@@ -1,0 +1,400 @@
+<!doctype html>
+<!-- FLOW.md mockups. Static, Bezel dark tokens (docs/DESIGN.md §2). Rendered to PNG by render.mjs.
+     Each <section class="frame" id="..."> becomes one screenshot. Content is illustrative mock data. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kelta flow mockups</title>
+<style>
+:root {
+  --k-font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --k-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --k-bezel: #1c2026; --k-bezel-raised: #21262d; --k-well: #121519; --k-bg-float: #262b33;
+  --k-bg-hover: rgba(216,221,227,.06); --k-bg-selected: #1e2a33;
+  --k-fg: #d8dde3; --k-fg-muted: #8b95a1; --k-fg-subtle: #6b7580; --k-fg-chrome: #7f8995;
+  --k-border: #2a3038; --k-border-strong: #39414b;
+  --k-accent: #6fa8c7; --k-accent-fg: #0e1418; --k-danger: #e0675f; --k-ok: #6fbf8a; --k-warn: #d9a03f;
+  --k-shadow: 0 10px 30px rgba(0,0,0,.5), 0 0 0 1px rgba(216,221,227,.06);
+  --k-overlay: rgba(6,8,10,.55);
+  --lamp-ni: #e5534b; --lamp-work: #5fb3b8; --lamp-err: #d9a03f; --lamp-done: #5db37e; --lamp-act: #8b95a1;
+  --shop: #6fa6d6; --billing: #d6ac55; --tools: #5bb7b0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0c0e; font: 13px/1.38 var(--k-font-ui); color: var(--k-fg); padding: 0; }
+.frame { width: 1440px; position: relative; overflow: hidden; background: var(--k-bezel); margin-bottom: 40px; }
+.win { display: grid; grid-template-columns: 44px 1fr; height: 860px; }
+.mono { font-family: var(--k-font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--k-fg-muted); } .subtle { color: var(--k-fg-subtle); }
+.ok { color: var(--k-ok); } .bad { color: var(--k-danger); } .warn { color: var(--k-warn); }
+
+/* lamps §6.1 */
+.lamp { display: inline-block; flex: none; vertical-align: middle; }
+.lamp.ni { width: 8px; height: 8px; border-radius: 50%; background: var(--lamp-ni); box-shadow: 0 0 0 2px color-mix(in oklab, var(--lamp-ni) 35%, transparent); }
+.lamp.work { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--lamp-work); }
+.lamp.err { width: 7px; height: 7px; background: var(--lamp-err); transform: rotate(45deg); }
+.lamp.done { width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-done); }
+.lamp.act { width: 4px; height: 4px; border-radius: 50%; background: var(--lamp-act); }
+.slot { width: 10px; display: inline-flex; justify-content: center; align-items: center; flex: none; }
+
+/* rail §6.2 */
+.rail { background: var(--k-bezel); display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 10px; }
+.tile { width: 28px; height: 28px; border-radius: 4px; background: var(--k-well); position: relative; display: grid; place-items: center; font-size: 12px; color: var(--k-fg-chrome); overflow: visible; }
+.tile .bar { position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 0 2px 2px 0; }
+.tile.active .bar { top: 0; bottom: 0; }
+.tile.active { color: var(--k-fg); font-weight: 600; }
+.tile.lit { background: color-mix(in oklab, var(--lamp-ni) 14%, var(--k-well)); }
+.tile .sock { position: absolute; top: -3px; right: -4px; display: flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 600; }
+.tile .count { position: absolute; top: -6px; right: -8px; min-width: 16px; height: 14px; border-radius: 7px; background: var(--k-bezel-raised); color: var(--k-fg); font-size: 10px; font-weight: 600; display: grid; place-items: center; padding: 0 3px; box-shadow: 0 0 0 1px var(--k-border-strong); }
+.rail .sep { width: 20px; height: 1px; background: var(--k-border); }
+.rail .bottom { margin-top: auto; margin-bottom: 10px; }
+
+.main { display: grid; grid-template-rows: 30px auto 1fr 22px; min-width: 0; gap: 1px; background: var(--k-bezel); }
+.tabbar { background: var(--k-bezel-raised); display: flex; align-items: stretch; padding-left: 8px; font-size: 12px; color: var(--k-fg-chrome); }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; position: relative; }
+.tab.active { color: var(--k-fg); font-weight: 600; box-shadow: inset 0 -2px 0 var(--k-accent); }
+.tab .t-mono { font-family: var(--k-font-mono); font-size: 12px; }
+.status { background: var(--k-bezel-raised); display: flex; align-items: center; gap: 12px; padding: 0 10px; font-size: 11px; color: var(--k-fg-chrome); font-variant-numeric: tabular-nums; }
+.status .pbar { width: 3px; height: 12px; border-radius: 1px; display: inline-block; vertical-align: -2px; margin-right: 6px; }
+.status .r { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+.status .seg { display: inline-flex; align-items: center; gap: 5px; }
+
+/* buttons §6.12 */
+.btn { height: 22px; border-radius: 4px; padding: 0 9px; font: 12px var(--k-font-ui); display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--k-border); background: var(--k-bezel-raised); color: var(--k-fg); white-space: nowrap; }
+.btn.primary { background: var(--k-accent); border-color: var(--k-accent); color: var(--k-accent-fg); font-weight: 600; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--k-fg-muted); }
+.btn.danger { background: var(--k-danger); border-color: var(--k-danger); color: #1a0d0c; }
+.kbd { font: 11px var(--k-font-mono); color: var(--k-fg-subtle); border-bottom: 1px solid var(--k-border-strong); padding: 0 2px; }
+.btn.primary .kbd { color: var(--k-accent-fg); border-color: color-mix(in oklab, var(--k-accent-fg) 40%, transparent); opacity: .8; }
+.chip { font-size: 11px; color: var(--k-fg-muted); background: var(--k-bezel-raised); border-radius: 2px; padding: 1px 6px; display: inline-flex; align-items: center; gap: 4px; }
+.chip.cat-prog { box-shadow: inset 2px 0 0 var(--k-warn); }
+
+/* Now view */
+.nowhead { background: var(--k-bezel-raised); display: flex; align-items: center; gap: 12px; padding: 0 12px; font-size: 12px; color: var(--k-fg-chrome); }
+.nowhead h1 { font-size: 12px; font-weight: 600; color: var(--k-fg); }
+.input { height: 22px; border-radius: 4px; background: var(--k-well); border: 1px solid var(--k-border); color: var(--k-fg-subtle); font: 12px var(--k-font-mono); display: flex; align-items: center; padding: 0 8px; width: 260px; }
+.list { background: var(--k-well); overflow: hidden; padding-bottom: 12px; }
+.sec { height: 30px; display: flex; align-items: flex-end; gap: 8px; padding: 0 12px 5px 22px; font-size: 12px; font-weight: 600; color: var(--k-fg-muted); }
+.sec .n { font-weight: 400; color: var(--k-fg-subtle); font-size: 11px; }
+.sec .why { font-weight: 400; color: var(--k-fg-subtle); font-size: 11px; margin-left: 4px; }
+.row { height: 26px; display: grid; grid-template-columns: 3px 10px 92px 1fr auto; align-items: center; column-gap: 8px; padding-right: 12px; position: relative; }
+.row .pb { height: 14px; width: 3px; border-radius: 0 2px 2px 0; }
+.row .id { font: 12px var(--k-font-mono); color: var(--k-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 6px; }
+.row .ti { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .ti .proj { color: var(--k-fg-subtle); font-size: 11px; margin-left: 8px; }
+.row .meta { display: flex; gap: 12px; font-size: 11px; color: var(--k-fg-muted); font-variant-numeric: tabular-nums; align-items: center; white-space: nowrap; }
+.row .meta .why { color: var(--k-fg); font-size: 12px; }
+.row .meta .age { width: 28px; text-align: right; color: var(--k-fg-subtle); }
+.row.sel { background: var(--k-bg-selected); box-shadow: inset 2px 0 0 var(--k-accent); }
+.row .pb { margin-left: 0; }
+.expand { background: var(--k-bg-selected); box-shadow: inset 2px 0 0 var(--k-accent); padding: 2px 12px 8px 127px; display: flex; gap: 16px; align-items: flex-start; }
+.expand p { font-size: 12px; color: var(--k-fg-muted); max-width: 78ch; line-height: 1.5; }
+.expand .acts { margin-left: auto; display: flex; gap: 4px; flex: none; }
+.diffst { font-family: var(--k-font-mono); font-size: 11px; }
+
+/* work bar */
+.workbar { background: var(--k-bezel-raised); height: 30px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 12px; font-size: 12px; color: var(--k-fg-chrome); white-space: nowrap; }
+.workbar .key { font: 12px var(--k-font-mono); color: var(--k-fg); }
+.workbar .wt { color: var(--k-fg); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.workbar .phase { display: inline-flex; align-items: center; gap: 6px; color: var(--k-fg); font-weight: 600; }
+.workbar .phase .sub { font-weight: 400; color: var(--k-fg-muted); }
+.workbar .br { font: 12px var(--k-font-mono); color: var(--k-fg-muted); }
+.workbar .sp { flex: 1; }
+.workbar .acts { display: flex; gap: 6px; align-items: center; }
+
+/* panes */
+.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--k-bezel); min-height: 0; }
+.pane { background: var(--k-well); display: grid; grid-template-rows: 22px 1fr; min-height: 0; overflow: hidden; }
+.ph { display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--k-fg-subtle); }
+.pane.focus .ph { color: var(--k-fg); font-weight: 600; box-shadow: inset 0 2px 0 var(--k-accent); }
+.term { font: 12.5px/1.45 var(--k-font-mono); color: #d3d9df; padding: 6px 10px; white-space: pre; overflow: hidden; }
+.term .c { color: #5fb3b8; } .term .g { color: #79b88a; } .term .r { color: #e0675f; } .term .y { color: #d6b163; } .term .d { color: #5e6873; } .term .b { color: #92b6e6; } .term .m { color: #b48bcb; }
+
+/* floating */
+.menu { position: absolute; background: var(--k-bg-float); border-radius: 8px; box-shadow: var(--k-shadow); padding: 4px; width: 280px; z-index: 5; }
+.mi { height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 4px; font-size: 13px; }
+.mi .k { margin-left: auto; font: 11px var(--k-font-mono); color: var(--k-fg-subtle); }
+.mi.sel { background: var(--k-bg-selected); box-shadow: inset 2px 0 0 var(--k-accent); }
+.mi.dis { color: var(--k-fg-subtle); }
+.msep { height: 1px; background: var(--k-border); margin: 4px 6px; }
+.scrim { position: absolute; inset: 0; background: var(--k-overlay); z-index: 4; }
+.sheet { position: absolute; top: 0; right: 0; bottom: 0; width: 480px; background: var(--k-bg-float); box-shadow: var(--k-shadow); z-index: 6; border-radius: 8px 0 0 8px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.sheet h2 { font-size: 15px; font-weight: 600; }
+.sheet h2 .mono { font-size: 14px; font-weight: 400; color: var(--k-fg-muted); margin-right: 6px; }
+.sheet .lede { font-size: 12px; color: var(--k-fg-muted); margin-top: -8px; }
+.fld { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; font-size: 13px; }
+.fld label { font-size: 12px; color: var(--k-fg-muted); }
+.fbox { background: var(--k-well); border: 1px solid var(--k-border); border-radius: 4px; height: 26px; display: flex; align-items: center; padding: 0 8px; font-size: 13px; }
+.fbox.mono { font: 12px var(--k-font-mono); }
+.fbox .hint { margin-left: auto; font-size: 11px; color: var(--k-fg-subtle); font-family: var(--k-font-ui); }
+.ta { background: var(--k-well); border: 1px solid var(--k-border); border-radius: 4px; padding: 8px; font-size: 13px; line-height: 1.5; min-height: 92px; }
+.ta.focus { box-shadow: 0 0 0 2px var(--k-accent); border-color: transparent; }
+.sheet h3 { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; }
+.sheet h3 .n { font-weight: 400; font-size: 11px; color: var(--k-fg-subtle); }
+.fb { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: 12px; padding: 6px 0; border-top: 1px solid var(--k-border); }
+.fb:first-of-type { border-top: 0; }
+.fb .who { color: var(--k-fg-muted); }
+.fb .loc { font: 11px var(--k-font-mono); color: var(--k-fg-muted); }
+.fb q { display: block; color: var(--k-fg); margin-top: 2px; quotes: none; }
+.cb { width: 14px; height: 14px; border-radius: 2px; border: 1px solid var(--k-border-strong); margin-top: 2px; display: grid; place-items: center; font-size: 10px; }
+.cb.on { background: var(--k-accent); border-color: var(--k-accent); color: var(--k-accent-fg); font-weight: 700; }
+.foot { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.foot .note { margin-right: auto; font-size: 11px; color: var(--k-fg-subtle); max-width: 240px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--k-fg-muted); }
+.tg { width: 24px; height: 14px; border-radius: 7px; background: var(--k-accent); position: relative; }
+.tg::after { content: ''; position: absolute; right: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--k-well); }
+
+/* states stack */
+.stack { background: var(--k-bezel); padding: 16px; display: grid; gap: 10px; width: 1440px; }
+.stack .lbl { font-size: 11px; color: var(--k-fg-subtle); margin-bottom: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ===================================================== 1. Now -->
+<section class="frame" id="f1-now">
+<div class="win">
+  <nav class="rail">
+    <div class="tile active" title="Now"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#d8dde3" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg><span class="count num">8</span></div>
+    <div class="sep"></div>
+    <div class="tile"><span class="bar" style="background:var(--shop)"></span>S<span class="sock"><span class="lamp done"></span></span></div>
+    <div class="tile lit"><span class="bar" style="background:var(--billing)"></span>B<span class="sock"><span class="lamp ni"></span><span class="num">1</span></span></div>
+    <div class="tile"><span class="bar" style="background:var(--tools)"></span>K<span class="sock"><span class="lamp err"></span></span></div>
+    <div class="tile bottom">~</div>
+  </nav>
+  <div class="main" style="grid-template-rows: 30px 1fr 22px">
+    <div class="nowhead">
+      <h1>Now</h1>
+      <span class="num">8 waiting for you, 3 in flight</span>
+      <div class="input" style="margin-left:auto">filter</div>
+      <span class="btn ghost">Refresh <span class="kbd">R</span></span>
+    </div>
+    <div class="list">
+      <div class="sec"><span class="lamp ni"></span>Claude needs you <span class="n num">1</span></div>
+      <div class="row"><span class="pb" style="background:var(--billing)"></span><span class="slot"><span class="lamp ni"></span></span><span class="id">4567</span><span class="ti">Retry failed invoice webhooks<span class="proj">Billing</span></span><span class="meta"><span class="why">Allow <span class="mono">pnpm test:int</span>?</span><span class="age">2m</span></span></div>
+
+      <div class="sec"><span class="lamp done"></span>To review <span class="n num">2</span><span class="why">Claude finished, you have not looked yet</span></div>
+      <div class="row sel"><span class="pb" style="background:var(--shop)"></span><span class="slot"><span class="lamp done"></span></span><span class="id">SHOP-142</span><span class="ti">Rate limit login attempts<span class="proj">Shop</span></span><span class="meta"><span class="diffst"><span class="ok">+214</span> <span class="bad">−38</span></span><span>8 files</span><span>↓3 main</span><span class="age">6m</span></span></div>
+      <div class="expand"><p>Claude: Added a sliding-window limiter in <span class="mono">auth/rate_limit.rs</span> with 6 tests, all passing. The admin login path is not covered; say if it should be.</p><span class="acts"><span class="btn primary">Review diff <span class="kbd">↵</span></span><span class="btn ghost">Ship <span class="kbd">p</span></span><span class="btn ghost">Mark reviewed <span class="kbd">x</span></span><span class="btn ghost">Go to Claude <span class="kbd">g</span></span></span></div>
+      <div class="row"><span class="pb" style="background:var(--tools)"></span><span class="slot"><span class="lamp done"></span></span><span class="id">wip</span><span class="ti">Make palette fuzzy match instant with 5k tickets<span class="proj">Kelta tools</span></span><span class="meta"><span class="diffst"><span class="ok">+51</span> <span class="bad">−12</span></span><span>3 files</span><span>no PR</span><span class="age">14m</span></span></div>
+
+      <div class="sec"><span class="lamp err"></span>Fix <span class="n num">2</span><span class="why">your PRs that cannot merge as they are</span></div>
+      <div class="row"><span class="pb" style="background:var(--tools)"></span><span class="slot"><span class="lamp err"></span></span><span class="id">gh-12</span><span class="ti">kt status --json<span class="proj">Kelta tools</span></span><span class="meta"><span class="mono">#13</span><span class="why">Changes requested, 3 threads</span><span class="age">1h</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--shop)"></span><span class="slot"><span class="lamp err"></span></span><span class="id">SHOP-120</span><span class="ti">Cart totals rounding<span class="proj">Shop</span></span><span class="meta"><span class="mono">#381</span><span class="why">Checks failed: e2e</span><span class="age">3h</span></span></div>
+
+      <div class="sec">Review requests <span class="n num">3</span></div>
+      <div class="row"><span class="pb" style="background:var(--shop)"></span><span class="slot"></span><span class="id">#402</span><span class="ti">Migrate checkout to the new payments SDK<span class="proj">Shop, ana</span></span><span class="meta"><span class="diffst"><span class="ok">+612</span> <span class="bad">−201</span></span><span class="subtle">checks running</span><span class="age">3h</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--billing)"></span><span class="slot"></span><span class="id">!57</span><span class="ti">Fix VAT on credit notes<span class="proj">Billing, marc</span></span><span class="meta"><span class="diffst"><span class="ok">+40</span> <span class="bad">−9</span></span><span class="ok">checks pass</span><span class="age">1d</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--tools)"></span><span class="slot"><span class="lamp work"></span></span><span class="id">#18</span><span class="ti">Linux tray icon<span class="proj">Kelta tools, jo</span></span><span class="meta"><span class="subtle">reviewing locally</span><span class="ok">checks pass</span><span class="age">2d</span></span></div>
+
+      <div class="sec">Ship and clean up <span class="n num">2</span></div>
+      <div class="row"><span class="pb" style="background:var(--billing)"></span><span class="slot"></span><span class="id">4498</span><span class="ti">Dunning email templates<span class="proj">Billing</span></span><span class="meta"><span class="mono">#77</span><span class="why">Approved, ready to merge</span><span class="age">20m</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--shop)"></span><span class="slot"></span><span class="id">SHOP-133</span><span class="ti">Guest checkout email validation<span class="proj">Shop</span></span><span class="meta"><span class="mono">#377</span><span class="why">Merged, worktree still here</span><span class="age">1d</span></span></div>
+
+      <div class="sec">In flight <span class="n num">3</span><span class="why">nothing to do yet</span></div>
+      <div class="row"><span class="pb" style="background:var(--shop)"></span><span class="slot"><span class="lamp work"></span></span><span class="id">SHOP-150</span><span class="ti">Wishlist sharing<span class="proj">Shop</span></span><span class="meta"><span>Claude working</span><span class="age">4m</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--tools)"></span><span class="slot"></span><span class="id">gh-9</span><span class="ti">Board column overrides<span class="proj">Kelta tools</span></span><span class="meta"><span class="mono">#11</span><span>In review, 0 of 2 approvals</span><span class="age">5h</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--billing)"></span><span class="slot"></span><span class="id">wip</span><span class="ti">Spike: idempotency keys on payouts<span class="proj">Billing</span></span><span class="meta"><span>No changes yet</span><span class="age">2d</span></span></div>
+
+      <div class="sec">Up next <span class="n num">4</span><span class="why">assigned to you, not started</span></div>
+      <div class="row"><span class="pb" style="background:var(--shop)"></span><span class="slot"></span><span class="id">SHOP-151</span><span class="ti">Coupon stacking rules<span class="proj">Shop</span></span><span class="meta"><span class="chip">To Do</span><span>High</span><span class="age">2d</span></span></div>
+      <div class="row"><span class="pb" style="background:var(--billing)"></span><span class="slot"></span><span class="id">4570</span><span class="ti">Export invoices as UBL<span class="proj">Billing</span></span><span class="meta"><span class="chip">To Do</span><span>Normal</span><span class="age">4d</span></span></div>
+    </div>
+    <div class="status"><span class="seg">Now</span><span class="r"><span class="seg"><span class="lamp ni"></span>1</span><span class="seg"><span class="lamp err"></span>2</span><span class="seg"><span class="lamp done"></span>2</span><span class="seg"><span class="lamp work"></span>2</span></span></div>
+  </div>
+</div>
+</section>
+
+<!-- ===================================================== 2. Work tab + work menu -->
+<section class="frame" id="f2-work-tab">
+<div class="win">
+  <nav class="rail">
+    <div class="tile" title="Now"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#7f8995" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg><span class="count num">8</span></div>
+    <div class="sep"></div>
+    <div class="tile active"><span class="bar" style="background:var(--shop)"></span>S<span class="sock"><span class="lamp done"></span></span></div>
+    <div class="tile lit"><span class="bar" style="background:var(--billing)"></span>B<span class="sock"><span class="lamp ni"></span><span class="num">1</span></span></div>
+    <div class="tile"><span class="bar" style="background:var(--tools)"></span>K<span class="sock"><span class="lamp err"></span></span></div>
+    <div class="tile bottom">~</div>
+  </nav>
+  <div class="main">
+    <div class="tabbar">
+      <span class="tab active"><span class="slot"><span class="lamp done"></span></span><span class="t-mono">SHOP-142</span> Rate limit login</span>
+      <span class="tab"><span class="slot"><span class="lamp work"></span></span><span class="t-mono">SHOP-150</span> Wishlist sharing</span>
+      <span class="tab"><span class="slot"></span>Shell</span>
+      <span class="tab"><span class="slot"></span>Board</span>
+    </div>
+    <div class="workbar">
+      <span class="key">SHOP-142</span><span class="wt">Rate limit login attempts</span>
+      <span class="chip cat-prog">In Progress ▾</span>
+      <span class="phase"><span class="lamp done"></span>To review <span class="sub">Claude finished 6m ago</span></span>
+      <span class="br">feat/SHOP-142-rate-limit-login</span>
+      <span class="num">↑4 ↓3</span>
+      <span class="diffst"><span class="ok">+214</span> <span class="bad">−38</span></span>
+      <span class="sp"></span>
+      <span class="acts"><span class="btn primary">Review diff</span><span class="btn">Work <span class="kbd">⌘.</span></span></span>
+    </div>
+    <div class="panes">
+      <div class="pane"><div class="ph"><span class="lamp done"></span>claude <span class="subtle" style="font-weight:400">Done</span></div>
+<div class="term"><span class="d">⏺</span> Update(auth/rate_limit.rs)
+  <span class="d">⎿</span>  Updated <span class="b">auth/rate_limit.rs</span> with <span class="g">96 additions</span>
+<span class="d">⏺</span> Bash(cargo test -p auth rate_limit)
+  <span class="d">⎿</span>  running 6 tests
+     test rate_limit::allows_under_limit ... <span class="g">ok</span>
+     test rate_limit::blocks_sixth_attempt ... <span class="g">ok</span>
+     test rate_limit::window_slides ... <span class="g">ok</span>
+     test rate_limit::per_ip_and_per_account ... <span class="g">ok</span>
+     test rate_limit::resets_on_success ... <span class="g">ok</span>
+     test rate_limit::clock_skew ... <span class="g">ok</span>
+     test result: <span class="g">ok</span>. 6 passed; 0 failed
+
+<span class="d">⏺</span> Added a sliding-window limiter in auth/rate_limit.rs
+  with 6 tests, all passing. The admin login path is
+  not covered; say if it should be.
+
+<span class="d">╭──────────────────────────────────────────────────╮</span>
+<span class="d">│</span> &gt;                                                <span class="d">│</span>
+<span class="d">╰──────────────────────────────────────────────────╯</span>
+</div></div>
+      <div class="pane focus"><div class="ph">nvim <span class="subtle" style="font-weight:400">diff origin/main...HEAD</span></div>
+<div class="term"><span class="m">  Changes (8)</span>
+    <span class="y">M</span> auth/login.rs            <span class="g">+12</span> <span class="r">-3</span>
+  <span style="background:#1e2a33">  <span class="g">A</span> auth/rate_limit.rs       <span class="g">+96</span>    </span>
+    <span class="y">M</span> auth/mod.rs              <span class="g">+2</span>
+    <span class="g">A</span> auth/tests/rate_limit.rs <span class="g">+71</span>
+    <span class="y">M</span> config/default.toml      <span class="g">+4</span>
+    <span class="y">M</span> Cargo.toml               <span class="g">+1</span>
+    <span class="y">M</span> Cargo.lock               <span class="g">+18</span> <span class="r">-35</span>
+    <span class="y">M</span> CHANGELOG.md             <span class="g">+10</span>
+<span class="d">────────────────────────────────────────────────</span>
+<span class="b">pub struct</span> RateLimiter {
+    window: Duration,
+    max: u32,
+    hits: Mutex&lt;HashMap&lt;Key, VecDeque&lt;Instant&gt;&gt;&gt;,
+}
+
+<span class="b">impl</span> RateLimiter {
+    <span class="b">pub fn</span> check(&amp;self, key: Key) -&gt; Decision {
+        <span class="b">let</span> now = Instant::now();
+        <span class="b">let mut</span> hits = self.hits.lock();
+</div></div>
+    </div>
+    <div class="status"><span class="seg"><span class="pbar" style="background:var(--shop)"></span>Shop</span><span class="seg mono">feat/SHOP-142-rate-limit-login</span><span class="seg"><span class="lamp done"></span>SHOP-142 to review</span><span class="r"><span class="seg"><span class="lamp ni"></span>1</span><span class="seg"><span class="lamp err"></span>2</span><span class="seg"><span class="lamp done"></span>2</span><span class="seg"><span class="lamp work"></span>2</span></span></div>
+  </div>
+</div>
+<div class="menu" style="top:64px; right:12px">
+  <div class="mi sel">Review diff in nvim<span class="k">↵ d</span></div>
+  <div class="mi">Ship: push and open PR<span class="k">p</span></div>
+  <div class="mi">Mark reviewed<span class="k">x</span></div>
+  <div class="msep"></div>
+  <div class="mi dis">Fix with Claude<span class="k">f</span></div>
+  <div class="mi">Rebase onto main<span class="k">r</span></div>
+  <div class="mi">Go to Claude<span class="k">g</span></div>
+  <div class="msep"></div>
+  <div class="mi">Open ticket<span class="k">t</span></div>
+  <div class="mi dis">Open PR<span class="k">o</span></div>
+  <div class="mi">Finish…<span class="k">⇧F</span></div>
+</div>
+</section>
+
+<!-- ===================================================== 3. Fix with Claude sheet -->
+<section class="frame" id="f3-fix-sheet">
+<div class="win">
+  <nav class="rail">
+    <div class="tile"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#7f8995" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg><span class="count num">8</span></div>
+    <div class="sep"></div>
+    <div class="tile"><span class="bar" style="background:var(--shop)"></span>S</div>
+    <div class="tile"><span class="bar" style="background:var(--billing)"></span>B</div>
+    <div class="tile active"><span class="bar" style="background:var(--tools)"></span>K<span class="sock"><span class="lamp err"></span></span></div>
+  </nav>
+  <div class="main">
+    <div class="tabbar"><span class="tab active"><span class="slot"><span class="lamp err"></span></span><span class="t-mono">gh-12</span> kt status --json</span><span class="tab"><span class="slot"></span>Shell</span></div>
+    <div class="workbar"><span class="key">gh-12</span><span class="wt">kt status --json</span><span class="chip">In Review ▾</span><span class="phase"><span class="lamp err"></span>Changes requested <span class="sub">3 threads, clippy failed</span></span><span class="br">feat/gh-12-json-output</span><span class="mono muted">#13</span><span class="sp"></span><span class="acts"><span class="btn primary">Fix with Claude</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div>
+    <div class="panes"><div class="pane"><div class="ph">claude <span class="subtle">Exited</span></div><div class="term d"></div></div><div class="pane"><div class="ph">nvim</div><div class="term"></div></div></div>
+    <div class="status"><span class="seg"><span class="pbar" style="background:var(--tools)"></span>Kelta tools</span></div>
+  </div>
+</div>
+<div class="scrim"></div>
+<div class="sheet">
+  <h2><span class="mono">gh-12</span>Fix with Claude</h2>
+  <p class="lede">Feedback on PR #13 is written to <span class="mono">.kelta/feedback.md</span> and sent to the Claude conversation that wrote this branch.</p>
+  <div>
+    <h3>Review threads <span class="n num">3 unresolved</span></h3>
+    <div class="fb"><span class="cb on">✓</span><div><span class="who">marc</span> <span class="loc">src/status.rs:42</span><q>Exit code should be non-zero when any repo is dirty, otherwise scripts can't use it.</q></div></div>
+    <div class="fb"><span class="cb on">✓</span><div><span class="who">marc</span> <span class="loc">src/status.rs:88</span><q>Use serde's rename_all instead of hand-writing the keys.</q></div></div>
+    <div class="fb"><span class="cb on">✓</span><div><span class="who">ana</span> <span class="loc">review summary</span><q>Please add a snapshot test for the JSON shape before we freeze it.</q></div></div>
+  </div>
+  <div>
+    <h3>Checks <span class="n">1 failed</span></h3>
+    <div class="fb"><span class="cb on">✓</span><div><span class="who">clippy</span> <span class="loc">failed 52m ago</span><q>Last 40 log lines attached.</q></div></div>
+  </div>
+  <div>
+    <h3>Prompt</h3>
+    <div class="ta focus" style="margin-top:6px">Address the review feedback in .kelta/feedback.md. Fix each item, run the tests, commit, then list what you changed per thread.</div>
+  </div>
+  <div class="foot">
+    <span class="note">Resumes conversation <span class="mono">3f2a91c0</span> from 2d ago. You push when you are happy.</span>
+    <span class="btn">Cancel</span><span class="btn primary">Send to Claude <span class="kbd">⌘↵</span></span>
+  </div>
+</div>
+</section>
+
+<!-- ===================================================== 4. New work item -->
+<section class="frame" id="f4-new-work">
+<div class="win">
+  <nav class="rail">
+    <div class="tile"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#7f8995" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg><span class="count num">8</span></div>
+    <div class="sep"></div>
+    <div class="tile"><span class="bar" style="background:var(--shop)"></span>S</div>
+    <div class="tile"><span class="bar" style="background:var(--billing)"></span>B</div>
+    <div class="tile active"><span class="bar" style="background:var(--tools)"></span>K</div>
+  </nav>
+  <div class="main">
+    <div class="tabbar"><span class="tab active"><span class="slot"></span>Shell</span><span class="tab"><span class="slot"></span>Board</span></div>
+    <div></div>
+    <div class="pane" style="grid-template-rows:22px 1fr"><div class="ph">zsh</div><div class="term">~/Sites/kelta main $ </div></div>
+    <div class="status"><span class="seg"><span class="pbar" style="background:var(--tools)"></span>Kelta tools</span><span class="seg mono">main</span></div>
+  </div>
+</div>
+<div class="scrim"></div>
+<div class="sheet">
+  <h2>New work item</h2>
+  <p class="lede">A branch, a worktree and a Claude session. No ticket needed; you can link one later.</p>
+  <div>
+    <h3>What should Claude do?</h3>
+    <div class="ta focus" style="margin-top:6px; min-height:120px">The palette fuzzy matcher is slow with 5k cached tickets. Profile it and make typing feel instant. Keep the ranking the same.</div>
+  </div>
+  <div class="fld"><label>Project</label><div class="fbox">Kelta tools<span class="hint">active project</span></div></div>
+  <div class="fld"><label>Repo</label><div class="fbox">kelta</div></div>
+  <div class="fld"><label>Branch</label><div class="fbox mono">wip/palette-fuzzy-matcher-slow<span class="hint">from the first line</span></div></div>
+  <div class="fld"><label>Base</label><div class="fbox mono">main</div></div>
+  <div class="fld"><label>Layout</label><div class="fbox">Claude + nvim</div></div>
+  <div class="fld"><label>Ticket</label><div class="fbox subtle">None</div></div>
+  <div class="foot">
+    <span class="note">Title: "The palette fuzzy matcher is slow with 5k cached tickets"</span>
+    <span class="btn">Cancel</span><span class="btn primary">Start <span class="kbd">⌘↵</span></span>
+  </div>
+</div>
+</section>
+
+<!-- ===================================================== 5. Work bar states -->
+<section class="frame" id="f5-work-bar-states" style="width:1440px">
+<div class="stack">
+  <div><div class="lbl">Starting</div><div class="workbar"><span class="key">SHOP-151</span><span class="wt">Coupon stacking rules</span><span class="phase"><span class="lamp work"></span>Starting <span class="sub">worktree 3 of 7</span></span><span class="br">feat/SHOP-151-coupon-stacking</span><span class="sp"></span><span class="acts"><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Failed step</div><div class="workbar"><span class="key">4567</span><span class="wt">Retry failed invoice webhooks</span><span class="phase"><span class="lamp err"></span>Failed at tracker side effects <span class="sub">Redmine: no transition to In Progress</span></span><span class="sp"></span><span class="acts"><span class="btn primary">Retry</span><span class="btn">Skip step</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Claude needs you</div><div class="workbar"><span class="key">4567</span><span class="wt">Retry failed invoice webhooks</span><span class="phase"><span class="lamp ni"></span>Claude needs you <span class="sub">Allow pnpm test:int?</span></span><span class="br">fix/4567-webhook-retry</span><span class="num">↑2 ↓0</span><span class="sp"></span><span class="acts"><span class="btn primary">Go to Claude</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Claude working (no primary action)</div><div class="workbar"><span class="key">SHOP-150</span><span class="wt">Wishlist sharing</span><span class="phase"><span class="lamp work"></span>Claude working <span class="sub">4m</span></span><span class="br">feat/SHOP-150-wishlist-sharing</span><span class="num">↑1 ↓0</span><span class="sp"></span><span class="acts"><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">To review</div><div class="workbar"><span class="key">SHOP-142</span><span class="wt">Rate limit login attempts</span><span class="phase"><span class="lamp done"></span>To review <span class="sub">Claude finished 6m ago</span></span><span class="br">feat/SHOP-142-rate-limit-login</span><span class="num">↑4 ↓3</span><span class="diffst"><span class="ok">+214</span> <span class="bad">−38</span></span><span class="sp"></span><span class="acts"><span class="btn primary">Review diff</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Reviewed, no PR</div><div class="workbar"><span class="key">wip</span><span class="wt">Make palette fuzzy match instant</span><span class="phase">Ready to ship <span class="sub">3 commits, not pushed</span></span><span class="br">wip/palette-fuzzy-matcher-slow</span><span class="num">↑3 ↓0</span><span class="sp"></span><span class="acts"><span class="btn primary">Ship</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">PR waiting on others</div><div class="workbar"><span class="key">gh-9</span><span class="wt">Board column overrides</span><span class="phase">In review <span class="sub">#11, checks pass, 0 of 2 approvals</span></span><span class="br">feat/gh-9-column-overrides</span><span class="sp"></span><span class="acts"><span class="btn">Open PR</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Changes requested or checks failed</div><div class="workbar"><span class="key">gh-12</span><span class="wt">kt status --json</span><span class="phase"><span class="lamp err"></span>Changes requested <span class="sub">#13, 3 threads, clippy failed</span></span><span class="br">feat/gh-12-json-output</span><span class="sp"></span><span class="acts"><span class="btn primary">Fix with Claude</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Base moved and the PR conflicts</div><div class="workbar"><span class="key">4555</span><span class="wt">Refund export</span><span class="phase"><span class="lamp err"></span>Conflicts with main <span class="sub">#74, 14 behind</span></span><span class="br">feat/4555-refund-export</span><span class="num">↑6 ↓14</span><span class="sp"></span><span class="acts"><span class="btn primary">Rebase</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Rebase stopped on conflicts</div><div class="workbar"><span class="key">4555</span><span class="wt">Refund export</span><span class="phase"><span class="lamp err"></span>Rebase stopped <span class="sub">2 conflicted files, commit 3 of 6</span></span><span class="br">feat/4555-refund-export</span><span class="sp"></span><span class="acts"><span class="btn primary">Ask Claude to resolve</span><span class="btn">Open in nvim</span><span class="btn">Abort rebase</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Rebased, PR head is behind</div><div class="workbar"><span class="key">4555</span><span class="wt">Refund export</span><span class="phase">Rebased <span class="sub">push rewrites #74</span></span><span class="br">feat/4555-refund-export</span><span class="num">↑6 ↓0</span><span class="sp"></span><span class="acts"><span class="btn primary">Force push…</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Approved</div><div class="workbar"><span class="key">4498</span><span class="wt">Dunning email templates</span><span class="phase">Approved <span class="sub">#77, checks pass</span></span><span class="br">feat/4498-dunning-templates</span><span class="sp"></span><span class="acts"><span class="btn primary">Open PR</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+  <div><div class="lbl">Merged</div><div class="workbar"><span class="key">SHOP-133</span><span class="wt">Guest checkout email validation</span><span class="phase">Merged <span class="sub">#377, ticket moved to Done</span></span><span class="br">feat/SHOP-133-guest-email</span><span class="sp"></span><span class="acts"><span class="btn primary">Finish…</span><span class="btn">Work <span class="kbd">⌘.</span></span></span></div></div>
+</div>
+</section>
+
+</body>
+</html>
