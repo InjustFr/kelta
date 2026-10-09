@@ -128,16 +128,15 @@ test.describe('inbox', () => {
     await expect(inbox.getByText('Terraform: add read replica')).toBeVisible();
     // The "Other" group header sits right above the unbound request.
     const order = await inbox
-      .locator('[data-group], [data-section], .row')
+      .locator('[data-group], [data-section], .k-row')
       .evaluateAll((els) =>
         els.map((e) => e.getAttribute('data-group') ?? e.getAttribute('data-section') ?? e.textContent ?? ''),
       );
     const at = order.findIndex((t, i) => t === 'Other' && (order[i + 1] ?? '').includes('Terraform'));
     expect(at).toBeGreaterThan(-1);
-    // Needs-input sessions of other projects are listed too (End jumps to the last row).
-    await inbox.focus();
-    await page.keyboard.press('End');
-    await expect(inbox.getByText('needs input', { exact: true }).first()).toBeVisible();
+    // Needs-input sessions of other projects are listed first, each with the needs-input lamp.
+    await expect(inbox.locator('[data-section="s:input"]')).toBeVisible();
+    await expect(inbox.getByRole('img', { name: 'needs input' }).first()).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -154,6 +153,8 @@ test.describe('inbox', () => {
     );
     await expect(page.getByTestId('inbox-pane').getByText('Rate-limit login attempts')).toBeVisible();
     await page.getByTestId('inbox-pane').focus();
+    // Needs-input sessions are listed first: j moves to the first ticket.
+    await page.keyboard.press('j');
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('ticket-detail')).toBeVisible();
   });

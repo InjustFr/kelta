@@ -19,18 +19,19 @@
 {/if}
 
 <style>
+  /* Flat chip: a filled colour pill would compete with the lamps. Tone = a 2px left bar. */
   .k-badge {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-1);
     height: 18px;
-    padding: 0 6px;
-    border-radius: 9px;
+    padding: 0 5px;
+    border-radius: var(--k-radius-sm);
     font-size: var(--k-font-size-xs);
-    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
     white-space: nowrap;
-    background: var(--k-bg-sunken);
+    background: var(--k-bezel-raised);
     color: var(--k-fg-muted);
   }
 
@@ -43,28 +44,40 @@
     flex: none;
   }
 
+  .k-badge.accent,
+  .k-badge.ok,
+  .k-badge.warn,
+  .k-badge.danger,
+  .k-badge.info {
+    box-shadow: inset 2px 0 0 var(--tone);
+    padding-left: 7px;
+  }
+
   .accent {
-    background: var(--k-accent);
-    color: var(--k-accent-fg);
+    --tone: var(--k-accent);
   }
 
   .ok {
-    background: var(--k-ok);
-    color: #fff;
+    --tone: var(--k-ok);
   }
 
   .warn {
-    background: var(--k-warn);
-    color: #fff;
+    --tone: var(--k-warn);
   }
 
   .danger {
-    background: var(--k-danger);
-    color: #fff;
+    --tone: var(--k-danger);
   }
 
   .info {
-    background: var(--k-info);
-    color: #fff;
+    --tone: var(--k-info);
+  }
+
+  .k-dot.accent,
+  .k-dot.ok,
+  .k-dot.warn,
+  .k-dot.danger,
+  .k-dot.info {
+    background: var(--tone);
   }
 </style>

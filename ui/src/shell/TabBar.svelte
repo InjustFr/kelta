@@ -3,9 +3,8 @@
   import type { ProjectId, Tab, ToolInfo } from '$lib/gen';
   import { activeTab, moveTab } from '$lib/layout';
   import { layout, toasts, tools, ui } from '$lib/stores';
-  import { Icon, Menu, type MenuItem } from '$lib/ui';
+  import { Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
-  import AttentionDot from './AttentionDot.svelte';
   import { requestCloseTab, selectTab, tabAttention } from './nav';
 
   interface Props {
@@ -97,6 +96,7 @@
     <div
       class="tab"
       class:active={active?.id === tab.id}
+      class:asks={level === 'needs_input'}
       class:over={overId === tab.id && dragId !== tab.id}
       role="tab"
       tabindex="0"
@@ -138,9 +138,9 @@
         overId = null;
       }}
     >
-      {#if tab.work_item_id}<Icon name="git-branch" size={13} />{/if}
+      <span class="lamp-slot"><Lamp {level} /></span>
+      {#if tab.work_item_id}<Icon name="git-branch" size={12} />{/if}
       <span class="title">{tab.title}</span>
-      <AttentionDot {level} size={7} />
       <button
         type="button"
         class="close"
@@ -198,10 +198,9 @@
     align-items: stretch;
     height: var(--k-tabbar-height);
     flex: none;
-    gap: 1px;
-    padding: 0 var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    padding: 0 var(--k-space-2);
+    background: var(--k-bezel-raised);
+    font-size: var(--k-font-size-sm);
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -211,26 +210,50 @@
     align-items: center;
     gap: var(--k-space-2);
     max-width: 220px;
-    padding: 0 var(--k-space-3);
-    border-bottom: 2px solid transparent;
-    color: var(--k-fg-muted);
+    padding: 0 var(--k-space-2) 0 var(--k-space-3);
+    box-shadow: inset 0 -2px 0 transparent;
+    color: var(--k-fg-chrome);
     white-space: nowrap;
     cursor: pointer;
+    transition: color var(--k-duration) ease-out;
   }
 
   .tab:hover {
-    background: var(--k-bg-hover);
     color: var(--k-fg);
   }
 
+  .tab:focus-visible {
+    outline-offset: -2px;
+  }
+
   .tab.active {
-    border-bottom-color: var(--k-accent);
+    box-shadow: inset 0 -2px 0 var(--k-accent);
     color: var(--k-fg);
-    background: var(--k-bg);
+    font-weight: var(--k-weight-strong);
+  }
+
+  /* Claude waiting: a top edge that stays visible even when the tab is half scrolled out. */
+  .tab.asks {
+    box-shadow: inset 0 2px 0 var(--k-lamp-needs-input);
+  }
+
+  .tab.asks.active {
+    box-shadow:
+      inset 0 2px 0 var(--k-lamp-needs-input),
+      inset 0 -2px 0 var(--k-accent);
   }
 
   .tab.over {
     box-shadow: inset 2px 0 0 var(--k-accent);
+  }
+
+  /* Fixed width even when empty, so the states of all tabs line up in one column. */
+  .lamp-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 10px;
+    flex: none;
   }
 
   .title {
@@ -245,29 +268,29 @@
     border-radius: var(--k-radius-sm);
     background: transparent;
     color: inherit;
-    opacity: 0;
+    visibility: hidden;
     cursor: pointer;
   }
 
   .tab:hover .close,
+  .tab:focus-visible .close,
   .tab.active .close {
-    opacity: 0.7;
+    visibility: visible;
   }
 
   .close:hover {
     background: var(--k-bg-active);
-    opacity: 1;
   }
 
   .plus {
     align-self: center;
     display: inline-flex;
-    padding: 5px;
+    padding: 4px;
     margin-left: var(--k-space-2);
     border: none;
     border-radius: var(--k-radius);
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-chrome);
     cursor: pointer;
   }
 

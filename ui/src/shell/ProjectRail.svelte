@@ -1,10 +1,9 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
-  import { attention, projects, reviews, sessions, toasts, ui } from '$lib/stores';
-  import { Icon, isIconName, Menu, type MenuItem } from '$lib/ui';
+  import { attention, lampOf, projects, reviews, sessions, toasts, ui } from '$lib/stores';
+  import { Icon, isIconName, Lamp, Menu, type MenuItem } from '$lib/ui';
 
-  import AttentionDot from './AttentionDot.svelte';
   import { confirms } from './confirm.svelte';
   import { activateProject, openInbox, railProjects } from './nav';
 
@@ -159,7 +158,7 @@
     aria-current={ui.inboxActive ? 'page' : undefined}
     data-testid="rail-inbox"
   >
-    <Icon name="inbox" size={18} />
+    <Icon name="inbox" size={16} />
     {#if inboxCount > 0}
       <span class="badge" data-testid="inbox-badge">{inboxCount > 99 ? '99+' : inboxCount}</span>
     {/if}
@@ -168,11 +167,14 @@
   <div class="list" role="list">
     {#each reorderable as p (p.id)}
       {@const lvl = attention.level(p.id)}
+      {@const n = attention.forProject(p.id).needs_input_count}
+      {@const lamp = lampOf(lvl, sessions.workingIn(p.id))}
       <div role="listitem" class="slot" class:over={overId === p.id && dragId !== p.id}>
         <button
           type="button"
           class="item project"
           class:active={p.active && !ui.inboxActive}
+          class:lit={lvl === 'needs_input'}
           style:--project-color={p.color ?? 'var(--k-border-strong)'}
           title={p.name}
           aria-label={p.name}
@@ -203,11 +205,14 @@
             overId = null;
           }}
         >
-          {#if iconName(p)}<Icon name={iconName(p) ?? ''} size={16} />{:else}<span class="glyph"
+          {#if iconName(p)}<Icon name={iconName(p) ?? ''} size={14} />{:else}<span class="glyph"
               >{glyph(p)}</span
             >{/if}
-          {#if lvl !== 'none'}
-            <span class="att"><AttentionDot level={lvl} size={10} title={dotTitle(p)} /></span>
+          {#if lamp !== 'none'}
+            <span class="att">
+              <Lamp level={lamp} title={dotTitle(p)} />
+              {#if lvl === 'needs_input' && n > 1}<span class="count k-num">{n}</span>{/if}
+            </span>
           {/if}
         </button>
       </div>
@@ -230,11 +235,19 @@
       oncontextmenu={(e) => openMenu(e, home)}
     >
       <Icon name="house" size={16} />
-      {#if lvl !== 'none'}<span class="att"
-          ><AttentionDot level={lvl} size={10} title={dotTitle(home)} /></span
-        >{/if}
+      {#if lvl !== 'none'}<span class="att"><Lamp level={lvl} title={dotTitle(home)} /></span>{/if}
     </button>
   {/if}
+  <button
+    type="button"
+    class="item"
+    title="Settings"
+    aria-label="Settings"
+    onclick={() => void dispatch('settings.open')}
+    data-testid="rail-settings"
+  >
+    <Icon name="settings" size={16} />
+  </button>
   <button
     type="button"
     class="item add"
@@ -243,7 +256,7 @@
     onclick={() => ui.openSheet('project_new')}
     data-testid="rail-add"
   >
-    <Icon name="plus" size={18} />
+    <Icon name="plus" size={16} />
   </button>
 </nav>
 
@@ -264,12 +277,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--k-space-3);
+    gap: var(--k-space-2);
     width: var(--k-rail-width);
     flex: none;
     padding: var(--k-space-3) 0;
-    border-right: 1px solid var(--k-border);
-    background: var(--k-bg-sunken);
+    background: var(--k-bezel);
   }
 
   .list {
@@ -280,6 +292,7 @@
     flex: 1;
     min-height: 0;
     width: 100%;
+    padding: var(--k-space-3) 0;
     overflow-y: auto;
     scrollbar-width: none;
   }
@@ -289,7 +302,7 @@
   }
 
   .slot.over {
-    box-shadow: 0 -2px 0 var(--k-accent);
+    box-shadow: 0 -4px 0 -2px var(--k-accent);
   }
 
   .item {
@@ -297,14 +310,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 28px;
     padding: 0;
-    border: 2px solid transparent;
-    border-radius: var(--k-radius-lg);
+    border: none;
+    border-radius: var(--k-radius);
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-chrome);
     cursor: pointer;
+    transition: background var(--k-duration) ease-out;
   }
 
   .item:hover {
@@ -312,55 +326,90 @@
     color: var(--k-fg);
   }
 
+  .item:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--k-bezel),
+      0 0 0 4px var(--k-focus);
+  }
+
   .item.active {
-    border-color: var(--k-accent);
+    color: var(--k-fg);
   }
 
   .project {
-    background: var(--project-color, var(--k-border-strong));
-    color: #fff;
+    background: var(--k-well);
+    overflow: visible;
   }
 
   .project:hover {
-    background: var(--project-color, var(--k-border-strong));
-    filter: brightness(1.1);
-    color: #fff;
+    background: var(--k-well);
   }
 
-  .project.home {
-    background: var(--k-bg-elev);
-    color: var(--k-fg-muted);
+  /* Index bar: raw project colour, short when idle, full height on the active project. */
+  .project:not(.home)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--k-radius) 0 0 var(--k-radius);
+    background: var(--project-color);
+  }
+
+  .project.active::before {
+    top: 0;
+    bottom: 0;
+  }
+
+  .project.active .glyph {
+    font-weight: var(--k-weight-strong);
+  }
+
+  /* Claude waiting is the brightest thing in the window. */
+  .project.lit {
+    background: color-mix(in oklab, var(--k-lamp-needs-input) 14%, var(--k-well));
   }
 
   .glyph {
-    font-weight: 700;
-    font-size: var(--k-font-size-lg);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    padding-left: 2px;
+    font-size: var(--k-font-size);
   }
 
   .att {
     position: absolute;
     top: -4px;
-    right: -4px;
+    right: -5px;
     display: inline-flex;
-    padding: 1px;
-    border-radius: 50%;
-    background: var(--k-bg-sunken);
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 10px;
+    height: 10px;
+  }
+
+  .count {
+    font-size: 10px;
+    font-weight: var(--k-weight-strong);
+    line-height: 1;
+    color: var(--k-lamp-needs-input);
   }
 
   .badge {
     position: absolute;
     top: -4px;
-    right: -5px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 8px;
-    background: var(--k-att-needs-input);
-    color: #fff;
+    right: -6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: var(--k-lamp-needs-input);
+    color: var(--k-well);
     font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
+    font-weight: var(--k-weight-strong);
+    font-variant-numeric: tabular-nums;
+    line-height: 14px;
     text-align: center;
   }
 </style>

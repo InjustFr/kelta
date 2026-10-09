@@ -137,7 +137,7 @@
 </script>
 
 <div class="pane" data-testid="settings-pane" data-pane-kind="settings">
-  <header class="bar">
+  <header class="k-toolbar bar">
     <div class="layers" role="group" aria-label="Layer being edited">
       <button
         type="button"
@@ -258,7 +258,7 @@
           {:else}
             {#each results as f (f.path)}
               <div class="result">
-                <span class="crumb">{sectionOfRoot(f.segs[0] ?? '')} · {f.path}</span>
+                <span class="crumb">{sectionOfRoot(f.segs[0] ?? '')}&ensp;<code>{f.path}</code></span>
                 <Field path={f.path} node={f.node} depth={1} />
               </div>
             {/each}
@@ -283,37 +283,34 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    background: var(--k-bg);
+    background: var(--k-well);
   }
 
   .bar {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-4);
-    border-bottom: 1px solid var(--k-border);
     flex-wrap: wrap;
+    height: auto;
+    min-height: var(--k-tabbar-height);
   }
 
+  /* Same grammar as the tab bar: text, active = 600 + accent underline. */
   .layers {
     display: inline-flex;
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    overflow: hidden;
+    align-self: stretch;
   }
 
   .layers button {
-    height: var(--k-control-height);
-    padding: 0 var(--k-space-4);
+    padding: 0 var(--k-space-3);
     border: none;
+    box-shadow: inset 0 -2px 0 transparent;
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-chrome);
     cursor: pointer;
   }
 
   .layers button.active {
-    background: var(--k-bg-selected);
+    box-shadow: inset 0 -2px 0 var(--k-accent);
     color: var(--k-fg);
+    font-weight: var(--k-weight-strong);
   }
 
   .layers button:disabled {
@@ -327,9 +324,10 @@
     gap: var(--k-space-2);
     margin-left: auto;
     padding: 0 var(--k-space-3);
-    height: var(--k-control-height);
+    height: 22px;
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
+    background: var(--k-well);
     color: var(--k-fg-subtle);
   }
 
@@ -345,8 +343,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-4);
-    border-bottom: 1px solid var(--k-border);
+    padding: var(--k-space-3) var(--k-space-5);
   }
 
   .banner ul {
@@ -375,8 +372,8 @@
     gap: var(--k-space-1);
     width: 190px;
     flex: none;
-    padding: var(--k-space-3);
-    border-right: 1px solid var(--k-border);
+    padding: var(--k-space-3) 0;
+    border-right: var(--k-gap) solid var(--k-bezel);
     overflow-y: auto;
   }
 
@@ -385,9 +382,8 @@
     align-items: center;
     gap: var(--k-space-3);
     height: var(--k-row-height);
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-4);
     border: none;
-    border-radius: var(--k-radius);
     background: transparent;
     color: var(--k-fg-muted);
     text-align: left;
@@ -400,6 +396,7 @@
 
   nav button.active {
     background: var(--k-bg-selected);
+    box-shadow: inset 2px 0 0 var(--k-accent);
     color: var(--k-fg);
   }
 
@@ -407,11 +404,17 @@
     flex: 1;
     min-width: 0;
     overflow-y: auto;
-    padding: var(--k-space-4) var(--k-space-6);
+    padding: var(--k-space-5) var(--k-space-6);
+  }
+
+  main > :global(*) {
+    max-width: 880px;
   }
 
   h2 {
     margin: 0 0 var(--k-space-3);
+    font-size: var(--k-font-size-lg);
+    font-weight: var(--k-weight-strong);
   }
 
   .result {

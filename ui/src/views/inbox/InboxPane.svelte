@@ -9,10 +9,20 @@
   import { layout, projects, reviews, sessions, tickets, toasts } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import { ticketKey } from '$lib/stores/tickets.svelte';
-  import { Badge, Button, EmptyState, ErrorState, IconButton, VirtualList, relativeTime } from '$lib/ui';
+  import {
+    Badge,
+    Button,
+    EmptyState,
+    ErrorState,
+    IconButton,
+    Lamp,
+    VirtualList,
+    relativeTime,
+  } from '$lib/ui';
 
   import { ciGlyph, decisionInfo, isAuthError, statusTone } from '../work/common';
   import { openContent } from '../work/nav';
+  import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -21,7 +31,7 @@
 
   let { projectId, focused }: PaneProps<'inbox'> = $props();
 
-  const ROW_HEIGHT = 32;
+  const ROW_HEIGHT = 26;
   const ALL = { kind: 'all' } as const;
 
   const myTickets = $derived(tickets.list(ALL, null));
@@ -59,7 +69,7 @@
   });
 
   type Row =
-    | { type: 'section'; id: string; label: string; count: number }
+    | { type: 'section'; id: string; label: string; count: number; lamp?: 'needs_input' }
     | { type: 'group'; id: string; label: string; count: number }
     | { type: 'empty'; id: string; label: string }
     | { type: 'ticket'; id: string; item: TicketItem }
@@ -68,6 +78,17 @@
 
   const rows = $derived.by((): Row[] => {
     const out: Row[] = [];
+    // Claude waiting comes first: it is the one thing that blocks work.
+    out.push({
+      type: 'section',
+      id: 's:input',
+      label: 'Needs input',
+      count: needing.length,
+      lamp: 'needs_input',
+    });
+    if (needing.length === 0) out.push({ type: 'empty', id: 'e:input', label: 'No session needs input.' });
+    for (const session of needing) out.push({ type: 'session', id: `n:${session.id}`, session });
+
     const tItems = myTickets.data?.items ?? [];
     out.push({ type: 'section', id: 's:tickets', label: 'My tickets', count: tItems.length });
     if (tItems.length === 0) out.push({ type: 'empty', id: 'e:tickets', label: 'Nothing assigned to you.' });
@@ -93,10 +114,6 @@
       for (const item of g.items)
         out.push({ type: 'review', id: `p:${reviewKey(item.review.ref)}`, item, mine: true });
     }
-
-    out.push({ type: 'section', id: 's:input', label: 'Needs input', count: needing.length });
-    if (needing.length === 0) out.push({ type: 'empty', id: 'e:input', label: 'No session needs input.' });
-    for (const session of needing) out.push({ type: 'session', id: `n:${session.id}`, session });
     return out;
   });
 
@@ -218,7 +235,7 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="pane"
+  class="k-listpane"
   data-testid="inbox-pane"
   bind:this={root}
   tabindex="0"
@@ -226,7 +243,7 @@
   aria-label="Inbox"
   {onkeydown}
 >
-  <header class="bar">
+  <header class="k-toolbar">
     <span class="title">Inbox</span>
     <span class="spacer"></span>
     <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
@@ -251,7 +268,7 @@
       onretry={refresh}
     />
     {#if empty && accountErrors.length === 0}
-      <EmptyState icon="inbox" title="Inbox zero" body="No tickets, review requests or sessions need you.">
+      <EmptyState icon="inbox" title="No tickets, review requests or sessions need you.">
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}
@@ -265,13 +282,14 @@
         >
           {#snippet row(r)}
             {#if r.type === 'section'}
-              <div class="section" role="heading" aria-level="2" data-section={r.id}>
+              <div class="k-group section" role="heading" aria-level="2" data-section={r.id}>
+                {#if r.lamp}<span class="k-row-lamp"><Lamp level={r.lamp} /></span>{/if}
                 {r.label}
-                <Badge>{r.count}</Badge>
+                <span class="count k-num">{r.count}</span>
               </div>
             {:else if r.type === 'group'}
               <div class="group" role="heading" aria-level="3" data-group={r.label}>
-                {r.label} <span class="count">{r.count}</span>
+                {r.label} <span class="count k-num">{r.count}</span>
               </div>
             {:else if r.type === 'empty'}
               <div class="empty">{r.label}</div>
@@ -279,32 +297,34 @@
               <button
                 type="button"
                 tabindex="-1"
-                class="row"
+                class="k-row"
                 class:selected={cur === r}
                 aria-current={cur === r ? 'true' : undefined}
                 onclick={() => (selId = r.id)}
                 ondblclick={() => void open(r)}
               >
                 {#if r.type === 'ticket'}
-                  <span class="key">{r.item.ticket.ref.key}</span>
-                  <span class="ttl">{r.item.ticket.title}</span>
+                  <span class="k-row-lamp"></span>
+                  <span class="k-row-key">{r.item.ticket.ref.key}</span>
+                  <span class="k-row-title">{r.item.ticket.title}</span>
                   <Badge tone={statusTone(r.item.ticket.status.category)}>{r.item.ticket.status.name}</Badge>
-                  <span class="meta">{relativeTime(Date.parse(r.item.ticket.updated_at))}</span>
+                  <span class="k-row-meta">{relativeTime(Date.parse(r.item.ticket.updated_at))}</span>
                 {:else if r.type === 'review'}
                   {@const ci = ciGlyph(r.item.review.ci)}
                   {@const dec = decisionInfo(r.item.review.decision)}
-                  <span class="ci {ci.tone}" role="img" aria-label={ci.label} title={ci.label}
-                    >{ci.glyph}</span
-                  >
-                  <span class="ttl">{r.item.review.title}</span>
+                  <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
+                  <span class="k-row-key">#{r.item.review.ref.number}</span>
+                  <span class="k-row-title">{r.item.review.title}</span>
                   {#if r.item.review.draft}<Badge>draft</Badge>{/if}
                   {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-                  <span class="meta">{r.mine ? r.item.review.ref.repo : r.item.review.author.name}</span>
-                  <span class="meta">{relativeTime(Date.parse(r.item.review.updated_at))}</span>
+                  <span class="k-row-meta">{r.mine ? r.item.review.ref.repo : r.item.review.author.name}</span
+                  >
+                  <span class="k-row-meta">{relativeTime(Date.parse(r.item.review.updated_at))}</span>
                 {:else}
-                  <Badge tone="danger">needs input</Badge>
-                  <span class="ttl">{r.session.name}</span>
-                  <span class="meta">{projects.byId(r.session.project_id)?.name ?? r.session.project_id}</span
+                  <span class="k-row-lamp"><Lamp level="needs_input" /></span>
+                  <span class="k-row-key">{r.session.name}</span>
+                  <span class="k-row-title"
+                    >{projects.byId(r.session.project_id)?.name ?? r.session.project_id}</span
                   >
                 {/if}
               </button>
@@ -315,36 +335,20 @@
     {/if}
   {/if}
 
-  <footer class="hints" aria-hidden="true">
-    j/k move · Enter open · o browser · s start work / review locally · R refresh
-  </footer>
+  <KeyHints
+    hints={[
+      ['j/k', 'move'],
+      ['Enter', 'open'],
+      ['o', 'browser'],
+      ['s', 'start work or review locally'],
+      ['R', 'refresh'],
+    ]}
+  />
 </div>
 
 <style>
-  .pane {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    outline: none;
-    background: var(--k-bg);
-    color: var(--k-fg);
-  }
-
-  .pane:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--k-focus);
-  }
-
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-  }
-
   .title {
-    font-weight: 600;
+    font-weight: var(--k-weight-strong);
   }
 
   .spacer {
@@ -356,105 +360,28 @@
     min-height: 0;
   }
 
-  .section,
+  .section {
+    color: var(--k-fg);
+  }
+
   .group,
   .empty {
     display: flex;
     align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     height: 100%;
-    padding: 0 var(--k-space-3);
-  }
-
-  .section {
-    background: var(--k-bg-sunken);
-    font-weight: 600;
-  }
-
-  .group {
-    padding-left: var(--k-space-4);
+    padding: 0 var(--k-space-3) 0 calc(var(--k-space-3) * 2 + 10px);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
+  }
+
+  .empty {
+    color: var(--k-fg-subtle);
   }
 
   .count {
     font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .empty {
-    padding-left: var(--k-space-4);
-    color: var(--k-fg-subtle);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    width: 100%;
-    height: 100%;
-    padding: 0 var(--k-space-3) 0 var(--k-space-5);
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: default;
-  }
-
-  .row:hover {
-    background: var(--k-bg-hover);
-  }
-
-  .selected {
-    background: var(--k-bg-selected);
-  }
-
-  .key {
-    flex: none;
-    min-width: 72px;
-    font-family: var(--k-font-mono);
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
-  }
-
-  .ci {
-    flex: none;
-    width: 16px;
-    text-align: center;
-    font-weight: 700;
-  }
-
-  .ci.ok {
-    color: var(--k-ok);
-  }
-
-  .ci.danger {
-    color: var(--k-danger);
-  }
-
-  .ci.warn {
-    color: var(--k-warn);
-  }
-
-  .ttl {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .meta {
-    flex: none;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .hints {
-    padding: var(--k-space-1) var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-    font-size: var(--k-font-size-xs);
+    font-weight: 400;
     color: var(--k-fg-subtle);
   }
 </style>

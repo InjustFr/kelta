@@ -64,14 +64,9 @@
     padding: var(--k-space-2) var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
-    background: var(--k-bg);
+    background: var(--k-well);
     color: var(--k-fg);
     resize: vertical;
-  }
-
-  input:focus,
-  textarea:focus {
-    border-color: var(--k-focus);
   }
 
   .invalid input,

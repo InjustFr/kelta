@@ -36,7 +36,7 @@ import {
   type PaneNode,
 } from '$lib/layout';
 import { attention, layout, projects, sessions, toasts, ui, work } from '$lib/stores';
-import { maxAttention } from '$lib/stores/reducers';
+import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
 
 import { confirms } from './confirm.svelte';
@@ -356,13 +356,16 @@ export function workItemOfTab(tab: Tab) {
 
 // ---- attention ------------------------------------------------------------------------------
 
-/** Max attention of the sessions shown in a tab (tab dot). */
+/** Lamp of the sessions shown in a tab (max attention, or working). */
 export function tabAttention(tab: Tab) {
-  const levels = allPanes(tab.root)
+  const tabSessions = allPanes(tab.root)
     .map((p) => paneSession(p))
     .filter((s): s is SessionId => s !== null)
-    .map((s) => sessions.get(s)?.attention ?? 'none');
-  return maxAttention(levels);
+    .map((s) => sessions.get(s));
+  return lampOf(
+    maxAttention(tabSessions.map((s) => s?.attention ?? 'none')),
+    tabSessions.some((s) => s?.status === 'working'),
+  );
 }
 
 export function projectAttention(id: ProjectId) {

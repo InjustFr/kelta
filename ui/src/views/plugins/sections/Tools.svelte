@@ -57,7 +57,7 @@
                 <span class="bad">{c}</span>
               {:else if c}
                 {#if c.installed}<span class="ok">{c.version ?? 'installed'}</span>
-                {:else}<span class="bad">missing{c.install_hint ? ` · ${c.install_hint}` : ''}</span>{/if}
+                {:else}<span class="bad">missing{c.install_hint ? `: ${c.install_hint}` : ''}</span>{/if}
               {:else if t.installed === false}
                 <span class="bad">missing</span>
               {/if}

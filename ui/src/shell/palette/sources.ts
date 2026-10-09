@@ -9,7 +9,7 @@ import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { plugins, projects, reviews, sessions, settings, tools } from '$lib/stores';
-import { attentionRank } from '$lib/stores/reducers';
+import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
@@ -25,6 +25,7 @@ export interface PaletteItem {
   detail?: string;
   kbd?: string;
   icon: string;
+  lamp?: LampLevel;
   run: () => void | Promise<void>;
 }
 
@@ -45,13 +46,16 @@ export function itemText(item: PaletteItem): string {
   return `${item.label} ${item.detail ?? ''}`;
 }
 
+/** Detail segments are separated by space, not middle dots (DESIGN §3). */
+const SEP = '\u2002\u2002';
+
 function projectName(id: ProjectId): string {
   return projects.byId(id)?.name ?? id;
 }
 
 function sessionDetail(s: SessionInfo): string {
   const status = statusLabel(s.status);
-  return [projectName(s.project_id), sessionKindName(s.kind), status].filter(Boolean).join(' · ');
+  return [projectName(s.project_id), sessionKindName(s.kind), status].filter(Boolean).join(SEP);
 }
 
 export function sessionItems(): PaletteItem[] {
@@ -66,6 +70,7 @@ export function sessionItems(): PaletteItem[] {
       label: s.name,
       detail: sessionDetail(s),
       icon: sessionIcon(s.kind),
+      lamp: lampOf(s.attention, s.status === 'working'),
       run: () => void revealSession(s.id),
     }));
 }
@@ -196,7 +201,7 @@ export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
     id: `ticket:${hit.ticket.ref.account}:${hit.ticket.ref.key}`,
     group: 'Tickets' as const,
     label: `${hit.ticket.ref.key} ${hit.ticket.title}`,
-    detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(' · '),
+    detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(SEP),
     icon: 'ticket',
     run: () => {
       const project = hit.project_ids[0] ?? projects.activeId;
