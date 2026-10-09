@@ -1,0 +1,29 @@
+{
+  "failed_checks": [
+    {
+      "log_tail": "test login::lockout ... FAILED",
+      "name": "ci / test",
+      "url": "https://github.com/acme/shop-api/actions/runs/2"
+    }
+  ],
+  "reviewers": [
+    "bob"
+  ],
+  "reviews": [
+    {
+      "author": "bob",
+      "body_md": "Close, two things to fix.",
+      "state": "changes_requested"
+    }
+  ],
+  "threads": [
+    {
+      "author": "bob",
+      "body_md": "bob: Reset the counter after a successful login.",
+      "id": "PRRT_kwDOA1",
+      "line": 42,
+      "path": "src/login.rs",
+      "url": "https://github.com/acme/shop-api/pull/74#discussion_r1"
+    }
+  ]
+}

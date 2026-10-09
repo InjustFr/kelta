@@ -1,0 +1,43 @@
+{
+  "data": {
+    "viewer": { "login": "louis" },
+    "repository": {
+      "pullRequest": {
+        "headRefOid": "abc123",
+        "url": "https://github.com/acme/shop/pull/101",
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_open",
+              "isResolved": false,
+              "path": "src/limiter.rs",
+              "line": null,
+              "originalLine": 42,
+              "comments": {
+                "nodes": [
+                  { "author": { "login": "erin" }, "body": "Reset the counter on success.", "url": "https://github.com/acme/shop/pull/101#discussion_r1" },
+                  { "author": { "login": "louis" }, "body": "Will do.", "url": "https://github.com/acme/shop/pull/101#discussion_r2" }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_done",
+              "isResolved": true,
+              "path": "src/main.rs",
+              "line": 3,
+              "originalLine": 3,
+              "comments": { "nodes": [ { "author": { "login": "erin" }, "body": "Typo.", "url": "https://github.com/acme/shop/pull/101#discussion_r3" } ] }
+            }
+          ]
+        },
+        "latestReviews": {
+          "nodes": [
+            { "state": "CHANGES_REQUESTED", "body": "Close, two things to fix.", "author": { "login": "erin" } },
+            { "state": "COMMENTED", "body": "", "author": { "login": "zed" } },
+            { "state": "COMMENTED", "body": "Self note", "author": { "login": "louis" } }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -212,6 +212,7 @@ async fn mcp_initialize_list_and_call() {
             "open_in_editor",
             "create_pr",
             "list_review_requests",
+            "get_review_feedback",
             "notify"
         ]
     );
@@ -280,6 +281,12 @@ async fn mcp_initialize_list_and_call() {
     let (text, err) = call(port, sid.as_str(), "mt", "list_review_requests", json!({})).await;
     assert!(!err, "{text}");
     assert!(e.fake.call_names().contains(&"review_list"));
+
+    e.fake.respond("work_feedback", serde_json::to_value(kelta_proto::samples::feedback()).unwrap());
+    let (text, err) = call(port, sid.as_str(), "mt", "get_review_feedback", json!({})).await;
+    assert!(!err, "{text}");
+    assert!(text.contains("src/login.rs:42") && text.contains("ci / test"), "{text}");
+    assert!(e.fake.call_names().contains(&"work_feedback"));
 
     let (_, err) = call(port, sid.as_str(), "mt", "notify", json!({"message":"Tests are green"})).await;
     assert!(!err);

@@ -207,6 +207,21 @@ pub fn existing_for<'a>(items: &'a [WorkItem], source: &WorkSource) -> Option<&'
     })
 }
 
+/// Unfinished own work item behind `pr` (B2): linked by URL, or on its head branch in the repo
+/// bound to the PR's repository (a PR Claude opened with `gh`).
+pub fn owner_of_pr<'a>(items: &'a [WorkItem], project: &ProjectInfo, pr: &Review) -> Option<&'a WorkItem> {
+    let bound = |w: &WorkItem| {
+        project
+            .repos
+            .iter()
+            .any(|r| r.id == w.repo_id && r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
+    };
+    items
+        .iter()
+        .filter(|w| w.state != WorkState::Finished && w.review.is_none())
+        .find(|w| w.pr_url.as_deref() == Some(pr.url.as_str()) || (w.branch == pr.source_branch && bound(w)))
+}
+
 /// Default side effects (status_map overrides `work.on_start`).
 pub fn side_effects(settings: &Settings, project: &ProjectInfo, ticket: bool, ctx: &Ctx) -> SideEffects {
     let on = &settings.work.on_start;
@@ -267,6 +282,7 @@ pub fn assemble(
         claude,
         side_effects,
         existing: existing.map(|w| w.id.clone()),
+        adopt_pr: None,
     }
 }
 
@@ -293,5 +309,27 @@ mod tests {
         assert_eq!(type_for(&s, Some("Bug")), "fix");
         assert_eq!(type_for(&s, Some("Epic")), "chore");
         assert_eq!(review_branch(CodeHostKind::Gitlab, 7), "kelta/mr-7");
+    }
+
+    #[test]
+    fn own_pr_matches_by_url_or_head_branch() {
+        let project = samples::project_info();
+        let mut pr = samples::review();
+        pr.source_branch = "feat/x".into();
+        let mut item = samples::work_item();
+        item.repo_id = project.repos[0].id.clone();
+        item.review = None;
+        item.pr_url = None;
+        item.branch = "feat/y".into();
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+        item.branch = "feat/x".into();
+        let bound = project.repos[0].code_host.as_ref().map(|c| c.repo.clone());
+        assert_eq!(bound.as_deref(), Some(pr.r#ref.repo.as_str()), "sample repo is bound to the PR repo");
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
+        item.branch = "other".into();
+        item.pr_url = Some(pr.url.clone());
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
+        item.state = WorkState::Finished;
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
     }
 }

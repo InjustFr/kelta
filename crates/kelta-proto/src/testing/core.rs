@@ -448,6 +448,11 @@ impl CoreApi for FakeCore {
             .ok_or_else(|| KeltaError::not_found(format!("work item {id}")))
     }
 
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<crate::codehost::Feedback, KeltaError> {
+        self.record("work_feedback", serde_json::json!({ "id": id }));
+        self.overridden("work_feedback").unwrap_or_else(|| Ok(crate::codehost::Feedback::default()))
+    }
+
     async fn editor_open(
         &self,
         target: EditorTarget,

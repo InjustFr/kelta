@@ -2,5 +2,7 @@
   "ahead": 2,
   "behind": 0,
   "dirty": true,
+  "diverged": false,
+  "remote_new": 0,
   "unpushed": true
 }

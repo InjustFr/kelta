@@ -335,3 +335,78 @@ async fn unauthorized_is_needs_auth() {
     Mock::given(path("/api/v4/user")).respond_with(ResponseTemplate::new(401)).mount(&server).await;
     assert_eq!(gl(&server).me().await.unwrap_err().code, ErrorCode::NeedsAuth);
 }
+
+#[tokio::test]
+async fn blocking_discussions_and_requested_changes_mean_changes_requested() {
+    let server = MockServer::start().await;
+    mount_detail(&server, "gitlab/mr_blocked.json", "gitlab/approvals.json").await;
+    let d = gl(&server).get(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested), "approvals never override it");
+    assert_eq!(d.review.decision_head.as_deref(), Some("deadbeef08"));
+
+    let server = MockServer::start().await;
+    mount_detail(&server, "gitlab/mr.json", "gitlab/approvals.json").await;
+    mount(&server, "GET", &format!("{MR}/reviewers"), 200, "gitlab/reviewers_requested_changes.json").await;
+    let d = gl(&server).get(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested), "GitLab 17 reviewer state");
+    let zed = d.reviewers.iter().find(|r| r.user.login.as_deref() == Some("zed")).unwrap();
+    assert_eq!(zed.state, Some(MyReviewState::ChangesRequested));
+}
+
+#[tokio::test]
+async fn feedback_unresolved_discussions_and_failed_job_traces() {
+    let server = MockServer::start().await;
+    mount_detail(&server, "gitlab/mr.json", "gitlab/approvals.json").await;
+    mount(&server, "GET", &format!("{MR}/discussions"), 200, "gitlab/discussions.json").await;
+    Mock::given(method("GET"))
+        .and(path("/api/v4/projects/grp%2Fother/jobs/901/trace"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("compiling\nerror: test failed\n"))
+        .mount(&server)
+        .await;
+    let f = gl(&server).feedback(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    assert_eq!(f.threads.len(), 1, "resolved, non-resolvable and system notes are dropped");
+    let t = &f.threads[0];
+    assert_eq!((t.id.as_str(), t.author.as_str()), ("d-open", "zed"));
+    assert_eq!((t.path.as_deref(), t.line), (Some("a.rs"), Some(12)));
+    assert_eq!(t.body_md, "zed: Use a constant here.\n\nlouis: Agreed.");
+    assert_eq!(t.url, "https://gitlab.acme.test/grp/other/-/merge_requests/8#note_301");
+    assert_eq!(f.reviewers, vec!["zed"], "me excluded");
+    assert_eq!(f.failed_checks.len(), 1);
+    assert_eq!(f.failed_checks[0].name, "test");
+    assert_eq!(f.failed_checks[0].log_tail.as_deref(), Some("compiling\nerror: test failed"));
+}
+
+#[tokio::test]
+async fn feedback_refused_names_the_missing_scope() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/user", 200, "gitlab/user.json").await;
+    Mock::given(path(MR)).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    Mock::given(path(format!("{MR}/discussions")))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    let e = gl(&server).feedback(&rref("gitlab-acme", "grp/other", 8)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(e.message, "GitLab refused the review discussions (403: token lacks `read_api`).");
+}
+
+#[tokio::test]
+async fn rerequest_posts_the_quick_action_and_resolve_puts_each_discussion() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/user", 200, "gitlab/user.json").await;
+    mount(&server, "GET", MR, 200, "gitlab/mr.json").await;
+    mount(&server, "POST", &format!("{MR}/notes"), 201, "gitlab/note.json").await;
+    let h = gl(&server);
+    let who = h.rerequest_review(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    assert_eq!(who, vec!["zed"]);
+    assert_eq!(bodies(&server, "POST", &format!("{MR}/notes")).await[0]["body"], "/request_review @zed");
+
+    Mock::given(method("PUT"))
+        .and(path(format!("{MR}/discussions/d-open")))
+        .and(query_param("resolved", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    h.resolve_threads(&rref("gitlab-acme", "grp/other", 8), &["d-open".into()]).await.unwrap();
+}

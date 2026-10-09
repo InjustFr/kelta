@@ -10,4 +10,8 @@ export type Review = { ref: ReviewRef, title: string, url: string, author: User,
 /**
  * Ticket keys matched by `reviews.ticket_key_regex` over branch + title.
  */
-linked_tickets: Array<string>, additions: number | null, deletions: number | null, };
+linked_tickets: Array<string>, additions: number | null, deletions: number | null, 
+/**
+ * Head commit the latest decisive review (changes requested / approved) was left on.
+ */
+decision_head?: string | null, };

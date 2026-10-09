@@ -86,6 +86,10 @@ pub struct Review {
     pub additions: Option<u32>,
     #[serde(default)]
     pub deletions: Option<u32>,
+    /// Head commit the latest decisive review (changes requested / approved) was left on.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub decision_head: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -160,4 +164,124 @@ pub struct ReviewPage {
     pub items: Vec<ReviewItem>,
     pub stale: bool,
     pub errors: Vec<AccountError>,
+}
+
+/// Review feedback on a PR for Fix with Claude (FLOW §4.2): unresolved threads, review summaries
+/// with a body, failed checks with their log tail.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Feedback {
+    pub threads: Vec<FeedbackThread>,
+    pub reviews: Vec<FeedbackReview>,
+    pub failed_checks: Vec<FailedCheck>,
+    /// Logins that reviewed (re-request review targets).
+    pub reviewers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct FeedbackThread {
+    /// Host id used to resolve the thread (GraphQL node id / GitLab discussion id).
+    pub id: String,
+    pub author: String,
+    pub path: Option<String>,
+    pub line: Option<u32>,
+    /// The thread's comments, oldest first, as `author: body` Markdown.
+    pub body_md: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct FeedbackReview {
+    pub author: String,
+    pub state: Option<MyReviewState>,
+    pub body_md: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct FailedCheck {
+    pub name: String,
+    pub url: Option<String>,
+    /// Last 40 log lines when the host exposes them.
+    pub log_tail: Option<String>,
+}
+
+impl Feedback {
+    /// Markdown brief for Claude (MCP `get_review_feedback`; the Fix sheet writes the same layout).
+    pub fn to_markdown(&self) -> String {
+        let mut s = String::from("# Review feedback\n");
+        if self.threads.is_empty() && self.reviews.is_empty() && self.failed_checks.is_empty() {
+            s.push_str("\nNo unresolved threads, review summaries or failed checks.\n");
+        }
+        if !self.threads.is_empty() {
+            s.push_str("\n## Unresolved threads\n");
+            for t in &self.threads {
+                let at = match (&t.path, t.line) {
+                    (Some(p), Some(l)) => format!(" on `{p}:{l}`"),
+                    (Some(p), None) => format!(" on `{p}`"),
+                    _ => String::new(),
+                };
+                s.push_str(&format!("\n### {}{at}\n\n{}\n\n<{}>\n", t.author, t.body_md.trim(), t.url));
+            }
+        }
+        if !self.reviews.is_empty() {
+            s.push_str("\n## Reviews\n");
+            for r in &self.reviews {
+                let state = match r.state {
+                    Some(MyReviewState::ChangesRequested) => " (changes requested)",
+                    Some(MyReviewState::Approved) => " (approved)",
+                    _ => "",
+                };
+                s.push_str(&format!("\n### {}{state}\n\n{}\n", r.author, r.body_md.trim()));
+            }
+        }
+        if !self.failed_checks.is_empty() {
+            s.push_str("\n## Failed checks\n");
+            for c in &self.failed_checks {
+                s.push_str(&format!("\n### {}\n", c.name));
+                if let Some(u) = &c.url {
+                    s.push_str(&format!("\n<{u}>\n"));
+                }
+                if let Some(t) = &c.log_tail {
+                    s.push_str(&format!("\n```text\n{}\n```\n", t.trim_end()));
+                }
+            }
+        }
+        s
+    }
+}
+
+#[cfg(test)]
+mod feedback_tests {
+    use super::*;
+
+    #[test]
+    fn markdown_lists_every_part() {
+        let f = Feedback {
+            threads: vec![FeedbackThread {
+                id: "t".into(),
+                author: "bob".into(),
+                path: Some("src/a.rs".into()),
+                line: Some(3),
+                body_md: "bob: rename".into(),
+                url: "https://h/1".into(),
+            }],
+            reviews: vec![FeedbackReview {
+                author: "ann".into(),
+                state: Some(MyReviewState::ChangesRequested),
+                body_md: "close".into(),
+            }],
+            failed_checks: vec![FailedCheck {
+                name: "test".into(),
+                url: None,
+                log_tail: Some("boom".into()),
+            }],
+            reviewers: vec![],
+        };
+        let md = f.to_markdown();
+        for part in
+            ["### bob on `src/a.rs:3`", "### ann (changes requested)", "### test", "```text\nboom\n```"]
+        {
+            assert!(md.contains(part), "{part} in {md}");
+        }
+        assert!(Feedback::default().to_markdown().contains("No unresolved"));
+    }
 }

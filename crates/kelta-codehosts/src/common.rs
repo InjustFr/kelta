@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use kelta_proto::error::KeltaError;
+use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::settings::ReviewsSettings;
 use kelta_proto::tracker::User;
 use parking_lot::RwLock;
@@ -79,6 +79,31 @@ pub fn host_matches(remote_host: &str, account_host: &str) -> bool {
     remote_host == account_host || remote_host.strip_prefix("ssh.") == Some(account_host)
 }
 
+/// Number of log lines kept per failed check (FLOW §4.2).
+pub const LOG_TAIL_LINES: usize = 40;
+/// Failed checks whose logs are fetched (each is one request).
+pub const MAX_LOGS: usize = 5;
+
+/// Last `LOG_TAIL_LINES` lines of a job log.
+pub fn log_tail(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(LOG_TAIL_LINES)..].join("\n")
+}
+
+/// FLOW §6 wording for a feedback read the host refused or could not serve.
+pub fn feedback_error(host: &str, what: &str, scope: &str) -> impl Fn(KeltaError) -> KeltaError {
+    move |e| match e.code {
+        ErrorCode::PermissionDenied => KeltaError::new(
+            ErrorCode::PermissionDenied,
+            format!("{host} refused the {what} (403: token lacks `{scope}`)."),
+        ),
+        ErrorCode::Network | ErrorCode::Timeout => {
+            KeltaError::new(e.code, format!("Could not reach {host} for the {what} (offline)."))
+        }
+        _ => e,
+    }
+}
+
 pub fn s<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
 }
@@ -113,6 +138,22 @@ mod tests {
         assert_eq!(parse_remote("/local/path/repo"), None);
         assert_eq!(parse_remote("not a url"), None);
         assert_eq!(parse_remote("https://github.com/"), None);
+    }
+
+    #[test]
+    fn tail_keeps_the_last_lines() {
+        let text: String = (1..=50).map(|i| format!("l{i}\n")).collect();
+        let t = log_tail(&text);
+        assert!(t.starts_with("l11\n") && t.ends_with("l50"));
+        assert_eq!(log_tail("a\nb"), "a\nb");
+    }
+
+    #[test]
+    fn feedback_errors_use_the_flow_wording() {
+        let map = feedback_error("GitHub", "review threads", "pull_requests:read");
+        let e = map(KeltaError::new(ErrorCode::Network, "connection refused"));
+        assert_eq!(e.message, "Could not reach GitHub for the review threads (offline).");
+        assert_eq!(map(KeltaError::invalid("x")).message, "x");
     }
 
     #[test]

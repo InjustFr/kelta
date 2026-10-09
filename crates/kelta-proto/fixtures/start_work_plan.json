@@ -1,4 +1,5 @@
 {
+  "adopt_pr": null,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "branch_exists": null,

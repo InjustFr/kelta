@@ -13,7 +13,7 @@ use ts_rs::TS;
 
 use crate::codehost::ReviewItem;
 use crate::codehost::{
-    CodeHostKind, PrCreate, PrDraft, Review, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
+    CodeHostKind, Feedback, PrCreate, PrDraft, Review, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
 };
 use crate::ctl::CtlCommand;
 use crate::error::KeltaError;
@@ -114,6 +114,18 @@ pub trait CodeHost: Send + Sync {
     /// `pull/N/head:…` | `merge-requests/N/head:…`.
     fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String;
     fn repo_from_remote(&self, url: &str) -> Option<String>;
+    /// Unresolved threads, review summaries and failed checks of a PR (Fix with Claude).
+    async fn feedback(&self, _r: &ReviewRef) -> Result<Feedback, KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot read review feedback"))
+    }
+    /// Ask everyone who reviewed to review again; returns their logins.
+    async fn rerequest_review(&self, _r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot re-request reviews"))
+    }
+    /// Resolve review threads by id (`FeedbackThread::id`).
+    async fn resolve_threads(&self, _r: &ReviewRef, _ids: &[String]) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot resolve threads"))
+    }
 }
 
 // ---- config / secrets (impl: kelta-config / kelta-secrets) ------------------------------------
@@ -179,6 +191,8 @@ pub trait CoreApi: Send + Sync {
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
     async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+    /// Review feedback of the work item's PR (MCP `get_review_feedback`).
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
     async fn editor_open(
         &self,
         target: EditorTarget,

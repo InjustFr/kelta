@@ -343,6 +343,50 @@ pub async fn ahead_behind(worktree: &Path, upstream: &str) -> Result<(u32, u32),
     Ok((it.next().unwrap_or(0), it.next().unwrap_or(0)))
 }
 
+/// `git rev-parse` of a commit-ish (`None` when it does not resolve).
+pub async fn rev(worktree: &Path, r: &str) -> Result<Option<String>, KeltaError> {
+    let spec = format!("{r}^{{commit}}");
+    let out = run(worktree, &["rev-parse", "--verify", "--quiet", &spec], LOCAL_TIMEOUT).await?;
+    Ok(out.ok().then(|| out.stdout.trim().to_owned()))
+}
+
+/// `git merge-base --is-ancestor <a> <b>`.
+pub async fn is_ancestor(worktree: &Path, a: &str, b: &str) -> Result<bool, KeltaError> {
+    let out = run(worktree, &["merge-base", "--is-ancestor", a, b], LOCAL_TIMEOUT).await?;
+    match out.code {
+        0 => Ok(true),
+        1 => Ok(false),
+        _ => Err(KeltaError::upstream(format!("git merge-base {a} {b} failed: {}", out.stderr.trim()))),
+    }
+}
+
+/// `git rev-list --count <args>`.
+pub async fn count(worktree: &Path, args: &[&str]) -> Result<u32, KeltaError> {
+    let mut a = vec!["rev-list", "--count"];
+    a.extend_from_slice(args);
+    Ok(run_ok(worktree, &a, LOCAL_TIMEOUT).await?.stdout.trim().parse().unwrap_or(0))
+}
+
+/// A stopped rebase of `worktree`: `(conflicted files, step, total)`; `None` when no rebase runs.
+pub async fn rebase_progress(worktree: &Path) -> Result<Option<(Vec<PathBuf>, u32, u32)>, KeltaError> {
+    let mut dir = None;
+    for name in ["rebase-merge", "rebase-apply"] {
+        let out = run_ok(worktree, &["rev-parse", "--git-path", name], LOCAL_TIMEOUT).await?;
+        let p = worktree.join(out.stdout.trim());
+        if p.is_dir() {
+            dir = Some((p, name == "rebase-merge"));
+            break;
+        }
+    }
+    let Some((dir, merge)) = dir else { return Ok(None) };
+    let num =
+        |f: &str| std::fs::read_to_string(dir.join(f)).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    let (step, total) = if merge { (num("msgnum"), num("end")) } else { (num("next"), num("last")) };
+    let out = run_ok(worktree, &["diff", "--name-only", "--diff-filter=U", "-z"], LOCAL_TIMEOUT).await?;
+    let files = out.stdout.split('\0').filter(|s| !s.is_empty()).map(PathBuf::from).collect();
+    Ok(Some((files, step, total)))
+}
+
 /// Upstream of HEAD (`origin/feat/x`) if configured.
 pub async fn upstream(worktree: &Path) -> Result<Option<String>, KeltaError> {
     let out =

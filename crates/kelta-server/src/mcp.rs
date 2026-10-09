@@ -127,6 +127,7 @@ const TOOL_NAMES: &[&str] = &[
     "open_in_editor",
     "create_pr",
     "list_review_requests",
+    "get_review_feedback",
     "notify",
 ];
 
@@ -182,6 +183,11 @@ pub(crate) fn tool_defs() -> Value {
             "inputSchema": empty,
         },
         {
+            "name": "get_review_feedback",
+            "description": "Get the review feedback on this session's pull/merge request: unresolved review threads (author, file:line, comments), review summaries and failed checks with the end of their logs, as Markdown.",
+            "inputSchema": empty,
+        },
+        {
             "name": "notify",
             "description": "Send a desktop notification to the user.",
             "inputSchema": {
@@ -215,6 +221,10 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str, args: &
         "open_in_editor" => open_in_editor(core, sid, args).await,
         "create_pr" => create_pr(core, sid, args).await,
         "list_review_requests" => list_review_requests(core).await,
+        "get_review_feedback" => {
+            let w = work(core, sid).await.ok_or_else(|| "no work item linked to this session".to_owned())?;
+            Ok(core.work_feedback(&w.id).await.map_err(|e| e.message)?.to_markdown())
+        }
         "notify" => {
             let message = str_arg(args, "message")?;
             let session = core.session_get(sid);

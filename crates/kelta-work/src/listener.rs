@@ -1,5 +1,6 @@
 //! Bus listener (one task, event-driven): `claude.file_edited` → editor reload/open
-//! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session.
+//! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
+//! Claude `Stop` → re-read the item's rebase state.
 
 use std::path::PathBuf;
 use std::sync::Weak;
@@ -29,6 +30,18 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                 tokio::spawn(async move {
                     if let Err(e) = svc.follow_edit(&sid, &path).await {
                         tracing::debug!(error = %e.message, "follow_claude_edits failed");
+                    }
+                });
+            }
+            // Claude may have finished (or aborted) a rebase it was asked to resolve.
+            bus::CLAUDE_HOOK if ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop") => {
+                let Some(sid) = ev.session_id.clone() else { continue };
+                tokio::spawn(async move {
+                    let Some(item) = svc.for_session(&sid).await.filter(|w| w.rebase.is_some()) else {
+                        return;
+                    };
+                    if let Err(e) = svc.refresh_rebase(&item.id).await {
+                        tracing::debug!(error = %e.message, "rebase re-read on Stop failed");
                     }
                 });
             }

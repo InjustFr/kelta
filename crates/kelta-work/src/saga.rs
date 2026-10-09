@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use kelta_proto::api::{CoreApi, Tracker};
-use kelta_proto::codehost::Review;
+use kelta_proto::codehost::{Review, ReviewKind};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, ToastAction, ToastLevel, bus};
 use kelta_proto::ext::{BlockingOutcome, ToolHandle};
@@ -275,6 +275,16 @@ impl WorkService {
             WorkSource::Review { review } => {
                 let host = core.code_host_for(&review.account).await?;
                 let r = host.get(review).await?.review;
+                // B2: my own PR is the work item on its head branch, never a `kelta/pr-N` checkout.
+                let existing = existing.or_else(|| plan::owner_of_pr(&items, &project, &r).cloned());
+                if existing.is_none() && r.kind == ReviewKind::Authored {
+                    // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
+                    let source = WorkSource::Branch { name: r.source_branch.clone() };
+                    let mut plan = Box::pin(self.build_plan(project_id, source)).await?;
+                    plan.base = r.target_branch.clone();
+                    plan.adopt_pr = Some(r.url.clone());
+                    return Ok(plan);
+                }
                 let repo = project
                     .repos
                     .iter()
@@ -397,10 +407,12 @@ impl WorkService {
             nvim_socket: None,
             session_ids: Vec::new(),
             tab_id: None,
-            pr_url: None,
+            pr_url: plan.adopt_pr.clone(),
             state: WorkState::Planned,
             steps: Vec::new(),
             created_at: kelta_proto::now_rfc3339(),
+            sent_threads: Vec::new(),
+            rebase: None,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -646,7 +658,10 @@ impl WorkService {
                 return Ok(Some(format!("fetched {spec}")));
             }
         }
-        match git::fetch(repo, remote, &[&item.base], timeout).await {
+        // An adopted PR's head branch comes from the remote.
+        let refs: Vec<&str> =
+            if item.pr_url.is_some() { vec![&item.base, &item.branch] } else { vec![&item.base] };
+        match git::fetch(repo, remote, &refs, timeout).await {
             Ok(()) => Ok(Some(format!("fetched {remote}/{}", item.base))),
             Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout) => {
                 Ok(Some(format!("offline: {}", e.message)))
@@ -694,7 +709,10 @@ impl WorkService {
                 git::worktree_add(repo, &item.worktree, &item.branch, None).await?;
             } else {
                 let remote_base = format!("{}/{}", env.repo.remote, item.base);
-                let start = if git::ref_exists(repo, &remote_base).await? {
+                let remote_branch = format!("{}/{}", env.repo.remote, item.branch);
+                let start = if git::ref_exists(repo, &format!("refs/remotes/{remote_branch}")).await? {
+                    remote_branch
+                } else if git::ref_exists(repo, &remote_base).await? {
                     remote_base
                 } else if git::ref_exists(repo, &item.base).await? {
                     item.base.clone()

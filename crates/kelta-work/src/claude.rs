@@ -76,7 +76,7 @@ pub fn context_md(c: &ContextInfo) -> String {
     if c.mcp {
         s.push_str(
             "\nKelta MCP tools (server `kelta`): get_ticket, transition_ticket, add_ticket_comment, \
-             open_in_editor, create_pr, list_review_requests, notify. Prefer `create_pr` over pushing \
+             open_in_editor, create_pr, list_review_requests, get_review_feedback, notify. Prefer `create_pr` over pushing \
              and opening pull requests by hand.\n",
         );
     }
@@ -93,10 +93,19 @@ pub fn context_md(c: &ContextInfo) -> String {
 pub enum LaunchMode {
     /// `--session-id <uuid> … "<prompt>"`.
     New { uuid: String, prompt: String },
-    /// `--resume <uuid>`.
-    Resume { uuid: String },
-    /// `--continue` (fallback when resume is refused).
-    Continue,
+    /// `--resume <uuid> [-- "<prompt>"]`.
+    Resume { uuid: String, prompt: Option<String> },
+    /// `--continue [-- "<prompt>"]` (fallback when resume is refused; keeps the prompt, B8).
+    Continue { prompt: Option<String> },
+}
+
+impl LaunchMode {
+    fn prompt(&self) -> Option<&str> {
+        match self {
+            LaunchMode::New { prompt, .. } => Some(prompt),
+            LaunchMode::Resume { prompt, .. } | LaunchMode::Continue { prompt } => prompt.as_deref(),
+        }
+    }
 }
 
 /// Inputs of the Claude argv.
@@ -123,8 +132,8 @@ pub fn argv(spec: &LaunchSpec) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     match &spec.mode {
         LaunchMode::New { uuid, .. } => a.extend(["--session-id".into(), uuid.clone()]),
-        LaunchMode::Resume { uuid } => a.extend(["--resume".into(), uuid.clone()]),
-        LaunchMode::Continue => a.push("--continue".into()),
+        LaunchMode::Resume { uuid, .. } => a.extend(["--resume".into(), uuid.clone()]),
+        LaunchMode::Continue { .. } => a.push("--continue".into()),
     }
     if !spec.name.is_empty() {
         a.extend(["-n".into(), spec.name.clone()]);
@@ -144,13 +153,10 @@ pub fn argv(spec: &LaunchSpec) -> Vec<String> {
     }
     a.extend(["--append-system-prompt-file".into(), spec.context_file.to_string_lossy().into_owned()]);
     a.extend(spec.extra_args.iter().cloned());
-    if let LaunchMode::New { prompt, .. } = &spec.mode
-        && !prompt.trim().is_empty()
-    {
-        if prompt.starts_with('-') {
-            a.push("--".into());
-        }
-        a.push(prompt.clone());
+    if let Some(prompt) = spec.mode.prompt().filter(|p| !p.trim().is_empty()) {
+        // `--` ends the options: neither a dash prompt nor a variadic extra arg can swallow it.
+        a.push("--".into());
+        a.push(prompt.to_owned());
     }
     a
 }
@@ -228,5 +234,32 @@ mod tests {
         let a = argv(&spec);
         assert_eq!(&a[a.len() - 2..], &["--".to_owned(), "-x".to_owned()]);
         assert!(a.contains(&"low".to_owned()) && a.contains(&"plan".to_owned()));
+    }
+
+    #[test]
+    fn resume_and_continue_carry_the_prompt() {
+        let spec = |mode| LaunchSpec {
+            mode,
+            name: String::new(),
+            model: String::new(),
+            effort: ClaudeEffort::Low,
+            permission_mode: PermissionMode::Plan,
+            settings_file: "/s".into(),
+            mcp_file: None,
+            allowed_tools: vec![],
+            context_file: "/c".into(),
+            extra_args: vec!["--add-dir".into(), "/x".into()],
+        };
+        let fix = Some("Fix the review".to_owned());
+        let a = argv(&spec(LaunchMode::Resume { uuid: "u".into(), prompt: fix.clone() }));
+        assert_eq!(&a[..2], &["--resume", "u"]);
+        assert_eq!(&a[a.len() - 2..], &["--", "Fix the review"]);
+        let a = argv(&spec(LaunchMode::Continue { prompt: fix }));
+        assert_eq!(
+            (a[0].as_str(), &a[a.len() - 2..]),
+            ("--continue", &["--".to_owned(), "Fix the review".to_owned()][..])
+        );
+        let a = argv(&spec(LaunchMode::Resume { uuid: "u".into(), prompt: None }));
+        assert_eq!(a.last().map(String::as_str), Some("/x"));
     }
 }

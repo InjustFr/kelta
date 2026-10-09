@@ -527,16 +527,19 @@ async fn claude_restore_request_regenerates_files() {
     let sid = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
     // Reboot wipes the runtime dir.
     std::fs::remove_dir_all(fx.dirs.runtime.join("s")).unwrap();
-    let req = w.claude_restore_request(&sid, false).await.unwrap().unwrap();
+    let req = w.claude_restore_request(&sid, false, None).await.unwrap().unwrap();
     assert_eq!(req.args[..2], ["--resume".to_owned(), item.claude_uuid.clone().unwrap()]);
     assert_eq!(req.kind, SessionKind::Claude);
     assert_eq!(req.cwd.as_ref(), Some(&item.worktree));
     let settings = req.args.windows(2).find(|a| a[0] == "--settings").map(|a| a[1].clone()).unwrap();
     assert!(std::path::Path::new(&settings).exists(), "files regenerated");
-    let req = w.claude_restore_request(&sid, true).await.unwrap().unwrap();
+    let req = w.claude_restore_request(&sid, true, None).await.unwrap().unwrap();
     assert_eq!(req.args[0], "--continue");
     assert!(
-        w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false).await.unwrap().is_none()
+        w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false, None)
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 

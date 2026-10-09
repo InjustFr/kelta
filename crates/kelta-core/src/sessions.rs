@@ -777,7 +777,7 @@ impl Core {
         // A work item's Claude needs its per-session files regenerated (the runtime dir does not
         // survive a reboot): kelta-work builds the full argv.
         if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
-            match self.work.claude_restore_request(id, use_continue).await {
+            match self.work.claude_restore_request(id, use_continue, None).await {
                 Ok(Some(req)) => {
                     launch = Launch { program: req.program, args: req.args, resume_attempt: !use_continue };
                 }

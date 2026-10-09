@@ -660,6 +660,14 @@ impl Default for ClaudeSettings {
                     "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.".to_owned(),
                 ),
                 ("standalone".to_owned(), String::new()),
+                (
+                    "feedback".to_owned(),
+                    "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.".to_owned(),
+                ),
+                (
+                    "conflicts".to_owned(),
+                    "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.".to_owned(),
+                ),
             ]),
             ide_bridge: false,
         }
