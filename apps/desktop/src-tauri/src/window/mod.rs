@@ -48,7 +48,16 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
     let _ = core;
     bench::started();
     #[cfg(target_os = "macos")]
-    app.set_menu(app_menu(app.handle())?)?;
+    {
+        app.set_menu(app_menu(app.handle())?)?;
+        // The predefined Quit item calls NSApp terminate:, which exits without RunEvent::Exit
+        // (no Core::shutdown). Route our own item through app.exit instead.
+        app.on_menu_event(|app, ev| {
+            if ev.id() == "quit" {
+                app.exit(0);
+            }
+        });
+    }
     create(app.handle())?;
     Ok(())
 }
@@ -244,7 +253,7 @@ pub fn on_second_instance(app: &AppHandle, argv: Vec<String>, cwd: String) {
 /// macOS app menu replacing Tauri's default (Cmd+W/H/M/Q are intentional).
 #[cfg(target_os = "macos")]
 fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    use tauri::menu::{Menu, PredefinedMenuItem as P, Submenu};
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem as P, Submenu};
     let kelta = Submenu::with_items(
         app,
         "Kelta",
@@ -256,7 +265,7 @@ fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
             &P::hide_others(app, None)?,
             &P::show_all(app, None)?,
             &P::separator(app)?,
-            &P::quit(app, None)?,
+            &MenuItem::with_id(app, "quit", "Quit Kelta", true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     let edit = Submenu::with_items(

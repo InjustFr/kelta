@@ -181,10 +181,12 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
         "cold-start" => {
             let mut runs: BTreeMap<String, Vec<f64>> = BTreeMap::new();
             for _ in 0..5 {
-                let app = launch(o).await?;
+                let mut app = launch(o).await?;
                 for (k, v) in wait_mark(&app, "app_ready_ms").await? {
                     runs.entry(k).or_default().push(v);
                 }
+                // Wait for the exit: the next launch would otherwise forward to this instance.
+                app.child.kill().await?;
             }
             let ready = runs.remove("app_ready_ms").unwrap_or_default();
             Ok([("cold_start_ms".to_owned(), median(&mut ready.clone()))].into())
