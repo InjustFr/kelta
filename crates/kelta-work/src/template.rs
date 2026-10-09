@@ -32,12 +32,6 @@ impl Ctx {
     pub fn get(&self, key: &str) -> Option<&str> {
         self.values.get(key).map(String::as_str)
     }
-
-    pub fn extend(&mut self, other: &Ctx) {
-        for (k, v) in &other.values {
-            self.values.insert(k.clone(), v.clone());
-        }
-    }
 }
 
 /// How unknown placeholders are treated.

@@ -315,9 +315,12 @@ pub async fn is_tracked(worktree: &Path, path: &str) -> Result<bool, KeltaError>
     Ok(run(worktree, &["ls-files", "--error-unmatch", "--", path], LOCAL_TIMEOUT).await?.ok())
 }
 
-/// Commits on HEAD that no remote-tracking ref contains.
-pub async fn unpushed_count(worktree: &Path) -> Result<u32, KeltaError> {
-    let out = run_ok(worktree, &["rev-list", "--count", "HEAD", "--not", "--remotes"], LOCAL_TIMEOUT).await?;
+/// Commits on HEAD that neither a remote-tracking ref nor the local `base` branch contains
+/// (`base` keeps a repo without a remote from counting its whole history).
+pub async fn unpushed_count(worktree: &Path, base: &str) -> Result<u32, KeltaError> {
+    let base = format!("refs/heads/{base}");
+    let args = ["rev-list", "--count", "--ignore-missing", "HEAD", "--not", "--remotes", &base];
+    let out = run_ok(worktree, &args, LOCAL_TIMEOUT).await?;
     Ok(out.stdout.trim().parse().unwrap_or(0))
 }
 

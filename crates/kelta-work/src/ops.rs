@@ -420,10 +420,10 @@ impl WorkService {
         let is_worktree = item.worktree.is_dir()
             && !git::same_path(&item.worktree, &repo)
             && git::worktree_at(&repo, &item.worktree).await?.is_some();
-        let mut needs_force = false;
+        let mut copies: Vec<String> = Vec::new();
         if opts.remove_worktree && is_worktree {
             let report = self.dirty_report(&env, &item).await?;
-            needs_force = report.any_entries;
+            copies = report.copies;
             if !opts.force && (!report.files.is_empty() || report.unpushed > 0) {
                 let msg = match (report.files.is_empty(), report.unpushed) {
                     (false, 0) => format!("{} has uncommitted changes", item.worktree.display()),
@@ -455,7 +455,12 @@ impl WorkService {
         }
 
         if opts.remove_worktree && is_worktree {
-            git::worktree_remove(&repo, &item.worktree, opts.force || needs_force).await?;
+            // Delete our include copies so git's own clean check (no --force) still guards files
+            // written after the dirty report (e.g. by Claude before it was killed).
+            for f in &copies {
+                let _ = std::fs::remove_file(item.worktree.join(f));
+            }
+            git::worktree_remove(&repo, &item.worktree, opts.force).await?;
             env.core.publish(
                 BusEvent::new(
                     bus::WORKTREE_REMOVED,
@@ -516,16 +521,14 @@ impl WorkService {
         let entries = git::dirty_files(&item.worktree).await?;
         let patterns = files::include_patterns(&env.repo.path, &env.settings.worktree.include);
         // Untracked copies of `worktree.include` files (.env…) are ours, not the user's work.
-        let mut files: Vec<String> = Vec::new();
-        for f in &entries {
-            let untracked_include =
-                files::is_included(f, &patterns) && !git::is_tracked(&item.worktree, f).await.unwrap_or(true);
-            if !untracked_include {
-                files.push(f.clone());
-            }
+        let (mut files, mut copies) = (Vec::new(), Vec::new());
+        for f in entries {
+            let untracked_include = files::is_included(&f, &patterns)
+                && !git::is_tracked(&item.worktree, &f).await.unwrap_or(true);
+            if untracked_include { copies.push(f) } else { files.push(f) }
         }
-        let unpushed = git::unpushed_count(&item.worktree).await?;
-        Ok(DirtyReport { any_entries: !entries.is_empty(), files, unpushed })
+        let unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
+        Ok(DirtyReport { files, copies, unpushed })
     }
 
     // ---- status ------------------------------------------------------------------------------
@@ -547,9 +550,8 @@ impl WorkService {
             Some(u) => git::ahead_behind(&item.worktree, &u).await?,
             None => (0, 0),
         };
-        let dirty = !git::dirty_files(&item.worktree).await?.is_empty();
-        let unpushed = git::unpushed_count(&item.worktree).await? > 0;
-        Ok(GitStatus { ahead, behind, dirty, unpushed })
+        let report = self.dirty_report(&env, &item).await?;
+        Ok(GitStatus { ahead, behind, dirty: !report.files.is_empty(), unpushed: report.unpushed > 0 })
     }
 
     // ---- editors -----------------------------------------------------------------------------
@@ -611,8 +613,13 @@ impl WorkService {
             EditorOpenMode::Keys => {
                 let tpl =
                     preset.open_keys.clone().unwrap_or_else(|| "<C-\\><C-N>:edit +{line} {file}<CR>".into());
+                let name = file.to_string_lossy();
+                // Control bytes would be typed straight into the editor.
+                if name.chars().any(char::is_control) {
+                    return Err(KeltaError::invalid("file name contains control characters"));
+                }
                 let mut ctx = editor::ctx(None, ".", Some(&file), line, &info.cwd, &info.id.sid8());
-                ctx.set("file", editor::ex_escape(&file.to_string_lossy()));
+                ctx.set("file", editor::ex_escape(&name));
                 let keys = render(&tpl, &ctx, Mode::Lenient)?;
                 core.session_write(&info.id, &editor::vim_keys(&keys)).await
             }
@@ -791,8 +798,9 @@ impl WorkService {
 }
 
 struct DirtyReport {
-    any_entries: bool,
     files: Vec<String>,
+    /// Untracked `worktree.include` copies (ours, removed with the worktree).
+    copies: Vec<String>,
     unpushed: u32,
 }
 

@@ -82,7 +82,11 @@ async fn finish_refuses_dirty_then_unpushed_then_force_removes() {
 async fn finish_clean_pushed_without_force() {
     need_git!();
     let fx = Fx::new();
+    // Our untracked include copy must not need --force.
+    std::fs::write(fx.repo.join("local.cfg"), "x=1\n").unwrap();
+    std::fs::write(fx.repo.join(".worktreeinclude"), "local.cfg\n").unwrap();
     let (w, item) = started(&fx, "SHOP-141").await;
+    assert!(item.worktree.join("local.cfg").exists());
     std::fs::write(item.worktree.join("done.txt"), "ok\n").unwrap();
     git(&item.worktree, &["add", "done.txt"]);
     git(&item.worktree, &["commit", "-q", "-m", "done"]);
@@ -221,4 +225,20 @@ async fn git_never_prompts() {
     let env = kelta_work::git::git_env();
     assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
     assert!(env["GIT_SSH_COMMAND"].contains("BatchMode=yes"));
+}
+
+#[tokio::test]
+async fn unpushed_ignores_base_history_without_remote() {
+    need_git!();
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("solo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "one"]);
+    git(&repo, &["checkout", "-q", "-b", "feat"]);
+    assert_eq!(kelta_work::git::unpushed_count(&repo, "main").await.unwrap(), 0);
+    git(&repo, &["-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "two"]);
+    assert_eq!(kelta_work::git::unpushed_count(&repo, "main").await.unwrap(), 1);
+    // Missing base branch is ignored, not an error.
+    assert_eq!(kelta_work::git::unpushed_count(&repo, "nope").await.unwrap(), 2);
 }

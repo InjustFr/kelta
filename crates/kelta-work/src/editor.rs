@@ -83,10 +83,15 @@ fn key_bytes(name: &str) -> Option<Vec<u8>> {
     Some(vec![b])
 }
 
-/// Escape a file name for an Ex command typed as keys (`:edit a\ b.rs`).
+/// Escape a file name for an Ex command typed as keys (`:edit a\ b.rs`). `<` becomes `<lt>` so
+/// `vim_keys` never turns a name like `x<CR>:!cmd<CR>` into keystrokes.
 pub fn ex_escape(path: &str) -> String {
     let mut s = String::with_capacity(path.len());
     for c in path.chars() {
+        if c == '<' {
+            s.push_str("<lt>");
+            continue;
+        }
         if " \t\\|\"%#'*?[{$`".contains(c) {
             s.push('\\');
         }
@@ -158,6 +163,9 @@ mod tests {
         assert_eq!(vim_keys("<C-\\><C-N>:edit +12 a.rs<CR>"), b"\x1c\x0e:edit +12 a.rs\r".to_vec());
         assert_eq!(vim_keys("<Esc>i<lt>x<Unknown>"), b"\x1bi<x<Unknown>".to_vec());
         assert_eq!(ex_escape("my file#1.rs"), "my\\ file\\#1.rs");
+        // A hostile file name stays one literal argument.
+        let typed = vim_keys(&format!(":edit {}<CR>", ex_escape("x<CR>:!touch<Space>p")));
+        assert_eq!(typed, b":edit x<CR>:!touch<Space>p\r".to_vec());
     }
 
     #[test]
