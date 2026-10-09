@@ -2,10 +2,16 @@
 import type { CloseOnExit } from "./CloseOnExit";
 import type { ProjectId } from "./ProjectId";
 import type { RestorePolicy } from "./RestorePolicy";
+import type { SessionId } from "./SessionId";
 import type { SessionKind } from "./SessionKind";
 import type { WorkItemId } from "./WorkItemId";
 
-export type SpawnRequest = { project_id: ProjectId, kind: SessionKind, name: string | null, 
+export type SpawnRequest = { 
+/**
+ * Caller-chosen session id (files naming it are written before the spawn). `None` = core
+ * generates one; a given id must be unused (`Conflict` otherwise).
+ */
+id: SessionId | null, project_id: ProjectId, kind: SessionKind, name: string | null, 
 /**
  * `None` = `$SHELL` (or `terminal.shell`).
  */

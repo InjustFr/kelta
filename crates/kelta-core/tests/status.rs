@@ -133,6 +133,7 @@ fn notification_rules_table() {
 
 fn claude_req() -> SpawnRequest {
     SpawnRequest {
+        id: None,
         project_id: ProjectId::new("shop"),
         kind: SessionKind::Claude,
         name: Some("claude".into()),

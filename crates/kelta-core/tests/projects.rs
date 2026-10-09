@@ -13,6 +13,7 @@ use kelta_proto::settings::{AccountKind, Settings};
 
 fn shell(project: &str) -> SpawnRequest {
     SpawnRequest {
+        id: None,
         project_id: ProjectId::new(project),
         kind: SessionKind::Shell,
         name: None,

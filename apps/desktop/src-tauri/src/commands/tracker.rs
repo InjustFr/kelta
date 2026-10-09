@@ -43,7 +43,7 @@ pub async fn tracker_transition(
     transition_id: String,
     fields: Option<Value>,
 ) -> Res<Ticket> {
-    core.tracker_transition(&ticket, &transition_id, fields).await
+    core.tracker_transition(&ticket, &transition_id, fields, None).await
 }
 
 /// Column → transition; ambiguous → `Conflict` with `detail.candidates`.
@@ -54,7 +54,7 @@ pub async fn tracker_move(core: State<'_, Arc<Core>>, ticket: TicketRef, column_
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_comment(core: State<'_, Arc<Core>>, ticket: TicketRef, markdown: String) -> Res<()> {
-    core.tracker_comment(&ticket, &markdown).await
+    core.tracker_comment(&ticket, &markdown, None).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

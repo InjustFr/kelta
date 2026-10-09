@@ -4,7 +4,6 @@
 //! derives changes from terminal output (heuristic). Both are folded into the session state by the
 //! functions below, which are table-tested.
 
-use kelta_proto::hooks::HookPayload;
 use kelta_proto::model::{Attention, SessionStatus, StatusChange};
 
 /// Notification candidates; whether they fire is decided by [`crate::notifier`].
@@ -185,48 +184,6 @@ pub const PREVIEW_MAX: usize = 200;
 pub fn truncate_preview(s: &str) -> String {
     let t = s.trim();
     if t.chars().count() <= PREVIEW_MAX { t.to_owned() } else { t.chars().take(PREVIEW_MAX).collect() }
-}
-
-/// Local implementation of the ARCHITECTURE §7.6 table, used when `kelta_server::hooks::map`
-/// yields nothing (it is the L7 stub until that lane merges); identical semantics.
-pub fn map_hook(p: &HookPayload) -> Option<StatusChange> {
-    use kelta_proto::hooks::names;
-    let mk = |status, raw: String| StatusChange { status, preview: None, file_edited: None, raw_event: raw };
-    let name = p.hook_event_name.as_str();
-    match name {
-        names::SESSION_START => Some(mk(SessionStatus::Running, name.into())),
-        names::USER_PROMPT_SUBMIT => Some(mk(SessionStatus::Working, name.into())),
-        names::PERMISSION_REQUEST => Some(mk(SessionStatus::NeedsInput, name.into())),
-        names::NOTIFICATION => {
-            let t = p.notification_type.as_deref().unwrap_or("");
-            let raw = format!("{name}:{t}");
-            match t {
-                "permission_prompt" | "elicitation_dialog" | "agent_needs_input" => {
-                    Some(mk(SessionStatus::NeedsInput, raw))
-                }
-                "idle_prompt" => Some(mk(SessionStatus::WaitingUser, raw)),
-                _ => None,
-            }
-        }
-        names::STOP => {
-            let mut c = mk(SessionStatus::Done, name.into());
-            c.preview = p.last_assistant_message.as_deref().map(truncate_preview);
-            Some(c)
-        }
-        names::STOP_FAILURE => Some(mk(SessionStatus::Error, name.into())),
-        names::SESSION_END => Some(mk(SessionStatus::Exited, name.into())),
-        names::POST_TOOL_USE => {
-            let tool = p.tool_name.as_deref().unwrap_or("");
-            if matches!(tool, "Edit" | "Write" | "MultiEdit") {
-                let mut c = mk(SessionStatus::Unknown, format!("{name}:{tool}"));
-                c.file_edited = p.edited_file();
-                Some(c)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
 }
 
 #[cfg(test)]

@@ -311,16 +311,3 @@ async fn ticket_tools_without_link() {
     assert!(err);
     e.server.release_http();
 }
-
-#[tokio::test]
-async fn proxy_is_mounted() {
-    let e = common::env();
-    let port = e.server.ensure_http().await.unwrap();
-    let r = client().get(format!("http://127.0.0.1:{port}/proxy/0123456789abcdef/")).send().await.unwrap();
-    // Reaches the kelta-plugins router (501 while it is a stub) past the Host guard.
-    assert_ne!(r.status(), 403);
-    if r.status() == 501 {
-        assert!(r.text().await.unwrap().contains("proxy"));
-    }
-    e.server.release_http();
-}

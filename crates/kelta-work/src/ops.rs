@@ -138,6 +138,7 @@ impl WorkService {
             let info = env
                 .core
                 .session_spawn(SpawnRequest {
+                    id: None,
                     project_id: item.project_id.clone(),
                     kind: SessionKind::Editor { adapter: preset.id.clone() },
                     name: Some(name.unwrap_or(&preset.id).to_owned()),
@@ -322,6 +323,7 @@ impl WorkService {
         let info = env
             .core
             .session_spawn(SpawnRequest {
+                id: None,
                 project_id: item.project_id.clone(),
                 kind: SessionKind::Custom,
                 name: Some("git push".into()),

@@ -117,6 +117,7 @@ pub const SWALLOWED_QUERIES: &[TerminalQuery] = &[
     csi("DSR", None, None, "n", &[5, 6]),
     csi("DECRQM", Some("?"), Some("$"), "p", &[]),
     csi("DECRQM_ANSI", None, Some("$"), "p", &[]),
+    csi("XTWINOPS_CHARS", None, None, "t", &[18]),
     osc("OSC4_PALETTE", 4),
     osc("OSC10_FG", 10),
     osc("OSC11_BG", 11),
@@ -170,6 +171,11 @@ pub enum TerminalEvent {
     AckTimeout {
         generation: u32,
     },
+    /// The global scrollback memory cap (§9.5) trimmed sessions; emitted once per host, on one of
+    /// the trimmed sessions.
+    MemoryCapReached {
+        cap_mb: u32,
+    },
 }
 
 /// Colours used to answer OSC 4/10/11/12 queries (`#rrggbb`).
@@ -202,11 +208,13 @@ impl Default for TerminalPalette {
 pub struct TerminalLimits {
     pub scrollback: ScrollbackSettings,
     pub memory_cap_mb: u32,
+    /// History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
+    pub view_scrollback: u32,
 }
 
 impl TerminalLimits {
     pub fn from_settings(t: &crate::settings::TerminalSettings) -> Self {
-        Self { scrollback: t.scrollback, memory_cap_mb: t.memory_cap_mb }
+        Self { scrollback: t.scrollback, memory_cap_mb: t.memory_cap_mb, view_scrollback: t.view_scrollback }
     }
 }
 

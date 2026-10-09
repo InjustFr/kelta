@@ -13,7 +13,11 @@ use crate::window::bridge::TauriBridge;
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn app_info(core: State<'_, Arc<Core>>) -> Res<AppInfo> {
-    Ok(core.app_info())
+    let mut info = core.app_info();
+    if let Some(d) = crate::window::effective_decorations() {
+        info.decorations = d;
+    }
+    Ok(info)
 }
 
 /// One subscription per window; the bridge fans out `UiEvent`s to every channel.
@@ -25,9 +29,12 @@ pub async fn events_subscribe(
     Ok(SubscribeResult { sub_id: bridge.subscribe(channel) })
 }
 
-/// Clears the launch crash guard, binds the runtime and kicks deferred startup work.
+/// The UI rendered its first frame: clears the launch crash guard, records the bench mark, binds
+/// the runtime and kicks deferred startup work.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn app_ready(core: State<'_, Arc<Core>>, t_ms: f64) -> Res<()> {
+    crate::platform::launch_succeeded();
+    crate::window::bench::app_ready();
     core.app_ready(t_ms).await
 }
 

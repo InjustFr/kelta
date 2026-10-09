@@ -2,7 +2,7 @@
 //!
 //! Local surfaces (ARCHITECTURE §2, §7.6, §11.1, PLUGINS §8): ctl socket server (line JSON,
 //! peer-uid + per-session hook token checks), hook ingestion → `hooks::map`, lazy loopback axum
-//! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`, web-tool proxy at `/proxy/`).
+//! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`).
 
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};

@@ -1,8 +1,9 @@
 //! Lazy loopback HTTP server (ARCHITECTURE §2, §11.1): axum on `127.0.0.1:<random>`, started by
 //! the first consumer and stopped when the consumer count drops to 0 (no idle timer).
 //!
-//! Routes: `POST /hook/<sid>` (http hook transport, hook token), `POST /mcp/<sid>` (MCP, MCP token),
-//! `/proxy/…` (web-tool proxy of kelta-plugins). Every request must carry `Host: 127.0.0.1:<port>`.
+//! Routes: `POST /hook/<sid>` (http hook transport, hook token), `POST /mcp/<sid>` (MCP, MCP token).
+//! Every request must carry `Host: 127.0.0.1:<port>`. (Web-tool proxies run on their own loopback
+//! listener per instance, in kelta-plugins.)
 
 use std::sync::{Arc, Weak};
 
@@ -109,7 +110,6 @@ fn router(ctx: Arc<Ctx>) -> Router {
         .route("/mcp/{sid}", post(mcp_post).get(mcp_no_stream).delete(mcp_no_stream))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .with_state(ctx.clone())
-        .nest("/proxy", kelta_plugins::proxy::router())
         .layer(middleware::from_fn_with_state(ctx, host_guard))
 }
 

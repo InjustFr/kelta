@@ -16,6 +16,7 @@ use kelta_proto::testing::{FakeTerminalHost, RecordingSink};
 
 fn req(kind: SessionKind, program: Option<&str>, args: &[&str], restore: RestorePolicy) -> SpawnRequest {
     SpawnRequest {
+        id: None,
         project_id: ProjectId::new("shop"),
         kind,
         name: None,

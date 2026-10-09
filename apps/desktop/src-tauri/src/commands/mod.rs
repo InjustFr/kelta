@@ -27,11 +27,6 @@ pub mod work;
 /// Command result.
 pub type Res<T> = Result<T, KeltaError>;
 
-/// The scaffold stub body: `Unsupported("not implemented: <command>")`.
-pub fn not_implemented<T>(command: &str) -> Res<T> {
-    Err(KeltaError::not_implemented(command))
-}
-
 /// Header carrying the session id when `session_write` is invoked with a raw `Uint8Array` body.
 pub const SESSION_ID_HEADER: &str = "x-kelta-session-id";
 

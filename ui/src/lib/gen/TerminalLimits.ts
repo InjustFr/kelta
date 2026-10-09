@@ -4,4 +4,8 @@ import type { ScrollbackSettings } from "./ScrollbackSettings";
 /**
  * Scrollback per kind + global memory cap (§9.5).
  */
-export type TerminalLimits = { scrollback: ScrollbackSettings, memory_cap_mb: number, };
+export type TerminalLimits = { scrollback: ScrollbackSettings, memory_cap_mb: number, 
+/**
+ * History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
+ */
+view_scrollback: number, };

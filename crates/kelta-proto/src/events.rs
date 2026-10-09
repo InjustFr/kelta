@@ -226,6 +226,8 @@ pub mod bus {
     pub const WORKTREE_REMOVED: &str = "worktree.removed";
     pub const WORK_BEFORE_FINISH: &str = "work.before_finish";
     pub const WORK_FINISHED: &str = "work.finished";
+    /// Work item or saga step changed (`{work}`); core relays it as `UiEvent::WorkUpdated`.
+    pub const WORK_UPDATED: &str = "work.updated";
     pub const PR_BEFORE_CREATE: &str = "pr.before_create";
     pub const PR_CREATED: &str = "pr.created";
     pub const PR_REVIEW_REQUESTED: &str = "pr.review_requested";
@@ -268,6 +270,7 @@ pub mod bus {
         WORKTREE_REMOVED,
         WORK_BEFORE_FINISH,
         WORK_FINISHED,
+        WORK_UPDATED,
         PR_BEFORE_CREATE,
         PR_CREATED,
         PR_REVIEW_REQUESTED,

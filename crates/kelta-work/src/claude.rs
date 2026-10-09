@@ -6,8 +6,7 @@ use std::time::Duration;
 
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
-use kelta_proto::hooks::names;
-use kelta_proto::settings::{ClaudeEffort, ClaudeSettings, HookTransport, PermissionMode};
+use kelta_proto::settings::{ClaudeEffort, ClaudeSettings, PermissionMode};
 use serde_json::{Value, json};
 
 use crate::template::shell_quote;
@@ -22,63 +21,10 @@ pub fn hook_command(dirs: &Dirs) -> String {
     format!("{} hook", shell_quote(&dirs.stable_ctl().to_string_lossy()))
 }
 
-fn command_hook(dirs: &Dirs, is_async: bool) -> Value {
-    if is_async {
-        json!({ "type": "command", "command": hook_command(dirs), "async": true, "timeout": 5 })
-    } else {
-        json!({ "type": "command", "command": hook_command(dirs), "timeout": 5 })
-    }
-}
-
-fn http_hook(port: u16, sid: &str) -> Value {
-    json!({
-        "type": "http",
-        "url": format!("http://127.0.0.1:{port}/hook/{sid}"),
-        "headers": { "Authorization": "Bearer ${KELTA_HOOK_TOKEN}" },
-        "allowedEnvVars": ["KELTA_HOOK_TOKEN"],
-        "timeout": 2
-    })
-}
-
-/// Generated `--settings` document. `http` = `(port, kelta session id)` when the HTTP transport is
-/// active; SessionStart always uses the command hook.
+/// Generated `--settings` document (`kelta_proto::hooks::claude_settings`). `http` = `(port, kelta
+/// session id)` when the HTTP transport is active; SessionStart always uses the command hook.
 pub fn settings_json(dirs: &Dirs, cfg: &ClaudeSettings, http: Option<(u16, &str)>) -> Value {
-    let http = match cfg.hook_transport {
-        HookTransport::Http => http,
-        HookTransport::Command => None,
-    };
-    let mut hooks = serde_json::Map::new();
-    for event in names::ALL {
-        let handler = match (*event, http) {
-            (names::SESSION_START, _) | (_, None) => command_hook(dirs, *event != names::SESSION_END),
-            (_, Some((port, sid))) => http_hook(port, sid),
-        };
-        let matcher = match *event {
-            names::NOTIFICATION => Some(names::NOTIFICATION_MATCHER),
-            names::POST_TOOL_USE => Some(names::EDIT_TOOLS_MATCHER),
-            _ => None,
-        };
-        let group = match matcher {
-            Some(m) => json!({ "matcher": m, "hooks": [handler] }),
-            None => json!({ "hooks": [handler] }),
-        };
-        hooks.insert((*event).to_owned(), Value::Array(vec![group]));
-    }
-    // `claude.extra_hooks`: { "<Event>": [ {matcher?, hooks: [...]}, ... ] } appended per event.
-    for (event, extra) in &cfg.extra_hooks {
-        let groups: Vec<Value> = match extra {
-            Value::Array(a) => a.clone(),
-            Value::Null => continue,
-            other => vec![other.clone()],
-        };
-        match hooks.get_mut(event) {
-            Some(Value::Array(existing)) => existing.extend(groups),
-            _ => {
-                hooks.insert(event.clone(), Value::Array(groups));
-            }
-        }
-    }
-    json!({ "hooks": Value::Object(hooks) })
+    kelta_proto::hooks::claude_settings(&hook_command(dirs), cfg, http)
 }
 
 /// `mcp.json` for `--mcp-config`.

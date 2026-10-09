@@ -9,11 +9,11 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use kelta_proto::events::bus;
-use kelta_proto::hooks::names;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::SessionStatus;
+use kelta_proto::settings::ClaudeSettings;
 use kelta_proto::testing::FakeCore;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 
 fn repo_root() -> PathBuf {
@@ -45,24 +45,10 @@ fn sh_quote(p: &Path) -> String {
     format!("'{}'", p.display().to_string().replace('\'', r"'\''"))
 }
 
-/// Hook settings exactly as PLUGINS §8 specifies (command transport).
+/// The settings document Kelta generates (command transport), shared with kelta-work.
 fn claude_settings(ctl: &Path) -> Value {
     let command = format!("{} hook", sh_quote(ctl));
-    let mut hooks = serde_json::Map::new();
-    for ev in names::ALL {
-        let mut h = json!({ "type": "command", "command": command, "timeout": 5 });
-        if *ev != names::SESSION_END {
-            h["async"] = json!(true);
-        }
-        let mut entry = json!({ "hooks": [h] });
-        match *ev {
-            names::NOTIFICATION => entry["matcher"] = json!(names::NOTIFICATION_MATCHER),
-            names::POST_TOOL_USE => entry["matcher"] = json!(names::EDIT_TOOLS_MATCHER),
-            _ => {}
-        }
-        hooks.insert((*ev).to_owned(), json!([entry]));
-    }
-    json!({ "hooks": hooks })
+    kelta_proto::hooks::claude_settings(&command, &ClaudeSettings::default(), None)
 }
 
 fn statuses(fake: &FakeCore) -> Vec<SessionStatus> {

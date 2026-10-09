@@ -9,10 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kelta_core::Core;
+use kelta_proto::api::CoreApi;
 use kelta_proto::api::{SettingsSource, UiBridge};
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::CliArgs;
-use kelta_proto::events::UiEvent;
+use kelta_proto::events::{BusEvent, UiEvent, bus};
+use kelta_proto::settings::Decorations;
 use tauri::webview::PageLoadEvent;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, RunEvent, Url, WebviewUrl, WebviewWindow,
@@ -25,6 +27,19 @@ use bridge::TauriBridge;
 
 /// Main window label (capabilities are granted to it only).
 pub const MAIN_WINDOW: &str = "main";
+
+/// Decorations the main window was last built with (reported by `app_info`).
+static EFFECTIVE_DECORATIONS: parking_lot::Mutex<Option<decorations::Effective>> =
+    parking_lot::Mutex::new(None);
+
+/// `app_info.decorations`: what the window was built with (`None` before the first window).
+pub fn effective_decorations() -> Option<Decorations> {
+    EFFECTIVE_DECORATIONS.lock().map(|e| match e {
+        decorations::Effective::Native => Decorations::Native,
+        decorations::Effective::None => Decorations::None,
+        decorations::Effective::Custom => Decorations::Custom,
+    })
+}
 
 fn core(app: &AppHandle) -> Option<Arc<Core>> {
     app.try_state::<Arc<Core>>().map(|s| s.inner().clone())
@@ -81,12 +96,6 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
             {
                 b.clear_subscribers();
             }
-            // Stand-in for `app_ready` (commands/app.rs is not mine): a finished page load proves
-            // the launch worked, so the crash guard can be dropped.
-            if matches!(p.event(), PageLoadEvent::Finished) {
-                crate::platform::launch_succeeded();
-                bench::page_loaded();
-            }
         });
 
     let saved = s.window.restore_geometry.then(|| geometry::load(&core.dirs().data)).flatten();
@@ -95,6 +104,7 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
         b = b.inner_size(g.width, g.height).position(g.x, g.y);
     }
     let win = b.build()?;
+    *EFFECTIVE_DECORATIONS.lock() = Some(eff);
     if maximized {
         let _ = win.maximize();
     }
@@ -211,6 +221,12 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     match event {
         WindowEvent::CloseRequested { .. } => {
             save_main_geometry(app);
+        }
+        // Scheduler intervals and triggers follow focus (`app.focus_changed`).
+        WindowEvent::Focused(focused) => {
+            if let Some(c) = core(app) {
+                c.publish(BusEvent::new(bus::APP_FOCUS_CHANGED, serde_json::json!({ "focused": focused })));
+            }
         }
         // The webview is gone: its event channels are dead; commands queue until the next one.
         WindowEvent::Destroyed => {

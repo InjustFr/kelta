@@ -28,9 +28,9 @@ pub fn mark(key: &str, value: f64) {
     let _ = std::fs::write(path, serde_json::Value::Object(marks).to_string());
 }
 
-/// First page load finished. shortcut: measured from window setup, not process start, and the UI's
-/// own `app_ready` (first rAF) is not used; upgrade when app_ready can call `mark`.
-pub fn page_loaded() {
+/// `app_ready` (the UI's first frame). shortcut: measured from window setup, not process start;
+/// upgrade if cold-start budgets need the pre-setup time.
+pub fn app_ready() {
     if let Some(t) = START.get() {
         mark("app_ready_ms", t.elapsed().as_secs_f64() * 1000.0);
     }

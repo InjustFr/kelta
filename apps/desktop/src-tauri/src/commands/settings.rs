@@ -125,6 +125,7 @@ pub async fn settings_open_file(
     let title = path.file_name().map_or_else(|| "config".to_owned(), |n| n.to_string_lossy().into_owned());
     let info = core
         .session_spawn(SpawnRequest {
+            id: None,
             project_id: project.clone(),
             kind: SessionKind::Editor { adapter },
             name: Some(title.clone()),

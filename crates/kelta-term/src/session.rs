@@ -18,8 +18,7 @@ use crate::frames;
 use crate::model::{Output, TermModel};
 use crate::palette::Palette;
 
-/// Scrollback lines sent with a snapshot (`terminal.view_scrollback` default; see
-/// docs/contract-requests/L1.md).
+/// Scrollback lines sent with a snapshot when `TerminalLimits::view_scrollback` is 0.
 pub const VIEW_SCROLLBACK: usize = 1000;
 /// History floor when the global memory cap shrinks sessions (ARCHITECTURE §9.5).
 pub const SHRINK_FLOOR: usize = 500;
@@ -93,7 +92,7 @@ impl Shared {
             })
             .collect();
         order.sort_by_key(|(v, _)| *v);
-        let mut shrunk = false;
+        let mut shrunk: Option<Arc<Session>> = None;
         for (_, s) in order {
             if self.total_memory.load(Ordering::Relaxed) <= cap {
                 break;
@@ -102,14 +101,19 @@ impl Shared {
             if st.model.history_limit() > SHRINK_FLOOR {
                 st.model.set_history_limit(SHRINK_FLOOR);
                 st.refresh_memory(self);
-                shrunk = true;
+                drop(st);
+                shrunk.get_or_insert(s);
             }
         }
-        if shrunk && !self.cap_warned.swap(true, Ordering::Relaxed) {
+        if let Some(s) = shrunk
+            && !self.cap_warned.swap(true, Ordering::Relaxed)
+        {
+            let cap_mb = u32::try_from(cap / (1024 * 1024)).unwrap_or(u32::MAX);
             tracing::warn!(
-                cap_mb = cap / (1024 * 1024),
-                "terminal scrollback memory cap reached: least recently viewed sessions trimmed to {SHRINK_FLOOR} lines"
+                cap_mb,
+                "terminal scrollback memory cap reached: sessions trimmed to {SHRINK_FLOOR} lines"
             );
+            s.events.on_event(&s.id, TerminalEvent::MemoryCapReached { cap_mb });
         }
     }
 }
@@ -176,7 +180,11 @@ impl State {
     /// Send a snapshot (attach / catch-up) and, after it, a pending exit frame.
     pub fn send_snapshot(&mut self, palette: &Palette, shared: &Shared, now: Instant) -> Vec<Output> {
         let mut frame = frames::snapshot_buffer(64 * 1024);
-        let outs = self.model.snapshot_into(VIEW_SCROLLBACK, palette, &mut frame);
+        let view = match shared.limits.lock().view_scrollback {
+            0 => VIEW_SCROLLBACK,
+            n => n as usize,
+        };
+        let outs = self.model.snapshot_into(view, palette, &mut frame);
         let len = frame.len() - 1;
         if self.send(frame, shared) {
             self.flow.snapshot_sent(len, now);

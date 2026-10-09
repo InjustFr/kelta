@@ -42,11 +42,11 @@ use serde_json::Value;
 use crate::perms::Granted;
 use crate::registry::{Entry, Registry};
 
-/// Writes `plugins.<id>.<key>` at the Global layer (wired by the desktop commands to kelta-config).
+/// Writes `plugins.<id>.<key>` at the Global layer (wired by core to kelta-config).
 pub type SettingsWriter = Arc<dyn Fn(&PluginId, &str, Value) -> Result<(), KeltaError> + Send + Sync>;
 
-/// Optional host services that `CoreApi` does not expose. The desktop commands wire them on first
-/// use (see `docs/contract-requests/L8.md`); every feature degrades gracefully without them.
+/// Optional host services that `CoreApi` does not expose. Core wires them at boot
+/// (`Core::start`); every feature degrades gracefully without them.
 #[derive(Clone, Default)]
 pub struct Wiring {
     /// UI events (`plugin.event` relay to screens, web tool handles) and window focus.
@@ -120,7 +120,7 @@ impl PluginHost {
     }
 
     /// Start the trigger engine's bus subscription (idempotent; needs a tokio runtime and a live
-    /// core). Every public entry point calls it, so the engine runs as soon as anything uses plugins.
+    /// core). Core calls it at startup; public entry points call it too, so tests need no core.
     pub fn start(&self) {
         let mut slot = self.bus_task.lock();
         if slot.as_ref().is_some_and(|t| !t.is_finished()) {
@@ -140,6 +140,12 @@ impl PluginHost {
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         tracing::warn!(skipped = n, "trigger engine lagged behind the bus");
+                        let Some(host) = me.upgrade() else { break };
+                        let marker = BusEvent::new(
+                            kelta_proto::events::bus::LAGGED,
+                            serde_json::json!({ "missed": n }),
+                        );
+                        host.handle_event(&marker).await;
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }

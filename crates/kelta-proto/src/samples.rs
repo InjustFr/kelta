@@ -550,6 +550,7 @@ pub fn all() -> Vec<Fixture> {
                     ok: true,
                 }),
                 safe_graphics: false,
+                decorations: crate::settings::Decorations::Native,
             }
         ),
         fx!(
@@ -653,6 +654,7 @@ pub fn all() -> Vec<Fixture> {
             "spawn_request",
             SpawnRequest,
             SpawnRequest {
+                id: None,
                 project_id: ProjectId::new("shop"),
                 kind: SessionKind::Editor { adapter: "nvim".into() },
                 name: Some("nvim".into()),
@@ -1126,7 +1128,11 @@ pub fn all() -> Vec<Fixture> {
         fx!(
             "terminal_limits",
             TerminalLimits,
-            TerminalLimits { scrollback: ScrollbackSettings::default(), memory_cap_mb: 160 }
+            TerminalLimits {
+                scrollback: ScrollbackSettings::default(),
+                memory_cap_mb: 160,
+                view_scrollback: 1000
+            }
         ),
         fx!(
             "login_env",

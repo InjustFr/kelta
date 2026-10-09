@@ -36,7 +36,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kelta_config::ConfigService;
 use kelta_http::{HttpClient, ProviderFactory};
-use kelta_plugins::PluginHost;
+use kelta_plugins::{PluginHost, Wiring};
 use kelta_proto::api::{
     CodeHost, CoreApi, GrantStore, PluginSettingsSource, SecretResolver, SettingsSource, TerminalHost,
     Tracker, TrustStore, UiBridge, WorkStore,
@@ -46,19 +46,20 @@ use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, UiEvent};
-use kelta_proto::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
+use kelta_proto::ext::{BlockingOutcome, ProxiedRequest, ProxiedResponse, ToolHandle};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
     SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
-use kelta_proto::settings::{ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
+use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
+use kelta_proto::tracker::{Ticket, TicketRef};
 use kelta_secrets::Secrets;
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
-use kelta_work::WorkService;
+use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
 
@@ -305,10 +306,18 @@ impl Core {
                 core.on_settings_changed(diff);
             }
         }));
-        let fragments = self.plugins.fragments();
-        if !fragments.is_empty() {
-            self.config.set_plugin_schemas(fragments);
-        }
+        self.work.set_host(Arc::new(CoreWorkHost(self.me.clone())));
+        let settings: Arc<dyn SettingsSource> = self.cfg.clone();
+        let config = self.config.clone();
+        self.plugins.wire(Wiring {
+            ui: Some(self.bridge.clone()),
+            settings: Some(settings),
+            settings_writer: Some(Arc::new(move |id: &kelta_proto::ids::PluginId, key: &str, value| {
+                config.layer_set(Layer::Global, None, None, &format!("plugins.{id}.{key}"), value).map(|_| ())
+            })),
+        });
+        self.sync_plugin_schemas();
+        apply_ticket_key_regex(&self.cfg.effective(None));
         let weak = self.me.clone();
         self.rt.spawn(async move {
             if let Some(core) = weak.upgrade() {
@@ -323,7 +332,7 @@ impl Core {
         if self.started.swap(true, Ordering::SeqCst) {
             return;
         }
-        bus::spawn_forwarder(&self);
+        self.plugins.start();
         self.scheduler.run(&self.rt);
         self.resubscribe();
         if self.start_services {
@@ -407,6 +416,11 @@ impl Core {
     pub fn login_env(&self) -> &LoginEnv {
         &self.login_env
     }
+    /// Hand the enabled plugins' settings schema fragments to kelta-config (Plugin-defaults
+    /// layer). Called at boot and after plugin install / uninstall / enable.
+    pub fn sync_plugin_schemas(&self) {
+        self.config.set_plugin_schemas(self.plugins.fragments());
+    }
     /// Scheduler state (subscriptions, armed deadline, paused accounts).
     pub fn scheduler_snapshot(&self) -> scheduler::SchedulerSnapshot {
         self.scheduler.snapshot()
@@ -423,18 +437,15 @@ impl Core {
             runtime_dir: self.dirs.runtime.clone(),
             claude: self.claude_ver.lock().clone(),
             safe_graphics: self.cli.safe_graphics,
+            // The desktop shell resolves `auto` against the compositor.
+            decorations: self.cfg.effective(None).window.decorations,
         }
     }
 
-    /// `app_ready`: clears the launch crash guard, binds the runtime, kicks deferred startup work.
+    /// `app_ready`: binds the runtime, kicks deferred startup work (the desktop shell clears its
+    /// launch crash guard).
     pub async fn app_ready(&self, t_ms: f64) -> Result<(), KeltaError> {
         self.rt.capture();
-        let guard = self.dirs.data.join("launch-guard");
-        if guard.exists()
-            && let Err(e) = std::fs::remove_file(&guard)
-        {
-            tracing::warn!(error = %e, "cannot remove launch guard");
-        }
         tracing::info!(t_ms, "app ready");
         self.on_window_changed();
         self.scheduler.kick(None);
@@ -477,6 +488,7 @@ impl Core {
             serde_json::json!({ "paths": diff.paths, "layers": diff.layers }),
         ));
         self.providers.invalidate_changed(&settings.accounts);
+        apply_ticket_key_regex(&settings);
         self.scheduler.resume_all();
         self.emit_all_projects();
         self.resubscribe();
@@ -541,6 +553,23 @@ impl CoreApi for Core {
         self.rt.capture();
         Ok(self.review_page(scope, kind, false).await?.items)
     }
+    async fn ticket_transition(
+        &self,
+        ticket: &TicketRef,
+        transition_id: &str,
+        fields: Option<serde_json::Value>,
+        session: Option<&SessionId>,
+    ) -> Result<Ticket, KeltaError> {
+        self.tracker_transition(ticket, transition_id, fields, session).await
+    }
+    async fn ticket_comment(
+        &self,
+        ticket: &TicketRef,
+        markdown: &str,
+        session: Option<&SessionId>,
+    ) -> Result<(), KeltaError> {
+        self.tracker_comment(ticket, markdown, session).await
+    }
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
     }
@@ -584,6 +613,33 @@ impl CoreApi for Core {
     async fn ctl(&self, cmd: CtlCommand) -> Result<serde_json::Value, KeltaError> {
         self.rt.capture();
         self.dispatch_ctl(cmd).await
+    }
+}
+
+/// `reviews.ticket_key_regex` → kelta-codehosts (process-wide; an invalid pattern keeps the previous).
+fn apply_ticket_key_regex(settings: &Settings) {
+    if let Err(e) = kelta_codehosts::set_ticket_key_regex(&settings.reviews.ticket_key_regex) {
+        tracing::warn!(error = %e, "reviews.ticket_key_regex ignored");
+    }
+}
+
+/// kelta-work's view of the HTTP server and the blocking trigger runner (weak: no cycle).
+struct CoreWorkHost(Weak<Core>);
+
+#[async_trait]
+impl WorkHost for CoreWorkHost {
+    async fn ensure_http(&self) -> Result<u16, KeltaError> {
+        let core = self.0.upgrade().ok_or_else(|| KeltaError::internal("core is shutting down"))?;
+        core.server.ensure_http().await
+    }
+    fn release_http(&self) {
+        if let Some(core) = self.0.upgrade() {
+            core.server.release_http();
+        }
+    }
+    async fn run_blocking(&self, ev: &BusEvent) -> Result<BlockingOutcome, KeltaError> {
+        let core = self.0.upgrade().ok_or_else(|| KeltaError::internal("core is shutting down"))?;
+        core.plugins.run_blocking(ev).await
     }
 }
 

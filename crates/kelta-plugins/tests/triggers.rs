@@ -324,6 +324,7 @@ async fn send_keys_needs_opt_in_and_is_rate_limited() {
     let session = env
         .core
         .session_spawn(SpawnRequest {
+            id: None,
             project_id: ProjectId::new("shop"),
             kind: SessionKind::Shell,
             name: None,

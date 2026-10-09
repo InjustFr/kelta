@@ -49,6 +49,7 @@ fn env_assembly_snapshot() {
 
 fn req(kind: SessionKind, program: Option<&str>, args: &[&str]) -> SpawnRequest {
     SpawnRequest {
+        id: None,
         project_id: ProjectId::new("shop"),
         kind,
         name: None,
@@ -175,4 +176,36 @@ async fn template_spawns_a_tab_with_claude_hooks() {
             .code,
         kelta_proto::ErrorCode::NotFound
     );
+}
+
+#[tokio::test]
+async fn spawn_uses_the_requested_id_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let id = kelta_proto::ids::SessionId::generate();
+    let mut r = req(SessionKind::Shell, None, &[]);
+    r.id = Some(id.clone());
+    // a failed spawn does not burn the id
+    let mut bad = r.clone();
+    bad.project_id = ProjectId::new("nope");
+    assert!(h.core.session_spawn(bad).await.is_err());
+    assert_eq!(h.core.session_spawn(r.clone()).await.unwrap().id, id);
+    let err = h.core.session_spawn(r.clone()).await.unwrap_err();
+    assert_eq!(err.code, kelta_proto::error::ErrorCode::Conflict);
+    r.id = Some(kelta_proto::ids::SessionId::new("not-a-uuid"));
+    let err = h.core.session_spawn(r).await.unwrap_err();
+    assert_eq!(err.code, kelta_proto::error::ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn work_updated_reaches_the_ui() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let work = kelta_proto::samples::work_item();
+    h.core.publish(kelta_proto::events::BusEvent::new(
+        kelta_proto::events::bus::WORK_UPDATED,
+        serde_json::json!({ "work": work }),
+    ));
+    assert!(h.ui.events().iter().any(|e| matches!(e,
+        kelta_proto::events::UiEvent::WorkUpdated { work: w } if w.id == work.id)));
 }

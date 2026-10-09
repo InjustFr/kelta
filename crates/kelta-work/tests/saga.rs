@@ -430,9 +430,9 @@ async fn host_veto_patch_and_mcp_port() {
     assert_eq!(
         json["mcpServers"]["kelta"]["url"],
         format!("http://127.0.0.1:4242/mcp/{}", sid.as_str()),
-        "mcp.json points at the session id core assigned"
+        "mcp.json points at the session id Claude is spawned as"
     );
-    assert!(call.args["env"]["KELTA_SESSION_ID"].as_str().is_some());
+    assert_eq!(call.args["id"], sid.as_str());
 }
 
 #[tokio::test]

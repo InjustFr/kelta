@@ -118,12 +118,10 @@ fn swallowed_queries_match_the_contract() {
     for r in rows.iter().filter(|r| r.swallowed) {
         assert!(r.reply.is_some(), "{} is swallowed but unanswered", r.name);
     }
-    // The answered-but-not-swallowed set is exactly the documented contract request.
+    // Every query the model answers is swallowed (the swallowed list is the exact answered set).
     let extra: Vec<&str> =
         rows.iter().filter(|r| r.reply.is_some() && !r.swallowed).map(|r| r.name.as_str()).collect();
-    assert_eq!(extra, vec!["XTWINOPS_CHARS"]);
-    let request = std::fs::read_to_string(workspace_root().join("docs/contract-requests/L1.md")).unwrap();
-    assert!(request.contains("XTWINOPS_CHARS"));
+    assert!(extra.is_empty(), "answered but not swallowed: {extra:?}");
 }
 
 /// All queries go through a real PTY: the child reads back every reply exactly once, in order.

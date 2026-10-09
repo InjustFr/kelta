@@ -615,6 +615,7 @@ impl PluginHost {
         let name = crate::util::basename(&command).to_owned();
         let session = core
             .session_spawn(SpawnRequest {
+                id: None,
                 project_id: project.clone(),
                 kind: SessionKind::Custom,
                 name: Some(name.clone()),

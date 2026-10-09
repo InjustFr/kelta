@@ -4,10 +4,10 @@
 //! worktrees, Claude launcher (argv, `--settings` hooks, `mcp.json`, `context.md`), editor adapters
 //! (nvim msgpack-RPC, vim keys, emacsclient, helix, external), create PR, finish, review start.
 //!
-//! Wiring beyond the frozen constructor: [`WorkService::set_host`] gives the service the lazy HTTP
-//! server port (`kelta_server::Server::ensure_http`) and the blocking trigger runner
-//! (`kelta_plugins::PluginHost::run_blocking`). Without a host, MCP config is omitted and blocking
-//! pre-events are only published (see `docs/contract-requests/L6.md`).
+//! Wiring beyond the frozen constructor: core calls [`WorkService::set_host`] at boot with the lazy
+//! HTTP server port (`kelta_server::Server::ensure_http`) and the blocking trigger runner
+//! (`kelta_plugins::PluginHost::run_blocking`). Without a host (tests), MCP config is omitted and
+//! blocking pre-events are only published.
 
 pub mod claude;
 pub mod editor;
@@ -33,7 +33,7 @@ use kelta_proto::api::{CoreApi, WorkStore};
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::BusEvent;
+use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
@@ -41,10 +41,6 @@ use kelta_proto::model::{
     WorkStepStatus,
 };
 use parking_lot::{Mutex, RwLock};
-
-/// Bus event carrying a work item update; core relays it to the UI as `UiEvent::WorkUpdated`
-/// (`CoreApi` has no direct UI emit — see the L6 contract request).
-pub const WORK_UPDATED: &str = "work.updated";
 
 /// Services owned by other lanes that the saga needs (wired by core after construction).
 #[async_trait]
@@ -268,7 +264,7 @@ impl WorkService {
         self.store.put_item(item).await?;
         if let Ok(core) = self.api() {
             core.publish(
-                BusEvent::new(WORK_UPDATED, serde_json::json!({ "work": item }))
+                BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": item }))
                     .with_project(item.project_id.clone())
                     .with_work_item(item.id.clone()),
             );

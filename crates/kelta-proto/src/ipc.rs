@@ -30,6 +30,9 @@ pub struct AppInfo {
     pub runtime_dir: PathBuf,
     pub claude: Option<ToolVersion>,
     pub safe_graphics: bool,
+    /// Effective window decorations (`native` | `none` | `custom`; the desktop resolves `auto`).
+    /// `custom` = the UI draws the drag region and resize handles.
+    pub decorations: crate::settings::Decorations,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

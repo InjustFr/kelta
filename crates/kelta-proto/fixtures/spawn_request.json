@@ -10,6 +10,7 @@
   "env": {
     "FOO": "bar"
   },
+  "id": null,
   "kind": {
     "adapter": "nvim",
     "type": "editor"

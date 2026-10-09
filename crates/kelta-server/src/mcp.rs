@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use kelta_proto::api::{CoreApi, Tracker};
 use kelta_proto::codehost::{PrDraft, ReviewKind};
-use kelta_proto::events::{BusEvent, Notification, bus};
+use kelta_proto::events::Notification;
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::{EditorTarget, Scope, WorkItem};
@@ -208,9 +208,8 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str, args: &
         "transition_ticket" => transition_ticket(core, sid, str_arg(args, "to")?).await,
         "add_ticket_comment" => {
             let md = str_arg(args, "markdown")?;
-            let (tracker, t) = linked(core, sid).await?;
-            tracker.comment(&t, md).await.map_err(|e| e.message)?;
-            publish(core, sid, bus::TICKET_COMMENTED, json!({ "ticket": t }));
+            let (_, t) = linked(core, sid).await?;
+            core.ticket_comment(&t, md, Some(sid)).await.map_err(|e| e.message)?;
             Ok(format!("Comment added to {}.", t.key))
         }
         "open_in_editor" => open_in_editor(core, sid, args).await,
@@ -231,15 +230,6 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str, args: &
         }
         other => Err(format!("unknown tool: {other}")),
     }
-}
-
-/// Publish a bus event with the session (and its project) as context, like `hooks::ingest`.
-fn publish(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str, payload: Value) {
-    let ev = BusEvent::new(name, payload).with_session(sid.clone());
-    core.publish(match core.session_get(sid) {
-        Some(s) => ev.with_project(s.project_id),
-        None => ev,
-    });
 }
 
 async fn work(core: &Arc<dyn CoreApi>, sid: &SessionId) -> Option<WorkItem> {
@@ -328,10 +318,7 @@ async fn transition_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId, to: &str) -
             tr.name
         ));
     }
-    // shortcut: one extra tracker read just for `from`; null if it fails, drop if trackers start returning it.
-    let from = tracker.get(&t).await.ok().map(|d| d.ticket.status);
-    let ticket = tracker.transition(&t, &tr.id, None).await.map_err(|e| e.message)?;
-    publish(core, sid, bus::TICKET_TRANSITIONED, json!({ "ticket": t, "from": from, "to": ticket.status }));
+    let ticket = core.ticket_transition(&t, &tr.id, None, Some(sid)).await.map_err(|e| e.message)?;
     Ok(format!("{} is now {}.", ticket.r#ref.key, ticket.status.name))
 }
 

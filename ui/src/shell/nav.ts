@@ -229,6 +229,7 @@ export async function splitFocused(dir: SplitDir): Promise<void> {
   try {
     const created = await sessionSpawn({
       req: {
+        id: null,
         project_id: projectId,
         kind: { type: 'shell' },
         name: null,

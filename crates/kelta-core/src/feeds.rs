@@ -16,7 +16,7 @@ use kelta_proto::codehost::{
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
 use kelta_proto::ext::Urgency;
-use kelta_proto::ids::{AccountId, ProjectId, WorkItemId};
+use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{PaneContent, Scope, WorkState};
 use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
@@ -525,15 +525,19 @@ impl Core {
         t: &TicketRef,
         transition_id: &str,
         fields: Option<serde_json::Value>,
+        session: Option<&SessionId>,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let tracker = self.tracker_of(&t.account)?;
         let from = self.cached_ticket(t).await.map(|x| x.status);
         let ticket = tracker.transition(t, transition_id, fields).await?;
-        self.publish_ev(BusEvent::new(
-            bus::TICKET_TRANSITIONED,
-            serde_json::json!({ "ticket": t, "from": from, "to": ticket.status }),
-        ));
+        self.publish_from(
+            session,
+            BusEvent::new(
+                bus::TICKET_TRANSITIONED,
+                serde_json::json!({ "ticket": t, "from": from, "to": ticket.status }),
+            ),
+        );
         self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
@@ -578,17 +582,33 @@ impl Core {
                 e
             }
         })?;
-        self.tracker_transition(t, &chosen.id, None).await
+        self.tracker_transition(t, &chosen.id, None, None).await
     }
 
-    pub async fn tracker_comment(&self, t: &TicketRef, markdown: &str) -> Result<(), KeltaError> {
+    pub async fn tracker_comment(
+        &self,
+        t: &TicketRef,
+        markdown: &str,
+        session: Option<&SessionId>,
+    ) -> Result<(), KeltaError> {
         self.rt.capture();
         self.tracker_of(&t.account)?.comment(t, markdown).await?;
-        self.publish_ev(BusEvent::new(
-            bus::TICKET_COMMENTED,
-            serde_json::json!({ "ticket": t, "markdown": markdown }),
-        ));
+        self.publish_from(
+            session,
+            BusEvent::new(bus::TICKET_COMMENTED, serde_json::json!({ "ticket": t, "markdown": markdown })),
+        );
         Ok(())
+    }
+
+    /// Publish with the acting session (and its project) as event context.
+    fn publish_from(&self, session: Option<&SessionId>, mut ev: BusEvent) {
+        if let Some(sid) = session {
+            ev = ev.with_session(sid.clone());
+            if let Some(p) = self.sessions.lock().get(sid).map(|e| e.info.project_id.clone()) {
+                ev = ev.with_project(p);
+            }
+        }
+        self.publish_ev(ev);
     }
 
     pub async fn tracker_assign(

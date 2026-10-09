@@ -1,8 +1,5 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "app": {
-    "enableGTKAppId": true
-  },
   "bundle": {
     "externalBin": ["binaries/kelta-ctl"],
     "linux": {

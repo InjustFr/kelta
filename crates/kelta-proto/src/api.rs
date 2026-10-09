@@ -161,6 +161,21 @@ pub trait CoreApi: Send + Sync {
     async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError>;
     async fn code_host_for(&self, account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError>;
     async fn review_list(&self, scope: Scope, kind: ReviewKind) -> Result<Vec<ReviewItem>, KeltaError>;
+    /// Tracker writes with core-owned side effects (cache invalidation, `ticket.transitioned` /
+    /// `ticket.commented`); `session` = the session acting (MCP), added as event context.
+    async fn ticket_transition(
+        &self,
+        ticket: &TicketRef,
+        transition_id: &str,
+        fields: Option<Value>,
+        session: Option<&SessionId>,
+    ) -> Result<Ticket, KeltaError>;
+    async fn ticket_comment(
+        &self,
+        ticket: &TicketRef,
+        markdown: &str,
+        session: Option<&SessionId>,
+    ) -> Result<(), KeltaError>;
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
     async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;

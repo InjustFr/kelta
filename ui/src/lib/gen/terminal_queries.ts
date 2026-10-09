@@ -26,6 +26,7 @@ export const SWALLOWED_CSI: readonly CsiQuery[] = [
   { name: "DSR", final: "n", params: [5,6] },
   { name: "DECRQM", prefix: "?", intermediates: "$", final: "p", params: [] },
   { name: "DECRQM_ANSI", intermediates: "$", final: "p", params: [] },
+  { name: "XTWINOPS_CHARS", final: "t", params: [18] },
 ];
 
 export const SWALLOWED_OSC: readonly OscQuery[] = [

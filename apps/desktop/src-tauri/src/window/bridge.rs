@@ -137,6 +137,8 @@ impl UiBridge for TauriBridge {
                     let _ = w.close();
                 }
             }
+            // Other bench events are not for the UI (and must not recreate the window).
+            UiEvent::CtlCommand { cmd: CtlCommand::Emit { .. } } => {}
             // Toggle is native: it must work when the webview is destroyed or hung.
             UiEvent::CtlCommand { cmd: CtlCommand::Toggle } => super::toggle(&self.handle),
             e if needs_window(e) => self.deliver_command(ev),

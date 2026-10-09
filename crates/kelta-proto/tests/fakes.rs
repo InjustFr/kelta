@@ -18,6 +18,7 @@ use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
 
 fn spawn_req(kind: SessionKind) -> SpawnRequest {
     SpawnRequest {
+        id: None,
         project_id: ProjectId::new("shop"),
         kind,
         name: None,

@@ -281,7 +281,7 @@ async fn tracker_move_resolves_columns() {
     assert_eq!(blog_cols.len(), 4);
     // NeedsFields propagates with its detail
     e.tracker.require_fields("t5");
-    let err = e.h.core.tracker_transition(&t, "t5", None).await.unwrap_err();
+    let err = e.h.core.tracker_transition(&t, "t5", None, None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NeedsFields);
 }
 

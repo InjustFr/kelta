@@ -7,5 +7,6 @@
     "setup": 1000,
     "shell": 3000,
     "tool": 500
-  }
+  },
+  "view_scrollback": 1000
 }

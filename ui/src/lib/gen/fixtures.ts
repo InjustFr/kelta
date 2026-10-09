@@ -35,6 +35,7 @@ export const appInfo: AppInfo = {
   },
   "config_dir": "/Users/ada/.config/kelta",
   "data_dir": "/Users/ada/Library/Application Support/dev.kelta.Kelta",
+  "decorations": "native",
   "platform": "macos",
   "runtime_dir": "/tmp/kelta-501",
   "safe_graphics": false,
@@ -298,6 +299,7 @@ export const spawnRequest: SpawnRequest = {
   "env": {
     "FOO": "bar"
   },
+  "id": null,
   "kind": {
     "adapter": "nvim",
     "type": "editor"
@@ -2205,7 +2207,8 @@ export const terminalLimits: TerminalLimits = {
     "setup": 1000,
     "shell": 3000,
     "tool": 500
-  }
+  },
+  "view_scrollback": 1000
 };
 
 export const loginEnv: LoginEnv = {

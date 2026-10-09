@@ -161,6 +161,7 @@ impl Core {
     ) -> Result<Option<(PaneContent, Option<SessionInfo>)>, KeltaError> {
         let TemplateNode::Session { session, name, profile, command } = leaf else { return Ok(None) };
         let base = SpawnRequest {
+            id: None,
             project_id: project.clone(),
             kind: SessionKind::Shell,
             name: name.clone(),
@@ -204,6 +205,7 @@ impl Core {
                 let prompt = s.claude.prompt_templates.get("standalone").map(|t| render(t, vars));
                 let args = claude_args(&s.claude, profile.as_deref(), &uuid, &file, prompt.as_deref());
                 let req = SpawnRequest {
+                    id: None,
                     kind: SessionKind::Claude,
                     program: Some(s.claude.binary.clone()),
                     args,
@@ -247,6 +249,7 @@ impl Core {
                     .create(&run)
                     .map_err(|e| KeltaError::internal(format!("runtime dir: {e}")))?;
                 let req = SpawnRequest {
+                    id: None,
                     kind: SessionKind::Editor { adapter: preset.id.clone() },
                     program: Some(preset.command.clone()),
                     args,

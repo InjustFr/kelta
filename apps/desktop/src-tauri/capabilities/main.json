@@ -8,6 +8,8 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
     "allow-app-info",
     "allow-app-ready",
     "allow-events-subscribe",

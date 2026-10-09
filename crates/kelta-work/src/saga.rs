@@ -897,6 +897,7 @@ impl WorkService {
                 let info = env
                     .core
                     .session_spawn(SpawnRequest {
+                        id: None,
                         project_id: item.project_id.clone(),
                         kind: SessionKind::Setup,
                         name: Some("setup".into()),
@@ -969,6 +970,7 @@ impl WorkService {
         let (pid, wid, cwd, tid) =
             (item.project_id.clone(), item.id.clone(), item.worktree.clone(), j.template_id());
         let base_req = |kind: SessionKind, name: String| SpawnRequest {
+            id: None,
             project_id: pid.clone(),
             kind,
             name: Some(name),
@@ -1151,8 +1153,8 @@ impl WorkService {
         }
     }
 
-    /// Spawn Claude (`mode`) for `item`; regenerates the files for the real session id/port.
-    /// `SpawnRequest` for Claude in `item`'s worktree (`sid` exported as `KELTA_SESSION_ID`).
+    /// `SpawnRequest` for Claude in `item`'s worktree, spawned as session `sid` (the id the
+    /// per-session files name).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn claude_request(
         &self,
@@ -1165,17 +1167,16 @@ impl WorkService {
         sid: &SessionId,
     ) -> SpawnRequest {
         let spec = self.launch_spec(env, item, j, run, mode, port);
-        let mut envv = BTreeMap::new();
-        envv.insert("KELTA_SESSION_ID".to_owned(), sid.as_str().to_owned());
         let uuid = item.claude_uuid.clone().unwrap_or_default();
         SpawnRequest {
+            id: Some(sid.clone()),
             project_id: item.project_id.clone(),
             kind: SessionKind::Claude,
             name: Some(spec.name.clone()),
             program: Some(env.settings.claude.binary.clone()),
             args: claude::argv(&spec),
             cwd: Some(item.worktree.clone()),
-            env: envv,
+            env: BTreeMap::new(),
             cols: COLS,
             rows: ROWS,
             work_item_id: Some(item.id.clone()),
@@ -1194,9 +1195,12 @@ impl WorkService {
     ) -> Result<SessionId, KeltaError> {
         self.version_gate(&env.core, &env.settings).await;
         let run = self.ensure_claude_run(item, j)?;
-        let hint = j.claude_sid_hint.get_or_insert_with(SessionId::generate).clone();
+        // The files name the session id: spawn under the journaled id unless a session holds it.
+        let hint = match j.claude_sid_hint.clone().filter(|s| env.core.session_get(s).is_none()) {
+            Some(s) => s,
+            None => j.claude_sid_hint.insert(SessionId::generate()).clone(),
+        };
         let port = self.http_port(&env.settings).await;
-        // Files carry the port and the session id; rewrite before spawning.
         if let Err(e) = self.write_claude_files(env, item, j, &run, &hint, port) {
             self.release_port(port);
             return Err(e);
@@ -1211,11 +1215,6 @@ impl WorkService {
         };
         if port.is_some() {
             self.http_sessions.lock().insert(info.id.clone());
-        }
-        if info.id != hint {
-            // Core assigned its own id: point mcp/http-hook URLs at it (before Claude reads them).
-            j.claude_sid_hint = Some(info.id.clone());
-            self.write_claude_files(env, item, j, &run, &info.id, port)?;
         }
         j.http_port = port;
         j.claude_session = Some(info.id.clone());

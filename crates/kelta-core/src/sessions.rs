@@ -413,25 +413,46 @@ impl Core {
     // Spawn
     // =========================================================================================
 
-    /// Reserves the sid8 under one lock so concurrent spawns / templates never share a runtime dir.
-    fn new_session_id(&self) -> SessionId {
+    /// Reserves `id`'s sid8 under one lock so concurrent spawns / templates never share a runtime
+    /// dir. False when the id or its sid8 is already in use.
+    fn reserve_session_id(&self, id: &SessionId) -> bool {
         let mut taken = self.sid8_taken.lock();
-        let mut id = SessionId::generate();
+        let sid8 = id.sid8();
+        if taken.contains(&sid8) || self.sessions.lock().keys().any(|k| k == id || k.sid8() == sid8) {
+            return false;
+        }
+        taken.insert(sid8);
+        true
+    }
+
+    fn new_session_id(&self) -> SessionId {
         loop {
-            let sid8 = id.sid8();
-            if !taken.contains(&sid8) && !self.sessions.lock().keys().any(|k| k.sid8() == sid8) {
-                taken.insert(sid8);
+            let id = SessionId::generate();
+            if self.reserve_session_id(&id) {
                 return id;
             }
-            // a v7 sid8 is the ms timestamp's top 32 bits (~65 s per value): retry with random bits.
-            id = SessionId::new(uuid::Uuid::new_v4().to_string());
         }
     }
 
     pub(crate) async fn spawn_session(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
-        let id = self.new_session_id();
+        let id = match req.id.clone() {
+            Some(id) if uuid::Uuid::parse_str(id.as_str()).is_err() => {
+                return Err(KeltaError::invalid(format!("session id {id} is not a uuid")));
+            }
+            Some(id) if !self.reserve_session_id(&id) => {
+                return Err(KeltaError::conflict(format!("session id {id} is already in use")));
+            }
+            Some(id) => id,
+            None => self.new_session_id(),
+        };
         let launch = Launch { program: req.program.clone(), args: req.args.clone(), resume_attempt: false };
-        self.spawn_with(id, req, launch, SpawnMode::New).await
+        let res = self.spawn_with(id.clone(), req, launch, SpawnMode::New).await;
+        // A failed spawn frees its sid8 so the caller can retry with the same id.
+        let unused = res.is_err() && !self.sessions.lock().contains_key(&id);
+        if unused {
+            self.sid8_taken.lock().remove(&id.sid8());
+        }
+        res
     }
 
     /// Spawn with a pre-chosen id (templates write per-session files first).
@@ -728,7 +749,20 @@ impl Core {
             (spec, e.restore.clone())
         };
         let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
-        let launch = restore_launch(&spec, &policy, &binary, use_continue);
+        let mut launch = restore_launch(&spec, &policy, &binary, use_continue);
+        // A work item's Claude needs its per-session files regenerated (the runtime dir does not
+        // survive a reboot): kelta-work builds the full argv.
+        if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
+            match self.work.claude_restore_request(id, use_continue).await {
+                Ok(Some(req)) => {
+                    launch = Launch { program: req.program, args: req.args, resume_attempt: !use_continue };
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, session = %id, "work item Claude restore files not written")
+                }
+            }
+        }
         let res = self.spawn_with(id.clone(), spec, launch, SpawnMode::Restore).await;
         if let Some(x) = self.sessions.lock().get_mut(id) {
             x.restoring = false;
@@ -1333,6 +1367,13 @@ impl Core {
             }
             TerminalEvent::Exited { code, signal } => self.on_exited(id, code, signal),
             TerminalEvent::AckTimeout { .. } => self.on_ack_timeout(),
+            TerminalEvent::MemoryCapReached { cap_mb } => self.emit(UiEvent::Toast {
+                toast: Toast::warn(format!(
+                    "Terminal scrollback reached the {cap_mb} MB cap (terminal.memory_cap_mb): \
+                     the least recently viewed sessions keep their last {} lines.",
+                    kelta_term::SHRINK_FLOOR
+                )),
+            }),
         }
     }
 

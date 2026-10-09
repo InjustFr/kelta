@@ -56,6 +56,7 @@ async fn backend_open_moves_sessions_and_kill_removes_panes() {
     let s = h
         .core
         .session_spawn(SpawnRequest {
+            id: None,
             project_id: shop.clone(),
             kind: SessionKind::Shell,
             name: None,

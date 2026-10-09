@@ -14,7 +14,7 @@ use crate::api::{CodeHost, CoreApi, Tracker};
 use crate::codehost::{PrDraft, ReviewItem, ReviewKind};
 use crate::ctl::CtlCommand;
 use crate::error::KeltaError;
-use crate::events::{BUS_CAPACITY, BusEvent, Notification, Toast};
+use crate::events::{BUS_CAPACITY, BusEvent, Notification, Toast, bus};
 use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use crate::ids::{AccountId, PaneId, ProjectId, SessionId, TabId, ToolId, WorkItemId};
 use crate::model::{
@@ -22,6 +22,7 @@ use crate::model::{
     SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
 };
 use crate::settings::Settings;
+use crate::tracker::{Ticket, TicketRef};
 
 /// A recorded `CoreApi` call: method name + JSON-ish argument summary.
 #[derive(Debug, Clone, PartialEq)]
@@ -198,6 +199,17 @@ impl FakeCore {
         let _ = self.bus.send(ev);
     }
 
+    /// Publish with the acting session (and its project) as context, like core.
+    fn publish_from(&self, session: Option<&SessionId>, mut ev: BusEvent) {
+        if let Some(sid) = session {
+            ev = ev.with_session(sid.clone());
+            if let Some(p) = self.sessions.lock().get(sid).map(|s| s.project_id.clone()) {
+                ev = ev.with_project(p);
+            }
+        }
+        self.publish_inner(ev);
+    }
+
     fn arg<T: serde::Serialize>(t: &T) -> Value {
         serde_json::to_value(t).unwrap_or(Value::Null)
     }
@@ -212,7 +224,13 @@ impl CoreApi for FakeCore {
             self.insert_session(s.clone());
             return Ok(s);
         }
-        let id = SessionId::generate();
+        let id = match req.id.clone() {
+            Some(id) if self.sessions.lock().contains_key(&id) => {
+                return Err(KeltaError::conflict(format!("session id {id} is already in use")));
+            }
+            Some(id) => id,
+            None => SessionId::generate(),
+        };
         let pid = {
             let mut p = self.next_pid.lock();
             *p += 1;
@@ -368,6 +386,48 @@ impl CoreApi for FakeCore {
             }
         }
         Ok(out)
+    }
+
+    async fn ticket_transition(
+        &self,
+        ticket: &TicketRef,
+        transition_id: &str,
+        fields: Option<serde_json::Value>,
+        session: Option<&SessionId>,
+    ) -> Result<Ticket, KeltaError> {
+        self.record(
+            "ticket_transition",
+            serde_json::json!({ "ticket": ticket, "transition_id": transition_id, "session": session }),
+        );
+        let tracker = self.tracker_for(&ticket.account).await?;
+        let from = tracker.get(ticket).await.ok().map(|d| d.ticket.status);
+        let t = tracker.transition(ticket, transition_id, fields).await?;
+        self.publish_from(
+            session,
+            BusEvent::new(
+                bus::TICKET_TRANSITIONED,
+                serde_json::json!({ "ticket": ticket, "from": from, "to": t.status }),
+            ),
+        );
+        Ok(t)
+    }
+
+    async fn ticket_comment(
+        &self,
+        ticket: &TicketRef,
+        markdown: &str,
+        session: Option<&SessionId>,
+    ) -> Result<(), KeltaError> {
+        self.record("ticket_comment", serde_json::json!({ "ticket": ticket, "session": session }));
+        self.tracker_for(&ticket.account).await?.comment(ticket, markdown).await?;
+        self.publish_from(
+            session,
+            BusEvent::new(
+                bus::TICKET_COMMENTED,
+                serde_json::json!({ "ticket": ticket, "markdown": markdown }),
+            ),
+        );
+        Ok(())
     }
 
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {

@@ -271,7 +271,7 @@ impl Core {
                     ev = ev.with_project(p);
                 }
                 self.publish_ev(ev);
-                let change = kelta_server::hooks::map(&payload).or_else(|| crate::status::map_hook(&payload));
+                let change = kelta_server::hooks::map(&payload);
                 if let Some(c) = change {
                     self.apply_hook(&session, c)?;
                 }
@@ -343,6 +343,13 @@ impl Core {
             CtlCommand::Emit { name, payload } => {
                 if !name.starts_with(bus::CUSTOM_PREFIX) || name.len() <= bus::CUSTOM_PREFIX.len() {
                     return Err(KeltaError::invalid("only custom.* events can be emitted"));
+                }
+                // kelta-bench drives the desktop shell through `custom.bench.*` (honoured by the
+                // bridge only when KELTA_BENCH_MARKS is set).
+                if name.starts_with("custom.bench.") {
+                    self.emit(UiEvent::CtlCommand {
+                        cmd: CtlCommand::Emit { name: name.clone(), payload: payload.clone() },
+                    });
                 }
                 self.publish_ev(BusEvent::new(name, payload));
                 Ok(Value::Null)

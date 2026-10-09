@@ -258,6 +258,7 @@ impl PluginHost {
         self.check_tool_permission(r, Some(&command)).await?;
         let core = self.core_or_err()?;
         let req = SpawnRequest {
+            id: None,
             project_id: project.clone(),
             kind: SessionKind::Tool { tool_id: r.id.clone() },
             name: Some(if def.label.is_empty() { r.id.to_string() } else { def.label.clone() }),

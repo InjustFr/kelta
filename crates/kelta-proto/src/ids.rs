@@ -109,9 +109,11 @@ impl SessionId {
         Self(uuid::Uuid::now_v7().to_string())
     }
 
-    /// First 8 hex chars of the uuid (`<sid8>`, ARCHITECTURE §2.1).
+    /// Last 8 hex chars of the uuid (`<sid8>`, ARCHITECTURE §2.1): the random tail of a v7 uuid
+    /// (its first 32 bits are the millisecond clock, shared by every id of a ~65 s window).
     pub fn sid8(&self) -> String {
-        self.0.chars().filter(|c| *c != '-').take(8).collect()
+        let hex: Vec<char> = self.0.chars().filter(|c| *c != '-').collect();
+        hex[hex.len().saturating_sub(8)..].iter().collect()
     }
 }
 
@@ -158,7 +160,7 @@ mod tests {
     #[test]
     fn sid8_and_slugs() {
         let s = SessionId::new("0192f0c1-aaaa-7bbb-8ccc-dddddddddddd");
-        assert_eq!(s.sid8(), "0192f0c1");
+        assert_eq!(s.sid8(), "dddddddd");
         assert!(ProjectId::is_valid_slug("shop-2"));
         assert!(!ProjectId::is_valid_slug("Shop"));
         assert!(PluginId::is_valid("tools-pack"));

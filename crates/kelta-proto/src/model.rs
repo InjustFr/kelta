@@ -244,6 +244,10 @@ pub enum CloseOnExit {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct SpawnRequest {
+    /// Caller-chosen session id (files naming it are written before the spawn). `None` = core
+    /// generates one; a given id must be unused (`Conflict` otherwise).
+    #[serde(default)]
+    pub id: Option<SessionId>,
     pub project_id: ProjectId,
     pub kind: SessionKind,
     #[serde(default)]
