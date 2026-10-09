@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { connect, KeltaError, matches, type Kelta } from '../src/index';
 
@@ -92,19 +92,21 @@ describe('connect', () => {
     const off = k.events.on('session.*', (_payload, name) => got.push(name));
     const vis: boolean[] = [];
     k.onVisibility((v) => vis.push(v));
-    await flush();
-    expect(h.requests.find((r) => r.method === 'events.subscribe')?.params).toEqual({ names: ['session.*'] });
+    // MessageChannel delivery is not ordered with timers: wait for it instead of one tick.
+    await vi.waitFor(() =>
+      expect(h.requests.find((r) => r.method === 'events.subscribe')?.params).toEqual({
+        names: ['session.*'],
+      }),
+    );
     h.channel.port1.postMessage({ type: 'event', name: 'session.bell', payload: {} });
     h.channel.port1.postMessage({ type: 'event', name: 'pr.merged', payload: {} });
     h.channel.port1.postMessage({ type: 'visibility', visible: false });
     h.channel.port1.postMessage({ type: 'theme', tokens: { '--k-fg': '#fff' } });
-    await flush();
+    await vi.waitFor(() => expect(k.theme['--k-fg']).toBe('#fff'));
     expect(got).toEqual(['session.bell']);
     expect(vis).toEqual([false]);
-    expect(k.theme['--k-fg']).toBe('#fff');
     off();
-    await flush();
-    expect(h.requests.some((r) => r.method === 'events.unsubscribe')).toBe(true);
+    await vi.waitFor(() => expect(h.requests.some((r) => r.method === 'events.unsubscribe')).toBe(true));
   });
 
   it('maps helpers to host methods', async () => {
