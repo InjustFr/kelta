@@ -22,7 +22,7 @@ As in SETTINGS.md §6: `{project.id|name|root}`, `{repo.id|path|name}`, `{worktr
 pub struct ToolDef {
   pub id: String,                      // [a-z0-9-]; plugin tools are namespaced "<plugin>/<id>"
   pub label: String, pub icon: Option<String>, pub description: Option<String>,
-  pub kind: ToolKind,                  // Pty | Web
+  pub kind: ToolKind,                  // Pty | Web | External (detached launch, no pane)
   // pty
   pub command: Option<String>, pub args: Vec<String>, pub cwd: Option<String>, pub env: BTreeMap<String, String>,
   pub close_on_exit: CloseOnExit,      // never | on_success | always (default never → exit banner + Relaunch)

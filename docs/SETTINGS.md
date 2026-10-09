@@ -216,6 +216,23 @@ layout = { session = "shell" }
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
 
+Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+
+```toml
+[[tools]]                    # embedded: TUI in a pane next to the current one, focused if already open
+id = "lazydocker"
+label = "Docker"
+command = "lazydocker"       # kind defaults to "pty"
+keybinding = "mod+shift+d"
+
+[[tools]]                    # external: launched detached, cwd = project root, never killed by Kelta
+id = "fork"
+label = "Fork"
+kind = "external"
+command = "open"
+args = ["-a", "Fork", "."]
+```
+
 ### [plugins]
 | `dev_paths` | list<path> | `[]` | unpacked plugin dirs loaded in dev mode (global only; still require grants) |
 | `disabled` | list<PluginId> | `[]` | |
