@@ -295,7 +295,10 @@ async fn error_bodies_travel_in_detail() {
 async fn a_304_for_a_caller_supplied_validator_is_reported_as_unchanged() {
     let server = MockServer::start().await;
     Mock::given(path("/x")).respond_with(ResponseTemplate::new(304)).mount(&server).await;
-    let r = ctx().send_text(HttpRequest::get(format!("{}/x", server.uri())).header("If-None-Match", "\"mine\"")).await.unwrap();
+    let r = ctx()
+        .send_text(HttpRequest::get(format!("{}/x", server.uri())).header("If-None-Match", "\"mine\""))
+        .await
+        .unwrap();
     assert!(r.not_modified);
     assert_eq!(r.status, 304);
     assert!(r.body.is_empty());
