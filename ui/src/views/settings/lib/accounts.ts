@@ -63,6 +63,28 @@ export const KINDS: readonly KindInfo[] = [
     codeHost: true,
   },
   {
+    kind: 'bitbucket',
+    label: 'Bitbucket',
+    blurb: 'Bitbucket Cloud pull requests (its issue tracker was removed; use Jira).',
+    baseUrlRequired: false,
+    baseUrlDefault: 'https://api.bitbucket.org/2.0',
+    baseUrlPlaceholder: 'https://api.bitbucket.org/2.0',
+    secretDefault: 'keyring',
+    authOptions: ['basic', 'bearer'],
+    codeHost: true,
+  },
+  {
+    kind: 'gitea',
+    label: 'Gitea / Forgejo',
+    blurb: 'Gitea or Forgejo issues and pull requests (self-hosted, Codeberg).',
+    baseUrlRequired: true,
+    baseUrlDefault: null,
+    baseUrlPlaceholder: 'https://git.example.org',
+    secretDefault: 'keyring',
+    authOptions: ['token'],
+    codeHost: true,
+  },
+  {
     kind: 'linear',
     label: 'Linear',
     blurb: 'Linear issues with a personal API key.',
@@ -154,13 +176,17 @@ export function validateDraft(
   }
   if (d.kind === 'jira' && needsEmail(d) && !d.email.trim())
     errors.email = 'Jira Cloud needs the account e-mail';
+  if (d.kind === 'bitbucket' && needsEmail(d) && !d.email.trim())
+    errors.email = 'Bitbucket API tokens need the Atlassian account e-mail';
   if (d.poll_secs.trim() && !/^\d+$/.test(d.poll_secs.trim())) errors.poll_secs = 'Whole seconds';
   if (!d.secret.trim()) errors.secret = 'Choose where the token comes from';
   return errors;
 }
 
-/** Jira Cloud (`*.atlassian.net` or flavor=cloud) authenticates with e-mail + token. */
+/** Jira Cloud (`*.atlassian.net` or flavor=cloud) and Bitbucket API tokens authenticate with e-mail + token. */
 export function needsEmail(d: AccountDraft): boolean {
+  // Bitbucket: API token = e-mail + token (Basic); access tokens are Bearer.
+  if (d.kind === 'bitbucket') return d.auth !== 'bearer';
   if (d.kind !== 'jira') return false;
   if (d.flavor === 'cloud') return true;
   return d.flavor === 'auto' && /atlassian\.net/.test(d.base_url);

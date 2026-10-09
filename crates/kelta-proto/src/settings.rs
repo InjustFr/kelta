@@ -1043,11 +1043,15 @@ pub enum AccountKind {
     Github,
     Gitlab,
     Linear,
+    /// Bitbucket Cloud: code host only (its issue tracker was removed in August 2026).
+    Bitbucket,
+    /// Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.
+    Gitea,
 }
 
 impl AccountKind {
     pub fn is_code_host(self) -> bool {
-        matches!(self, Self::Github | Self::Gitlab)
+        matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea)
     }
 }
 
@@ -1082,12 +1086,12 @@ pub enum TextFormat {
 #[serde(deny_unknown_fields)]
 pub struct AccountConfig {
     pub kind: AccountKind,
-    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.
+    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0`; required for jira/redmine/gitea.
     #[serde(default)]
     pub base_url: Option<String>,
     #[serde(default)]
     pub flavor: JiraFlavor,
-    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).
+    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth).
     #[serde(default)]
     pub auth: Option<AuthKind>,
     #[serde(default)]
@@ -1114,6 +1118,7 @@ impl AccountConfig {
             AccountKind::Github => Some("https://api.github.com".into()),
             AccountKind::Gitlab => Some("https://gitlab.com".into()),
             AccountKind::Linear => Some("https://api.linear.app".into()),
+            AccountKind::Bitbucket => Some("https://api.bitbucket.org/2.0".into()),
             _ => None,
         })
     }
@@ -1364,13 +1369,13 @@ pub struct TrackerView {
     pub search: Option<String>,
     /// github Projects v2.
     pub project_v2: Option<ProjectV2Ref>,
-    /// gitlab: `group/sub/proj`; linear: project name.
+    /// gitlab: `group/sub/proj`; gitea: `owner/name`; linear: project name.
     pub project: Option<String>,
     /// linear: team key (`ENG`).
     pub team: Option<String>,
-    /// gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
+    /// gitlab, gitea: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
     pub scope: Option<String>,
-    /// gitlab, linear (label names).
+    /// gitlab, gitea, linear (label names).
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,

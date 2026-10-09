@@ -84,7 +84,7 @@ pub struct RepoDraft {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CodeHostHint {
     pub repo_id: String,
-    /// `"github"` | `"gitlab"`.
+    /// `"github"` | `"gitlab"` | `"bitbucket"` | `"gitea"`.
     pub kind: String,
     /// Host, e.g. `github.com`, `gitlab.acme.example`.
     pub host: String,
@@ -97,7 +97,7 @@ pub struct CodeHostHint {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TrackerHint {
-    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"`.
+    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"` | `"gitea"`.
     pub kind: String,
     /// Human explanation, e.g. "branch names contain SHOP-123".
     pub reason: String,

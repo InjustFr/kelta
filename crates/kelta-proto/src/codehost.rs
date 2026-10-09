@@ -11,6 +11,8 @@ use crate::tracker::{AccountError, User};
 pub enum CodeHostKind {
     Github,
     Gitlab,
+    Bitbucket,
+    Gitea,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]

@@ -42,7 +42,7 @@ search: string | null,
  */
 project_v2: ProjectV2Ref | null, 
 /**
- * gitlab: `group/sub/proj`; linear: project name.
+ * gitlab: `group/sub/proj`; gitea: `owner/name`; linear: project name.
  */
 project: string | null, 
 /**
@@ -50,11 +50,11 @@ project: string | null,
  */
 team: string | null, 
 /**
- * gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
+ * gitlab, gitea: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
  */
 scope: string | null, 
 /**
- * gitlab, linear (label names).
+ * gitlab, gitea, linear (label names).
  */
 labels: Array<string> | null, 
 /**
