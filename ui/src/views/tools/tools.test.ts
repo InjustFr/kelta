@@ -22,7 +22,10 @@ describe('missing tools', () => {
     const t = tools.list('shop')[0];
     t.installed = null; // never checked by the backend
     m.state.tools.find((x) => x.id === t.id)!.installed = false;
-    const { getByText, findByText, getAllByText } = render(ToolPicker, { onclose: vi.fn(), projectId: 'shop' });
+    const { getByText, findByText, getAllByText } = render(ToolPicker, {
+      onclose: vi.fn(),
+      projectId: 'shop',
+    });
     await fireEvent.click(getByText(t.label, { selector: '.label' }));
     expect(await findByText(/brew install/)).toBeTruthy();
     expect(getAllByText('Check again').length).toBeGreaterThan(0);
@@ -36,6 +39,9 @@ describe('missing tools', () => {
     projects.list = m.state.projects.map((p) => ({ ...p, active: p.id === 'shop' }));
     await dispatch('tools.open', { tool_id: id });
     expect(m.calls.some((c) => c.cmd === 'tool_open')).toBe(false);
-    expect(ui.sheet).toMatchObject({ key: 'tool_picker', props: { query: id, checks: { [id]: { installed: false } } } });
+    expect(ui.sheet).toMatchObject({
+      key: 'tool_picker',
+      props: { query: id, checks: { [id]: { installed: false } } },
+    });
   });
 });

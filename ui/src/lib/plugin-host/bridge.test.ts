@@ -89,7 +89,10 @@ describe('screen bridge', () => {
     const got = new Promise((resolve) => (port.onmessage = resolve));
     port.postMessage({ id: 1, method: 'clipboard.write', params: { text: 'x' } });
     await got;
-    expect(mock.controls.calls).toContainEqual({ cmd: 'clipboard_write', args: { kind: 'clipboard', text: 'x' } });
+    expect(mock.controls.calls).toContainEqual({
+      cmd: 'clipboard_write',
+      args: { kind: 'clipboard', text: 'x' },
+    });
     port.close();
     b.destroy();
   });
