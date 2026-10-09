@@ -198,7 +198,7 @@ export function backendAdvice(backend: string): SecretAdvice | null {
         steps: [
           'On GNOME / KDE the keyring starts with your session. On Sway or Hyprland nothing provides it by default.',
           'Start gnome-keyring for secrets, or enable Secret Service integration in KeePassXC (Settings → Secret Service Integration).',
-          'Or avoid the keyring: use a command: reference (pass, op, secret-tool) or an env: reference.',
+          'Or avoid the keyring: store tokens in the passphrase-encrypted file (file: references), or use a command: reference (pass, op, secret-tool) or an env: reference.',
         ],
         snippets: [
           'gnome-keyring-daemon --start --components=secrets',

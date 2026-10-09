@@ -7,6 +7,7 @@ Account tokens are references, never plain text:
 | Reference | Source |
 |---|---|
 | `keyring:<name>` | macOS Keychain, Linux Secret Service (service `dev.kelta`) |
+| `file:<name>` | Kelta's own encrypted file (`secrets.enc` in the data folder), unlocked with a passphrase once per run |
 | `command:<argv>` | output of a command, run without a shell, 5 s limit (`command:pass show jira/acme`) |
 | `env:<VAR>` | environment variable |
 
@@ -21,7 +22,15 @@ gnome-keyring-daemon --start --components=secrets
 ```
 
 Start it from your session (`exec-once = gnome-keyring-daemon --start --components=secrets` in Hyprland,
-`exec` in Sway) and make sure the collection is unlocked. Or skip the keyring and use `command:` / `env:`.
+`exec` in Sway) and make sure the collection is unlocked. Or skip the keyring and use `file:`, `command:` or
+`env:`.
+
+### Encrypted file (no keyring needed)
+
+Pick "Encrypted file (passphrase)" as the token source, then in Settings > Accounts > Secret storage choose
+a passphrase (the first time creates the file). Kelta asks for it once per run, at startup, when an account
+uses a `file:` reference. There is no recovery: a forgotten passphrase means deleting `secrets.enc` and
+setting the tokens again.
 
 ### macOS: Keychain
 

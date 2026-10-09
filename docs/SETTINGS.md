@@ -312,13 +312,15 @@ Config holds only `SecretRef` strings, never tokens:
 | SecretRef | Resolution |
 |---|---|
 | `keyring:<name>` | OS keyring via keyring-core: service `dev.kelta`, user `<name>`. macOS Keychain (`apple-native-keyring-store`, `keychain` feature); Linux Secret Service (`zbus-secret-service-keyring-store`). |
+| `file:<name>` | entry `<name>` of `<data>/secrets.enc`: 0600, XChaCha20-Poly1305 over a JSON map, key = Argon2id(passphrase, per-file salt; 19 MiB, t=2, p=1), header authenticated. Locked until the passphrase is entered in the UI (startup prompt when an account uses `file:`, or Settings → Accounts → Secret storage); the derived key stays in memory for the run (zeroized on drop), the passphrase is wiped after derivation. Writes are serialized and atomic (temp file + rename). |
 | `gh-cli` | `gh auth token --hostname <host of base_url>` (read-only reuse; never copied) |
 | `glab-cli` | plaintext `config.yml` token for host (glab path search order), else `glab auth status --show-token --hostname <host>` |
 | `command:<argv>` | argv split shell-words, exec without a shell, 5 s timeout, stdout trimmed (e.g. `command:pass show jira/acme`, `command:op read op://…`, `command:secret-tool lookup service kelta account jira`) |
 | `env:<VAR>` | process env (login env included) |
 
 - Resolution runs off the UI thread with a 5 s timeout, result cached in memory only (zeroized on drop), invalidated on settings change or 401. Never written to disk, never sent to the UI, never logged.
-- `secret_set` writes only `keyring:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- `secret_set` / `secret_delete` write only `keyring:` and `file:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `file:`/`command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- `secret_unlock {passphrase, create}` (UI IPC only, no ctl equivalent) unlocks the encrypted file for the run; `create` makes it when missing (`not_found` otherwise). `secret_backends_status` reports it as `encrypted-file` (available = unlocked) and Diagnostics warns while an existing file is locked. A wrong passphrase and a modified file give the same `needs_auth` error.
 - macOS dev builds: Keychain prompts on each rebuild — CONTRIBUTING recommends `env:` refs in development.
 
 ## 6. Templates and placeholders

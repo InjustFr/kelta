@@ -217,12 +217,26 @@ pub fn secret_backends(list: &[SecretBackendStatus]) -> Check {
             CheckStatus::Warn,
             b.detail.clone().unwrap_or_else(|| "not available".into()),
             Some(if cfg!(target_os = "macos") {
-                "Unlock the login keychain, or use env:/command: secrets"
+                "Unlock the login keychain, or use file:/env:/command: secrets"
             } else {
-                "Start a keyring: gnome-keyring-daemon --start --components=secrets (or KeePassXC), or use env:/command: secrets"
+                "Start a keyring: gnome-keyring-daemon --start --components=secrets (or KeePassXC), or use file:/env:/command: secrets"
             }),
         ),
         None => check("secret-service", label, CheckStatus::Warn, "backend status unavailable", None),
+    }
+}
+
+/// The encrypted secrets file, once it exists: warns while it is still locked this run.
+pub fn secret_file(list: &[SecretBackendStatus]) -> Option<Check> {
+    let b = list.iter().find(|b| b.backend == "encrypted-file")?;
+    let detail = b.detail.clone().unwrap_or_default();
+    if b.available {
+        Some(check("secret-file", "Encrypted secrets file", CheckStatus::Ok, detail, None))
+    } else if detail.starts_with("locked") {
+        let fix = Some("Enter its passphrase in Settings → Accounts → Secret storage");
+        Some(check("secret-file", "Encrypted secrets file", CheckStatus::Warn, detail, fix))
+    } else {
+        None
     }
 }
 
@@ -386,5 +400,14 @@ mod tests {
         assert_eq!(secret_backends(&[up]).status, CheckStatus::Ok);
         assert_eq!(secret_backends(&[down]).status, CheckStatus::Warn);
         assert_eq!(secret_backends(&[]).status, CheckStatus::Warn);
+        let file = |available, detail: &str| SecretBackendStatus {
+            backend: "encrypted-file".into(),
+            available,
+            detail: Some(detail.into()),
+        };
+        assert!(secret_file(&[]).is_none());
+        assert!(secret_file(&[file(false, "not set up: …")]).is_none());
+        assert_eq!(secret_file(&[file(false, "locked: …")]).unwrap().status, CheckStatus::Warn);
+        assert_eq!(secret_file(&[file(true, "unlocked")]).unwrap().status, CheckStatus::Ok);
     }
 }

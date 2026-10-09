@@ -63,6 +63,36 @@
     void loadBackends();
   });
 
+  // The encrypted secrets file: its passphrase goes to the backend once per app run and is
+  // cleared here right away. A `not_found` answer means no file yet: confirm, then create it.
+  let passphrase = $state('');
+  let passphraseAgain = $state('');
+  let creating = $state(false);
+  let unlocking = $state(false);
+  let unlockError = $state<string | null>(null);
+
+  async function unlock(): Promise<void> {
+    if (creating && passphrase !== passphraseAgain) {
+      unlockError = 'The two passphrases differ';
+      return;
+    }
+    unlocking = true;
+    unlockError = null;
+    try {
+      await ipc.secretUnlock({ passphrase, create: creating });
+      creating = false;
+      await loadBackends();
+    } catch (err) {
+      const e = toIpcError('secret_unlock', err);
+      if (e.code === 'not_found') creating = true;
+      unlockError = e.message;
+    } finally {
+      passphrase = '';
+      passphraseAgain = '';
+      unlocking = false;
+    }
+  }
+
   const keyringBackend = $derived(
     backends.find((b) => b.backend === 'keychain' || b.backend === 'secret-service'),
   );
@@ -202,6 +232,35 @@
         <Icon name={b.available ? 'circle-check' : 'triangle-alert'} size={14} />
         <strong>{b.backend}</strong>
         <span class="muted">{b.detail ?? (b.available ? 'available' : 'unavailable')}</span>
+        {#if b.backend === 'encrypted-file' && !b.available}
+          <form
+            class="advice unlock"
+            data-testid="secret-file-unlock"
+            onsubmit={(e) => {
+              e.preventDefault();
+              void unlock();
+            }}
+          >
+            <TextInput
+              bind:value={passphrase}
+              type="password"
+              autocomplete="off"
+              label={creating ? 'New passphrase' : 'Passphrase'}
+            />
+            {#if creating}
+              <TextInput
+                bind:value={passphraseAgain}
+                type="password"
+                autocomplete="off"
+                label="Repeat the passphrase"
+              />
+            {/if}
+            <Button size="sm" variant="primary" type="submit" loading={unlocking} disabled={!passphrase}
+              >{creating ? 'Create' : 'Unlock'}</Button
+            >
+            {#if unlockError}<p class="error" role="alert">{unlockError}</p>{/if}
+          </form>
+        {/if}
         {#if advice}
           <div class="advice" data-testid="backend-advice">
             <p>{advice.title}</p>
@@ -216,7 +275,8 @@
   </ul>
   {#if keyringBackend && !keyringBackend.available}
     <p class="hint" data-testid="keyring-fallback">
-      The keyring is unavailable: choose <code>command:</code> or <code>env:</code> when you add an account.
+      The keyring is unavailable: choose the encrypted file, <code>command:</code> or <code>env:</code> when you
+      add an account.
     </p>
   {/if}
 
@@ -459,6 +519,13 @@
     padding: var(--k-space-3) var(--k-space-4);
     background: var(--k-bg-sunken);
     border-radius: var(--k-radius);
+  }
+
+  .unlock {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--k-space-3);
   }
 
   .advice p {

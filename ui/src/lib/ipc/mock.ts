@@ -423,6 +423,7 @@ export function createMockTransport(options: MockOptions = {}): {
     secret_set: () => null,
     secret_delete: () => null,
     secret_backends_status: () => clone(samples.secretBackendsStatus),
+    secret_unlock: () => null,
     account_test: ({ account_id }) =>
       account_id.startsWith('broken')
         ? { ok: false, user: null, error: err('needs_auth', '401 Unauthorized') }

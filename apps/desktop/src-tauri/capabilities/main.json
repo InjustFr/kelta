@@ -31,6 +31,7 @@
     "allow-secret-set",
     "allow-secret-delete",
     "allow-secret-backends-status",
+    "allow-secret-unlock",
     "allow-account-test",
     "allow-project-list",
     "allow-project-detect",

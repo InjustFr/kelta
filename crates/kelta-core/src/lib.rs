@@ -56,7 +56,7 @@ use kelta_proto::model::{
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::tracker::{Ticket, TicketRef};
-use kelta_secrets::Secrets;
+use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
 use kelta_work::{WorkHost, WorkService};
@@ -209,7 +209,10 @@ impl Core {
             None => config.clone(),
         };
         let settings_source: Arc<dyn SettingsSource> = cfg.clone();
-        let secrets = Secrets::new(settings_source.clone());
+        let secrets = Secrets::with_options(
+            settings_source.clone(),
+            SecretsOptions { file: Some(dirs.data.join(SECRETS_FILE)), ..SecretsOptions::default() },
+        );
         let resolver: Arc<dyn SecretResolver> = resolver.unwrap_or_else(|| secrets.clone());
         let settings = settings_source.effective(None);
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
