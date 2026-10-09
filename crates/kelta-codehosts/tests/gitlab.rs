@@ -2,7 +2,7 @@
 
 mod support;
 
-use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind};
+use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind, ReviewQuery};
 use kelta_proto::error::ErrorCode;
 use serde_json::json;
 use support::*;
@@ -264,11 +264,12 @@ async fn find_for_branch_by_source_branch() {
 }
 
 #[tokio::test]
-async fn todos_gate_detects_a_new_todo() {
+async fn todos_gate_stays_changed_until_list_reviews_succeeds() {
     let server = MockServer::start().await;
+    common(&server, "gitlab/version_16.json").await;
     Mock::given(path("/api/v4/todos"))
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/todos.json")))
-        .up_to_n_times(2)
+        .up_to_n_times(1)
         .with_priority(1)
         .mount(&server)
         .await;
@@ -277,10 +278,24 @@ async fn todos_gate_detects_a_new_todo() {
         .with_priority(2)
         .mount(&server)
         .await;
+    Mock::given(path("/api/v4/merge_requests"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/v4/merge_requests"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .with_priority(2)
+        .mount(&server)
+        .await;
     let h = gl(&server);
-    assert!(h.changed_since_last().await.unwrap());
-    assert!(!h.changed_since_last().await.unwrap());
-    assert!(h.changed_since_last().await.unwrap(), "a new pending review_requested todo");
+    let q = ReviewQuery { kind: ReviewKind::ReviewRequested, include_drafts: false, include_team: false };
+    assert!(h.changed_since_last().await.unwrap(), "first poll");
+    assert!(h.changed_since_last().await.unwrap(), "still pending: list not done");
+    assert!(h.list_reviews(&q).await.is_err());
+    assert!(h.changed_since_last().await.unwrap(), "the list failed, change not lost");
+    h.list_reviews(&q).await.unwrap();
     assert!(!h.changed_since_last().await.unwrap());
 }
 

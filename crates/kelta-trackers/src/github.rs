@@ -283,6 +283,7 @@ impl GithubIssues {
         let data = self.gql(Q, json!({"owner": owner, "name": name, "number": number})).await?;
         let issue = data
             .pointer("/repository/issue")
+            .filter(|v| !v.is_null())
             .ok_or_else(|| KeltaError::not_found(format!("{repo}#{number}")))?;
         let nodes =
             issue.pointer("/projectItems/nodes").and_then(Value::as_array).cloned().unwrap_or_default();

@@ -142,6 +142,7 @@ impl RedmineTracker {
     }
 
     async fn fetch_issue(&self, id: &str, include: Option<&str>) -> Result<Value, KeltaError> {
+        id.parse::<u64>().map_err(|_| KeltaError::invalid(format!("bad redmine id: {id}")))?;
         let mut req = HttpRequest::get(format!("{}/issues/{id}.json", self.base));
         if let Some(i) = include {
             req = req.query("include", i);
@@ -151,6 +152,7 @@ impl RedmineTracker {
     }
 
     async fn put_issue(&self, id: &str, issue: Value) -> Result<(), KeltaError> {
+        id.parse::<u64>().map_err(|_| KeltaError::invalid(format!("bad redmine id: {id}")))?;
         let url = format!("{}/issues/{id}.json", self.base);
         match self.auth.send_text(HttpRequest::put(url).json(json!({ "issue": issue }))).await {
             Ok(_) => Ok(()),

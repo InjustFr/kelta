@@ -134,7 +134,14 @@ pub fn split_repo_number(key: &str) -> Result<(String, u64), KeltaError> {
     let (repo, n) =
         key.rsplit_once('#').ok_or_else(|| KeltaError::invalid(format!("bad ticket key: {key}")))?;
     let n = n.parse::<u64>().map_err(|_| KeltaError::invalid(format!("bad ticket key: {key}")))?;
-    if repo.is_empty() {
+    // Keys reach URL paths unescaped: only plain `/`-separated name segments.
+    let ok = |p: &str| {
+        !p.is_empty()
+            && p != ".."
+            && p != "."
+            && p.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+    };
+    if !repo.split('/').all(ok) {
         return Err(KeltaError::invalid(format!("bad ticket key: {key}")));
     }
     Ok((repo.to_owned(), n))
@@ -158,6 +165,8 @@ mod tests {
         assert_eq!(split_repo_number("grp/sub/proj#12").unwrap(), ("grp/sub/proj".to_owned(), 12));
         assert!(split_repo_number("nope").is_err());
         assert!(split_repo_number("#3").is_err());
+        assert!(split_repo_number("a/b/../../x#1").is_err());
+        assert!(split_repo_number("a/b?x#1").is_err());
     }
 
     #[test]

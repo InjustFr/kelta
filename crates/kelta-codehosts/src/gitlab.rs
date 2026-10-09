@@ -34,6 +34,8 @@ const PER_PAGE: &str = "100";
 struct TodoGate {
     disabled: bool,
     last: Option<(usize, u64)>,
+    /// A change was seen but `list_reviews` has not yet succeeded since.
+    pending: bool,
 }
 
 pub struct GitlabHost {
@@ -286,9 +288,9 @@ impl CodeHost for GitlabHost {
         let count = resp.headers.get("x-total").and_then(|v| v.parse::<usize>().ok()).unwrap_or(items.len());
         let max_id = items.iter().filter_map(|t| t.get("id").and_then(Value::as_u64)).max().unwrap_or(0);
         let mut g = self.gate.lock();
-        let changed = g.last != Some((count, max_id));
+        g.pending |= g.last != Some((count, max_id));
         g.last = Some((count, max_id));
-        Ok(changed)
+        Ok(g.pending)
     }
 
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
@@ -297,6 +299,7 @@ impl CodeHost for GitlabHost {
             req = req.query(k, v);
         }
         let resp = self.json(req.with_etag()).await?;
+        self.gate.lock().pending = false;
         Ok(resp
             .body
             .as_array()
