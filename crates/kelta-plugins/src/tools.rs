@@ -334,6 +334,10 @@ impl PluginHost {
         self.check_tool_permission(r, Some(&command)).await?;
         let mut env = Self::expand_env(vars, &self.settings(Some(project)).env)?;
         env.extend(Self::expand_env(vars, &def.env)?);
+        // A Dock-launched Kelta has a bare PATH; use the login shell's, as pty tools do.
+        if let Some(p) = self.core().and_then(|c| c.login_path()) {
+            env.entry("PATH".to_owned()).or_insert(p);
+        }
         let cwd = self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?;
         let mut child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env)
             .spawn()
@@ -341,9 +345,14 @@ impl PluginHost {
                 std::io::ErrorKind::NotFound => KeltaError::not_found(format!("`{command}` not found")),
                 _ => KeltaError::internal(format!("cannot start `{command}`: {e}")),
             })?;
-        // Reap only, so a quick-exiting launcher (`open`) leaves no zombie.
+        // Reap (no zombie from a quick-exiting launcher like `open`) and log failed launches.
+        let id = r.id.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            if let Ok(s) = child.wait().await
+                && !s.success()
+            {
+                tracing::warn!(tool = %id, status = ?s, "external tool exited with error");
+            }
         });
         self.publish(
             BusEvent::new(bus::TOOL_OPENED, json!({ "tool_id": r.id, "kind": "external" }))
@@ -638,6 +647,20 @@ mod external_tests {
             c.get_envs().collect::<Vec<_>>(),
             [(std::ffi::OsStr::new("A"), Some(std::ffi::OsStr::new("1")))]
         );
+    }
+
+    #[tokio::test]
+    async fn external_command_uses_env_path_for_lookup() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("kelta-ext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("kelta-fake-tool");
+        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let env = BTreeMap::from([("PATH".to_owned(), dir.to_string_lossy().into_owned())]);
+        let st = external_command("kelta-fake-tool", &[], &dir, &env).status().await.unwrap();
+        assert!(st.success());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -231,6 +231,7 @@ label = "Fork"
 kind = "external"
 command = "open"
 args = ["-a", "Fork", "."]
+check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the app is absent
 ```
 
 ### [plugins]
