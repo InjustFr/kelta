@@ -74,12 +74,17 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
         .inner_size(geometry::DEFAULT_WIDTH, geometry::DEFAULT_HEIGHT)
         .min_inner_size(geometry::MIN_WIDTH, geometry::MIN_HEIGHT)
         .decorations(!eff.undecorated())
-        .on_page_load(|_, p| {
+        .on_page_load(|w, p| {
+            // The UI re-subscribes after every load; channels of the previous page are dead.
+            if matches!(p.event(), PageLoadEvent::Started)
+                && let Some(b) = w.app_handle().try_state::<Arc<TauriBridge>>()
+            {
+                b.clear_subscribers();
+            }
             // Stand-in for `app_ready` (commands/app.rs is not mine): a finished page load proves
             // the launch worked, so the crash guard can be dropped.
             if matches!(p.event(), PageLoadEvent::Finished) {
                 crate::platform::launch_succeeded();
-                crate::platform::webview::reset_reloads();
                 bench::page_loaded();
             }
         });

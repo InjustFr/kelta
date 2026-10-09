@@ -20,21 +20,72 @@ use super::MAIN_WINDOW;
 /// queued and delivered on the next subscription. Bounded so a stuck UI cannot grow memory.
 const PENDING_CAP: usize = 32;
 
+/// Subscriber list plus the queue of commands that arrived with no subscriber. Generic over the
+/// channel/event types so the ordering logic is testable without a Tauri app.
+struct Hub<C, E> {
+    subs: Mutex<Vec<(u64, C)>>,
+    pending: Mutex<Vec<E>>,
+}
+
+impl<C: Clone, E: Clone> Hub<C, E> {
+    fn new() -> Self {
+        Self { subs: Mutex::new(Vec::new()), pending: Mutex::new(Vec::new()) }
+    }
+
+    fn subscribe(&self, id: u64, ch: C, send: impl Fn(&C, E) -> bool) {
+        // Hold subs across drain and push so a concurrent deliver cannot queue in between.
+        let mut subs = self.subs.lock();
+        for ev in std::mem::take(&mut *self.pending.lock()) {
+            let _ = send(&ch, ev);
+        }
+        subs.push((id, ch));
+    }
+
+    fn fan_out(&self, ev: &E, send: impl Fn(&C, E) -> bool) -> usize {
+        let snapshot: Vec<(u64, C)> = self.subs.lock().clone();
+        let mut dead = Vec::new();
+        let mut delivered = 0;
+        for (id, ch) in &snapshot {
+            if send(ch, ev.clone()) {
+                delivered += 1;
+            } else {
+                dead.push(*id);
+            }
+        }
+        if !dead.is_empty() {
+            self.subs.lock().retain(|(id, _)| !dead.contains(id));
+        }
+        delivered
+    }
+
+    /// Send to subscribers, or queue when there is none (or none accepted it).
+    fn deliver(&self, ev: E, send: impl Fn(&C, E) -> bool) {
+        // Empty-check and queue under the subs lock (shared with subscribe).
+        let subs = self.subs.lock();
+        if subs.is_empty() {
+            queue_capped(&mut self.pending.lock(), ev);
+            return;
+        }
+        drop(subs);
+        if self.fan_out(&ev, send) == 0 {
+            queue_capped(&mut self.pending.lock(), ev);
+        }
+    }
+}
+
+fn send_ev(ch: &Channel<UiEvent>, ev: UiEvent) -> bool {
+    ch.send(ev).is_ok()
+}
+
 pub struct TauriBridge {
     handle: AppHandle,
     next_sub: AtomicU64,
-    subs: Mutex<Vec<(u64, Channel<UiEvent>)>>,
-    pending: Mutex<Vec<UiEvent>>,
+    hub: Hub<Channel<UiEvent>, UiEvent>,
 }
 
 impl TauriBridge {
     pub fn new(handle: AppHandle) -> Arc<Self> {
-        Arc::new(Self {
-            handle,
-            next_sub: AtomicU64::new(1),
-            subs: Mutex::new(Vec::new()),
-            pending: Mutex::new(Vec::new()),
-        })
+        Arc::new(Self { handle, next_sub: AtomicU64::new(1), hub: Hub::new() })
     }
 
     pub fn handle(&self) -> &AppHandle {
@@ -44,60 +95,27 @@ impl TauriBridge {
     /// Register a UI event channel (one per window). Queued commands are delivered first.
     pub fn subscribe(&self, channel: Channel<UiEvent>) -> u64 {
         let id = self.next_sub.fetch_add(1, Ordering::Relaxed);
-        // Hold subs across drain and push so a concurrent deliver_command cannot queue in between.
-        let mut subs = self.subs.lock();
-        for ev in std::mem::take(&mut *self.pending.lock()) {
-            let _ = channel.send(ev);
-        }
-        subs.push((id, channel));
+        self.hub.subscribe(id, channel, send_ev);
         id
     }
 
     /// Drops every channel (the webview that owned them is gone).
     pub fn clear_subscribers(&self) {
-        self.subs.lock().clear();
+        self.hub.subs.lock().clear();
     }
 
     pub fn subscriber_count(&self) -> usize {
-        self.subs.lock().len()
-    }
-
-    fn fan_out(&self, ev: &UiEvent) -> usize {
-        let snapshot: Vec<(u64, Channel<UiEvent>)> = self.subs.lock().clone();
-        if snapshot.is_empty() {
-            return 0;
-        }
-        let mut dead = Vec::new();
-        let mut delivered = 0;
-        for (id, ch) in &snapshot {
-            match ch.send(ev.clone()) {
-                Ok(()) => delivered += 1,
-                Err(_) => dead.push(*id),
-            }
-        }
-        if !dead.is_empty() {
-            self.subs.lock().retain(|(id, _)| !dead.contains(id));
-        }
-        delivered
+        self.hub.subs.lock().len()
     }
 
     /// Commands that need a visible UI: bring the window back (recreating it in background mode).
     fn deliver_command(&self, ev: UiEvent) {
         super::raise(&self.handle);
-        // Empty-check and queue under the subs lock (shared with subscribe).
-        let subs = self.subs.lock();
-        if subs.is_empty() {
-            queue_capped(&mut self.pending.lock(), ev);
-            return;
-        }
-        drop(subs);
-        if self.fan_out(&ev) == 0 {
-            queue_capped(&mut self.pending.lock(), ev);
-        }
+        self.hub.deliver(ev, send_ev);
     }
 }
 
-fn queue_capped(p: &mut Vec<UiEvent>, ev: UiEvent) {
+fn queue_capped<E>(p: &mut Vec<E>, ev: E) {
     if p.len() >= PENDING_CAP {
         p.remove(0);
     }
@@ -123,7 +141,7 @@ impl UiBridge for TauriBridge {
             UiEvent::CtlCommand { cmd: CtlCommand::Toggle } => super::toggle(&self.handle),
             e if needs_window(e) => self.deliver_command(ev),
             _ => {
-                let _ = self.fan_out(&ev);
+                let _ = self.hub.fan_out(&ev, send_ev);
             }
         }
     }
@@ -202,6 +220,27 @@ mod tests {
         }
         assert_eq!(p.len(), PENDING_CAP);
         assert!(matches!(&p[0], UiEvent::ProjectRemoved { id } if id.as_str() == "3"));
+    }
+
+    #[test]
+    fn queued_until_subscribe_then_drained_in_order() {
+        let hub: Hub<u8, u32> = Hub::new();
+        let sent = std::cell::RefCell::new(Vec::new());
+        let send = |c: &u8, e: u32| {
+            sent.borrow_mut().push((*c, e));
+            true
+        };
+        hub.deliver(1, send);
+        hub.deliver(2, send);
+        assert!(sent.borrow().is_empty());
+        hub.subscribe(1, 7, send);
+        assert_eq!(*sent.borrow(), [(7, 1), (7, 2)]);
+        hub.deliver(3, send);
+        assert_eq!(sent.borrow().last(), Some(&(7, 3)));
+        // a dead channel is pruned and the event queued for the next subscriber
+        hub.deliver(4, |_, _| false);
+        assert!(hub.subs.lock().is_empty());
+        assert_eq!(*hub.pending.lock(), [4]);
     }
 
     #[test]

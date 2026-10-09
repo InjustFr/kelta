@@ -4,7 +4,9 @@
 //! - macOS: a `webViewWebContentProcessDidTerminate:` handler added to wry's navigation delegate
 //!   (reload) and the WebContent pid (via `_webProcessIdentifier`) for `perf_snapshot`.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
 
 use tauri::{Runtime, WebviewWindow};
 
@@ -12,16 +14,24 @@ use tauri::{Runtime, WebviewWindow};
 /// spin; the launch crash guard and the diagnostics pane take over).
 pub const MAX_AUTO_RELOADS: u32 = 5;
 
-static RELOADS: AtomicU32 = AtomicU32::new(0);
+/// A page that survived this long since the last auto reload ends the crash streak.
+const STABLE: Duration = Duration::from_secs(60);
+
+/// (reloads in the current streak, time of the last one)
+static RELOADS: Mutex<(u32, Option<Instant>)> = Mutex::new((0, None));
 
 /// True while another automatic reload is still allowed.
 pub fn allow_reload() -> bool {
-    RELOADS.fetch_add(1, Ordering::Relaxed) < MAX_AUTO_RELOADS
+    budget(&mut RELOADS.lock(), Instant::now())
 }
 
-/// A stable page load ends the crash streak.
-pub fn reset_reloads() {
-    RELOADS.store(0, Ordering::Relaxed);
+fn budget(st: &mut (u32, Option<Instant>), now: Instant) -> bool {
+    if st.1.is_some_and(|t| now.duration_since(t) > STABLE) {
+        st.0 = 0;
+    }
+    st.1 = Some(now);
+    st.0 += 1;
+    st.0 <= MAX_AUTO_RELOADS
 }
 
 /// Called once per created main webview.
@@ -189,8 +199,12 @@ mod tests {
     }
 
     #[test]
-    fn reload_budget_is_bounded() {
-        let allowed = (0..20).filter(|_| allow_reload()).count();
-        assert!(allowed <= MAX_AUTO_RELOADS as usize);
+    fn crash_loop_is_capped_until_page_is_stable() {
+        let mut st = (0, None);
+        let t0 = Instant::now();
+        // dies 1s after every reload: must stop at the cap
+        let allowed = (0..20).filter(|i| budget(&mut st, t0 + Duration::from_secs(*i))).count();
+        assert_eq!(allowed, MAX_AUTO_RELOADS as usize);
+        assert!(budget(&mut st, t0 + Duration::from_secs(200)));
     }
 }
