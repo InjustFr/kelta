@@ -19,6 +19,8 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 /// `nvim_exec_lua` body: `:edit` the file (fnameescape) and jump to the line.
 pub const LUA_EDIT: &str = r#"
 local file, line, focus = ...
+if type(line) ~= 'number' then line = nil end
+focus = focus == true
 local cur = vim.api.nvim_buf_get_name(0)
 if focus or not vim.bo.modified or cur == file then
   vim.cmd('edit ' .. vim.fn.fnameescape(file))

@@ -22,6 +22,8 @@ mod listener;
 mod ops;
 mod saga;
 
+pub use ops::selection_ref;
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};

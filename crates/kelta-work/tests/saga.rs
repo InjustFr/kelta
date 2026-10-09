@@ -472,3 +472,46 @@ async fn branch_workspace_without_ticket() {
     assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
     assert!(fx.tracker.calls().is_empty());
 }
+
+#[tokio::test]
+async fn resume_respawns_exited_claude_with_continue_fallback() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    let first = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+    fx.core.exit_session(&first, 0);
+
+    let resumed = w.resume(&item.id).await.unwrap();
+    let claude_args = |fx: &Fx| -> Vec<Vec<String>> {
+        fx.core
+            .calls()
+            .into_iter()
+            .filter(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+            .map(|c| serde_json::from_value(c.args["args"].clone()).unwrap())
+            .collect()
+    };
+    let spawns = claude_args(&fx);
+    assert_eq!(spawns.len(), 2);
+    assert_eq!(spawns[1][..2], ["--resume".to_owned(), item.claude_uuid.clone().unwrap()]);
+    assert!(!spawns[1].iter().any(|a| a.starts_with("Work on")), "no prompt on resume");
+    let second = fx.spawned_of(|k| *k == SessionKind::Claude).into_iter().find(|s| s.id != first).unwrap().id;
+    assert!(resumed.session_ids.contains(&second) && !resumed.session_ids.contains(&first));
+    let new_tabs = fx.core.opened().iter().filter(|(_, r)| r.placement == Placement::NewTab).count();
+    assert_eq!(new_tabs, 2, "tab recreated");
+
+    // `--resume` refused: fast non-zero exit → `--continue` in the same pane.
+    fx.core.exit_session(&second, 1);
+    for _ in 0..300 {
+        if claude_args(&fx).len() == 3 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let spawns = claude_args(&fx);
+    assert_eq!(spawns.len(), 3, "continue fallback spawned");
+    assert_eq!(spawns[2][0], "--continue");
+    let last = fx.core.opened().last().cloned().unwrap().1;
+    assert_eq!(last.placement, Placement::ReplaceFocused);
+}

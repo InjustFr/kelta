@@ -64,6 +64,9 @@ impl WorkService {
                         continue;
                     }
                     let Some(uuid) = item.claude_uuid.clone() else { continue };
+                    if let Some(old) = j.claude_session.take() {
+                        item.session_ids.retain(|s| s != &old);
+                    }
                     let rx = env.core.subscribe();
                     let sid = self.spawn_claude(&env, item, &mut j, LaunchMode::Resume { uuid }).await?;
                     respawned = true;
@@ -72,6 +75,9 @@ impl WorkService {
                 SlotKind::Editor | SlotKind::Shell { .. } => {
                     if alive(&j.sessions.get(&slot.idx).cloned()).is_some() {
                         continue;
+                    }
+                    if let Some(old) = j.sessions.remove(&slot.idx) {
+                        item.session_ids.retain(|s| s != &old);
                     }
                     let sid = self.respawn_leaf(&env, item, &mut j, &slot.kind, slot.name.as_deref()).await?;
                     j.sessions.insert(slot.idx, sid.clone());
