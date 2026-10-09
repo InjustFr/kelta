@@ -253,4 +253,19 @@ mod tests {
         let leftovers: Vec<_> = std::fs::read_dir(f.parent().unwrap()).unwrap().collect();
         assert_eq!(leftovers.len(), 1);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_ignores_planted_symlink() {
+        let d = tempfile::tempdir().unwrap();
+        let outside = d.path().join("outside");
+        std::fs::write(&outside, "keep").unwrap();
+        let dir = d.path().join("cfg");
+        std::fs::create_dir(&dir).unwrap();
+        let tmp = dir.join(format!(".c.toml.kelta-tmp-{}", std::process::id()));
+        std::os::unix::fs::symlink(&outside, &tmp).unwrap();
+        write_atomic(&dir.join("c.toml"), "a = 1\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&outside).unwrap(), "keep");
+        assert_eq!(std::fs::read_to_string(dir.join("c.toml")).unwrap(), "a = 1\n");
+    }
 }

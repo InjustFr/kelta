@@ -105,6 +105,25 @@ pub fn scope_issues(layer: Layer, value: &Value) -> Vec<RawIssue> {
     out
 }
 
+/// `x-kelta-secret` fields hold a `SecretRef`, never a raw token (the message must not echo the value).
+pub fn secret_issues(value: &Value) -> Vec<RawIssue> {
+    let idx = index();
+    leaves(value)
+        .into_iter()
+        .filter(|p| idx.info(p).secret)
+        .filter(|p| {
+            matches!(get(value, p), Some(Value::String(s)) if !s.is_empty()
+                && kelta_proto::secret::SecretRef::new(s.as_str()).parse().is_none())
+        })
+        .map(|p| {
+            RawIssue::new(
+                &p,
+                "expected keyring:<name>, gh-cli, glab-cli, command:<argv> or env:<VAR> (secret values never go in config files)",
+            )
+        })
+        .collect()
+}
+
 /// Repo-local files accept only [`REPO_ALLOWED_KEYS`] (SETTINGS §4).
 pub fn repo_key_issues(value: &Value) -> Vec<RawIssue> {
     let mut out = Vec::new();
@@ -531,6 +550,7 @@ pub fn layer_issues(layer: Layer, value: &Value, stem: Option<&str>) -> Vec<RawI
         return out;
     }
     out.extend(scope_issues(layer, value));
+    out.extend(secret_issues(value));
     if layer == Layer::Repo {
         out.extend(repo_key_issues(value));
     }
@@ -546,6 +566,16 @@ pub fn layer_issues(layer: Layer, value: &Value, stem: Option<&str>) -> Vec<RawI
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn raw_token_in_secret_field_is_rejected() {
+        let bad = json!({"accounts": {"jira": {"secret": "ghp_abc"}}});
+        let ok = json!({"accounts": {"jira": {"secret": "env:JIRA_TOKEN"}}});
+        let issues = secret_issues(&bad);
+        assert_eq!(issues.len(), 1);
+        assert!(!issues[0].message.contains("ghp_abc"));
+        assert!(secret_issues(&ok).is_empty());
+    }
 
     #[test]
     fn schema_reports_range_and_unknown_keys() {

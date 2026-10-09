@@ -79,8 +79,9 @@
   }
 
   function pick(k: Kind): void {
+    // the old argument belongs to the old source: never carry it over
+    if (k !== kind) arg = k === 'keyring' ? (accountId ?? '') : '';
     kind = k;
-    if (k === 'keyring' && !arg) arg = accountId ?? '';
     const ref = build(k, arg);
     if (ref !== null || k === 'none') onchange(ref);
   }

@@ -4,6 +4,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use parking_lot::MutexGuard;
+
 use kelta_proto::api::TrustStore;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::ProjectId;
@@ -243,7 +245,17 @@ impl ConfigService {
 
     /// Validate `new_text` as the content of `target`, write it atomically and apply it.
     pub(crate) fn commit_text(&self, target: &Target, new_text: String) -> Result<(), KeltaError> {
-        let _g = self.gate.lock();
+        let g = self.gate.lock();
+        self.commit_text_locked(&g, target, new_text)
+    }
+
+    /// Same as [`Self::commit_text`] for callers that read the file under the gate (read-modify-write).
+    fn commit_text_locked(
+        &self,
+        _gate: &MutexGuard<'_, ()>,
+        target: &Target,
+        new_text: String,
+    ) -> Result<(), KeltaError> {
         let prev = self.inner.read().clone();
         let mut ov = Overrides::new();
         ov.insert(target.path.clone(), new_text.clone());
@@ -344,9 +356,11 @@ impl ConfigService {
         }
         let target = self.resolve_target(layer, project, repo_id)?;
         let (target, segs) = self.redirect(target, segs)?;
+        let g = self.gate.lock();
         let mut doc = self.read_doc(&target)?;
         edit::set_path(&mut doc, &segs, &value).map_err(KeltaError::invalid)?;
-        self.commit_text(&target, Self::finish_text(&target, &doc))?;
+        self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
+        drop(g);
         self.effective_for(project)
     }
 
@@ -361,13 +375,16 @@ impl ConfigService {
         let segs = split_path(path).map_err(KeltaError::invalid)?;
         let target = self.resolve_target(layer, project, repo_id)?;
         let (target, segs) = self.redirect(target, segs)?;
+        let g = self.gate.lock();
         if read_optional(&target.path)?.is_none() {
+            drop(g);
             return self.effective_for(project);
         }
         let mut doc = self.read_doc(&target)?;
         if edit::remove_path(&mut doc, &segs) {
-            self.commit_text(&target, Self::finish_text(&target, &doc))?;
+            self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
         }
+        drop(g);
         self.effective_for(project)
     }
 
@@ -406,6 +423,7 @@ impl ConfigService {
             )));
         }
         let path = self.dirs.projects_dir().join(format!("{id}.toml"));
+        let g = self.gate.lock();
         if path.exists() || self.inner.read().projects.contains_key(&id) {
             return Err(KeltaError::conflict(format!("project `{id}` already exists")));
         }
@@ -439,7 +457,8 @@ impl ConfigService {
             }
         }
         let text = format!("#:schema {SCHEMA_BASE_URL}/project.schema.json\n{doc}");
-        self.commit_text(&Target { path, kind: FileKind::Project }, ensure_newline(text))?;
+        self.commit_text_locked(&g, &Target { path, kind: FileKind::Project }, ensure_newline(text))?;
+        drop(g);
         self.project_arc(&id)
     }
 
@@ -449,6 +468,7 @@ impl ConfigService {
         patch: &ProjectPatch,
     ) -> Result<Arc<ProjectConfig>, KeltaError> {
         let target = self.resolve_target(Layer::Project, Some(id), None)?;
+        let g = self.gate.lock();
         let mut doc = self.read_doc(&target)?;
         let set = |doc: &mut DocumentMut, key: &str, v: Value| {
             edit::set_path(doc, &["project".to_owned(), key.to_owned()], &v).map_err(KeltaError::invalid)
@@ -478,7 +498,8 @@ impl ConfigService {
             let v = edit::prune_empty(&serde_json::to_value(t)?);
             set(&mut doc, "tracker", v)?;
         }
-        self.commit_text(&target, Self::finish_text(&target, &doc))?;
+        self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
+        drop(g);
         self.project_arc(id.as_str())
     }
 
@@ -486,6 +507,7 @@ impl ConfigService {
     pub fn project_remove(&self, id: &ProjectId) -> Result<(), KeltaError> {
         let target = self.resolve_target(Layer::Project, Some(id), None)?;
         let trash = self.dirs.projects_dir().join(".trash");
+        let g = self.gate.lock();
         std::fs::create_dir_all(&trash)?;
         let secs =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
@@ -496,6 +518,7 @@ impl ConfigService {
             n += 1;
         }
         std::fs::rename(&target.path, &dest)?;
+        drop(g);
         let _ = self.reload();
         Ok(())
     }

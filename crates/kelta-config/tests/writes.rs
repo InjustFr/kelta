@@ -294,3 +294,33 @@ fn project_update_rejects_broken_results() {
     assert_eq!(err.code, ErrorCode::InvalidArgument);
     assert_eq!(read(&e.dirs.projects_dir().join("shop.toml")), before);
 }
+
+#[test]
+fn concurrent_sets_all_land() {
+    let e = env();
+    e.global(GLOBAL);
+    let svc = e.load();
+    let edits = [
+        ("terminal.font_size", json!(15)),
+        ("terminal.cursor_style", json!("bar")),
+        ("window.restore_geometry", json!(false)),
+        ("notifications.enabled", json!(false)),
+        ("app.theme", json!("light")),
+    ];
+    std::thread::scope(|s| {
+        for (k, v) in &edits {
+            let svc = svc.clone();
+            s.spawn(move || svc.layer_set(Layer::Global, None, None, k, v.clone()).unwrap());
+        }
+    });
+    let text = read(&e.dirs.global_config());
+    for needle in [
+        "font_size = 15",
+        "cursor_style = \"bar\"",
+        "restore_geometry = false",
+        "enabled = false",
+        "theme = \"light\"",
+    ] {
+        assert!(text.contains(needle), "lost `{needle}` in:\n{text}");
+    }
+}
