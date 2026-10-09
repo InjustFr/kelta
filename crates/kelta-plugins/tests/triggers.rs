@@ -2,6 +2,8 @@
 //! re-fire within a chain), rate limit, `send_keys` gate, blocking veto/patch, debounce under paused
 //! time, `trigger_test`, `prompt`, plugin permissions.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use std::collections::BTreeMap;

@@ -1,6 +1,8 @@
 //! Install from a directory, a tarball and a git tag; SHA-256 check; uninstall; enable/disable;
 //! dev paths; the hello-screen preview used by the UI e2e.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use std::process::Command;

@@ -1,6 +1,8 @@
 //! Reverse proxy against local axum test servers: frame-blocking headers stripped, Location
 //! rewritten, WebSocket echo passed through, loopback-only upstreams, Host guard on the own listener.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 use axum::Router;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode, header};

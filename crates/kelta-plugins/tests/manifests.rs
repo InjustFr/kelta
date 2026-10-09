@@ -1,6 +1,8 @@
 //! Manifest corpus: every file under fixtures/manifests/valid parses, every file under invalid fails
 //! with the message announced on its first line (`# expect: <substring>`).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use std::path::Path;

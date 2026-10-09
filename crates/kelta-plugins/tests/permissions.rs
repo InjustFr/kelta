@@ -1,6 +1,8 @@
 //! Permission matrix (PLUGINS §5/§7): every `PluginMethod` without its permission is
 //! `PermissionDenied`; with the permission granted it is not.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use kelta_proto::ErrorCode;

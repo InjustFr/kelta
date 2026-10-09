@@ -1,6 +1,8 @@
 //! `kelta-plugin://` handler: never serves outside the plugin dir (`../`, encoded, symlinks), always
 //! sends the per-plugin CSP, serves MIME types, refuses disabled/unknown plugins.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use axum::http::{Method, Request, StatusCode, header};

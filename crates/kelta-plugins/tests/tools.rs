@@ -1,6 +1,8 @@
 //! Tools: registry merge + namespacing, `tool_check`, PTY tools through `CoreApi::session_spawn`,
 //! web tools (free port, stdout readiness, timeout, early exit, port_open, proxy embed, lifecycle).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] fns unwrap too
+
 mod common;
 
 use std::time::Duration;
