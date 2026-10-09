@@ -45,7 +45,12 @@ fn parse_args(args: &[String]) -> Result<Opts> {
         duration_secs: 120,
         fixtures: bench.join("fixtures"),
         budgets: bench.join("budgets.toml"),
-        baseline: bench.join("fixtures/baseline.json"),
+        // macOS sums phys_footprint, Linux sums PSS: each OS regresses against its own numbers.
+        baseline: bench.join(if cfg!(target_os = "macos") {
+            "fixtures/baseline-macos.json"
+        } else {
+            "fixtures/baseline-linux.json"
+        }),
     };
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -84,7 +89,7 @@ fn dry_metrics(o: &Opts) -> Result<Metrics> {
 async fn run(o: &Opts) -> Result<bool> {
     let budgets: Budgets = toml::from_str(&std::fs::read_to_string(&o.budgets).context("budgets.toml")?)?;
     let mut baseline: Baseline = match std::fs::read_to_string(&o.baseline) {
-        Ok(text) => serde_json::from_str(&text).context("baseline.json")?,
+        Ok(text) => serde_json::from_str(&text).with_context(|| o.baseline.display().to_string())?,
         Err(_) => Baseline::new(),
     };
     let metrics = if o.dry_run { dry_metrics(o)? } else { run::measure(o).await? };
@@ -127,5 +132,15 @@ async fn main() -> ExitCode {
             eprintln!("kelta-bench: {e:#}");
             ExitCode::from(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn default_baseline_is_per_os() {
+        let o = super::parse_args(&["--scenario".into(), "flood".into()]).unwrap();
+        let name = if cfg!(target_os = "macos") { "baseline-macos.json" } else { "baseline-linux.json" };
+        assert!(o.baseline.ends_with(format!("fixtures/{name}")));
     }
 }
