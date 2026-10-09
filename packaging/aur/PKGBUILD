@@ -1,0 +1,23 @@
+# Maintainer: Kelta contributors
+# Template: the release workflow fills pkgver and sha256sums from the published checksums.
+pkgname=kelta-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Claude Code and nvim side by side, with tickets and pull request reviews'
+arch=('x86_64')
+url='https://github.com/InjustFr/kelta'
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3')
+optdepends=('neovim: built-in editor sessions'
+            'gnome-keyring: Secret Service for stored tokens'
+            'libnotify: desktop notifications (needs a notification daemon)')
+provides=('kelta')
+conflicts=('kelta')
+source=("https://github.com/InjustFr/kelta/releases/download/v${pkgver}/kelta_${pkgver}_amd64.deb"
+        "https://raw.githubusercontent.com/InjustFr/kelta/v${pkgver}/LICENSE")
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  bsdtar -xf data.tar.* -C "${pkgdir}"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

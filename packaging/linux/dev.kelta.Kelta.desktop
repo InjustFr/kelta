@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Kelta
+GenericName=Developer workbench
+Comment=Claude Code and nvim side by side, with tickets and pull request reviews
+Exec=kelta %F
+Icon=kelta
+Terminal=false
+Categories=Development;
+StartupWMClass=dev.kelta.Kelta
+Actions=safe-graphics;
+
+[Desktop Action safe-graphics]
+Name=Safe graphics
+Exec=kelta --safe-graphics

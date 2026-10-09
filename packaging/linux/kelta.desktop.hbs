@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=Developer workbench
+{{#if comment}}Comment={{comment}}
+{{/if}}Exec={{exec}} %F
+Icon={{icon}}
+Terminal=false
+Categories={{categories}}
+StartupWMClass=dev.kelta.Kelta
+Actions=safe-graphics;
+
+[Desktop Action safe-graphics]
+Name=Safe graphics
+Exec={{exec}} --safe-graphics

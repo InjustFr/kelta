@@ -1,0 +1,48 @@
+# Hard budgets (ARCHITECTURE §13). Every metric is "lower is better"; `max_macos` overrides `max` on macOS.
+# NVIDIA proprietary on Linux: footprint is informational (+30 % allowed), see docs/user/graphics.md.
+
+[idle-3p10s.footprint_mb]
+max = 250.0
+max_macos = 220.0
+
+[idle-3p10s.core_mb]
+max = 60.0
+
+[background.background_mb]
+max = 60.0
+
+[cold-start.cold_start_ms]
+max = 700.0
+max_macos = 400.0
+
+[switch.switch_warm_ms]
+max = 50.0
+
+[switch.switch_cold_ms]
+max = 120.0
+
+[echo-latency.echo_frames_p95]
+max = 2.0
+max_macos = 1.0
+
+[echo-latency.keydown_to_pty_p99_ms]
+max = 3.0
+max_macos = 2.0
+
+[ink-redraw.frame_p95_ms]
+max = 25.0
+
+[flood.frame_max_ms]
+max = 50.0
+
+[flood.webview_delta_mb]
+max = 30.0
+
+[flood.inflight_kib]
+max = 256.0
+
+[idle-cpu.cpu_pct]
+max = 0.2
+
+[idle-cpu.wakeups_per_s]
+max = 1.0

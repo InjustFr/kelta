@@ -1,0 +1,13 @@
+# kelta-bench reference workload (ARCHITECTURE §13). @FIXTURES@ is replaced by the harness.
+[claude]
+binary = "@ROOT@/fixtures/fake-claude"
+
+[[session_templates]]
+id = "sim-ink"
+label = "tui-sim ink"
+layout = { session = "shell", command = "tui-sim --ink --fps 30" }
+
+[[session_templates]]
+id = "sim-alt"
+label = "tui-sim alt"
+layout = { session = "shell", command = "tui-sim --alt" }
