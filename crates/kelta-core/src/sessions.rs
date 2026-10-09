@@ -67,6 +67,8 @@ pub struct SessionEntry {
     pub resume_attempt: bool,
     pub kill_requested: bool,
     pub restarting: bool,
+    /// Live-claimed by `restore_session` but the PTY may not exist yet; attach waits on `exits`.
+    pub restoring: bool,
     pub http_ref: bool,
     /// Hooks inactive → heuristic status.
     pub heuristic: bool,
@@ -303,6 +305,7 @@ impl Core {
                 resume_attempt: false,
                 kill_requested: false,
                 restarting: false,
+                restoring: false,
                 http_ref: false,
                 heuristic: false,
                 timers: Arc::new(SessionTimers::default()),
@@ -410,11 +413,14 @@ impl Core {
     // Spawn
     // =========================================================================================
 
+    /// Reserves the sid8 under one lock so concurrent spawns / templates never share a runtime dir.
     fn new_session_id(&self) -> SessionId {
+        let mut taken = self.sid8_taken.lock();
         let mut id = SessionId::generate();
         loop {
             let sid8 = id.sid8();
-            if !self.sessions.lock().keys().any(|k| k.sid8() == sid8) {
+            if !taken.contains(&sid8) && !self.sessions.lock().keys().any(|k| k.sid8() == sid8) {
+                taken.insert(sid8);
                 return id;
             }
             // a v7 sid8 is the ms timestamp's top 32 bits (~65 s per value): retry with random bits.
@@ -645,6 +651,7 @@ impl Core {
                 resume_attempt: launch.resume_attempt,
                 kill_requested: false,
                 restarting: false,
+                restoring: s.get(&id).is_some_and(|e| e.restoring),
                 http_ref,
                 heuristic: false,
                 timers: Arc::new(SessionTimers::default()),
@@ -704,8 +711,9 @@ impl Core {
             if e.info.lifecycle == Lifecycle::Live && !use_continue {
                 return Ok(e.info.clone());
             }
-            // claim (a concurrent attach sees Live)
+            // claim (a concurrent attach sees `restoring` and waits)
             e.info.lifecycle = Lifecycle::Live;
+            e.restoring = true;
             let mut spec = e.spec.clone();
             spec.cwd = Some(e.info.cwd.clone());
             spec.cols = if cols > 0 { cols } else { e.info.cols };
@@ -714,15 +722,15 @@ impl Core {
         };
         let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
         let launch = restore_launch(&spec, &policy, &binary, use_continue);
-        match self.spawn_with(id.clone(), spec, launch, SpawnMode::Restore).await {
-            Ok(i) => Ok(i),
-            Err(e) => {
-                if let Some(x) = self.sessions.lock().get_mut(id) {
-                    x.info.lifecycle = Lifecycle::Dormant;
-                }
-                Err(e)
+        let res = self.spawn_with(id.clone(), spec, launch, SpawnMode::Restore).await;
+        if let Some(x) = self.sessions.lock().get_mut(id) {
+            x.restoring = false;
+            if res.is_err() {
+                x.info.lifecycle = Lifecycle::Dormant;
             }
         }
+        self.exits.notify_waiters();
+        res
     }
 
     // =========================================================================================
@@ -738,7 +746,21 @@ impl Core {
         sink: Box<dyn FrameSink>,
     ) -> Result<AttachInfo, KeltaError> {
         self.rt.capture();
-        let lifecycle = self.get_info(id)?.lifecycle;
+        // a restore in flight (eager restore, double attach) → wait for its PTY
+        let lifecycle = loop {
+            let notified = self.exits.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            let (lifecycle, restoring) = {
+                let s = self.sessions.lock();
+                let e = s.get(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
+                (e.info.lifecycle, e.restoring)
+            };
+            if !restoring {
+                break lifecycle;
+            }
+            notified.await;
+        };
         if lifecycle == Lifecycle::Dormant {
             self.restore_session(id, cols, rows, false).await?;
         }
@@ -851,13 +873,13 @@ impl Core {
     /// `session_restart`: same id, same request.
     pub async fn session_restart(&self, id: &SessionId) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
-        let (spec, lifecycle) = {
+        let (spec, lifecycle, restore) = {
             let mut s = self.sessions.lock();
             let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
             if e.info.lifecycle == Lifecycle::Live {
                 e.restarting = true;
             }
-            (e.spec.clone(), e.info.lifecycle)
+            (e.spec.clone(), e.info.lifecycle, e.restore.clone())
         };
         match lifecycle {
             Lifecycle::Dormant => return self.restore_session(id, 0, 0, false).await,
@@ -870,7 +892,14 @@ impl Core {
             }
             Lifecycle::Exited => {}
         }
-        let launch = Launch { program: spec.program.clone(), args: spec.args.clone(), resume_attempt: false };
+        // Claude: `--resume <uuid>` (replaying `--session-id` + the first prompt would be refused).
+        let policy = if matches!(restore, RestorePolicy::ClaudeResume { .. }) {
+            restore
+        } else {
+            RestorePolicy::Relaunch
+        };
+        let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
+        let launch = restore_launch(&spec, &policy, &binary, false);
         self.spawn_with(id.clone(), spec, launch, SpawnMode::Restart).await
     }
 

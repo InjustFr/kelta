@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -22,12 +22,16 @@ use parking_lot::Mutex;
 struct Counter {
     n: AtomicU32,
     fail: Mutex<Option<KeltaError>>,
+    panic_once: AtomicBool,
 }
 
 #[async_trait]
 impl Refresher for Counter {
     async fn refresh(&self, _key: &SubKey) -> Result<(), KeltaError> {
         self.n.fetch_add(1, Ordering::SeqCst);
+        if self.panic_once.swap(false, Ordering::SeqCst) {
+            panic!("provider bug");
+        }
         match self.fail.lock().take() {
             Some(e) => Err(e),
             None => Ok(()),
@@ -155,4 +159,35 @@ async fn idle_core_arms_no_timer() {
     settle().await;
     assert_eq!(h.core.scheduler_snapshot().subscriptions, 0);
     assert_eq!(h.core.perf_snapshot().timers_armed, 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn panicking_refresh_keeps_polling() {
+    let (c, _rt, s) = setup();
+    c.panic_once.store(true, Ordering::SeqCst);
+    let policy = IntervalPolicy::from_settings(&PollingSettings::default(), 0, None);
+    s.set_subscriptions(vec![(key(), policy)]);
+    wait(140).await;
+    assert_eq!(c.n.load(Ordering::SeqCst), 1);
+    wait(140).await;
+    assert_eq!(c.n.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn notification_subs_skip_accounts_of_closed_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut shop = project("shop", tmp.path());
+    shop.repos[0].code_host = Some(kelta_proto::settings::CodeHostBinding {
+        account: "github-work".into(),
+        repo: "acme/shop".into(),
+    });
+    let mut s = Settings::defaults();
+    s.accounts.insert("github-work".into(), account(AccountKind::Github));
+    let h = start(tmp.path(), s, vec![shop]);
+    h.cfg.update(|_| {});
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 0, "bound only to a closed project");
+    h.core.project_open(&kelta_proto::ids::ProjectId::new("shop")).unwrap();
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 2);
 }

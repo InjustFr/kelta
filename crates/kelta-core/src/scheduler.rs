@@ -12,6 +12,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use futures::FutureExt;
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::ipc::WindowState;
@@ -370,7 +371,11 @@ async fn run_loop(
             let Some(r) = refresher.upgrade() else { return };
             let tx = tx.clone();
             tokio::spawn(async move {
-                let res = r.refresh(&key).await;
+                // A panicking provider must still report Done, or the sub stays inflight forever.
+                let res = std::panic::AssertUnwindSafe(r.refresh(&key))
+                    .catch_unwind()
+                    .await
+                    .unwrap_or_else(|_| Err(KeltaError::internal("refresh panicked")));
                 let _ = tx.send(Cmd::Done(key, res));
             });
         }

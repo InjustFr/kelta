@@ -160,11 +160,13 @@ impl ProviderFactory for Factory {
 pub struct ListHost {
     pub reviews: Mutex<Vec<Review>>,
     pub calls: Mutex<u32>,
+    /// `changed_since_last` answer (the notifications-ETag gate).
+    pub changed: Mutex<bool>,
 }
 
 impl ListHost {
     pub fn new(reviews: Vec<Review>) -> Arc<Self> {
-        Arc::new(Self { reviews: Mutex::new(reviews), calls: Mutex::new(0) })
+        Arc::new(Self { reviews: Mutex::new(reviews), calls: Mutex::new(0), changed: Mutex::new(true) })
     }
 }
 
@@ -175,6 +177,9 @@ impl CodeHost for ListHost {
     }
     async fn me(&self) -> Result<User, KeltaError> {
         Ok(kelta_proto::samples::user())
+    }
+    async fn changed_since_last(&self) -> Result<bool, KeltaError> {
+        Ok(*self.changed.lock())
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
         *self.calls.lock() += 1;

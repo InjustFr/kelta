@@ -211,3 +211,46 @@ async fn none_mode_drops_dormant_sessions() {
     assert!(h.core.session_list(None).is_empty());
     assert!(term.spawned_ids().is_empty());
 }
+
+#[tokio::test]
+async fn concurrent_attaches_wait_for_the_restore() {
+    let tmp = tempfile::tempdir().unwrap();
+    let id = {
+        let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+        let mut r = req(SessionKind::Shell, None, &[], RestorePolicy::None);
+        // the restore awaits a store lookup for the work item before the PTY exists
+        r.work_item_id = Some(kelta_proto::ids::WorkItemId::generate());
+        let s = h.core.session_spawn(r).await.unwrap();
+        h.core.shutdown().await.unwrap();
+        s.id
+    };
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let (a, b) = tokio::join!(
+        h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())),
+        h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())),
+    );
+    a.unwrap();
+    b.unwrap();
+    assert_eq!(h.term.spawned_ids().len(), 1);
+}
+
+#[tokio::test]
+async fn claude_restart_resumes_instead_of_replaying_argv() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h
+        .core
+        .session_spawn(req(
+            SessionKind::Claude,
+            Some("claude"),
+            &["--session-id", "U-1", "-n", "x", "do it"],
+            RestorePolicy::None,
+        ))
+        .await
+        .unwrap();
+    h.term.emit(&s.id, TerminalEvent::Exited { code: Some(0), signal: None });
+    settle().await;
+    h.core.session_restart(&s.id).await.unwrap();
+    let args = h.term.with_session(&s.id, |x| x.spec.args.clone()).unwrap();
+    assert_eq!(args, vec!["-n", "x", "--resume", "U-1"]);
+}

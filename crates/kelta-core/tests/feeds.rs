@@ -284,3 +284,22 @@ async fn tracker_move_resolves_columns() {
     let err = e.h.core.tracker_transition(&t, "t5", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NeedsFields);
 }
+
+#[tokio::test]
+async fn unchanged_gate_skips_requested_but_authored_still_polls() {
+    use kelta_core::feeds::reviews_key;
+    use kelta_core::scheduler::{Refresher, SubKey};
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![review("acme/shop-api", 87, ReviewKind::ReviewRequested)]);
+    for k in [ReviewKind::ReviewRequested, ReviewKind::Authored] {
+        e.h.core.review_page(Scope::All, k, true).await.unwrap();
+    }
+    *e.host.changed.lock() = false;
+    *e.host.calls.lock() = 0;
+    let acc = AccountId::new("github-work");
+    let sub = |k| SubKey { account: acc.clone(), query: reviews_key(&acc, k) };
+    e.h.core.refresh(&sub(ReviewKind::ReviewRequested)).await.unwrap();
+    assert_eq!(*e.host.calls.lock(), 0, "gate says unchanged");
+    e.h.core.refresh(&sub(ReviewKind::Authored)).await.unwrap();
+    assert_eq!(*e.host.calls.lock(), 1, "authored never consumes the gate");
+}

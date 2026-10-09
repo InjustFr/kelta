@@ -92,7 +92,8 @@ async fn open_set_order_and_active_persist() {
         for p in ["a", "b", "c"] {
             h.core.project_open(&ProjectId::new(p)).unwrap();
         }
-        h.core.project_reorder(&[ProjectId::new("c"), ProjectId::new("a")]).unwrap();
+        // non-adjacent duplicates are dropped
+        h.core.project_reorder(&[ProjectId::new("c"), ProjectId::new("a"), ProjectId::new("c")]).unwrap();
         h.core.project_activate(&ProjectId::new("b")).unwrap();
         assert_eq!(ids(&h.core), vec!["c", "a", "home", "b"]);
         h.core.store().flush().await.unwrap();

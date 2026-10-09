@@ -30,7 +30,7 @@ pub fn render(t: &str, vars: &BTreeMap<&str, String>) -> String {
 /// The hooks Kelta registers for a Claude session (PLUGINS §8) + `claude.extra_hooks`.
 pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Value>) -> serde_json::Value {
     use kelta_proto::hooks::names;
-    let cmd = format!("'{}' hook", ctl.display());
+    let cmd = format!("'{}' hook", ctl.display().to_string().replace('\'', r"'\''"));
     let hook = |async_: bool| {
         let mut h = serde_json::json!({ "type": "command", "command": cmd, "timeout": 5 });
         if async_ {
@@ -376,6 +376,8 @@ mod tests {
         assert_eq!(h["SessionEnd"][0]["hooks"][0].get("async"), None);
         assert_eq!(h["Stop"][0]["hooks"][0]["async"], true);
         assert_eq!(h["Stop"][0]["hooks"][0]["command"], "'/d/bin/current/kelta-ctl' hook");
+        let q = claude_hooks_settings(Path::new("/Users/o'brien/kelta-ctl"), &BTreeMap::new());
+        assert_eq!(q["hooks"]["Stop"][0]["hooks"][0]["command"], r"'/Users/o'\''brien/kelta-ctl' hook");
     }
 
     #[test]

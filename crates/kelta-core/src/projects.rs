@@ -357,8 +357,9 @@ impl Core {
     pub fn project_reorder(&self, ids: &[ProjectId]) -> Result<(), KeltaError> {
         {
             let mut st = self.projects.lock();
-            let mut next: Vec<ProjectId> = ids.iter().filter(|i| st.open.contains(i)).cloned().collect();
-            next.dedup();
+            let mut seen = std::collections::HashSet::new();
+            let mut next: Vec<ProjectId> =
+                ids.iter().filter(|i| st.open.contains(i) && seen.insert(*i)).cloned().collect();
             for p in &st.open {
                 if !next.contains(p) {
                     next.push(p.clone());

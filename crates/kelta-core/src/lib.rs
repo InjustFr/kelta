@@ -162,6 +162,8 @@ pub struct Core {
     pub(crate) projects: Mutex<projects::ProjectsState>,
     pub(crate) layouts: Mutex<std::collections::HashMap<ProjectId, kelta_proto::model::Layout>>,
     pub(crate) sessions: Mutex<std::collections::BTreeMap<SessionId, sessions::SessionEntry>>,
+    /// shortcut: sid8s handed out are never freed (8 bytes per spawn), prune on remove if spawns reach 1e5+.
+    pub(crate) sid8_taken: Mutex<std::collections::HashSet<String>>,
     pub(crate) attention: Mutex<attention::AttentionState>,
     pub(crate) providers: providers::ProviderRegistry,
     pub(crate) scheduler: scheduler::Scheduler,
@@ -274,6 +276,7 @@ impl Core {
                 projects: Mutex::new(projects::ProjectsState::default()),
                 layouts: Mutex::new(std::collections::HashMap::new()),
                 sessions: Mutex::new(std::collections::BTreeMap::new()),
+                sid8_taken: Mutex::default(),
                 attention: Mutex::new(attention::AttentionState::default()),
                 feeds: feeds::Feeds::default(),
                 exits: tokio::sync::Notify::new(),
@@ -576,7 +579,7 @@ impl CoreApi for Core {
     }
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
         self.rt.capture();
-        ctl::http_fetch(&self.http, req).await
+        ctl::http_fetch(req).await
     }
     async fn ctl(&self, cmd: CtlCommand) -> Result<serde_json::Value, KeltaError> {
         self.rt.capture();

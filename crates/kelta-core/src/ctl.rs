@@ -149,24 +149,40 @@ fn b64_encode(input: &[u8]) -> String {
     out
 }
 
-/// Plugin `net.fetch` (the caller checked the `net:` grant). 5 MB response cap.
-pub async fn http_fetch(
-    http: &kelta_http::HttpClient,
-    req: ProxiedRequest,
-) -> Result<ProxiedResponse, KeltaError> {
+/// Plugin fetches: own client, redirects never followed (a 3xx to another host would bypass the
+/// `net:<host>` grant the caller checked on `req.url`), returned to the plugin as-is.
+fn plugin_client() -> Result<&'static reqwest::Client, KeltaError> {
+    static C: std::sync::OnceLock<Option<reqwest::Client>> = std::sync::OnceLock::new();
+    C.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(kelta_http::default_user_agent())
+            .timeout(Duration::from_secs(20))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .ok()
+    })
+    .as_ref()
+    .ok_or_else(|| KeltaError::internal("plugin http client unavailable"))
+}
+
+/// Plugin `net.fetch` (the caller checked the `net:` grant). https only (http for loopback),
+/// no redirects, 5 MB response cap enforced while streaming.
+pub async fn http_fetch(req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
     const CAP: usize = 5 * 1024 * 1024;
-    let lower = req.url.to_ascii_lowercase();
-    if !(lower.starts_with("https://") || lower.starts_with("http://")) {
-        return Err(KeltaError::invalid("only http(s) URLs can be fetched"));
+    let url = reqwest::Url::parse(&req.url).map_err(|e| KeltaError::invalid(format!("invalid URL: {e}")))?;
+    let loopback = matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"));
+    if !(url.scheme() == "https" || (url.scheme() == "http" && loopback)) {
+        return Err(KeltaError::invalid("only https URLs can be fetched (http for localhost)"));
     }
-    let c = http.reqwest();
+    let c = plugin_client()?;
     let mut rb = match req.method.to_ascii_uppercase().as_str() {
-        "GET" | "" => c.get(&req.url),
-        "POST" => c.post(&req.url),
-        "PUT" => c.put(&req.url),
-        "PATCH" => c.patch(&req.url),
-        "DELETE" => c.delete(&req.url),
-        "HEAD" => c.head(&req.url),
+        "GET" | "" => c.get(url),
+        "POST" => c.post(url),
+        "PUT" => c.put(url),
+        "PATCH" => c.patch(url),
+        "DELETE" => c.delete(url),
+        "HEAD" => c.head(url),
         other => return Err(KeltaError::invalid(format!("unsupported method {other}"))),
     };
     for (k, v) in &req.headers {
@@ -178,22 +194,29 @@ pub async fn http_fetch(
     if let Some(ms) = req.timeout_ms {
         rb = rb.timeout(Duration::from_millis(ms.clamp(100, 60_000)));
     }
-    let resp = rb.send().await.map_err(|e| {
+    let mut resp = rb.send().await.map_err(|e| {
         KeltaError::network(format!("fetch failed: {}", kelta_proto::redact::redact_url(&e.to_string())))
     })?;
+    let too_big = || KeltaError::invalid("response larger than 5 MB");
+    if resp.content_length().is_some_and(|n| n > CAP as u64) {
+        return Err(too_big());
+    }
     let status = resp.status().as_u16();
     let headers = resp
         .headers()
         .iter()
         .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_ascii_lowercase(), v.to_owned())))
         .collect();
-    let bytes = resp.bytes().await.map_err(|e| KeltaError::network(format!("fetch body: {e}")))?;
-    if bytes.len() > CAP {
-        return Err(KeltaError::invalid("response larger than 5 MB"));
+    let mut bytes = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| KeltaError::network(format!("fetch body: {e}")))? {
+        if bytes.len() + chunk.len() > CAP {
+            return Err(too_big());
+        }
+        bytes.extend_from_slice(&chunk);
     }
-    let (body, body_base64) = match std::str::from_utf8(&bytes) {
-        Ok(s) => (s.to_owned(), false),
-        Err(_) => (b64_encode(&bytes), true),
+    let (body, body_base64) = match String::from_utf8(bytes) {
+        Ok(s) => (s, false),
+        Err(e) => (b64_encode(e.as_bytes()), true),
     };
     Ok(ProxiedResponse { status, headers, body, body_base64 })
 }
@@ -409,5 +432,41 @@ mod tests {
         install_ctl_from(&src, &bin, "0.1.0").unwrap();
         install_ctl_from(&src, &bin, "0.2.0").unwrap();
         assert_eq!(std::fs::read_link(bin.join("current")).unwrap(), PathBuf::from("0.2.0"));
+    }
+
+    /// One-shot loopback server answering every connection with `resp`.
+    async fn serve(resp: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = l.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = s.read(&mut buf).await;
+                let _ = s.write_all(resp.as_bytes()).await;
+            }
+        });
+        format!("http://{addr}/r")
+    }
+
+    fn get(url: String) -> ProxiedRequest {
+        ProxiedRequest { url, method: "GET".into(), ..Default::default() }
+    }
+
+    #[tokio::test]
+    async fn fetch_does_not_follow_redirects_or_buffer_huge_bodies() {
+        let url =
+            serve("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:9/x\r\nContent-Length: 0\r\n\r\n").await;
+        let r = http_fetch(get(url)).await.unwrap();
+        assert_eq!(r.status, 302);
+        assert_eq!(
+            r.headers.iter().find(|h| h.0 == "location").map(|h| h.1.as_str()),
+            Some("http://127.0.0.1:9/x")
+        );
+
+        let url = serve("HTTP/1.1 200 OK\r\nContent-Length: 999999999\r\n\r\nabc").await;
+        assert!(http_fetch(get(url)).await.unwrap_err().message.contains("5 MB"));
+
+        assert!(http_fetch(get("http://example.com/".into())).await.is_err(), "plain http off loopback");
     }
 }

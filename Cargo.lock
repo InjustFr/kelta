@@ -3027,6 +3027,7 @@ dependencies = [
  "libc",
  "parking_lot",
  "regex",
+ "reqwest",
  "rusqlite",
  "rustix",
  "semver",

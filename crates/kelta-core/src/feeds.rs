@@ -1033,27 +1033,28 @@ impl Core {
                 }
             }
         };
-        let reviews = |scope: &Scope, kinds: &[ReviewKind], want: &mut BTreeMap<SubKey, IntervalPolicy>| {
-            for a in self.review_accounts(scope) {
-                if !s.accounts.get(&a).is_some_and(|x| x.kind.is_code_host()) {
-                    continue;
+        let reviews =
+            |accounts: Vec<AccountId>, kinds: &[ReviewKind], want: &mut BTreeMap<SubKey, IntervalPolicy>| {
+                for a in accounts {
+                    if !s.accounts.get(&a).is_some_and(|x| x.kind.is_code_host()) {
+                        continue;
+                    }
+                    for k in kinds {
+                        want.insert(
+                            SubKey { account: a.clone(), query: reviews_key(&a, *k) },
+                            self.policy_for(&a, &s),
+                        );
+                    }
                 }
-                for k in kinds {
-                    want.insert(
-                        SubKey { account: a.clone(), query: reviews_key(&a, *k) },
-                        self.policy_for(&a, &s),
-                    );
-                }
-            }
-        };
+            };
         let both = [ReviewKind::ReviewRequested, ReviewKind::Authored];
         for c in &contents {
             match c {
                 PaneContent::Tickets { scope, view_id, .. } => tickets(scope, view_id.as_deref(), &mut want),
-                PaneContent::Reviews { scope } => reviews(scope, &both, &mut want),
+                PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
                 PaneContent::Inbox => {
                     tickets(&Scope::All, None, &mut want);
-                    reviews(&Scope::All, &both, &mut want);
+                    reviews(self.review_accounts(&Scope::All), &both, &mut want);
                 }
                 _ => {}
             }
@@ -1068,7 +1069,21 @@ impl Core {
                 kinds.push(ReviewKind::Authored);
             }
             if !kinds.is_empty() {
-                reviews(&Scope::All, &kinds, &mut want);
+                // open projects' accounts + accounts bound to no project (§8.4)
+                let open = self.open_projects();
+                let (mut bound, mut live) = (HashSet::new(), HashSet::new());
+                for (a, _, p) in self.review_bindings() {
+                    if open.contains(&p) {
+                        live.insert(a.clone());
+                    }
+                    bound.insert(a);
+                }
+                let accounts = self
+                    .review_accounts(&Scope::All)
+                    .into_iter()
+                    .filter(|a| live.contains(a) || !bound.contains(a))
+                    .collect();
+                reviews(accounts, &kinds, &mut want);
             }
         }
         self.scheduler.set_subscriptions(want.into_iter().collect());
@@ -1086,7 +1101,11 @@ impl Core {
             if key.query.ends_with(":authored") { ReviewKind::Authored } else { ReviewKind::ReviewRequested };
         let host = self.code_host_of(&key.account)?;
         let has_cache = self.cache_get::<Vec<Review>>(&reviews_key(&key.account, kind)).await.is_some();
-        if has_cache
+        // The gate is stateful per account ("changed since the last call"): only the requested
+        // feed may consume it, or the authored poll could swallow a new review request.
+        // Authored always polls (CI / approvals do not move the notifications ETag anyway).
+        if kind == ReviewKind::ReviewRequested
+            && has_cache
             && self.feeds.primed.lock().contains(&key.account)
             && matches!(host.changed_since_last().await, Ok(false))
         {
