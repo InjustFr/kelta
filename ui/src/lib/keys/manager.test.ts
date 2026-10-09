@@ -18,7 +18,9 @@ function keys(over: Partial<KeysSettings> = {}): KeysSettings {
   };
 }
 
-function setup(over: Omit<Partial<KeyManagerOptions>, 'keys'> & { ctx?: KeyContext; keys?: KeysSettings } = {}) {
+function setup(
+  over: Omit<Partial<KeyManagerOptions>, 'keys'> & { ctx?: KeyContext; keys?: KeysSettings } = {},
+) {
   const { ctx: initialCtx, keys: keysOverride, ...options } = over;
   const calls: { id: string; args?: Record<string, unknown> }[] = [];
   let ctx = initialCtx ?? GLOBAL;
@@ -74,7 +76,9 @@ describe('direct chords (Linux)', () => {
   });
 
   it('supports plugin command bindings from keys.bindings', () => {
-    const { manager, calls } = setup({ keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+shift+9'] } }) });
+    const { manager, calls } = setup({
+      keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+shift+9'] } }),
+    });
     // 9 is project.goto.9 by default: first binding wins, so use another key.
     const { manager: m2, calls: c2 } = setup({
       keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+shift+f9'] } }),
@@ -125,7 +129,8 @@ describe('terminal passthrough', () => {
       for (const e of events) {
         // Ctrl+R / Ctrl+F reach the PTY inside terminals; outside they are webview defaults.
         const result = manager.handleKeyDown(e);
-        const isWebviewDefault = !ctx.terminal && e.ctrlKey && !e.altKey && (e.code === 'KeyR' || e.code === 'KeyF');
+        const isWebviewDefault =
+          !ctx.terminal && e.ctrlKey && !e.altKey && (e.code === 'KeyR' || e.code === 'KeyF');
         if (!isWebviewDefault) {
           expect(result, `${e.code} c${+e.ctrlKey}a${+e.altKey}s${+e.shiftKey}m${+e.metaKey}`).toBe('pass');
           expect(e.defaultPrevented).toBe(false);
@@ -217,10 +222,12 @@ describe('context-dependent actions', () => {
   it('macOS uses Cmd chords', () => {
     const { manager, ids } = setup({ platform: 'macos' });
     expect(manager.handleKeyDown(press({ code: 'KeyK', key: 'k', metaKey: true }))).toBe('consumed');
-    expect(manager.handleKeyDown(press({ code: 'KeyK', key: 'k', ctrlKey: true, shiftKey: true }))).toBe('pass');
-    expect(manager.handleKeyDown(press({ code: 'ArrowLeft', key: 'ArrowLeft', metaKey: true, altKey: true }))).toBe(
-      'consumed',
+    expect(manager.handleKeyDown(press({ code: 'KeyK', key: 'k', ctrlKey: true, shiftKey: true }))).toBe(
+      'pass',
     );
+    expect(
+      manager.handleKeyDown(press({ code: 'ArrowLeft', key: 'ArrowLeft', metaKey: true, altKey: true })),
+    ).toBe('consumed');
     expect(ids()).toEqual(['palette.open', 'pane.focus_left']);
   });
 });

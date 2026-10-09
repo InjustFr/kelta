@@ -44,8 +44,18 @@ describe('parseChord', () => {
   });
 
   it('expands mod per platform', () => {
-    expect(parseChord('mod+t', 'macos')).toMatchObject({ meta: true, ctrl: false, shift: false, code: 'KeyT' });
-    expect(parseChord('mod+t', 'linux')).toMatchObject({ meta: false, ctrl: true, shift: true, code: 'KeyT' });
+    expect(parseChord('mod+t', 'macos')).toMatchObject({
+      meta: true,
+      ctrl: false,
+      shift: false,
+      code: 'KeyT',
+    });
+    expect(parseChord('mod+t', 'linux')).toMatchObject({
+      meta: false,
+      ctrl: true,
+      shift: true,
+      code: 'KeyT',
+    });
   });
 
   it('rejects invalid chords', () => {
@@ -108,7 +118,13 @@ describe('reserved chords', () => {
   });
 
   it('does not flag Ctrl+Shift chords', () => {
-    for (const c of ['ctrl+shift+k', 'ctrl+shift+1', 'ctrl+shift+pagedown', 'ctrl+shift+space', 'ctrl+enter']) {
+    for (const c of [
+      'ctrl+shift+k',
+      'ctrl+shift+1',
+      'ctrl+shift+pagedown',
+      'ctrl+shift+space',
+      'ctrl+enter',
+    ]) {
       expect(reserved(c), c).toBe(false);
     }
   });
@@ -143,7 +159,9 @@ describe('findConflicts', () => {
 
   it('ignores invalid chords and duplicates of the same action', () => {
     expect(
-      findConflicts({ 'palette.open': ['ctrl+shift+k', 'ctrl+shift+k', 'nope'] }, RESERVED, { platform: 'linux' }),
+      findConflicts({ 'palette.open': ['ctrl+shift+k', 'ctrl+shift+k', 'nope'] }, RESERVED, {
+        platform: 'linux',
+      }),
     ).toEqual([]);
   });
 });

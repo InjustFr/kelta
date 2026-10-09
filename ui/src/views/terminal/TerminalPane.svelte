@@ -9,7 +9,7 @@
   import { terminalPool } from '$lib/terminal';
   import { terminalUi } from '$lib/terminal/ui.svelte';
   import type { TerminalView, ViewState } from '$lib/terminal/view';
-  import { Button, currentPlatform, ErrorState, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, EmptyState, ErrorState, Menu, type MenuItem } from '$lib/ui';
 
   import SearchBar from './SearchBar.svelte';
 
@@ -31,11 +31,13 @@
 
   const exited = $derived(viewState.exited || session?.lifecycle === 'exited');
   const exitCode = $derived(viewState.exitCode ?? session?.exit_code ?? null);
+  // The session was killed or removed: nothing to show (and nothing to attach to).
+  const missing = $derived(sessions.loaded && !session);
   const searching = $derived(terminalUi.searchSession === sessionId);
 
   // Show the pooled view while the pane is visible; hide (not destroy) it otherwise.
   $effect(() => {
-    if (!container || !visible) return;
+    if (!container || !visible || missing) return;
     const id = sessionId;
     const el = container;
     let alive = true;
@@ -146,7 +148,7 @@
       { id: 'copy', label: 'Copy', icon: 'copy', disabled: !view?.term.hasSelection() },
       { id: 'paste', label: 'Paste', icon: 'clipboard' },
       { id: 'search', label: 'Search…', icon: 'search', separator: true },
-      { id: 'clear', label: 'Clear screen', icon: 'eraser' },
+      { id: 'clear', label: 'Clear screen', icon: 'trash-2' },
     ];
   }
 
@@ -181,7 +183,19 @@
     <SearchBar {view} onclose={closeSearch} />
   {/if}
 
-  {#if viewState.error}
+  {#if missing}
+    <div class="overlay" data-testid="terminal-missing">
+      <EmptyState
+        icon="square-terminal"
+        title="This session is gone"
+        body="Its process was stopped or removed."
+      >
+        {#snippet actions()}
+          <Button icon="x" onclick={close}>Close pane</Button>
+        {/snippet}
+      </EmptyState>
+    </div>
+  {:else if viewState.error}
     <div class="overlay" data-testid="terminal-error">
       <ErrorState
         error={viewState.error.message}

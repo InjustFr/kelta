@@ -117,6 +117,18 @@
     const stopKeys = keyManager.start();
     const offPrefix = keyManager.onPrefixChange((armed) => (prefixArmed = armed));
     const offRemoved = onUiEvent('session.removed', (ev) => terminalPool.release(ev.id));
+    const offOpen = onUiEvent('ui.open', (ev) => {
+      // The backend asks for a pane: the layout store applies it to a loaded layout; an unloaded
+      // layout is fetched first. Focus requests also bring the project to the front.
+      const id = ev.project_id;
+      if (!layout.get(id)) {
+        layout
+          .ensure(id)
+          .then(() => layout.open(id, ev.request))
+          .catch((err: unknown) => toasts.error(err, 'Opening the pane failed'));
+      }
+      if (ev.request.focus) void activateProject(id);
+    });
     const offCtl = ui.onCtl((cmd) => {
       if (cmd.cmd === 'focus_project') void activateProject(cmd.id);
       else if (cmd.cmd === 'new') {
@@ -161,6 +173,7 @@
       stopKeys();
       offPrefix();
       offRemoved();
+      offOpen();
       offCtl();
       mql?.removeEventListener('change', onScheme);
       window.removeEventListener('focus', onFocus);

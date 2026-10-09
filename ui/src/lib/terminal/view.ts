@@ -24,6 +24,7 @@ import {
 import { fontStack, type TerminalConfig } from './config';
 import { AckBatcher, FrameHandler } from './frames';
 import { macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
+import { needsPasteConfirmation, sanitizePaste } from './paste';
 import { installQueryHandlers } from './queries';
 import { frames } from './raf';
 import {
@@ -67,17 +68,6 @@ const SEARCH_DECORATIONS = {
   activeMatchBackground: '#a8731a',
   activeMatchColorOverviewRuler: '#f0a020',
 };
-
-/** Removes bracketed-paste markers from pasted text (paste injection). */
-export function sanitizePaste(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[20[01]~/g, '');
-}
-
-export function needsPasteConfirmation(text: string, bracketedPaste: boolean, enabled: boolean): boolean {
-  if (!enabled || bracketedPaste) return false;
-  return /[\r\n]/.test(text.replace(/[\r\n]+$/, ''));
-}
 
 export class TerminalView implements PoolView {
   readonly id: SessionId;

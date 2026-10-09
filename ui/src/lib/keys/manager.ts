@@ -13,14 +13,7 @@ import type { KeysSettings } from '$lib/gen';
 import { ACTIONS, type ActionContext } from '$lib/gen/actions';
 import { currentPlatform } from '$lib/ui/format';
 
-import {
-  chordFromEvent,
-  chordToString,
-  matchChord,
-  parseChord,
-  type Chord,
-  type Platform,
-} from './chords';
+import { chordFromEvent, chordToString, matchChord, parseChord, type Chord, type Platform } from './chords';
 
 export interface KeyContext {
   /** Focus is inside a terminal view. */
@@ -256,7 +249,8 @@ export class KeyManager {
     if (!dispatch) return;
     try {
       const result = dispatch(binding.action, binding.args);
-      if (result instanceof Promise) result.catch((err: unknown) => this.#opts.onError?.(err, binding.action));
+      if (result instanceof Promise)
+        result.catch((err: unknown) => this.#opts.onError?.(err, binding.action));
     } catch (err) {
       this.#opts.onError?.(err, binding.action);
     }
@@ -349,7 +343,8 @@ export class KeyManager {
       for (const text of list) add(text, { action: id, context: 'global' });
     }
     for (const extra of this.#opts.extraBindings?.() ?? []) {
-      for (const text of extra.chords) add(text, { action: extra.action, context: 'global', args: extra.args });
+      for (const text of extra.chords)
+        add(text, { action: extra.action, context: 'global', args: extra.args });
     }
 
     const prefixText = keys?.prefix ?? DEFAULT_PREFIX;

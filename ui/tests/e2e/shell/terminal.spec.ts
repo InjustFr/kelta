@@ -264,3 +264,16 @@ test.describe('terminal pane', () => {
     await waitForAttached(page, 2);
   });
 });
+
+test('a killed session leaves a closable placeholder instead of a dead terminal', async ({ page }) => {
+  await boot(page);
+  await page.evaluate((id) => window.__keltaMock!.emit({ type: 'session.removed', id }), SESSIONS.shopNvim);
+  const gone = page.getByTestId('terminal-missing');
+  await expect(gone).toContainText('This session is gone');
+  // No attach is attempted for a session that does not exist.
+  expect(
+    (await callsOf(page, 'session_attach')).filter((c) => c.args?.id === SESSIONS.shopNvim),
+  ).toHaveLength(1);
+  await gone.getByRole('button', { name: 'Close pane' }).click();
+  await expect(page.getByTestId('pane')).toHaveCount(1);
+});

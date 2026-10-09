@@ -125,6 +125,44 @@ test.describe('project switching', () => {
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
   });
 
+  test('dragging a project on the rail reorders it', async ({ page }) => {
+    await boot(page);
+    const item = (id: string) => page.locator(`[data-testid="rail-project"][data-project-id="${id}"]`);
+    await item('kelta-tools').dragTo(item('shop'));
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('[data-testid="rail-project"]')].map((e) =>
+            e.getAttribute('data-project-id'),
+          ),
+        ),
+      )
+      .toEqual(['kelta-tools', 'shop', 'billing', 'home']);
+    const order = (await callsOf(page, 'project_reorder'))[0]!.args as { ids: string[] };
+    expect(order.ids.indexOf('kelta-tools')).toBeLessThan(order.ids.indexOf('shop'));
+    expect((await callsOf(page, 'session_kill')).length).toBe(0);
+  });
+
+  test('a backend ui.open request opens the pane and brings its project to the front', async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() =>
+      window.__keltaMock!.emit({
+        type: 'ui.open',
+        project_id: 'billing',
+        request: {
+          content: { kind: 'diagnostics' },
+          placement: 'new_tab',
+          focus: true,
+          tab_title: 'Diagnostics',
+          work_item_id: null,
+        },
+      }),
+    );
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await expect(page.getByTestId('tab').filter({ hasText: 'Diagnostics' })).toHaveCount(1);
+    expect((await callsOf(page, 'session_kill')).length).toBe(0);
+  });
+
   test('closing a project keeps its sessions running unless stop is chosen', async ({ page }) => {
     await boot(page);
     const tools = page.locator('[data-testid="rail-project"][data-project-id="kelta-tools"]');
