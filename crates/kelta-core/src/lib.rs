@@ -404,6 +404,10 @@ impl Core {
     pub fn login_env(&self) -> &LoginEnv {
         &self.login_env
     }
+    /// Scheduler state (subscriptions, armed deadline, paused accounts).
+    pub fn scheduler_snapshot(&self) -> scheduler::SchedulerSnapshot {
+        self.scheduler.snapshot()
+    }
 
     /// `app_info`.
     pub fn app_info(&self) -> AppInfo {

@@ -411,12 +411,14 @@ impl Core {
     // =========================================================================================
 
     fn new_session_id(&self) -> SessionId {
+        let mut id = SessionId::generate();
         loop {
-            let id = SessionId::generate();
             let sid8 = id.sid8();
             if !self.sessions.lock().keys().any(|k| k.sid8() == sid8) {
                 return id;
             }
+            // a v7 sid8 is the ms timestamp's top 32 bits (~65 s per value): retry with random bits.
+            id = SessionId::new(uuid::Uuid::new_v4().to_string());
         }
     }
 
