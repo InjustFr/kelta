@@ -27,7 +27,9 @@ async function boot(page: Page): Promise<string[]> {
 const lastCall = (page: Page, cmd: string) =>
   page.evaluate((c) => window.__keltaMock!.calls.filter((x) => x.cmd === c).at(-1)?.args ?? null, cmd);
 
-test('Flow 2: Fix with Claude sends the checked feedback into the previous conversation', async ({ page }) => {
+test('Flow 2: Fix with Claude sends the checked feedback into the previous conversation', async ({
+  page,
+}) => {
   const errors = await boot(page);
   await page.getByTestId('work-header').getByRole('button', { name: 'Fix with Claude' }).click();
   const sheet = page.getByRole('dialog', { name: 'Fix with Claude' });

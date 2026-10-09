@@ -26,8 +26,7 @@ const claudeOf = (w: WorkItem): SessionInfo =>
   mock.state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude')!;
 const sent = () =>
   mock.calls.filter((c) => c.cmd === 'work_send').at(-1)?.args as
-    | { prompt: string; files: { name: string; content: string }[]; threads: string[] }
-    | undefined;
+    { prompt: string; files: { name: string; content: string }[]; threads: string[] } | undefined;
 
 function mountSheet(): ReturnType<typeof vi.fn> {
   const onclose = vi.fn();

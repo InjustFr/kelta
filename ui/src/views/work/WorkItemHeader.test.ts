@@ -107,7 +107,9 @@ describe('WorkItemHeader', () => {
     const { ui } = await import('$lib/stores');
     expect(ui.sheet?.key).toBe('work_dialog');
     expect(ui.sheet?.props).toMatchObject({ tone: 'danger', title: 'Force push' });
-    expect(String(ui.sheet?.props.text)).toMatch(/Rewrites feat\/gh-12-json-output on origin \(#13\)\. The lease checks origin is still at \w{7}\./);
+    expect(String(ui.sheet?.props.text)).toMatch(
+      /Rewrites feat\/gh-12-json-output on origin \(#13\)\. The lease checks origin is still at \w{7}\./,
+    );
     expect(mock.calls.some((c) => c.cmd === 'work_push')).toBe(false);
     ui.closeSheet();
   });
