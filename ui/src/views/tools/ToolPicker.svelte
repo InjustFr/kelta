@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Tool picker sheet (SPEC §3.5): filter, Enter/click opens. A missing binary shows its install
-  // hint and "Check again" (tool_check) instead of opening.
+  // Tool picker sheet (SPEC §3.5): filter, Enter/click opens. An open that fails on a missing
+  // binary shows its install hint and "Check again" (tool_check).
   import type { SheetProps } from '$app/registry';
   import type { ToolCheck, ToolInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -51,12 +51,9 @@
 
   async function open(t: ToolInfo): Promise<void> {
     if (!projectId) return;
-    // Never checked yet: check first so a missing binary shows its hint instead of a spawn error.
-    if (!installed(t) || (checks[t.id] === undefined && t.installed == null)) {
-      await check(t);
-      if (!installed(t)) return;
-    }
-    if (await openTool(projectId, t)) onclose();
+    const r = await openTool(projectId, t);
+    if (r === true) onclose();
+    else if (r) checks = { ...checks, [t.id]: r };
   }
 
   function onkeydown(e: KeyboardEvent): void {
