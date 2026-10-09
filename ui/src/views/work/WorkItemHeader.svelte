@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import type { GitStatus } from '$lib/gen';
   import { openExternal, workRetryStep, workStatus } from '$lib/ipc/commands';
   import { tickets, toasts, work } from '$lib/stores';
@@ -11,9 +12,8 @@
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
   import { MoveController } from '../tickets/move.svelte';
   import { statusTone, type Tone } from './common';
-  import CreatePrDialog from './CreatePrDialog.svelte';
-  import FinishDialog from './FinishDialog.svelte';
   import { openContent } from './nav';
+  import { shipPhase } from './shipPhase';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
 
@@ -25,8 +25,6 @@
 
   let git = $state<GitStatus | null>(null);
   let gitError = $state(false);
-  let creating = $state(false);
-  let finishing = $state(false);
   let menu = $state<{ x: number; y: number } | null>(null);
   let statusBtn = $state<HTMLElement>();
   let retrying = $state(false);
@@ -68,6 +66,11 @@
         return { label: 'Active', tone: 'info' };
       case 'pr_open':
         return { label: 'PR open', tone: 'accent' };
+      case 'merged':
+      case 'pr_closed': {
+        const p = shipPhase(item, null, git);
+        return { label: `${p?.label}: ${p?.detail}`, tone: item.state.kind === 'merged' ? 'ok' : 'neutral' };
+      }
       case 'finished':
         return { label: 'Finished', tone: 'ok' };
       case 'failed':
@@ -160,7 +163,13 @@
       {#if item.pr_url}
         <Button size="sm" icon="git-pull-request" onclick={() => browse(item.pr_url)}>Open PR</Button>
       {:else}
-        <Button size="sm" icon="git-pull-request" onclick={() => (creating = true)}>Create PR</Button>
+        <Button
+          size="sm"
+          icon="git-pull-request"
+          disabled={git?.ahead === 0}
+          title={git?.ahead === 0 ? `No commits ahead of ${item.base}.` : 'Push and open a pull request'}
+          onclick={() => void dispatch('work.ship', { id: item.id })}>Ship</Button
+        >
       {/if}
     {/if}
     {#if ticketRef}
@@ -193,7 +202,9 @@
       </Button>
     {/if}
     {#if item.state.kind !== 'finished'}
-      <Button size="sm" variant="danger" onclick={() => (finishing = true)}>Finish</Button>
+      <Button size="sm" variant="danger" onclick={() => void dispatch('work.finish', { id: item.id })}
+        >Finish…</Button
+      >
     {/if}
   </div>
 {:else}
@@ -211,12 +222,6 @@
     onselect={menuSelect}
     onclose={() => (menu = null)}
   />
-{/if}
-{#if creating && item}
-  <CreatePrDialog {item} onclose={() => (creating = false)} />
-{/if}
-{#if finishing && item}
-  <FinishDialog {item} onclose={() => (finishing = false)} />
 {/if}
 <MoveDialogs {move} />
 

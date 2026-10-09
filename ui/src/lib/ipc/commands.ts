@@ -19,6 +19,7 @@ import type {
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
+  FinishMergedReport,
   FinishOpts,
   GitStatus,
   JsonValue,
@@ -189,6 +190,12 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Title, body and draft flag Ship would use (prefills the Ship dialog). */
+  work_pr_draft: { args: { id: WorkItemId }; result: PrDraft };
+  /** Finishes merged items with clean worktrees; the rest come back as skipped. */
+  work_finish_merged: { args: NoArgs; result: FinishMergedReport };
+  /** Startup / Now open: one host check per work-item PR missing from the open list. */
+  work_check_prs: { args: NoArgs; result: null };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -296,6 +303,9 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_pr_draft',
+  'work_finish_merged',
+  'work_check_prs',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -475,6 +485,9 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workPrDraft = wrap('work_pr_draft');
+export const workFinishMerged = wrap('work_finish_merged');
+export const workCheckPrs = wrap('work_check_prs');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

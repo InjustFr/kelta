@@ -9,6 +9,8 @@ import * as samples from '$lib/gen/fixtures';
 import type {
   Column,
   EffectiveSettings,
+  FinishMergedReport,
+  FinishOpts,
   JsonValue,
   KeltaError,
   Layer,
@@ -133,6 +135,14 @@ function freshState(): MockState {
 
 const refKey = (r: TicketRef): string => `${r.account}:${r.key}`;
 const sameRef = (a: TicketRef, b: TicketRef): boolean => a.account === b.account && a.key === b.key;
+/** Fixture items whose worktree has uncommitted changes (the failed billing item, the merged wip). */
+const dirtyWork = (w: WorkItem): boolean => w.id === FIXTURES.work[1]?.id || w.id === FIXTURES.work[5]?.id;
+const FINISH_MERGED: FinishOpts = {
+  remove_worktree: true,
+  delete_branch: true,
+  force: false,
+  transition_to: null,
+};
 
 function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
   const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
@@ -826,6 +836,7 @@ export function createMockTransport(options: MockOptions = {}): {
         state: { kind: 'active' },
         steps,
         created_at: now,
+        review_due: false,
       };
       const spawned = handlers.session_spawn_template({
         project_id: plan.project_id,
@@ -880,13 +891,37 @@ export function createMockTransport(options: MockOptions = {}): {
       const w = work(id);
       w.pr_url = w.pr_url ?? `https://github.com/acme/mock/pull/${100 + state.work.indexOf(w)}`;
       w.state = { kind: 'pr_open' };
+      w.review_due = false; // origin: ui
       void draft;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_pr_draft: ({ id }) => {
+      const w = work(id);
+      const t = w.ticket && state.tickets.find((x) => sameRef(x.ticket.ref, w.ticket!))?.ticket;
+      const pr = (state.settings.value as { work?: { pr?: { draft?: boolean } } }).work?.pr;
+      return {
+        title: t ? `${t.ref.key}: ${t.title}` : w.branch,
+        body: t ? `${t.url}` : '',
+        draft: pr?.draft ?? false,
+      };
+    },
+    work_finish_merged: () => {
+      const report: FinishMergedReport = { finished: [], skipped: [] };
+      for (const w of state.work.filter((x) => x.state.kind === 'merged')) {
+        const why = w.state.kind === 'merged' ? w.state.detail : null;
+        if (why || dirtyWork(w)) {
+          report.skipped.push({ id: w.id, reason: why ?? `${w.worktree} has uncommitted changes` });
+        } else {
+          report.finished.push(handlers.work_finish({ id: w.id, opts: FINISH_MERGED }) as WorkItem);
+        }
+      }
+      return report;
+    },
+    work_check_prs: () => null,
     work_finish: ({ id, opts }) => {
       const w = work(id);
-      if (w.id === FIXTURES.work[1]?.id && !opts.force) {
+      if (dirtyWork(w) && !opts.force) {
         throw err('dirty', 'worktree has uncommitted changes', {
           files: ['src/invoice.rs', 'tests/rounding.rs'],
         });
@@ -903,6 +938,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     work_status: ({ id }) => {
       const w = work(id);
+      if (w.state.kind === 'merged') return { ahead: 0, behind: 0, dirty: dirtyWork(w), unpushed: false };
       return w.state.kind === 'failed'
         ? { ahead: 0, behind: 3, dirty: true, unpushed: false }
         : clone(samples.gitStatus);

@@ -95,7 +95,8 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-09T08:00:00Z"
+    "created_at": "2026-10-09T08:00:00Z",
+    "review_due": false
   },
   {
     "id": "0199a6b2-0000-7000-8000-00000000a002",
@@ -195,7 +196,8 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-08T14:00:00Z"
+    "created_at": "2026-10-08T14:00:00Z",
+    "review_due": false
   },
   {
     "id": "0199a6b2-0000-7000-8000-00000000a003",
@@ -293,6 +295,303 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-07T10:00:00Z"
+    "created_at": "2026-10-07T10:00:00Z",
+    "review_due": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a004",
+    "project_id": "billing",
+    "kind": "ticket",
+    "ticket": {
+      "account": "redmine-corp",
+      "key": "4590",
+      "id": "4590"
+    },
+    "review": null,
+    "repo_id": "core",
+    "worktree": "/Users/ada/code/billing-core.worktrees/4590",
+    "branch": "feat/4590-export-invoices-csv",
+    "base": "main",
+    "claude_uuid": null,
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/44",
+    "state": {
+      "kind": "merged",
+      "detail": "choose Done status"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-06T09:00:00Z",
+    "review_due": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a005",
+    "project_id": "shop",
+    "kind": "ticket",
+    "ticket": {
+      "account": "jira-acme",
+      "key": "SHOP-120",
+      "id": "10120"
+    },
+    "review": null,
+    "repo_id": "api",
+    "worktree": "/Users/ada/code/shop-api.worktrees/SHOP-120",
+    "branch": "feat/SHOP-120-upgrade-payment-sdk",
+    "base": "main",
+    "claude_uuid": null,
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": "https://github.com/acme/shop-api/pull/88",
+    "state": {
+      "kind": "merged",
+      "detail": null
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-05T09:00:00Z",
+    "review_due": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a006",
+    "project_id": "shop",
+    "kind": "branch",
+    "ticket": null,
+    "review": null,
+    "repo_id": "api",
+    "worktree": "/Users/ada/code/shop-api.worktrees/wip-cache-warmup",
+    "branch": "wip/cache-warmup",
+    "base": "main",
+    "claude_uuid": null,
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": "https://github.com/acme/shop-api/pull/86",
+    "state": {
+      "kind": "merged",
+      "detail": null
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-04T09:00:00Z",
+    "review_due": false
   }
 ]

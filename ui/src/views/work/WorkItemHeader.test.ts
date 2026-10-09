@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { sheetRegistry, type RegisteredSheetKey } from '$app/registry';
 import type { WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { tickets, toasts, work } from '$lib/stores';
+import { tickets, toasts, ui, work } from '$lib/stores';
 
+import './actions';
 import WorkItemHeader from './WorkItemHeader.svelte';
 
 let mock: MockControls;
@@ -17,12 +19,20 @@ beforeEach(async () => {
   tickets.details = {};
   tickets.transitions = {};
   toasts.clear();
+  ui.sheets = [];
   work.byId = {};
   await work.load();
 });
 
 function mountHeader(item: WorkItem) {
   return render(WorkItemHeader, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
+}
+
+/** Renders the sheet the last action opened (the shell's SheetHost does this in the app). */
+async function mountSheet(key: RegisteredSheetKey) {
+  await waitFor(() => expect(ui.sheet?.key).toBe(key));
+  const Sheet = (await sheetRegistry[key]()).default;
+  return render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet(key) } });
 }
 
 const item = (i: number): WorkItem => mock.state.work[i] as WorkItem;
@@ -48,17 +58,21 @@ describe('WorkItemHeader', () => {
     );
   });
 
-  it('creates a PR with the edited draft and then offers Open PR', async () => {
+  it('ships with the edited title and then offers Open PR', async () => {
     const w = item(0);
     expect(w.pr_url).toBeNull();
     mountHeader(w);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Create PR' }));
-    await fireEvent.input(screen.getByLabelText('Title'), { target: { value: 'My PR' } });
-    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Create PR' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ship' }));
+    await mountSheet('ship');
+    const title = screen.getByLabelText('Title') as HTMLInputElement;
+    await waitFor(() => expect(title.value).toBe('SHOP-142: Rate-limit login attempts'));
+    await fireEvent.input(title, { target: { value: 'My PR' } });
+    // The fixture worktree is dirty: Ship anyway.
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Ship anyway' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_create_pr')).toBe(true));
     expect(mock.calls.filter((c) => c.cmd === 'work_create_pr').at(-1)?.args).toMatchObject({
       id: w.id,
-      draft: { title: 'My PR', body: null, draft: null },
+      draft: { title: 'My PR', draft: false },
     });
     expect(await screen.findByRole('button', { name: 'Open PR' })).toBeTruthy();
   });
@@ -66,7 +80,8 @@ describe('WorkItemHeader', () => {
   it('lists the dirty files on Finish and only removes with Force', async () => {
     const w = item(1);
     mountHeader(w);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Finish' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finish…' }));
+    await mountSheet('finish');
     const dialog = await screen.findByRole('dialog');
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Finish' }));
     const dirty = await screen.findByTestId('finish-dirty');
