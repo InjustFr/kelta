@@ -127,6 +127,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids.
+- **MCP tools** (`kelta-server/src/mcp.rs`, server `kelta`, per session): `get_ticket`, `transition_ticket{to}`, `add_ticket_comment{markdown}`, `open_in_editor{path, line?}`, `create_pr{title?, body?, draft?}`, `list_review_requests`, `get_review_feedback` (Markdown of `CoreApi::work_feedback` for the session's work item: unresolved threads with `path:line`, review summaries, failed checks with their log tail; the same layout as the Fix with Claude sheet's `feedback.md`), `notify{message}`.
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
 - **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
@@ -356,7 +357,8 @@ pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
   repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
-  created_at: String }
+  created_at: String, sent_threads: Vec<String> /*thread ids the last Fix with Claude handed over*/,
+  rebase: Option<RebaseState{onto, pre_head, remote_sha: Option<String>, conflicts: Vec<PathBuf>, step: u32, total: u32}> }
 pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
 ```
 
@@ -468,7 +470,13 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
 | `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
 | `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
-| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
+| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, diverged, remote_new}` (on demand; re-reads a recorded rebase). `diverged` = own rewrite: the recorded `remote_sha` is still the remote tip, is in `pre_head` and not in HEAD. `remote_new` = commits on `<remote>/<branch>` in neither HEAD nor `pre_head` | |
+| `work_send` | `{id, prompt, files: Vec<SendFile{name, content}>, threads?: Vec<String>}` | `WorkItem` | files (`name.md`, not `ticket.md`/`context.md`) go to the item's private Claude run dir, never the worktree; `prompt` is rendered (`{file}`, `{pr.url}`, `{onto}`…) then pasted (bracketed + Enter) into a live Claude whose hook status is `Done`/`WaitingUser`, or passed to `claude --resume <uuid> -- <prompt>` (dead / closed tab / dormant; the `--continue` fallback keeps it). `Conflict{reason: claude_busy}` while `Working`/`NeedsInput`/`Running`, `Conflict{reason: hooks_inactive}` when the live session's status is not from hooks. `threads` → `WorkItem.sent_threads` |
+| `work_feedback` | `{id}` | `Feedback{threads, reviews, failed_checks, reviewers}` (`CodeHost::feedback` of the item's PR) | |
+| `work_rerequest_review` | `{id}` | `Vec<String>` (logins asked again) | |
+| `work_resolve_sent_threads` | `{id}` | `WorkItem` (`sent_threads` cleared) | |
+| `work_rebase` | `{id, op: RebaseOp{kind: start{onto: base\|remote_branch, no_fetch}\|continue\|abort}}` | `WorkItem` with `rebase: Option<RebaseState{onto, pre_head, remote_sha, conflicts, step, total}>` | start refuses `Conflict{claude_busy}` and `Dirty{files}`; fetches base (+ branch when pushed), `Network{reason: fetch_failed}` (retry with `no_fetch`); `total > 0` = stopped; kept with `total = 0` only while a force push is pending (dropped for a never-pushed branch) |
+| `work_push` | `{id, force}` | `WorkItem` (`rebase` cleared) | plain `git push -u` or, only when `diverged`, `git push --force-with-lease=<branch>:<remote_sha> --force-if-includes`, in a visible transient pane; refused while Claude works. Failures are diagnosed by a fetch: `Conflict{reason: non_fast_forward}` / `Conflict{reason: lease_rejected}`, never retried, never a plain `--force` |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
@@ -656,18 +664,26 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
   fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:…
   fn repo_from_remote(&self, url: &str) -> Option<String>;
+  // Fix with Claude (default: Unsupported)
+  async fn feedback(&self, r: &ReviewRef) -> Result<Feedback, KeltaError>;          // unresolved threads, reviews with a body, failed checks + 40-line log tail
+  async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError>; // everyone who reviewed, minus me
+  async fn resolve_threads(&self, r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError>;
 }
 pub struct ReviewRef { account: AccountId, repo: String, number: u64 }
 pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, source_branch, target_branch,
   ci: CiState /*Success|Failure|Pending|Error|None*/, decision: Option<ReviewDecision /*Approved|ChangesRequested|ReviewRequired*/>,
   my_state: Option<MyReviewState /*Pending|Approved|ChangesRequested|Commented*/>, mergeable: Option<bool>,
   labels: Vec<String>, kind: ReviewKind /*ReviewRequested|Authored*/, updated_at: String, linked_tickets: Vec<String>,
-  additions: Option<u32>, deletions: Option<u32> }
+  additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/ }
+pub struct Feedback { threads: Vec<FeedbackThread{id, author, path?, line?, body_md, url}>,
+  reviews: Vec<FeedbackReview{author, state?, body_md}>, failed_checks: Vec<FailedCheck{name, url?, log_tail?}>, reviewers: Vec<String> }
 ```
 
 - GitHub: list = one GraphQL request with aliased searches `is:pr is:open review-requested:@me archived:false` (`user-review-requested:@me` if `reviews.include_team_requests=false`) and `is:pr is:open author:@me`; small nested `first:`. Gate: `GET /notifications?participating=true` + `If-None-Match` only for classic/gh tokens (fine-grained → no gate). Actions REST: `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`. GHE via `base_url`.
 - GitLab: `GET /merge_requests?scope=all&state=opened&reviewer_username=<me>` and `scope=created_by_me`, `updated_after`; `draft=` if `/version` ≥ 16 else `wip=`; approve `POST …/approve {sha}` (409 → `Conflict`); request changes = note (+ optional unapprove). Gate: `/todos?state=pending&action=review_requested` count+max id.
 - `linked_tickets`: regex `reviews.ticket_key_regex` over branch + title.
+- Feedback (FLOW §4.2). GitHub: one GraphQL query (`reviewThreads(first:100)` filtered on `isResolved` client side, since the connection has no such argument; `latestReviews` with a body; `viewer`), check runs of the head (REST) and, for failed GitHub Actions runs (5 max), the job log tail. Re-request = `POST …/requested_reviewers` with the latest reviewers; resolve = `resolveReviewThread` per id. GitLab: unresolved resolvable discussions (system notes skipped), failed jobs of the head pipeline + `/jobs/:id/trace` tail; re-request = `/request_review @…` quick action note (GitLab 17); resolve = `PUT …/discussions/:id?resolved=true`. A 403 / offline read maps to the FLOW §6 wording ("GitHub refused the review threads (403: token lacks `pull_requests:read`).", GitLab: `read_api`).
+- GitLab `decision = ChangesRequested` (and `decision_head = sha`) when `blocking_discussions_resolved = false`, `detailed_merge_status = discussions_not_resolved`, or a reviewer is in `requested_changes` state (`GET …/reviewers`, GitLab 17+). GitHub `decision_head` = commit of the latest APPROVED / CHANGES_REQUESTED review.
 
 ### 8.3 HttpCtx (kelta-http)
 

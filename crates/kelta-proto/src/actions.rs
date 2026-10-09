@@ -94,6 +94,17 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("terminal.copy", "Copy", ["cmd+c"], ["ctrl+shift+c"], Some("["), Terminal),
     a!("terminal.paste", "Paste", ["cmd+v"], ["ctrl+shift+v"], Some("]"), Terminal),
     a!("settings.open", "Open settings", ["cmd+,"], ["ctrl+shift+,"], Some(","), Global),
+    // Focused work item (FLOW §2.5, §3.5); no default chords (the work menu gives them letters).
+    a!("work.fix", "Work: Fix with Claude", [], [], None, Global),
+    a!("work.push", "Work: Push", [], [], None, Global),
+    a!("work.force_push", "Work: Force push…", [], [], None, Global),
+    a!("work.rebase", "Work: Rebase", [], [], None, Global),
+    a!("work.rebase_continue", "Work: Continue rebase", [], [], None, Global),
+    a!("work.rebase_abort", "Work: Abort rebase", [], [], None, Global),
+    a!("work.rebase_conflicts", "Work: Open conflicts in nvim", [], [], None, Global),
+    a!("work.rebase_ask_claude", "Work: Ask Claude to resolve conflicts", [], [], None, Global),
+    a!("work.rerequest_review", "Work: Re-request review", [], [], None, Global),
+    a!("work.resolve_threads", "Work: Resolve sent threads", [], [], None, Global),
     a!("window.toggle", "Toggle window (kelta-ctl toggle)", [], [], None, External),
 ];
 

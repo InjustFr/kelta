@@ -19,6 +19,7 @@ import type {
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
+  Feedback,
   FinishOpts,
   GitStatus,
   JsonValue,
@@ -37,6 +38,7 @@ import type {
   ProjectId,
   ProjectInfo,
   ProjectPatch,
+  RebaseOp,
   ReviewDetail,
   ReviewKind,
   ReviewPage,
@@ -46,6 +48,7 @@ import type {
   ScreenOpenResult,
   SecretBackendStatus,
   SessionId,
+  SendFile,
   SessionInfo,
   SpawnRequest,
   StartWorkPlan,
@@ -189,6 +192,16 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids. */
+  work_send: {
+    args: { id: WorkItemId; prompt: string; files: SendFile[]; threads?: string[] | null };
+    result: WorkItem;
+  };
+  work_feedback: { args: { id: WorkItemId }; result: Feedback };
+  work_rerequest_review: { args: { id: WorkItemId }; result: string[] };
+  work_resolve_sent_threads: { args: { id: WorkItemId }; result: WorkItem };
+  work_rebase: { args: { id: WorkItemId; op: RebaseOp }; result: WorkItem };
+  work_push: { args: { id: WorkItemId; force: boolean }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -296,6 +309,12 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_send',
+  'work_feedback',
+  'work_rerequest_review',
+  'work_resolve_sent_threads',
+  'work_rebase',
+  'work_push',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -475,6 +494,12 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workSend = wrap('work_send');
+export const workFeedback = wrap('work_feedback');
+export const workRerequestReview = wrap('work_rerequest_review');
+export const workResolveSentThreads = wrap('work_resolve_sent_threads');
+export const workRebase = wrap('work_rebase');
+export const workPush = wrap('work_push');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

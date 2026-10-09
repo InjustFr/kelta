@@ -3,7 +3,14 @@
 import type { CtlCommand, UiEvent } from '$lib/gen';
 
 export type SheetKey =
-  'start_work' | 'onboarding' | 'project_new' | 'plugin_install' | 'tool_picker' | 'session_new';
+  | 'start_work'
+  | 'onboarding'
+  | 'project_new'
+  | 'plugin_install'
+  | 'tool_picker'
+  | 'session_new'
+  | 'fix'
+  | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {

@@ -91,6 +91,43 @@ describe('WorkItemHeader', () => {
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_retry_step')).toBe(true));
   });
 
+  it('rebase: stopped on conflicts → Continue → Rebased → Force push… (confirmed, lease)', async () => {
+    const w = item(2); // PR open, Claude idle
+    mountHeader(w);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Rebase onto main' }));
+    expect(await screen.findByText('Rebase stopped (1 conflicted file)')).toBeTruthy();
+    for (const name of ['Ask Claude to resolve', 'Open conflicts in nvim', 'Continue', 'Abort rebase']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+    expect(screen.queryByRole('button', { name: 'Fix with Claude' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText('Rebased (push rewrites #13)')).toBeTruthy();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Force push…' }));
+    // The dialog is a sheet entry: it is mounted by the sheet host, here we assert what it asks.
+    const { ui } = await import('$lib/stores');
+    expect(ui.sheet?.key).toBe('work_dialog');
+    expect(ui.sheet?.props).toMatchObject({ tone: 'danger', title: 'Force push' });
+    expect(String(ui.sheet?.props.text)).toMatch(/Rewrites feat\/gh-12-json-output on origin \(#13\)\. The lease checks origin is still at \w{7}\./);
+    expect(mock.calls.some((c) => c.cmd === 'work_push')).toBe(false);
+    ui.closeSheet();
+  });
+
+  it('remote commits get "Rebase onto origin/<branch>", never Force push', async () => {
+    const w = item(1); // billing MR with a suggestion commit on the remote
+    const claude = mock.state.sessions.find((x) => w.session_ids.includes(x.id) && x.kind.type === 'claude')!;
+    claude.status = 'done'; // it was asking for permission: rebase would be refused
+    mountHeader(w);
+    expect(await screen.findByText('Remote has new commits (2)')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Force push…' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: `Rebase onto origin/${w.branch}` }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'work_rebase').at(-1)?.args).toMatchObject({
+        op: { kind: 'start', onto: 'remote_branch' },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('Remote has new commits (2)')).toBeNull());
+  });
+
   it('shows a placeholder for an unknown work item', async () => {
     render(WorkItemHeader, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();

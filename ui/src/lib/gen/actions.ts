@@ -37,6 +37,16 @@ export const ACTION_IDS = [
   "terminal.copy",
   "terminal.paste",
   "settings.open",
+  "work.fix",
+  "work.push",
+  "work.force_push",
+  "work.rebase",
+  "work.rebase_continue",
+  "work.rebase_abort",
+  "work.rebase_conflicts",
+  "work.rebase_ask_claude",
+  "work.rerequest_review",
+  "work.resolve_threads",
   "window.toggle",
 ] as const;
 
@@ -91,6 +101,16 @@ export const ACTIONS: readonly ActionMeta[] = [
   { id: "terminal.copy", label: "Copy", mac: ["cmd+c"], linux: ["ctrl+shift+c"], prefix: "[", context: "terminal" },
   { id: "terminal.paste", label: "Paste", mac: ["cmd+v"], linux: ["ctrl+shift+v"], prefix: "]", context: "terminal" },
   { id: "settings.open", label: "Open settings", mac: ["cmd+,"], linux: ["ctrl+shift+,"], prefix: ",", context: "global" },
+  { id: "work.fix", label: "Work: Fix with Claude", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.push", label: "Work: Push", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.force_push", label: "Work: Force push…", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase", label: "Work: Rebase", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase_continue", label: "Work: Continue rebase", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase_abort", label: "Work: Abort rebase", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase_conflicts", label: "Work: Open conflicts in nvim", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase_ask_claude", label: "Work: Ask Claude to resolve conflicts", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rerequest_review", label: "Work: Re-request review", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.resolve_threads", label: "Work: Resolve sent threads", mac: [], linux: [], prefix: null, context: "global" },
   { id: "window.toggle", label: "Toggle window (kelta-ctl toggle)", mac: [], linux: [], prefix: null, context: "external" },
 ];
 

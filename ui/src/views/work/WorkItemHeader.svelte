@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import type { GitStatus } from '$lib/gen';
   import { openExternal, workRetryStep, workStatus } from '$lib/ipc/commands';
   import { tickets, toasts, work } from '$lib/stores';
@@ -13,6 +14,7 @@
   import { statusTone, type Tone } from './common';
   import CreatePrDialog from './CreatePrDialog.svelte';
   import FinishDialog from './FinishDialog.svelte';
+  import { gitTick, prLabel, remoteOf } from './fixloop.svelte';
   import { openContent } from './nav';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
@@ -45,8 +47,17 @@
   // whenever the work item changes state.
   $effect(() => {
     void item?.state.kind;
+    void item?.rebase;
+    void gitTick.n;
     untrack(() => void refreshGit());
   });
+
+  // Rebase / push / feedback controls (FLOW §4.2, §4.4). Review checkouts are read-only.
+  const own = $derived(item !== null && item.kind !== 'review' && item.state.kind !== 'finished');
+  const stopped = $derived(item?.rebase && item.rebase.total > 0 ? item.rebase : null);
+  const conflictCount = $derived(stopped?.conflicts.length ?? 0);
+  const run = (id: string, args: Record<string, unknown> = {}): void =>
+    void dispatch(id, { id: workItemId, ...args });
 
   $effect(() => {
     const ref = ticketRef;
@@ -152,7 +163,47 @@
     {:else if gitError}
       <button type="button" class="link" onclick={() => void refreshGit()}>status unavailable, retry</button>
     {/if}
+    {#if own && stopped}
+      <Badge
+        tone="danger"
+        title={`Rebasing onto ${stopped.onto}, commit ${stopped.step} of ${stopped.total}`}
+      >
+        Rebase stopped ({conflictCount} conflicted file{conflictCount === 1 ? '' : 's'})
+      </Badge>
+    {:else if own && item.pr_url && git?.remote_new}
+      <Badge tone="danger" title="Suggestion commits, Update branch or a teammate's push">
+        Remote has new commits ({git.remote_new})
+      </Badge>
+    {:else if own && git?.diverged}
+      <Badge tone="neutral">Rebased (push rewrites {prLabel(item)})</Badge>
+    {/if}
     <span class="spacer"></span>
+    {#if own && stopped}
+      <Button size="sm" variant="primary" onclick={() => run('work.rebase_ask_claude')}
+        >Ask Claude to resolve</Button
+      >
+      <Button size="sm" disabled={conflictCount === 0} onclick={() => run('work.rebase_conflicts')}>
+        Open conflicts in nvim
+      </Button>
+      <Button size="sm" onclick={() => run('work.rebase_continue')}>Continue</Button>
+      <Button size="sm" variant="ghost" onclick={() => run('work.rebase_abort')}>Abort rebase</Button>
+    {:else if own}
+      {#if item.pr_url && git?.remote_new}
+        <Button size="sm" variant="primary" onclick={() => run('work.rebase', { onto: 'remote_branch' })}>
+          Rebase onto {remoteOf(item)}/{item.branch}
+        </Button>
+      {:else if git?.diverged}
+        <Button size="sm" onclick={() => run('work.force_push')}>Force push…</Button>
+      {:else if item.pr_url && git?.unpushed}
+        <Button size="sm" variant="primary" icon="arrow-up" onclick={() => run('work.push')}>Push</Button>
+      {/if}
+      {#if item.pr_url}
+        <Button size="sm" icon="bot" onclick={() => run('work.fix')}>Fix with Claude</Button>
+      {/if}
+      <Button size="sm" variant="ghost" icon="git-branch" onclick={() => run('work.rebase')}>
+        Rebase onto {item.base}
+      </Button>
+    {/if}
     {#if item.state.kind === 'failed'}
       <Button size="sm" loading={retrying} onclick={() => void retryFailed()}>Retry {item.state.step}</Button>
     {/if}

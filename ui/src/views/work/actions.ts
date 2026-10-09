@@ -1,8 +1,9 @@
-// Action handlers owned by L9 (work): `work.start`.
+// Action handlers owned by L9 (work): `work.start`; the fix-loop `work.*` actions live in fixloop.svelte.ts.
 import { registerAction } from '$lib/actions';
 import type { TicketRef } from '$lib/gen';
 import { toasts } from '$lib/stores';
 
+import './fixloop.svelte';
 import { selection } from './selection.svelte';
 import { startWorkOnTicket } from './startWork';
 
