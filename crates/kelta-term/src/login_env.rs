@@ -173,6 +173,12 @@ pub fn resolve(timeout: Duration) -> LoginEnv {
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .unwrap_or_else(default_shell);
+    resolve_with(&shell, timeout)
+}
+
+/// [`resolve`] with an explicit shell.
+pub fn resolve_with(shell: &Path, timeout: Duration) -> LoginEnv {
+    let shell = shell.to_path_buf();
     if let Some(vars) = probe(&shell, true, timeout) {
         return LoginEnv { vars, source: LoginEnvSource::LoginInteractive, shell: Some(shell) };
     }

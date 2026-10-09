@@ -156,6 +156,16 @@ impl Flow {
         if self.paused && self.inflight < self.low { AckAction::CatchUp } else { AckAction::Accepted }
     }
 
+    /// The child exited: the view must end with a snapshot (then the Exit frame). Returns true
+    /// when it can be sent now; otherwise the view is paused until acks bring it below LOW.
+    pub fn on_exit(&mut self) -> bool {
+        if !self.attached {
+            return false;
+        }
+        self.paused = true;
+        self.inflight < self.low
+    }
+
     /// Watchdog check: returns the generation to report in `AckTimeout` when the deadline passed.
     /// The watchdog is one-shot: it is disarmed until the next send or ack progress.
     pub fn check_deadline(&mut self, now: Instant) -> Option<u32> {
@@ -258,6 +268,20 @@ mod tests {
         f.on_ack(g, 1000, t0);
         assert_eq!(f.inflight(), 0);
         assert_eq!(f.deadline(), None);
+    }
+
+    #[test]
+    fn exit_pauses_until_caught_up() {
+        let now = Instant::now();
+        let mut f = Flow::new();
+        assert!(!f.on_exit(), "no view");
+        let g = f.attach();
+        assert!(f.on_exit(), "nothing in flight: snapshot now");
+        f.snapshot_sent(10, now);
+        f.on_data(200 * 1024, now);
+        assert!(!f.on_exit(), "above LOW: deferred");
+        assert!(f.paused());
+        assert_eq!(f.on_ack(g, 200 * 1024, now), AckAction::CatchUp);
     }
 
     #[test]

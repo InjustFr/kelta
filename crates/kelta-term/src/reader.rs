@@ -199,13 +199,13 @@ fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
     {
         let mut st = session.state.lock();
         st.exit = Some((code, signal));
-        if st.sink.is_some() {
-            if st.flow.paused() {
-                // Sent after the catch-up snapshot (see `State::send_snapshot`).
-                st.exit_frame_pending = true;
-            } else {
-                st.send(frames::exit(code.unwrap_or(-1)), shared);
-            }
+        // An attached view ends with a snapshot then the Exit frame, now or (when bytes are still
+        // in flight) after the catch-up of `State::send_snapshot`.
+        if st.flow.on_exit() {
+            let outs = st.send_snapshot(&palette, shared, Instant::now());
+            drop(outs);
+        } else if st.sink.is_some() {
+            st.exit_frame_pending = true;
         }
         st.model.release_cache();
     }
