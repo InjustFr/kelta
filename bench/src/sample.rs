@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mem {
@@ -150,7 +150,7 @@ mod mac {
         let rc =
             unsafe { libc::proc_pid_rusage(pid, libc::RUSAGE_INFO_V4, std::ptr::from_mut(&mut ri).cast()) };
         if rc != 0 {
-            bail!("proc_pid_rusage({pid}) failed");
+            anyhow::bail!("proc_pid_rusage({pid}) failed");
         }
         Ok(ri)
     }

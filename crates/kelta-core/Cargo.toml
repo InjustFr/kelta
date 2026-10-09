@@ -14,6 +14,8 @@ kelta-term = { workspace = true }
 kelta-config = { workspace = true }
 kelta-secrets = { workspace = true }
 kelta-http = { workspace = true }
+# plugin http_fetch needs its own no-redirect client (L3.md deviation 4)
+reqwest = { workspace = true }
 kelta-trackers = { workspace = true }
 kelta-codehosts = { workspace = true }
 kelta-work = { workspace = true }

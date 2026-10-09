@@ -133,12 +133,16 @@ pub fn graphics() -> Check {
 pub fn webkit() -> Check {
     #[cfg(target_os = "linux")]
     {
-        let v = format!(
-            "{}.{}.{}",
-            webkit2gtk::functions::major_version(),
-            webkit2gtk::functions::minor_version(),
-            webkit2gtk::functions::micro_version()
-        );
+        // SAFETY: plain getters with no arguments; webkit2gtk 2.0 only exposes them through ffi.
+        let v = unsafe {
+            use webkit2gtk::ffi::*;
+            format!(
+                "{}.{}.{}",
+                webkit_get_major_version(),
+                webkit_get_minor_version(),
+                webkit_get_micro_version()
+            )
+        };
         let status = if version_at_least(&v, "2.40") { CheckStatus::Ok } else { CheckStatus::Warn };
         check(
             "webkit",

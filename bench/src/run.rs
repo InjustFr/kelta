@@ -23,6 +23,7 @@ struct App {
     tmp: PathBuf,
     marks: PathBuf,
     ctl: PathBuf,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sampler reads it
     before: std::collections::HashSet<i32>,
 }
 
