@@ -24,6 +24,11 @@ impl WorkService {
     /// A `claude.hook` of `sid`. The bus only carries real hooks, so heuristic sessions (hooks
     /// inactive) never get here and never set a flag.
     pub(crate) async fn on_claude_hook(&self, sid: &SessionId, hook: HookPayload) -> Result<(), KeltaError> {
+        let event = hook.hook_event_name.as_str();
+        // A new session id comes with SessionStart (/clear, in-Claude /resume); tool hooks are noise.
+        if ![names::SESSION_START, names::USER_PROMPT_SUBMIT, names::STOP].contains(&event) {
+            return Ok(());
+        }
         let core = self.api()?;
         if core.session_get(sid).is_none_or(|s| s.kind != SessionKind::Claude) {
             return Ok(());
@@ -32,7 +37,6 @@ impl WorkService {
         if item.state == WorkState::Finished {
             return Ok(());
         }
-        let event = hook.hook_event_name.as_str();
         // Review checkouts are someone else's code: no "to review" signal for them.
         let own = item.kind != WorkKind::Review;
         let changes = if own && event == names::STOP {
@@ -43,7 +47,6 @@ impl WorkService {
             None
         };
         let uuid = hook.session_id.filter(|u| !u.is_empty());
-        let mut became_due = false;
         let item = self
             .update(&item.id, |w| {
                 let before = (w.review_due, w.claude_replied, w.claude_uuid.clone());
@@ -52,21 +55,20 @@ impl WorkService {
                 }
                 match (event, changes) {
                     (names::USER_PROMPT_SUBMIT, _) => (w.review_due, w.claude_replied) = (false, false),
-                    (names::STOP, Some(true)) => {
-                        became_due = !w.review_due;
-                        (w.review_due, w.claude_replied) = (true, false);
-                    }
+                    (names::STOP, Some(true)) => (w.review_due, w.claude_replied) = (true, false),
                     (names::STOP, Some(false)) => w.claude_replied = true,
                     _ => {}
                 }
                 before != (w.review_due, w.claude_replied, w.claude_uuid.clone())
             })
             .await?;
-        if changes.is_some() && core.settings(Some(&item.project_id)).notifications.claude_done {
-            let title = if became_due || item.review_due {
-                format!("{} ready to review", item_key(&item))
-            } else {
-                format!("{}: Claude replied", item_key(&item))
+        // Core leaves the "finished" notification of a work item's Claude to us.
+        if event == names::STOP && core.settings(Some(&item.project_id)).notifications.claude_done {
+            let key = item_key(&item);
+            let title = match changes {
+                Some(true) => format!("{key} ready to review"),
+                Some(false) => format!("{key}: Claude replied"),
+                None => format!("{key}: Claude finished"),
             };
             let body = hook.last_assistant_message.map(|m| m.chars().take(200).collect());
             // Core drops it when the session's pane is visible in the focused window.
