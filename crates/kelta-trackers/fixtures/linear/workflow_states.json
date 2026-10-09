@@ -1,0 +1,33 @@
+{
+  "data": {
+    "workflowStates": {
+      "nodes": [
+        {
+          "name": "Todo",
+          "type": "unstarted",
+          "position": 1
+        },
+        {
+          "name": "Backlog",
+          "type": "backlog",
+          "position": 0
+        },
+        {
+          "name": "Done",
+          "type": "completed",
+          "position": 3
+        },
+        {
+          "name": "In Progress",
+          "type": "started",
+          "position": 2
+        },
+        {
+          "name": "Todo",
+          "type": "unstarted",
+          "position": 1
+        }
+      ]
+    }
+  }
+}

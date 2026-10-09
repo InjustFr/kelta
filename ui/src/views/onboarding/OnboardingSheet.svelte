@@ -131,7 +131,7 @@
           <Icon name={hasAccount ? 'circle-check' : 'key-round'} size={18} />
           <div>
             <strong>Add an account</strong>
-            <p>Jira, Redmine, GitHub or GitLab. Tokens go to your system keychain.</p>
+            <p>Jira, Redmine, GitHub, GitLab or Linear. Tokens go to your system keychain.</p>
           </div>
           <Button variant={hasAccount ? 'secondary' : 'primary'} onclick={addAccount}>Add account</Button>
         </div>

@@ -65,7 +65,7 @@ describe('mock fixtures', () => {
       for (const r of p.repos) expect(typeof r.path).toBe('string');
       if (p.tracker) {
         expect(p.tracker.views.length).toBeGreaterThan(0);
-        for (const v of p.tracker.views) expect(Object.keys(v)).toHaveLength(15);
+        for (const v of p.tracker.views) expect(Object.keys(v)).toHaveLength(16);
       }
     }
     expect(MOCK_FIXTURES.projects.filter((p) => p.active)).toHaveLength(1);

@@ -1,0 +1,10 @@
+{
+  "data": {
+    "viewer": {
+      "id": "user-1",
+      "name": "Louis Duprat",
+      "displayName": "louis",
+      "avatarUrl": "https://example.test/a.png"
+    }
+  }
+}

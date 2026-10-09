@@ -92,3 +92,28 @@ pub async fn bodies(server: &MockServer, m: &str, p: &str) -> Vec<Value> {
 pub async fn count(server: &MockServer, m: &str, p: &str) -> usize {
     bodies(server, m, p).await.len()
 }
+
+/// Mount Linear's single `/graphql` endpoint: each operation is told apart by its query text.
+pub async fn linear_mocks(server: &MockServer) {
+    use wiremock::matchers::body_string_contains;
+    for (needle, fixture_name) in [
+        ("viewer", "linear/viewer.json"),
+        ("issues(filter", "linear/issues_p1.json"),
+        ("comments(last", "linear/issue.json"),
+        ("states(first", "linear/transitions.json"),
+        ("workflowStates", "linear/workflow_states.json"),
+        ("issueUpdate", "linear/issue_updated.json"),
+        ("commentCreate", "linear/comment_created.json"),
+    ] {
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .and(body_string_contains(needle))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(fixture_text(fixture_name))
+                    .insert_header("content-type", "application/json"),
+            )
+            .mount(server)
+            .await;
+    }
+}

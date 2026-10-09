@@ -1042,6 +1042,7 @@ pub enum AccountKind {
     Redmine,
     Github,
     Gitlab,
+    Linear,
 }
 
 impl AccountKind {
@@ -1081,12 +1082,12 @@ pub enum TextFormat {
 #[serde(deny_unknown_fields)]
 pub struct AccountConfig {
     pub kind: AccountKind,
-    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; required for jira/redmine.
+    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.
     #[serde(default)]
     pub base_url: Option<String>,
     #[serde(default)]
     pub flavor: JiraFlavor,
-    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`.
+    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).
     #[serde(default)]
     pub auth: Option<AuthKind>,
     #[serde(default)]
@@ -1112,6 +1113,7 @@ impl AccountConfig {
         self.base_url.clone().or_else(|| match self.kind {
             AccountKind::Github => Some("https://api.github.com".into()),
             AccountKind::Gitlab => Some("https://gitlab.com".into()),
+            AccountKind::Linear => Some("https://api.linear.app".into()),
             _ => None,
         })
     }
@@ -1362,11 +1364,13 @@ pub struct TrackerView {
     pub search: Option<String>,
     /// github Projects v2.
     pub project_v2: Option<ProjectV2Ref>,
-    /// gitlab: `group/sub/proj`.
+    /// gitlab: `group/sub/proj`; linear: project name.
     pub project: Option<String>,
-    /// gitlab: `assigned_to_me` | `all`.
+    /// linear: team key (`ENG`).
+    pub team: Option<String>,
+    /// gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
     pub scope: Option<String>,
-    /// gitlab.
+    /// gitlab, linear (label names).
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,

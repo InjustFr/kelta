@@ -42,15 +42,19 @@ search: string | null,
  */
 project_v2: ProjectV2Ref | null, 
 /**
- * gitlab: `group/sub/proj`.
+ * gitlab: `group/sub/proj`; linear: project name.
  */
 project: string | null, 
 /**
- * gitlab: `assigned_to_me` | `all`.
+ * linear: team key (`ENG`).
+ */
+team: string | null, 
+/**
+ * gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
  */
 scope: string | null, 
 /**
- * gitlab.
+ * gitlab, linear (label names).
  */
 labels: Array<string> | null, 
 /**

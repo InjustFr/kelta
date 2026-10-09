@@ -1,0 +1,32 @@
+{
+  "data": {
+    "issueUpdate": {
+      "success": true,
+      "issue": {
+        "id": "iss-uuid-12",
+        "identifier": "ENG-12",
+        "title": "Fix login redirect",
+        "url": "https://linear.app/acme/issue/ENG-12/fix-login-redirect",
+        "updatedAt": "2026-10-01T08:30:00.000Z",
+        "priorityLabel": "High",
+        "state": {
+          "id": "st-review",
+          "name": "In Review",
+          "type": "started"
+        },
+        "assignee": {
+          "id": "user-1",
+          "name": "Louis Duprat",
+          "displayName": "louis",
+          "avatarUrl": "https://example.test/a.png"
+        },
+        "labels": {
+          "nodes": []
+        },
+        "team": {
+          "key": "ENG"
+        }
+      }
+    }
+  }
+}

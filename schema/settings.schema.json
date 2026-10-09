@@ -682,7 +682,7 @@
         "properties": {
           "auth": {
             "default": null,
-            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`.",
+            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).",
             "enum": [
               "basic",
               "bearer",
@@ -697,7 +697,7 @@
           },
           "base_url": {
             "default": null,
-            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; required for jira/redmine.",
+            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.",
             "type": [
               "string",
               "null"
@@ -724,7 +724,8 @@
               "jira",
               "redmine",
               "github",
-              "gitlab"
+              "gitlab",
+              "linear"
             ],
             "type": "string"
           },

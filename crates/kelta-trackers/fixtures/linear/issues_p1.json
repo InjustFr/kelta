@@ -1,0 +1,61 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "iss-uuid-12",
+          "identifier": "ENG-12",
+          "title": "Fix login redirect",
+          "url": "https://linear.app/acme/issue/ENG-12/fix-login-redirect",
+          "updatedAt": "2026-10-01T08:30:00.000Z",
+          "priorityLabel": "High",
+          "state": {
+            "id": "st-started",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "assignee": {
+            "id": "user-1",
+            "name": "Louis Duprat",
+            "displayName": "louis",
+            "avatarUrl": "https://example.test/a.png"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "bug"
+              }
+            ]
+          },
+          "team": {
+            "key": "ENG"
+          }
+        },
+        {
+          "id": "iss-uuid-13",
+          "identifier": "ENG-13",
+          "title": "Write docs",
+          "url": "https://linear.app/acme/issue/ENG-13/write-docs",
+          "updatedAt": "2026-10-01T08:30:00.000Z",
+          "priorityLabel": "No priority",
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "endCursor": "cur-1"
+      }
+    }
+  }
+}
