@@ -1,19 +1,12 @@
 //! `review` commands — PR/MR reviews (owner: L3, ARCHITECTURE §6).
-//!
-//! SCAFFOLD STUBS: return `Unsupported("not implemented: <command>")`. Keep the signatures (argument
-//! names are the snake_case keys the UI sends); replace the bodies.
-#![allow(unused_variables, unused_imports)]
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use kelta_core::Core;
 use kelta_proto::prelude::*;
-use serde_json::Value;
 use tauri::State;
-use tauri::ipc::{Channel, InvokeResponseBody};
 
-use super::{Res, not_implemented};
+use super::Res;
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_list(
@@ -22,25 +15,26 @@ pub async fn review_list(
     kind: ReviewKind,
     refresh: bool,
 ) -> Res<ReviewPage> {
-    not_implemented("review_list")
+    core.review_page(scope, kind, refresh).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_get(core: State<'_, Arc<Core>>, review: ReviewRef) -> Res<ReviewDetail> {
-    not_implemented("review_get")
+    core.review_get(&review).await
 }
 
+/// `Conflict` when the head moved since `head_sha` was shown.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_approve(core: State<'_, Arc<Core>>, review: ReviewRef, head_sha: String) -> Res<()> {
-    not_implemented("review_approve")
+    core.review_approve(&review, &head_sha).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_comment(core: State<'_, Arc<Core>>, review: ReviewRef, body: String) -> Res<()> {
-    not_implemented("review_comment")
+    core.review_comment(&review, &body).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_request_changes(core: State<'_, Arc<Core>>, review: ReviewRef, body: String) -> Res<()> {
-    not_implemented("review_request_changes")
+    core.review_request_changes(&review, &body).await
 }
