@@ -5,6 +5,7 @@
   import { layout, toasts, tools, ui } from '$lib/stores';
   import { Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
+  import ToolStrip from './ToolStrip.svelte';
   import { requestCloseTab, selectTab, tabAttention } from './nav';
 
   interface Props {
@@ -170,6 +171,7 @@
   >
     <Icon name="plus" size={15} />
   </button>
+  <ToolStrip {projectId} />
 </div>
 
 {#if tabMenu}

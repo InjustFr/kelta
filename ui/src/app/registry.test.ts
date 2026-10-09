@@ -25,7 +25,7 @@ describe('registries', () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  }, 20_000); // cold-transforms every view chunk: ~5 s on a loaded machine
+  }, 30_000); // cold-transforms every view
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(

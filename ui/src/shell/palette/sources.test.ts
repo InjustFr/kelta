@@ -50,7 +50,7 @@ describe('palette sources', () => {
   });
 
   it('lists tools of the active project and settings sections', () => {
-    expect(toolItems().map((i) => i.label)).toContain('Open tool: lazygit');
+    expect(toolItems().map((i) => i.label)).toContain('Open lazygit');
     expect(settingsItems().map((i) => i.label)).toContain('Settings: Keys');
   });
 

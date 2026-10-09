@@ -110,7 +110,7 @@ export function toolItems(): PaletteItem[] {
   return tools.list(id).map((t) => ({
     id: `tool:${t.id}`,
     group: 'Tools' as const,
-    label: `Open tool: ${t.label}`,
+    label: `Open ${t.label}`,
     detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
     kbd: t.keybinding ?? undefined,
     icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
