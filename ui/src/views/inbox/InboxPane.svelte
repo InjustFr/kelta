@@ -181,6 +181,12 @@
       case 'ArrowUp':
         step(-1);
         break;
+      case 'Home':
+        if (selectable[0]) selId = selectable[0].id;
+        break;
+      case 'End':
+        if (selectable.at(-1)) selId = selectable.at(-1)!.id;
+        break;
       case 'Enter':
         void open(cur);
         break;

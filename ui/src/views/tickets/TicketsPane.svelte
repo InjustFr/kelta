@@ -135,11 +135,14 @@
   $effect(() => {
     if (!cur) return;
     if (mode === 'list') vlist?.scrollToIndex(shown.indexOf(cur));
-    else
-      root
-        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(keyOf(cur))}"]`)
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    else rowEl(keyOf(cur))?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
+
+  function rowEl(key: string): HTMLElement | undefined {
+    return [...(root?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(
+      (el) => el.dataset.key === key,
+    );
+  }
 
   function step(delta: number): void {
     const seq = mode === 'board' ? (lanes.find((l) => cur && l.cards.includes(cur))?.cards ?? []) : shown;
@@ -209,7 +212,7 @@
       toasts.error(slot.error ?? 'No columns configured for this tracker', 'Move');
       return;
     }
-    const el = root?.querySelector<HTMLElement>(`[data-key="${CSS.escape(keyOf(item))}"]`);
+    const el = rowEl(keyOf(item));
     const r = (el ?? root)?.getBoundingClientRect();
     menu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, columns: cols };
   }

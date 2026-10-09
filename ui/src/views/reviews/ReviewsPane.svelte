@@ -152,6 +152,12 @@
       case 'ArrowUp':
         step(-1);
         break;
+      case 'Home':
+        if (itemRows[0]) selId = itemRows[0].id;
+        break;
+      case 'End':
+        if (itemRows.at(-1)) selId = itemRows.at(-1)!.id;
+        break;
       case 'Enter':
         if (item) openDetail(item);
         break;
