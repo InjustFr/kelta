@@ -198,7 +198,13 @@ impl TerminalHost for PtyTerminalHost {
         Ok(())
     }
 
-    fn attach(&self, id: &SessionId, cols: u16, rows: u16, sink: Box<dyn FrameSink>) -> Result<AttachInfo, KeltaError> {
+    fn attach(
+        &self,
+        id: &SessionId,
+        cols: u16,
+        rows: u16,
+        sink: Box<dyn FrameSink>,
+    ) -> Result<AttachInfo, KeltaError> {
         let s = self.session(id)?;
         let palette = *self.shared.palette.read();
         let now = Instant::now();
@@ -266,7 +272,8 @@ impl TerminalHost for PtyTerminalHost {
     fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError> {
         let s = self.session(id)?;
         let sig = signal_number(signal);
-        let foreground = s.master().and_then(|m| rustix::termios::tcgetpgrp(&*m).ok()).map(|p| p.as_raw_nonzero().get());
+        let foreground =
+            s.master().and_then(|m| rustix::termios::tcgetpgrp(&*m).ok()).map(|p| p.as_raw_nonzero().get());
         let proc = s.proc.lock();
         if proc.reaped {
             return Ok(());

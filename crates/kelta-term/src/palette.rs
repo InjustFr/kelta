@@ -30,7 +30,8 @@ impl Palette {
     /// Parse `#rrggbb` colours; invalid entries keep the built-in default.
     pub fn from_proto(p: &TerminalPalette) -> Self {
         let fallback = TerminalPalette::default();
-        let pick = |s: &str, d: &str| parse_hex(s).or_else(|| parse_hex(d)).unwrap_or(Rgb { r: 0, g: 0, b: 0 });
+        let pick =
+            |s: &str, d: &str| parse_hex(s).or_else(|| parse_hex(d)).unwrap_or(Rgb { r: 0, g: 0, b: 0 });
         let mut ansi = [Rgb { r: 0, g: 0, b: 0 }; 16];
         for (i, slot) in ansi.iter_mut().enumerate() {
             let s = p.ansi.get(i).map(String::as_str).unwrap_or("");

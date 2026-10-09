@@ -14,8 +14,8 @@ use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::{ClipboardType, Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{
     self, Attr, CharsetIndex, ClearMode, CursorShape, CursorStyle, Handler, Hyperlink, KeyboardModes,
-    KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys, NamedPrivateMode, PrivateMode, Processor, Rgb,
-    ScpCharPath, ScpUpdateMode, StandardCharset, TabulationClearMode,
+    KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys, NamedPrivateMode, PrivateMode,
+    Processor, Rgb, ScpCharPath, ScpUpdateMode, StandardCharset, TabulationClearMode,
 };
 use kelta_proto::term::{ClipboardKind, TerminalEvent};
 use parking_lot::Mutex;
@@ -775,14 +775,21 @@ mod tests {
     fn events_title_bell_clipboard_notify() {
         let mut m = TermModel::new(80, 24, 100);
         let mut out = Vec::new();
-        m.advance(b"\x1b]2;hello\x07\x07\x1b]52;c;aGk=\x07\x1b]777;notify;T;B\x07", &Palette::default(), &mut out);
+        m.advance(
+            b"\x1b]2;hello\x07\x07\x1b]52;c;aGk=\x07\x1b]777;notify;T;B\x07",
+            &Palette::default(),
+            &mut out,
+        );
         assert_eq!(
             out,
             vec![
                 Output::Event(TerminalEvent::Notify { title: Some("T".into()), body: "B".into() }),
                 Output::Event(TerminalEvent::Title("hello".into())),
                 Output::Event(TerminalEvent::Bell),
-                Output::Event(TerminalEvent::ClipboardStore { kind: ClipboardKind::Clipboard, text: "hi".into() }),
+                Output::Event(TerminalEvent::ClipboardStore {
+                    kind: ClipboardKind::Clipboard,
+                    text: "hi".into()
+                }),
             ]
         );
         // OSC 52 read is not allowed (copy only).

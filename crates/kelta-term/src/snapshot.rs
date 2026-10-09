@@ -30,6 +30,9 @@ const STYLE: Flags = Flags::BOLD
     .union(Flags::STRIKEOUT)
     .union(Flags::ALL_UNDERLINES);
 
+/// Shortest run of blank cells replaced by a cursor move.
+const SKIP_RUN: usize = 6;
+
 const CHARSETS: [CharsetIndex; 4] = [CharsetIndex::G0, CharsetIndex::G1, CharsetIndex::G2, CharsetIndex::G3];
 
 /// Graphic rendition of a cell (what SGR + OSC 8 can set).
@@ -66,8 +69,22 @@ impl Pen {
     }
 
     fn same_sgr(&self, other: &Self) -> bool {
-        self.fg == other.fg && self.bg == other.bg && self.flags == other.flags && self.underline == other.underline
+        self.fg == other.fg
+            && self.bg == other.bg
+            && self.flags == other.flags
+            && self.underline == other.underline
     }
+}
+
+/// How a row relates to the previous one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Cont {
+    /// Starts a new line (CR LF or CUP).
+    None,
+    /// Soft-wrapped continuation.
+    Wrap,
+    /// Continuation whose first (wide) character re-creates the previous row's leading spacer.
+    LeadingSpacer,
 }
 
 /// A cell that a fresh terminal already holds (nothing to write).
@@ -130,6 +147,8 @@ impl Writer<'_> {
 
     fn set_pen(&mut self, pen: &Pen) {
         if !self.pen.same_sgr(pen) {
+            let from_default = self.pen.same_sgr(&Pen::default());
+            let start = self.out.len();
             self.s("\x1b[0");
             let f = pen.flags;
             if f.contains(Flags::BOLD) {
@@ -176,6 +195,10 @@ impl Writer<'_> {
                 _ => {}
             }
             self.s("m");
+            if from_default && self.out.len() > start + 4 {
+                // From the default pen the attributes are additive: drop the leading `0;`.
+                self.out.drain(start + 2..start + 4);
+            }
         }
         if self.pen.link != pen.link {
             match &pen.link {
@@ -212,10 +235,22 @@ impl Writer<'_> {
         }
     }
 
-    /// Write cells `0..end` of a row starting at column 0 with the cursor at column 0.
-    fn row(&mut self, row: &Row<Cell>, end: usize, wrapped: bool, next_starts_wide: bool) {
+    /// Write cells `0..end` of a row starting at column 0 with the cursor at column 0 (or, for a
+    /// continuation row, pending wrap at the end of the previous row).
+    fn row(&mut self, row: &Row<Cell>, end: usize, wrapped: bool, next_starts_wide: bool, cont: Cont) {
         let last = self.cols - 1;
+        let mut skip = 0;
+        if cont == Cont::Wrap {
+            // Wrap with the default pen so a scroll fills the new row with the default background,
+            // then return to its first column.
+            self.reset_pen();
+            self.s(" \r");
+        }
+        let allow_skip = cont != Cont::LeadingSpacer;
         for c in 0..end {
+            if c < skip {
+                continue;
+            }
             let cell = &row[Column(c)];
             if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
                 if c > 0 && row[Column(c - 1)].flags.contains(Flags::WIDE_CHAR) {
@@ -242,13 +277,42 @@ impl Writer<'_> {
                 self.s("G");
                 continue;
             }
+            if is_blank(cell) {
+                // Skip runs of untouched cells inside the row with a cursor move.
+                let run = (c..end).take_while(|&i| is_blank(&row[Column(i)])).count();
+                if allow_skip && run >= SKIP_RUN && c + run < end {
+                    skip = c + run;
+                    self.s("\x1b[");
+                    self.num(skip + 1);
+                    self.s("G");
+                    continue;
+                }
+            }
             let ch = if cell.c == '\t' { ' ' } else { cell.c };
             self.glyph(cell, ch);
+        }
+        if cont == Cont::LeadingSpacer && end < self.cols {
+            // The wide character wrapped with its own pen: clear the rest with the default one.
+            self.reset_pen();
+            self.s("\x1b[K");
+        }
+    }
+
+    /// How a row continues the previous one.
+    fn cont(&self, prev: Option<&Row<Cell>>, row: &Row<Cell>) -> Cont {
+        let Some(prev) = prev.filter(|p| self.wrapped(p)) else { return Cont::None };
+        let last = &prev[Column(self.cols - 1)];
+        if last.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
+            && row[Column(0)].flags.contains(Flags::WIDE_CHAR)
+        {
+            Cont::LeadingSpacer
+        } else {
+            Cont::Wrap
         }
     }
 
     /// Number of cells to write for a row.
-    fn extent(&self, row: &Row<Cell>, wrapped: bool, prev_wrapped: bool) -> usize {
+    fn extent(&self, row: &Row<Cell>, wrapped: bool) -> usize {
         if wrapped {
             return self.cols;
         }
@@ -256,7 +320,7 @@ impl Writer<'_> {
         while end > 0 && is_blank(&row[Column(end - 1)]) {
             end -= 1;
         }
-        if prev_wrapped { end.max(1) } else { end }
+        end
     }
 
     fn wrapped(&self, row: &Row<Cell>) -> bool {
@@ -268,39 +332,40 @@ impl Writer<'_> {
     fn primary(&mut self, g: &Grid<Cell>, max_history: usize) {
         let hist = g.history_size().min(max_history) as i32;
         let rows = g.screen_lines() as i32;
-        let mut prev_wrapped = false;
+        let mut prev: Option<&Row<Cell>> = None;
         for l in -hist..rows {
-            if l > -hist && !prev_wrapped {
+            let row = &g[Line(l)];
+            let cont = self.cont(prev, row);
+            if prev.is_some() && cont == Cont::None {
                 self.reset_pen();
                 self.s("\r\n");
             }
-            let row = &g[Line(l)];
             let wrapped = self.wrapped(row);
-            let end = self.extent(row, wrapped, prev_wrapped);
+            let end = self.extent(row, wrapped);
             let next_wide = l + 1 < rows && g[Line(l + 1)][Column(0)].flags.contains(Flags::WIDE_CHAR);
-            self.row(row, end, wrapped, next_wide);
-            prev_wrapped = wrapped;
+            self.row(row, end, wrapped, next_wide, cont);
+            prev = Some(row);
         }
     }
 
     /// Alternate screen rows (no scrollback): each row is positioned explicitly.
     fn alternate(&mut self, g: &Grid<Cell>) {
         let rows = g.screen_lines() as i32;
-        let mut prev_wrapped = false;
+        let mut prev: Option<&Row<Cell>> = None;
         for l in 0..rows {
             let row = &g[Line(l)];
+            let cont = self.cont(prev, row);
             let wrapped = self.wrapped(row) && l + 1 < rows;
-            let end = self.extent(row, wrapped, prev_wrapped);
-            if end == 0 {
-                prev_wrapped = false;
-                continue;
-            }
-            if !prev_wrapped {
+            let end = self.extent(row, wrapped);
+            prev = Some(row);
+            if cont == Cont::None {
+                if end == 0 {
+                    continue;
+                }
                 self.cup(l as usize, 0, 0);
             }
             let next_wide = l + 1 < rows && g[Line(l + 1)][Column(0)].flags.contains(Flags::WIDE_CHAR);
-            self.row(row, end, wrapped, next_wide);
-            prev_wrapped = wrapped;
+            self.row(row, end, wrapped, next_wide, cont);
         }
     }
 
@@ -427,6 +492,8 @@ pub fn encode(
         w.s("\x1b[?1049h");
         w.reset_pen();
         w.ascii_charsets();
+        // The alternate screen was cleared with the inherited background: clear it again.
+        w.s("\x1b[2J");
         w.alternate(term.grid());
     } else {
         w.primary(term.grid(), max_history);

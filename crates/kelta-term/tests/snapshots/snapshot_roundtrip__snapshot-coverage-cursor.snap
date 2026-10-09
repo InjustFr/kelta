@@ -1,0 +1,35 @@
+---
+source: crates/kelta-term/tests/snapshot_roundtrip.rs
+expression: escape(&snap)
+---
+␛c␛]4;1;rgb:ff/80/00␇␛]10;rgb:c0/c0/c0␇␛]11;rgb:20/20/20␇line 0␍␊
+line 1␍␊
+line 2␍␊
+line 3␍␊
+line 4␍␊
+line 5␍␊
+line 6␍␊
+line 7␍␊
+line 8␍␊
+line 9␍␊
+line 10␍␊
+line 11␍␊
+PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP␍␊
+line 13␍␊
+line 14␍␊
+line 15␍␊
+line 16␍␊
+line 17␍␊
+line 18␍␊
+line 19␍␊
+line 20␍␊
+line 21␍␊
+line 22␍␊
+line 23␍␊
+line 24␍␊
+line 25␍␊
+line 26␍␊
+line 27␍␊
+line 28␍␊
+line 29␍␊
+␛[5;7H␛[1;31;48;5;22m␛]8;id=s;https://saved␛\␛(0␛7␛(B␛[3;20r␛[?1h␛[?1002h␛[?1004h␛[?1006h␛[?1015h␛[?2004h␛[?25l␛[?1007l␛=␛[?6h␛[4;80H␛[0m␛]8;;␛\P␛[3;35m␛)0\x0e␛[20h␛[5 q␛]2;cursor test␇␛[?2026l

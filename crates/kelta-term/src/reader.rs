@@ -125,7 +125,13 @@ fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake
 }
 
 /// Expired DEC 2026 deadline → flush; expired ack watchdog → AckTimeout.
-fn timers(session: &Session, shared: &Shared, now: Instant, sync_dl: Option<Instant>, ack_dl: Option<Instant>) {
+fn timers(
+    session: &Session,
+    shared: &Shared,
+    now: Instant,
+    sync_dl: Option<Instant>,
+    ack_dl: Option<Instant>,
+) {
     let sync_due = sync_dl.is_some_and(|d| now >= d);
     let ack_due = ack_dl.is_some_and(|d| now >= d);
     if !sync_due && !ack_due {
@@ -215,7 +221,8 @@ fn reap(session: &Session) -> (Option<i32>, Option<i32>) {
         // SAFETY: zeroed siginfo_t is a valid out-parameter for waitid.
         let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
         // SAFETY: plain syscall on our own child.
-        let r = unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOWAIT) };
+        let r =
+            unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOWAIT) };
         if r == 0 {
             break;
         }

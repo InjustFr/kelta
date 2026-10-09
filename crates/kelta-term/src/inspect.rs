@@ -181,10 +181,17 @@ pub fn diff(a: &Dump, b: &Dump) -> Option<String> {
         parts.push(format!("primary cursor {:?} != {:?}", a.primary_cursor, b.primary_cursor));
     }
     if a.modes != b.modes {
-        parts.push(format!("modes {:?} != {:?}", TermMode::from_bits_retain(a.modes), TermMode::from_bits_retain(b.modes)));
+        parts.push(format!(
+            "modes {:?} != {:?}",
+            TermMode::from_bits_retain(a.modes),
+            TermMode::from_bits_retain(b.modes)
+        ));
     }
     if (&a.cursor_shape, a.cursor_blinking) != (&b.cursor_shape, b.cursor_blinking) {
-        parts.push(format!("cursor style {} {} != {} {}", a.cursor_shape, a.cursor_blinking, b.cursor_shape, b.cursor_blinking));
+        parts.push(format!(
+            "cursor style {} {} != {} {}",
+            a.cursor_shape, a.cursor_blinking, b.cursor_shape, b.cursor_blinking
+        ));
     }
     if a.active_charset != b.active_charset {
         parts.push(format!("active charset {:?} != {:?}", a.active_charset, b.active_charset));

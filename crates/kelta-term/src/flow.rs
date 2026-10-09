@@ -55,7 +55,16 @@ impl Flow {
 
     /// Custom watermarks / watchdog (tests).
     pub fn with_limits(high: u32, low: u32, timeout: Duration) -> Self {
-        Self { generation: 0, attached: false, inflight: 0, paused: false, deadline: None, high, low, timeout }
+        Self {
+            generation: 0,
+            attached: false,
+            inflight: 0,
+            paused: false,
+            deadline: None,
+            high,
+            low,
+            timeout,
+        }
     }
 
     /// A new view replaces the previous one; returns the new generation.

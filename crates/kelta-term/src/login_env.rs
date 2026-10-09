@@ -34,7 +34,8 @@ pub fn probe_for(shell: &Path) -> String {
     if name == "nu" || name == "nushell" {
         "^printf '\\000__KELTA_ENV_BEGIN__\\000'; ^env -0; ^printf '\\000__KELTA_ENV_END__\\000'".to_owned()
     } else {
-        "printf '\\000__KELTA_ENV_BEGIN__\\000'; command env -0; printf '\\000__KELTA_ENV_END__\\000'".to_owned()
+        "printf '\\000__KELTA_ENV_BEGIN__\\000'; command env -0; printf '\\000__KELTA_ENV_END__\\000'"
+            .to_owned()
     }
 }
 
@@ -168,7 +169,10 @@ fn probe(shell: &Path, interactive: bool, timeout: Duration) -> Option<BTreeMap<
 
 /// Resolve the login environment (blocking, at most ~2 × `timeout`).
 pub fn resolve(timeout: Duration) -> LoginEnv {
-    let shell = std::env::var_os("SHELL").map(PathBuf::from).filter(|p| p.is_absolute()).unwrap_or_else(default_shell);
+    let shell = std::env::var_os("SHELL")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(default_shell);
     if let Some(vars) = probe(&shell, true, timeout) {
         return LoginEnv { vars, source: LoginEnvSource::LoginInteractive, shell: Some(shell) };
     }
@@ -208,7 +212,12 @@ mod tests {
     #[test]
     fn parses_between_sentinels_with_noisy_rc_output() {
         let mut out = b"Last login: Mon\nwelcome \x1b[31mred\x1b[0m\nPATH=/evil\n".to_vec();
-        out.extend(block(&[("PATH", "/usr/bin:/bin"), ("MULTI", "a\nb=c"), ("EMPTY", ""), ("_", "/usr/bin/env")]));
+        out.extend(block(&[
+            ("PATH", "/usr/bin:/bin"),
+            ("MULTI", "a\nb=c"),
+            ("EMPTY", ""),
+            ("_", "/usr/bin/env"),
+        ]));
         out.extend_from_slice(b"\nbye from .zlogout\0PATH=/after\0");
         let vars = parse_env_block(&out).unwrap();
         assert_eq!(vars.get("PATH").map(String::as_str), Some("/usr/bin:/bin"));
@@ -246,7 +255,9 @@ mod tests {
 
     #[test]
     fn path_helper_output() {
-        let v = parse_path_helper("PATH=\"/usr/local/bin:/usr/bin\"; export PATH;\nMANPATH=\"/usr/share/man\"; export MANPATH;\n");
+        let v = parse_path_helper(
+            "PATH=\"/usr/local/bin:/usr/bin\"; export PATH;\nMANPATH=\"/usr/share/man\"; export MANPATH;\n",
+        );
         assert_eq!(v["PATH"], "/usr/local/bin:/usr/bin");
         assert_eq!(v["MANPATH"], "/usr/share/man");
         assert_eq!(v.len(), 2);
@@ -271,7 +282,8 @@ mod tests {
     #[test]
     fn capture_times_out_and_kills_the_group() {
         let t0 = Instant::now();
-        let out = run_capture(Path::new("/bin/sh"), &["-c", "sleep 30 & sleep 30"], Duration::from_millis(200));
+        let out =
+            run_capture(Path::new("/bin/sh"), &["-c", "sleep 30 & sleep 30"], Duration::from_millis(200));
         assert!(out.is_none());
         assert!(t0.elapsed() < Duration::from_secs(5));
     }

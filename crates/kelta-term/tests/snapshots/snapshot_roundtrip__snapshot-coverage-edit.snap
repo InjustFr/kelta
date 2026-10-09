@@ -1,0 +1,45 @@
+---
+source: crates/kelta-term/tests/snapshot_roundtrip.rs
+expression: escape(&snap)
+---
+␛c00 abcdefghijklmnopqrstuvwxyz␍␊
+01 abcdefghijklmnopqrstuvwxyz␍␊
+02 abcdefghijklmnopqrstuvwxyz␍␊
+03 abcdefghijklmnopqrstuvwxyz␍␊
+04 abcdefghijklmnopqrstuvwxyz␍␊
+05 abcdefghijklmnopqrstuvwxyz␍␊
+06 abcdefghijklmnopqrstuvwxyz␍␊
+07 abcdefghijklmnopqrstuvwxyz␍␊
+08 abcdefghijklmnopqrstuvwxyz␍␊
+09 abcdefghijklmnopqrstuvwxyz␍␊
+10 abcdefghijklmnopqrstuvwxyz␍␊
+11 abcdefghijklmnopqrstuvwxyz␍␊
+12 abcdefghijklmnopqrstuvwxyz␍␊
+13 abcdefghijklmnopqrstuvwxyz␍␊
+14 abcdefghijklmnopqrstuvwxyz␍␊
+15 abcdefghijklmnopqrstuvwxyz␍␊
+16 abcdefghijklmnopqrstuvwxyz␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␛[8Gabcdefghijklmnopqrstuvwxyz␍␊
+38 abcdefghijklmnopqrstuvwxyz␍␊
+no-wrap-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz␛[?7l␛[24;80Hz␛[?2026l
