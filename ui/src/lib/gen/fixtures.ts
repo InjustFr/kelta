@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -1655,6 +1655,9 @@ export const settingsDefault: Settings = {
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
+    "history_log": true,
+    "history_log_mb": 16,
+    "history_log_total_mb": 512,
     "keyboard_protocol": "legacy",
     "letter_spacing": 0.0,
     "line_height": 1.15,
@@ -2200,6 +2203,9 @@ export const terminalStats: TerminalStats = {
 };
 
 export const terminalLimits: TerminalLimits = {
+  "history_log": true,
+  "history_log_mb": 16,
+  "history_log_total_mb": 512,
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,
@@ -2210,6 +2216,11 @@ export const terminalLimits: TerminalLimits = {
     "tool": 500
   },
   "view_scrollback": 1000
+};
+
+export const historyHit: HistoryHit = {
+  "line": "error[E0308]: mismatched types",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203"
 };
 
 export const loginEnv: LoginEnv = {
@@ -3010,6 +3021,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "notification": notification,
   "terminal_stats": terminalStats,
   "terminal_limits": terminalLimits,
+  "history_hit": historyHit,
   "login_env": loginEnv,
   "proxied_request": proxiedRequest,
   "proxied_response": proxiedResponse,

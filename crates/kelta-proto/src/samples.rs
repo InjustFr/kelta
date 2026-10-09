@@ -22,7 +22,7 @@ use crate::model::*;
 use crate::secret::SecretBackendStatus;
 use crate::settings::*;
 use crate::term::{
-    LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::*;
 
@@ -1131,8 +1131,16 @@ pub fn all() -> Vec<Fixture> {
             TerminalLimits {
                 scrollback: ScrollbackSettings::default(),
                 memory_cap_mb: 160,
-                view_scrollback: 1000
+                view_scrollback: 1000,
+                history_log: true,
+                history_log_mb: 16,
+                history_log_total_mb: 512
             }
+        ),
+        fx!(
+            "history_hit",
+            HistoryHit,
+            HistoryHit { session_id: SessionId::new(SID), line: "error[E0308]: mismatched types".into() }
         ),
         fx!(
             "login_env",

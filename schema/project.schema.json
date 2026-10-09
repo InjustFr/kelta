@@ -3086,6 +3086,9 @@
         "env": {},
         "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
         "font_size": 13.0,
+        "history_log": true,
+        "history_log_mb": 16,
+        "history_log_total_mb": 512,
         "keyboard_protocol": "legacy",
         "letter_spacing": 0.0,
         "line_height": 1.15,
@@ -3163,6 +3166,27 @@
           "maximum": 40.0,
           "minimum": 6.0,
           "type": "number"
+        },
+        "history_log": {
+          "default": true,
+          "description": "Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.",
+          "type": "boolean"
+        },
+        "history_log_mb": {
+          "default": 16,
+          "description": "Per-session log cap (two rotated halves).",
+          "format": "uint32",
+          "maximum": 1024,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "history_log_total_mb": {
+          "default": 512,
+          "description": "Cap of all session logs; oldest files are deleted first.",
+          "format": "uint32",
+          "maximum": 65536,
+          "minimum": 16,
+          "type": "integer"
         },
         "keyboard_protocol": {
           "default": "legacy",

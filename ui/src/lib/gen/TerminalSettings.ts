@@ -22,6 +22,18 @@ renderer: Renderer, cursor_style: CursorStyle,
  */
 cursor_blink: boolean, scrollback: ScrollbackSettings, view_scrollback: number, max_live_views: number, memory_cap_mb: number, 
 /**
+ * Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+ */
+history_log: boolean, 
+/**
+ * Per-session log cap (two rotated halves).
+ */
+history_log_mb: number, 
+/**
+ * Cap of all session logs; oldest files are deleted first.
+ */
+history_log_total_mb: number, 
+/**
  * macOS.
  */
 option_as_meta: OptionAsMeta, copy_on_select: boolean, 
