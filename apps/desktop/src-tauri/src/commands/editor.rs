@@ -1,19 +1,15 @@
 //! `editor` commands — editor integration (owner: L6, ARCHITECTURE §6).
 //!
-//! SCAFFOLD STUBS: return `Unsupported("not implemented: <command>")`. Keep the signatures (argument
-//! names are the snake_case keys the UI sends); replace the bodies.
-#![allow(unused_variables, unused_imports)]
+//! Thin delegation to `kelta_work::WorkService` (through `Core::work()`).
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use kelta_core::Core;
 use kelta_proto::prelude::*;
-use serde_json::Value;
 use tauri::State;
-use tauri::ipc::{Channel, InvokeResponseBody};
 
-use super::{Res, not_implemented};
+use super::Res;
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn editor_open(
@@ -22,7 +18,7 @@ pub async fn editor_open(
     path: PathBuf,
     line: Option<u32>,
 ) -> Res<()> {
-    not_implemented("editor_open")
+    core.work().editor_open(target, &path, line).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -31,5 +27,5 @@ pub async fn editor_send_selection(
     editor_session: SessionId,
     claude_session: SessionId,
 ) -> Res<()> {
-    not_implemented("editor_send_selection")
+    core.work().send_selection(&editor_session, &claude_session).await
 }

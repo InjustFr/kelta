@@ -1,0 +1,105 @@
+---
+source: crates/kelta-work/tests/claude_files.rs
+expression: got
+---
+{
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input"
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' hook",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
