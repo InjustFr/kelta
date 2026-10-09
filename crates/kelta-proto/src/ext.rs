@@ -29,6 +29,8 @@ pub enum ToolKind {
     #[default]
     Pty,
     Web,
+    /// Launched detached beside Kelta (GUI apps, `open -a Fork .`); never tracked or killed.
+    External,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -122,7 +124,7 @@ pub struct ToolDef {
     pub icon: Option<String>,
     pub description: Option<String>,
     pub kind: ToolKind,
-    // pty
+    // pty and external
     pub command: Option<String>,
     pub args: Vec<String>,
     pub cwd: Option<String>,
@@ -206,12 +208,13 @@ pub struct ToolCheck {
     pub install_hint: Option<String>,
 }
 
-/// `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}`.
+/// `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}` | `{"kind":"external"}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolHandle {
     Pty { session_id: SessionId },
     Web { instance_id: ToolInstanceId, url: String, embed: EmbedMode },
+    External,
 }
 
 // ---------------------------------------------------------------------------------------------

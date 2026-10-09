@@ -2950,11 +2950,20 @@
           },
           "kind": {
             "default": "pty",
-            "enum": [
-              "pty",
-              "web"
-            ],
-            "type": "string"
+            "oneOf": [
+              {
+                "enum": [
+                  "pty",
+                  "web"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "external",
+                "description": "Launched detached beside Kelta (GUI apps, `open -a Fork .`); never tracked or killed.",
+                "type": "string"
+              }
+            ]
           },
           "label": {
             "default": "",
