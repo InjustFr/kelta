@@ -297,30 +297,36 @@ fn project_update_rejects_broken_results() {
 
 #[test]
 fn concurrent_sets_all_land() {
-    let e = env();
-    e.global(GLOBAL);
-    let svc = e.load();
+    // same table, many rounds: a read taken before the write gate loses an update
     let edits = [
         ("terminal.font_size", json!(15)),
         ("terminal.cursor_style", json!("bar")),
-        ("window.restore_geometry", json!(false)),
-        ("notifications.enabled", json!(false)),
-        ("app.theme", json!("light")),
+        ("terminal.renderer", json!("webgl")),
+        ("terminal.scrollback.shell", json!(4000)),
     ];
-    std::thread::scope(|s| {
-        for (k, v) in &edits {
-            let svc = svc.clone();
-            s.spawn(move || svc.layer_set(Layer::Global, None, None, k, v.clone()).unwrap());
+    for _ in 0..50 {
+        let e = env();
+        e.global(GLOBAL);
+        let svc = e.load();
+        std::thread::scope(|s| {
+            for (k, v) in &edits {
+                let svc = svc.clone();
+                s.spawn(move || svc.layer_set(Layer::Global, None, None, k, v.clone()).unwrap());
+            }
+        });
+        let text = read(&e.dirs.global_config());
+        for needle in ["font_size = 15", "cursor_style = \"bar\"", "renderer = \"webgl\"", "shell = 4000"] {
+            assert!(text.contains(needle), "lost `{needle}` in:\n{text}");
         }
-    });
-    let text = read(&e.dirs.global_config());
-    for needle in [
-        "font_size = 15",
-        "cursor_style = \"bar\"",
-        "restore_geometry = false",
-        "enabled = false",
-        "theme = \"light\"",
-    ] {
-        assert!(text.contains(needle), "lost `{needle}` in:\n{text}");
     }
+}
+
+#[test]
+fn new_project_failing_merged_validation_is_rejected() {
+    let e = env();
+    let svc = e.load();
+    let mut d = draft(&e, "shop");
+    d.default_template = Some("nope".into());
+    assert_eq!(svc.project_create(&d).unwrap_err().code, ErrorCode::InvalidArgument);
+    assert!(!e.dirs.projects_dir().join("shop.toml").exists());
 }

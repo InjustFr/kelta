@@ -112,8 +112,15 @@ pub fn secret_issues(value: &Value) -> Vec<RawIssue> {
         .into_iter()
         .filter(|p| idx.info(p).secret)
         .filter(|p| {
-            matches!(get(value, p), Some(Value::String(s)) if !s.is_empty()
-                && kelta_proto::secret::SecretRef::new(s.as_str()).parse().is_none())
+            let bad = |s: &Value| {
+                matches!(s, Value::String(s) if !s.is_empty()
+                    && kelta_proto::secret::SecretRef::new(s.as_str()).parse().is_none())
+            };
+            match get(value, p) {
+                Some(Value::Array(a)) => a.iter().any(bad),
+                Some(v) => bad(v),
+                None => false,
+            }
         })
         .map(|p| {
             RawIssue::new(

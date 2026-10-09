@@ -727,7 +727,7 @@ impl ConfigService {
             let mut repos = self.repo_entries(&cfg, old, ov);
             let eff = match self.try_project(&plugin_defaults, &gv, &file, &repos, &cfg) {
                 Ok(c) => c,
-                Err(_) => {
+                Err(raw) => {
                     // semantic failure: revert the layers that changed since the last good state
                     let mut changed = false;
                     if let Some(pe) = old {
@@ -745,7 +745,15 @@ impl ConfigService {
                             }
                         }
                     }
-                    if changed {
+                    if !changed {
+                        // nothing to revert to (new file): reject it and say why
+                        file.valid = false;
+                        file.issues.extend(validate::position(
+                            &file.text,
+                            toml_io::parse(&file.text).ok().as_ref(),
+                            raw,
+                        ));
+                    } else {
                         file.issues.push(ValidationIssue {
                             path: String::new(),
                             message: "change rejected: it breaks the merged settings (unknown template, preset or plugin setting)"
