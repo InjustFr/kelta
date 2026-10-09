@@ -33,7 +33,7 @@ pub struct ToolDef {
   pub embed: EmbedMode,                // auto | iframe | proxy | external (default: web.embed_default)
   pub url_is_secret: bool,             // never logged / shown in chrome (default true when start is set)
   pub lifecycle: WebLifecycle,         // on_close (default) | on_project_close | never
-  pub keep_alive: bool,                // keep iframe when hidden (default web.keep_alive)
+  pub keep_alive: bool,                // keep iframe while its pane is mounted but hidden (default web.keep_alive)
   // common
   pub check: Option<Vec<String>>,      // argv run by tool_check; exit 0 = installed
   pub install_hint: Option<String>,
@@ -52,7 +52,7 @@ Behaviour (kelta-plugins `tools`):
 - **PTY tool** → `CoreApi::session_spawn(kind = Tool{tool_id})`, cwd/args/env expanded; a normal session (attention, restore = Relaunch).
 - **Web tool** → server spawned with `tokio::process` (not a PTY; stdout/stderr captured into a 64 KiB ring for the log view); readiness read from the stdout stream (no polling; `port_open` tries `connect()` after each stdout line and on backoff 100/200/400 ms … ≤ `ready_timeout_ms`); `{port}` is a free loopback port reserved by Kelta. Then `embed`:
   - `auto`: HEAD probe; no `X-Frame-Options` and no `frame-ancestors` → `iframe`, else `proxy`.
-  - `proxy`: `http://127.0.0.1:<kelta-port>/proxy/<128-bit instance>/…` reverse proxy to the tool's loopback origin; strips `X-Frame-Options` and CSP `frame-ancestors`; passes WebSocket upgrades; rewrites `Location` headers to the proxy prefix.
+  - `proxy`: `http://127.0.0.1:<listener-port>/proxy/<128-bit instance>/…` reverse proxy to the tool's loopback origin, served by kelta-plugins on its own loopback listener per instance (a distinct origin per web tool; started on first open, stopped with the instance); strips `X-Frame-Options` and CSP `frame-ancestors`; passes WebSocket upgrades; rewrites `Location` headers to the proxy prefix.
   - `external`: opens the system browser (url via `open_external`).
 - Server process killed per `lifecycle` (process group, `stop` spec). Exit → pane shows exit code + log tail + **Relaunch**.
 
@@ -357,6 +357,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `ticket.commented` / `ticket.assigned` | `{ticket, ...}` |
 | `worktree.created` / `worktree.removed` | `{path, branch, repo_id}` |
 | `work.before_finish` (blocking) / `work.finished` | `{work_item_id, opts}` |
+| `work.updated` | `{work: WorkItem}` (any item or saga step change; core relays it to the UI) |
 | `pr.before_create` (blocking) / `pr.created` | `{draft}` / `{review: Review}` |
 | `pr.review_requested` | `{review: Review}` (new key only) |
 | `pr.updated` | `{review, changes: ["ci","decision","head"]}` |
@@ -368,7 +369,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 
 ## 7. Host API for custom screens
 
-Transport: host → iframe `postMessage({type:"kelta:init", api:"0.1", instance, plugin, project, params, theme}, "*", [port2])` after `load`, only if `event.source === iframe.contentWindow`. Over the port: request `{id, method, params}` → response `{id, result}` | `{id, error: {code, message}}`; host-pushed `{type:"event", name, payload}`, `{type:"theme", tokens}`, `{type:"params", params}`, `{type:"visibility", visible}`.
+Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the host answers with `postMessage({type:"kelta:init", api:"0.1", instance, plugin, project, params, theme}, "*", [port2])`, only if `event.source === iframe.contentWindow` (answering `kelta:ready` instead of the iframe `load` event avoids racing the screen's listener). Each iframe creation opens a fresh screen instance (`plugin_screen_open`), closed when the iframe is destroyed. Over the port: request `{id, method, params}` → response `{id, result}` | `{id, error: {code, message}}`; host-pushed `{type:"event", name, payload}`, `{type:"theme", tokens}`, `{type:"params", params}`, `{type:"visibility", visible}`.
 
 `PluginMethod` (enum in proto; method → required permission):
 
@@ -397,11 +398,11 @@ Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with
 
 SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
 
-Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
+Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 
 ## 8. Claude Code hooks generated by Kelta
 
-Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600) and passes it with `--settings` (it **adds** to the user's hooks):
+Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600; work-item sessions use kelta-work's own run dir, ARCHITECTURE §2.1) and passes it with `--settings` (it **adds** to the user's hooks). The document is built by `kelta_proto::hooks::claude_settings(hook_command, &ClaudeSettings, http)`, shared by kelta-work and kelta-server's end-to-end test:
 
 ```json
 { "hooks": {
@@ -420,4 +421,4 @@ Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600
 - The path is POSIX single-quoted (macOS data dir contains a space). `claude.hook_transport = "http"` replaces every event except SessionStart with `{"type":"http","url":"http://127.0.0.1:<port>/hook/<sid>","headers":{"Authorization":"Bearer ${KELTA_HOOK_TOKEN}"},"allowedEnvVars":["KELTA_HOOK_TOKEN"],"timeout":2}`.
 - `kelta-ctl hook` reads stdin (cap 1 MiB), reads `KELTA_SESSION_ID`, `KELTA_HOOK_TOKEN`, `KELTA_SOCK`, writes one line `{"v":1,"cmd":"hook","session":…,"token":…,"payload":{…}}` to the ctl socket, **always exits 0**, < 5 ms.
 - `claude.extra_hooks` is merged in. A user's `disableAllHooks` disables these too → hooks-inactive heuristics (ARCHITECTURE §7.6).
-- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions.
+- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context).

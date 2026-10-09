@@ -158,7 +158,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
 | `include_drafts` | bool | `false` | |
-| `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets |
+| `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets; applied at startup and on reload (an invalid pattern keeps the previous one) |
 | `repos_allow` / `repos_deny` | list<glob> | `[]` / `[]` | |
 
 ### [web]
@@ -276,8 +276,9 @@ enabled = true
 Tracker view schema per kind (`views[]` entries; `id`, `label` always):
 - jira: `jql` (required), `board_id?` (columns from board config when set).
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
-- github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`.
-- gitlab: `project?` (`group/sub/proj`), `scope = "assigned_to_me"|"all"`, `labels?`, `workflow_scope = "workflow"`.
+- github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`, plus the shared `status` and (per-repo views) `assigned_to` keys below.
+- gitlab: `project?` (`group/sub/proj`), `scope = "assigned_to_me"|"all"`, `labels?`, `workflow_scope = "workflow"`, plus the shared `status` key.
+- Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github and gitlab; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 

@@ -51,7 +51,6 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). Verified aga
 | hyper | 1.12.0 | proxy client | kelta-plugins |
 | hyper-util / http-body-util | 0.1.21 / 0.1.5 | `client-legacy, tokio, http1`: hyper 1.x client + `TokioIo` (already in the graph via axum) | kelta-plugins |
 | tokio-tungstenite | 0.30.0 | proxy WebSocket passthrough; axum 0.8.9 `ws` brings its own 0.29, so both are in the lockfile: never mix axum `WebSocket` types with 0.30 types | kelta-plugins |
-| rmcp | 3.5.1 | MCP server, streamable-HTTP transport (fallback: hand-rolled JSON-RPC for `initialize`, `tools/list`, `tools/call`) | kelta-server |
 | rmpv | 1.3.1 | hand-rolled msgpack-RPC client for nvim (`nvim-rs` not used: stale) | kelta-work |
 | rusqlite | 0.40.2 | `bundled`; WAL; `PRAGMA cache_size=-2000` | kelta-core |
 | toml | 1.1.8 | | kelta-config, kelta-plugins |
@@ -127,7 +126,8 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
-- **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`, or first web tool in proxy mode); stops when its consumer count reaches 0 (event-driven, no idle timer).
+- **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids.
+- **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
 - **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
 
@@ -143,7 +143,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
 | per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
 
-`<sid8>` = first 8 hex chars of the session uuid (collision-checked). All socket paths are asserted < 100 bytes at startup.
+`<sid8>` = last 8 hex chars of the session uuid (the random tail of the v7 uuid; its first 32 bits are the millisecond clock), reserved by core under one lock (collision-checked). kelta-work names the runtime dirs of the sessions it spawns (Claude, editor) itself — `<runtime>/s/<key8>/`, recorded in its saga journal and `WorkItem.nvim_socket` — so core never assumes `<runtime>/s/<sid8>/` for work-item sessions. All socket paths are asserted < 100 bytes at startup.
 
 ---
 
@@ -198,7 +198,7 @@ pub struct KeltaError { pub code: ErrorCode, pub message: String,
   pub detail: Option<serde_json::Value>, pub retry_after_ms: Option<u64> }
 pub enum ErrorCode { NotFound, InvalidArgument, Conflict, PermissionDenied, NeedsAuth, RateLimited,
   Network, Upstream, Timeout, Unsupported, Untrusted, NeedsFields, Dirty, Cancelled, Internal }
-// IpcError on the wire == KeltaError. Stubs return ErrorCode::Unsupported("not implemented: <fn>").
+// IpcError on the wire == KeltaError. (Scaffold stubs returned Unsupported("not implemented: <fn>"); none remain.)
 
 // ---- terminal (impl: kelta-term) ---------------------------------------
 pub trait TerminalHost: Send + Sync {
@@ -208,9 +208,9 @@ pub trait TerminalHost: Send + Sync {
   fn write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError>;
   fn resize(&self, id: &SessionId, cols: u16, rows: u16) -> Result<(), KeltaError>;
   fn ack(&self, id: &SessionId, generation: u32, bytes: u32);
-  fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError>; // Hup|Term|Kill, to process group
+  fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError>; // Hup|Term|Kill, to process group; on an exited session: close (drop it)
   fn set_palette(&self, palette: TerminalPalette);                              // OSC 4/10/11/12 replies
-  fn set_limits(&self, limits: TerminalLimits);                                 // scrollback per kind, memory cap
+  fn set_limits(&self, limits: TerminalLimits);                                 // scrollback per kind, memory cap, view_scrollback
   fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>; // plain text (search, persistence)
   fn stats(&self) -> TerminalStats;                                             // per-session bytes, lines, inflight
 }
@@ -218,7 +218,8 @@ pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // fa
 pub trait TerminalEvents: Send + Sync { fn on_event(&self, id: &SessionId, ev: TerminalEvent); }
 pub enum TerminalEvent { Title(String), Cwd(PathBuf) /*OSC 7*/, Bell, Notify{title: Option<String>, body: String} /*OSC 9/777*/,
   ClipboardStore{kind: ClipboardKind, text: String}, ClipboardLoad{kind: ClipboardKind}, Activity /*first output since mark_seen*/,
-  Exited{code: Option<i32>, signal: Option<i32>}, AckTimeout{generation: u32} }
+  Exited{code: Option<i32>, signal: Option<i32>}, AckTimeout{generation: u32},
+  MemoryCapReached{cap_mb: u32} /*§9.5, once per host; core raises a toast*/ }
 pub struct PtySpawnSpec { pub id: SessionId, pub program: PathBuf /*absolute, resolved*/, pub args: Vec<String>,
   pub cwd: PathBuf, pub env: BTreeMap<String,String> /*complete env*/, pub cols: u16, pub rows: u16,
   pub scrollback_lines: u32, pub kind: SessionKind, pub events: Arc<dyn TerminalEvents> }
@@ -264,6 +265,10 @@ pub trait SecretResolver: Send + Sync {
   async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError>;
   async fn code_host_for(&self, account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError>;
   async fn review_list(&self, scope: Scope, kind: ReviewKind) -> Result<Vec<ReviewItem>, KeltaError>;
+  // tracker writes with core-owned side effects (cache invalidation, ticket.transitioned / ticket.commented);
+  // `session` = the acting session (MCP tools), added as event context
+  async fn ticket_transition(&self, ticket: &TicketRef, transition_id: &str, fields: Option<Value>, session: Option<&SessionId>) -> Result<Ticket, KeltaError>;
+  async fn ticket_comment(&self, ticket: &TicketRef, markdown: &str, session: Option<&SessionId>) -> Result<(), KeltaError>;
   // work & editor (core delegates to kelta-work)
   async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
   async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
@@ -274,7 +279,7 @@ pub trait SecretResolver: Send + Sync {
   fn subscribe(&self) -> tokio::sync::broadcast::Receiver<BusEvent>;
   async fn notify(&self, n: Notification) -> Result<(), KeltaError>;
   fn toast(&self, t: Toast);
-  async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>; // plugin net: (allowlist checked by caller)
+  async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>; // plugin net: (allowlist checked by caller); never follows redirects (own reqwest client in core)
   async fn ctl(&self, cmd: CtlCommand) -> Result<serde_json::Value, KeltaError>;            // dispatch of ctl socket commands
 }
 
@@ -291,9 +296,13 @@ pub trait UiBridge: Send + Sync {
 // Services owned by other lanes that core calls (constructor signatures frozen in scaffold stubs):
 // (exact signatures: BUILD_PLAN §2.2)
 //   kelta_work::WorkService::new(core: Weak<dyn CoreApi>, store: Arc<dyn WorkStore>, dirs: Dirs) ; methods mirror §6 work_* commands (+ for_session)
+//       core calls set_host(Arc<dyn kelta_work::WorkHost>) at boot: {ensure_http, release_http} over Server, run_blocking over PluginHost;
+//       claude_restore_request(session, fallback) builds the argv when core restores a Dormant work-item Claude session
 //   kelta_server::Server::new(core: Weak<dyn CoreApi>, dirs: Dirs) ; start_ctl(), ensure_http() -> port, register_session(sid, hook_token, mcp_token)
 //   kelta_plugins::PluginHost::new(core: Weak<dyn CoreApi>, dirs: Dirs, grants: Arc<dyn GrantStore>) ; tools, triggers, screens,
 //       uri::handle(host: &PluginHost, req) (the handler needs the plugin directories)
+//       core calls wire(Wiring{ui, settings, settings_writer}) at boot and start() (trigger engine's own bus subscription)
+//       once the runtime is up; triggers run without a UI
 //   kelta_config::ConfigService::load(dirs: &Dirs, overrides: RuntimeOverrides) ; impl SettingsSource ; watch(on_change) ; set_plugin_schemas
 //   kelta_secrets::Secrets::new(settings: Arc<dyn SettingsSource>) ; impl SecretResolver
 //   kelta_term::PtyTerminalHost::new(env: LoginEnv, limits: TerminalLimits) ; impl TerminalHost ; kelta_term::resolve_login_env(timeout)
@@ -328,7 +337,8 @@ pub enum Attention { None = 0, Activity = 1, Done = 2, Error = 3, NeedsInput = 4
 pub enum Lifecycle { Dormant, Live, Exited }
 pub enum RestorePolicy { None, Relaunch, ShellInCwd, ClaudeResume{ uuid: String }, Editor{ session_file: Option<PathBuf> } }
 pub enum CloseOnExit { Never, OnSuccess, Always }
-pub struct SpawnRequest { project_id: ProjectId, kind: SessionKind, name: Option<String>,
+pub struct SpawnRequest { id: Option<SessionId> /*caller-chosen (files naming it are written first); must be unused → else Conflict*/,
+  project_id: ProjectId, kind: SessionKind, name: Option<String>,
   program: Option<String> /*None = $SHELL*/, args: Vec<String>, cwd: Option<PathBuf>, env: BTreeMap<String,String>,
   cols: u16, rows: u16, work_item_id: Option<WorkItemId>, restore: RestorePolicy, close_on_exit: CloseOnExit,
   template_id: Option<String> }
@@ -384,8 +394,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | Command | Args | Returns | Owner file |
 |---|---|---|---|
 | **app** | | | `commands/app.rs` (L3) |
-| `app_info` | `{}` | `AppInfo{version, platform, arch, data_dir, config_dir, runtime_dir, claude: Option<ToolVersion>, safe_graphics: bool}` | |
-| `app_ready` | `{t_ms: f64}` | `()` (clears launch crash guard; bench mark) | |
+| `app_info` | `{}` | `AppInfo{version, platform, arch, data_dir, config_dir, runtime_dir, claude: Option<ToolVersion>, safe_graphics: bool, decorations: Decorations}` (`decorations` = what the window was built with: `native`/`none`/`custom`; `custom` → the UI draws the drag strip + resize handles) | |
+| `app_ready` | `{t_ms: f64}` | `()` (desktop clears the launch crash guard and writes the `app_ready_ms` bench mark; core binds the runtime) | |
 | `events_subscribe` | `{channel: Channel<UiEvent>}` | `{sub_id: u64}` (one per window) | |
 | `open_external` | `{url: String}` (http/https/mailto only) | `()` | |
 | `perf_snapshot` | `{}` | `PerfSnapshot{processes: Vec<ProcMem{pid, name, role: Core|WebContent|Network|Gpu|Child, pss_or_footprint_kb}>, sessions: Vec<SessionMem>, live_views: u32, timers_armed: u32, http_server: bool}` | |
@@ -455,7 +465,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |
-| `work_retry_step` | `{id, step}` | `WorkItem` | |
+| `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
 | `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
 | `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
@@ -512,7 +522,7 @@ type UiEvent =
 
 ### 6.3 Internal bus (`BusEvent`) — catalogue in PLUGINS.md §6
 
-`BusEvent { name: String, ts: String, project_id: Option<ProjectId>, session_id: Option<SessionId>, work_item_id: Option<WorkItemId>, payload: Value, chain: TriggerChain{depth: u8, origin_triggers: Vec<String>} }` on a `tokio::sync::broadcast` (capacity 1024; lagged subscribers get a `lagged` marker and resync).
+`BusEvent { name: String, ts: String, project_id: Option<ProjectId>, session_id: Option<SessionId>, work_item_id: Option<WorkItemId>, payload: Value, chain: TriggerChain{depth: u8, origin_triggers: Vec<String>} }` on a `tokio::sync::broadcast` (capacity 1024; lagged subscribers get a `lagged` marker and resync). The trigger engine (`PluginHost::start`) is one subscriber. Core itself handles two events synchronously on publish: `app.focus_changed` (published by the desktop shell on window focus; scheduler intervals) and `work.updated` (published by kelta-work; relayed as `UiEvent::WorkUpdated`).
 
 ---
 
@@ -555,7 +565,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 
 ### 7.4 Query responder (single responder = Rust model)
 
-- Model answers: DA1 (`CSI c`), DA2 (`CSI > c`), DSR 5/6 (`CSI n`), DECRQM (`CSI ? Ps $ p`), OSC 4/10/11/12 `?` (from the palette pushed by `terminal_set_palette`, re-pushed on theme change), plus anything else alacritty_terminal 0.26 answers. L1 records the exact answered set in `docs/contracts/terminal-queries.md` (L1-owned file) with tests.
+- Model answers: DA1 (`CSI c`), DA2 (`CSI > c`), DSR 5/6 (`CSI n`), DECRQM (`CSI ? Ps $ p`, `CSI Ps $ p`), XTWINOPS 18 (`CSI 18 t`), OSC 4/10/11/12 `?` (from the palette pushed by `terminal_set_palette`, re-pushed on theme change), plus anything else alacritty_terminal 0.26 answers. L1 records the exact answered set in `docs/contracts/terminal-queries.md` (L1-owned file) with tests.
 - xterm.js swallows exactly that set via `term.parser.registerCsiHandler` / `registerOscHandler` returning `true` (constant list in `ui/src/lib/gen/terminal_queries.ts`, generated from `kelta_proto::term::SWALLOWED_QUERIES`). Queries the model does not answer (e.g. XTVERSION if unsupported) are **not** swallowed.
 - Kitty: model `kitty_keyboard = false` (D7) — it ignores `CSI > u` pushes and does not answer `CSI ? u`; apps fall back via DA1.
 
@@ -691,7 +701,7 @@ Alt-screen state with main scrollback (`?1049`), last N history lines (`terminal
 `attachCustomKeyEventHandler`: Kelta chords (from `keys.*`, matched on `KeyboardEvent.code` + modifiers) and the prefix key return `false` (consumed); everything else reaches xterm → `onData` → `session_write`. Per-kind remaps (`terminal.shift_enter`): Claude default `esc-cr` (`\x1b\r`), others `passthrough`. Never send unsolicited CSI-u. macOS `Option as Meta` via `macOptionIsMeta` (+ left/right-only handling in the key handler). Default webview shortcuts (reload, zoom, find, context menu) are disabled.
 
 ### 9.5 Memory budget for scrollback (L1)
-Scrollback per kind (`terminal.scrollback`: shell 3000, claude 3000, editor 500, tool 500, setup 1000). Global cap `terminal.memory_cap_mb` (default 160): computed from `history_lines × cols × 24 B` per session, updated on line growth (counter, event-driven). On exceed: shrink history of least-recently-viewed sessions to 500 lines (never below), oldest first; emit toast once.
+Scrollback per kind (`terminal.scrollback`: shell 3000, claude 3000, editor 500, tool 500, setup 1000). Global cap `terminal.memory_cap_mb` (default 160): computed from `history_lines × cols × 24 B` per session, updated on line growth (counter, event-driven). On exceed: shrink history of least-recently-viewed sessions to 500 lines (never below), oldest first; the host emits `TerminalEvent::MemoryCapReached` once and core raises a warning toast. Snapshots carry `terminal.view_scrollback` history lines (`TerminalLimits.view_scrollback`).
 
 ---
 
@@ -703,7 +713,7 @@ projects_open(project_id PK, ord, active)              -- open set + order; conf
 layouts(project_id PK, json, rev, updated_at)
 sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)
 work_items(id PK, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base, claude_uuid, nvim_socket,
-           tab_id, pr_url, state_json, created_at, updated_at)
+           tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at)
 work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, detail, updated_at, PK(work_item_id, step))
 seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
 provider_cache(key PK, etag, body_json, fetched_at)
@@ -721,7 +731,7 @@ All writes go through the single sqlite thread. Startup reads (open projects, la
 
 ### 11.1 Local surfaces
 - ctl socket: 0600 in a 0700 dir owned by the user; peer uid must equal ours; hook frames must carry the session's `KELTA_HOOK_TOKEN` (constant-time compare). Other ctl commands are allowed for same-uid peers.
-- HTTP server: binds `127.0.0.1` only; `/mcp/<sid>` and `/hook/<sid>` require `Authorization: Bearer <per-session token>`; `/proxy/<instance>/…` requires an unguessable instance path segment (128-bit) and only proxies to the tool's own loopback origin; `Host` header must be `127.0.0.1:<port>` (DNS-rebinding guard).
+- HTTP server: binds `127.0.0.1` only; `/mcp/<sid>` and `/hook/<sid>` require `Authorization: Bearer <per-session token>`; the per-instance web-tool proxy listeners (kelta-plugins) serve `/proxy/<instance>/…` with an unguessable instance path segment (128-bit), only proxy to the tool's own loopback origin and require `Host: 127.0.0.1:<listener port>`; `Host` header must be `127.0.0.1:<port>` (DNS-rebinding guard).
 - Per-session runtime files 0600; never inside the worktree (no repo pollution).
 - Tokens, secrets and tokenized URLs (ISL) are never logged (`tracing` field redaction helper in proto).
 
