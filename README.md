@@ -10,7 +10,7 @@ Open source (MIT). Desktop app built with Tauri v2, Svelte 5 and Rust. macOS 13+
 
 ## Features
 
-- Take a ticket (Jira, Redmine, GitHub Issues, GitLab Issues), build it in a git worktree with Claude
+- Take a ticket (Jira, Redmine, GitHub Issues, GitLab Issues, Linear), build it in a git worktree with Claude
   Code and nvim side by side.
 - Review the pull requests and merge requests you are asked to review (GitHub, GitLab).
 - Several projects in one window. Switching never stops a session.

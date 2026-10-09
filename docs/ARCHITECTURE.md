@@ -161,7 +161,7 @@ crates/kelta-config     [L4]  layered load/merge/provenance, validation, toml_ed
 crates/kelta-secrets    [L4]  SecretRef resolution chain, keyring stores, backend status
 crates/kelta-http       [L5]  shared reqwest client, HttpCtx (retry, backoff, rate limits, ETag LRU), markdown→HTML
                               (scaffold ships a functional baseline: plain send, no retry)
-crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues; ADF walker
+crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Linear; ADF walker
 crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST)
 crates/kelta-work       [L6]  git CLI ops, templates (branch/path/slug), work saga (journaled), Claude launcher, editor adapters
                               (nvim msgpack-RPC, vim keys, emacsclient, helix, external), review_start
@@ -603,7 +603,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 
 ```rust
 #[async_trait] pub trait Tracker: Send + Sync {
-  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues
+  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | Linear
   fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
   async fn me(&self) -> Result<User, KeltaError>;
   async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
@@ -636,8 +636,9 @@ pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
 | Redmine | `X-Redmine-API-Key` header | `/issues.json?assigned_to_id=me&status_id=open&sort=updated_on:desc&limit=100` (+ `project_id`, `query_id`) | `PUT /issues/{id}.json {issue:{status_id}}` restricted to `include=allowed_statuses`; 422 surfaced; poll ≥ 60 s |
 | GitHub Issues | gh-cli / keyring PAT / env | `GET /issues?filter=assigned&state=open` (drop items with `pull_request`) or per-repo; ETag | no project: open/closed; Projects v2: Status single-select field/option ids resolved **by name** at runtime, cached; `updateProjectV2ItemFieldValue` |
 | GitLab Issues | `PRIVATE-TOKEN` (keyring/glab-cli/env/command) | `/api/v4/issues?scope=assigned_to_me&state=opened` or `/projects/:id/issues` | scoped labels `<scope>::<value>` (default `workflow`): `PUT add_labels` + explicit `remove_labels` of same-scope labels; Done = `state_event=close` |
+| Linear | personal API key, raw `Authorization` header (`auth = "bearer"` for OAuth) | `POST https://api.linear.app/graphql` `issues(filter, first: 50, after, orderBy: updatedAt)` (assignee `isMe`, team key, project name, labels); `pageInfo.endCursor`, cap 20 pages | `issueUpdate(stateId)` with state ids read at runtime from the issue's team `states` (matched by name, never hard-coded); rate limit = HTTP 400 + `RATELIMITED` → `RateLimited` |
 
-ADF → Markdown: tolerant recursive walker (unknown nodes render children, never fail). Comments to Jira Cloud = ADF paragraphs (one per line). Redmine Textile shown preformatted unless account `text_format = "markdown"`. Linear: v0.2.
+ADF → Markdown: tolerant recursive walker (unknown nodes render children, never fail). Comments to Jira Cloud = ADF paragraphs (one per line). Redmine Textile shown preformatted unless account `text_format = "markdown"`. Linear descriptions and comments are Markdown (same sanitizer as GitHub/GitLab).
 
 ### 8.2 CodeHost trait
 

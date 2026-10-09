@@ -1,5 +1,5 @@
 //! One conformance harness, run against every tracker provider (Jira Cloud, Jira DC, Redmine,
-//! GitHub Issues, GitLab Issues). Each provider only supplies its mocks and expectations.
+//! GitHub Issues, GitLab Issues, Linear). Each provider only supplies its mocks and expectations.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -111,6 +111,10 @@ mocks!(gitlab_mocks, |s| {
     ok_status(s, "POST", "/api/v4/projects/grp%2Fsub%2Fproj/issues/12/notes", 201).await;
 });
 
+mocks!(linear_mocks_ok, |s| {
+    linear_mocks(s).await;
+});
+
 fn cases() -> Vec<Case> {
     let mut gl_view = view("mine");
     gl_view.project = Some("grp/sub/proj".into());
@@ -171,6 +175,17 @@ fn cases() -> Vec<Case> {
             branch_key: "gl-12",
             build: |base| tracker("gitlab-acme", "gitlab", base, json!({})),
             mock_ok: gitlab_mocks,
+        },
+        Case {
+            name: "linear",
+            kind: TrackerKind::Linear,
+            account_id: "linear-acme",
+            ticket: tref("linear-acme", "ENG-12", "iss-uuid-12"),
+            view: view("mine"),
+            binding: binding(view("mine")),
+            branch_key: "eng-12",
+            build: |base| tracker("linear-acme", "linear", base, json!({})),
+            mock_ok: linear_mocks_ok,
         },
     ]
 }

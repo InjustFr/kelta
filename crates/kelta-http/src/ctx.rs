@@ -241,7 +241,7 @@ impl HttpCtx {
         attempt: u32,
     ) -> Option<Wait> {
         let max = self.policy.max_backoff;
-        let hinted = wait_hint(headers).map(|d| d.min(max));
+        let hinted = wait_hint(headers).or_else(|| linear_reset(status, headers, body)).map(|d| d.min(max));
         if status == 429 || is_rate_limited(status, headers, body) {
             let dur = match hinted {
                 Some(d) => d,
@@ -435,9 +435,25 @@ fn is_secondary(body: &str) -> bool {
 
 /// 403 that is really a rate limit (GitHub primary: remaining 0; secondary: message).
 fn is_rate_limited(status: u16, headers: &BTreeMap<String, String>, body: &str) -> bool {
-    status == 403
-        && (header_u64(headers, &["x-ratelimit-remaining", "ratelimit-remaining"]) == Some(0)
-            || is_secondary(body))
+    is_linear_rate_limited(status, body)
+        || status == 403
+            && (header_u64(headers, &["x-ratelimit-remaining", "ratelimit-remaining"]) == Some(0)
+                || is_secondary(body))
+}
+
+/// Linear answers a spent quota with HTTP 400 and `extensions.code = RATELIMITED` in the body.
+fn is_linear_rate_limited(status: u16, body: &str) -> bool {
+    status == 400 && body.contains("RATELIMITED")
+}
+
+/// Wait until `X-RateLimit-Requests-Reset` (UTC epoch milliseconds) when Linear rate-limits.
+fn linear_reset(status: u16, headers: &BTreeMap<String, String>, body: &str) -> Option<Duration> {
+    let reset = header_u64(headers, &["x-ratelimit-requests-reset"])?;
+    if !is_linear_rate_limited(status, body) {
+        return None;
+    }
+    let now = time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000;
+    Some(Duration::from_millis((i128::from(reset) - now).max(0) as u64))
 }
 
 /// `Retry-After` in milliseconds (delta seconds or HTTP date).
@@ -451,10 +467,12 @@ pub fn status_error(status: u16, headers: &BTreeMap<String, String>, body: &str)
     let snippet: String = body.chars().take(300).collect();
     let code = match status {
         401 => ErrorCode::NeedsAuth,
+        400 if body.contains("AUTHENTICATION_ERROR") => ErrorCode::NeedsAuth, // Linear
         403 if is_rate_limited(status, headers, body) => ErrorCode::RateLimited,
         403 => ErrorCode::PermissionDenied,
         404 => ErrorCode::NotFound,
         409 | 412 => ErrorCode::Conflict,
+        400 if is_linear_rate_limited(status, body) => ErrorCode::RateLimited,
         400 | 422 => ErrorCode::InvalidArgument,
         429 => ErrorCode::RateLimited,
         408 | 504 => ErrorCode::Timeout,
@@ -467,7 +485,8 @@ pub fn status_error(status: u16, headers: &BTreeMap<String, String>, body: &str)
     let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}"))
         .with_detail(serde_json::json!({ "status": status, "body": &body[..cut] }));
     if code == ErrorCode::RateLimited {
-        e.retry_after_ms = wait_hint(headers).map(|d| d.as_millis() as u64);
+        e.retry_after_ms =
+            wait_hint(headers).or_else(|| linear_reset(status, headers, body)).map(|d| d.as_millis() as u64);
     }
     e
 }

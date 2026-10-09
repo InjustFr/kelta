@@ -62,6 +62,17 @@ export const KINDS: readonly KindInfo[] = [
     authOptions: ['token'],
     codeHost: true,
   },
+  {
+    kind: 'linear',
+    label: 'Linear',
+    blurb: 'Linear issues with a personal API key.',
+    baseUrlRequired: false,
+    baseUrlDefault: 'https://api.linear.app',
+    baseUrlPlaceholder: 'https://api.linear.app',
+    secretDefault: 'keyring',
+    authOptions: [],
+    codeHost: false,
+  },
 ];
 
 export function kindInfo(kind: AccountKind): KindInfo {

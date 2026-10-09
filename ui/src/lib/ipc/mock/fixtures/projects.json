@@ -63,6 +63,7 @@
           "project": null,
           "scope": null,
           "labels": null,
+          "team": null,
           "workflow_scope": null
         },
         {
@@ -80,6 +81,7 @@
           "project": null,
           "scope": null,
           "labels": null,
+          "team": null,
           "workflow_scope": null
         }
       ],
@@ -142,6 +144,7 @@
           "project": null,
           "scope": null,
           "labels": null,
+          "team": null,
           "workflow_scope": null
         }
       ],
@@ -208,6 +211,7 @@
           "project": null,
           "scope": null,
           "labels": null,
+          "team": null,
           "workflow_scope": null
         }
       ],

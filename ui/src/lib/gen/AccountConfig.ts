@@ -10,11 +10,11 @@ import type { TextFormat } from "./TextFormat";
  */
 export type AccountConfig = { kind: AccountKind, 
 /**
- * github: `https://api.github.com`; gitlab: `https://gitlab.com`; required for jira/redmine.
+ * github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.
  */
 base_url: string | null, flavor: JiraFlavor, 
 /**
- * Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`.
+ * Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).
  */
 auth: AuthKind | null, email: string | null, user: string | null, 
 /**

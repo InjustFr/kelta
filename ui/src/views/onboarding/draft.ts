@@ -85,6 +85,7 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
     search: null,
     project_v2: null,
     project: null,
+    team: null,
     scope: null,
     labels: null,
     workflow_scope: null,
@@ -103,6 +104,8 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
       return { ...base, repo: hint };
     case 'gitlab':
       return { ...base, project: hint, scope: 'assigned_to_me' };
+    case 'linear':
+      return { ...base, team: hint, scope: 'assigned_to_me' };
     default:
       return base;
   }

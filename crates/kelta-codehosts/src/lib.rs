@@ -44,7 +44,7 @@ impl ProviderFactory for CodeHostFactory {
         match account.kind {
             AccountKind::Github => Ok(Arc::new(GithubHost::new(account, http, secrets)?)),
             AccountKind::Gitlab => Ok(Arc::new(GitlabHost::new(account, http, secrets)?)),
-            AccountKind::Jira | AccountKind::Redmine => {
+            AccountKind::Jira | AccountKind::Redmine | AccountKind::Linear => {
                 Err(KeltaError::unsupported(format!("{:?} accounts have no code host", account.kind)))
             }
         }

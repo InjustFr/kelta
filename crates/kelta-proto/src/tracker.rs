@@ -14,6 +14,7 @@ pub enum TrackerKind {
     Redmine,
     GithubIssues,
     GitlabIssues,
+    Linear,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

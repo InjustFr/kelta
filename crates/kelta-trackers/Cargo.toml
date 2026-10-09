@@ -1,6 +1,6 @@
 [package]
 name = "kelta-trackers"
-description = "Tracker providers: Jira Cloud/DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues (L5)"
+description = "Tracker providers: Jira Cloud/DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Linear (L5)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
