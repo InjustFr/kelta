@@ -151,6 +151,32 @@ pub fn wait_until<T>(timeout: Duration, mut f: impl FnMut() -> Option<T>) -> Opt
     }
 }
 
+/// Aborts the test binary when it is not dropped within `limit`: a call that blocks forever
+/// (no deadline of its own) fails the run fast, with every thread's stack on macOS, instead of
+/// hanging CI.
+pub struct Watchdog(std::sync::mpsc::Sender<()>);
+
+impl Watchdog {
+    pub fn arm(limit: Duration) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let test = std::thread::current().name().unwrap_or("?").to_owned();
+        #[allow(clippy::disallowed_methods)] // allowlisted: test watchdog thread
+        std::thread::spawn(move || {
+            if rx.recv_timeout(limit) == Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
+                // Not eprintln!: the test harness captures it, and abort would lose it.
+                let msg = format!("watchdog: {test} still running after {limit:?}, aborting\n");
+                let _ = std::io::Write::write_all(&mut std::io::stderr(), msg.as_bytes());
+                #[cfg(target_os = "macos")]
+                let _ = Command::new("sample")
+                    .args([&std::process::id().to_string(), "1", "-file", "/dev/stderr"])
+                    .status();
+                std::process::abort();
+            }
+        });
+        Self(tx)
+    }
+}
+
 /// A sink pushing frames into a shared vector.
 #[derive(Clone, Default)]
 pub struct Frames {
