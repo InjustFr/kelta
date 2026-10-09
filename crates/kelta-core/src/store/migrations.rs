@@ -1,0 +1,136 @@
+//! Schema migrations (ARCHITECTURE §10). Each entry upgrades the schema by one version; the index
+//! + 1 is the version recorded in `schema_version(v)`.
+
+use rusqlite::Connection;
+
+/// v1: every table of ARCHITECTURE §10.
+///
+/// Deviation (docs/contract-requests/L3.md): `work_items` carries an extra `session_ids_json`
+/// column because `WorkItem.session_ids` must round-trip through `WorkStore`.
+const V1: &str = r#"
+CREATE TABLE IF NOT EXISTS projects_open (
+  project_id TEXT PRIMARY KEY NOT NULL,
+  ord        INTEGER NOT NULL,
+  active     INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS layouts (
+  project_id TEXT PRIMARY KEY NOT NULL,
+  json       TEXT NOT NULL,
+  rev        INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id           TEXT PRIMARY KEY NOT NULL,
+  project_id   TEXT NOT NULL,
+  kind_json    TEXT NOT NULL,
+  spec_json    TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  work_item_id TEXT,
+  restore_json TEXT NOT NULL,
+  cwd          TEXT NOT NULL,
+  lifecycle    TEXT NOT NULL,
+  text_tail    TEXT,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project_id);
+CREATE TABLE IF NOT EXISTS work_items (
+  id               TEXT PRIMARY KEY NOT NULL,
+  project_id       TEXT NOT NULL,
+  kind             TEXT NOT NULL,
+  ticket_json      TEXT,
+  review_json      TEXT,
+  repo_id          TEXT NOT NULL,
+  worktree         TEXT NOT NULL,
+  branch           TEXT NOT NULL,
+  base             TEXT NOT NULL,
+  claude_uuid      TEXT,
+  nvim_socket      TEXT,
+  tab_id           TEXT,
+  pr_url           TEXT,
+  state_json       TEXT NOT NULL,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  session_ids_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS work_items_project ON work_items(project_id);
+CREATE TABLE IF NOT EXISTS work_steps (
+  work_item_id TEXT NOT NULL,
+  step         TEXT NOT NULL,
+  status       TEXT NOT NULL,
+  detail       TEXT,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (work_item_id, step)
+);
+CREATE TABLE IF NOT EXISTS seen_reviews (
+  account    TEXT NOT NULL,
+  repo       TEXT NOT NULL,
+  number     INTEGER NOT NULL,
+  head_sha   TEXT NOT NULL,
+  first_seen TEXT NOT NULL,
+  PRIMARY KEY (account, repo, number)
+);
+CREATE TABLE IF NOT EXISTS provider_cache (
+  key        TEXT PRIMARY KEY NOT NULL,
+  etag       TEXT,
+  body_json  TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS plugin_grants (
+  plugin_id       TEXT NOT NULL,
+  permission      TEXT NOT NULL,
+  granted_at      TEXT NOT NULL,
+  manifest_sha256 TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, permission)
+);
+CREATE TABLE IF NOT EXISTS plugin_kv (
+  plugin_id TEXT NOT NULL,
+  key       TEXT NOT NULL,
+  value     TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, key)
+);
+CREATE TABLE IF NOT EXISTS repo_trust (
+  path       TEXT PRIMARY KEY NOT NULL,
+  sha256     TEXT NOT NULL,
+  trusted_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS trigger_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts         TEXT NOT NULL,
+  trigger_id TEXT NOT NULL,
+  event      TEXT NOT NULL,
+  ok         INTEGER NOT NULL,
+  detail     TEXT,
+  depth      INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ui_state (
+  key   TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+"#;
+
+/// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
+pub const MIGRATIONS: &[&str] = &[V1];
+
+/// Current recorded version (0 for an empty database).
+pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_version (v INTEGER NOT NULL)")?;
+    let v: Option<u32> = conn.query_row("SELECT MAX(v) FROM schema_version", [], |r| r.get(0))?;
+    Ok(v.unwrap_or(0))
+}
+
+/// Apply every pending migration in its own transaction. Idempotent.
+pub fn migrate(conn: &mut Connection) -> rusqlite::Result<u32> {
+    let mut cur = current_version(conn)?;
+    for (i, sql) in MIGRATIONS.iter().enumerate() {
+        let v = (i + 1) as u32;
+        if v <= cur {
+            continue;
+        }
+        let tx = conn.transaction()?;
+        tx.execute_batch(sql)?;
+        tx.execute("INSERT INTO schema_version (v) VALUES (?1)", [v])?;
+        tx.commit()?;
+        cur = v;
+    }
+    Ok(cur)
+}

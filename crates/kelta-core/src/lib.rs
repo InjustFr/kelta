@@ -5,10 +5,31 @@
 //! ProviderRegistry + aggregation + caches + seen_reviews, notifier, clipboard, ctl dispatch,
 //! perf snapshot.
 //!
-//! SCAFFOLD STUB: `Core::start` wires the stub services; every `CoreApi` method returns
-//! `Unsupported("not implemented: <fn>")` (or an empty value) except `app_info`.
+//! Every lane service is constructed with `Weak<dyn CoreApi>` and consumed only through the scaffold
+//! signatures. [`Core::start_with`] lets tests inject the `kelta_proto::testing` fakes.
+
+pub mod attention;
+pub mod bus;
+pub mod clipboard;
+pub mod ctl;
+pub mod detect;
+pub mod feeds;
+pub mod layout;
+pub mod layout_store;
+pub mod notifier;
+pub mod perf;
+pub mod projects;
+pub mod providers;
+pub mod rt;
+pub mod scheduler;
+pub mod sessions;
+pub mod spawn_env;
+pub mod status;
+pub mod store;
+pub mod templates;
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -17,28 +38,33 @@ use kelta_config::ConfigService;
 use kelta_http::{HttpClient, ProviderFactory};
 use kelta_plugins::PluginHost;
 use kelta_proto::api::{
-    CodeHost, CoreApi, GrantStore, PluginGrant, SecretResolver, SettingsSource, TerminalHost, Tracker,
-    TrustStore, UiBridge, WorkStore,
+    CodeHost, CoreApi, GrantStore, PluginSettingsSource, SecretResolver, SettingsSource, TerminalHost,
+    Tracker, TrustStore, UiBridge, WorkStore,
 };
 use kelta_proto::codehost::{PrDraft, ReviewItem, ReviewKind};
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast};
+use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, UiEvent};
 use kelta_proto::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
-use kelta_proto::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
+use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
-    EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo, SpawnRequest,
-    StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
+    EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
+    SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
-use kelta_proto::settings::{RuntimeOverrides, Settings};
-use kelta_proto::term::TerminalLimits;
+use kelta_proto::settings::{ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
+use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_secrets::Secrets;
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
 use kelta_work::WorkService;
+use parking_lot::Mutex;
 use tokio::sync::broadcast;
+
+use crate::clipboard::{ClipboardBackend, SystemClipboard};
+use crate::rt::Rt;
+use crate::store::Store;
 
 /// Inputs of [`Core::start`].
 pub struct CoreConfig {
@@ -47,57 +73,279 @@ pub struct CoreConfig {
     pub bridge: Arc<dyn UiBridge>,
 }
 
+/// Settings + project-file CRUD as core consumes them. Implemented by `ConfigService`; tests
+/// provide an in-memory implementation.
+pub trait ConfigBackend: SettingsSource {
+    fn project_create(&self, draft: &ProjectDraft) -> Result<Arc<ProjectConfig>, KeltaError>;
+    fn project_update(&self, id: &ProjectId, patch: &ProjectPatch) -> Result<Arc<ProjectConfig>, KeltaError>;
+    fn project_remove(&self, id: &ProjectId) -> Result<(), KeltaError>;
+    fn watch(&self, on_change: Box<dyn Fn(SettingsDiff) + Send + Sync>);
+}
+
+impl ConfigBackend for ConfigService {
+    fn project_create(&self, draft: &ProjectDraft) -> Result<Arc<ProjectConfig>, KeltaError> {
+        ConfigService::project_create(self, draft)
+    }
+    fn project_update(&self, id: &ProjectId, patch: &ProjectPatch) -> Result<Arc<ProjectConfig>, KeltaError> {
+        ConfigService::project_update(self, id, patch)
+    }
+    fn project_remove(&self, id: &ProjectId) -> Result<(), KeltaError> {
+        ConfigService::project_remove(self, id)
+    }
+    fn watch(&self, on_change: Box<dyn Fn(SettingsDiff) + Send + Sync>) {
+        ConfigService::watch(self, on_change)
+    }
+}
+
+/// Injection points of [`Core::start_with`]; `None` = the real implementation.
+pub struct CoreDeps {
+    pub dirs: Dirs,
+    pub cli: CliArgs,
+    pub bridge: Arc<dyn UiBridge>,
+    pub config: Option<Arc<dyn ConfigBackend>>,
+    pub terminal: Option<Arc<dyn TerminalHost>>,
+    pub secrets: Option<Arc<dyn SecretResolver>>,
+    pub trackers: Option<Arc<dyn ProviderFactory>>,
+    pub code_hosts: Option<Arc<dyn ProviderFactory>>,
+    pub login_env: Option<LoginEnv>,
+    pub clipboard: Option<Arc<dyn ClipboardBackend>>,
+    /// Use an in-memory database instead of `<data>/kelta.db`.
+    pub in_memory_store: bool,
+    /// Install the stable `kelta-ctl` copy at startup (off in tests).
+    pub install_ctl: bool,
+    /// Bind the ctl socket and run `WorkService::startup` (off in tests).
+    pub start_services: bool,
+}
+
+impl CoreDeps {
+    pub fn new(dirs: Dirs, cli: CliArgs, bridge: Arc<dyn UiBridge>) -> Self {
+        Self {
+            dirs,
+            cli,
+            bridge,
+            config: None,
+            terminal: None,
+            secrets: None,
+            trackers: None,
+            code_hosts: None,
+            login_env: None,
+            clipboard: None,
+            in_memory_store: false,
+            install_ctl: true,
+            start_services: true,
+        }
+    }
+}
+
 /// The application core. Commands reach services through the accessors.
 pub struct Core {
+    me: Weak<Core>,
     dirs: Dirs,
     cli: CliArgs,
     bridge: Arc<dyn UiBridge>,
     config: Arc<ConfigService>,
+    cfg: Arc<dyn ConfigBackend>,
     secrets: Arc<Secrets>,
-    terminal: Arc<PtyTerminalHost>,
+    resolver: Arc<dyn SecretResolver>,
+    terminal: Arc<dyn TerminalHost>,
+    login_env: LoginEnv,
     http: HttpClient,
     trackers: Arc<dyn ProviderFactory>,
     code_hosts: Arc<dyn ProviderFactory>,
     work: Arc<WorkService>,
     server: Arc<Server>,
     plugins: Arc<PluginHost>,
+    store: Arc<Store>,
     bus: broadcast::Sender<BusEvent>,
+    pub(crate) rt: Rt,
+    pub(crate) clip: Arc<dyn ClipboardBackend>,
+    pub(crate) projects: Mutex<projects::ProjectsState>,
+    pub(crate) layouts: Mutex<std::collections::HashMap<ProjectId, kelta_proto::model::Layout>>,
+    pub(crate) sessions: Mutex<std::collections::BTreeMap<SessionId, sessions::SessionEntry>>,
+    pub(crate) attention: Mutex<attention::AttentionState>,
+    pub(crate) providers: providers::ProviderRegistry,
+    pub(crate) scheduler: scheduler::Scheduler,
+    pub(crate) feeds: feeds::Feeds,
+    pub(crate) exits: tokio::sync::Notify,
+    pub(crate) quitting: AtomicBool,
+    pub(crate) http_refs: std::sync::atomic::AtomicU32,
+    pub(crate) last_reload: Mutex<Option<std::time::Instant>>,
+    pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
+    started: AtomicBool,
+    start_services: bool,
+    install_ctl: bool,
 }
 
 impl Core {
     /// Construct every service (each lane service receives `Weak<dyn CoreApi>`).
     pub fn start(cfg: CoreConfig) -> Result<Arc<Core>, KeltaError> {
-        let CoreConfig { dirs, cli, bridge } = cfg;
+        Self::start_with(CoreDeps::new(cfg.dirs, cfg.cli, cfg.bridge))
+    }
+
+    /// [`Core::start`] with injectable services (tests).
+    pub fn start_with(deps: CoreDeps) -> Result<Arc<Core>, KeltaError> {
+        let CoreDeps {
+            dirs,
+            cli,
+            bridge,
+            config: cfg_override,
+            terminal,
+            secrets: resolver,
+            trackers,
+            code_hosts,
+            login_env,
+            clipboard,
+            in_memory_store,
+            install_ctl,
+            start_services,
+        } = deps;
         let overrides = RuntimeOverrides::from_env_and_cli(std::env::vars(), &cli);
         let config = ConfigService::load(&dirs, overrides)?;
-        let settings_source: Arc<dyn SettingsSource> = config.clone();
+        let cfg: Arc<dyn ConfigBackend> = match cfg_override {
+            Some(c) => c,
+            None => config.clone(),
+        };
+        let settings_source: Arc<dyn SettingsSource> = cfg.clone();
         let secrets = Secrets::new(settings_source.clone());
+        let resolver: Arc<dyn SecretResolver> = resolver.unwrap_or_else(|| secrets.clone());
         let settings = settings_source.effective(None);
-        let terminal = PtyTerminalHost::new_arc(
-            kelta_term::resolve_login_env(Duration::from_secs(3)),
-            TerminalLimits::from_settings(&settings.terminal),
-        );
-        let store = Arc::new(NullStore);
+        let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
+        let terminal: Arc<dyn TerminalHost> = match terminal {
+            Some(t) => t,
+            None => {
+                PtyTerminalHost::new_arc(login_env.clone(), TerminalLimits::from_settings(&settings.terminal))
+            }
+        };
+        let store = if in_memory_store {
+            Store::open_in_memory()?
+        } else {
+            match Store::open(&dirs.db_path()) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!(error = %e, "cannot open the state database; using an in-memory store");
+                    Store::open_in_memory()?
+                }
+            }
+        };
         let (bus, _) = broadcast::channel(BUS_CAPACITY);
+        let http = HttpClient::new(&kelta_http::default_user_agent());
+        let trackers: Arc<dyn ProviderFactory> =
+            trackers.unwrap_or_else(|| Arc::new(kelta_trackers::TrackerFactory));
+        let code_hosts: Arc<dyn ProviderFactory> =
+            code_hosts.unwrap_or_else(|| Arc::new(kelta_codehosts::CodeHostFactory));
+        let clip: Arc<dyn ClipboardBackend> =
+            clipboard.unwrap_or_else(|| Arc::new(SystemClipboard::default()));
+        let rt = Rt::new();
+        let gauge = rt.timers.clone();
+
         let core = Arc::new_cyclic(|weak: &Weak<Core>| {
             let api: Weak<dyn CoreApi> = weak.clone();
+            let work_store: Arc<dyn WorkStore> = store.clone();
+            let grant_store: Arc<dyn GrantStore> = store.clone();
+            let refresher: Weak<dyn scheduler::Refresher> = weak.clone();
             Core {
-                work: WorkService::new(api.clone(), store.clone(), dirs.clone()),
+                me: weak.clone(),
+                work: WorkService::new(api.clone(), work_store, dirs.clone()),
                 server: Server::new(api.clone(), dirs.clone()),
-                plugins: PluginHost::new(api, dirs.clone(), store.clone()),
+                plugins: PluginHost::new(api, dirs.clone(), grant_store),
+                providers: providers::ProviderRegistry::new(
+                    http.clone(),
+                    trackers.clone(),
+                    code_hosts.clone(),
+                    resolver.clone(),
+                ),
+                scheduler: scheduler::Scheduler::new(refresher, gauge),
                 dirs,
                 cli,
                 bridge,
                 config,
+                cfg,
                 secrets,
+                resolver,
                 terminal,
-                http: HttpClient::new(&kelta_http::default_user_agent()),
-                trackers: Arc::new(kelta_trackers::TrackerFactory),
-                code_hosts: Arc::new(kelta_codehosts::CodeHostFactory),
+                login_env,
+                http,
+                trackers,
+                code_hosts,
+                store,
                 bus,
+                rt,
+                clip,
+                projects: Mutex::new(projects::ProjectsState::default()),
+                layouts: Mutex::new(std::collections::HashMap::new()),
+                sessions: Mutex::new(std::collections::BTreeMap::new()),
+                attention: Mutex::new(attention::AttentionState::default()),
+                feeds: feeds::Feeds::default(),
+                exits: tokio::sync::Notify::new(),
+                quitting: AtomicBool::new(false),
+                http_refs: std::sync::atomic::AtomicU32::new(0),
+                last_reload: Mutex::new(None),
+                claude_ver: Mutex::new(None),
+                started: AtomicBool::new(false),
+                start_services,
+                install_ctl,
             }
         });
+        core.boot()?;
         Ok(core)
+    }
+
+    /// Synchronous startup: state from SQLite (before window creation), config watch, Dormant
+    /// sessions; async services are queued until the runtime is reachable.
+    fn boot(self: &Arc<Self>) -> Result<(), KeltaError> {
+        self.load_projects()?;
+        self.load_layouts()?;
+        self.load_sessions()?;
+        let weak = self.me.clone();
+        self.cfg.watch(Box::new(move |diff| {
+            if let Some(core) = weak.upgrade() {
+                core.on_settings_changed(diff);
+            }
+        }));
+        let fragments = self.plugins.fragments();
+        if !fragments.is_empty() {
+            self.config.set_plugin_schemas(fragments);
+        }
+        let weak = self.me.clone();
+        self.rt.spawn(async move {
+            if let Some(core) = weak.upgrade() {
+                core.start_async().await;
+            }
+        });
+        Ok(())
+    }
+
+    /// Async startup (runs once the runtime is reachable).
+    async fn start_async(self: Arc<Self>) {
+        if self.started.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        bus::spawn_forwarder(&self);
+        self.scheduler.run(&self.rt);
+        self.resubscribe();
+        if self.start_services {
+            if let Err(e) = self.server.start_ctl().await {
+                tracing::warn!(error = %e, "ctl socket not started");
+            }
+            if let Err(e) = self.work.startup().await {
+                tracing::warn!(error = %e, "work startup hook failed");
+            }
+            let probe =
+                ctl::probe_claude(self.login_env.clone(), self.cfg.effective(None).claude.clone()).await;
+            *self.claude_ver.lock() = probe;
+        }
+        if self.install_ctl {
+            let dirs = self.dirs.clone();
+            let r = self.rt.blocking(move || ctl::install_stable_ctl(&dirs)).await;
+            if let Err(e) = r {
+                tracing::warn!(error = %e, "kelta-ctl stable copy not installed");
+            }
+        }
+        self.publish(BusEvent::new(
+            kelta_proto::events::bus::APP_STARTED,
+            serde_json::json!({ "version": kelta_proto::VERSION }),
+        ));
+        self.eager_restore().await;
     }
 
     // ---- accessors used by commands -------------------------------------------------------------
@@ -118,7 +366,7 @@ impl Core {
         &self.secrets
     }
     pub fn secret_resolver(&self) -> Arc<dyn SecretResolver> {
-        self.secrets.clone()
+        self.resolver.clone()
     }
     pub fn terminal(&self) -> Arc<dyn TerminalHost> {
         self.terminal.clone()
@@ -141,8 +389,23 @@ impl Core {
     pub fn plugins(&self) -> &Arc<PluginHost> {
         &self.plugins
     }
+    /// The SQLite store (also `WorkStore`/`GrantStore`/`TrustStore`).
+    pub fn store(&self) -> &Arc<Store> {
+        &self.store
+    }
+    /// `TrustStore` view of the store (repo trust, used by settings commands).
+    pub fn trust_store(&self) -> Arc<dyn TrustStore> {
+        self.store.clone()
+    }
+    /// The settings source core reads (the `ConfigService` in production).
+    pub fn settings_source(&self) -> Arc<dyn SettingsSource> {
+        self.cfg.clone()
+    }
+    pub fn login_env(&self) -> &LoginEnv {
+        &self.login_env
+    }
 
-    /// `app_info` (functional in the scaffold).
+    /// `app_info`.
     pub fn app_info(&self) -> AppInfo {
         AppInfo {
             version: kelta_proto::VERSION.to_owned(),
@@ -151,58 +414,125 @@ impl Core {
             data_dir: self.dirs.data.clone(),
             config_dir: self.dirs.config.clone(),
             runtime_dir: self.dirs.runtime.clone(),
-            claude: None,
+            claude: self.claude_ver.lock().clone(),
             safe_graphics: self.cli.safe_graphics,
         }
     }
 
-    /// Called by the desktop shell on quit (L3: confirm, nvim mksession, persist Dormant sessions).
-    pub async fn shutdown(&self) -> Result<(), KeltaError> {
+    /// `app_ready`: clears the launch crash guard, binds the runtime, kicks deferred startup work.
+    pub async fn app_ready(&self, t_ms: f64) -> Result<(), KeltaError> {
+        self.rt.capture();
+        let guard = self.dirs.data.join("launch-guard");
+        if guard.exists()
+            && let Err(e) = std::fs::remove_file(&guard)
+        {
+            tracing::warn!(error = %e, "cannot remove launch guard");
+        }
+        tracing::info!(t_ms, "app ready");
+        self.on_window_changed();
+        self.scheduler.kick(None);
         Ok(())
     }
-}
 
-fn ni<T>(f: &str) -> Result<T, KeltaError> {
-    Err(KeltaError::not_implemented(f))
+    /// `open_external` (http/https/mailto only).
+    pub async fn open_external(&self, url: &str) -> Result<(), KeltaError> {
+        self.rt.capture();
+        ctl::open_external(url).await
+    }
+
+    /// `notify_test`: bypasses the rules, reports the daemon error.
+    pub async fn notify_test(&self) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.bridge.notify(Notification {
+            title: "Kelta".into(),
+            body: Some("Test notification".into()),
+            urgency: kelta_proto::ext::Urgency::Normal,
+            project_id: None,
+            session_id: None,
+        })
+    }
+
+    pub(crate) fn emit(&self, ev: UiEvent) {
+        self.bridge.emit(ev);
+    }
+
+    /// Settings hot reload: terminal limits, providers, subscriptions, projects.
+    pub(crate) fn on_settings_changed(&self, diff: SettingsDiff) {
+        let settings = self.cfg.effective(None);
+        self.terminal.set_limits(TerminalLimits::from_settings(&settings.terminal));
+        self.emit(UiEvent::SettingsChanged {
+            layers: diff.layers.clone(),
+            paths: diff.paths.clone(),
+            requires_restart: diff.requires_restart.clone(),
+        });
+        self.publish(BusEvent::new(
+            kelta_proto::events::bus::SETTINGS_CHANGED,
+            serde_json::json!({ "paths": diff.paths, "layers": diff.layers }),
+        ));
+        self.providers.invalidate_changed(&settings.accounts);
+        self.scheduler.resume_all();
+        self.emit_all_projects();
+        self.resubscribe();
+    }
+
+    /// Window focus / visibility changed (bus `app.focus_changed` or `app_ready`).
+    pub fn on_window_changed(&self) {
+        let w = self.bridge.window_state();
+        self.scheduler.window_changed(w);
+    }
+
+    /// Called by the desktop shell on quit: nvim mksession, persist Dormant sessions, SIGHUP →
+    /// 2 s → SIGKILL.
+    pub async fn shutdown(&self) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.quit_flow().await
+    }
 }
 
 #[async_trait]
 impl CoreApi for Core {
-    async fn session_spawn(&self, _req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
-        ni("Core::session_spawn")
+    async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
+        self.rt.capture();
+        self.spawn_session(req).await
     }
-    async fn session_write(&self, _id: &SessionId, _bytes: &[u8]) -> Result<(), KeltaError> {
-        ni("Core::session_write")
+    async fn session_write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
+        self.write_session(id, bytes)
     }
-    async fn session_kill(&self, _id: &SessionId, _force: bool) -> Result<(), KeltaError> {
-        ni("Core::session_kill")
+    async fn session_kill(&self, id: &SessionId, force: bool) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.kill_session(id, force)
     }
-    fn session_get(&self, _id: &SessionId) -> Option<SessionInfo> {
-        None
+    fn session_get(&self, id: &SessionId) -> Option<SessionInfo> {
+        self.sessions.lock().get(id).map(|e| e.info.clone())
     }
-    fn session_list(&self, _project: Option<&ProjectId>) -> Vec<SessionInfo> {
-        Vec::new()
+    fn session_list(&self, project: Option<&ProjectId>) -> Vec<SessionInfo> {
+        self.list_sessions(project)
     }
-    async fn session_apply_hook(&self, _id: &SessionId, _change: StatusChange) -> Result<(), KeltaError> {
-        ni("Core::session_apply_hook")
+    async fn session_apply_hook(&self, id: &SessionId, change: StatusChange) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.apply_hook(id, change)
     }
-    async fn layout_open(&self, _project: &ProjectId, _req: OpenPaneRequest) -> Result<PaneRef, KeltaError> {
-        ni("Core::layout_open")
+    async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError> {
+        self.rt.capture();
+        self.open_pane(project, req)
     }
-    fn project(&self, _id: &ProjectId) -> Option<ProjectInfo> {
-        None
+    fn project(&self, id: &ProjectId) -> Option<ProjectInfo> {
+        self.project_info(id)
     }
     fn settings(&self, project: Option<&ProjectId>) -> Arc<Settings> {
-        self.config.effective(project)
+        self.cfg.effective(project)
     }
-    async fn tracker_for(&self, _account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
-        ni("Core::tracker_for")
+    async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
+        self.rt.capture();
+        self.providers.tracker(account, &self.cfg.effective(None).accounts)
     }
-    async fn code_host_for(&self, _account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError> {
-        ni("Core::code_host_for")
+    async fn code_host_for(&self, account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError> {
+        self.rt.capture();
+        self.providers.code_host(account, &self.cfg.effective(None).accounts)
     }
-    async fn review_list(&self, _scope: Scope, _kind: ReviewKind) -> Result<Vec<ReviewItem>, KeltaError> {
-        ni("Core::review_list")
+    async fn review_list(&self, scope: Scope, kind: ReviewKind) -> Result<Vec<ReviewItem>, KeltaError> {
+        self.rt.capture();
+        Ok(self.review_page(scope, kind, false).await?.items)
     }
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
@@ -228,102 +558,29 @@ impl CoreApi for Core {
         self.plugins.tool_open(project, tool, ctx, placement).await
     }
     fn publish(&self, ev: BusEvent) {
-        let _ = self.bus.send(ev);
+        bus::publish(self, ev);
     }
     fn subscribe(&self) -> broadcast::Receiver<BusEvent> {
         self.bus.subscribe()
     }
-    async fn notify(&self, _n: Notification) -> Result<(), KeltaError> {
-        ni("Core::notify")
+    async fn notify(&self, n: Notification) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.notify_rules(n)
     }
     fn toast(&self, t: Toast) {
-        self.bridge.emit(kelta_proto::events::UiEvent::Toast { toast: t });
+        self.emit(UiEvent::Toast { toast: t });
     }
-    async fn http_fetch(&self, _req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
-        ni("Core::http_fetch")
+    async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
+        self.rt.capture();
+        ctl::http_fetch(&self.http, req).await
     }
-    async fn ctl(&self, _cmd: CtlCommand) -> Result<serde_json::Value, KeltaError> {
-        ni("Core::ctl")
-    }
-}
-
-/// Placeholder store until L3's SQLite `Store` exists: reads are empty, writes Unsupported.
-struct NullStore;
-
-#[async_trait]
-impl WorkStore for NullStore {
-    async fn put_item(&self, _item: &WorkItem) -> Result<(), KeltaError> {
-        ni("Store::put_item")
-    }
-    async fn get_item(&self, _id: &WorkItemId) -> Result<Option<WorkItem>, KeltaError> {
-        Ok(None)
-    }
-    async fn list_items(&self, _project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
-        Ok(Vec::new())
-    }
-    async fn delete_item(&self, _id: &WorkItemId) -> Result<(), KeltaError> {
-        ni("Store::delete_item")
-    }
-    async fn set_step(
-        &self,
-        _id: &WorkItemId,
-        _step: &str,
-        _status: StepStatus,
-        _detail: Option<String>,
-    ) -> Result<(), KeltaError> {
-        ni("Store::set_step")
-    }
-    async fn steps(&self, _id: &WorkItemId) -> Result<Vec<WorkStepStatus>, KeltaError> {
-        Ok(Vec::new())
+    async fn ctl(&self, cmd: CtlCommand) -> Result<serde_json::Value, KeltaError> {
+        self.rt.capture();
+        self.dispatch_ctl(cmd).await
     }
 }
 
-#[async_trait]
-impl GrantStore for NullStore {
-    async fn grants(&self, _plugin: &PluginId) -> Result<Vec<PluginGrant>, KeltaError> {
-        Ok(Vec::new())
-    }
-    async fn grant(&self, _plugin: &PluginId, _permissions: &[String], _sha: &str) -> Result<(), KeltaError> {
-        ni("Store::grant")
-    }
-    async fn revoke_all(&self, _plugin: &PluginId) -> Result<(), KeltaError> {
-        ni("Store::revoke_all")
-    }
-}
-
-#[async_trait]
-impl TrustStore for NullStore {
-    async fn trusted_hash(&self, _path: &Path) -> Result<Option<String>, KeltaError> {
-        Ok(None)
-    }
-    async fn set_trust(&self, _path: &Path, _sha256: Option<String>) -> Result<(), KeltaError> {
-        ni("Store::set_trust")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use kelta_proto::testing::FakeUiBridge;
-
-    #[tokio::test]
-    async fn start_wires_stubs() {
-        let tmp = tempfile::tempdir().unwrap();
-        let core = Core::start(CoreConfig {
-            dirs: Dirs::under(tmp.path()),
-            cli: CliArgs::default(),
-            bridge: FakeUiBridge::new(),
-        })
-        .unwrap();
-        assert_eq!(core.app_info().version, kelta_proto::VERSION);
-        let e = core.session_list_err().await;
-        assert_eq!(e.code, kelta_proto::ErrorCode::Unsupported);
-        assert!(core.work().core().is_some());
-    }
-
-    impl Core {
-        async fn session_list_err(&self) -> KeltaError {
-            self.session_write(&SessionId::new("x"), b"").await.unwrap_err()
-        }
-    }
+/// Convenience: `Arc<Core>` as the `CoreApi` trait object.
+pub fn as_api(core: &Arc<Core>) -> Arc<dyn CoreApi> {
+    core.clone()
 }
