@@ -36,6 +36,9 @@ use crate::tracker::{
 
 // ---- terminal (impl: kelta-term) ---------------------------------------------------------------
 
+/// `detach` generation matching any view; real generations start at 1.
+pub const ANY_VIEW: u32 = 0;
+
 pub trait TerminalHost: Send + Sync {
     /// Id inside spec.
     fn spawn(&self, spec: PtySpawnSpec) -> Result<(), KeltaError>;
@@ -46,6 +49,7 @@ pub trait TerminalHost: Send + Sync {
         rows: u16,
         sink: Box<dyn FrameSink>,
     ) -> Result<AttachInfo, KeltaError>;
+    /// [`ANY_VIEW`] drops whatever view is attached (the window is gone).
     fn detach(&self, id: &SessionId, generation: u32);
     fn write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError>;
     fn resize(&self, id: &SessionId, cols: u16, rows: u16) -> Result<(), KeltaError>;

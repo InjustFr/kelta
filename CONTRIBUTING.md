@@ -71,8 +71,10 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 - `bash packaging/build.sh` builds the installers with `packaging/tauri.release.json`. It needs the
   `kelta-ctl` sidecar, which the script builds.
 - `cargo run -p kelta-bench -- --scenario idle-3p10s --dry-run` checks the harness against fixtures. Real runs
-  need a release build of the app (`--app target/release/kelta`) and, on macOS, no running Kelta (the runtime
-  socket path is shared).
+  need a release build embedding the UI (`pnpm --filter @kelta/ui run build`, then
+  `cargo build --release -p kelta-desktop --features tauri/custom-protocol` and
+  `cargo build --release -p kelta-bench -p tui-sim`). The harness runs the app in a temp HOME with its own
+  `KELTA_RUNTIME_DIR`, so a Kelta you are using is never touched.
 - `node bench/bundle-size.mjs ui/dist` checks the JavaScript budgets.
 
 ## Commits

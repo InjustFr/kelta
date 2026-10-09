@@ -58,7 +58,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `cursor_blink` | bool | `false` | focused pane only |
 | `scrollback` | table {shell, claude, editor, tool, setup, custom: int} | `{3000, 3000, 500, 500, 1000, 3000}` | Rust model lines |
 | `view_scrollback` | int (100..10000) | `1000` | xterm lines + snapshot history |
-| `max_live_views` | int (1..12) | `4` | hidden xterm instances kept (LRU) |
+| `max_live_views` | int (1..12) | `2` | hidden xterm instances kept (LRU) |
 | `memory_cap_mb` | int (32..2048) | `160` | total scrollback budget across sessions |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |

@@ -66,7 +66,7 @@
   });
 
   $effect(() => {
-    terminalPool.setCapacity(settings.value()?.terminal.max_live_views ?? 4);
+    terminalPool.setCapacity(settings.value()?.terminal.max_live_views ?? 2);
   });
 
   // ---- layouts ---------------------------------------------------------------------------------
