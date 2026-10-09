@@ -70,13 +70,7 @@ describe('InboxPane', () => {
 
     expect(container.querySelector('[data-group="Shop"]')).not.toBeNull();
     expect(container.querySelector('[data-section="s:authored"]')).not.toBeNull();
-    // The list is virtualised: scroll to the end for the last section.
-    const list = container.querySelector('.k-vlist') as HTMLElement;
-    Object.defineProperty(list, 'scrollTop', { value: 500, writable: true, configurable: true }); // jsdom has no layout
-    await fireEvent.scroll(list);
-    await waitFor(() =>
-      expect(container.querySelector('[data-section="s:input"]')?.textContent).toMatch(/Needs input/),
-    );
+    expect(container.querySelector('[data-section="s:input"]')?.textContent).toMatch(/Needs input/);
   });
 
   it('is usable with the keyboard: j/k, Enter on a ticket opens its detail', async () => {
