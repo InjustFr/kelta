@@ -6,10 +6,14 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 [[ -z "$(git status --porcelain)" ]] || { echo "dirty tree: commit or stash first" >&2; exit 1; }
+# The public nightly is main only: refuse unreviewed branches.
+git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main || { echo "HEAD is not on origin/main" >&2; exit 1; }
 sha="$(git rev-parse HEAD)"
 dist="$PWD/target/nightly-dist"
 rm -rf "$dist" && mkdir -p "$dist"
 
+# The bundler keeps older versioned files: clear them so only this build is published.
+rm -rf target/release/bundle
 bash packaging/build.sh
 cp target/release/bundle/dmg/*.dmg "$dist"
 
@@ -20,7 +24,7 @@ for arch in arm64 amd64; do
     -v "kelta-nightly-target-$arch":/work/target -v kelta-cargo:/root/.cargo/registry \
     -v kelta-pnpm:/root/.local/share/pnpm/store -v "$dist":/out \
     -e APPIMAGE_EXTRACT_AND_RUN=1 "kelta-nightly-$arch" \
-    bash -lc 'tar -x -C /work && cd /work && bash packaging/build.sh \
+    bash -lc 'tar -x -C /work && cd /work && rm -rf target/release/bundle && bash packaging/build.sh \
       && cp target/release/bundle/deb/*.deb target/release/bundle/appimage/*.AppImage /out/'
 done
 
@@ -41,7 +45,7 @@ notes="$(mktemp)"
 git tag -f nightly "$sha"
 git push -f origin refs/tags/nightly
 if gh release view nightly >/dev/null 2>&1; then
-  gh release edit nightly --prerelease --notes-file "$notes"
+  gh release edit nightly --prerelease --title nightly --notes-file "$notes"
 else
   gh release create nightly --prerelease --verify-tag --title nightly --notes-file "$notes"
 fi
