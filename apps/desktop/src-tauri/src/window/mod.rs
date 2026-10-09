@@ -54,6 +54,7 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
         // (no Core::shutdown). Route our own item through app.exit instead.
         app.on_menu_event(|app, ev| {
             if ev.id() == "quit" {
+                save_main_geometry(app); // app.exit does not send CloseRequested
                 app.exit(0);
             }
         });
@@ -78,6 +79,7 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
             // the launch worked, so the crash guard can be dropped.
             if matches!(p.event(), PageLoadEvent::Finished) {
                 crate::platform::launch_succeeded();
+                crate::platform::webview::reset_reloads();
                 bench::page_loaded();
             }
         });
@@ -107,6 +109,15 @@ fn monitors(app: &AppHandle) -> Vec<(f64, f64, f64, f64)> {
             (f64::from(p.x) / f, f64::from(p.y) / f, f64::from(s.width) / f, f64::from(s.height) / f)
         })
         .collect()
+}
+
+fn save_main_geometry(app: &AppHandle) {
+    if let Some(c) = core(app)
+        && c.config().effective(None).window.restore_geometry
+        && let Some(w) = app.get_webview_window(MAIN_WINDOW)
+    {
+        save_geometry(&w.as_ref().window(), &c.dirs().data);
+    }
 }
 
 fn save_geometry(win: &Window, data_dir: &Path) {
@@ -194,11 +205,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     let app = window.app_handle();
     match event {
         WindowEvent::CloseRequested { .. } => {
-            if let Some(c) = core(app)
-                && c.config().effective(None).window.restore_geometry
-            {
-                save_geometry(window, &c.dirs().data);
-            }
+            save_main_geometry(app);
         }
         // The webview is gone: its event channels are dead; commands queue until the next one.
         WindowEvent::Destroyed => {
@@ -218,6 +225,7 @@ pub fn on_run_event(app: &AppHandle, event: &RunEvent) {
     match event {
         // No window left and no explicit quit: stay alive in background mode.
         RunEvent::ExitRequested { code: None, api, .. } if background_mode(app) => api.prevent_exit(),
+        RunEvent::ExitRequested { .. } => save_main_geometry(app),
         RunEvent::Exit => {
             if let Some(c) = core(app)
                 && let Err(e) = tauri::async_runtime::block_on(c.shutdown())
@@ -242,6 +250,8 @@ fn second_instance_paths(argv: &[String], cwd: &str) -> Vec<PathBuf> {
 
 /// A second `kelta [args]` launch forwarded by tauri-plugin-single-instance.
 pub fn on_second_instance(app: &AppHandle, argv: Vec<String>, cwd: String) {
+    // The second process wrote the crash guard in pre_init and exits without a page load: drop it.
+    crate::platform::launch_succeeded();
     raise(app);
     if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
         for path in second_instance_paths(&argv, &cwd) {

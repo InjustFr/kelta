@@ -44,11 +44,12 @@ impl TauriBridge {
     /// Register a UI event channel (one per window). Queued commands are delivered first.
     pub fn subscribe(&self, channel: Channel<UiEvent>) -> u64 {
         let id = self.next_sub.fetch_add(1, Ordering::Relaxed);
-        let queued = std::mem::take(&mut *self.pending.lock());
-        for ev in queued {
+        // Hold subs across drain and push so a concurrent deliver_command cannot queue in between.
+        let mut subs = self.subs.lock();
+        for ev in std::mem::take(&mut *self.pending.lock()) {
             let _ = channel.send(ev);
         }
-        self.subs.lock().push((id, channel));
+        subs.push((id, channel));
         id
     }
 
@@ -80,21 +81,27 @@ impl TauriBridge {
         delivered
     }
 
-    fn queue(&self, ev: UiEvent) {
-        let mut p = self.pending.lock();
-        if p.len() >= PENDING_CAP {
-            p.remove(0);
-        }
-        p.push(ev);
-    }
-
     /// Commands that need a visible UI: bring the window back (recreating it in background mode).
     fn deliver_command(&self, ev: UiEvent) {
         super::raise(&self.handle);
+        // Empty-check and queue under the subs lock (shared with subscribe).
+        let subs = self.subs.lock();
+        if subs.is_empty() {
+            queue_capped(&mut self.pending.lock(), ev);
+            return;
+        }
+        drop(subs);
         if self.fan_out(&ev) == 0 {
-            self.queue(ev);
+            queue_capped(&mut self.pending.lock(), ev);
         }
     }
+}
+
+fn queue_capped(p: &mut Vec<UiEvent>, ev: UiEvent) {
+    if p.len() >= PENDING_CAP {
+        p.remove(0);
+    }
+    p.push(ev);
 }
 
 /// Which events must wake a window that does not exist.
@@ -186,6 +193,16 @@ impl UiBridge for TauriBridge {
 mod tests {
     use super::*;
     use kelta_proto::ids::ProjectId;
+
+    #[test]
+    fn pending_queue_evicts_oldest() {
+        let mut p = Vec::new();
+        for i in 0..PENDING_CAP + 3 {
+            queue_capped(&mut p, UiEvent::ProjectRemoved { id: ProjectId::new(i.to_string()) });
+        }
+        assert_eq!(p.len(), PENDING_CAP);
+        assert!(matches!(&p[0], UiEvent::ProjectRemoved { id } if id.as_str() == "3"));
+    }
 
     #[test]
     fn only_window_commands_wake_the_webview() {

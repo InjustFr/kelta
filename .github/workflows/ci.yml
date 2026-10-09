@@ -75,3 +75,13 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses bans sources
+
+  packaging-meta:
+    name: desktop entry + AppStream
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+      - run: |
+          desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
+          appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml

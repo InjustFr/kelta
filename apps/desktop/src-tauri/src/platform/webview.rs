@@ -19,6 +19,11 @@ pub fn allow_reload() -> bool {
     RELOADS.fetch_add(1, Ordering::Relaxed) < MAX_AUTO_RELOADS
 }
 
+/// A stable page load ends the crash streak.
+pub fn reset_reloads() {
+    RELOADS.store(0, Ordering::Relaxed);
+}
+
 /// Called once per created main webview.
 #[cfg(target_os = "linux")]
 pub fn configure<R: Runtime>(win: &WebviewWindow<R>) {
