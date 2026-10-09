@@ -1,0 +1,9 @@
+{
+  "accountId": "5b10ac8d82e05b22cc7d4ef5",
+  "displayName": "Louis Duprat",
+  "emailAddress": "louis@acme.test",
+  "avatarUrls": {
+    "48x48": "https://avatar.test/louis.png"
+  },
+  "active": true
+}

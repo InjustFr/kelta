@@ -1,0 +1,60 @@
+{
+  "total_count": 2,
+  "incomplete_results": false,
+  "items": [
+    {
+      "id": 1012,
+      "number": 12,
+      "title": "Cart total wrong",
+      "state": "open",
+      "html_url": "https://github.com/acme/shop/issues/12",
+      "labels": [
+        {
+          "name": "bug"
+        }
+      ],
+      "updated_at": "2026-09-30T09:00:00Z",
+      "assignee": {
+        "login": "louis",
+        "avatar_url": "https://avatars.test/louis"
+      },
+      "assignees": [
+        {
+          "login": "louis"
+        }
+      ],
+      "repository_url": "https://api.github.com/repos/acme/shop",
+      "body": "Steps to **reproduce**:\n\n1. open\n2. crash\n\n<script>alert(1)</script>",
+      "user": {
+        "login": "carol"
+      }
+    },
+    {
+      "id": 1003,
+      "number": 3,
+      "title": "Rate limit headers",
+      "state": "open",
+      "html_url": "https://github.com/acme/api/issues/3",
+      "labels": [
+        {
+          "name": "bug"
+        }
+      ],
+      "updated_at": "2026-09-30T09:00:00Z",
+      "assignee": {
+        "login": "louis",
+        "avatar_url": "https://avatars.test/louis"
+      },
+      "assignees": [
+        {
+          "login": "louis"
+        }
+      ],
+      "repository_url": "https://api.github.com/repos/acme/api",
+      "body": "Steps to **reproduce**:\n\n1. open\n2. crash\n\n<script>alert(1)</script>",
+      "user": {
+        "login": "carol"
+      }
+    }
+  ]
+}

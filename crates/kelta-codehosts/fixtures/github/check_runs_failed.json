@@ -1,0 +1,16 @@
+{
+  "total_count": 2,
+  "check_runs": [
+    {
+      "name": "build",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://ci.test/9"
+    }
+  ]
+}

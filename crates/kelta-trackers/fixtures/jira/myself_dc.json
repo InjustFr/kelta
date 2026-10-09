@@ -1,0 +1,10 @@
+{
+  "name": "louis",
+  "key": "JIRAUSER10100",
+  "displayName": "Louis Duprat",
+  "emailAddress": "louis@acme.test",
+  "avatarUrls": {
+    "48x48": "https://avatar.test/louis.png"
+  },
+  "active": true
+}

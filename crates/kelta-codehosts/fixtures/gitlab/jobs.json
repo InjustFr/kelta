@@ -1,0 +1,16 @@
+[
+  {
+    "name": "build",
+    "status": "success",
+    "web_url": "https://gl.test/j/1"
+  },
+  {
+    "name": "test",
+    "status": "failed",
+    "web_url": "https://gl.test/j/2"
+  },
+  {
+    "name": "deploy",
+    "status": "manual"
+  }
+]

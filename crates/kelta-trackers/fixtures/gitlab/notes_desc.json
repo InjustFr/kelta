@@ -1,0 +1,35 @@
+[
+  {
+    "id": 3,
+    "body": "third",
+    "system": false,
+    "author": {
+      "id": 5,
+      "username": "carol",
+      "name": "Carol"
+    },
+    "created_at": "2026-09-03T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "body": "changed the description",
+    "system": true,
+    "author": {
+      "id": 5,
+      "username": "carol",
+      "name": "Carol"
+    },
+    "created_at": "2026-09-02T10:00:00Z"
+  },
+  {
+    "id": 1,
+    "body": "first **note**",
+    "system": false,
+    "author": {
+      "id": 5,
+      "username": "carol",
+      "name": "Carol"
+    },
+    "created_at": "2026-09-01T10:00:00Z"
+  }
+]

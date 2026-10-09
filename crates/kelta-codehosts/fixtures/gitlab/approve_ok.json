@@ -1,0 +1,27 @@
+{
+  "id": 5008,
+  "iid": 8,
+  "project_id": 77,
+  "title": "Fix #12 flicker",
+  "description": "Fixes the **thing**.",
+  "state": "opened",
+  "draft": false,
+  "web_url": "https://gitlab.acme.test/grp/other/-/merge_requests/8",
+  "source_branch": "fix/flicker",
+  "target_branch": "main",
+  "sha": "deadbeef08",
+  "author": {
+    "id": 6,
+    "username": "dave",
+    "name": "Dave",
+    "avatar_url": "https://gl.test/a.png"
+  },
+  "labels": [],
+  "updated_at": "2026-09-30T10:00:00.000Z",
+  "detailed_merge_status": "mergeable",
+  "has_conflicts": false,
+  "references": {
+    "short": "!8",
+    "full": "grp/other!8"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "errors": [
+    "Assignee is invalid",
+    "Target version cannot be blank"
+  ]
+}

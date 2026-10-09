@@ -1,0 +1,32 @@
+{
+  "data": {
+    "node": {
+      "fields": {
+        "nodes": [
+          {
+            "id": "PVTSSF_status",
+            "name": "Status",
+            "options": [
+              {
+                "id": "opt_new_todo",
+                "name": "Todo"
+              },
+              {
+                "id": "opt_new_prog",
+                "name": "In Progress"
+              },
+              {
+                "id": "opt_new_rev",
+                "name": "In Review"
+              },
+              {
+                "id": "opt_new_done",
+                "name": "Done"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

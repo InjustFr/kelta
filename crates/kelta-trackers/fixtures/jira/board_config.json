@@ -1,0 +1,40 @@
+{
+  "id": 7,
+  "name": "SHOP board",
+  "columnConfig": {
+    "columns": [
+      {
+        "name": "Backlog",
+        "statuses": [
+          {
+            "id": "10001"
+          }
+        ]
+      },
+      {
+        "name": "Doing",
+        "statuses": [
+          {
+            "id": "10002"
+          }
+        ]
+      },
+      {
+        "name": "Code Review",
+        "statuses": [
+          {
+            "id": "10003"
+          }
+        ]
+      },
+      {
+        "name": "Shipped",
+        "statuses": [
+          {
+            "id": "10004"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "name": "workflow::todo"
+  },
+  {
+    "id": 2,
+    "name": "workflow::doing"
+  },
+  {
+    "id": 3,
+    "name": "workflow::review"
+  },
+  {
+    "id": 4,
+    "name": "workflow::done"
+  },
+  {
+    "id": 5,
+    "name": "workflowish"
+  }
+]

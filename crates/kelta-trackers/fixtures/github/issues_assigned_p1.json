@@ -1,0 +1,86 @@
+[
+  {
+    "id": 1012,
+    "number": 12,
+    "title": "Cart total wrong",
+    "state": "open",
+    "html_url": "https://github.com/acme/shop/issues/12",
+    "labels": [
+      {
+        "name": "bug"
+      }
+    ],
+    "updated_at": "2026-09-30T09:00:00Z",
+    "assignee": {
+      "login": "louis",
+      "avatar_url": "https://avatars.test/louis"
+    },
+    "assignees": [
+      {
+        "login": "louis"
+      }
+    ],
+    "repository_url": "https://api.github.com/repos/acme/shop",
+    "body": "Steps to **reproduce**:\n\n1. open\n2. crash\n\n<script>alert(1)</script>",
+    "user": {
+      "login": "carol"
+    }
+  },
+  {
+    "id": 1013,
+    "number": 13,
+    "title": "Fix cart total (PR)",
+    "state": "open",
+    "html_url": "https://github.com/acme/shop/issues/13",
+    "labels": [
+      {
+        "name": "bug"
+      }
+    ],
+    "updated_at": "2026-09-30T09:00:00Z",
+    "assignee": {
+      "login": "louis",
+      "avatar_url": "https://avatars.test/louis"
+    },
+    "assignees": [
+      {
+        "login": "louis"
+      }
+    ],
+    "repository_url": "https://api.github.com/repos/acme/shop",
+    "body": "Steps to **reproduce**:\n\n1. open\n2. crash\n\n<script>alert(1)</script>",
+    "user": {
+      "login": "carol"
+    },
+    "pull_request": {
+      "url": "x"
+    }
+  },
+  {
+    "id": 1007,
+    "number": 7,
+    "title": "Dark mode flicker",
+    "state": "open",
+    "html_url": "https://github.com/acme/web/issues/7",
+    "labels": [
+      {
+        "name": "bug"
+      }
+    ],
+    "updated_at": "2026-09-30T09:00:00Z",
+    "assignee": {
+      "login": "louis",
+      "avatar_url": "https://avatars.test/louis"
+    },
+    "assignees": [
+      {
+        "login": "louis"
+      }
+    ],
+    "repository_url": "https://api.github.com/repos/acme/web",
+    "body": "Steps to **reproduce**:\n\n1. open\n2. crash\n\n<script>alert(1)</script>",
+    "user": {
+      "login": "carol"
+    }
+  }
+]

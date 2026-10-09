@@ -1,0 +1,103 @@
+{
+  "data": {
+    "repositoryOwner": {
+      "projectV2": {
+        "items": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "endCursor": "CUR1"
+          },
+          "nodes": [
+            {
+              "fieldValues": {
+                "nodes": [
+                  {},
+                  {
+                    "name": "In Progress",
+                    "field": {
+                      "name": "Status"
+                    }
+                  }
+                ]
+              },
+              "content": {
+                "id": "I_1",
+                "databaseId": 1012,
+                "number": 12,
+                "title": "Cart total wrong",
+                "url": "https://github.com/acme/shop/issues/12",
+                "state": "OPEN",
+                "updatedAt": "2026-09-30T09:00:00Z",
+                "repository": {
+                  "nameWithOwner": "acme/shop"
+                },
+                "assignees": {
+                  "nodes": [
+                    {
+                      "login": "louis",
+                      "name": "Louis Duprat",
+                      "avatarUrl": "https://avatars.test/louis"
+                    }
+                  ]
+                },
+                "labels": {
+                  "nodes": [
+                    {
+                      "name": "bug"
+                    }
+                  ]
+                },
+                "issueType": {
+                  "name": "Bug"
+                }
+              }
+            },
+            {
+              "fieldValues": {
+                "nodes": [
+                  {
+                    "name": "Done",
+                    "field": {
+                      "name": "Status"
+                    }
+                  }
+                ]
+              },
+              "content": {
+                "id": "I_2",
+                "databaseId": 1020,
+                "number": 20,
+                "title": "Old thing",
+                "url": "https://github.com/acme/shop/issues/20",
+                "state": "CLOSED",
+                "updatedAt": "2026-08-01T09:00:00Z",
+                "repository": {
+                  "nameWithOwner": "acme/shop"
+                },
+                "assignees": {
+                  "nodes": []
+                },
+                "labels": {
+                  "nodes": []
+                },
+                "issueType": null
+              }
+            },
+            {
+              "fieldValues": {
+                "nodes": []
+              },
+              "content": {}
+            },
+            {
+              "fieldValues": {
+                "nodes": []
+              },
+              "content": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}

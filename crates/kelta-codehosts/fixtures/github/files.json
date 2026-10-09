@@ -1,0 +1,12 @@
+[
+  {
+    "filename": "src/limiter.rs",
+    "additions": 100,
+    "deletions": 2
+  },
+  {
+    "filename": "README.md",
+    "additions": 20,
+    "deletions": 6
+  }
+]

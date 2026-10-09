@@ -3,14 +3,28 @@
 //! Tracker providers (ARCHITECTURE §8.1): Jira Cloud + Data Center (flavor detection, ADF walker),
 //! Redmine, GitHub Issues (+ Projects v2), GitLab Issues.
 //!
-//! SCAFFOLD STUB: the factory returns `Unsupported("not implemented: <fn>")`.
+//! Every provider resolves its secret per request through [`kelta_http::Authed`] (the resolver
+//! caches), talks only through the per-account [`kelta_http::HttpCtx`], and never hard-codes
+//! workflow ids: moves are resolved at runtime from `transitions()`.
 
 use std::sync::Arc;
 
 use kelta_http::{HttpCtx, ProviderFactory};
 use kelta_proto::api::{CodeHost, SecretResolver, Tracker};
 use kelta_proto::error::KeltaError;
-use kelta_proto::settings::AccountConfig;
+use kelta_proto::settings::{AccountConfig, AccountKind};
+
+pub mod adf;
+mod common;
+pub mod github;
+pub mod gitlab;
+pub mod jira;
+pub mod redmine;
+
+pub use github::GithubIssues;
+pub use gitlab::GitlabIssues;
+pub use jira::JiraTracker;
+pub use redmine::RedmineTracker;
 
 /// Builds `Tracker`s for `jira`, `redmine`, `github`, `gitlab` accounts.
 #[derive(Debug, Default, Clone, Copy)]
@@ -19,11 +33,16 @@ pub struct TrackerFactory;
 impl ProviderFactory for TrackerFactory {
     fn tracker(
         &self,
-        _account: &AccountConfig,
-        _http: HttpCtx,
-        _secrets: Arc<dyn SecretResolver>,
+        account: &AccountConfig,
+        http: HttpCtx,
+        secrets: Arc<dyn SecretResolver>,
     ) -> Result<Arc<dyn Tracker>, KeltaError> {
-        Err(KeltaError::not_implemented("TrackerFactory::tracker"))
+        Ok(match account.kind {
+            AccountKind::Jira => Arc::new(JiraTracker::new(account, http, secrets)?),
+            AccountKind::Redmine => Arc::new(RedmineTracker::new(account, http, secrets)?),
+            AccountKind::Github => Arc::new(GithubIssues::new(account, http, secrets)?),
+            AccountKind::Gitlab => Arc::new(GitlabIssues::new(account, http, secrets)?),
+        })
     }
 
     fn code_host(

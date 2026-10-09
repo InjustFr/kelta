@@ -1,0 +1,69 @@
+{
+  "issues": [
+    {
+      "id": 4567,
+      "project": {
+        "id": 3,
+        "name": "Client Site"
+      },
+      "tracker": {
+        "id": 1,
+        "name": "Bug"
+      },
+      "status": {
+        "id": 1,
+        "name": "New"
+      },
+      "priority": {
+        "id": 2,
+        "name": "Normal"
+      },
+      "author": {
+        "id": 5,
+        "name": "Carol Client"
+      },
+      "subject": "Checkout button misaligned",
+      "description": "h1. Steps\n\n* open the page\n* click *save*",
+      "created_on": "2026-09-01T08:00:00Z",
+      "updated_on": "2026-09-30T08:30:00Z",
+      "assigned_to": {
+        "id": 7,
+        "name": "Louis Duprat"
+      }
+    },
+    {
+      "id": 4568,
+      "project": {
+        "id": 3,
+        "name": "Client Site"
+      },
+      "tracker": {
+        "id": 1,
+        "name": "Bug"
+      },
+      "status": {
+        "id": 2,
+        "name": "In Progress"
+      },
+      "priority": {
+        "id": 2,
+        "name": "Normal"
+      },
+      "author": {
+        "id": 5,
+        "name": "Carol Client"
+      },
+      "subject": "Typo in footer",
+      "description": "h1. Steps\n\n* open the page\n* click *save*",
+      "created_on": "2026-09-01T08:00:00Z",
+      "updated_on": "2026-09-30T08:30:00Z",
+      "assigned_to": {
+        "id": 7,
+        "name": "Louis Duprat"
+      }
+    }
+  ],
+  "total_count": 3,
+  "offset": 0,
+  "limit": 2
+}

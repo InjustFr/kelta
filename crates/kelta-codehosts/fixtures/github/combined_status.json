@@ -1,0 +1,10 @@
+{
+  "state": "success",
+  "statuses": [
+    {
+      "context": "ci/legacy",
+      "state": "success",
+      "target_url": "https://legacy.test/1"
+    }
+  ]
+}

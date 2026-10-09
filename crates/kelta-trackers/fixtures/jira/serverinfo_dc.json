@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://jira.acme.test",
+  "version": "9.12.4",
+  "versionNumbers": [
+    9,
+    12,
+    4
+  ],
+  "deploymentType": "Server",
+  "serverTitle": "Acme Jira DC"
+}
