@@ -116,7 +116,8 @@ fn initialize(params: &Value) -> Value {
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": "kelta", "title": "Kelta", "version": env!("CARGO_PKG_VERSION") },
         "instructions": "Kelta workbench tools for this Claude session: read and move the linked ticket, \
-    comment on it, open files in the tab's editor, create the pull request, list review requests and notify the user."
+    comment on it, open files in the tab's editor, create the pull request, list review requests, add line \
+    comments to the pending review of a pull request under review and notify the user."
     })
 }
 
@@ -127,6 +128,7 @@ const TOOL_NAMES: &[&str] = &[
     "open_in_editor",
     "create_pr",
     "list_review_requests",
+    "add_review_comment",
     "notify",
 ];
 
@@ -182,6 +184,19 @@ pub(crate) fn tool_defs() -> Value {
             "inputSchema": empty,
         },
         {
+            "name": "add_review_comment",
+            "description": "Add a line comment to the pending (draft) review on the pull request this session is reviewing. Nothing is published until the user submits the review in Kelta. `line` is a line of the new version of `path`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "File path relative to the repository root" },
+                    "line": { "type": "integer", "minimum": 1 },
+                    "body": { "type": "string" }
+                },
+                "required": ["path", "line", "body"], "additionalProperties": false
+            },
+        },
+        {
             "name": "notify",
             "description": "Send a desktop notification to the user.",
             "inputSchema": {
@@ -215,6 +230,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str, args: &
         "open_in_editor" => open_in_editor(core, sid, args).await,
         "create_pr" => create_pr(core, sid, args).await,
         "list_review_requests" => list_review_requests(core).await,
+        "add_review_comment" => add_review_comment(core, sid, args).await,
         "notify" => {
             let message = str_arg(args, "message")?;
             let session = core.session_get(sid);
@@ -363,6 +379,24 @@ async fn create_pr(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> To
         Some(url) => format!("Pull request: {url}"),
         None => "Pull request created.".to_owned(),
     })
+}
+
+async fn add_review_comment(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> ToolResult {
+    let (path, body) = (str_arg(args, "path")?, str_arg(args, "body")?);
+    let line = args
+        .get("line")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| *n >= 1)
+        .ok_or_else(|| "`line` must be a positive integer".to_owned())?;
+    let r =
+        work(core, sid).await.and_then(|w| w.review).ok_or("no pull request under review in this session")?;
+    let host = core.code_host_for(&r.account).await.map_err(|e| e.message)?;
+    host.add_pending_comment(&r, path, line, body).await.map_err(|e| e.message)?;
+    Ok(format!(
+        "Pending comment added on {path}:{line} of {}#{}. The user submits the review.",
+        r.repo, r.number
+    ))
 }
 
 async fn list_review_requests(core: &Arc<dyn CoreApi>) -> ToolResult {

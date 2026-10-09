@@ -270,3 +270,27 @@ export function myStateInfo(state: string | null): { label: string; tone: Tone }
       return null;
   }
 }
+
+// ---- review-kind items (FLOW §2.2, §4.7) -----------------------------------------------------
+
+export type ReviewPhase = 'pending' | 'updated' | 'reviewed';
+
+/**
+ * Where a PR I review stands: `pending` (Review requests), `updated` (the head moved after my
+ * review: back in Review requests as "Updated since your review"), `reviewed` (Ship and clean up).
+ */
+export function reviewPhase(r: {
+  my_state: string | null;
+  head_sha: string;
+  reviewed_head?: string | null;
+}): ReviewPhase {
+  if (r.reviewed_head && r.reviewed_head !== r.head_sha) return 'updated';
+  return r.my_state === null || r.my_state === 'pending' ? 'pending' : 'reviewed';
+}
+
+/** Why a work action is unavailable on a review-kind item (a `kelta/pr-<n>` checkout is never pushed). */
+export const REVIEW_READONLY = 'Review checkout: read-only';
+const READONLY_KEYS = ['p', 'r', 'f', 'l'];
+export function workActionDisabled(item: { kind: string }, key: string): string | null {
+  return item.kind === 'review' && READONLY_KEYS.includes(key) ? REVIEW_READONLY : null;
+}

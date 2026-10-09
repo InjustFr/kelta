@@ -109,6 +109,49 @@ test.describe('reviews', () => {
   });
 });
 
+test.describe('reviewing others', () => {
+  test('request row, Enter, detail, s, Ctrl+Enter starts a local review', async ({ page }) => {
+    const errors = await boot(page);
+    await dispatch(page, 'reviews.open');
+    await expect(page.getByText('SHOP-150: cache product images')).toBeVisible();
+    await page.keyboard.press('Enter'); // first request: SHOP-150
+    const detail = page.getByTestId('review-detail');
+    await expect(detail).toBeVisible();
+    await page.keyboard.press('s');
+    const sheet = page.getByRole('dialog', { name: /acme\/shop-api#311|pr-311/ });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Control+Enter');
+    await expect(sheet).toBeHidden();
+    const started = await page.evaluate(() =>
+      window.__kelta!.stores.work.all.some((w) => w.kind === 'review' && w.review?.number === 311),
+    );
+    expect(started).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test('pending comments are submitted with the decision', async ({ page }) => {
+    const errors = await boot(page);
+    await page.evaluate(() =>
+      window.__kelta!.stores.layout.open('shop', {
+        content: {
+          kind: 'review_detail',
+          review: { account: 'github-acme', repo: 'acme/shop-web', number: 101 },
+        },
+        placement: 'new_tab',
+        focus: true,
+        tab_title: 'PR',
+        work_item_id: null,
+      }),
+    );
+    const detail = page.getByTestId('review-detail');
+    await expect(detail.getByTestId('pending-comments')).toContainText('2 pending comments');
+    await page.keyboard.press('a');
+    await expect(page.getByTestId('toasts')).toContainText('Approved');
+    await expect(detail.getByTestId('pending-comments')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('inbox', () => {
   test('lists unbound review requests under Other', async ({ page }) => {
     const errors = await boot(page);

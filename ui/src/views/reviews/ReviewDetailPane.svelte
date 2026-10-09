@@ -24,6 +24,9 @@
   /** The commit shown on screen: the only value `Approve` ever sends. */
   const shownSha = $derived(rv?.head_sha ?? null);
 
+  /** Line comments waiting in my pending review; a / c / m publish them with the decision. */
+  const pendingCount = $derived(detail?.pending_comments ?? 0);
+
   let changed = $state(false);
   let approving = $state(false);
   let dialog = $state<'comment' | 'changes' | null>(null);
@@ -83,14 +86,14 @@
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     switch (e.key) {
-      case 'A':
+      case 'a':
         void approve();
         break;
       case 'c':
-        dialog = 'comment';
-        break;
-      case 'x':
         dialog = 'changes';
+        break;
+      case 'm':
+        dialog = 'comment';
         break;
       case 'o':
         browse();
@@ -111,6 +114,9 @@
     if (root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
   });
 </script>
+
+<!-- Window focus re-reads the PR: my review state, its head and my pending comments (no polling). -->
+<svelte:window onfocus={() => void reviews.loadDetail(ref)} />
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
@@ -186,6 +192,11 @@
         >
         <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
         <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
+        {#if detail.pending_comments > 0}
+          <span class="pending" data-testid="pending-comments">
+            {detail.pending_comments} pending {detail.pending_comments === 1 ? 'comment' : 'comments'}
+          </span>
+        {/if}
         <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
         <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
           Review locally
@@ -271,7 +282,7 @@
     title="Comment"
     label="Comment (Markdown)"
     submitLabel="Comment"
-    required
+    required={!pendingCount}
     onsubmit={(t) => send('comment', t)}
     onclose={() => {
       dialog = null;
@@ -283,7 +294,7 @@
     title="Request changes"
     label="What should change? (Markdown)"
     submitLabel="Request changes"
-    required
+    required={!pendingCount}
     danger
     onsubmit={(t) => send('changes', t)}
     onclose={() => {
@@ -314,6 +325,11 @@
     gap: var(--k-space-2);
     padding: var(--k-space-2) var(--k-space-4);
     background: var(--k-bg-sunken);
+    color: var(--k-warn);
+  }
+
+  .pending {
+    font-size: var(--k-font-size-sm);
     color: var(--k-warn);
   }
 

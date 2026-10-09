@@ -90,6 +90,8 @@ export interface MockState {
   settings: EffectiveSettings;
   approved: Set<string>;
   comments: Record<string, string[]>;
+  /** Pending (draft) review line comments per `repo#number`. */
+  pending: Record<string, number>;
   plugins: (typeof samples.pluginInfo)[];
 }
 
@@ -127,10 +129,12 @@ function freshState(): MockState {
     settings: { value: clone(samples.settingsDefault) as unknown as JsonValue, sources: {} },
     approved: new Set(),
     comments: {},
+    pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
   };
 }
 
+const prKey = (r: { repo: string; number: number }): string => `${r.repo}#${r.number}`;
 const refKey = (r: TicketRef): string => `${r.account}:${r.key}`;
 const sameRef = (a: TicketRef, b: TicketRef): boolean => a.account === b.account && a.key === b.key;
 
@@ -732,6 +736,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const detail: ReviewDetail = {
         ...clone(samples.reviewDetail),
         review: clone(item.review),
+        pending_comments: state.pending[prKey(review)] ?? 0,
         body_html: `<p>${escapeHtml(item.review.title)}</p><p>Mock description. <a href="${item.review.url}">View on host</a></p>`,
       };
       return detail;
@@ -742,17 +747,24 @@ export function createMockTransport(options: MockOptions = {}): {
         throw err('conflict', 'PR changed, refresh', { head_sha: item.review.head_sha });
       }
       item.review.my_state = 'approved';
-      state.approved.add(`${review.repo}#${review.number}`);
+      item.review.reviewed_head = head_sha;
+      delete state.pending[prKey(review)];
+      state.approved.add(prKey(review));
       emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
       return null;
     },
     review_comment: ({ review }) => {
       const item = reviewItem(review);
-      if (!item.review.my_state) item.review.my_state = 'commented';
+      if (!item.review.my_state || item.review.my_state === 'pending') item.review.my_state = 'commented';
+      item.review.reviewed_head = item.review.head_sha;
+      delete state.pending[prKey(review)];
       return null;
     },
     review_request_changes: ({ review }) => {
-      reviewItem(review).review.my_state = 'changes_requested';
+      const item = reviewItem(review);
+      item.review.my_state = 'changes_requested';
+      item.review.reviewed_head = item.review.head_sha;
+      delete state.pending[prKey(review)];
       return null;
     },
     // ---- work ------------------------------------------------------------------------------
