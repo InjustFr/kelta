@@ -158,7 +158,17 @@
       <Button size="sm" loading={retrying} onclick={() => void retryFailed()}>Retry {item.state.step}</Button>
     {/if}
     {#if item.state.kind !== 'finished'}
-      {#if item.pr_url}
+      {#if item.review}
+        {@const ref = item.review}
+        <Button
+          size="sm"
+          variant="primary"
+          icon="git-pull-request"
+          onclick={() => void openContent(projectId, { kind: 'review_detail', review: ref })}
+        >
+          Open review
+        </Button>
+      {:else if item.pr_url}
         <Button size="sm" icon="git-pull-request" onclick={() => browse(item.pr_url)}>Open PR</Button>
       {:else}
         <Button size="sm" icon="git-pull-request" onclick={() => (creating = true)}>Create PR</Button>
