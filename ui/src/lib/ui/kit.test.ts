@@ -123,6 +123,31 @@ describe('components', () => {
     expect(onclose).toHaveBeenCalled();
   });
 
+  it('Menu runs an item by its key; a disabled one swallows it; Enter runs the first', async () => {
+    const onselect = vi.fn();
+    render(Menu, {
+      props: {
+        x: 10,
+        y: 10,
+        onselect,
+        onclose: vi.fn(),
+        items: [
+          { id: 'a', label: 'A' },
+          { id: 'b', label: 'B', key: 'b', disabled: true, title: 'not available yet' },
+          { id: 'f', label: 'F', key: 'F' },
+        ],
+      },
+    });
+    const menu = screen.getByRole('menu');
+    await fireEvent.keyDown(menu, { key: 'b' });
+    expect(onselect).not.toHaveBeenCalled();
+    expect(screen.getByText('B').closest('button')?.title).toBe('not available yet');
+    await fireEvent.keyDown(menu, { key: 'F' });
+    expect(onselect).toHaveBeenCalledWith('f');
+    await fireEvent.keyDown(menu, { key: 'Enter' });
+    expect(onselect).toHaveBeenLastCalledWith('a');
+  });
+
   it('HtmlContent routes links to open_external and never navigates', async () => {
     const { transport, controls } = createMockTransport();
     setTransport(transport);

@@ -811,7 +811,9 @@ pub struct EditorSettings {
     /// Preset id.
     pub default: String,
     pub follow_claude_edits: FollowEdits,
-    /// Appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]`.
+    /// The diff editor's arguments: appended for review sessions and used by Review diff on own work
+    /// items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
+    /// base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
     #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
     pub review_args: Vec<String>,
     #[schemars(extend("x-kelta-merge" = "by_id", "x-kelta-exec" = true))]

@@ -2,15 +2,17 @@
   import type { Attention } from '$lib/gen';
 
   interface Props {
-    level: Attention;
+    /** An attention level, or `working` (Claude busy: hollow ring, derived from the status). */
+    level: Attention | 'working';
     size?: number;
     title?: string;
   }
 
   let { level, size = 8, title }: Props = $props();
 
-  const LABELS: Record<Attention, string> = {
+  const LABELS: Record<Attention | 'working', string> = {
     none: '',
+    working: 'working',
     activity: 'activity',
     done: 'done',
     error: 'error',
@@ -51,5 +53,10 @@
 
   .activity {
     background: var(--k-att-activity);
+  }
+
+  .working {
+    box-sizing: border-box;
+    border: 1.5px solid var(--k-att-activity);
   }
 </style>

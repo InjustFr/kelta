@@ -6,11 +6,16 @@
     icon?: string;
     kbd?: string;
     group?: string;
+    /** Lamp slot (work items). */
+    lamp?: Attention | 'working';
   }
 </script>
 
 <script lang="ts">
+  import type { Attention } from '$lib/gen';
   import { Icon, Kbd, Sheet, Spinner } from '$lib/ui';
+
+  import AttentionDot from '../AttentionDot.svelte';
 
   interface Props {
     title: string;
@@ -101,6 +106,7 @@
           onpointermove={() => (selected = i)}
           onclick={() => onpick(item.id)}
         >
+          {#if item.lamp}<span class="lamp"><AttentionDot level={item.lamp} size={8} /></span>{/if}
           <Icon name={item.icon ?? 'command'} size={14} />
           <span class="label">{item.label}</span>
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
@@ -114,6 +120,13 @@
 </Sheet>
 
 <style>
+  .lamp {
+    display: inline-flex;
+    justify-content: center;
+    flex: none;
+    width: 10px;
+  }
+
   .picker {
     display: flex;
     flex-direction: column;

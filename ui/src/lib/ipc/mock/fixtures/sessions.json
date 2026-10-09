@@ -255,5 +255,34 @@
     "cols": 120,
     "rows": 40,
     "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000011",
+    "project_id": "shop",
+    "kind": {
+      "type": "claude"
+    },
+    "name": "claude",
+    "title": null,
+    "cwd": "/Users/ada/code/shop-api.worktrees/SHOP-155",
+    "status": "done",
+    "status_source": "hook",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "dormant",
+    "pid": null,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a004",
+    "claude": {
+      "session_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0011",
+      "model": "claude-sonnet-5",
+      "preview": "Fixed the race in CartServiceTest: the clock is now injected. 3 files changed.",
+      "files_touched": [],
+      "hooks_active": true
+    },
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T07:30:00Z"
   }
 ]

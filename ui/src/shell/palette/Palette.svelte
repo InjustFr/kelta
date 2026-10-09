@@ -75,6 +75,7 @@
     icon: r.icon,
     kbd: r.kbd,
     group: r.group,
+    lamp: r.lamp,
   }))}
   {query}
   onquery={(q) => (query = q)}

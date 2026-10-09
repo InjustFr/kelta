@@ -189,6 +189,11 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Every unfinished item (one fetch per repo, 5 min floor). */
+  work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
+  /** Spawns the review diff session; the UI places it zoomed in the work tab. */
+  work_diff: { args: { id: WorkItemId }; result: SessionInfo };
+  work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -296,6 +301,9 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_status_all',
+  'work_diff',
+  'work_mark_reviewed',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -475,6 +483,9 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workStatusAll = wrap('work_status_all');
+export const workDiff = wrap('work_diff');
+export const workMarkReviewed = wrap('work_mark_reviewed');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

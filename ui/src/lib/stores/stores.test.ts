@@ -75,8 +75,8 @@ describe('SessionsStore', () => {
   it('loads all sessions and filters by project', async () => {
     const store = new SessionsStore();
     await store.load();
-    expect(store.all).toHaveLength(10);
-    expect(store.forProject('shop')).toHaveLength(4);
+    expect(store.all).toHaveLength(11);
+    expect(store.forProject('shop')).toHaveLength(5);
     expect(store.needingInput.map((s) => s.project_id)).toEqual(['billing']);
     expect(store.next(['shop', 'billing'], null)?.project_id).toBe('billing');
   });
@@ -271,7 +271,7 @@ describe('WorkStore', () => {
   it('loads work items and finds them by ticket/session', async () => {
     const store = new WorkStore();
     await store.load();
-    expect(store.all).toHaveLength(3);
+    expect(store.all).toHaveLength(5);
     const w = store.all[0]!;
     expect(store.forTicket(w.ticket!)?.id).toBe(w.id);
     expect(store.forSession(w.session_ids[0]!)?.id).toBe(w.id);

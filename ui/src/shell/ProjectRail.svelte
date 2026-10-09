@@ -1,20 +1,25 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
-  import { attention, projects, reviews, sessions, toasts, ui } from '$lib/stores';
+  import { attention, projects, sessions, toasts, ui } from '$lib/stores';
   import { Icon, isIconName, Menu, type MenuItem } from '$lib/ui';
 
+  import { nowSummary, refreshNow } from '../views/inbox/now';
   import AttentionDot from './AttentionDot.svelte';
   import { confirms } from './confirm.svelte';
-  import { activateProject, openInbox, railProjects } from './nav';
+  import { activateProject, openInbox, projectAttention, railProjects } from './nav';
 
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
   const home = $derived(rail.find((p) => p.builtin) ?? null);
 
-  const inboxCount = $derived(
-    attention.totalNeedsInput + reviews.items({ kind: 'all' }, 'review_requested').length,
-  );
+  // Now's tile: badge = what waits on Louis (first four sections), tooltip = the split header.
+  const now = $derived(nowSummary());
+
+  // Startup and window focus refresh Now's sources (no polling).
+  onMount(() => void refreshNow());
 
   let menu = $state<{ project: ProjectInfo; x: number; y: number } | null>(null);
   let dragId = $state<string | null>(null);
@@ -33,9 +38,11 @@
   }
 
   function dotTitle(p: ProjectInfo): string {
-    const lvl = attention.level(p.id);
+    const lvl = projectAttention(p.id);
     const n = attention.forProject(p.id).needs_input_count;
-    return lvl === 'needs_input' ? `${n} session${n === 1 ? '' : 's'} need input` : lvl.replace('_', ' ');
+    return lvl === 'needs_input' && n > 0
+      ? `${n} session${n === 1 ? '' : 's'} need input`
+      : lvl.replace('_', ' ');
   }
 
   function menuItems(p: ProjectInfo): MenuItem[] {
@@ -148,26 +155,28 @@
   }
 </script>
 
+<svelte:window onfocus={() => void refreshNow()} />
+
 <nav class="rail" aria-label="Projects" data-testid="rail">
   <button
     type="button"
     class="item inbox"
     class:active={ui.inboxActive}
     onclick={openInbox}
-    title="Inbox"
-    aria-label="Inbox"
+    title={`Now: ${now.header}`}
+    aria-label="Now"
     aria-current={ui.inboxActive ? 'page' : undefined}
     data-testid="rail-inbox"
   >
     <Icon name="inbox" size={18} />
-    {#if inboxCount > 0}
-      <span class="badge" data-testid="inbox-badge">{inboxCount > 99 ? '99+' : inboxCount}</span>
+    {#if now.waiting > 0}
+      <span class="badge" data-testid="inbox-badge">{now.waiting > 99 ? '99+' : now.waiting}</span>
     {/if}
   </button>
 
   <div class="list" role="list">
     {#each reorderable as p (p.id)}
-      {@const lvl = attention.level(p.id)}
+      {@const lvl = projectAttention(p.id)}
       <div role="listitem" class="slot" class:over={overId === p.id && dragId !== p.id}>
         <button
           type="button"
@@ -215,7 +224,7 @@
   </div>
 
   {#if home}
-    {@const lvl = attention.level(home.id)}
+    {@const lvl = projectAttention(home.id)}
     <button
       type="button"
       class="item project home"

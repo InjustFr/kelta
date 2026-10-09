@@ -1,5 +1,5 @@
 // L9 e2e on the IPC mock (VITE_IPC=mock): start work from the board, move a ticket (and roll back),
-// approve a review, the Inbox "Other" group. The shell is L2's: the harness page hosts the panes.
+// approve a review, Now's review requests and ticket rows. The shell is L2's: the harness page hosts the panes.
 import { expect, test, type Page } from '@playwright/test';
 
 const HARNESS = '/tests/e2e/work/harness/index.html';
@@ -109,52 +109,41 @@ test.describe('reviews', () => {
   });
 });
 
-test.describe('inbox', () => {
-  test('lists unbound review requests under Other', async ({ page }) => {
-    const errors = await boot(page);
+test.describe('now', () => {
+  async function openNow(page: Page): Promise<void> {
     await page.evaluate(() =>
       window.__kelta!.stores.layout.open('shop', {
         content: { kind: 'inbox' },
         placement: 'new_tab',
         focus: true,
-        tab_title: 'Inbox',
+        tab_title: 'Now',
         work_item_id: null,
       }),
     );
-    const inbox = page.getByTestId('inbox-pane');
-    await expect(inbox).toBeVisible();
-    const requests = inbox.locator('[data-section="s:requested"]');
-    await expect(requests).toBeVisible();
-    await expect(inbox.getByText('Terraform: add read replica')).toBeVisible();
-    // The "Other" group header sits right above the unbound request.
-    const order = await inbox
-      .locator('[data-group], [data-section], .row')
-      .evaluateAll((els) =>
-        els.map((e) => e.getAttribute('data-group') ?? e.getAttribute('data-section') ?? e.textContent ?? ''),
-      );
-    const at = order.findIndex((t, i) => t === 'Other' && (order[i + 1] ?? '').includes('Terraform'));
-    expect(at).toBeGreaterThan(-1);
-    // Needs-input sessions of other projects are listed too (End jumps to the last row).
-    await inbox.focus();
-    await page.keyboard.press('End');
-    await expect(inbox.getByText('needs input', { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId('inbox-pane')).toBeVisible();
+  }
+
+  test('lists review requests, also on repos bound to no project', async ({ page }) => {
+    const errors = await boot(page);
+    await openNow(page);
+    const now = page.getByTestId('inbox-pane');
+    await expect(now.locator('[data-section="requests"]')).toBeVisible();
+    await expect(now.getByText('Terraform: add read replica')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
-  test('Enter on a ticket opens its detail', async ({ page }) => {
+  test('g on an Up next ticket opens its detail', async ({ page }) => {
     await boot(page);
-    await page.evaluate(() =>
-      window.__kelta!.stores.layout.open('shop', {
-        content: { kind: 'inbox' },
-        placement: 'new_tab',
-        focus: true,
-        tab_title: 'Inbox',
-        work_item_id: null,
-      }),
-    );
-    await expect(page.getByTestId('inbox-pane').getByText('Rate-limit login attempts')).toBeVisible();
-    await page.getByTestId('inbox-pane').focus();
-    await page.keyboard.press('Enter');
+    await openNow(page);
+    const now = page.getByTestId('inbox-pane');
+    await expect(now.getByText('Checkout: show tax breakdown')).toBeVisible();
+    await now.focus();
+    for (let i = 0; i < 30; i += 1) {
+      const id = await now.locator('.row[aria-current="true"]').getAttribute('data-row');
+      if (id === 't:jira-acme:SHOP-151') break;
+      await page.keyboard.press('j');
+    }
+    await page.keyboard.press('g');
     await expect(page.getByTestId('ticket-detail')).toBeVisible();
   });
 });

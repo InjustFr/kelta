@@ -87,27 +87,28 @@ test.describe('project switching', () => {
     for (const ms of measures.slice(-4)) expect(ms).toBeLessThanOrEqual(50);
   });
 
-  test('rail: attention dots, inbox badge and context menu reorder', async ({ page }) => {
+  test('rail: lamps, Now badge and context menu reorder', async ({ page }) => {
     await boot(page);
     const billing = page.locator('[data-testid="rail-project"][data-project-id="billing"]');
+    const tools = page.locator('[data-testid="rail-project"][data-project-id="kelta-tools"]');
     await expect(billing).toHaveAttribute('data-attention', 'needs_input');
-    await expect(page.locator('[data-testid="rail-project"][data-project-id="kelta-tools"]')).toHaveAttribute(
+    await expect(page.locator('[data-testid="rail-project"][data-project-id="shop"]')).toHaveAttribute(
       'data-attention',
-      'done',
+      'working',
     );
+    // kelta-tools' Claude finished long ago: "done" comes from review_due, not the seen flag.
+    await expect(tools).toHaveAttribute('data-attention', 'none');
     await expect(page.getByTestId('inbox-badge')).toBeVisible();
+    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: Claude: 1 asks, 1 ready/);
 
-    // Backend events move the dot.
-    await page.evaluate(() =>
-      window.__keltaMock!.emit({
-        type: 'attention.changed',
-        project_id: 'billing',
-        level: 'none',
-        needs_input_count: 0,
-        total_needs_input: 0,
-      }),
-    );
-    await expect(billing).toHaveAttribute('data-attention', 'none');
+    // A Claude stop with changes lights the tile.
+    await page.evaluate(() => {
+      const mock = window.__keltaMock!;
+      const w = mock.state.work.find((x) => x.project_id === 'kelta-tools')!;
+      w.review_due = true;
+      mock.emit({ type: 'work.updated', work: structuredClone(w) });
+    });
+    await expect(tools).toHaveAttribute('data-attention', 'done');
 
     // Context menu: Move up reorders the rail without touching sessions.
     await billing.click({ button: 'right' });

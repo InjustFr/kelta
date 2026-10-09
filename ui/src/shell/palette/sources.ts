@@ -12,11 +12,22 @@ import { plugins, projects, reviews, sessions, settings, tools } from '$lib/stor
 import { attentionRank } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
+import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
+import { goToWork } from '../../views/work/nav';
+import { workKey, type Lamp } from '../../views/work/phase';
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
 import { activateProject, focusedPane, openContent, revealSession } from '../nav';
 
 export type PaletteGroup =
-  'Sessions' | 'Projects' | 'Actions' | 'Tools' | 'Commands' | 'Tickets' | 'Reviews' | 'Settings';
+  | 'Work items'
+  | 'Sessions'
+  | 'Projects'
+  | 'Actions'
+  | 'Tools'
+  | 'Commands'
+  | 'Tickets'
+  | 'Reviews'
+  | 'Settings';
 
 export interface PaletteItem {
   id: string;
@@ -25,11 +36,13 @@ export interface PaletteItem {
   detail?: string;
   kbd?: string;
   icon: string;
+  lamp?: Exclude<Lamp, 'none'>;
   run: () => void | Promise<void>;
 }
 
 /** Display order of the groups when the query is empty. */
 export const GROUP_ORDER: readonly PaletteGroup[] = [
+  'Work items',
   'Sessions',
   'Projects',
   'Actions',
@@ -63,11 +76,28 @@ export function sessionItems(): PaletteItem[] {
     .map((s) => ({
       id: `session:${s.id}`,
       group: 'Sessions' as const,
-      label: s.name,
+      label: sessionLabel(s),
       detail: sessionDetail(s),
       icon: sessionIcon(s.kind),
       run: () => void revealSession(s.id),
     }));
+}
+
+/** Every unfinished work item: `[lamp] KEY title`, the phase as meta; matches key, title, branch. */
+export function workItems(): PaletteItem[] {
+  return unfinishedWork().map((w) => {
+    const phase = phaseNow(w);
+    return {
+      id: `work:${w.id}`,
+      group: 'Work items' as const,
+      label: `${workKey(w)} ${workTitle(w)}`,
+      detail: `${phase.label} · ${w.branch}`,
+      icon: 'git-branch',
+      lamp: phase.lamp === 'none' ? undefined : phase.lamp,
+      // work_resume recreates a closed tab and resumes Claude.
+      run: () => void goToWork(w),
+    };
+  });
 }
 
 export function projectItems(): PaletteItem[] {
@@ -213,6 +243,7 @@ export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
 /** Every synchronous item, in display order. */
 export function buildItems(): PaletteItem[] {
   return [
+    ...workItems(),
     ...sessionItems(),
     ...projectItems(),
     ...actionItems(),

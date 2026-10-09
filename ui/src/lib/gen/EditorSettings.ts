@@ -8,6 +8,8 @@ export type EditorSettings = {
  */
 default: string, follow_claude_edits: FollowEdits, 
 /**
- * Appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]`.
+ * The diff editor's arguments: appended for review sessions and used by Review diff on own work
+ * items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
+ * base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
  */
 review_args: Array<string>, presets: Array<EditorPreset>, };
