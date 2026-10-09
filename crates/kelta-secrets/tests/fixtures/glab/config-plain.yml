@@ -1,0 +1,15 @@
+git_protocol: ssh
+editor:
+glamour_style: dark
+check_update: false
+hosts:
+    gitlab.com:
+        token: glpat-plain-com-token
+        api_host: gitlab.com
+        git_protocol: ssh
+        api_protocol: https
+        user: louis
+    gitlab.acme.example:
+        token: "glpat-acme-token"
+        api_host: gitlab.acme.example
+        user: louis

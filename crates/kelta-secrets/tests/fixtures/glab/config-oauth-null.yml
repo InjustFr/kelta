@@ -1,0 +1,6 @@
+hosts:
+    gitlab.com:
+        token: !!null 
+        is_oauth2: "true"
+        oauth2_refresh_token: !!null 
+        user: louis
