@@ -21,16 +21,16 @@ Open source (MIT). Desktop app built with Tauri v2, Svelte 5 and Rust. macOS 13+
 
 ## Try the latest build
 
-Every push to `main` publishes unsigned builds to the rolling
+`bash scripts/nightly-local.sh` builds on the maintainer's Mac and publishes unsigned builds to the rolling
 [nightly prerelease](https://github.com/InjustFr/kelta/releases/tag/nightly):
 
 | Platform | File |
 |---|---|
-| macOS 13+ (universal) | `Kelta_*_universal.dmg` |
-| Linux, any distro | `kelta_*_amd64.AppImage` |
-| Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb` |
+| macOS 13+ (Apple silicon) | `Kelta_*_aarch64.dmg` |
+| Linux, any distro | `kelta_*_amd64.AppImage`, `kelta_*_aarch64.AppImage` (arm64) |
+| Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb`, `kelta_*_arm64.deb` |
 
-The release notes list the commit and the lanes merged so far. The builds are for testing; expect rough edges.
+The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached. The builds are for testing; expect rough edges.
 
 ### macOS
 
