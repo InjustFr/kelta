@@ -23,7 +23,8 @@ pub async fn diagnostics_run(core: State<'_, Arc<Core>>) -> Res<Diagnostics> {
 
     let secrets = core.secret_resolver();
     let (backends, notifications) = tokio::join!(secrets.backends_status(), probes::notification_daemon());
-    let mut checks = vec![probes::graphics(), probes::webkit(), notifications, probes::secret_backends(&backends)];
+    let mut checks =
+        vec![probes::graphics(), probes::webkit(), notifications, probes::secret_backends(&backends)];
 
     let claude_bin = settings.claude.binary.clone();
     for (name, required, min) in [

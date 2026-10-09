@@ -105,6 +105,13 @@ pub fn needs_window(ev: &UiEvent) -> bool {
 impl UiBridge for TauriBridge {
     fn emit(&self, ev: UiEvent) {
         match &ev {
+            UiEvent::CtlCommand { cmd: CtlCommand::Emit { name, .. } }
+                if name == "custom.bench.close_window" && super::bench::enabled() =>
+            {
+                if let Some(w) = self.handle.get_webview_window(MAIN_WINDOW) {
+                    let _ = w.close();
+                }
+            }
             // Toggle is native: it must work when the webview is destroyed or hung.
             UiEvent::CtlCommand { cmd: CtlCommand::Toggle } => super::toggle(&self.handle),
             e if needs_window(e) => self.deliver_command(ev),
@@ -118,7 +125,8 @@ impl UiBridge for TauriBridge {
         #[cfg(target_os = "macos")]
         {
             let label = (needs_input > 0).then(|| needs_input.to_string());
-            let _ = self.handle.run_on_main_thread(move || crate::platform::dock::set_badge(label.as_deref()));
+            let _ =
+                self.handle.run_on_main_thread(move || crate::platform::dock::set_badge(label.as_deref()));
         }
         #[cfg(not(target_os = "macos"))]
         {

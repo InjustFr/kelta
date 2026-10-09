@@ -70,7 +70,8 @@ fn linux_pre_init(args: &[String], safe_flag: bool) -> PreInit {
     limit_malloc_arenas();
 
     let cli = CliArgs::parse(args);
-    let dirs = Dirs::from_process_env(&DirsOverrides { config: cli.config_dir.clone(), ..Default::default() }).ok();
+    let dirs =
+        Dirs::from_process_env(&DirsOverrides { config: cli.config_dir.clone(), ..Default::default() }).ok();
 
     let cfg = dirs.as_ref().map(|d| kelta_config::early::linux_graphics(&d.config)).unwrap_or_default();
 

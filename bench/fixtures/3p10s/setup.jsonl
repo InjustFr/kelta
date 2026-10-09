@@ -1,0 +1,13 @@
+{"cmd": "open", "path": "@FIXTURES@/3p10s/projects/a"}
+{"cmd": "open", "path": "@FIXTURES@/3p10s/projects/b"}
+{"cmd": "open", "path": "@FIXTURES@/3p10s/projects/c"}
+{"cmd": "new", "template": "claude", "cwd": "@FIXTURES@/3p10s/projects/a"}
+{"cmd": "new", "template": "claude", "cwd": "@FIXTURES@/3p10s/projects/b"}
+{"cmd": "new", "template": "claude", "cwd": "@FIXTURES@/3p10s/projects/c"}
+{"cmd": "new", "template": "editor", "cwd": "@FIXTURES@/3p10s/projects/a"}
+{"cmd": "new", "template": "editor", "cwd": "@FIXTURES@/3p10s/projects/b"}
+{"cmd": "new", "template": "editor", "cwd": "@FIXTURES@/3p10s/projects/c"}
+{"cmd": "new", "template": "shell", "cwd": "@FIXTURES@/3p10s/projects/a"}
+{"cmd": "new", "template": "shell", "cwd": "@FIXTURES@/3p10s/projects/b"}
+{"cmd": "new", "template": "sim-ink", "cwd": "@FIXTURES@/3p10s/projects/a"}
+{"cmd": "new", "template": "sim-alt", "cwd": "@FIXTURES@/3p10s/projects/b"}

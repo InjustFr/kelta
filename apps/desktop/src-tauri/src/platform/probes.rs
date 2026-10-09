@@ -66,7 +66,8 @@ pub fn find_in_dirs(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
 
 /// Directories searched for tools: `$PATH` plus the usual places a Dock/desktop launch misses.
 pub fn search_dirs(path_var: Option<&str>, home: Option<&Path>) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = path_var.unwrap_or("").split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect();
+    let mut dirs: Vec<PathBuf> =
+        path_var.unwrap_or("").split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect();
     for extra in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"] {
         dirs.push(PathBuf::from(extra));
     }
@@ -115,7 +116,8 @@ pub fn graphics() -> Check {
                     if wayland { " (Wayland)" } else { "" },
                 );
                 let status = if a.guard_tripped { CheckStatus::Warn } else { CheckStatus::Ok };
-                let fix = (a.guard_tripped || a.nvidia).then_some("Settings > Linux graphics, or run `kelta --safe-graphics`");
+                let fix = (a.guard_tripped || a.nvidia)
+                    .then_some("Settings > Linux graphics, or run `kelta --safe-graphics`");
                 check("graphics", "Graphics", status, detail, fix)
             }
             None => check("graphics", "Graphics", CheckStatus::Warn, "pre_init did not run", None),
@@ -173,11 +175,17 @@ pub async fn notification_daemon() -> Check {
         };
         // one-shot: bound the D-Bus round trip so diagnostics never hang
         match tokio::time::timeout(Duration::from_secs(2), probe).await {
-            Ok(Ok((name, vendor, version, _spec))) => {
-                check("notifications", "Notification daemon", CheckStatus::Ok, format!("{name} {version} ({vendor})"), None)
-            }
+            Ok(Ok((name, vendor, version, _spec))) => check(
+                "notifications",
+                "Notification daemon",
+                CheckStatus::Ok,
+                format!("{name} {version} ({vendor})"),
+                None,
+            ),
             Ok(Err(e)) => check("notifications", "Notification daemon", CheckStatus::Warn, e, fix),
-            Err(_) => check("notifications", "Notification daemon", CheckStatus::Warn, "no reply within 2 s", fix),
+            Err(_) => {
+                check("notifications", "Notification daemon", CheckStatus::Warn, "no reply within 2 s", fix)
+            }
         }
     }
     #[cfg(not(target_os = "linux"))]
@@ -192,7 +200,13 @@ pub fn secret_backends(list: &[SecretBackendStatus]) -> Check {
     let primary = if cfg!(target_os = "macos") { "keychain" } else { "secret-service" };
     let label = if cfg!(target_os = "macos") { "Keychain" } else { "Secret Service" };
     match list.iter().find(|b| b.backend == primary) {
-        Some(b) if b.available => check("secret-service", label, CheckStatus::Ok, b.detail.clone().unwrap_or_else(|| "available".into()), None),
+        Some(b) if b.available => check(
+            "secret-service",
+            label,
+            CheckStatus::Ok,
+            b.detail.clone().unwrap_or_else(|| "available".into()),
+            None,
+        ),
         Some(b) => check(
             "secret-service",
             label,
@@ -219,12 +233,19 @@ async fn run_version(path: &Path) -> Option<String> {
 }
 
 /// One tool probe (`claude`, `nvim`, `git`, `gh`, `glab`).
-pub async fn tool(name: &str, required: bool, min: Option<&str>, dirs: &[PathBuf]) -> (Check, Option<ToolVersion>) {
+pub async fn tool(
+    name: &str,
+    required: bool,
+    min: Option<&str>,
+    dirs: &[PathBuf],
+) -> (Check, Option<ToolVersion>) {
     let label = name.to_owned();
     let missing = if required { CheckStatus::Fail } else { CheckStatus::Warn };
     let Some(path) = find_in_dirs(name, dirs) else {
         let fix = match name {
-            "claude" => "Install Claude Code (https://docs.claude.com/claude-code) and make sure it is in your login PATH",
+            "claude" => {
+                "Install Claude Code (https://docs.claude.com/claude-code) and make sure it is in your login PATH"
+            }
             "nvim" => "Install Neovim (brew install neovim / apt install neovim)",
             "git" => "Install git",
             "gh" => "Optional: install the GitHub CLI for GitHub token reuse",
@@ -241,7 +262,13 @@ pub async fn tool(name: &str, required: bool, min: Option<&str>, dirs: &[PathBuf
             (check(name, &label, status, detail, fix.as_deref()), Some(ToolVersion { path, version, ok }))
         }
         None => (
-            check(name, &label, CheckStatus::Warn, format!("{} did not report a version", path.display()), None),
+            check(
+                name,
+                &label,
+                CheckStatus::Warn,
+                format!("{} did not report a version", path.display()),
+                None,
+            ),
             None,
         ),
     }
@@ -258,7 +285,9 @@ pub fn hooks(total: usize, inactive: usize) -> Check {
             "hooks",
             "Claude hooks",
             CheckStatus::Warn,
-            format!("{inactive} of {total} session(s) report no hooks; status falls back to output heuristics"),
+            format!(
+                "{inactive} of {total} session(s) report no hooks; status falls back to output heuristics"
+            ),
             Some("Check that kelta-ctl is reachable and ~/.claude settings are not overriding hooks"),
         )
     }
@@ -348,7 +377,8 @@ mod tests {
         assert_eq!(hooks(3, 1).status, CheckStatus::Warn);
         let primary = if cfg!(target_os = "macos") { "keychain" } else { "secret-service" };
         let up = SecretBackendStatus { backend: primary.into(), available: true, detail: None };
-        let down = SecretBackendStatus { backend: primary.into(), available: false, detail: Some("x".into()) };
+        let down =
+            SecretBackendStatus { backend: primary.into(), available: false, detail: Some("x".into()) };
         assert_eq!(secret_backends(&[up]).status, CheckStatus::Ok);
         assert_eq!(secret_backends(&[down]).status, CheckStatus::Warn);
         assert_eq!(secret_backends(&[]).status, CheckStatus::Warn);

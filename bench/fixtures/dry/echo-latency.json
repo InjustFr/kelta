@@ -1,0 +1,4 @@
+{
+ "echo_frames_p95": 1.0,
+ "keydown_to_pty_p99_ms": 1.9
+}

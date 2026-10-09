@@ -2,6 +2,7 @@
 //! app_id, geometry restore), macOS app menu, close → background / quit, reopen, second instance,
 //! webview crash/hang reload.
 
+pub mod bench;
 pub mod bridge;
 
 use std::path::{Path, PathBuf};
@@ -35,13 +36,17 @@ fn env(k: &str) -> Option<String> {
 
 fn background_mode(app: &AppHandle) -> bool {
     core(app).is_some_and(|c| {
-        decorations::closes_to_background(c.config().effective(None).window.close_behavior, cfg!(target_os = "macos"))
+        decorations::closes_to_background(
+            c.config().effective(None).window.close_behavior,
+            cfg!(target_os = "macos"),
+        )
     })
 }
 
 /// Called from the Tauri `setup` hook after `Core::start`.
 pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::error::Error>> {
     let _ = core;
+    bench::started();
     #[cfg(target_os = "macos")]
     app.set_menu(app_menu(app.handle())?)?;
     create(app.handle())?;
@@ -64,6 +69,7 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
             // the launch worked, so the crash guard can be dropped.
             if matches!(p.event(), PageLoadEvent::Finished) {
                 crate::platform::launch_succeeded();
+                bench::page_loaded();
             }
         });
 
@@ -152,8 +158,11 @@ pub(crate) fn reload_url(current: Option<Url>, safe: bool) -> Option<Url> {
     if safe == has_safe {
         return None;
     }
-    let keep: Vec<(String, String)> =
-        url.query_pairs().filter(|(k, _)| k != "safe").map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+    let keep: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(k, _)| k != "safe")
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
     url.set_query(None);
     {
         let mut q = url.query_pairs_mut();
@@ -184,6 +193,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         }
         // The webview is gone: its event channels are dead; commands queue until the next one.
         WindowEvent::Destroyed => {
+            if bench::enabled() {
+                bench::mark("window_closed", 1.0);
+            }
             if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
                 b.clear_subscribers();
             }
@@ -293,6 +305,9 @@ mod tests {
     #[test]
     fn second_instance_paths_are_absolute() {
         let argv = ["kelta", "--safe-graphics", "repo", "/abs"].map(String::from);
-        assert_eq!(second_instance_paths(&argv, "/work"), [PathBuf::from("/work/repo"), PathBuf::from("/abs")]);
+        assert_eq!(
+            second_instance_paths(&argv, "/work"),
+            [PathBuf::from("/work/repo"), PathBuf::from("/abs")]
+        );
     }
 }
