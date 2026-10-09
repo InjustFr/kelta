@@ -318,11 +318,12 @@ mod tests {
         let other = kelta_proto::dirs::my_uid() + 1;
         std::thread::spawn(move || serve_as(l, host(), Duration::from_secs(30), other));
         let mut s = UnixStream::connect(&sock).unwrap();
-        s.write_all(&encode(&Call { seq: 1, req: Req::Hello { v: PROTOCOL_VERSION } }, &[]).unwrap())
-            .unwrap();
+        // Linux may reset the connection (unread data), macOS closes it: either way no reply.
+        let _ = s.write_all(&encode(&Call { seq: 1, req: Req::Hello { v: PROTOCOL_VERSION } }, &[]).unwrap());
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         let mut buf = Vec::new();
-        // dropped without a reply
-        assert_eq!(s.read_to_end(&mut buf).unwrap(), 0);
+        let _ = s.read_to_end(&mut buf);
+        assert!(buf.is_empty(), "rejected peer got a reply");
     }
 
     #[test]
