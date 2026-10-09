@@ -748,21 +748,7 @@ impl Core {
             spec.rows = if rows > 0 { rows } else { e.info.rows };
             (spec, e.restore.clone())
         };
-        let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
-        let mut launch = restore_launch(&spec, &policy, &binary, use_continue);
-        // A work item's Claude needs its per-session files regenerated (the runtime dir does not
-        // survive a reboot): kelta-work builds the full argv.
-        if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
-            match self.work.claude_restore_request(id, use_continue).await {
-                Ok(Some(req)) => {
-                    launch = Launch { program: req.program, args: req.args, resume_attempt: !use_continue };
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    tracing::warn!(error = %e, session = %id, "work item Claude restore files not written")
-                }
-            }
-        }
+        let launch = self.relaunch(id, &spec, &policy, use_continue).await;
         let res = self.spawn_with(id.clone(), spec, launch, SpawnMode::Restore).await;
         if let Some(x) = self.sessions.lock().get_mut(id) {
             x.restoring = false;
@@ -777,6 +763,32 @@ impl Core {
     // =========================================================================================
     // Terminal passthroughs
     // =========================================================================================
+
+    /// Launch for a restore or restart under the same id.
+    async fn relaunch(
+        &self,
+        id: &SessionId,
+        spec: &SpawnRequest,
+        policy: &RestorePolicy,
+        use_continue: bool,
+    ) -> Launch {
+        let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
+        let mut launch = restore_launch(spec, policy, &binary, use_continue);
+        // A work item's Claude needs its per-session files regenerated (the runtime dir does not
+        // survive a reboot): kelta-work builds the full argv.
+        if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
+            match self.work.claude_restore_request(id, use_continue).await {
+                Ok(Some(req)) => {
+                    launch = Launch { program: req.program, args: req.args, resume_attempt: !use_continue };
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, session = %id, "work item Claude restore files not written")
+                }
+            }
+        }
+        launch
+    }
 
     /// `session_attach`: Dormant sessions spawn here (lazy restore).
     pub async fn session_attach(
@@ -911,7 +923,7 @@ impl Core {
         }
     }
 
-    /// `session_restart`: same id, same request.
+    /// `session_restart`: same id, same request (a work item's Claude gets its restore argv).
     pub async fn session_restart(&self, id: &SessionId) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         let (spec, lifecycle, restore) = {
@@ -939,8 +951,7 @@ impl Core {
         } else {
             RestorePolicy::Relaunch
         };
-        let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
-        let launch = restore_launch(&spec, &policy, &binary, false);
+        let launch = self.relaunch(id, &spec, &policy, false).await;
         self.spawn_with(id.clone(), spec, launch, SpawnMode::Restart).await
     }
 
