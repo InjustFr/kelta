@@ -42,9 +42,12 @@ time = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true }
+objc2-foundation = { workspace = true }
+objc2-web-kit = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { workspace = true }
+zbus = { workspace = true }
 
 [dev-dependencies]
 kelta-proto = { workspace = true, features = ["testing"] }

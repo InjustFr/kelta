@@ -1,0 +1,9 @@
+{
+  "layers": [
+    "project"
+  ],
+  "paths": [
+    "worktree.setup"
+  ],
+  "requires_restart": []
+}

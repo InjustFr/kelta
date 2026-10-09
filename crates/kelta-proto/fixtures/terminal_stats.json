@@ -1,0 +1,16 @@
+{
+  "reader_threads": 1,
+  "sessions": [
+    {
+      "attached": true,
+      "bytes_in": 1048576,
+      "cols": 120,
+      "history_lines": 500,
+      "id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+      "inflight": 0,
+      "memory_bytes": 1440000,
+      "rows": 40
+    }
+  ],
+  "total_memory_bytes": 1440000
+}

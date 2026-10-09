@@ -1,0 +1,102 @@
+[
+  {
+    "enabled": true,
+    "id": "claude+editor",
+    "label": "Claude + editor",
+    "layout": {
+      "children": [
+        {
+          "command": null,
+          "name": null,
+          "profile": null,
+          "session": "claude"
+        },
+        {
+          "command": null,
+          "name": null,
+          "profile": null,
+          "session": "editor"
+        }
+      ],
+      "ratios": [
+        0.5,
+        0.5
+      ],
+      "split": "row"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "review",
+    "label": "Review",
+    "layout": {
+      "children": [
+        {
+          "command": null,
+          "name": null,
+          "profile": "review",
+          "session": "claude"
+        },
+        {
+          "children": [
+            {
+              "command": null,
+              "name": null,
+              "profile": null,
+              "session": "editor"
+            },
+            {
+              "command": "git diff --stat origin/{base}...HEAD",
+              "name": null,
+              "profile": null,
+              "session": "shell"
+            }
+          ],
+          "ratios": [
+            0.75,
+            0.25
+          ],
+          "split": "column"
+        }
+      ],
+      "ratios": [
+        0.5,
+        0.5
+      ],
+      "split": "row"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "claude",
+    "label": "Claude",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "claude"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "editor",
+    "label": "Editor",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "editor"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "shell",
+    "label": "Shell",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "shell"
+    }
+  }
+]

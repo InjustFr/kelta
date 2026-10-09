@@ -9,6 +9,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use crate::api::PluginGrant;
 use crate::codehost::*;
 use crate::ctl::*;
 use crate::error::*;
@@ -20,7 +21,9 @@ use crate::ipc::*;
 use crate::model::*;
 use crate::secret::SecretBackendStatus;
 use crate::settings::*;
-use crate::term::TerminalPalette;
+use crate::term::{
+    LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
+};
 use crate::tracker::*;
 
 /// One fixture: name (file stem), Rust type name, JSON value, and a round-trip function.
@@ -1091,6 +1094,148 @@ pub fn all() -> Vec<Fixture> {
         ),
         fx!("hook_stop_failure", HookPayload, hook("StopFailure", json!({"error": "rate_limit"}))),
         fx!("hook_session_end", HookPayload, hook("SessionEnd", json!({"reason": "prompt_input_exit"}))),
+        fx!(
+            "notification",
+            Notification,
+            Notification {
+                title: "Shop: SHOP-142 claude".into(),
+                body: Some("I need permission to run `cargo test`.".into()),
+                urgency: Urgency::Critical,
+                project_id: Some(ProjectId::new("shop")),
+                session_id: Some(SessionId::new(SID)),
+            }
+        ),
+        fx!(
+            "terminal_stats",
+            TerminalStats,
+            TerminalStats {
+                sessions: vec![SessionTermStats {
+                    id: SessionId::new(SID),
+                    bytes_in: 1_048_576,
+                    history_lines: 500,
+                    cols: 120,
+                    rows: 40,
+                    inflight: 0,
+                    attached: true,
+                    memory_bytes: 1_440_000,
+                }],
+                total_memory_bytes: 1_440_000,
+                reader_threads: 1,
+            }
+        ),
+        fx!(
+            "terminal_limits",
+            TerminalLimits,
+            TerminalLimits { scrollback: ScrollbackSettings::default(), memory_cap_mb: 160 }
+        ),
+        fx!(
+            "login_env",
+            LoginEnv,
+            LoginEnv {
+                vars: BTreeMap::from([("PATH".to_owned(), "/opt/homebrew/bin:/usr/bin:/bin".to_owned())]),
+                source: LoginEnvSource::LoginInteractive,
+                shell: Some(PathBuf::from("/bin/zsh")),
+            }
+        ),
+        fx!(
+            "proxied_request",
+            ProxiedRequest,
+            ProxiedRequest {
+                url: "https://api.acme.com/v1/burndown".into(),
+                method: "GET".into(),
+                headers: BTreeMap::from([("accept".to_owned(), "application/json".to_owned())]),
+                body: None,
+                body_base64: false,
+                timeout_ms: Some(10_000),
+            }
+        ),
+        fx!(
+            "proxied_response",
+            ProxiedResponse,
+            ProxiedResponse {
+                status: 200,
+                headers: BTreeMap::from([("content-type".to_owned(), "application/json".to_owned())]),
+                body: "{\"points\":[]}".into(),
+                body_base64: false,
+            }
+        ),
+        fx!(
+            "settings_diff",
+            SettingsDiff,
+            SettingsDiff {
+                layers: vec![Layer::Project],
+                paths: vec!["worktree.setup".into()],
+                requires_restart: vec![],
+            }
+        ),
+        fx!(
+            "plugin_grant",
+            PluginGrant,
+            PluginGrant {
+                permission: "tickets.read".into(),
+                granted_at: TS.into(),
+                manifest_sha256: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08".into(),
+            }
+        ),
+        fx!(
+            "account_config",
+            AccountConfig,
+            AccountConfig {
+                kind: AccountKind::Jira,
+                base_url: Some("https://acme.atlassian.net".into()),
+                flavor: JiraFlavor::Auto,
+                auth: None,
+                email: Some("me@acme.com".into()),
+                user: None,
+                secret: Some(crate::secret::SecretRef::new("keyring:jira-acme")),
+                text_format: TextFormat::Textile,
+                poll_secs: None,
+                web_url: None,
+            }
+        ),
+        fx!("session_templates_default", Vec<SessionTemplate>, default_session_templates()),
+        fx!("editor_presets_default", Vec<EditorPreset>, default_editor_presets()),
+        fx!(
+            "review_query",
+            ReviewQuery,
+            ReviewQuery { kind: ReviewKind::Authored, include_team: true, include_drafts: false }
+        ),
+        fx!("work_source_review", WorkSource, WorkSource::Review { review: review_ref() }),
+        fx!(
+            "pane_ref",
+            PaneRef,
+            PaneRef {
+                project_id: ProjectId::new("shop"),
+                tab_id: TabId::new("tab-1"),
+                pane_id: PaneId::new("pane-2")
+            }
+        ),
+        fx!(
+            "pr_create",
+            PrCreate,
+            PrCreate {
+                repo: "acme/shop-api".into(),
+                head: "feat/SHOP-142-rate-limit-login".into(),
+                base: "main".into(),
+                title: "SHOP-142: Rate-limit login".into(),
+                body: "https://acme.atlassian.net/browse/SHOP-142".into(),
+                draft: false,
+            }
+        ),
+        fx!(
+            "ctl_command_new",
+            CtlCommand,
+            CtlCommand::New {
+                template: "claude+editor".into(),
+                cwd: Some(PathBuf::from("/home/ada/code/shop-api")),
+                project: Some(ProjectId::new("shop")),
+            }
+        ),
+        fx!(
+            "ctl_response_error",
+            CtlResponse,
+            CtlResponse::err(KeltaError::invalid("only custom.* events can be emitted"))
+        ),
     ];
     for (name, ev) in ui_event_samples() {
         v.push(Fixture { name, type_name: "UiEvent", value: val(&ev), roundtrip: rt::<UiEvent> });

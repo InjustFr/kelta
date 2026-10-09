@@ -1,0 +1,6 @@
+{
+  "cmd": "new",
+  "cwd": "/home/ada/code/shop-api",
+  "project": "shop",
+  "template": "claude+editor"
+}

@@ -73,6 +73,8 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["rt-tokio-
 zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
 arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
 objc2 = { version = "=0.6.5" }
+objc2-foundation = { version = "=0.3.2" }
+objc2-web-kit = { version = "=0.3.2" }
 webkit2gtk = { version = "=2.0.2" }
 
 # ---- text / markdown -------------------------------------------------------

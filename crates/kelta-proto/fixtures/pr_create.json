@@ -1,0 +1,8 @@
+{
+  "base": "main",
+  "body": "https://acme.atlassian.net/browse/SHOP-142",
+  "draft": false,
+  "head": "feat/SHOP-142-rate-limit-login",
+  "repo": "acme/shop-api",
+  "title": "SHOP-142: Rate-limit login"
+}

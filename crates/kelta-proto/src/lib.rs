@@ -25,6 +25,7 @@ pub mod samples;
 pub mod schema;
 pub mod secret;
 pub mod settings;
+pub mod store;
 pub mod term;
 pub mod tracker;
 pub mod typescript;

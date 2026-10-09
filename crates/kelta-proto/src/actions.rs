@@ -7,6 +7,9 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+/// Action id: a built-in id from [`ACTIONS`] or `plugin.command.<command-id>`.
+pub type ActionId = String;
+
 /// Where an action may be triggered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -1,0 +1,8 @@
+{
+  "kind": "review",
+  "review": {
+    "account": "github-work",
+    "number": 87,
+    "repo": "acme/shop-api"
+  }
+}

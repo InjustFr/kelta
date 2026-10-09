@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "invalid_argument",
+    "detail": null,
+    "message": "only custom.* events can be emitted",
+    "retry_after_ms": null
+  },
+  "ok": false,
+  "result": null
+}

@@ -1,0 +1,105 @@
+[
+  {
+    "args": [
+      "--listen",
+      "{sock}",
+      "{path}"
+    ],
+    "command": "nvim",
+    "enabled": true,
+    "external": false,
+    "id": "nvim",
+    "label": "Neovim",
+    "open": "rpc",
+    "open_cmd": null,
+    "open_keys": null,
+    "restore": "mksession"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "vim",
+    "enabled": true,
+    "external": false,
+    "id": "vim",
+    "label": "Vim",
+    "open": "keys",
+    "open_cmd": null,
+    "open_keys": "<C-\\><C-N>:edit +{line} {file}<CR>",
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "hx",
+    "enabled": true,
+    "external": false,
+    "id": "helix",
+    "label": "Helix",
+    "open": "none",
+    "open_cmd": null,
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "-nw",
+      "--eval",
+      "(progn (setq server-name \"kelta-{sid8}\") (server-start))",
+      "{path}"
+    ],
+    "command": "emacs",
+    "enabled": true,
+    "external": false,
+    "id": "emacs",
+    "label": "Emacs",
+    "open": "command",
+    "open_cmd": [
+      "emacsclient",
+      "-s",
+      "kelta-{sid8}",
+      "-n",
+      "+{line}",
+      "{file}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "code",
+    "enabled": true,
+    "external": true,
+    "id": "vscode",
+    "label": "VS Code",
+    "open": "command",
+    "open_cmd": [
+      "code",
+      "-g",
+      "{file}:{line}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "zed",
+    "enabled": true,
+    "external": true,
+    "id": "zed",
+    "label": "Zed",
+    "open": "command",
+    "open_cmd": [
+      "zed",
+      "{file}:{line}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  }
+]

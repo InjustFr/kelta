@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlRequest, CtlResponse, Diagnostics, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, OpenPaneRequest, PerfSnapshot, PluginInfo, PluginInstallPreview, PluginManifest, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ReviewDetail, ReviewPage, ScreenOpenResult, SecretBackendStatus, SessionInfo, Settings, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalPalette, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -2171,6 +2171,357 @@ export const hookSessionEnd: HookPayload = {
   "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl"
 };
 
+export const notification: Notification = {
+  "body": "I need permission to run `cargo test`.",
+  "project_id": "shop",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+  "title": "Shop: SHOP-142 claude",
+  "urgency": "critical"
+};
+
+export const terminalStats: TerminalStats = {
+  "reader_threads": 1,
+  "sessions": [
+    {
+      "attached": true,
+      "bytes_in": 1048576,
+      "cols": 120,
+      "history_lines": 500,
+      "id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+      "inflight": 0,
+      "memory_bytes": 1440000,
+      "rows": 40
+    }
+  ],
+  "total_memory_bytes": 1440000
+};
+
+export const terminalLimits: TerminalLimits = {
+  "memory_cap_mb": 160,
+  "scrollback": {
+    "claude": 3000,
+    "custom": 3000,
+    "editor": 500,
+    "setup": 1000,
+    "shell": 3000,
+    "tool": 500
+  }
+};
+
+export const loginEnv: LoginEnv = {
+  "shell": "/bin/zsh",
+  "source": "login_interactive",
+  "vars": {
+    "PATH": "/opt/homebrew/bin:/usr/bin:/bin"
+  }
+};
+
+export const proxiedRequest: ProxiedRequest = {
+  "body": null,
+  "body_base64": false,
+  "headers": {
+    "accept": "application/json"
+  },
+  "method": "GET",
+  "timeout_ms": 10000,
+  "url": "https://api.acme.com/v1/burndown"
+};
+
+export const proxiedResponse: ProxiedResponse = {
+  "body": "{\"points\":[]}",
+  "body_base64": false,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+};
+
+export const settingsDiff: SettingsDiff = {
+  "layers": [
+    "project"
+  ],
+  "paths": [
+    "worktree.setup"
+  ],
+  "requires_restart": []
+};
+
+export const pluginGrant: PluginGrant = {
+  "granted_at": "2026-10-09T12:00:00Z",
+  "manifest_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "permission": "tickets.read"
+};
+
+export const accountConfig: AccountConfig = {
+  "auth": null,
+  "base_url": "https://acme.atlassian.net",
+  "email": "me@acme.com",
+  "flavor": "auto",
+  "kind": "jira",
+  "poll_secs": null,
+  "secret": "keyring:jira-acme",
+  "text_format": "textile",
+  "user": null,
+  "web_url": null
+};
+
+export const sessionTemplatesDefault: SessionTemplate[] = [
+  {
+    "enabled": true,
+    "id": "claude+editor",
+    "label": "Claude + editor",
+    "layout": {
+      "children": [
+        {
+          "command": null,
+          "name": null,
+          "profile": null,
+          "session": "claude"
+        },
+        {
+          "command": null,
+          "name": null,
+          "profile": null,
+          "session": "editor"
+        }
+      ],
+      "ratios": [
+        0.5,
+        0.5
+      ],
+      "split": "row"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "review",
+    "label": "Review",
+    "layout": {
+      "children": [
+        {
+          "command": null,
+          "name": null,
+          "profile": "review",
+          "session": "claude"
+        },
+        {
+          "children": [
+            {
+              "command": null,
+              "name": null,
+              "profile": null,
+              "session": "editor"
+            },
+            {
+              "command": "git diff --stat origin/{base}...HEAD",
+              "name": null,
+              "profile": null,
+              "session": "shell"
+            }
+          ],
+          "ratios": [
+            0.75,
+            0.25
+          ],
+          "split": "column"
+        }
+      ],
+      "ratios": [
+        0.5,
+        0.5
+      ],
+      "split": "row"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "claude",
+    "label": "Claude",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "claude"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "editor",
+    "label": "Editor",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "editor"
+    }
+  },
+  {
+    "enabled": true,
+    "id": "shell",
+    "label": "Shell",
+    "layout": {
+      "command": null,
+      "name": null,
+      "profile": null,
+      "session": "shell"
+    }
+  }
+];
+
+export const editorPresetsDefault: EditorPreset[] = [
+  {
+    "args": [
+      "--listen",
+      "{sock}",
+      "{path}"
+    ],
+    "command": "nvim",
+    "enabled": true,
+    "external": false,
+    "id": "nvim",
+    "label": "Neovim",
+    "open": "rpc",
+    "open_cmd": null,
+    "open_keys": null,
+    "restore": "mksession"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "vim",
+    "enabled": true,
+    "external": false,
+    "id": "vim",
+    "label": "Vim",
+    "open": "keys",
+    "open_cmd": null,
+    "open_keys": "<C-\\><C-N>:edit +{line} {file}<CR>",
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "hx",
+    "enabled": true,
+    "external": false,
+    "id": "helix",
+    "label": "Helix",
+    "open": "none",
+    "open_cmd": null,
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "-nw",
+      "--eval",
+      "(progn (setq server-name \"kelta-{sid8}\") (server-start))",
+      "{path}"
+    ],
+    "command": "emacs",
+    "enabled": true,
+    "external": false,
+    "id": "emacs",
+    "label": "Emacs",
+    "open": "command",
+    "open_cmd": [
+      "emacsclient",
+      "-s",
+      "kelta-{sid8}",
+      "-n",
+      "+{line}",
+      "{file}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "code",
+    "enabled": true,
+    "external": true,
+    "id": "vscode",
+    "label": "VS Code",
+    "open": "command",
+    "open_cmd": [
+      "code",
+      "-g",
+      "{file}:{line}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  },
+  {
+    "args": [
+      "{path}"
+    ],
+    "command": "zed",
+    "enabled": true,
+    "external": true,
+    "id": "zed",
+    "label": "Zed",
+    "open": "command",
+    "open_cmd": [
+      "zed",
+      "{file}:{line}"
+    ],
+    "open_keys": null,
+    "restore": "none"
+  }
+];
+
+export const reviewQuery: ReviewQuery = {
+  "include_drafts": false,
+  "include_team": true,
+  "kind": "authored"
+};
+
+export const workSourceReview: WorkSource = {
+  "kind": "review",
+  "review": {
+    "account": "github-work",
+    "number": 87,
+    "repo": "acme/shop-api"
+  }
+};
+
+export const paneRef: PaneRef = {
+  "pane_id": "pane-2",
+  "project_id": "shop",
+  "tab_id": "tab-1"
+};
+
+export const prCreate: PrCreate = {
+  "base": "main",
+  "body": "https://acme.atlassian.net/browse/SHOP-142",
+  "draft": false,
+  "head": "feat/SHOP-142-rate-limit-login",
+  "repo": "acme/shop-api",
+  "title": "SHOP-142: Rate-limit login"
+};
+
+export const ctlCommandNew: CtlCommand = {
+  "cmd": "new",
+  "cwd": "/home/ada/code/shop-api",
+  "project": "shop",
+  "template": "claude+editor"
+};
+
+export const ctlResponseError: CtlResponse = {
+  "error": {
+    "code": "invalid_argument",
+    "detail": null,
+    "message": "only custom.* events can be emitted",
+    "retry_after_ms": null
+  },
+  "ok": false,
+  "result": null
+};
+
 export const uiEventSessionUpdated: UiEvent = {
   "session": {
     "attention": "needs_input",
@@ -2651,6 +3002,23 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "hook_stop": hookStop,
   "hook_stop_failure": hookStopFailure,
   "hook_session_end": hookSessionEnd,
+  "notification": notification,
+  "terminal_stats": terminalStats,
+  "terminal_limits": terminalLimits,
+  "login_env": loginEnv,
+  "proxied_request": proxiedRequest,
+  "proxied_response": proxiedResponse,
+  "settings_diff": settingsDiff,
+  "plugin_grant": pluginGrant,
+  "account_config": accountConfig,
+  "session_templates_default": sessionTemplatesDefault,
+  "editor_presets_default": editorPresetsDefault,
+  "review_query": reviewQuery,
+  "work_source_review": workSourceReview,
+  "pane_ref": paneRef,
+  "pr_create": prCreate,
+  "ctl_command_new": ctlCommandNew,
+  "ctl_response_error": ctlResponseError,
   "ui_event_session_updated": uiEventSessionUpdated,
   "ui_event_session_removed": uiEventSessionRemoved,
   "ui_event_attention_changed": uiEventAttentionChanged,

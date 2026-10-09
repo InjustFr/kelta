@@ -1,0 +1,51 @@
+# cargo-deny configuration (BUILD_PLAN §2.5: licenses MIT/Apache/BSD/ISC/MPL-2.0/Zlib/Unicode only).
+# Run: cargo deny check licenses   (CI job "cargo-deny licenses")
+
+[graph]
+# Shipping targets only (Windows-only crates such as clipboard-win are out of scope).
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+]
+all-features = false
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "0BSD",
+  "ISC",
+  "MPL-2.0",
+  "Zlib",
+  "Unicode-3.0",
+]
+# Single-crate exceptions (see docs/contract-requests/S0.md):
+exceptions = [
+  # notify (pinned by ARCHITECTURE §1.1) is CC0-1.0 (public domain dedication).
+  { allow = ["CC0-1.0"], crate = "notify" },
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[advisories]
+version = 2
+yanked = "warn"

@@ -1,0 +1,11 @@
+{
+  "memory_cap_mb": 160,
+  "scrollback": {
+    "claude": 3000,
+    "custom": 3000,
+    "editor": 500,
+    "setup": 1000,
+    "shell": 3000,
+    "tool": 500
+  }
+}

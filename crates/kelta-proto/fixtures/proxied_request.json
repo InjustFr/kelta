@@ -1,0 +1,10 @@
+{
+  "body": null,
+  "body_base64": false,
+  "headers": {
+    "accept": "application/json"
+  },
+  "method": "GET",
+  "timeout_ms": 10000,
+  "url": "https://api.acme.com/v1/burndown"
+}
