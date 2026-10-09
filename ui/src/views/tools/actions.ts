@@ -2,7 +2,7 @@
 
 import type { ProjectId, TemplateCtx, ToolInfo } from '$lib/gen';
 import { registerAction } from '$lib/actions';
-import { toolOpen } from '$lib/ipc/commands';
+import { toolCheck, toolOpen } from '$lib/ipc/commands';
 import { rememberWebTool } from '$lib/plugin-host/web.svelte';
 import { projects, toasts, tools, ui } from '$lib/stores';
 
@@ -42,6 +42,12 @@ registerAction('tools.open', async (args) => {
   const toolId = typeof args?.tool_id === 'string' ? args.tool_id : null;
   if (!projectId || !toolId) {
     ui.openSheet('tool_picker');
+    return;
+  }
+  // A missing binary opens the picker on that tool with its install hint and "Check again".
+  const check = await toolCheck({ tool_id: toolId }).catch(() => null);
+  if (check && !check.installed) {
+    ui.openSheet('tool_picker', { projectId, query: toolId, checks: { [toolId]: check } });
     return;
   }
   const label = tools.list(projectId).find((t) => t.id === toolId)?.label ?? toolId;

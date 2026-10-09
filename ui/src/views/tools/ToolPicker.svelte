@@ -16,12 +16,15 @@
 
   import { openTool } from './actions';
 
-  let { onclose, projectId: given }: SheetProps = $props();
+  // `query`/`checks` seed the sheet when `tools.open` found the requested tool missing.
+  let { onclose, projectId: given, query: q0, checks: c0 }: SheetProps = $props();
 
   const projectId = $derived((typeof given === 'string' ? given : null) ?? projects.activeId);
   const slot = $derived(projectId ? tools.byProject[projectId] : undefined);
-  let query = $state('');
-  let checks = $state<Record<string, ToolCheck>>({});
+  // svelte-ignore state_referenced_locally
+  let query = $state(typeof q0 === 'string' ? q0 : '');
+  // svelte-ignore state_referenced_locally
+  let checks = $state<Record<string, ToolCheck>>((c0 as Record<string, ToolCheck> | undefined) ?? {});
 
   const shown = $derived(
     (slot?.data ?? []).filter((t) =>
@@ -48,7 +51,8 @@
 
   async function open(t: ToolInfo): Promise<void> {
     if (!projectId) return;
-    if (!installed(t)) {
+    // Never checked yet: check first so a missing binary shows its hint instead of a spawn error.
+    if (!installed(t) || (checks[t.id] === undefined && t.installed == null)) {
       await check(t);
       if (!installed(t)) return;
     }
