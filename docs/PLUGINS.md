@@ -8,7 +8,7 @@ Three tiers, none of which keeps a background runtime alive (zero memory when un
 
 Tools, triggers, commands and session templates use the **same schema** in `config.toml`, project files, repo-local `.kelta/config.toml` (trust-gated) and plugin manifests. Types live in `kelta-proto::ext` (`ToolDef`, `TriggerDef`, `ActionDef`, `CommandDef`, `PluginManifest`, `ScreenDef`, `PluginMethod`, `Permission`), JSON Schemas in `schema/tool.schema.json`, `schema/trigger.schema.json`, `schema/plugin-manifest.schema.json` (generated, CI drift-checked).
 
-v0.2 (designed, not built): process plugins speaking JSON-RPC over stdio (KPP) that can contribute **tracker / code-host providers** via the same `Tracker`/`CodeHost` traits; plugin KV storage; WASM logic plugins.
+v0.2 (designed, not built): process plugins speaking JSON-RPC over stdio (KPP) that can contribute **tracker / code-host providers** via the same `Tracker`/`CodeHost` traits; WASM logic plugins.
 
 ---
 
@@ -330,10 +330,11 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `ui.open` | open panes/screens, focus |
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
+| `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
 | `exec:<command>` | run that argv[0] (basename match) in `run` actions |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
 
-Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no storage, no Tauri IPC.
+Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
 
 ## 6. Events catalogue (BusEvent names; payload JSON)
 
@@ -393,10 +394,13 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `ui.toast` / `ui.open_screen` / `ui.focus` | | — / `ui.open` / `ui.open` |
 | `notify.send` | `{title, body}` | `notify` |
 | `clipboard.write` | `{text}` | `clipboard.write` |
+| `kv.get` / `kv.set` / `kv.delete` / `kv.list` | `{key}` → JSON or `null` / `{key, value}` / `{key}` / `{}` → `[key]` (sorted) | `storage` |
+
+`kv.*` is the plugin's own store in SQLite `plugin_kv`, namespaced by the calling screen's plugin id (a plugin can never name another's), shared by all its screens and projects, kept across updates and deleted on uninstall. Keys are 1–256 bytes; a value is any JSON up to 64 KiB serialized; keys + values of one plugin are capped at 1 MiB. Over a cap → `InvalidArgument` and nothing is written.
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 
-SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
+SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
 
 Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 

@@ -754,7 +754,7 @@ work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, d
 seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
 provider_cache(key PK, etag, body_json, fetched_at)
 plugin_grants(plugin_id, permission, granted_at, manifest_sha256, PK(plugin_id, permission))
-plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- v0.2 consumers; table exists
+plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- screens' kv.* (PLUGINS §7); value = JSON text
 repo_trust(path PK, sha256, trusted_at)
 trigger_log(id PK, ts, trigger_id, event, ok, detail, depth)   -- capped 1000 rows
 ui_state(key PK, value)                                   -- webgl probe result, onboarding done, window geometry

@@ -25,6 +25,7 @@ const ALL_PERMS: &[&str] = &[
     "ui.open",
     "notify",
     "clipboard.write",
+    "storage",
     "exec:htop",
     "net:api.example.com",
 ];
@@ -192,4 +193,58 @@ async fn disabled_plugins_cannot_open_screens_or_call() {
     assert_eq!(e.code, ErrorCode::NotFound, "screens of a disabled plugin are closed");
     env.host.enable(&id, true).await.unwrap();
     assert!(env.host.screen_open(&id, "main", None, Value::Null).await.is_ok());
+}
+
+#[tokio::test]
+async fn kv_is_gated_capped_and_namespaced() {
+    const KV_VALUE_CAP: usize = 64 * 1024; // screens::KV_VALUE_CAP / KV_QUOTA (PLUGINS §7)
+    const KV_QUOTA: usize = 1024 * 1024;
+    let env = common::Env::new();
+    let mut open = Vec::new();
+    for id in ["kv-a", "kv-b"] {
+        env.write_plugin(
+            id,
+            &format!("{}{SCREEN}", common::manifest(id, &["storage"], "")),
+            &[("index.html", "x")],
+        );
+        let pid = PluginId::new(id);
+        let s = env.host.screen_open(&pid, "main", None, Value::Null).await.unwrap();
+        open.push((pid, s.instance_id));
+    }
+    let call = |i: usize, method, p: Value| {
+        let (host, inst) = (env.host.clone(), open[i].1.clone());
+        async move { host.call(&inst, method, p, origin(&inst)).await }
+    };
+    let e = call(0, PluginMethod::KvSet, json!({ "key": "k", "value": 1 })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "declared but not granted");
+    for (pid, _) in &open {
+        env.host.grant(pid, vec!["storage".into()]).await.unwrap();
+    }
+
+    call(0, PluginMethod::KvSet, json!({ "key": "k", "value": { "n": [1, 2] } })).await.unwrap();
+    assert_eq!(call(0, PluginMethod::KvGet, json!({ "key": "k" })).await.unwrap(), json!({ "n": [1, 2] }));
+    assert_eq!(
+        call(1, PluginMethod::KvGet, json!({ "key": "k" })).await.unwrap(),
+        Value::Null,
+        "B cannot read A"
+    );
+    assert_eq!(call(1, PluginMethod::KvList, json!({})).await.unwrap(), json!([]));
+    assert_eq!(call(0, PluginMethod::KvList, json!({})).await.unwrap(), json!(["k"]));
+
+    let big = "x".repeat(KV_VALUE_CAP);
+    let e = call(0, PluginMethod::KvSet, json!({ "key": "big", "value": big })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "JSON (with quotes) over the per-value cap");
+    let e = call(0, PluginMethod::KvSet, json!({ "key": "", "value": 1 })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+    let chunk = "x".repeat(KV_VALUE_CAP - 100);
+    let fits = KV_QUOTA / KV_VALUE_CAP;
+    for i in 0..fits {
+        call(1, PluginMethod::KvSet, json!({ "key": format!("c{i}"), "value": chunk })).await.unwrap();
+    }
+    let e = call(1, PluginMethod::KvSet, json!({ "key": "over", "value": chunk })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "per-plugin quota");
+    call(0, PluginMethod::KvSet, json!({ "key": "k2", "value": chunk })).await.unwrap();
+
+    call(0, PluginMethod::KvDelete, json!({ "key": "k" })).await.unwrap();
+    assert_eq!(call(0, PluginMethod::KvGet, json!({ "key": "k" })).await.unwrap(), Value::Null);
 }

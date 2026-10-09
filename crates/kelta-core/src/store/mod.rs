@@ -663,6 +663,56 @@ pub mod q {
             .map_err(db_err)
     }
 
+    pub fn kv_get(c: &Connection, plugin: &PluginId, key: &str) -> R<Option<String>> {
+        c.query_row(
+            "SELECT value FROM plugin_kv WHERE plugin_id = ?1 AND key = ?2",
+            params![plugin.as_str(), key],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db_err)
+    }
+
+    /// Quota check and upsert in one transaction (bytes: `CAST AS BLOB`, `length(text)` counts chars).
+    pub fn kv_set(c: &mut Connection, plugin: &PluginId, key: &str, value: &str, quota: usize) -> R<()> {
+        let tx = c.transaction().map_err(db_err)?;
+        let others: i64 = tx
+            .query_row(
+                "SELECT COALESCE(SUM(length(CAST(key AS BLOB)) + length(CAST(value AS BLOB))), 0)
+                 FROM plugin_kv WHERE plugin_id = ?1 AND key <> ?2",
+                params![plugin.as_str(), key],
+                |r| r.get(0),
+            )
+            .map_err(db_err)?;
+        if others as usize + key.len() + value.len() > quota {
+            return Err(kelta_proto::api::kv_quota_error(quota));
+        }
+        tx.execute(
+            "INSERT INTO plugin_kv (plugin_id, key, value) VALUES (?1, ?2, ?3)
+             ON CONFLICT(plugin_id, key) DO UPDATE SET value = excluded.value",
+            params![plugin.as_str(), key, value],
+        )
+        .map_err(db_err)?;
+        tx.commit().map_err(db_err)
+    }
+
+    /// `key: None` deletes every key of the plugin.
+    pub fn kv_delete(c: &Connection, plugin: &PluginId, key: Option<&str>) -> R<()> {
+        c.execute(
+            "DELETE FROM plugin_kv WHERE plugin_id = ?1 AND (?2 IS NULL OR key = ?2)",
+            params![plugin.as_str(), key],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
+    pub fn kv_keys(c: &Connection, plugin: &PluginId) -> R<Vec<String>> {
+        let mut st =
+            c.prepare("SELECT key FROM plugin_kv WHERE plugin_id = ?1 ORDER BY key").map_err(db_err)?;
+        let rows = st.query_map([plugin.as_str()], |r| r.get(0)).map_err(db_err)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_err)
+    }
+
     pub fn trusted_hash(c: &Connection, path: &Path) -> R<Option<String>> {
         c.query_row("SELECT sha256 FROM repo_trust WHERE path = ?1", [path.to_string_lossy()], |r| r.get(0))
             .optional()
@@ -746,6 +796,37 @@ impl GrantStore for Store {
     async fn revoke_all(&self, plugin: &PluginId) -> Result<(), KeltaError> {
         let plugin = plugin.clone();
         self.call(move |c| q::revoke_all(c, &plugin)).await
+    }
+
+    async fn kv_get(&self, plugin: &PluginId, key: &str) -> Result<Option<String>, KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_get(c, &plugin, &key)).await
+    }
+
+    async fn kv_set(
+        &self,
+        plugin: &PluginId,
+        key: &str,
+        value: String,
+        quota: usize,
+    ) -> Result<(), KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_set(c, &plugin, &key, &value, quota)).await
+    }
+
+    async fn kv_delete(&self, plugin: &PluginId, key: &str) -> Result<(), KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_delete(c, &plugin, Some(&key))).await
+    }
+
+    async fn kv_keys(&self, plugin: &PluginId) -> Result<Vec<String>, KeltaError> {
+        let plugin = plugin.clone();
+        self.call(move |c| q::kv_keys(c, &plugin)).await
+    }
+
+    async fn kv_clear(&self, plugin: &PluginId) -> Result<(), KeltaError> {
+        let plugin = plugin.clone();
+        self.call(move |c| q::kv_delete(c, &plugin, None)).await
     }
 }
 

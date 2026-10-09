@@ -152,7 +152,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 
