@@ -1,0 +1,31 @@
+{
+  "data": {
+    "repositoryOwner": {
+      "projectV2": {
+        "id": "PVT_proj1",
+        "fields": {
+          "nodes": [
+            {
+              "id": "PVTSSF_status",
+              "name": "Status",
+              "options": [
+                {
+                  "id": "opt_todo",
+                  "name": "Todo"
+                },
+                {
+                  "id": "opt_prog",
+                  "name": "In Progress"
+                },
+                {
+                  "id": "opt_done",
+                  "name": "Done"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

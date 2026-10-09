@@ -1,0 +1,43 @@
+{
+  "data": {
+    "node": {
+      "fields": {
+        "nodes": [
+          {},
+          {
+            "id": "PVTF_prio",
+            "name": "Priority",
+            "options": [
+              {
+                "id": "p1",
+                "name": "P1"
+              }
+            ]
+          },
+          {
+            "id": "PVTSSF_status",
+            "name": "Status",
+            "options": [
+              {
+                "id": "opt_todo",
+                "name": "Todo"
+              },
+              {
+                "id": "opt_prog",
+                "name": "In Progress"
+              },
+              {
+                "id": "opt_rev",
+                "name": "In Review"
+              },
+              {
+                "id": "opt_done",
+                "name": "Done"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "issues": [
+    {
+      "expand": "operations",
+      "id": "10142",
+      "key": "SHOP-142",
+      "fields": {
+        "summary": "Rate-limit login endpoint",
+        "status": {
+          "id": "10001",
+          "name": "To Do",
+          "statusCategory": {
+            "key": "new"
+          }
+        },
+        "issuetype": {
+          "name": "Story"
+        },
+        "assignee": {
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "displayName": "Louis Duprat",
+          "emailAddress": "louis@acme.test",
+          "avatarUrls": {
+            "48x48": "https://avatar.test/louis.png"
+          }
+        },
+        "labels": [
+          "backend"
+        ],
+        "priority": {
+          "name": "High"
+        },
+        "updated": "2026-09-30T10:15:00.000+0200",
+        "project": {
+          "key": "SHOP"
+        }
+      }
+    },
+    {
+      "expand": "operations",
+      "id": "10143",
+      "key": "SHOP-143",
+      "fields": {
+        "summary": "Fix flaky checkout test",
+        "status": {
+          "id": "10003",
+          "name": "In Review",
+          "statusCategory": {
+            "key": "indeterminate"
+          }
+        },
+        "issuetype": {
+          "name": "Story"
+        },
+        "assignee": null,
+        "labels": [
+          "backend"
+        ],
+        "priority": {
+          "name": "High"
+        },
+        "updated": "2026-09-30T10:15:00.000+0200",
+        "project": {
+          "key": "SHOP"
+        }
+      }
+    }
+  ],
+  "nextPageToken": "tok-page-2"
+}

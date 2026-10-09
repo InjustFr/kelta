@@ -1,0 +1,30 @@
+[
+  {
+    "id": "10001",
+    "name": "To Do",
+    "statusCategory": {
+      "key": "new"
+    }
+  },
+  {
+    "id": "10002",
+    "name": "In Progress",
+    "statusCategory": {
+      "key": "indeterminate"
+    }
+  },
+  {
+    "id": "10003",
+    "name": "In Review",
+    "statusCategory": {
+      "key": "indeterminate"
+    }
+  },
+  {
+    "id": "10004",
+    "name": "Done",
+    "statusCategory": {
+      "key": "done"
+    }
+  }
+]

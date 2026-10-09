@@ -1,0 +1,115 @@
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "before"
+        }
+      ]
+    },
+    {
+      "type": "extensionFrame",
+      "attrs": {
+        "foo": "bar"
+      },
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "inside an unknown container"
+            }
+          ]
+        },
+        {
+          "type": "futureBlock",
+          "content": [
+            {
+              "type": "text",
+              "text": "deeply nested text"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "somethingNew",
+      "text": "orphan text node"
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "mixed "
+        },
+        {
+          "type": "futureInline",
+          "content": [
+            {
+              "type": "text",
+              "text": "inline unknown"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " end",
+          "marks": [
+            {
+              "type": "unknownMark"
+            },
+            {
+              "type": "strong"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "mysteryItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "odd list child"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "content": []
+    },
+    {
+      "type": "heading",
+      "content": [
+        {
+          "type": "text",
+          "text": "no level"
+        }
+      ]
+    },
+    {
+      "nonsense": true
+    },
+    "stray string",
+    null,
+    {
+      "type": "paragraph"
+    }
+  ]
+}

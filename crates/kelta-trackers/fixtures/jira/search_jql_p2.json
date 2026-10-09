@@ -1,0 +1,41 @@
+{
+  "issues": [
+    {
+      "expand": "operations",
+      "id": "10144",
+      "key": "SHOP-144",
+      "fields": {
+        "summary": "Upgrade Node to 22",
+        "status": {
+          "id": "10002",
+          "name": "In Progress",
+          "statusCategory": {
+            "key": "indeterminate"
+          }
+        },
+        "issuetype": {
+          "name": "Story"
+        },
+        "assignee": {
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "displayName": "Louis Duprat",
+          "emailAddress": "louis@acme.test",
+          "avatarUrls": {
+            "48x48": "https://avatar.test/louis.png"
+          }
+        },
+        "labels": [
+          "backend"
+        ],
+        "priority": {
+          "name": "High"
+        },
+        "updated": "2026-09-30T10:15:00.000+0200",
+        "project": {
+          "key": "SHOP"
+        }
+      }
+    }
+  ],
+  "isLast": true
+}

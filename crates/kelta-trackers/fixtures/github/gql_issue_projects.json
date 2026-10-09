@@ -1,0 +1,39 @@
+{
+  "data": {
+    "repository": {
+      "issue": {
+        "state": "OPEN",
+        "projectItems": {
+          "nodes": [
+            {
+              "id": "PVTI_item1",
+              "project": {
+                "id": "PVT_proj1",
+                "number": 5,
+                "owner": {
+                  "login": "acme"
+                }
+              },
+              "fieldValues": {
+                "nodes": [
+                  {
+                    "name": "In Progress",
+                    "field": {
+                      "name": "Status"
+                    }
+                  },
+                  {
+                    "name": "P1",
+                    "field": {
+                      "name": "Priority"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

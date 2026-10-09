@@ -1,0 +1,32 @@
+{
+  "id": 9012,
+  "iid": 12,
+  "project_id": 77,
+  "title": "Cart total wrong",
+  "description": "Reproduce:\n\n- step one\n- step two",
+  "state": "opened",
+  "labels": [
+    "bug"
+  ],
+  "updated_at": "2026-09-30T09:00:00.000Z",
+  "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/12",
+  "references": {
+    "short": "#12",
+    "relative": "#12",
+    "full": "grp/sub/proj#12"
+  },
+  "assignee": {
+    "id": 42,
+    "username": "louis",
+    "name": "Louis Duprat",
+    "avatar_url": "https://gl.test/a.png"
+  },
+  "assignees": [
+    {
+      "id": 42,
+      "username": "louis",
+      "name": "Louis Duprat"
+    }
+  ],
+  "issue_type": "issue"
+}

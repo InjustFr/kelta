@@ -1,0 +1,73 @@
+{
+  "expand": "operations",
+  "id": "10142",
+  "key": "SHOP-142",
+  "fields": {
+    "summary": "Rate-limit login endpoint",
+    "status": {
+      "id": "10001",
+      "name": "To Do",
+      "statusCategory": {
+        "key": "new"
+      }
+    },
+    "issuetype": {
+      "name": "Story"
+    },
+    "assignee": {
+      "name": "louis",
+      "key": "JIRAUSER10100",
+      "displayName": "Louis Duprat",
+      "emailAddress": "louis@acme.test",
+      "avatarUrls": {
+        "48x48": "https://avatar.test/louis.png"
+      }
+    },
+    "labels": [
+      "backend"
+    ],
+    "priority": {
+      "name": "High"
+    },
+    "updated": "2026-09-30T10:15:00.000+0200",
+    "project": {
+      "key": "SHOP"
+    },
+    "description": "h2. Goal\nAdd a *rate limiter* to {{/login}}.",
+    "comment": {
+      "comments": [
+        {
+          "id": "1",
+          "author": {
+            "name": "alice",
+            "displayName": "Alice"
+          },
+          "body": "first *comment*",
+          "created": "2026-09-11T09:00:00.000+0000"
+        },
+        {
+          "id": "2",
+          "author": {
+            "name": "bob",
+            "displayName": "Bob"
+          },
+          "body": "second",
+          "created": "2026-09-12T09:00:00.000+0000"
+        }
+      ]
+    }
+  },
+  "renderedFields": {
+    "description": "<h2>Goal</h2><p>Add a <b>rate limiter</b> to <tt>/login</tt>.</p><script>alert(1)</script>",
+    "comment": {
+      "comments": [
+        {
+          "body": "<p>first <b>comment</b></p>"
+        },
+        {
+          "body": "<p>second</p>"
+        }
+      ]
+    }
+  }
+}

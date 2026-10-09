@@ -1,0 +1,10 @@
+{
+  "user": {
+    "id": 7,
+    "login": "louis",
+    "firstname": "Louis",
+    "lastname": "Duprat",
+    "mail": "louis@client.test",
+    "api_key": "must-never-leak"
+  }
+}
