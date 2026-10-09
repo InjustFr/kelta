@@ -354,6 +354,11 @@ impl CoreApi for FakeCore {
         self.settings.lock().clone()
     }
 
+    /// Set with `respond("login_path", json!("/dir"))`.
+    fn login_path(&self) -> Option<String> {
+        self.overridden("login_path").and_then(Result::ok)
+    }
+
     async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
         self.record("tracker_for", serde_json::json!({ "account": account }));
         self.trackers
