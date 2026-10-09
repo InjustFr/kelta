@@ -870,7 +870,7 @@
         },
         "prompt_templates": {
           "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-          "standalone": "",
+          "standalone": "{task}",
           "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
         }
       },
@@ -1000,7 +1000,7 @@
           },
           "default": {
             "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-            "standalone": "",
+            "standalone": "{task}",
             "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
           },
           "type": "object"
@@ -3935,7 +3935,8 @@
           "draft": false,
           "title_template": "{ticket.key}: {ticket.title}"
         },
-        "review_template": "review"
+        "review_template": "review",
+        "scratch_branch_template": "wip/{slug}"
       },
       "properties": {
         "default_template": {
@@ -4167,6 +4168,11 @@
         },
         "review_template": {
           "default": "review",
+          "type": "string"
+        },
+        "scratch_branch_template": {
+          "default": "wip/{slug}",
+          "description": "Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of\nthe task's first line.",
           "type": "string"
         }
       },

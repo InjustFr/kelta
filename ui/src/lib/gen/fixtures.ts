@@ -732,6 +732,7 @@ export const workItem: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
   "repo_id": "api",
@@ -823,6 +824,7 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -834,6 +836,7 @@ export const workItemFailed: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
   "repo_id": "api",
@@ -927,6 +930,7 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -1344,7 +1348,7 @@ export const settingsDefault: Settings = {
     },
     "prompt_templates": {
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-      "standalone": "",
+      "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
     }
   },
@@ -1718,7 +1722,8 @@ export const settingsDefault: Settings = {
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
-    "review_template": "review"
+    "review_template": "review",
+    "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
@@ -2769,6 +2774,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",
     "repo_id": "api",
@@ -2860,6 +2866,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }
 };

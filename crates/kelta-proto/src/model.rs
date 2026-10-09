@@ -547,15 +547,35 @@ pub struct WorkItem {
     pub state: WorkState,
     pub steps: Vec<WorkStepStatus>,
     pub created_at: String,
+    /// Scratch items: first line of the task, 72 chars max (tab, rows, PR title).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Set by `work_link` on an item with a PR: the next Ship/Push prefixes the ticket key to the PR
+    /// title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
+    #[serde(default)]
+    pub pr_title_needs_key: bool,
 }
 
-/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` | `{"kind":"branch","name":".."}`.
+/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` |
+/// `{"kind":"branch","name":"..","task":"..","repo":".."}` (scratch work, FLOW §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WorkSource {
-    Ticket { ticket: TicketRef },
-    Review { review: ReviewRef },
-    Branch { name: String },
+    Ticket {
+        ticket: TicketRef,
+    },
+    Review {
+        review: ReviewRef,
+    },
+    /// Empty `name` → `work.scratch_branch_template` with `{slug}` from the task's first line.
+    /// `task` is the first Claude prompt (`{task}`); `repo` defaults to the project's primary repo.
+    Branch {
+        name: String,
+        #[serde(default)]
+        task: Option<String>,
+        #[serde(default)]
+        repo: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]

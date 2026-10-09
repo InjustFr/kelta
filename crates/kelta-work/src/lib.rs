@@ -23,6 +23,7 @@ mod ops;
 mod saga;
 
 pub use ops::selection_ref;
+pub use plan::pr_title_with_key;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -40,6 +41,7 @@ use kelta_proto::model::{
     EditorTarget, FinishOpts, GitStatus, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource,
     WorkStepStatus,
 };
+use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};
 
 /// Services owned by other lanes that the saga needs (wired by core after construction).
@@ -163,6 +165,16 @@ impl WorkService {
     /// `work_create_pr`.
     pub async fn create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
         self.create_pr_impl(id, draft).await
+    }
+
+    /// `work_link`: attach a ticket to a scratch item (optionally applying `on_start` / `on_pr`).
+    pub async fn link(
+        &self,
+        id: &WorkItemId,
+        ticket: TicketRef,
+        apply_side_effects: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        self.link_impl(id, ticket, apply_side_effects).await
     }
 
     /// `work_finish`.

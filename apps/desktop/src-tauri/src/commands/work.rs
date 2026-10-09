@@ -54,3 +54,13 @@ pub async fn work_finish(core: State<'_, Arc<Core>>, id: WorkItemId, opts: Finis
 pub async fn work_status(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<GitStatus> {
     core.work().status(&id).await
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_link(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    ticket: TicketRef,
+    apply_side_effects: bool,
+) -> Res<WorkItem> {
+    core.work().link(&id, ticket, apply_side_effects).await
+}

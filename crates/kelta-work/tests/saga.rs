@@ -77,7 +77,11 @@ async fn invalid_branch_template_is_sanitized_or_rejected() {
     fx.settings(|s| s.worktree.branch_template = "{type}/{key} weird..name~".into());
     let plan = fx.service().plan(&project(), ticket("SHOP-141")).await.unwrap();
     assert_eq!(plan.branch, "feat/SHOP-141-weird.name");
-    let e = fx.service().plan(&project(), WorkSource::Branch { name: "-bad".into() }).await.unwrap_err();
+    let e = fx
+        .service()
+        .plan(&project(), WorkSource::Branch { name: "-bad".into(), task: None, repo: None })
+        .await
+        .unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument);
 }
 
@@ -465,7 +469,10 @@ async fn branch_workspace_without_ticket() {
     need_git!();
     let fx = Fx::new();
     let w = fx.service();
-    let plan = w.plan(&project(), WorkSource::Branch { name: "spike/caching".into() }).await.unwrap();
+    let plan = w
+        .plan(&project(), WorkSource::Branch { name: "spike/caching".into(), task: None, repo: None })
+        .await
+        .unwrap();
     assert_eq!(plan.branch, "spike/caching");
     assert_eq!(plan.worktree_path, fx.wt_root.join("shop/api/spike-caching"));
     assert!(!plan.side_effects.assign_me && plan.side_effects.transition_to.is_none());
@@ -551,4 +558,97 @@ async fn concurrent_starts_for_one_ticket_make_one_item() {
     assert!(!ids.is_empty());
     assert!(ids.iter().all(|i| *i == ids[0]));
     assert_eq!(fx.store_items().await.len(), 1);
+}
+
+fn scratch(task: &str) -> WorkSource {
+    WorkSource::Branch { name: String::new(), task: Some(task.into()), repo: None }
+}
+
+#[tokio::test]
+async fn scratch_item_from_a_task() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let task = "Fix the login flake\nIt fails on CI about once a day.";
+    let plan = w.plan(&project(), scratch(task)).await.unwrap();
+    assert_eq!(plan.branch, "wip/fix-the-login-flake");
+    assert_eq!(plan.worktree_path, fx.wt_root.join("shop/api/wip-fix-the-login-flake"));
+    assert_eq!(plan.claude.prompt, task, "standalone defaults to {{task}}");
+    assert!(!plan.side_effects.assign_me && plan.side_effects.transition_to.is_none());
+
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
+    assert_eq!(item.kind, kelta_proto::model::WorkKind::Branch);
+    assert_eq!(item.title.as_deref(), Some("Fix the login flake"));
+    assert!(fx.tracker.calls().is_empty(), "no tracker side effects");
+    assert_eq!(fx.core.opened()[0].1.tab_title.as_deref(), Some("wip Fix the login flake"));
+    let claude = fx
+        .core
+        .calls()
+        .into_iter()
+        .find(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude");
+    let argv: Vec<String> = serde_json::from_value(claude.unwrap().args["args"].clone()).unwrap();
+    assert_eq!(argv.last().map(String::as_str), Some(task));
+
+    // Same first line again: refused with a reason, never adopted.
+    let e = w.plan(&project(), scratch(task)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(e.message.contains("wip/fix-the-login-flake"), "{}", e.message);
+    // An existing branch without an item is refused too.
+    git(&fx.repo, &["branch", "wip/taken"]);
+    let e = w.plan(&project(), scratch("Taken")).await.unwrap_err();
+    assert!(e.message.contains("already exists"), "{}", e.message);
+    // An edited branch name wins over the task; nothing to slug is invalid.
+    let named = WorkSource::Branch { name: "spike/x".into(), task: Some("Try x".into()), repo: None };
+    assert_eq!(w.plan(&project(), named).await.unwrap().branch, "spike/x");
+    let e = w.plan(&project(), scratch("  \n ")).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+    let other = WorkSource::Branch { name: String::new(), task: Some("x".into()), repo: Some("nope".into()) };
+    assert_eq!(w.plan(&project(), other).await.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[tokio::test]
+async fn link_scratch_item_to_a_ticket() {
+    need_git!();
+    use kelta_proto::api::{CodeHost, WorkStore};
+    let fx = Fx::new();
+    let w = fx.service();
+    let WorkSource::Ticket { ticket: t } = ticket("SHOP-141") else { unreachable!() };
+
+    // Without side effects: only the ticket is read; the branch stays.
+    let a = w.start(w.plan(&project(), scratch("Explore caching")).await.unwrap()).await.unwrap();
+    let linked = w.link(&a.id, t.clone(), false).await.unwrap();
+    assert_eq!(linked.kind, kelta_proto::model::WorkKind::Ticket);
+    assert_eq!(linked.ticket.as_ref().map(|x| x.key.as_str()), Some("SHOP-141"));
+    assert_eq!(linked.branch, "wip/explore-caching");
+    assert!(!linked.pr_title_needs_key);
+    assert_eq!(fx.tracker.calls(), vec!["get:SHOP-141".to_owned()]);
+    let e = w.link(&a.id, t.clone(), false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict, "already linked");
+
+    // With a PR and side effects: on_start (assign + In Progress) then on_pr (In Review).
+    let b = w.start(w.plan(&project(), scratch("Speed up search")).await.unwrap()).await.unwrap();
+    let binding = samples::project_info().repos[0].code_host.clone().unwrap();
+    let pr = fx
+        .host
+        .create(&kelta_proto::codehost::PrCreate {
+            repo: binding.repo.clone(),
+            head: b.branch.clone(),
+            base: "main".into(),
+            title: "Speed up search".into(),
+            body: String::new(),
+            draft: false,
+        })
+        .await
+        .unwrap();
+    let mut with_pr = fx.store.get_item(&b.id).await.unwrap().unwrap();
+    with_pr.pr_url = Some(pr.url.clone());
+    fx.store.put_item(&with_pr).await.unwrap();
+    let linked = w.link(&b.id, t, true).await.unwrap();
+    assert!(linked.pr_title_needs_key);
+    assert_eq!(linked.branch, "wip/speed-up-search");
+    let calls = fx.tracker.calls();
+    assert!(calls.contains(&"assign:SHOP-141".to_owned()), "{calls:?}");
+    assert_eq!(calls.iter().filter(|c| c.starts_with("transition:")).count(), 2, "{calls:?}");
+    assert_eq!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "In Review");
 }

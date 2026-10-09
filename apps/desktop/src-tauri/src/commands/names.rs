@@ -82,6 +82,7 @@ pub const COMMANDS: &[&str] = &[
     "work_create_pr",
     "work_finish",
     "work_status",
+    "work_link",
     "editor_open",
     "editor_send_selection",
     // tools / plugins / triggers

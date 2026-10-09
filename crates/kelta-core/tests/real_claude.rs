@@ -216,7 +216,11 @@ async fn real_claude_gate_c1() {
     // 1. Work item → Kelta-created worktree → `claude --session-id <uuid> … -p "<prompt>"` in a PTY.
     //    The MCP call is allowed by `--allowedTools mcp__kelta__*`; the write needs permission
     //    (PermissionRequest fires in print mode too, then it is denied).
-    let mut plan = core.work().plan(&pid, WorkSource::Branch { name: "c1-real".into() }).await.unwrap();
+    let mut plan = core
+        .work()
+        .plan(&pid, WorkSource::Branch { name: "c1-real".into(), task: None, repo: None })
+        .await
+        .unwrap();
     plan.template_id = "claude".into();
     plan.claude.model = "haiku".into();
     plan.claude.effort = ClaudeEffort::Low;

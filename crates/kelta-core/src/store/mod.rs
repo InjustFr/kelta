@@ -463,14 +463,16 @@ pub mod q {
     pub fn work_put(c: &Connection, w: &WorkItem) -> R<()> {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
-             base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+             base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
+             title, pr_title_needs_key)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
              claude_uuid = excluded.claude_uuid, nvim_socket = excluded.nvim_socket, tab_id = excluded.tab_id,
              pr_url = excluded.pr_url, state_json = excluded.state_json, updated_at = excluded.updated_at,
-             session_ids_json = excluded.session_ids_json",
+             session_ids_json = excluded.session_ids_json, title = excluded.title,
+             pr_title_needs_key = excluded.pr_title_needs_key",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -489,6 +491,8 @@ pub mod q {
                 w.created_at,
                 kelta_proto::now_rfc3339(),
                 serde_json::to_string(&w.session_ids)?,
+                w.title,
+                w.pr_title_needs_key,
             ],
         )
         .map_err(db_err)?;
@@ -505,7 +509,8 @@ pub mod q {
     }
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
-        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json";
+        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, title,
+        pr_title_needs_key";
 
     fn work_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<(WorkItem, String, String, String, String)> {
         let ticket: Option<String> = r.get(3)?;
@@ -530,6 +535,8 @@ pub mod q {
             state: WorkState::Planned,
             steps: Vec::new(),
             created_at: r.get(14)?,
+            title: r.get(16)?,
+            pr_title_needs_key: r.get(17)?,
         };
         Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions))
     }

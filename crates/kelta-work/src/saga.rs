@@ -164,6 +164,9 @@ impl WorkService {
         c.set("worktree", item.worktree.to_string_lossy().into_owned());
         c.set("branch", item.branch.clone());
         c.set("base", item.base.clone());
+        if let Some(WorkSource::Branch { task: Some(task), .. }) = j.plan.as_ref().map(|p| &p.source) {
+            c.set("task", task.clone());
+        }
         if let Some(t) = &j.ticket {
             plan::add_ticket(&mut c, t);
             c.set("key", t.branch_key.clone());
@@ -186,7 +189,7 @@ impl WorkService {
         c
     }
 
-    /// Tab title: `KEY title`, `PR #n title` or the branch.
+    /// Tab title: `KEY title`, `PR #n title`, `wip title` (scratch) or the branch.
     pub(crate) fn tab_title(item: &WorkItem, j: &Journal) -> String {
         if let Some(t) = &j.ticket {
             return format!("{} {}", t.key, t.title);
@@ -200,7 +203,10 @@ impl WorkService {
         if let Some(r) = &item.review {
             return format!("#{}", r.number);
         }
-        item.branch.clone()
+        match &item.title {
+            Some(t) => format!("wip {t}"),
+            None => item.branch.clone(),
+        }
     }
 
     // ---- plan ------------------------------------------------------------------------------
@@ -318,13 +324,40 @@ impl WorkService {
                     existing.as_ref(),
                 ))
             }
-            WorkSource::Branch { name } => {
-                let repo_id =
-                    plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
-                        .ok_or_else(|| KeltaError::invalid("no repository"))?;
+            WorkSource::Branch { name, task, repo } => {
+                let repo_id = match repo {
+                    Some(r) => r.clone(),
+                    None => {
+                        plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
+                            .ok_or_else(|| KeltaError::invalid("no repository"))?
+                    }
+                };
                 let repo = repo_of(&project, &repo_id)?;
-                let branch = git::check_branch_name(&repo.path, name.trim()).await?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
+                ctx.set("task", task.clone().unwrap_or_default());
+                let branch = if name.trim().is_empty() {
+                    let title = task.as_deref().map(plan::task_title).unwrap_or_default();
+                    let slug = slugify(&title, slug_max);
+                    if slug.is_empty() {
+                        return Err(KeltaError::invalid("describe the task or name the branch"));
+                    }
+                    ctx.set("slug", slug);
+                    let raw = render(&settings.work.scratch_branch_template, &ctx, Mode::Strict)?;
+                    ctx.set("slug", "");
+                    plan::valid_branch(&repo.path, &raw).await?
+                } else {
+                    git::check_branch_name(&repo.path, name.trim()).await?
+                };
+                // The resolved branch (not the possibly empty name) identifies the item.
+                let existing = items
+                    .iter()
+                    .find(|w| {
+                        w.state != WorkState::Finished
+                            && w.ticket.is_none()
+                            && w.review.is_none()
+                            && w.branch == branch
+                    })
+                    .cloned();
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
                 ctx.set("branch", branch.clone());
@@ -335,6 +368,13 @@ impl WorkService {
                         plan::branch_exists(&repo.path, &branch).await?,
                     ),
                 };
+                // New work item: never adopt an existing branch or item behind the user's back.
+                if task.is_some() && (existing.is_some() || exists.is_some()) {
+                    let what = if existing.is_some() { "has a work item" } else { "already exists" };
+                    return Err(KeltaError::conflict(format!(
+                        "Branch {branch} {what}. Edit the branch name or the task's first line."
+                    )));
+                }
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "default", "standalone", &ctx);
                 let side = plan::side_effects(&settings, &project, false, &ctx);
@@ -378,10 +418,12 @@ impl WorkService {
         plan.worktree_path = path.clone();
         let has_claude =
             layout::slots(&template.layout).iter().any(|s| matches!(s.kind, SlotKind::Claude { .. }));
-        let (kind, ticket, review) = match &plan.source {
-            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None),
-            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone())),
-            WorkSource::Branch { .. } => (WorkKind::Branch, None, None),
+        let (kind, ticket, review, title) = match &plan.source {
+            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None, None),
+            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone()), None),
+            WorkSource::Branch { task, .. } => {
+                (WorkKind::Branch, None, None, task.as_deref().map(plan::task_title))
+            }
         };
         let mut item = WorkItem {
             id: WorkItemId::generate(),
@@ -401,6 +443,8 @@ impl WorkService {
             state: WorkState::Planned,
             steps: Vec::new(),
             created_at: kelta_proto::now_rfc3339(),
+            title: title.filter(|t| !t.is_empty()),
+            pr_title_needs_key: false,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -1371,7 +1415,7 @@ impl WorkService {
         Ok(())
     }
 
-    async fn step_effects(
+    pub(crate) async fn step_effects(
         &self,
         env: &Env,
         item: &mut WorkItem,

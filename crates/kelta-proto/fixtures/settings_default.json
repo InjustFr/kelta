@@ -37,7 +37,7 @@
     },
     "prompt_templates": {
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-      "standalone": "",
+      "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
     }
   },
@@ -411,7 +411,8 @@
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
-    "review_template": "review"
+    "review_template": "review",
+    "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",

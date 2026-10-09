@@ -108,8 +108,14 @@ CREATE TABLE IF NOT EXISTS ui_state (
 );
 "#;
 
+/// v2: scratch work items (FLOW §2.1, §4.3): `WorkItem.title`, `WorkItem.pr_title_needs_key`.
+const V2: &str = r#"
+ALTER TABLE work_items ADD COLUMN title TEXT;
+ALTER TABLE work_items ADD COLUMN pr_title_needs_key INTEGER NOT NULL DEFAULT 0;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1];
+pub const MIGRATIONS: &[&str] = &[V1, V2];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

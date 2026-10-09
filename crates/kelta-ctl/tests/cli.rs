@@ -145,6 +145,29 @@ fn commands_print_result_or_fail() {
 }
 
 #[test]
+fn start_task_sends_a_scratch_request() {
+    let d = tmp();
+    let sock = d.path().join("c.sock");
+    let srv = fake_server(&sock, r#"{"ok":true,"result":{"branch":"wip/fix-the-login-flake"}}"#);
+    let o = run(
+        &["start", "--task", "Fix the login flake\nIt fails on CI", "--project", "shop"],
+        &[("KELTA_SOCK", sock.as_path())],
+        &[],
+        b"",
+    );
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(String::from_utf8_lossy(&o.stdout).contains("wip/fix-the-login-flake"));
+    let req: serde_json::Value = serde_json::from_str(&srv.join().unwrap()).unwrap();
+    assert_eq!(req["cmd"], "start_task");
+    assert_eq!(req["task"], "Fix the login flake\nIt fails on CI");
+    assert_eq!(req["project"], "shop");
+    // usage errors: empty task, task plus a ticket key
+    assert_eq!(run(&["start", "--task", " "], &[], &[], b"").status.code(), Some(2));
+    assert_eq!(run(&["start", "SHOP-1", "--task", "x"], &[], &[], b"").status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&run(&["--help"], &[], &[], b"").stdout).contains("start --task"));
+}
+
+#[test]
 fn version_works_offline() {
     let d = tmp();
     let o = run(&["version"], &[("KELTA_SOCK", d.path().join("none.sock").as_path())], &[], b"");
