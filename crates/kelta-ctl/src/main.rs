@@ -164,7 +164,9 @@ fn parse_opts(rest: &[String], known: &[&str]) -> Result<(Vec<String>, Map<Strin
         if let Some(flag) = a.strip_prefix("--") {
             let (name, value) = match flag.split_once('=') {
                 Some((n, v)) => (n.to_owned(), v.to_owned()),
-                None => (flag.to_owned(), it.next().ok_or_else(|| format!("--{flag} needs a value"))?.clone()),
+                None => {
+                    (flag.to_owned(), it.next().ok_or_else(|| format!("--{flag} needs a value"))?.clone())
+                }
             };
             if !known.contains(&name.as_str()) {
                 return Err(format!("unknown option --{name}"));
@@ -213,7 +215,10 @@ fn build(args: &[String]) -> Result<Value, String> {
         }
         "start" => {
             let (pos, opts) = parse_opts(rest, &["project"])?;
-            envelope("start", json!({ "ticket": one(&pos, "ticket key or URL")?, "project": opts.get("project") }))
+            envelope(
+                "start",
+                json!({ "ticket": one(&pos, "ticket key or URL")?, "project": opts.get("project") }),
+            )
         }
         "new" => {
             let (pos, opts) = parse_opts(rest, &["template", "cwd", "project"])?;
@@ -250,7 +255,8 @@ fn build(args: &[String]) -> Result<Value, String> {
             Some("install") => {
                 let (pos, _) = parse_opts(&rest[1..], &[])?;
                 let src = one(&pos, "plugin source")?;
-                let source = if Path::new(&src).exists() { absolute(&src)?.display().to_string() } else { src };
+                let source =
+                    if Path::new(&src).exists() { absolute(&src)?.display().to_string() } else { src };
                 envelope("plugin_install", json!({ "source": source }))
             }
             _ => return Err("usage: kelta-ctl plugin install <src>".into()),
@@ -271,7 +277,8 @@ fn run(args: &[String]) -> ExitCode {
     match request(&req, CMD_TIMEOUT) {
         Ok(resp) if resp.get("ok").and_then(Value::as_bool) == Some(true) => {
             let result = resp.get("result").cloned().unwrap_or(Value::Null);
-            let out = if is_version { json!({ "ctl": env!("CARGO_PKG_VERSION"), "app": result }) } else { result };
+            let out =
+                if is_version { json!({ "ctl": env!("CARGO_PKG_VERSION"), "app": result }) } else { result };
             println!("{out}");
             ExitCode::SUCCESS
         }

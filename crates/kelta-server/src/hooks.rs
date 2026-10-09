@@ -93,7 +93,11 @@ fn matcher_value(p: &HookPayload) -> Option<String> {
 
 /// Ingest one hook for `sid` (already authenticated): apply the status change to core and publish
 /// `claude.hook` (always) and `claude.file_edited` (edits).
-pub async fn ingest(core: &Arc<dyn CoreApi>, sid: &SessionId, payload: HookPayload) -> Result<(), KeltaError> {
+pub async fn ingest(
+    core: &Arc<dyn CoreApi>,
+    sid: &SessionId,
+    payload: HookPayload,
+) -> Result<(), KeltaError> {
     let change = map(&payload);
     let project = core.session_get(sid).map(|s| s.project_id);
     let with_ctx = |ev: BusEvent| {

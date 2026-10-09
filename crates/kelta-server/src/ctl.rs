@@ -35,7 +35,10 @@ pub(crate) fn prepare_dir(dir: &Path) -> Result<(), KeltaError> {
     std::fs::create_dir_all(dir)?;
     let meta = std::fs::symlink_metadata(dir)?;
     if !meta.file_type().is_dir() {
-        return Err(KeltaError::permission_denied(format!("runtime dir {} is not a directory", dir.display())));
+        return Err(KeltaError::permission_denied(format!(
+            "runtime dir {} is not a directory",
+            dir.display()
+        )));
     }
     if meta.uid() != my_uid() {
         return Err(KeltaError::permission_denied(format!(
@@ -100,7 +103,11 @@ enum LineRead {
 }
 
 /// Read one `\n`-terminated line into `buf` (without the newline), refusing more than `max` bytes.
-async fn read_line<R: AsyncBufRead + Unpin>(r: &mut R, buf: &mut Vec<u8>, max: usize) -> io::Result<LineRead> {
+async fn read_line<R: AsyncBufRead + Unpin>(
+    r: &mut R,
+    buf: &mut Vec<u8>,
+    max: usize,
+) -> io::Result<LineRead> {
     loop {
         let chunk = r.fill_buf().await?;
         if chunk.is_empty() {
@@ -207,14 +214,15 @@ async fn dispatch(ctx: &CtlCtx, cmd: CtlCommand) -> Result<serde_json::Value, Ke
         }
         CtlCommand::Emit { name, payload } => {
             if !name.starts_with(bus::CUSTOM_PREFIX) || name.len() == bus::CUSTOM_PREFIX.len() {
-                return Err(KeltaError::invalid(format!("only custom.* events can be emitted, got {name:?}")));
+                return Err(KeltaError::invalid(format!(
+                    "only custom.* events can be emitted, got {name:?}"
+                )));
             }
             core.ctl(CtlCommand::Emit { name, payload }).await
         }
         other => core.ctl(other).await,
     }
 }
-
 
 #[cfg(test)]
 mod tests {

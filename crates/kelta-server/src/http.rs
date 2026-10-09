@@ -139,7 +139,12 @@ fn core_gone() -> Response {
     (StatusCode::SERVICE_UNAVAILABLE, "kelta is shutting down").into_response()
 }
 
-async fn hook(State(ctx): State<Arc<Ctx>>, Path(sid): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
+async fn hook(
+    State(ctx): State<Arc<Ctx>>,
+    Path(sid): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let sid = SessionId::new(sid);
     if !authorized(&ctx, &sid, TokenKind::Hook, &headers) {
         tracing::warn!(session = %sid, "http: hook with an invalid token rejected");
@@ -157,7 +162,12 @@ async fn hook(State(ctx): State<Arc<Ctx>>, Path(sid): Path<String>, headers: Hea
     StatusCode::OK.into_response()
 }
 
-async fn mcp_post(State(ctx): State<Arc<Ctx>>, Path(sid): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
+async fn mcp_post(
+    State(ctx): State<Arc<Ctx>>,
+    Path(sid): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let sid = SessionId::new(sid);
     if !authorized(&ctx, &sid, TokenKind::Mcp, &headers) {
         tracing::warn!(session = %sid, "http: MCP request with an invalid token rejected");

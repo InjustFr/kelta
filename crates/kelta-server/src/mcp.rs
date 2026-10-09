@@ -116,7 +116,7 @@ fn initialize(params: &Value) -> Value {
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": "kelta", "title": "Kelta", "version": env!("CARGO_PKG_VERSION") },
         "instructions": "Kelta workbench tools for this Claude session: read and move the linked ticket, \
-comment on it, open files in the tab's editor, create the pull request, list review requests and notify the user."
+    comment on it, open files in the tab's editor, create the pull request, list review requests and notify the user."
     })
 }
 
@@ -254,7 +254,11 @@ fn html_text(html: &str) -> String {
             _ => {}
         }
     }
-    out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+    out.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
 }
 
 async fn get_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId) -> ToolResult {
@@ -274,7 +278,12 @@ async fn get_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId) -> ToolResult {
     if !d.comments.is_empty() {
         s.push_str("\n## Comments\n");
         for c in &d.comments {
-            s.push_str(&format!("\n### {} ({})\n\n{}\n", c.author.name, c.created_at, html_text(&c.body_html).trim()));
+            s.push_str(&format!(
+                "\n### {} ({})\n\n{}\n",
+                c.author.name,
+                c.created_at,
+                html_text(&c.body_html).trim()
+            ));
         }
     }
     Ok(s)
@@ -290,7 +299,8 @@ fn pick_transition<'a>(ts: &'a [Transition], to: &str) -> Option<&'a Transition>
         .or_else(|| {
             let want = norm(to);
             ts.iter().find(|t| {
-                serde_json::to_value(t.to.category).ok().and_then(|v| v.as_str().map(str::to_owned)) == Some(want.clone())
+                serde_json::to_value(t.to.category).ok().and_then(|v| v.as_str().map(str::to_owned))
+                    == Some(want.clone())
             })
         })
 }
@@ -303,7 +313,10 @@ async fn transition_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId, to: &str) -
         return Err(format!("no transition matches {to:?}; available: {}", names.join(", ")));
     };
     if tr.needs_fields {
-        return Err(format!("transition {:?} requires extra fields; move the ticket from Kelta's UI", tr.name));
+        return Err(format!(
+            "transition {:?} requires extra fields; move the ticket from Kelta's UI",
+            tr.name
+        ));
     }
     let ticket = tracker.transition(&t, &tr.id, None).await.map_err(|e| e.message)?;
     Ok(format!("{} is now {}.", ticket.r#ref.key, ticket.status.name))
@@ -380,7 +393,10 @@ mod tests {
     #[test]
     fn negotiates_version() {
         assert_eq!(initialize(&json!({"protocolVersion": "2025-03-26"}))["protocolVersion"], "2025-03-26");
-        assert_eq!(initialize(&json!({"protocolVersion": "1999-01-01"}))["protocolVersion"], PROTOCOL_VERSIONS[0]);
+        assert_eq!(
+            initialize(&json!({"protocolVersion": "1999-01-01"}))["protocolVersion"],
+            PROTOCOL_VERSIONS[0]
+        );
     }
 
     #[test]
