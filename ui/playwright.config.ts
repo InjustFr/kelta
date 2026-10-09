@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 5179;
+const PORT = Number(process.env.E2E_PORT ?? 5179);
 
 // UI e2e against the Vite dev server with the in-memory IPC mock (VITE_IPC=mock).
 // Lanes add specs under tests/e2e/<lane>/.

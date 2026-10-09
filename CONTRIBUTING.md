@@ -36,10 +36,10 @@ On macOS every rebuild changes the code signature, so Keychain asks for permissi
 
 ## QA
 
-Before every pull request:
+Before every pull request (see CI below):
 
 ```sh
-bash scripts/qa.sh
+bash scripts/qa.sh      # or: bash scripts/ci-local.sh, which also runs e2e and cargo-deny
 ```
 
 It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fmt --check`, clippy with
@@ -50,6 +50,21 @@ It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fm
 
 `scripts/linux-check.sh` repeats the checks on Ubuntu 24.04 (`docker/ubuntu-build.Dockerfile`), which is the
 primary Linux target. Run it when you touch `platform/`, `window/`, packaging or anything with `cfg(target_os)`.
+
+## CI
+
+GitHub Actions is the confirmation, not the test bench. Do not push to see whether it works.
+
+1. Verify locally with `bash scripts/ci-local.sh`: the local mirror of `ci.yml` (`scripts/qa.sh`, Playwright
+   e2e, cargo-deny). It also runs `scripts/linux-check.sh` when the diff against `origin/main` touches Linux
+   code (`--linux` forces it, `--base <ref>` changes the base).
+2. Open the PR when it is ready. Draft PRs do not run CI; marking one ready does. A PR runs only the jobs for
+   what it changes (Rust, UI, packaging), and docs-only PRs run nothing. There is no CI on pushes to `main`
+   or to branches.
+3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
+   runs are manual: Actions, bench, Run workflow.
+4. Nightly builds run once a day (03:17 UTC), and only when `main` moved since the last one. Tags `v*` build
+   the release.
 
 ## Packaging and benchmarks
 
@@ -62,4 +77,4 @@ primary Linux target. Run it when you touch `platform/`, `window/`, packaging or
 
 ## Commits
 
-Conventional commits (`feat(scope): ...`). The nightly workflow publishes every merge to `main`.
+Conventional commits (`feat(scope): ...`). The nightly workflow publishes `main` once a day.
