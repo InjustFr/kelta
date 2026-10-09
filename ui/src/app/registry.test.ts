@@ -59,5 +59,5 @@ describe('registries', () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  });
+  }, 30_000); // cold-transforms every section
 });
