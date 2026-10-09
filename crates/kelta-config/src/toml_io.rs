@@ -197,8 +197,10 @@ pub fn write_atomic(path: &Path, text: &str) -> Result<(), KeltaError> {
     std::fs::create_dir_all(dir)?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let tmp: PathBuf = dir.join(format!(".{name}.kelta-tmp-{}", std::process::id()));
+    // A hostile repo may pre-plant a symlink at the temp name: drop it, then create exclusively.
+    let _ = std::fs::remove_file(&tmp);
     {
-        let mut f = std::fs::File::create(&tmp)?;
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
     }
