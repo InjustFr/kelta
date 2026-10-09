@@ -54,7 +54,7 @@ describe('ReviewDetailPane', () => {
     if (!item) throw new Error('fixture missing');
     item.review.head_sha = 'f'.repeat(40); // someone pushed after the page loaded
 
-    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'A', shiftKey: true });
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'a' });
     await waitFor(() => expect(approveCalls()).toHaveLength(1));
     expect((approveCalls()[0]?.args as { head_sha: string }).head_sha).toBe(shown);
     expect(await screen.findByTestId('pr-changed')).toBeTruthy();
@@ -84,11 +84,24 @@ describe('ReviewDetailPane', () => {
     });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'm' });
     const comment = await screen.findByLabelText(/Comment \(Markdown\)/);
     await fireEvent.input(comment, { target: { value: 'LGTM so far' } });
     await fireEvent.keyDown(comment, { key: 'Enter', ctrlKey: true });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'review_comment')).toBe(true));
+  });
+
+  it('shows pending comments and lets a decision go out without a body', async () => {
+    mock.state.pending['acme/shop-api#311'] = 2;
+    mountDetail();
+    expect((await screen.findByTestId('pending-comments')).textContent).toContain('2 pending comments');
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
+    await screen.findByLabelText(/What should change/);
+    const submit = screen.getAllByRole('button', { name: 'Request changes' }).at(-1) as HTMLElement;
+    expect(submit.hasAttribute('disabled')).toBe(false);
+    await fireEvent.click(submit);
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'review_request_changes')).toBe(true));
+    await waitFor(() => expect(screen.queryByTestId('pending-comments')).toBeNull());
   });
 
   it('opens the review-locally flow from the keyboard', async () => {

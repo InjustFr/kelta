@@ -99,6 +99,7 @@ const MR: &str = "/api/v4/projects/grp%2Fother/merge_requests/8";
 
 async fn mount_detail(server: &MockServer, mr: &str, approvals: &str) {
     mount(server, "GET", "/api/v4/user", 200, "gitlab/user.json").await;
+    mount(server, "GET", &format!("{MR}/draft_notes"), 200, "gitlab/draft_notes.json").await;
     mount(server, "GET", MR, 200, mr).await;
     mount(server, "GET", &format!("{MR}/approvals"), 200, approvals).await;
     mount(server, "GET", &format!("{MR}/changes"), 200, "gitlab/changes.json").await;
@@ -164,6 +165,7 @@ async fn detail_survives_missing_approvals_and_changes() {
 #[tokio::test]
 async fn approve_sends_the_sha_and_a_409_is_a_conflict() {
     let server = MockServer::start().await;
+    mount(&server, "GET", &format!("{MR}/draft_notes"), 200, "gitlab/no_drafts.json").await;
     Mock::given(method("POST"))
         .and(path(format!("{MR}/approve")))
         .and(body_partial_json(json!({"sha": "deadbeef08"})))
@@ -174,6 +176,7 @@ async fn approve_sends_the_sha_and_a_409_is_a_conflict() {
     gl(&server).approve(&rref("gitlab-acme", "grp/other", 8), "deadbeef08").await.unwrap();
 
     let moved = MockServer::start().await;
+    mount(&moved, "GET", &format!("{MR}/draft_notes"), 200, "gitlab/no_drafts.json").await;
     Mock::given(path(format!("{MR}/approve")))
         .respond_with(
             ResponseTemplate::new(409)
@@ -189,6 +192,7 @@ async fn approve_sends_the_sha_and_a_409_is_a_conflict() {
 #[tokio::test]
 async fn request_changes_is_a_note_plus_unapprove_that_may_fail() {
     let server = MockServer::start().await;
+    mount(&server, "GET", &format!("{MR}/draft_notes"), 200, "gitlab/no_drafts.json").await;
     Mock::given(method("POST"))
         .and(path(format!("{MR}/notes")))
         .respond_with(ResponseTemplate::new(201).set_body_string(fixture_text("gitlab/note.json")))
@@ -334,4 +338,37 @@ async fn unauthorized_is_needs_auth() {
     let server = MockServer::start().await;
     Mock::given(path("/api/v4/user")).respond_with(ResponseTemplate::new(401)).mount(&server).await;
     assert_eq!(gl(&server).me().await.unwrap_err().code, ErrorCode::NeedsAuth);
+}
+
+#[tokio::test]
+async fn draft_notes_are_the_pending_review() {
+    let server = MockServer::start().await;
+    mount_detail(&server, "gitlab/mr.json", "gitlab/approvals.json").await;
+    let r = rref("gitlab-acme", "grp/other", 8);
+    assert_eq!(gl(&server).get(&r).await.unwrap().pending_comments, 2);
+
+    // a line comment becomes a draft note positioned on the MR diff refs
+    mount(&server, "POST", &format!("{MR}/draft_notes"), 201, "gitlab/note.json").await;
+    gl(&server).add_pending_comment(&r, "src/a.rs", 12, "nit").await.unwrap();
+    let body = &bodies(&server, "POST", &format!("{MR}/draft_notes")).await[0];
+    assert_eq!(body["note"], "nit");
+    assert_eq!(
+        body["position"],
+        json!({"position_type": "text", "base_sha": "b0", "start_sha": "s0", "head_sha": "h0",
+               "new_path": "src/a.rs", "old_path": "src/a.rs", "new_line": 12})
+    );
+}
+
+#[tokio::test]
+async fn decisions_publish_the_drafts_first_and_an_empty_comment_sends_no_note() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", &format!("{MR}/draft_notes"), 200, "gitlab/draft_notes.json").await;
+    mount(&server, "POST", &format!("{MR}/draft_notes/bulk_publish"), 204, "gitlab/note.json").await;
+    mount(&server, "POST", &format!("{MR}/approve"), 201, "gitlab/approve_ok.json").await;
+    let h = gl(&server);
+    let r = rref("gitlab-acme", "grp/other", 8);
+    h.approve(&r, "deadbeef08").await.unwrap();
+    h.comment(&r, "").await.unwrap();
+    assert_eq!(count(&server, "POST", &format!("{MR}/draft_notes/bulk_publish")).await, 2);
+    assert_eq!(count(&server, "POST", &format!("{MR}/notes")).await, 0);
 }
