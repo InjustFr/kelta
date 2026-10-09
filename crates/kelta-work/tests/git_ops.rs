@@ -242,3 +242,48 @@ async fn unpushed_ignores_base_history_without_remote() {
     // Missing base branch is ignored, not an error.
     assert_eq!(kelta_work::git::unpushed_count(&repo, "nope").await.unwrap(), 2);
 }
+
+#[tokio::test]
+async fn finish_keeps_user_files_that_match_include_patterns() {
+    need_git!();
+    let fx = Fx::new();
+    std::fs::write(fx.repo.join("local.cfg"), "x=1\n").unwrap();
+    std::fs::write(fx.repo.join(".worktreeinclude"), "local.*\n").unwrap();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    // Never copied by Kelta, same pattern: the user's file.
+    std::fs::write(item.worktree.join("local.staging"), "mine\n").unwrap();
+    let e = w.finish(&item.id, opts(false)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Dirty);
+    assert_eq!(e.detail.unwrap()["files"], serde_json::json!(["local.staging"]));
+    assert!(item.worktree.join("local.staging").exists());
+    // A copy the user edited is theirs too.
+    std::fs::remove_file(item.worktree.join("local.staging")).unwrap();
+    std::fs::write(item.worktree.join("local.cfg"), "x=2\n").unwrap();
+    let e = w.finish(&item.id, opts(false)).await.unwrap_err();
+    assert_eq!(e.detail.unwrap()["files"], serde_json::json!(["local.cfg"]));
+    assert!(w.status(&item.id).await.unwrap().dirty);
+}
+
+#[tokio::test]
+async fn finish_after_squash_merge_with_pruned_branch() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    std::fs::write(item.worktree.join("a.txt"), "a\n").unwrap();
+    git(&item.worktree, &["add", "a.txt"]);
+    git(&item.worktree, &["commit", "-q", "-m", "a"]);
+    std::fs::write(item.worktree.join("b.txt"), "b\n").unwrap();
+    git(&item.worktree, &["add", "b.txt"]);
+    git(&item.worktree, &["commit", "-q", "-m", "b"]);
+    // Squash merge on the host: one new commit on main, head branch never on a remote ref.
+    std::fs::write(fx.repo.join("a.txt"), "a\n").unwrap();
+    std::fs::write(fx.repo.join("b.txt"), "b\n").unwrap();
+    git(&fx.repo, &["add", "a.txt", "b.txt"]);
+    git(&fx.repo, &["commit", "-q", "-m", "squash"]);
+    git(&fx.repo, &["push", "-q", "origin", "main"]);
+    git(&fx.repo, &["reset", "-q", "--hard", "HEAD~1"]);
+    assert!(!w.status(&item.id).await.unwrap().unpushed);
+    let done = w.finish(&item.id, opts(false)).await.unwrap();
+    assert_eq!(done.state, WorkState::Finished);
+    assert!(!item.worktree.exists());
+}

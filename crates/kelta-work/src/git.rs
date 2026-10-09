@@ -324,6 +324,17 @@ pub async fn unpushed_count(worktree: &Path, base: &str) -> Result<u32, KeltaErr
     Ok(out.stdout.trim().parse().unwrap_or(0))
 }
 
+/// HEAD's changes are already in `target` (squash/rebase merge): merging HEAD into it is a no-op.
+/// shortcut: false when `target` later rewrote the same lines (conflict), the user then forces.
+pub async fn changes_merged(worktree: &Path, target: &str) -> Result<bool, KeltaError> {
+    let out = run(worktree, &["merge-tree", "--write-tree", target, "HEAD"], LOCAL_TIMEOUT).await?;
+    if !out.ok() {
+        return Ok(false);
+    }
+    let tree = run_ok(worktree, &["rev-parse", &format!("{target}^{{tree}}")], LOCAL_TIMEOUT).await?;
+    Ok(out.stdout.lines().next() == Some(tree.stdout.trim()))
+}
+
 /// `(ahead, behind)` of HEAD relative to `upstream`.
 pub async fn ahead_behind(worktree: &Path, upstream: &str) -> Result<(u32, u32), KeltaError> {
     let range = format!("HEAD...{upstream}");

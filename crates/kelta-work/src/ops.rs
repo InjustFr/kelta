@@ -127,7 +127,10 @@ impl WorkService {
             && preset.open == EditorOpenMode::Rpc
             && file.exists()
         {
-            let run = j.editor_run.clone().unwrap_or(files::alloc_run_dir(&self.dirs, None)?);
+            let run = match j.editor_run.clone() {
+                Some(r) => r,
+                None => files::alloc_run_dir(&self.dirs, None)?,
+            };
             files::private_dir(&run)?;
             j.editor_run = Some(run.clone());
             let sock = run.join("nvim.sock");
@@ -219,7 +222,10 @@ impl WorkService {
         let mut j = self.load_journal(&item.id);
         let run = self.ensure_claude_run(&item, &mut j)?;
         let port = self.http_port(&env.settings).await;
-        self.write_claude_files(&env, &item, &j, &run, session, port)?;
+        if let Err(e) = self.write_claude_files(&env, &item, &j, &run, session, port) {
+            self.release_port(port);
+            return Err(e);
+        }
         if port.is_some() {
             self.http_sessions.lock().insert(session.clone());
         }
@@ -422,7 +428,14 @@ impl WorkService {
             && git::worktree_at(&repo, &item.worktree).await?.is_some();
         let mut copies: Vec<String> = Vec::new();
         if opts.remove_worktree && is_worktree {
-            let report = self.dirty_report(&env, &item).await?;
+            if item.pr_url.is_some() {
+                // Best effort: see a merge that happened on the code host since the last fetch.
+                let timeout = Duration::from_secs(u64::from(env.settings.worktree.fetch_timeout_secs.max(1)));
+                if let Err(e) = git::fetch(&repo, &env.repo.remote, &[&item.base], timeout).await {
+                    tracing::warn!(error = %e.message, "fetch before finish failed");
+                }
+            }
+            let report = self.dirty_report(&env, &item, &j).await?;
             copies = report.copies;
             if !opts.force && (!report.files.is_empty() || report.unpushed > 0) {
                 let msg = match (report.files.is_empty(), report.unpushed) {
@@ -517,17 +530,26 @@ impl WorkService {
         Ok(item)
     }
 
-    async fn dirty_report(&self, env: &Env, item: &WorkItem) -> Result<DirtyReport, KeltaError> {
+    async fn dirty_report(&self, env: &Env, item: &WorkItem, j: &Journal) -> Result<DirtyReport, KeltaError> {
         let entries = git::dirty_files(&item.worktree).await?;
-        let patterns = files::include_patterns(&env.repo.path, &env.settings.worktree.include);
-        // Untracked copies of `worktree.include` files (.env…) are ours, not the user's work.
+        // Only files Kelta copied (journal) and the user left byte-identical are ours to delete.
         let (mut files, mut copies) = (Vec::new(), Vec::new());
         for f in entries {
-            let untracked_include = files::is_included(&f, &patterns)
-                && !git::is_tracked(&item.worktree, &f).await.unwrap_or(true);
-            if untracked_include { copies.push(f) } else { files.push(f) }
+            let ours = j.include_copies.contains(&f)
+                && std::fs::read(item.worktree.join(&f))
+                    .ok()
+                    .is_some_and(|b| std::fs::read(env.repo.path.join(&f)).is_ok_and(|src| src == b));
+            if ours { copies.push(f) } else { files.push(f) }
         }
-        let unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
+        let mut unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
+        // Squash/rebase-merged PR whose remote branch was pruned: the work is in the remote base.
+        let remote_base = format!("refs/remotes/{}/{}", env.repo.remote, item.base);
+        if unpushed > 0
+            && git::ref_exists(&item.worktree, &remote_base).await?
+            && git::changes_merged(&item.worktree, &remote_base).await?
+        {
+            unpushed = 0;
+        }
         Ok(DirtyReport { files, copies, unpushed })
     }
 
@@ -550,7 +572,7 @@ impl WorkService {
             Some(u) => git::ahead_behind(&item.worktree, &u).await?,
             None => (0, 0),
         };
-        let report = self.dirty_report(&env, &item).await?;
+        let report = self.dirty_report(&env, &item, &self.load_journal(id)).await?;
         Ok(GitStatus { ahead, behind, dirty: !report.files.is_empty(), unpushed: report.unpushed > 0 })
     }
 

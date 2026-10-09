@@ -539,3 +539,16 @@ async fn claude_restore_request_regenerates_files() {
         w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false).await.unwrap().is_none()
     );
 }
+
+#[tokio::test]
+async fn concurrent_starts_for_one_ticket_make_one_item() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    let (a, b) = tokio::join!(w.start(plan.clone()), w.start(plan));
+    let ids: Vec<_> = [a, b].into_iter().filter_map(Result::ok).map(|i| i.id).collect();
+    assert!(!ids.is_empty());
+    assert!(ids.iter().all(|i| *i == ids[0]));
+    assert_eq!(fx.store_items().await.len(), 1);
+}

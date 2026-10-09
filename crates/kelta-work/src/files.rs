@@ -166,11 +166,6 @@ fn copy_tree(src: &Path, dst: &Path, copied: &mut Vec<String>, rel: &str) -> Res
     Ok(())
 }
 
-/// Does `rel` (a worktree-relative file) match the include patterns?
-pub fn is_included(rel: &str, patterns: &[String]) -> bool {
-    build_set(patterns).map(|s| s.is_match(rel.trim_end_matches('/'))).unwrap_or(false)
-}
-
 /// Very small HTML → text for comment bodies (tags dropped, common entities decoded).
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
@@ -275,7 +270,6 @@ mod tests {
         assert_eq!(copied, vec![".env", ".env.local"]);
         assert!(wt.join(".env").exists());
         assert!(!wt.join("other.txt").exists());
-        assert!(is_included("sub/.env", &pats));
         // Never overwrites.
         std::fs::write(wt.join(".env"), "mine").unwrap();
         copy_includes(&repo, &wt, &cands, &pats).unwrap();

@@ -67,6 +67,8 @@ pub struct WorkService {
     versions: Mutex<HashMap<PathBuf, Option<semver::Version>>>,
     /// Serializes saga/finish/PR operations per work item.
     item_locks: Mutex<HashMap<WorkItemId, Arc<tokio::sync::Mutex<()>>>>,
+    /// Serializes the existing-item check + insert of `start` (no twin items for one source).
+    start_lock: tokio::sync::Mutex<()>,
     /// Bus listener (follow_claude_edits, HTTP consumer release); started on first need.
     listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Claude sessions holding an HTTP server consumer.
@@ -85,6 +87,7 @@ impl WorkService {
             host: RwLock::new(None),
             versions: Mutex::new(HashMap::new()),
             item_locks: Mutex::new(HashMap::new()),
+            start_lock: tokio::sync::Mutex::new(()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
             crash_after: Mutex::new(None),
@@ -122,11 +125,21 @@ impl WorkService {
     /// `work_start` (progress via `work.updated`).
     pub async fn start(&self, plan: StartWorkPlan) -> Result<WorkItem, KeltaError> {
         self.ensure_listener();
-        if let Some(existing) = plan.existing.clone() {
+        let guard = self.start_lock.lock().await;
+        // Re-check: another start for this source may have created its item since `plan`.
+        let items = self.store.list_items(Some(&plan.project_id)).await?;
+        let existing =
+            plan.existing.clone().or_else(|| plan::existing_for(&items, &plan.source).map(|w| w.id.clone()));
+        if let Some(existing) = existing {
+            drop(guard);
             return self.resume(&existing).await;
         }
         let id = self.create_item(plan).await?;
-        self.run_saga(&id).await
+        // Hold the item lock before releasing `start_lock` so a racing start sees it busy.
+        let lock = self.item_lock(&id);
+        let _item = lock.lock().await;
+        drop(guard);
+        self.run_saga_locked(&id).await
     }
 
     /// `work_list`.

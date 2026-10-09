@@ -56,6 +56,9 @@ pub(crate) struct Journal {
     pub arranged: bool,
     pub worktree_created: bool,
     pub http_port: Option<u16>,
+    /// Worktree-relative files `include_files` copied (finish may delete only these).
+    #[serde(default)]
+    pub include_copies: Vec<String>,
     /// Tracker side effects already attempted (`assign`, `transition`, `comment`).
     pub effects_done: BTreeSet<String>,
 }
@@ -409,12 +412,6 @@ impl WorkService {
         Ok(item.id)
     }
 
-    pub(crate) async fn run_saga(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
-        let lock = self.item_lock(id);
-        let _guard = lock.lock().await;
-        self.run_saga_locked(id).await
-    }
-
     pub(crate) async fn run_saga_locked(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
         let mut item = self.load(id).await?;
         let mut j = self.load_journal(id);
@@ -517,7 +514,7 @@ impl WorkService {
             "fetch_ticket" => self.step_fetch_ticket(env, item, j).await,
             "fetch_base" => self.step_fetch_base(env, item, j).await,
             "worktree" => self.step_worktree(env, item, j).await,
-            "include_files" => self.step_include(env, item).await,
+            "include_files" => self.step_include(env, item, j).await,
             "claude_files" => self.step_claude_files(env, item, j).await,
             "layout" => self.step_layout(env, item, j).await,
             "setup" => self.step_setup(env, item, j).await,
@@ -717,7 +714,12 @@ impl WorkService {
         Ok(Some(detail))
     }
 
-    async fn step_include(&self, env: &Env, item: &mut WorkItem) -> Result<Option<String>, KeltaError> {
+    async fn step_include(
+        &self,
+        env: &Env,
+        item: &mut WorkItem,
+        j: &mut Journal,
+    ) -> Result<Option<String>, KeltaError> {
         let patterns = files::include_patterns(&env.repo.path, &env.settings.worktree.include);
         if patterns.is_empty() || git::same_path(&env.repo.path, &item.worktree) {
             return Ok(Some("nothing to copy".into()));
@@ -728,6 +730,7 @@ impl WorkService {
             tokio::task::spawn_blocking(move || files::copy_includes(&repo, &wt, &candidates, &patterns))
                 .await
                 .map_err(|e| KeltaError::internal(e.to_string()))??;
+        j.include_copies.extend(copied.iter().cloned());
         Ok(Some(if copied.is_empty() {
             "nothing to copy".into()
         } else {
@@ -757,6 +760,15 @@ impl WorkService {
                 tracing::warn!(error = %e.message, "HTTP server unavailable; Claude starts without Kelta MCP");
                 None
             }
+        }
+    }
+
+    /// Give back the consumer `http_port` took (no-op when it returned `None`).
+    pub(crate) fn release_port(&self, port: Option<u16>) {
+        if port.is_some()
+            && let Some(h) = self.host()
+        {
+            h.release_http();
         }
     }
 
@@ -804,12 +816,8 @@ impl WorkService {
         let run = self.ensure_claude_run(item, j)?;
         let sid = j.claude_sid_hint.get_or_insert_with(SessionId::generate).clone();
         let port = self.http_port(&env.settings).await;
-        if port.is_some()
-            && let Some(h) = self.host()
-        {
-            // The Claude step takes its own consumer; this one only learned the port.
-            h.release_http();
-        }
+        // The Claude step takes its own consumer; this one only learned the port.
+        self.release_port(port);
         j.http_port = port;
         self.write_claude_files(env, item, j, &run, &sid, port)?;
         Ok(Some(format!("{}", run.display())))
@@ -1189,16 +1197,15 @@ impl WorkService {
         let hint = j.claude_sid_hint.get_or_insert_with(SessionId::generate).clone();
         let port = self.http_port(&env.settings).await;
         // Files carry the port and the session id; rewrite before spawning.
-        self.write_claude_files(env, item, j, &run, &hint, port)?;
+        if let Err(e) = self.write_claude_files(env, item, j, &run, &hint, port) {
+            self.release_port(port);
+            return Err(e);
+        }
         let req = self.claude_request(env, item, j, &run, mode, port, &hint);
         let info = match env.core.session_spawn(req).await {
             Ok(i) => i,
             Err(e) => {
-                if port.is_some()
-                    && let Some(h) = self.host()
-                {
-                    h.release_http();
-                }
+                self.release_port(port);
                 return Err(e);
             }
         };
