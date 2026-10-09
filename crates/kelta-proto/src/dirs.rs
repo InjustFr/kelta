@@ -123,6 +123,11 @@ impl Dirs {
         self.runtime.join(crate::ctl::CTL_SOCKET_NAME)
     }
 
+    /// `<runtime>/keltad.sock` (session daemon).
+    pub fn keltad_socket(&self) -> PathBuf {
+        self.runtime.join("keltad.sock")
+    }
+
     /// `<runtime>/s/<sid8>/`.
     pub fn session_runtime(&self, sid8: &str) -> PathBuf {
         self.runtime.join("s").join(sid8)
@@ -144,6 +149,64 @@ impl Dirs {
     pub fn stable_ctl(&self) -> PathBuf {
         self.bin.join("current").join("kelta-ctl")
     }
+}
+
+/// Our real uid.
+pub fn my_uid() -> u32 {
+    rustix::process::getuid().as_raw()
+}
+
+/// Create (or fix) a private runtime dir for a socket: a real directory owned by us, mode 0700.
+fn prepare_private_dir(dir: &Path) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    std::fs::create_dir_all(dir)?;
+    let meta = std::fs::symlink_metadata(dir)?;
+    if !meta.file_type().is_dir() {
+        return Err(KeltaError::permission_denied(format!(
+            "runtime dir {} is not a directory",
+            dir.display()
+        )));
+    }
+    if meta.uid() != my_uid() {
+        return Err(KeltaError::permission_denied(format!(
+            "runtime dir {} is owned by uid {}, not us",
+            dir.display(),
+            meta.uid()
+        )));
+    }
+    if meta.mode() & 0o777 != 0o700 {
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
+/// Remove a stale socket file; refuse when another live instance answers on it.
+fn clear_stale_socket(path: &Path) -> Result<()> {
+    use std::os::unix::fs::FileTypeExt;
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return Ok(()) };
+    if !meta.file_type().is_socket() {
+        return Err(KeltaError::conflict(format!("{} exists and is not a socket", path.display())));
+    }
+    if std::os::unix::net::UnixStream::connect(path).is_ok() {
+        return Err(KeltaError::conflict(format!("another instance is listening on {}", path.display())));
+    }
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+/// Bind a unix socket (mode 0600) in a private 0700 directory owned by us (ctl socket, keltad).
+pub fn bind_private_socket(path: &Path) -> Result<std::os::unix::net::UnixListener> {
+    use std::os::unix::fs::PermissionsExt;
+    if let Some(dir) = path.parent() {
+        prepare_private_dir(dir)?;
+    }
+    if path.as_os_str().len() >= 100 {
+        return Err(KeltaError::invalid(format!("socket path too long: {}", path.display())));
+    }
+    clear_stale_socket(path)?;
+    let listener = std::os::unix::net::UnixListener::bind(path)?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(listener)
 }
 
 /// Parsed command line of the `kelta` binary.

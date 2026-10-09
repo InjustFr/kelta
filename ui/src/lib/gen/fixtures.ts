@@ -1673,6 +1673,7 @@ export const settingsDefault: Settings = {
       "shell": 3000,
       "tool": 500
     },
+    "session_host": "daemon",
     "shell": "",
     "shift_enter": {
       "claude": "esc-cr",

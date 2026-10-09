@@ -3104,6 +3104,7 @@
           "shell": 3000,
           "tool": 500
         },
+        "session_host": "daemon",
         "shell": "",
         "shift_enter": {
           "claude": "esc-cr",
@@ -3287,6 +3288,26 @@
             }
           },
           "type": "object"
+        },
+        "session_host": {
+          "default": "daemon",
+          "description": "`daemon` = sessions survive quit (keltad).",
+          "oneOf": [
+            {
+              "const": "inprocess",
+              "description": "PTYs in the app process: quitting ends them.",
+              "type": "string"
+            },
+            {
+              "const": "daemon",
+              "description": "PTYs in `keltad`: sessions survive quit and re-attach on the next start.",
+              "type": "string"
+            }
+          ],
+          "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "shell": {
           "default": "",

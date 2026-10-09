@@ -350,6 +350,17 @@ impl ScrollbackSettings {
     }
 }
 
+/// Where terminal sessions live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionHost {
+    /// PTYs in the app process: quitting ends them.
+    Inprocess,
+    /// PTYs in `keltad`: sessions survive quit and re-attach on the next start.
+    #[default]
+    Daemon,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct TerminalSettings {
@@ -389,6 +400,9 @@ pub struct TerminalSettings {
     #[schemars(extend("x-kelta-exec" = true))]
     pub env: BTreeMap<String, String>,
     pub minimum_contrast_ratio: f64,
+    /// `daemon` = sessions survive quit (keltad).
+    #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
+    pub session_host: SessionHost,
 }
 
 impl Default for TerminalSettings {
@@ -419,6 +433,7 @@ impl Default for TerminalSettings {
             shell: String::new(),
             env: BTreeMap::new(),
             minimum_contrast_ratio: 1.0,
+            session_host: SessionHost::Daemon,
         }
     }
 }

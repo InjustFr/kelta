@@ -2,7 +2,6 @@
 //! owned by us, peer uid must equal ours, line-delimited `CtlRequest` → `CtlResponse`.
 
 use std::io;
-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -25,59 +24,11 @@ pub(crate) struct CtlCtx {
     pub(crate) tokens: Arc<TokenTable>,
 }
 
-/// Our real uid (rustix).
-pub(crate) fn my_uid() -> u32 {
-    rustix::process::getuid().as_raw()
-}
-
-/// Create (or fix) the runtime dir: a real directory owned by us with mode 0700.
-pub(crate) fn prepare_dir(dir: &Path) -> Result<(), KeltaError> {
-    std::fs::create_dir_all(dir)?;
-    let meta = std::fs::symlink_metadata(dir)?;
-    if !meta.file_type().is_dir() {
-        return Err(KeltaError::permission_denied(format!(
-            "runtime dir {} is not a directory",
-            dir.display()
-        )));
-    }
-    if meta.uid() != my_uid() {
-        return Err(KeltaError::permission_denied(format!(
-            "runtime dir {} is owned by uid {}, not us",
-            dir.display(),
-            meta.uid()
-        )));
-    }
-    if meta.mode() & 0o777 != 0o700 {
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(())
-}
-
-/// Remove a stale socket file; refuse when another live instance answers on it.
-fn clear_stale(path: &Path) -> Result<(), KeltaError> {
-    let Ok(meta) = std::fs::symlink_metadata(path) else { return Ok(()) };
-    if !meta.file_type().is_socket() {
-        return Err(KeltaError::conflict(format!("{} exists and is not a socket", path.display())));
-    }
-    if std::os::unix::net::UnixStream::connect(path).is_ok() {
-        return Err(KeltaError::conflict(format!("another instance is listening on {}", path.display())));
-    }
-    std::fs::remove_file(path)?;
-    Ok(())
-}
-
-/// Bind the socket (0600) and return the listener.
+/// Bind the socket (0600 in a private 0700 dir) and return the listener.
 pub(crate) fn bind(path: &Path) -> Result<UnixListener, KeltaError> {
-    if let Some(dir) = path.parent() {
-        prepare_dir(dir)?;
-    }
-    if path.as_os_str().len() >= 100 {
-        return Err(KeltaError::invalid(format!("socket path too long: {}", path.display())));
-    }
-    clear_stale(path)?;
-    let listener = UnixListener::bind(path)?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    Ok(listener)
+    let l = kelta_proto::dirs::bind_private_socket(path)?;
+    l.set_nonblocking(true)?;
+    Ok(UnixListener::from_std(l)?)
 }
 
 /// Accept loop (a tokio task, ended by aborting its handle).
@@ -137,7 +88,7 @@ async fn write_response(w: &mut (impl AsyncWriteExt + Unpin), resp: &CtlResponse
 
 async fn serve_conn(stream: UnixStream, ctx: Arc<CtlCtx>) {
     match stream.peer_cred() {
-        Ok(cred) if cred.uid() == my_uid() => {}
+        Ok(cred) if cred.uid() == kelta_proto::dirs::my_uid() => {}
         Ok(cred) => {
             tracing::warn!(peer_uid = cred.uid(), "ctl: rejected connection from another uid");
             return;

@@ -13,7 +13,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 |---|---|---|---|
 | D1 | **Tauri v2 + Svelte 5 + xterm.js 6.0.0**, Rust core | Electron misses the memory budget (Chromium multi-process baseline 250-350 MB). Native egui/GPUI cannot embed sl web in-window on native Wayland and is too risky for a one-pass parallel build. Tauri reuses the system webview (WKWebView / WebKitGTK). | Gate G1 or G2 fails after tuning (BUILD_PLAN §6) → replace only `apps/desktop` + `ui/` with a native front end over the Tauri-free crates. |
 | D2 | **Rust is the terminal source of truth.** One headless `alacritty_terminal::Term` per session; xterm.js instances exist only for visible panes plus a small LRU (`terminal.max_live_views`, default 4) | Hidden sessions cost only a Rust grid (no JS heap/DOM). Re-attach = compact ANSI snapshot. Background sessions still answer terminal queries correctly. | — |
-| D3 | **No session daemon in v0.1**; PTYs live in the app process behind the `TerminalHost` trait | Delivery risk; a `keltad` mux daemon is v0.2 and swaps in behind the same trait without UI changes. Closing the window ("background mode") keeps sessions alive and drops WebKit. | Users demand sessions surviving quit → v0.2 `keltad`. |
+| D3 | PTYs live behind the `TerminalHost` trait: in **`keltad`** (`terminal.session_host = "daemon"`, default) or in the app process (`inprocess`, also the fallback when keltad cannot start) | `keltad` runs kelta-term's `PtyTerminalHost` unchanged in its own process and the app talks to it with `DaemonTerminalHost` (same frames, attach/detach, acks, snapshots), so sessions survive quitting the app with no UI change; the models live only in keltad (no duplicate in the app). Closing the window ("background mode") keeps sessions alive and drops WebKit. | keltad's per-session memory or socket hop shows up in `kelta-bench` → move the hot path to fd passing. |
 | D4 | Blocking reader **thread per PTY** (256 KiB stack) + `poll(2)` with timeout for DEC 2026 sync deadlines | Simplest correct design; ~10-20 threads is cheap with `M_ARENA_MAX=2`. | Profiling shows thread overhead > 1 MB/session. |
 | D5 | **Typed IPC**: one Tauri command per operation, DTOs in `kelta-proto`, TS generated with `ts-rs`, CI drift check | Compile-time agreement between 10 parallel agents. | — |
 | D6 | Programs are **exec'd directly** with a login environment resolved once (sentinel-delimited) — no `$SHELL -c` wrapper | Works with fish/nushell, no quoting bugs, Dock-launched apps get the user's PATH. | — |
@@ -122,13 +122,15 @@ WebKit helpers (OS-managed): WebContent (UI + all iframes), Network, GPU (macOS)
 children (each in its own PTY + session/process group): claude, nvim, $SHELL -l, lazygit, lazydocker …
 non-PTY children: web-tool servers (sl web …) owned by kelta-plugins, killed with their tool instance
 kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
+keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the PTY children above; outlives the app
 ```
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids.
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
-- **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
+- **Session daemon (`keltad`):** `<runtime>/keltad.sock` (0600 in the 0700 runtime dir, peer uid checked on both ends). Core launches it from the stable copy `<data>/bin/<version>/keltad` (`keltad --socket <path>`, stderr → `<logs>/keltad.log`); it binds, forks into its own session, and the launcher connects once the parent exits. Messages: `u32 len` + `u32 json_len` + JSON head + raw bytes (input, frames). Each session's events go to the client that spawned or last adopted it. On quit, sessions core would restore stay running (no SIGHUP); the others are killed and closed. On start, core `adopt`s every persisted session keltad still runs (Live, same hook token) before any Dormant respawn and kills the rest. keltad exits 30 s after it has no client and no running session (one-shot grace armed by the disconnect / exit, no polling).
+- **Bundling:** `kelta-ctl` and `keltad` are added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
 
 ### 2.1 Filesystem locations
@@ -139,7 +141,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 | data (db, plugins, bin, logs) | `$XDG_DATA_HOME/kelta` (`~/.local/share/kelta`) | `~/Library/Application Support/dev.kelta.Kelta` |
 | state db | `<data>/kelta.db` | same |
 | logs | `$XDG_STATE_HOME/kelta/logs/kelta.log` (5 MB × 2) | `~/Library/Logs/Kelta/kelta.log` |
-| stable CLI copy | `<data>/bin/<version>/kelta-ctl` + `<data>/bin/current` symlink | same |
+| stable CLI copy | `<data>/bin/<version>/{kelta-ctl,keltad}` + `<data>/bin/current` symlink | same |
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
 | per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
 
@@ -155,7 +157,8 @@ crates/kelta-proto      [scaffold]  ids, DTOs, IPC request/response types, UiEve
                                     service traits (§4), KeltaError, `testing` feature: FakeCore, FakeTerminalHost, FakeTracker,
                                     FakeCodeHost, FakeSecrets, FakeSettings, fixtures
 crates/kelta-term       [L1]  TerminalHost impl: PtyBackend (portable-pty | rustix), login-env exec, reader threads, alacritty model,
-                              query responder, snapshot encoder, flow control, scrollback memory budget
+                              query responder, snapshot encoder, flow control, scrollback memory budget;
+                              `daemon`: the `keltad` binary and the `DaemonTerminalHost` client
 crates/kelta-config     [L4]  layered load/merge/provenance, validation, toml_edit writes, hot reload, repo trust check helpers,
                               project files CRUD, early `linux.graphics` reader
 crates/kelta-secrets    [L4]  SecretRef resolution chain, keyring stores, backend status
@@ -213,6 +216,8 @@ pub trait TerminalHost: Send + Sync {
   fn set_limits(&self, limits: TerminalLimits);                                 // scrollback per kind, memory cap, view_scrollback
   fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>; // plain text (search, persistence)
   fn stats(&self) -> TerminalStats;                                             // per-session bytes, lines, inflight
+  fn persistent(&self) -> bool { false }                                        // keltad: quit leaves restorable sessions running
+  fn adopt(&self, id: &SessionId, events: Arc<dyn TerminalEvents>) -> Option<BTreeMap<String,String>> { None } // re-route a running session's events after an app restart; its spawn env
 }
 pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // false = channel closed → auto-detach
 pub trait TerminalEvents: Send + Sync { fn on_event(&self, id: &SessionId, ev: TerminalEvent); }
@@ -577,8 +582,8 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 | Pane hidden / project switch / UI reload / webview crash | Session keeps running; view re-attaches with Snapshot. |
 | Window closed, `close_behavior=background` | Webview destroyed; sessions run; attention → dock badge / notifications. |
 | Process exit | `Exited{code}`; `close_on_exit` applies; else banner "Exited (code) — Enter restart, x close". |
-| App quit | Confirm if any Claude session is `Working`/`NeedsInput`. nvim sessions get RPC `:wall \| mksession! <data>/sessions/<sid>.vim`. All persisted as `Dormant` with `RestorePolicy`; SIGHUP → 2 s → SIGKILL. |
-| Next start | Layout restored; `Dormant` sessions spawn **when their pane is first attached** (`app.restore_mode = lazy`; `eager`, `none` available): Claude `claude --resume <uuid>` (fallback `--continue` if resume is refused), nvim `-S <file> --listen <sock>`, shell in last OSC 7 cwd, tools relaunched. A dimmed "restored" separator shows the persisted text tail (≤ 200 lines, `sessions.text_tail`). |
+| App quit | keltad (`terminal.session_host = daemon`): restorable sessions keep running, no confirmation; the rest below applies to the others. Confirm if any Claude session is `Working`/`NeedsInput`. nvim sessions get RPC `:wall \| mksession! <data>/sessions/<sid>.vim`. All persisted as `Dormant` with `RestorePolicy`; SIGHUP → 2 s → SIGKILL. |
+| Next start | Layout restored; sessions still running in keltad are re-adopted `Live` (no respawn); other `Dormant` sessions spawn **when their pane is first attached** (`app.restore_mode = lazy`; `eager`, `none` available): Claude `claude --resume <uuid>` (fallback `--continue` if resume is refused), nvim `-S <file> --listen <sock>`, shell in last OSC 7 cwd, tools relaunched. A dimmed "restored" separator shows the persisted text tail (≤ 200 lines, `sessions.text_tail`). |
 
 ### 7.6 Claude status machine (pure fn in kelta-server `hooks::map`)
 

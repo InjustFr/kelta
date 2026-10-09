@@ -71,6 +71,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `shell` | str | `""` | empty = `$SHELL` |
 | `env` | map<str,str> | `{}` | added to every session |
 | `minimum_contrast_ratio` | float | `1` | xterm option |
+| `session_host` | enum(inprocess\|daemon) | `daemon` | restart; global. `daemon` = PTYs live in `keltad`: sessions survive quit and re-attach on the next start (falls back to `inprocess` when keltad cannot start) |
 
 ### [linux.graphics]  (x-kelta-scope global, x-kelta-restart; read by `platform::pre_init` with a minimal TOML parse)
 | `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds |

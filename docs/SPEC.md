@@ -33,6 +33,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 - Several projects are open at once; open set and order persist. `kelta-ctl open <path>` opens/creates and focuses.
 - Per-project groupings: tabs, layouts, sessions, work items, tools, triggers, settings overrides, tickets/reviews views.
 - Aggregated views: **Inbox** = "My tickets" (all open projects' tracker views, grouped by project) + "Review requests" (all configured code-host accounts, grouped by project, unmatched items in **Other**) + "My PRs" + "Needs input" (sessions across projects).
+- **Quitting Kelta** leaves the sessions running in the `keltad` session daemon (`terminal.session_host = "daemon"`); the next start re-attaches every live one where it was (shells, Claude, nvim keep their process and scrollback). Sessions that ended meanwhile restore as below.
 - Close project: sessions keep running unless "Close and stop sessions" is chosen. Remove project: moves config to `projects/.trash/`.
 
 ## 3. Core flows
@@ -149,7 +150,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, on-disk scrollback history log, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, on-disk scrollback history log, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

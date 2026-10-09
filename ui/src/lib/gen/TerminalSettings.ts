@@ -6,6 +6,7 @@ import type { OptionAsMeta } from "./OptionAsMeta";
 import type { Osc52 } from "./Osc52";
 import type { Renderer } from "./Renderer";
 import type { ScrollbackSettings } from "./ScrollbackSettings";
+import type { SessionHost } from "./SessionHost";
 import type { ShiftEnter } from "./ShiftEnter";
 
 export type TerminalSettings = { 
@@ -40,4 +41,8 @@ shift_enter: { [key in string]: ShiftEnter }, keyboard_protocol: KeyboardProtoco
 /**
  * Empty = `$SHELL`.
  */
-shell: string, env: { [key in string]: string }, minimum_contrast_ratio: number, };
+shell: string, env: { [key in string]: string }, minimum_contrast_ratio: number, 
+/**
+ * `daemon` = sessions survive quit (keltad).
+ */
+session_host: SessionHost, };
