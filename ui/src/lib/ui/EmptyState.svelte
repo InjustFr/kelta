@@ -16,41 +16,42 @@
 </script>
 
 <div class="k-empty" role="status">
-  <Icon name={icon} size={28} />
-  <p class="title">{title}</p>
+  <p class="title"><Icon name={icon} size={14} />{title}</p>
   {#if body}<p class="body">{body}</p>{/if}
   {#if actions}<div class="actions">{@render actions()}</div>{/if}
 </div>
 
 <style>
+  /* One sentence and one action, at the top-left of the pane: no illustration, no centring. */
   .k-empty {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--k-space-3);
-    height: 100%;
-    min-height: 120px;
-    padding: var(--k-space-6);
-    text-align: center;
-    color: var(--k-fg-subtle);
+    align-items: flex-start;
+    gap: var(--k-space-2);
+    padding: var(--k-space-5);
+    color: var(--k-fg-muted);
   }
 
   .title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-3);
     margin: 0;
     color: var(--k-fg);
-    font-weight: 600;
+  }
+
+  .title :global(.k-icon) {
+    color: var(--k-fg-subtle);
   }
 
   .body {
     margin: 0;
-    max-width: 42ch;
-    color: var(--k-fg-muted);
+    max-width: var(--k-measure);
   }
 
   .actions {
     display: flex;
     gap: var(--k-space-3);
-    margin-top: var(--k-space-2);
+    margin-top: var(--k-space-3);
   }
 </style>

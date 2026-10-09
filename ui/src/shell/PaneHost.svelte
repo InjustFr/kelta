@@ -3,10 +3,9 @@
   import type { PaneNode, Rect } from '$lib/layout';
   import type { ProjectId, TabId } from '$lib/gen';
   import { pluginEnable } from '$lib/ipc/commands';
-  import { plugins, sessions, toasts } from '$lib/stores';
-  import { Badge, ErrorState, Icon, IconButton, Menu, Spinner, Button, type MenuItem } from '$lib/ui';
+  import { lampOf, plugins, sessions, toasts } from '$lib/stores';
+  import { Badge, Button, ErrorState, Icon, IconButton, Lamp, Menu, Spinner, type MenuItem } from '$lib/ui';
 
-  import AttentionDot from './AttentionDot.svelte';
   import { prompts } from './confirm.svelte';
   import EmptyPane from './EmptyPane.svelte';
   import { lazyComponents } from './lazy.svelte';
@@ -147,7 +146,7 @@
       <Icon name={paneIcon(content, session)} size={13} />
       <span class="title" data-testid="pane-title">{paneTitle(content, session)}</span>
       {#if session}
-        <AttentionDot level={session.attention} size={7} />
+        <Lamp level={lampOf(session.attention, session.status === 'working')} />
         {#if status}<span class="status" data-testid="pane-status">{status}</span>{/if}
       {/if}
       {#if hooksInactive}
@@ -237,7 +236,8 @@
 <style>
   .slot {
     position: absolute;
-    padding: 1px;
+    /* The bezel shows through a 1px gap right and below each pane: panes have no borders. */
+    padding: 0 var(--k-gap) var(--k-gap) 0;
     min-width: 0;
     min-height: 0;
   }
@@ -252,38 +252,36 @@
     width: 100%;
     height: 100%;
     min-width: 0;
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    background: var(--k-bg);
+    background: var(--k-well);
     overflow: hidden;
   }
 
-  .pane.focused {
-    border-color: var(--k-accent);
-  }
-
+  /* Header and terminal read as one screen; the focused pane gets an accent tick on top. */
   header {
     display: flex;
     align-items: center;
-    gap: var(--k-space-2);
-    height: 24px;
+    gap: var(--k-space-3);
+    height: var(--k-pane-header-height);
     flex: none;
     padding: 0 var(--k-space-2) 0 var(--k-space-3);
-    background: var(--k-bg-elev);
-    border-bottom: 1px solid var(--k-border);
-    color: var(--k-fg-muted);
+    background: var(--k-well);
+    color: var(--k-fg-subtle);
     font-size: var(--k-font-size-sm);
   }
 
   .pane.focused header {
     color: var(--k-fg);
+    box-shadow: inset 0 2px 0 var(--k-accent);
   }
 
   .title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 600;
+  }
+
+  .pane.focused .title {
+    font-weight: var(--k-weight-strong);
   }
 
   .status {
@@ -306,7 +304,6 @@
     border: none;
     background: transparent;
     color: var(--k-accent);
-    font-weight: 600;
     cursor: pointer;
   }
 

@@ -1,6 +1,7 @@
 // Pure helpers shared by the work views (tickets, reviews, inbox, start-work sheet, work header).
 
 import type { AccountError, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
+import type { LampLevel } from '$lib/stores/reducers';
 
 // ---- plan validation ------------------------------------------------------------------------
 
@@ -229,17 +230,18 @@ export function columnFor<C extends { id: string; name: string; category: string
   );
 }
 
-export function ciGlyph(state: string): { glyph: string; tone: Tone; label: string } {
+/** CI state as a lamp: passed = done dot, failed = error diamond, running = working ring. */
+export function ciGlyph(state: string): { lamp: LampLevel; label: string } {
   switch (state) {
     case 'success':
-      return { glyph: '✓', tone: 'ok', label: 'CI passed' };
+      return { lamp: 'done', label: 'CI passed' };
     case 'failure':
     case 'error':
-      return { glyph: '✗', tone: 'danger', label: 'CI failed' };
+      return { lamp: 'error', label: 'CI failed' };
     case 'pending':
-      return { glyph: '●', tone: 'warn', label: 'CI running' };
+      return { lamp: 'working', label: 'CI running' };
     default:
-      return { glyph: '–', tone: 'neutral', label: 'No CI' };
+      return { lamp: 'none', label: 'No CI' };
   }
 }
 

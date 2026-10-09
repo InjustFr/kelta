@@ -37,13 +37,14 @@
     border: none;
     border-radius: var(--k-radius);
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-chrome);
     cursor: pointer;
+    transition: background var(--k-duration) ease-out;
   }
 
   .k-icon-button.sm {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
 
   .k-icon-button:hover:not(:disabled),

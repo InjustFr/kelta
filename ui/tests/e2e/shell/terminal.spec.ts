@@ -193,7 +193,7 @@ test.describe('terminal pane', () => {
     }, SESSIONS.shopClaude);
     const badge = page.getByTestId('hooks-badge').first();
     await expect(badge).toContainText('status hooks inactive');
-    await expect(page.getByTestId('status-hooks')).toContainText('hooks inactive');
+    await expect(page.getByTestId('status-hooks')).toContainText('Hooks inactive');
     const tabs = await page.getByTestId('tab').count();
     await badge.getByRole('button', { name: 'Fix' }).click();
     await expect(page.getByTestId('tab')).toHaveCount(tabs + 1);
@@ -216,7 +216,7 @@ test.describe('terminal pane', () => {
           ((await callsOf(page, 'terminal_set_palette')).at(-1)!.args as { palette: { background: string } })
             .palette.background,
       )
-      .toBe('#ffffff');
+      .toBe('#fafbfb');
     await page.evaluate(async () => {
       const { settingsSet } = await import(/* @vite-ignore */ '/src/lib/ipc/commands.ts' as string);
       await settingsSet({ layer: 'global', path: 'app.theme', value: 'dark' });
@@ -227,7 +227,7 @@ test.describe('terminal pane', () => {
           ((await callsOf(page, 'terminal_set_palette')).at(-1)!.args as { palette: { background: string } })
             .palette.background,
       )
-      .toBe('#17181b');
+      .toBe('#121519');
   });
 
   test('welcome pane lists the environment checks', async ({ page }) => {
