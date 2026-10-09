@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
 
   import IconButton from './IconButton.svelte';
+  import { focusModal, modalKeydown } from './modal';
 
   interface Props {
     title: string;
@@ -19,17 +20,9 @@
   const titleId = `k-sheet-${uid}`;
   let el = $state<HTMLElement>();
 
-  $effect(() => {
-    const first = el?.querySelector<HTMLElement>('[autofocus], input, textarea, select');
-    (first ?? el)?.focus();
-  });
+  $effect(() => (el ? focusModal(el) : undefined));
 
-  function onkeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      onclose();
-    }
-  }
+  const onkeydown = (e: KeyboardEvent): void => modalKeydown(e, el, onclose);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->

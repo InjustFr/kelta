@@ -3,15 +3,18 @@
 
   import Icon from './Icon.svelte';
   import IconButton from './IconButton.svelte';
+  import Kbd from './Kbd.svelte';
 
   interface Props {
     toast: Toast;
     ondismiss: () => void;
     /** Called with the toast action (`command` is an ActionId or plugin command id). */
     onaction?: (action: NonNullable<Toast['action']>) => void;
+    /** Chord that runs this toast's action (`toast.run_last`), printed on the button. */
+    kbd?: string | null;
   }
 
-  let { toast, ondismiss, onaction }: Props = $props();
+  let { toast, ondismiss, onaction, kbd = null }: Props = $props();
 
   const icon = $derived(
     toast.level === 'error' ? 'circle-alert' : toast.level === 'warn' ? 'triangle-alert' : 'info',
@@ -24,6 +27,7 @@
   {#if toast.action && onaction}
     <button type="button" class="action" onclick={() => toast.action && onaction?.(toast.action)}>
       {toast.action.label}
+      {#if kbd}<Kbd chord={kbd} />{/if}
     </button>
   {/if}
   <IconButton icon="x" label="Dismiss" size="sm" onclick={ondismiss} />
@@ -71,6 +75,9 @@
   }
 
   .action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
     border: none;
     background: transparent;
     color: var(--k-accent);
