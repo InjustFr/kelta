@@ -52,7 +52,13 @@ embed = "iframe"
 `,
 );
 
-const driver = spawn('tauri-driver', ['--port', '4444'], { env, stdio: 'inherit' });
+const driver = spawn('tauri-driver', ['--port', '4444'], { env, stdio: ['ignore', 'inherit', 'pipe'] });
+// The app's stderr comes through the driver: collected to prove the forged IPC reached the invoke-key check.
+let stderr = '';
+driver.stderr.on('data', (d) => {
+  process.stderr.write(d);
+  stderr += d;
+});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const failures = [];
 let session;
@@ -160,6 +166,8 @@ try {
   const tool = await probe(`iframe[src="${toolUrl}"]`);
   assertProbe('web tool', tool, { granted: 'no bridge', notGranted: 'no bridge' });
   await assertApp('web tool');
+  // One forged message per iframe (probe.js webkitIpc); "grants unchanged" alone also passes if Tauri drops it earlier.
+  check('forged IPC hit the invoke-key check', (stderr.match(/__TAURI_INVOKE_KEY__ expected/g) ?? []).length >= 2);
 } catch (e) {
   check('runner', false, e.stack);
 } finally {
