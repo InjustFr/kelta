@@ -2,15 +2,17 @@
 //! Term A, encode a snapshot, feed it into a fresh Term B and require identical cells, attributes,
 //! cursor, modes and title. The snapshot bytes are pinned with insta.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+
 mod common;
 #[path = "common/workload.rs"]
 mod workload;
 
 use common::*;
-use workload::build_log;
 use kelta_term::inspect::{diff, dump};
 use kelta_term::model::TermModel;
 use proptest::prelude::*;
+use workload::build_log;
 
 const HIST: usize = 10_000;
 

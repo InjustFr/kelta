@@ -2,6 +2,8 @@
 //! no fd or thread leak after 100 spawn/kill cycles. One test so nothing else runs in this process
 //! while it measures.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+
 mod common;
 
 use std::sync::Arc;
@@ -92,7 +94,9 @@ fn idle_sessions_stay_small(h: &PtyTerminalHost) {
 
 fn spawn_kill_cycles_do_not_leak(h: &PtyTerminalHost) {
     let settle = |fds: usize, thr: u64| {
-        wait_until(T, || (open_fds() <= fds && threads() <= thr && h.stats().reader_threads == 0).then_some(()))
+        wait_until(T, || {
+            (open_fds() <= fds && threads() <= thr && h.stats().reader_threads == 0).then_some(())
+        })
     };
     // One cycle first so one-time descriptors (e.g. /dev/ptmx clones, tty lookups) exist.
     let ev = Arc::new(Events::default());

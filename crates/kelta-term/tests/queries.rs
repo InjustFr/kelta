@@ -1,6 +1,8 @@
 //! The answered query set (ARCHITECTURE §7.4) against `docs/contracts/terminal-queries.md`:
 //! exact replies from the model, `SWALLOWED_QUERIES` consistency, and exactly-once over a PTY.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+
 mod common;
 
 use std::collections::BTreeSet;
@@ -108,7 +110,8 @@ fn model_answers_exactly_the_documented_set() {
 #[test]
 fn swallowed_queries_match_the_contract() {
     let rows = rows();
-    let doc_swallowed: BTreeSet<&str> = rows.iter().filter(|r| r.swallowed).map(|r| r.name.as_str()).collect();
+    let doc_swallowed: BTreeSet<&str> =
+        rows.iter().filter(|r| r.swallowed).map(|r| r.name.as_str()).collect();
     let proto: BTreeSet<&str> = SWALLOWED_QUERIES.iter().map(|q| q.name).collect();
     assert_eq!(doc_swallowed, proto, "docs/contracts/terminal-queries.md vs SWALLOWED_QUERIES");
     // Every swallowed query is answered by the model (otherwise nobody would answer it).
@@ -138,12 +141,20 @@ fn pty_child_reads_each_reply_exactly_once() {
         let out = dir.path().join("out.bin");
         std::fs::write(&q, &queries).unwrap();
         // Raw, no echo; `cat` ends after 1 s without input (VMIN 0, VTIME 10).
-        let script =
-            format!("stty raw -echo; stty min 0 time 10; cat '{}'; cat > '{}'; echo DONE", q.display(), out.display());
+        let script = format!(
+            "stty raw -echo; stty min 0 time 10; cat '{}'; cat > '{}'; echo DONE",
+            q.display(),
+            out.display()
+        );
         let ev = Arc::new(Events::default());
         h.spawn(spec("q", "/bin/sh", &["-c", &script], 80, 24, ev.clone())).unwrap();
         assert_eq!(ev.wait_exit(Duration::from_secs(20)), (Some(0), None), "{name}");
         let got = std::fs::read(&out).unwrap();
-        assert_eq!(escape(&got), escape(&expected), "{name}: {}", h.text_tail(&SessionId::new("q"), 5).unwrap());
+        assert_eq!(
+            escape(&got),
+            escape(&expected),
+            "{name}: {}",
+            h.text_tail(&SessionId::new("q"), 5).unwrap()
+        );
     }
 }

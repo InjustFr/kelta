@@ -1,5 +1,7 @@
 //! PTY integration tests with `/bin/sh` and `tui-sim` (BUILD_PLAN §4 L1), on both backends.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+
 mod common;
 
 use std::sync::Arc;
@@ -175,9 +177,7 @@ fn events_title_bell_cwd_notify_clipboard() {
 #[test]
 fn palette_answers_osc_queries() {
     let h = host(Arc::new(PortablePty));
-    let mut p = TerminalPalette::default();
-    p.background = "#010203".into();
-    h.set_palette(p);
+    h.set_palette(TerminalPalette { background: "#010203".into(), ..Default::default() });
     let ev = sh(
         &h,
         "pal",

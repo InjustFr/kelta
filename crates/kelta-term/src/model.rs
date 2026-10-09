@@ -737,8 +737,8 @@ mod tests {
     #[test]
     fn palette_replies_use_pushed_palette_and_overrides() {
         let mut m = TermModel::new(80, 24, 100);
-        let mut pal = kelta_proto::term::TerminalPalette::default();
-        pal.background = "#123456".into();
+        let mut pal =
+            kelta_proto::term::TerminalPalette { background: "#123456".into(), ..Default::default() };
         pal.ansi[2] = "#00ff00".into();
         let pal = Palette::from_proto(&pal);
         let mut out = Vec::new();

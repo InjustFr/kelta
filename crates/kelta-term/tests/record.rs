@@ -7,6 +7,8 @@
 //! Synthetic streams cover every ARCHITECTURE §9.3 item explicitly; the others are captured from
 //! real programs in a PTY (`tui-sim`, `nvim --clean`, `fake-claude`).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+
 mod common;
 
 use std::path::PathBuf;

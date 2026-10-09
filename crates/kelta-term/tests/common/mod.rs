@@ -183,10 +183,10 @@ pub fn escape(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
-            '\x1b' => out.push_str("␛"),
-            '\r' => out.push_str("␍"),
+            '\x1b' => out.push('␛'),
+            '\r' => out.push('␍'),
             '\n' => out.push_str("␊\n"),
-            '\x07' => out.push_str("␇"),
+            '\x07' => out.push('␇'),
             c if c.is_control() => out.push_str(&format!("\\x{:02x}", c as u32)),
             c => out.push(c),
         }

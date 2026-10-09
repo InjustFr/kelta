@@ -81,10 +81,9 @@ mod tests {
 
     #[test]
     fn parses_pushed_palette() {
-        let mut p = TerminalPalette::default();
-        p.background = "#102030".into();
+        let mut p =
+            TerminalPalette { background: "#102030".into(), cursor: "bogus".into(), ..Default::default() };
         p.ansi[1] = "#ff0000".into();
-        p.cursor = "bogus".into();
         let pal = Palette::from_proto(&p);
         assert_eq!(pal.color(BACKGROUND), Rgb { r: 0x10, g: 0x20, b: 0x30 });
         assert_eq!(pal.color(1), Rgb { r: 255, g: 0, b: 0 });
