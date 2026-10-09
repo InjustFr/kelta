@@ -433,7 +433,13 @@ impl PluginHost {
         self.emit_ui(UiEvent::PluginEvent {
             instance_id: ScreenInstanceId::new(instance_id.to_string()),
             name: TOOL_HANDLE_EVENT.into(),
-            payload: json!({ "handle": handle, "tool_id": r.id, "label": label, "project_id": project }),
+            payload: json!({
+                "handle": handle,
+                "tool_id": r.id,
+                "label": label,
+                "project_id": project,
+                "lifecycle": def.lifecycle,
+            }),
         });
         if embed != EmbedMode::External {
             core.layout_open(
