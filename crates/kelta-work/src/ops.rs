@@ -205,6 +205,29 @@ impl WorkService {
         });
     }
 
+    /// Spawn request restoring a Dormant Claude session that belongs to a work item:
+    /// `claude --resume <uuid>` (or `--continue` with `fallback`), with its per-session files
+    /// regenerated (the runtime dir does not survive a reboot). `None` = not a work item session.
+    pub async fn claude_restore_request(
+        &self,
+        session: &SessionId,
+        fallback: bool,
+    ) -> Result<Option<SpawnRequest>, KeltaError> {
+        let Some(item) = self.for_session(session).await else { return Ok(None) };
+        let Some(uuid) = item.claude_uuid.clone() else { return Ok(None) };
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let mut j = self.load_journal(&item.id);
+        let run = self.ensure_claude_run(&item, &mut j)?;
+        let port = self.http_port(&env.settings).await;
+        self.write_claude_files(&env, &item, &j, &run, session, port)?;
+        if port.is_some() {
+            self.http_sessions.lock().insert(session.clone());
+        }
+        self.save_journal(&item.id, &j)?;
+        let mode = if fallback { LaunchMode::Continue } else { LaunchMode::Resume { uuid } };
+        Ok(Some(self.claude_request(&env, &item, &j, &run, mode, port, session)))
+    }
+
     // ---- create PR ---------------------------------------------------------------------------
 
     pub(crate) async fn create_pr_impl(
