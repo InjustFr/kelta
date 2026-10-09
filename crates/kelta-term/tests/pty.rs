@@ -71,10 +71,32 @@ fn missing_program_and_duplicate_ids() {
     assert_eq!(e.code, kelta_proto::ErrorCode::Conflict);
     h.kill(&SessionId::new("dup"), KillSignal::Kill).unwrap();
     ev.wait_exit(T);
-    // An exited session id can be reused.
-    let ev2 = sh(&h, "dup", "exit 0");
+    // An exited session id can be reused once its Exited event was delivered (`exited` is set
+    // right after the callback returns, hence the retry).
+    let ev2 = Arc::new(Events::default());
+    wait_until(T, || h.spawn(spec("dup", "/bin/sh", &["-c", "exit 0"], 80, 24, ev2.clone())).ok()).unwrap();
     assert_eq!(ev2.wait_exit(T), (Some(0), None));
     assert_eq!(h.write(&SessionId::new("nope"), b"x").unwrap_err().code, kelta_proto::ErrorCode::NotFound);
+}
+
+#[test]
+fn exited_sessions_keep_the_tail_and_kill_closes_them() {
+    let h = host(Arc::new(PortablePty));
+    let ev = sh(&h, "done", "i=0; while [ $i -lt 1500 ]; do echo \"line $i\"; i=$((i+1)); done");
+    assert_eq!(ev.wait_exit(T), (Some(0), None));
+    let id = SessionId::new("done");
+    let st = h.stats();
+    assert!(st.sessions[0].history_lines <= 200, "{:?}", st.sessions[0]);
+    assert!(h.text_tail(&id, 200).unwrap().contains("line 1499"));
+    // `exited` is set right after the Exited callback, so the first kill may still be a no-op.
+    wait_until(T, || {
+        h.kill(&id, KillSignal::Hup).unwrap();
+        h.text_tail(&id, 1).is_err().then_some(())
+    })
+    .unwrap();
+    assert_eq!(h.stats().total_memory_bytes, 0);
+    assert!(h.stats().sessions.is_empty());
+    assert_eq!(h.kill(&id, KillSignal::Hup).unwrap_err().code, kelta_proto::ErrorCode::NotFound);
 }
 
 #[test]
@@ -427,10 +449,11 @@ fn scrollback_cap_shrinks_least_recently_viewed() {
     let mut evs = Vec::new();
     for i in 0..4 {
         let id = format!("cap{i}");
-        evs.push(sh(&h, &id, "i=0; while [ $i -lt 2500 ]; do echo line $i; i=$((i+1)); done"));
+        // Stay alive: an exited session drops to its 200-line tail anyway.
+        evs.push(sh(&h, &id, "i=0; while [ $i -lt 2500 ]; do echo line $i; i=$((i+1)); done; exec cat"));
     }
-    for e in &evs {
-        e.wait_exit(T);
+    for i in 0..4 {
+        wait_text(&h, &format!("cap{i}"), "line 2499");
     }
     let st = h.stats();
     for s in &st.sessions {
@@ -440,4 +463,7 @@ fn scrollback_cap_shrinks_least_recently_viewed() {
     assert!(st.sessions.iter().any(|s| s.history_lines == 500), "{st:?}");
     let tail = h.text_tail(&SessionId::new("cap0"), 3).unwrap();
     assert!(tail.contains("line 2499"), "{tail}");
+    for i in 0..4 {
+        h.kill(&SessionId::new(format!("cap{i}")), KillSignal::Kill).unwrap();
+    }
 }

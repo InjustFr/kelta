@@ -55,7 +55,7 @@ fn threads() -> u64 {
     rss_and_threads().1
 }
 
-fn idle_sessions_stay_small(h: &PtyTerminalHost) {
+fn idle_sessions_stay_small(h: &PtyTerminalHost, concurrent: bool) {
     // Warm up lazily initialised state (thread-locals, allocator pools, tracing) once.
     let ev = Arc::new(Events::default());
     h.spawn(spec("warm", "/bin/sh", &["-c", "echo warm"], 80, 24, ev.clone())).unwrap();
@@ -63,18 +63,21 @@ fn idle_sessions_stay_small(h: &PtyTerminalHost) {
     let (before, _) = rss_and_threads();
     let script = "i=0; while [ $i -lt 500 ]; do echo \"line $i: lorem ipsum dolor sit amet consectetur adipiscing elit\"; \
                   i=$((i+1)); done; echo END; exec cat";
-    // Sessions fill one after another: ten readers growing their grids at the same instant leave
-    // ~25 MB of freed-but-retained malloc regions (same live heap, measured with
-    // malloc_zone_statistics), which measures the allocator, not the idle footprint.
+    let wait_end = |i: usize| {
+        let id = SessionId::new(format!("idle{i}"));
+        wait_until(T, || h.text_tail(&id, 3).ok().filter(|t| t.contains("END")))
+            .unwrap_or_else(|| panic!("idle{i} did not finish"));
+    };
     let mut evs = Vec::new();
     for i in 0..10 {
         let ev = Arc::new(Events::default());
         h.spawn(spec(&format!("idle{i}"), "/bin/sh", &["-c", script], 80, 24, ev.clone())).unwrap();
         evs.push(ev);
-        let id = SessionId::new(format!("idle{i}"));
-        wait_until(T, || h.text_tail(&id, 3).ok().filter(|t| t.contains("END")))
-            .unwrap_or_else(|| panic!("idle{i} did not finish"));
+        if !concurrent {
+            wait_end(i);
+        }
     }
+    (0..10).for_each(wait_end);
     let st = h.stats();
     for s in st.sessions.iter().filter(|s| s.id.as_str().starts_with("idle")) {
         assert!(s.history_lines >= 470, "{s:?}");
@@ -109,7 +112,11 @@ fn spawn_kill_cycles_do_not_leak(h: &PtyTerminalHost) {
         let ev = Arc::new(Events::default());
         // Alternate between reusing one id (replacing an exited session) and fresh ids.
         let id = if i % 2 == 0 { "cycle".to_owned() } else { format!("cycle{i}") };
-        h.spawn(spec(&id, "/bin/sh", &["-c", "echo up; exec sleep 30"], 80, 24, ev.clone())).unwrap();
+        // Retry: the replaced session's `exited` flag lands just after its Exited callback.
+        wait_until(T, || {
+            h.spawn(spec(&id, "/bin/sh", &["-c", "echo up; exec sleep 30"], 80, 24, ev.clone())).ok()
+        })
+        .unwrap();
         let sid = SessionId::new(&id);
         if i % 3 == 0 {
             let sink = Frames::default();
@@ -131,6 +138,19 @@ fn spawn_kill_cycles_do_not_leak(h: &PtyTerminalHost) {
 #[test]
 fn memory_and_leaks() {
     let h = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
-    idle_sessions_stay_small(&h);
+    // Sessions fill one after another.
+    idle_sessions_stay_small(&h, false);
     spawn_kill_cycles_do_not_leak(&h);
+}
+
+/// All ten fill at once (eager restore, several panes printing at startup). Ignored: it measures
+/// ≈ 35-60 MB RSS on macOS with the same live heap as the sequential case. alacritty touches 1000
+/// rows per grow step; rows freed by ten threads at once are interleaved on the same malloc pages,
+/// so neither `release_cache` nor `malloc_zone_pressure_relief` can return them. Recorded as unmet
+/// in docs/contract-requests/L1.md. Run with `cargo test -p kelta-term --test resources -- --ignored`.
+#[test]
+#[ignore = "known unmet: concurrent fill leaves fragmented malloc pages resident"]
+fn idle_sessions_filled_concurrently() {
+    let h = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    idle_sessions_stay_small(&h, true);
 }

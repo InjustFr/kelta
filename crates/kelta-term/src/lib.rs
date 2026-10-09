@@ -11,8 +11,8 @@
 //! - [`snapshot`]: ANSI repaint for (re-)attaching views; [`flow`]: HIGH/LOW watermarks.
 //! - [`login_env`]: login environment resolution (`resolve_login_env`).
 //!
-//! Sessions stay in the host after their process exits (text tail, re-attach shows the exit
-//! banner) until a new `spawn` reuses the id.
+//! Sessions stay in the host after their process exits (history trimmed to the 200-line text
+//! tail; re-attach shows the exit banner) until `kill` closes them or a new `spawn` reuses the id.
 
 pub mod backend;
 pub mod flow;
@@ -223,7 +223,6 @@ impl TerminalHost for PtyTerminalHost {
             }
             let generation = st.flow.attach();
             st.sink = Some(sink);
-            st.exit_frame_pending = false;
             let outs = st.send_snapshot(&palette, &self.shared, now);
             let info = AttachInfo { generation, cols: st.model.cols(), rows: st.model.rows() };
             (info, outs)
@@ -236,11 +235,12 @@ impl TerminalHost for PtyTerminalHost {
     fn detach(&self, id: &SessionId, generation: u32) {
         let Ok(s) = self.session(id) else { return };
         let mut st = s.state.lock();
-        if st.flow.attached() && st.flow.generation() == generation {
-            st.drop_view(&self.shared);
-            st.model.release_cache();
-            st.released_at = Some(st.history);
+        if !st.flow.detach(generation) {
+            return;
         }
+        st.drop_view(&self.shared);
+        st.model.release_cache();
+        st.released_at = Some(st.history);
     }
 
     fn write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
@@ -271,6 +271,19 @@ impl TerminalHost for PtyTerminalHost {
 
     fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError> {
         let s = self.session(id)?;
+        if s.exited.load(Ordering::SeqCst) {
+            // Killing an exited session closes it ("x close"): free its model and memory estimate.
+            let mut map = self.shared.sessions.write();
+            // A respawn may already have replaced it under the same id.
+            if map.get(id).is_some_and(|cur| Arc::ptr_eq(cur, &s)) {
+                map.remove(id);
+                drop(map);
+                let mut st = s.state.lock();
+                self.shared.add_memory(st.memory, 0);
+                st.memory = 0;
+            }
+            return Ok(());
+        }
         let sig = signal_number(signal);
         let foreground =
             s.master().and_then(|m| rustix::termios::tcgetpgrp(&*m).ok()).map(|p| p.as_raw_nonzero().get());
@@ -301,7 +314,6 @@ impl TerminalHost for PtyTerminalHost {
         for s in sessions {
             let lines = limits.scrollback.for_kind(s.kind.name()) as usize;
             let mut st = s.state.lock();
-            st.shrunk = false;
             st.model.set_history_limit(lines);
             st.refresh_memory(&self.shared);
         }

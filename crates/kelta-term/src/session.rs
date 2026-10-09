@@ -101,7 +101,6 @@ impl Shared {
             let mut st = s.state.lock();
             if st.model.history_limit() > SHRINK_FLOOR {
                 st.model.set_history_limit(SHRINK_FLOOR);
-                st.shrunk = true;
                 st.refresh_memory(self);
                 shrunk = true;
             }
@@ -125,12 +124,9 @@ pub(crate) struct State {
     pub activity_pending: bool,
     /// `(code, signal)` once the child exited.
     pub exit: Option<(Option<i32>, Option<i32>)>,
-    /// Exit frame deferred until the paused view caught up with a snapshot.
-    pub exit_frame_pending: bool,
     pub last_viewed: u64,
     /// History size when the grid cache was last released.
     pub released_at: Option<usize>,
-    pub shrunk: bool,
     pub history: usize,
     pub memory: u64,
 }
@@ -144,10 +140,8 @@ impl State {
             bytes_in: 0,
             activity_pending: true,
             exit: None,
-            exit_frame_pending: false,
             last_viewed: 0,
             released_at: None,
-            shrunk: false,
             history: 0,
             memory: 0,
         }
@@ -175,7 +169,6 @@ impl State {
     pub fn drop_view(&mut self, shared: &Shared) {
         self.sink = None;
         self.flow.drop_view();
-        self.exit_frame_pending = false;
         self.activity_pending = true;
         self.last_viewed = shared.tick();
     }
@@ -189,7 +182,6 @@ impl State {
             self.flow.snapshot_sent(len, now);
             // After an exit the view also needs the exit banner (re-attach, or deferred while paused).
             if let Some((code, _)) = self.exit {
-                self.exit_frame_pending = false;
                 self.send(frames::exit(code.unwrap_or(-1)), shared);
             }
         }

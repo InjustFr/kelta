@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use alacritty_terminal::term::TermMode;
 use kelta_proto::error::KeltaError;
 use kelta_proto::term::{READ_CHUNK, READER_STACK_SIZE, TerminalEvent};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
@@ -26,6 +27,9 @@ use crate::flow::DataAction;
 use crate::frames;
 use crate::model::Output;
 use crate::session::{Session, Shared};
+
+/// History kept by an exited session: the text tail core persists (ARCHITECTURE §7.5, ≤ 200 lines).
+const EXITED_HISTORY: usize = 200;
 
 /// Start the reader thread of a session.
 pub(crate) fn start(
@@ -166,8 +170,9 @@ fn process(session: &Session, shared: &Shared, chunk: &[u8], now: Instant) {
         if st.flow.on_data(chunk.len(), now) == DataAction::Send {
             st.send(frames::data(chunk), shared);
         }
-        let h = st.model.history_size();
-        if h != st.history {
+        // The primary history cannot change while the alternate screen is active, and reading it
+        // there swaps the grids.
+        if !st.model.term().mode().contains(TermMode::ALT_SCREEN) && st.model.history_size() != st.history {
             st.refresh_memory(shared);
         }
     }
@@ -195,7 +200,6 @@ fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
     session.close_io();
 
     let (code, signal) = reap(session);
-    session.exited.store(true, Ordering::SeqCst);
     {
         let mut st = session.state.lock();
         st.exit = Some((code, signal));
@@ -204,13 +208,17 @@ fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
         if st.flow.on_exit() {
             let outs = st.send_snapshot(&palette, shared, Instant::now());
             drop(outs);
-        } else if st.sink.is_some() {
-            st.exit_frame_pending = true;
         }
+        // A dead session only needs what core persists; keep it small until `kill` closes it.
+        let lines = st.model.history_limit().min(EXITED_HISTORY);
+        st.model.set_history_limit(lines);
         st.model.release_cache();
+        st.refresh_memory(shared);
     }
     shared.reader_threads.fetch_sub(1, Ordering::SeqCst);
     session.emit(TerminalEvent::Exited { code, signal });
+    // Only now may `spawn` reuse the id: a late Exited must not reach core after the new session.
+    session.exited.store(true, Ordering::SeqCst);
 }
 
 /// Wait for the child without reaping (so `kill` cannot hit a recycled pid), then reap it under
