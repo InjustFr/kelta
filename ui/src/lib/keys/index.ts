@@ -1,49 +1,57 @@
-// SCAFFOLD STUB (L2): key manager (SPEC §4, ARCHITECTURE §9.4). L4's keybinding editor imports
-// `parseChord` and `findConflicts`; the stub versions are inert (no chords, no conflicts).
+// Key manager (SPEC §4, ARCHITECTURE §9.4). L4's keybinding editor imports `parseChord` and
+// `findConflicts`; the shell starts the `keyManager` singleton, terminal views route their key
+// events through it.
 
-export interface Chord {
-  ctrl: boolean;
-  alt: boolean;
-  shift: boolean;
-  meta: boolean;
-  /** `KeyboardEvent.code` (physical key), e.g. `KeyK`, `Digit1`, `Enter`. */
-  code: string;
-}
+import { dispatch, hasAction } from '$lib/actions';
+import { settings, toasts, tools } from '$lib/stores';
 
-export interface Conflict {
-  chord: string;
-  /** Action ids bound to the chord, or `reserved` when the chord is reserved for terminals. */
-  actions: string[];
-  reserved: boolean;
-}
+import { KeyManager, type ExtraBinding } from './manager';
 
-/** Parses `ctrl+shift+k` / `cmd+opt+left` / `mod+t`. Returns null when invalid. */
-export function parseChord(text: string, platform: 'macos' | 'linux' = 'linux'): Chord | null {
-  void text;
-  void platform;
-  return null;
-}
+export {
+  chordFromEvent,
+  chordToString,
+  codeToKeyName,
+  findConflicts,
+  isReservedChord,
+  keyNameToCode,
+  matchChord,
+  parseChord,
+  type Chord,
+  type Conflict,
+  type Platform,
+} from './chords';
+export {
+  contextFromEvent,
+  effectiveBindings,
+  effectiveChords,
+  isEditable,
+  isWebviewDefault,
+  KeyManager,
+  type ExtraBinding,
+  type KeyContext,
+  type KeyManagerOptions,
+  type KeyResult,
+} from './manager';
 
-export function matchChord(chord: Chord, event: KeyboardEvent): boolean {
-  void chord;
-  void event;
-  return false;
-}
-
-/** Conflicts between bindings (action id → chords) and the reserved chord list. */
-export function findConflicts(
-  bindings: Record<string, readonly string[]>,
-  reserved: readonly string[],
-): Conflict[] {
-  void bindings;
-  void reserved;
-  return [];
-}
-
-export class KeyManager {
-  /** Starts listening on `target` (window by default). Returns a stop function. */
-  start(target: EventTarget = window): () => void {
-    void target;
-    return () => {};
+/** Tool keybindings (`ToolInfo.keybinding`) open the tool through the `tools.open` action. */
+function toolBindings(): ExtraBinding[] {
+  const out: ExtraBinding[] = [];
+  const seen = new Set<string>();
+  for (const slot of Object.values(tools.byProject)) {
+    for (const tool of slot.data ?? []) {
+      if (!tool.keybinding || seen.has(tool.id)) continue;
+      seen.add(tool.id);
+      out.push({ action: 'tools.open', chords: [tool.keybinding], args: { tool_id: tool.id } });
+    }
   }
+  return out;
 }
+
+/** The window-wide key manager (started by the shell). */
+export const keyManager = new KeyManager({
+  keys: () => settings.value()?.keys ?? null,
+  dispatch,
+  hasAction,
+  extraBindings: toolBindings,
+  onError: (err, id) => toasts.error(err, `Action ${id} failed`),
+});
