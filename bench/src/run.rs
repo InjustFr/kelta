@@ -123,6 +123,19 @@ async fn setup(app: &App, o: &Opts) -> Result<()> {
     Ok(())
 }
 
+/// Sends a `custom.bench.*` event over the control socket.
+async fn emit(app: &App, name: &str, payload: serde_json::Value) -> Result<()> {
+    let stream = UnixStream::connect(&app.ctl).await?;
+    let (rd, mut wr) = stream.into_split();
+    let req = serde_json::json!({ "v": 1, "cmd": "emit", "name": name, "payload": payload });
+    wr.write_all(format!("{req}\n").as_bytes()).await?;
+    let reply = BufReader::new(rd).lines().next_line().await?.context("ctl socket closed")?;
+    if reply.contains("\"ok\":false") {
+        bail!("emit {name} failed: {reply}");
+    }
+    Ok(())
+}
+
 fn probe(app: &App) -> Result<Box<dyn Probe>> {
     let pid = app.child.id().context("app already exited")?;
     #[cfg(target_os = "macos")]
@@ -152,12 +165,7 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
             setup(&app, o).await?;
             settle(o).await;
             // Bench hook (window::bridge): closes the window as the user would; sessions stay alive.
-            let stream = UnixStream::connect(&app.ctl).await?;
-            let (_, mut wr) = stream.into_split();
-            wr.write_all(
-                b"{\"v\":1,\"cmd\":\"emit\",\"name\":\"custom.bench.close_window\",\"payload\":null}\n",
-            )
-            .await?;
+            emit(&app, "custom.bench.close_window", serde_json::Value::Null).await?;
             wait_mark(&app, "window_closed").await?;
             settle(o).await;
             let m = probe(&app)?.memory()?;
@@ -198,6 +206,8 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
             let app = launch(o).await?;
             wait_mark(&app, "app_ready_ms").await?;
             setup(&app, o).await?;
+            // The UI runs the scenario in a pane of its own (ui/src/lib/terminal/bench.ts).
+            emit(&app, "custom.bench.run", serde_json::json!({ "scenario": name })).await?;
             let done = match name {
                 "switch" => "switch_cold_ms",
                 "echo-latency" => "keydown_to_pty_p99_ms",

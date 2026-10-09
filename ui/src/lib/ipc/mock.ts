@@ -371,6 +371,7 @@ export function createMockTransport(options: MockOptions = {}): {
     // ---- app -------------------------------------------------------------------------------
     app_info: () => clone(samples.appInfo),
     app_ready: () => null,
+    bench_mark: () => null,
     events_subscribe: ({ channel }) => {
       eventChannels.add(channel);
       return { sub_id: eventChannels.size };

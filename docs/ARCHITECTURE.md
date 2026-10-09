@@ -396,6 +396,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | **app** | | | `commands/app.rs` (L3) |
 | `app_info` | `{}` | `AppInfo{version, platform, arch, data_dir, config_dir, runtime_dir, claude: Option<ToolVersion>, safe_graphics: bool, decorations: Decorations}` (`decorations` = what the window was built with: `native`/`none`/`custom`; `custom` → the UI draws the drag strip + resize handles) | |
 | `app_ready` | `{t_ms: f64}` | `()` (desktop clears the launch crash guard and writes the `app_ready_ms` bench mark; core binds the runtime) | |
+| `bench_mark` | `{key: String, value: f64}` | `()` (merges a UI-measured kelta-bench metric into `KELTA_BENCH_MARKS`; no-op without it) | |
 | `events_subscribe` | `{channel: Channel<UiEvent>}` | `{sub_id: u64}` (one per window) | |
 | `open_external` | `{url: String}` (http/https/mailto only) | `()` | |
 | `perf_snapshot` | `{}` | `PerfSnapshot{processes: Vec<ProcMem{pid, name, role: Core|WebContent|Network|Gpu|Child, pss_or_footprint_kb}>, sessions: Vec<SessionMem>, live_views: u32, timers_armed: u32, http_server: bool}` | |
