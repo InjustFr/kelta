@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { paneComponent, paneRegistry, settingsSections, sheetRegistry, tabHeaderRegistry } from './registry';
 
-describe('registries', () => {
+// Each test imports (and cold-transforms) every lazy view; 5 s is too short on a loaded machine.
+describe('registries', { timeout: 30_000 }, () => {
   it('every pane kind except empty has a lazy view', async () => {
     const kinds = Object.keys(paneRegistry).sort();
     expect(kinds).toEqual(
