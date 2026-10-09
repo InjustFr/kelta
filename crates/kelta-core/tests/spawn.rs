@@ -1,5 +1,6 @@
 //! SpawnRequest → PtySpawnSpec: env assembly (insta snapshot), program resolution, scrollback by
 //! kind, per-session tokens, standalone Claude template files.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -75,7 +76,15 @@ async fn spawn_builds_the_pty_spec() {
     let shell = h.core.session_spawn(req(SessionKind::Shell, None, &[])).await.unwrap();
     let (program, args, env, scrollback, cwd) = h
         .term
-        .with_session(&shell.id, |s| (s.spec.program.clone(), s.spec.args.clone(), s.spec.env.clone(), s.spec.scrollback_lines, s.spec.cwd.clone()))
+        .with_session(&shell.id, |s| {
+            (
+                s.spec.program.clone(),
+                s.spec.args.clone(),
+                s.spec.env.clone(),
+                s.spec.scrollback_lines,
+                s.spec.cwd.clone(),
+            )
+        })
         .unwrap();
     assert_eq!(program, Path::new("/bin/sh"));
     assert_eq!(args, vec!["-l".to_owned()]);
@@ -93,8 +102,17 @@ async fn spawn_builds_the_pty_spec() {
     assert!(!env.contains_key("KELTA_MCP_TOKEN"));
     assert!(env["KELTA_SOCK"].ends_with("run/ctl.sock"));
 
-    let editor = h.core.session_spawn(req(SessionKind::Editor { adapter: "nvim".into() }, Some("nvim"), &["--listen", "/tmp/x.sock", "."])).await.unwrap();
-    let (program, scrollback) = h.term.with_session(&editor.id, |s| (s.spec.program.clone(), s.spec.scrollback_lines)).unwrap();
+    let editor = h
+        .core
+        .session_spawn(req(
+            SessionKind::Editor { adapter: "nvim".into() },
+            Some("nvim"),
+            &["--listen", "/tmp/x.sock", "."],
+        ))
+        .await
+        .unwrap();
+    let (program, scrollback) =
+        h.term.with_session(&editor.id, |s| (s.spec.program.clone(), s.spec.scrollback_lines)).unwrap();
     assert!(program.ends_with("bin/nvim") && program.is_absolute());
     assert_eq!(scrollback, 500);
     assert_eq!(editor.editor.as_ref().and_then(|e| e.socket.clone()).unwrap(), Path::new("/tmp/x.sock"));
@@ -106,10 +124,15 @@ async fn spawn_builds_the_pty_spec() {
     assert_eq!(env["KELTA_MCP_TOKEN"].len(), 32);
     assert_ne!(env["KELTA_MCP_TOKEN"], env["KELTA_HOOK_TOKEN"]);
 
-    let missing = h.core.session_spawn(req(SessionKind::Tool { tool_id: "nope".into() }, Some("definitely-not-here"), &[])).await.unwrap_err();
+    let missing = h
+        .core
+        .session_spawn(req(SessionKind::Tool { tool_id: "nope".into() }, Some("definitely-not-here"), &[]))
+        .await
+        .unwrap_err();
     assert_eq!(missing.code, kelta_proto::ErrorCode::NotFound);
     assert!(missing.detail.is_some());
-    let bad_project = SpawnRequest { project_id: ProjectId::new("ghost"), ..req(SessionKind::Shell, None, &[]) };
+    let bad_project =
+        SpawnRequest { project_id: ProjectId::new("ghost"), ..req(SessionKind::Shell, None, &[]) };
     assert_eq!(h.core.session_spawn(bad_project).await.unwrap_err().code, kelta_proto::ErrorCode::NotFound);
 }
 
@@ -118,7 +141,11 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
     let shop = ProjectId::new("shop");
-    let spawned = h.core.session_spawn_template(&shop, "claude+editor", TemplateCtx::default(), Placement::NewTab).await.unwrap();
+    let spawned = h
+        .core
+        .session_spawn_template(&shop, "claude+editor", TemplateCtx::default(), Placement::NewTab)
+        .await
+        .unwrap();
     assert_eq!(spawned.len(), 2);
     assert!(matches!(spawned[0].kind, SessionKind::Claude));
     assert!(matches!(&spawned[1].kind, SessionKind::Editor { adapter } if adapter == "nvim"));
@@ -135,10 +162,17 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     let layout = h.core.layout_get(&shop).unwrap();
     assert_eq!(layout.tabs.len(), 1);
     assert_eq!(layout.tabs[0].title, "Claude + editor");
-    assert_eq!(kelta_core::layout::layout_sessions(&layout), vec![spawned[0].id.clone(), spawned[1].id.clone()]);
+    assert_eq!(
+        kelta_core::layout::layout_sessions(&layout),
+        vec![spawned[0].id.clone(), spawned[1].id.clone()]
+    );
     assert!(h.ui.event_names().contains(&"layout.changed"));
     assert_eq!(
-        h.core.session_spawn_template(&shop, "nope", TemplateCtx::default(), Placement::NewTab).await.unwrap_err().code,
+        h.core
+            .session_spawn_template(&shop, "nope", TemplateCtx::default(), Placement::NewTab)
+            .await
+            .unwrap_err()
+            .code,
         kelta_proto::ErrorCode::NotFound
     );
 }

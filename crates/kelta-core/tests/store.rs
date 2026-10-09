@@ -1,4 +1,5 @@
 //! SQLite store: migrations up from empty + idempotent, Work/Grant/Trust stores, trigger_log cap.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 use std::path::Path;
 
@@ -26,7 +27,10 @@ async fn migrations_from_empty_and_idempotent() {
     // reopen: no re-run, data kept
     let s = Store::open(&db).unwrap();
     let rows: u32 = s
-        .call(|c| c.query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0)).map_err(kelta_core::store::db_err))
+        .call(|c| {
+            c.query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
+                .map_err(kelta_core::store::db_err)
+        })
         .await
         .unwrap();
     assert_eq!(rows, 1);

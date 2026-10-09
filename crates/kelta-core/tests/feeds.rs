@@ -1,6 +1,7 @@
 //! Tickets/reviews: Scope::All de-dup + project tagging + "Other", provider_cache
 //! stale-while-revalidate, per-account errors, seen_reviews first-poll silence, authored PR
 //! change events, tracker_move resolution.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -8,6 +9,7 @@ use std::sync::Arc;
 
 use common::*;
 use kelta_core::store::q;
+use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
 use kelta_proto::codehost::{CiState, Review, ReviewKind, ReviewRef};
 use kelta_proto::events::{BusEvent, UiEvent};
@@ -18,7 +20,6 @@ use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectCon
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
 use kelta_proto::tracker::StatusCategory;
-use kelta_proto::ErrorCode;
 
 fn settings() -> Settings {
     let mut s = Settings::defaults();
@@ -30,7 +31,8 @@ fn settings() -> Settings {
 fn projects(root: &std::path::Path) -> Vec<ProjectConfig> {
     let mut shop = project("shop", root);
     shop.tracker = Some(kelta_proto::samples::tracker_binding());
-    shop.repos[0].code_host = Some(CodeHostBinding { account: "github-work".into(), repo: "acme/shop-api".into() });
+    shop.repos[0].code_host =
+        Some(CodeHostBinding { account: "github-work".into(), repo: "acme/shop-api".into() });
     let mut blog = project("blog", root);
     let mut b = kelta_proto::samples::tracker_binding();
     b.columns.clear();
@@ -74,7 +76,13 @@ fn bus_names(rx: &mut tokio::sync::broadcast::Receiver<BusEvent>) -> Vec<BusEven
 #[tokio::test]
 async fn all_scope_dedups_and_tags_projects() {
     let tmp = tempfile::tempdir().unwrap();
-    let e = env(tmp.path(), vec![review("acme/shop-api", 87, ReviewKind::ReviewRequested), review("acme/unbound", 5, ReviewKind::ReviewRequested)]);
+    let e = env(
+        tmp.path(),
+        vec![
+            review("acme/shop-api", 87, ReviewKind::ReviewRequested),
+            review("acme/unbound", 5, ReviewKind::ReviewRequested),
+        ],
+    );
     let page = e.h.core.tracker_list(Scope::All, None, None, true).await.unwrap();
     // shop and blog share the same view → one provider call
     assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count(), 1);
@@ -90,7 +98,11 @@ async fn all_scope_dedups_and_tags_projects() {
     assert_eq!(bound.project_ids, vec![ProjectId::new("shop")]);
     let other = all.items.iter().find(|i| i.review.r#ref.number == 5).unwrap();
     assert!(other.project_ids.is_empty(), "unbound repos land in Other");
-    let shop = e.h.core.review_page(Scope::Project { id: "shop".into() }, ReviewKind::ReviewRequested, false).await.unwrap();
+    let shop =
+        e.h.core
+            .review_page(Scope::Project { id: "shop".into() }, ReviewKind::ReviewRequested, false)
+            .await
+            .unwrap();
     assert_eq!(shop.items.len(), 1);
     // linked tickets from branch + title
     assert_eq!(bound.review.linked_tickets, vec!["SHOP-140"]);
@@ -132,7 +144,10 @@ async fn cache_serves_first_then_revalidates_when_stale() {
     assert_eq!(p4.items.len(), 3);
     assert_eq!(p4.errors[0].account_id.as_str(), "jira-acme");
     assert_eq!(p4.errors[0].error.code, ErrorCode::NeedsAuth);
-    assert!(e.h.ui.events().iter().any(|ev| matches!(ev, UiEvent::AccountStatusChanged { status: kelta_proto::events::AccountStatus::NeedsAuth, .. })));
+    assert!(e.h.ui.events().iter().any(|ev| matches!(
+        ev,
+        UiEvent::AccountStatusChanged { status: kelta_proto::events::AccountStatus::NeedsAuth, .. }
+    )));
 }
 
 #[tokio::test]
@@ -149,7 +164,8 @@ async fn first_review_poll_is_silent() {
         // a new request on the next poll fires once
         e.host.reviews.lock().push(review("acme/shop-api", 88, ReviewKind::ReviewRequested));
         e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
-        let evs: Vec<BusEvent> = bus_names(&mut rx).into_iter().filter(|ev| ev.name == "pr.review_requested").collect();
+        let evs: Vec<BusEvent> =
+            bus_names(&mut rx).into_iter().filter(|ev| ev.name == "pr.review_requested").collect();
         assert_eq!(evs.len(), 1);
         assert_eq!(evs[0].payload["review"]["ref"]["number"], 88);
         assert_eq!(evs[0].project_id.as_ref().map(|p| p.as_str()), Some("shop"));
@@ -161,11 +177,14 @@ async fn first_review_poll_is_silent() {
         e.h.core.store().flush().await.unwrap();
     }
     // next start: #89 appeared while closed → the first poll fills silently again
-    let e = env(tmp.path(), vec![
-        review("acme/shop-api", 87, ReviewKind::ReviewRequested),
-        review("acme/shop-api", 88, ReviewKind::ReviewRequested),
-        review("acme/shop-api", 89, ReviewKind::ReviewRequested),
-    ]);
+    let e = env(
+        tmp.path(),
+        vec![
+            review("acme/shop-api", 87, ReviewKind::ReviewRequested),
+            review("acme/shop-api", 88, ReviewKind::ReviewRequested),
+            review("acme/shop-api", 89, ReviewKind::ReviewRequested),
+        ],
+    );
     e.h.ui.set_window_state(WindowState { exists: true, visible: true, focused: false });
     let mut rx = e.h.core.subscribe();
     e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
@@ -192,7 +211,8 @@ async fn authored_changes_emit_pr_events() {
         l[0].decision = Some(kelta_proto::codehost::ReviewDecision::Approved);
     }
     e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
-    let names: Vec<String> = bus_names(&mut rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect();
+    let names: Vec<String> =
+        bus_names(&mut rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect();
     assert_eq!(names, vec!["pr.ci_changed", "pr.approved", "pr.updated"]);
     assert_eq!(e.h.ui.notifications().len(), 2, "ci failed + approved");
 }
@@ -207,17 +227,40 @@ async fn tracker_move_resolves_columns() {
         let mut shop = (*ps[0]).clone();
         let b = shop.tracker.as_mut().unwrap();
         b.columns = vec![
-            ColumnSpec { id: "todo".into(), label: "To do".into(), categories: vec![StatusCategory::Todo], names: vec![] },
-            ColumnSpec { id: "late".into(), label: "Late".into(), categories: vec![StatusCategory::InReview, StatusCategory::Done], names: vec![] },
-            ColumnSpec { id: "named".into(), label: "Named".into(), categories: vec![StatusCategory::Done], names: vec!["In Review".into()] },
-            ColumnSpec { id: "weird".into(), label: "Weird".into(), categories: vec![], names: vec!["Nope".into()] },
+            ColumnSpec {
+                id: "todo".into(),
+                label: "To do".into(),
+                categories: vec![StatusCategory::Todo],
+                names: vec![],
+            },
+            ColumnSpec {
+                id: "late".into(),
+                label: "Late".into(),
+                categories: vec![StatusCategory::InReview, StatusCategory::Done],
+                names: vec![],
+            },
+            ColumnSpec {
+                id: "named".into(),
+                label: "Named".into(),
+                categories: vec![StatusCategory::Done],
+                names: vec!["In Review".into()],
+            },
+            ColumnSpec {
+                id: "weird".into(),
+                label: "Weird".into(),
+                categories: vec![],
+                names: vec!["Nope".into()],
+            },
         ];
         ps[0] = Arc::new(shop);
     }
     e.h.core.project_activate(&ProjectId::new("shop")).unwrap();
     let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
     let cols = e.h.core.tracker_columns(&ProjectId::new("shop")).await.unwrap();
-    assert_eq!(cols.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["todo", "late", "named", "weird"]);
+    assert_eq!(
+        cols.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
+        vec!["todo", "late", "named", "weird"]
+    );
 
     let err = e.h.core.tracker_move(&t, "late").await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Conflict);

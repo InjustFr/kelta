@@ -1,6 +1,7 @@
 //! Hook StatusChange → status / attention / notification decision tables; attention
 //! max-aggregation + badge; hooks-inactive one-shot and heuristic status; ctl hook dispatch;
 //! OSC 52 policy.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -16,7 +17,8 @@ use kelta_proto::hooks::HookPayload;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{
-    Attention, OpenPaneRequest, PaneContent, Placement, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
+    Attention, OpenPaneRequest, PaneContent, Placement, SessionKind, SessionStatus, SpawnRequest,
+    StatusChange, StatusSource,
 };
 use kelta_proto::settings::{NotificationSettings, Osc52, Settings};
 use kelta_proto::term::{ClipboardKind, TerminalEvent};
@@ -40,11 +42,39 @@ fn hook_decision_table() {
         (st(S::Running, A::None, true, false), S::Working, S::Working, A::Activity, false, None),
         (st(S::Running, A::None, true, true), S::Working, S::Working, A::None, true, None),
         (st(S::NeedsInput, A::NeedsInput, false, false), S::Working, S::Working, A::Activity, false, None),
-        (st(S::Working, A::Activity, false, false), S::NeedsInput, S::NeedsInput, A::NeedsInput, false, Some(NotifyKind::ClaudeNeedsInput)),
-        (st(S::Working, A::None, true, true), S::NeedsInput, S::NeedsInput, A::NeedsInput, true, Some(NotifyKind::ClaudeNeedsInput)),
-        (st(S::Done, A::None, false, false), S::WaitingUser, S::WaitingUser, A::NeedsInput, false, Some(NotifyKind::ClaudeNeedsInput)),
+        (
+            st(S::Working, A::Activity, false, false),
+            S::NeedsInput,
+            S::NeedsInput,
+            A::NeedsInput,
+            false,
+            Some(NotifyKind::ClaudeNeedsInput),
+        ),
+        (
+            st(S::Working, A::None, true, true),
+            S::NeedsInput,
+            S::NeedsInput,
+            A::NeedsInput,
+            true,
+            Some(NotifyKind::ClaudeNeedsInput),
+        ),
+        (
+            st(S::Done, A::None, false, false),
+            S::WaitingUser,
+            S::WaitingUser,
+            A::NeedsInput,
+            false,
+            Some(NotifyKind::ClaudeNeedsInput),
+        ),
         (st(S::Done, A::None, true, false), S::WaitingUser, S::WaitingUser, A::None, true, None),
-        (st(S::Working, A::Activity, false, false), S::Done, S::Done, A::Done, false, Some(NotifyKind::ClaudeDone)),
+        (
+            st(S::Working, A::Activity, false, false),
+            S::Done,
+            S::Done,
+            A::Done,
+            false,
+            Some(NotifyKind::ClaudeDone),
+        ),
         (st(S::Working, A::None, true, true), S::Done, S::Done, A::None, true, Some(NotifyKind::ClaudeDone)),
         (st(S::Working, A::None, true, true), S::Error, S::Error, A::Error, true, None),
         (st(S::NeedsInput, A::NeedsInput, false, false), S::Exited, S::Exited, A::None, false, None),
@@ -52,7 +82,11 @@ fn hook_decision_table() {
     ];
     for (prev, input, status, attention, seen, notify) in rows {
         let d = apply_hook(&prev, &ch(input));
-        assert_eq!((d.status, d.attention, d.seen, d.notify), (status, attention, seen, notify), "{prev:?} + {input:?}");
+        assert_eq!(
+            (d.status, d.attention, d.seen, d.notify),
+            (status, attention, seen, notify),
+            "{prev:?} + {input:?}"
+        );
     }
     assert_eq!(apply_hook(&st(S::Starting, A::None, true, false), &ch(S::Running)).hooks_active, Some(true));
     // mark_seen keeps a pending needs-input
@@ -62,7 +96,10 @@ fn hook_decision_table() {
     assert_eq!(apply_heuristic(&st(S::Running, A::None, true, false), Heuristic::Output).status, S::Working);
     assert_eq!(apply_heuristic(&st(S::Working, A::None, true, false), Heuristic::Quiet).status, S::Done);
     assert_eq!(apply_heuristic(&st(S::Running, A::None, true, false), Heuristic::Quiet).status, S::Running);
-    assert_eq!(apply_heuristic(&st(S::Working, A::None, true, false), Heuristic::Alert).attention, A::NeedsInput);
+    assert_eq!(
+        apply_heuristic(&st(S::Working, A::None, true, false), Heuristic::Alert).attention,
+        A::NeedsInput
+    );
 }
 
 #[test]
@@ -135,7 +172,13 @@ async fn hooks_drive_status_attention_badge_and_notifications() {
     h.core
         .layout_open(
             &ProjectId::new("shop"),
-            OpenPaneRequest { content: PaneContent::Terminal { session_id: a.id.clone() }, placement: Placement::NewTab, focus: true, tab_title: None, work_item_id: None },
+            OpenPaneRequest {
+                content: PaneContent::Terminal { session_id: a.id.clone() },
+                placement: Placement::NewTab,
+                focus: true,
+                tab_title: None,
+                work_item_id: None,
+            },
         )
         .await
         .unwrap();
@@ -154,7 +197,10 @@ async fn hooks_drive_status_attention_badge_and_notifications() {
     assert_eq!(h.ui.notifications().len(), 1);
     assert_eq!(h.ui.notifications()[0].session_id.as_ref(), Some(&b.id));
     // a done while visible + focused → no attention, no notification
-    h.core.session_apply_hook(&a.id, StatusChange { preview: Some("All done".into()), ..ch(S::Done) }).await.unwrap();
+    h.core
+        .session_apply_hook(&a.id, StatusChange { preview: Some("All done".into()), ..ch(S::Done) })
+        .await
+        .unwrap();
     let ai = h.core.session_get(&a.id).unwrap();
     assert_eq!((ai.status, ai.attention), (S::Done, A::None));
     assert_eq!(ai.claude.unwrap().preview.as_deref(), Some("All done"));
@@ -170,7 +216,14 @@ async fn hooks_drive_status_attention_badge_and_notifications() {
     assert_eq!(h.ui.badge(), 0);
     // PostToolUse: status unchanged, file recorded
     h.core
-        .session_apply_hook(&b.id, StatusChange { file_edited: Some("/x/src/a.rs".into()), raw_event: "PostToolUse:Edit".into(), ..ch(S::Unknown) })
+        .session_apply_hook(
+            &b.id,
+            StatusChange {
+                file_edited: Some("/x/src/a.rs".into()),
+                raw_event: "PostToolUse:Edit".into(),
+                ..ch(S::Unknown)
+            },
+        )
         .await
         .unwrap();
     let bi = h.core.session_get(&b.id).unwrap();
@@ -219,16 +272,28 @@ async fn ctl_hook_checks_the_token() {
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
     let s = h.core.session_spawn(claude_req()).await.unwrap();
     let token = h.term.with_session(&s.id, |x| x.spec.env["KELTA_HOOK_TOKEN"].clone()).unwrap();
-    let payload = |name: &str| HookPayload { hook_event_name: name.into(), session_id: Some("claude-uuid-2".into()), ..HookPayload::default() };
+    let payload = |name: &str| HookPayload {
+        hook_event_name: name.into(),
+        session_id: Some("claude-uuid-2".into()),
+        ..HookPayload::default()
+    };
     let mut rx = h.core.subscribe();
     let bad = h
         .core
-        .ctl(CtlCommand::Hook { session: s.id.clone(), token: "nope".into(), payload: Box::new(payload("PermissionRequest")) })
+        .ctl(CtlCommand::Hook {
+            session: s.id.clone(),
+            token: "nope".into(),
+            payload: Box::new(payload("PermissionRequest")),
+        })
         .await
         .unwrap_err();
     assert_eq!(bad.code, kelta_proto::ErrorCode::PermissionDenied);
     h.core
-        .ctl(CtlCommand::Hook { session: s.id.clone(), token, payload: Box::new(payload("PermissionRequest")) })
+        .ctl(CtlCommand::Hook {
+            session: s.id.clone(),
+            token,
+            payload: Box::new(payload("PermissionRequest")),
+        })
         .await
         .unwrap();
     let info = h.core.session_get(&s.id).unwrap();
@@ -242,8 +307,16 @@ async fn ctl_hook_checks_the_token() {
     };
     assert_eq!(ev.payload["event"], "PermissionRequest");
     // only custom.* can be emitted
-    assert!(h.core.ctl(CtlCommand::Emit { name: "session.spawned".into(), payload: serde_json::json!({}) }).await.is_err());
-    h.core.ctl(CtlCommand::Emit { name: "custom.deploy".into(), payload: serde_json::json!({"ok": 1}) }).await.unwrap();
+    assert!(
+        h.core
+            .ctl(CtlCommand::Emit { name: "session.spawned".into(), payload: serde_json::json!({}) })
+            .await
+            .is_err()
+    );
+    h.core
+        .ctl(CtlCommand::Emit { name: "custom.deploy".into(), payload: serde_json::json!({"ok": 1}) })
+        .await
+        .unwrap();
     assert_eq!(h.core.ctl(CtlCommand::Version).await.unwrap()["version"], kelta_proto::VERSION);
 }
 
@@ -253,8 +326,13 @@ async fn osc52_policy() {
     let mut settings = Settings::defaults();
     settings.terminal.osc52 = Osc52::Write;
     let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
-    let s = h.core.session_spawn(SpawnRequest { kind: SessionKind::Shell, program: None, ..claude_req() }).await.unwrap();
-    h.term.emit(&s.id, TerminalEvent::ClipboardStore { kind: ClipboardKind::Clipboard, text: "copied".into() });
+    let s = h
+        .core
+        .session_spawn(SpawnRequest { kind: SessionKind::Shell, program: None, ..claude_req() })
+        .await
+        .unwrap();
+    h.term
+        .emit(&s.id, TerminalEvent::ClipboardStore { kind: ClipboardKind::Clipboard, text: "copied".into() });
     settle().await;
     assert_eq!(h.core.clipboard_read(ClipboardKind::Clipboard).await.unwrap(), "copied");
     // write-only: loads are not answered

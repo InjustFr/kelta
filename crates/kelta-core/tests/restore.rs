@@ -1,5 +1,6 @@
 //! Quit → Dormant persistence → lazy restore on first attach, for each restore policy; eager and
 //! none modes; `--resume` refused → `--continue` fallback.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -45,17 +46,32 @@ async fn seed(root: &std::path::Path) -> Seeded {
     let shell = h.core.session_spawn(req(SessionKind::Shell, None, &[], RestorePolicy::None)).await.unwrap();
     let claude = h
         .core
-        .session_spawn(req(SessionKind::Claude, Some("claude"), &["--session-id", "U-1", "-n", "x", "do it"], RestorePolicy::None))
+        .session_spawn(req(
+            SessionKind::Claude,
+            Some("claude"),
+            &["--session-id", "U-1", "-n", "x", "do it"],
+            RestorePolicy::None,
+        ))
         .await
         .unwrap();
     let editor = h
         .core
-        .session_spawn(req(SessionKind::Editor { adapter: "nvim".into() }, Some("nvim"), &["--listen", "/tmp/n.sock", "."], RestorePolicy::None))
+        .session_spawn(req(
+            SessionKind::Editor { adapter: "nvim".into() },
+            Some("nvim"),
+            &["--listen", "/tmp/n.sock", "."],
+            RestorePolicy::None,
+        ))
         .await
         .unwrap();
     let tool = h
         .core
-        .session_spawn(req(SessionKind::Tool { tool_id: "lazygit".into() }, Some("lazygit"), &["-p", "."], RestorePolicy::None))
+        .session_spawn(req(
+            SessionKind::Tool { tool_id: "lazygit".into() },
+            Some("lazygit"),
+            &["-p", "."],
+            RestorePolicy::None,
+        ))
         .await
         .unwrap();
     let setup = h.core.session_spawn(req(SessionKind::Setup, None, &[], RestorePolicy::None)).await.unwrap();
@@ -102,7 +118,8 @@ async fn dormant_sessions_spawn_on_first_attach() {
     // shell → login shell in the last OSC 7 cwd
     let info = h.core.session_attach(&seeded.shell, 132, 43, Box::new(RecordingSink::new())).await.unwrap();
     assert_eq!((info.cols, info.rows), (132, 43));
-    let (args, cwd) = term.with_session(&seeded.shell, |s| (s.spec.args.clone(), s.spec.cwd.clone())).unwrap();
+    let (args, cwd) =
+        term.with_session(&seeded.shell, |s| (s.spec.args.clone(), s.spec.cwd.clone())).unwrap();
     assert_eq!(args, vec!["-l"]);
     assert_eq!(cwd, tmp.path().join("home"));
     assert_eq!(h.core.session_get(&seeded.shell).unwrap().lifecycle, Lifecycle::Live);
@@ -136,12 +153,19 @@ async fn resume_refused_falls_back_to_continue() {
     let tmp = tempfile::tempdir().unwrap();
     let seeded = seed(tmp.path()).await;
     let term = FakeTerminalHost::new();
-    let h = start_in(tmp.path(), MemConfig::new(Settings::defaults(), vec![project("shop", tmp.path())]), term.clone(), Arc::new(Factory::default()));
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(Settings::defaults(), vec![project("shop", tmp.path())]),
+        term.clone(),
+        Arc::new(Factory::default()),
+    );
     h.core.session_attach(&seeded.claude, 80, 24, Box::new(RecordingSink::new())).await.unwrap();
     term.emit(&seeded.claude, TerminalEvent::Exited { code: Some(1), signal: None });
     for _ in 0..50 {
         settle().await;
-        if term.with_session(&seeded.claude, |s| s.spec.args.last().cloned()).flatten().as_deref() == Some("--continue") {
+        if term.with_session(&seeded.claude, |s| s.spec.args.last().cloned()).flatten().as_deref()
+            == Some("--continue")
+        {
             break;
         }
     }
@@ -156,7 +180,12 @@ async fn eager_mode_spawns_at_start() {
     let tmp = tempfile::tempdir().unwrap();
     seed(tmp.path()).await;
     let term = FakeTerminalHost::new();
-    let h = start_in(tmp.path(), MemConfig::new(mode(RestoreMode::Eager), vec![project("shop", tmp.path())]), term.clone(), Arc::new(Factory::default()));
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(mode(RestoreMode::Eager), vec![project("shop", tmp.path())]),
+        term.clone(),
+        Arc::new(Factory::default()),
+    );
     for _ in 0..50 {
         settle().await;
         if term.spawned_ids().len() == 4 {
@@ -172,7 +201,12 @@ async fn none_mode_drops_dormant_sessions() {
     let tmp = tempfile::tempdir().unwrap();
     seed(tmp.path()).await;
     let term = FakeTerminalHost::new();
-    let h = start_in(tmp.path(), MemConfig::new(mode(RestoreMode::None), vec![project("shop", tmp.path())]), term.clone(), Arc::new(Factory::default()));
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(mode(RestoreMode::None), vec![project("shop", tmp.path())]),
+        term.clone(),
+        Arc::new(Factory::default()),
+    );
     settle().await;
     assert!(h.core.session_list(None).is_empty());
     assert!(term.spawned_ids().is_empty());

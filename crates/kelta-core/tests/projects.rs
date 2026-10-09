@@ -1,5 +1,6 @@
 //! Project lifecycle: Home, open/close/activate/reorder persistence, sessions survive close/switch
 //! unless `kill_sessions`, detection from a folder.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -42,13 +43,20 @@ async fn home_is_open_and_active_by_default() {
     let shop = list.iter().find(|p| p.id.as_str() == "shop").unwrap();
     assert!(!shop.open);
     assert!(shop.repos[0].exists);
-    assert_eq!(h.core.project_remove(&ProjectId::home(), false).unwrap_err().code, kelta_proto::ErrorCode::InvalidArgument);
+    assert_eq!(
+        h.core.project_remove(&ProjectId::home(), false).unwrap_err().code,
+        kelta_proto::ErrorCode::InvalidArgument
+    );
 }
 
 #[tokio::test]
 async fn close_and_switch_keep_sessions_unless_killed() {
     let tmp = tempfile::tempdir().unwrap();
-    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path()), project("blog", tmp.path())]);
+    let h = start(
+        tmp.path(),
+        Settings::defaults(),
+        vec![project("shop", tmp.path()), project("blog", tmp.path())],
+    );
     let shop = ProjectId::new("shop");
     let blog = ProjectId::new("blog");
     h.core.project_activate(&shop).unwrap();
@@ -100,7 +108,11 @@ async fn create_opens_and_activates() {
     let h = start(tmp.path(), Settings::defaults(), vec![]);
     let repo = tmp.path().join("work").join("My Shop");
     std::fs::create_dir_all(repo.join(".git/refs/heads/feat")).unwrap();
-    std::fs::write(repo.join(".git/config"), "[core]\n\tbare = false\n[remote \"origin\"]\n\turl = git@github.com:acme/shop.git\n").unwrap();
+    std::fs::write(
+        repo.join(".git/config"),
+        "[core]\n\tbare = false\n[remote \"origin\"]\n\turl = git@github.com:acme/shop.git\n",
+    )
+    .unwrap();
     std::fs::write(repo.join(".git/refs/heads/feat/SHOP-12-login"), "x").unwrap();
     std::fs::create_dir_all(repo.join(".github")).unwrap();
     let mut settings = Settings::defaults();

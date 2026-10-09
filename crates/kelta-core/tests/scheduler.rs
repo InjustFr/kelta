@@ -1,5 +1,6 @@
 //! Scheduler with paused tokio time: no subscription → no wakeups; intervals follow focus;
 //! NeedsAuth pauses; manual refresh resumes; an idle core arms 0 timers.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
@@ -122,8 +123,15 @@ async fn focus_changes_rearm_and_needs_auth_pauses() {
     assert!(s.snapshot().paused.is_empty());
 
     // Redmine floor: 30 s focused setting still polls every 60 s
-    let redmine = IntervalPolicy::from_settings(&PollingSettings { focused_secs: 30, ..PollingSettings::default() }, 60, None);
-    assert_eq!(redmine.interval(WindowState { exists: true, visible: true, focused: true }), Some(Duration::from_secs(60)));
+    let redmine = IntervalPolicy::from_settings(
+        &PollingSettings { focused_secs: 30, ..PollingSettings::default() },
+        60,
+        None,
+    );
+    assert_eq!(
+        redmine.interval(WindowState { exists: true, visible: true, focused: true }),
+        Some(Duration::from_secs(60))
+    );
 }
 
 #[tokio::test(start_paused = true)]

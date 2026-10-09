@@ -1,5 +1,5 @@
 //! Shared test harness: a `Core` wired with the `kelta_proto::testing` fakes.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used, clippy::type_complexity)] // test helpers, not #[test] fns
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -246,7 +246,12 @@ pub fn project(id: &str, root: &Path) -> ProjectConfig {
     ProjectConfig {
         id: ProjectId::new(id),
         name: id.to_uppercase(),
-        repos: vec![RepoConfig { id: "main".into(), path: path.to_string_lossy().into_owned(), primary: true, ..RepoConfig::default() }],
+        repos: vec![RepoConfig {
+            id: "main".into(),
+            path: path.to_string_lossy().into_owned(),
+            primary: true,
+            ..RepoConfig::default()
+        }],
         ..ProjectConfig::default()
     }
 }

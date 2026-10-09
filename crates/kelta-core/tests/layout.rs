@@ -1,14 +1,17 @@
 //! Layout persistence: optimistic `rev` conflicts, backend `layout_open`, a session in at most
 //! one pane, removal of killed sessions.
+#![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 
 mod common;
 
 use common::*;
+use kelta_proto::ErrorCode;
 use kelta_proto::api::CoreApi;
 use kelta_proto::ids::ProjectId;
-use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, Scope, SessionKind, SpawnRequest, TicketsMode};
+use kelta_proto::model::{
+    OpenPaneRequest, PaneContent, Placement, Scope, SessionKind, SpawnRequest, TicketsMode,
+};
 use kelta_proto::settings::Settings;
-use kelta_proto::ErrorCode;
 
 fn open(content: PaneContent, placement: Placement) -> OpenPaneRequest {
     OpenPaneRequest { content, placement, focus: true, tab_title: None, work_item_id: None }
@@ -43,7 +46,11 @@ async fn save_conflicts_on_stale_rev() {
 #[tokio::test]
 async fn backend_open_moves_sessions_and_kill_removes_panes() {
     let tmp = tempfile::tempdir().unwrap();
-    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path()), project("blog", tmp.path())]);
+    let h = start(
+        tmp.path(),
+        Settings::defaults(),
+        vec![project("shop", tmp.path()), project("blog", tmp.path())],
+    );
     let shop = ProjectId::new("shop");
     let blog = ProjectId::new("blog");
     let s = h
@@ -67,7 +74,11 @@ async fn backend_open_moves_sessions_and_kill_removes_panes() {
         .unwrap();
     let term = PaneContent::Terminal { session_id: s.id.clone() };
     let p1 = h.core.layout_open(&shop, open(term.clone(), Placement::NewTab)).await.unwrap();
-    let tickets = PaneContent::Tickets { scope: Scope::Project { id: shop.clone() }, view_id: None, mode: TicketsMode::Board };
+    let tickets = PaneContent::Tickets {
+        scope: Scope::Project { id: shop.clone() },
+        view_id: None,
+        mode: TicketsMode::Board,
+    };
     let p2 = h.core.layout_open(&shop, open(tickets.clone(), Placement::SplitRight)).await.unwrap();
     assert_eq!(p1.tab_id, p2.tab_id);
     let l = h.core.layout_get(&shop).unwrap();
