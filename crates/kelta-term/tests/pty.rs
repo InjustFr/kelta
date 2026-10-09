@@ -3,8 +3,8 @@
 mod common;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex as StdMutex;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
 use common::*;
@@ -13,10 +13,10 @@ use kelta_proto::ids::SessionId;
 use kelta_proto::term::{
     ClipboardKind, HIGH_WATERMARK, KillSignal, LoginEnv, TerminalEvent, TerminalLimits, TerminalPalette,
 };
+use kelta_term::PtyTerminalHost;
 use kelta_term::backend::{PortablePty, PtyBackend, RustixPty};
 use kelta_term::frames::{self, Frame};
 use kelta_term::model::TermModel;
-use kelta_term::PtyTerminalHost;
 
 const T: Duration = Duration::from_secs(20);
 
@@ -36,8 +36,9 @@ fn sh(host: &PtyTerminalHost, id: &str, script: &str) -> Arc<Events> {
 
 fn wait_text(host: &PtyTerminalHost, id: &str, needle: &str) -> String {
     let sid = SessionId::new(id);
-    wait_until(T, || host.text_tail(&sid, 200).ok().filter(|t| t.contains(needle)))
-        .unwrap_or_else(|| panic!("{needle:?} not seen; tail:\n{}", host.text_tail(&sid, 200).unwrap_or_default()))
+    wait_until(T, || host.text_tail(&sid, 200).ok().filter(|t| t.contains(needle))).unwrap_or_else(|| {
+        panic!("{needle:?} not seen; tail:\n{}", host.text_tail(&sid, 200).unwrap_or_default())
+    })
 }
 
 #[test]
@@ -111,7 +112,8 @@ fn hup_ignored_then_kill() {
 fn resize_delivers_sigwinch() {
     for b in backends() {
         let h = host(b);
-        let ev = sh(&h, "winch", "trap 'echo WINCH $(stty size)' WINCH; echo ready; while :; do sleep 0.05; done");
+        let ev =
+            sh(&h, "winch", "trap 'echo WINCH $(stty size)' WINCH; echo ready; while :; do sleep 0.05; done");
         wait_text(&h, "winch", "ready");
         h.resize(&SessionId::new("winch"), 100, 30).unwrap();
         wait_text(&h, "winch", "WINCH 30 100");
@@ -129,7 +131,8 @@ fn input_echo_and_eagain_queue() {
         let h = host(b);
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("in.bin");
-        let script = format!("stty raw -echo; echo READY; sleep 1; head -c 300000 > '{}'; echo DONE", out.display());
+        let script =
+            format!("stty raw -echo; echo READY; sleep 1; head -c 300000 > '{}'; echo DONE", out.display());
         let ev = sh(&h, "eagain", &script);
         wait_text(&h, "eagain", "READY");
         // The child does not read for a second: most of this is queued (EAGAIN) and drained later.
@@ -175,7 +178,11 @@ fn palette_answers_osc_queries() {
     let mut p = TerminalPalette::default();
     p.background = "#010203".into();
     h.set_palette(p);
-    let ev = sh(&h, "pal", r"stty raw -echo; printf '\033]11;?\007'; dd bs=1 count=24 2>/dev/null | tr '\033\007' 'EB'; echo; echo END");
+    let ev = sh(
+        &h,
+        "pal",
+        r"stty raw -echo; printf '\033]11;?\007'; dd bs=1 count=24 2>/dev/null | tr '\033\007' 'EB'; echo; echo END",
+    );
     let text = wait_text(&h, "pal", "END");
     assert!(text.contains("E]11;rgb:0101/0202/0303B"), "{text}");
     ev.wait_exit(T);
@@ -187,7 +194,8 @@ fn queries_are_answered_exactly_once() {
     for b in backends() {
         let h = host(b);
         let ev = Arc::new(Events::default());
-        h.spawn(spec("q", sim.to_str().unwrap(), &["--queries", "--timeout-ms", "3000"], 80, 24, ev.clone())).unwrap();
+        h.spawn(spec("q", sim.to_str().unwrap(), &["--queries", "--timeout-ms", "3000"], 80, 24, ev.clone()))
+            .unwrap();
         // tui-sim exits 1 on a missing or duplicated reply.
         assert_eq!(ev.wait_exit(T), (Some(0), None), "{}", h.text_tail(&SessionId::new("q"), 20).unwrap());
         let text = h.text_tail(&SessionId::new("q"), 20).unwrap();
@@ -215,8 +223,15 @@ fn ink_redraw_renders() {
     let sim = tui_sim();
     let h = host(Arc::new(PortablePty));
     let ev = Arc::new(Events::default());
-    h.spawn(spec("ink", sim.to_str().unwrap(), &["--ink", "--fps", "60", "--lines", "10"], 100, 30, ev.clone()))
-        .unwrap();
+    h.spawn(spec(
+        "ink",
+        sim.to_str().unwrap(),
+        &["--ink", "--fps", "60", "--lines", "10"],
+        100,
+        30,
+        ev.clone(),
+    ))
+    .unwrap();
     wait_text(&h, "ink", "Working");
     let sink = Frames::default();
     let info = h.attach(&SessionId::new("ink"), 100, 30, Box::new(sink.clone())).unwrap();
