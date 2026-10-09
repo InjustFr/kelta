@@ -187,8 +187,15 @@ fn resolve(req: &Request) -> Option<(String, Upstream, String)> {
         .and_then(|r| r.parse::<Uri>().ok())
         .and_then(|u| split_instance(u.path()))
         .and_then(|(id, _)| reg.get(&id).map(|up| (id, up.clone())));
+    // Single-instance fallback only for the proxied page itself (its WebSockets carry no Referer):
+    // a foreign page must never reach a tool without knowing the 128-bit instance id.
+    let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
+    let same_origin = matches!((host, origin), (Some(h), Some(o)) if o == format!("http://{h}"));
     let fallback = from_referer.or_else(|| {
-        (reg.len() == 1).then(|| reg.iter().next().map(|(k, v)| (k.clone(), v.clone()))).flatten()
+        (same_origin && reg.len() == 1)
+            .then(|| reg.iter().next().map(|(k, v)| (k.clone(), v.clone())))
+            .flatten()
     })?;
     Some((fallback.0, fallback.1, format!("{path}{query}")))
 }

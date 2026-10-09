@@ -16,6 +16,8 @@
 
   const instanceId = $derived(content.tool_instance_id);
   const tool = $derived(webTools[instanceId] ?? null);
+  // Only http(s) is framed: the iframe allows same-origin, which must never be the app's or a plugin's.
+  const framable = $derived(!!tool && /^https?:\/\//i.test(tool.url));
   let busy = $state(false);
 
   function openExternal(): void {
@@ -84,7 +86,7 @@
       {#if tool.exited.log}<pre class="k-selectable">{tool.exited.log}</pre>{/if}
       <Button icon="refresh-cw" loading={busy} onclick={relaunch}>Relaunch</Button>
     </div>
-  {:else if tool.embed === 'external'}
+  {:else if tool.embed === 'external' || !framable}
     <EmptyState icon="globe" title={`${tool.label} opens in your browser`}>
       {#snippet actions()}
         <Button variant="primary" onclick={openExternal}>Open in browser</Button>

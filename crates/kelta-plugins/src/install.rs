@@ -148,7 +148,7 @@ async fn stage(host: &PluginHost, source: &str) -> Result<Staged, KeltaError> {
             let temp = staging_dir(host)?;
             let staged = Staged { root: temp.clone(), temp: Some(temp.clone()), source: src.clone() };
             let listing = run(
-                tokio::process::Command::new("tar").arg("-tzf").arg(file),
+                tokio::process::Command::new("tar").arg("-tf").arg(file),
                 "tar -t",
                 Duration::from_secs(60),
             )
@@ -158,7 +158,7 @@ async fn stage(host: &PluginHost, source: &str) -> Result<Staged, KeltaError> {
             }
             run(
                 tokio::process::Command::new("tar")
-                    .arg("-xzf")
+                    .arg("-xf")
                     .arg(file)
                     .arg("--no-same-owner")
                     .arg("-C")

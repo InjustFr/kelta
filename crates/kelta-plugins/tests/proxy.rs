@@ -163,6 +163,17 @@ async fn own_listener_guards_host_and_stops_when_idle() {
     let mut buf = String::new();
     s.read_to_string(&mut buf).await.unwrap();
     assert!(buf.starts_with("HTTP/1.1 200"), "{buf}");
+    // A foreign page without the instance id gets nothing (no single-instance fallback for it).
+    let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    s.write_all(
+        format!("GET /page HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://evil.example\r\nConnection: close\r\n\r\n")
+            .as_bytes(),
+    )
+    .await
+    .unwrap();
+    let mut buf = String::new();
+    s.read_to_string(&mut buf).await.unwrap();
+    assert!(buf.starts_with("HTTP/1.1 404"), "{buf}");
     proxy::unregister(inst);
 }
 

@@ -88,6 +88,19 @@ async fn installs_from_a_tarball_and_rejects_unsafe_archives() {
     assert!(env.plugins_dir().join("tools-pack/kelta-plugin.toml").is_file());
     assert!(!env.plugins_dir().join(".staging").read_dir().unwrap().any(|_| true), "staging cleaned");
 
+    // An uncompressed `.tar` is accepted too (tar detects the compression itself).
+    let plain = work.path().join("tools-pack.tar");
+    let status = Command::new("tar")
+        .arg("-cf")
+        .arg(&plain)
+        .arg("-C")
+        .arg(common::repo_root().join("examples/plugins"))
+        .arg("tools-pack")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert_eq!(env.host.inspect(plain.to_str().unwrap()).await.unwrap().sha256, p.sha256);
+
     // An archive with `..` entries is refused before extraction.
     let evil_src = work.path().join("evil");
     std::fs::create_dir_all(evil_src.join("p")).unwrap();

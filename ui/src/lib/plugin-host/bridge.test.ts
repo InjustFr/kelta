@@ -4,9 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import PluginScreenPane from '../../views/plugin-screen/PluginScreenPane.svelte';
+import WebToolPane from '../../views/web-tool/WebToolPane.svelte';
 
 import { connectScreen } from './bridge';
-import { applyWebToolEvent, webTools } from './web.svelte';
+import { applyWebToolEvent, rememberWebTool, webTools } from './web.svelte';
 
 function frame(): HTMLIFrameElement {
   const iframe = document.createElement('iframe');
@@ -112,5 +113,23 @@ describe('PluginScreenPane', () => {
 
     await rerender({ ...props, visible: false });
     await vi.waitFor(() => expect(container.querySelector('iframe')).toBeNull());
+  });
+});
+
+describe('WebToolPane', () => {
+  it('never frames a non-http(s) tool URL', async () => {
+    setTransport(createMockTransport().transport);
+    const handle = {
+      kind: 'web' as const,
+      instance_id: 't-x',
+      url: 'kelta-plugin://p/x.html',
+      embed: 'iframe' as const,
+    };
+    rememberWebTool(handle, { toolId: 'p/x', label: 'X', projectId: 'shop' });
+    const content = { kind: 'web' as const, tool_instance_id: 't-x' };
+    const props = { projectId: 'shop', tabId: 't', paneId: 'p', content, visible: true, focused: true };
+    const { container, getByText } = render(WebToolPane, props);
+    expect(getByText('Open in browser')).toBeTruthy();
+    expect(container.querySelector('iframe')).toBeNull();
   });
 });
