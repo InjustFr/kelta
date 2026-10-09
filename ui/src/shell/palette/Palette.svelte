@@ -52,7 +52,10 @@
         if (mine === seq) searching = false;
       }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      seq++; // drop an in-flight search when the query changes or clears
+    };
   });
 
   function pick(id: string): void {
