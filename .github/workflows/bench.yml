@@ -18,6 +18,7 @@ jobs:
   budgets:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'perf')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # Job level, so an unrelated label event (job skipped) cannot cancel a running benchmark.
     concurrency:
       group: bench-${{ github.event.pull_request.number || github.ref }}

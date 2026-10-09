@@ -65,6 +65,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20 # a hung test must not burn macOS minutes
     strategy:
       fail-fast: false
       matrix:
@@ -95,6 +96,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

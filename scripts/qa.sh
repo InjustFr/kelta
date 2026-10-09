@@ -38,8 +38,9 @@ if want rust; then
   section "cargo clippy --workspace --all-targets --locked -- -D warnings"
   cargo clippy --workspace --all-targets --locked -- -D warnings
 
-  section "cargo test --workspace --locked"
-  cargo test --workspace --locked
+  # --no-fail-fast: one run lists every failing test, not just the first failing binary.
+  section "cargo test --workspace --locked --no-fail-fast"
+  cargo test --workspace --locked --no-fail-fast
 
   section "cargo run -p xtask --locked -- codegen --check"
   cargo run -p xtask --locked -- codegen --check
