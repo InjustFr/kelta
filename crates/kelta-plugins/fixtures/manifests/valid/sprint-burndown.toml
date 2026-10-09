@@ -1,0 +1,36 @@
+id = "sprint-burndown"
+name = "Sprint Burndown"
+version = "0.2.0"
+kelta_api = "^0.1"
+description = "Burndown chart of the active sprint for the current project"
+author = "Jane Doe"
+license = "MIT"
+platforms = ["macos", "linux"]
+permissions = ["tickets.read", "settings.read", "events:ticket.*", "notify"]
+activation = ["onScreen:burndown", "onCommand:sprint-burndown.open"]
+
+[[contributes.screens]]
+id = "burndown"
+title = "Burndown"
+icon = "chart"
+entry = "dist/index.html"
+scope = "project"
+placement = ["tab", "pane"]
+
+[[contributes.commands]]
+id = "sprint-burndown.open"
+title = "Burndown: open"
+do = [ { action = "open_screen", screen = "burndown", placement = "new_tab" } ]
+
+[[contributes.keybindings]]
+command = "sprint-burndown.open"
+key = "mod+b"
+
+[[contributes.triggers]]
+id = "sprint-done-toast"
+on = "ticket.transitioned"
+match = { "payload.to.category" = "done" }
+do = [ { action = "toast", text = "{ticket.key} done" } ]
+
+[contributes.settings]
+schema = "settings.schema.json"

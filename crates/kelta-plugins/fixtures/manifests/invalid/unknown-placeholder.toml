@@ -1,0 +1,13 @@
+# expect: unknown placeholder
+id = "badph"
+name = "X"
+version = "1.2.3"
+kelta_api = "^0.1"
+description = "d"
+author = "a"
+license = "MIT"
+[[contributes.tools]]
+id = "t"
+kind = "pty"
+command = "htop"
+cwd = "{nope.path}"

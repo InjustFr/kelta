@@ -1,0 +1,85 @@
+{
+  "manifest": {
+    "id": "hello-screen",
+    "name": "Hello screen",
+    "version": "0.1.0",
+    "description": "A minimal custom screen: greets you, shows the current project and its sessions, and live session events",
+    "author": "Kelta contributors",
+    "license": "MIT",
+    "homepage": null,
+    "kelta_api": "^0.1",
+    "platforms": ["macos", "linux"],
+    "permissions": ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open"],
+    "activation": ["onScreen:hello", "onCommand:hello-screen.open"],
+    "contributes": {
+      "tools": [],
+      "triggers": [],
+      "commands": [
+        {
+          "id": "hello-screen.open",
+          "title": "Hello: open screen",
+          "do": [
+            {
+              "action": "open_screen",
+              "plugin": null,
+              "screen": "hello",
+              "params": null,
+              "placement": "new_tab"
+            }
+          ],
+          "when": null,
+          "keybinding": null,
+          "enabled": true
+        }
+      ],
+      "keybindings": [
+        {
+          "command": "hello-screen.open",
+          "key": "mod+shift+h"
+        }
+      ],
+      "session_templates": [],
+      "screens": [
+        {
+          "id": "hello",
+          "title": "Hello",
+          "icon": "star",
+          "entry": "dist/index.html",
+          "scope": "project",
+          "placement": ["tab", "pane"],
+          "keep_alive": false,
+          "min_width": null
+        }
+      ],
+      "ticket_actions": [],
+      "review_actions": [],
+      "settings": {
+        "schema": "settings.schema.json"
+      }
+    }
+  },
+  "permissions": [
+    {
+      "permission": "projects.read",
+      "description": "See your projects"
+    },
+    {
+      "permission": "sessions.read",
+      "description": "See your terminal sessions"
+    },
+    {
+      "permission": "events:session.*",
+      "description": "Receive app events matching `session.*`"
+    },
+    {
+      "permission": "notify",
+      "description": "Show desktop notifications"
+    },
+    {
+      "permission": "ui.open",
+      "description": "Open panes and screens, change focus"
+    }
+  ],
+  "sha256": "495438c82a90160c6505744881b4f6f05c4c7045e67acafd57eebbee074dc783",
+  "warnings": []
+}

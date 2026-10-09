@@ -1,0 +1,32 @@
+# Example plugin: declarative tools only (no screen). Tools are namespaced `tools-pack/<id>`.
+id = "tools-pack"
+name = "Tools pack"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "k9s and btop as Kelta tools"
+author = "Kelta contributors"
+license = "MIT"
+permissions = ["sessions.spawn", "exec:k9s", "exec:btop"]
+
+[[contributes.tools]]
+id = "k9s"
+label = "Kubernetes"
+icon = "box"
+kind = "pty"
+command = "k9s"
+args = ["--readonly"]
+cwd = "{repo.path|project.root}"
+check = ["k9s", "version", "--short"]
+install_hint = "brew install k9s  |  https://k9scli.io/topics/install/"
+placement = "new_tab"
+
+[[contributes.tools]]
+id = "btop"
+label = "btop"
+icon = "activity"
+kind = "pty"
+command = "btop"
+check = ["btop", "--version"]
+install_hint = "brew install btop  |  apt install btop"
+close_on_exit = "always"
+placement = "split_down"

@@ -1,0 +1,11 @@
+{
+  "id": "json-plugin",
+  "name": "JSON plugin",
+  "version": "0.1.0",
+  "kelta_api": "^0.1",
+  "description": "manifest in JSON",
+  "author": "a",
+  "license": "MIT",
+  "permissions": ["clipboard.write"],
+  "contributes": { "commands": [{ "id": "json-plugin.copy", "title": "Copy", "do": [{ "action": "toast", "text": "hi" }] }] }
+}

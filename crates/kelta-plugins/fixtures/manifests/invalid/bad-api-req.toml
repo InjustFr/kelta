@@ -1,0 +1,8 @@
+# expect: kelta_api
+id = "badapi"
+name = "X"
+version = "1.0.0"
+kelta_api = "not a req"
+description = "d"
+author = "a"
+license = "MIT"

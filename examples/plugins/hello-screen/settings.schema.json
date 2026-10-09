@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "default": "Hello",
+      "description": "Greeting shown at the top of the screen"
+    }
+  }
+}
