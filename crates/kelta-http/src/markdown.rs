@@ -16,6 +16,11 @@ pub fn to_html(md: &str) -> String {
     sanitize(&out)
 }
 
+/// Plain text (Textile, Jira wiki, anything not rendered) shown preformatted: escaped inside `<pre>`.
+pub fn plain_to_html(text: &str) -> String {
+    sanitize(&format!("<pre>{}</pre>", crate::util::escape_html(text)))
+}
+
 /// Sanitize provider HTML (Jira rendered fields, GitLab/GitHub HTML bodies).
 pub fn sanitize(html: &str) -> String {
     ammonia::Builder::default()
@@ -40,5 +45,13 @@ mod tests {
         assert!(!s.contains("iframe"));
         assert!(!s.contains("javascript"));
         assert!(!s.contains("<style"));
+    }
+
+    #[test]
+    fn plain_text_is_preformatted_and_escaped() {
+        let h = plain_to_html("h1. Title <script>x</script> & more");
+        assert!(h.starts_with("<pre>"));
+        assert!(h.contains("&lt;script&gt;"));
+        assert!(!h.contains("<script"));
     }
 }

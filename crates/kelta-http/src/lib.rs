@@ -1,23 +1,24 @@
 //! # kelta-http
 //!
-//! Shared `reqwest` client, per-account [`HttpCtx`], Markdown → sanitized HTML, and the
-//! [`provider::ProviderFactory`] trait (ARCHITECTURE §8.3).
+//! Shared `reqwest` client, per-account [`HttpCtx`], Markdown → sanitized HTML, the
+//! [`provider::ProviderFactory`] trait and provider authentication helpers (ARCHITECTURE §8.3).
 //!
-//! Scaffold FUNCTIONAL BASELINE: plain send with status → `KeltaError` mapping and a concurrency
-//! semaphore; no retry, backoff or ETag cache yet (L5 upgrades behind the same API).
+//! [`HttpCtx`] adds, on top of the plain client: a per-account concurrency semaphore, `Retry-After`
+//! and rate-limit header handling, exponential backoff with jitter, an exact-URL ETag LRU,
+//! `401 → NeedsAuth` and `offline → Network`. Nothing here owns a timer: waits are one-shot sleeps
+//! armed by a rate-limit response (`// one-shot:` comments in `ctx.rs`).
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::time::Duration;
 
-use kelta_proto::error::{ErrorCode, KeltaError};
-use kelta_proto::ids::AccountId;
-use serde::de::DeserializeOwned;
-use tokio::sync::Semaphore;
-
+pub mod auth;
+mod ctx;
 pub mod markdown;
 pub mod provider;
+pub mod util;
 
+pub use auth::{AuthScheme, Authed};
+pub use ctx::{HttpCtx, retry_after_ms, status_error};
 pub use provider::ProviderFactory;
 
 /// `kelta/<version>`.
@@ -33,15 +34,23 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub fn new(user_agent: &str) -> Self {
-        let inner = reqwest::Client::builder()
-            .user_agent(user_agent)
-            .timeout(Duration::from_secs(20))
-            .pool_idle_timeout(Duration::from_secs(30))
-            .build()
-            .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "http client builder failed; using defaults");
-                reqwest::Client::new()
-            });
+        Self::with_timeout(user_agent, Some(Duration::from_secs(20)))
+    }
+
+    /// Like [`HttpClient::new`] with an explicit request timeout. `None` = no client-side timeout
+    /// and no connection pooling, so the client arms no timer at all (tests that run under paused
+    /// tokio time would otherwise see the clock auto-advance to reqwest's own timers).
+    pub fn with_timeout(user_agent: &str, timeout: Option<Duration>) -> Self {
+        let mut b =
+            reqwest::Client::builder().user_agent(user_agent).pool_idle_timeout(Duration::from_secs(30));
+        match timeout {
+            Some(t) => b = b.timeout(t),
+            None => b = b.pool_max_idle_per_host(0),
+        }
+        let inner = b.build().unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "http client builder failed; using defaults");
+            reqwest::Client::new()
+        });
         Self { inner }
     }
 
@@ -95,18 +104,47 @@ impl Method {
             Self::Head => reqwest::Method::HEAD,
         }
     }
+
+    /// Safe to repeat after a transport failure or a 5xx.
+    pub fn is_idempotent(self) -> bool {
+        matches!(self, Self::Get | Self::Head | Self::Put | Self::Delete)
+    }
 }
 
 /// A provider request (decoupled from reqwest so the transport can evolve).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HttpRequest {
     pub method: Method,
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub query: Vec<(String, String)>,
     pub json: Option<serde_json::Value>,
-    /// Use the ETag cache for this GET (L5).
+    /// Use the ETag cache for this GET.
     pub etag: bool,
+}
+
+/// Header names whose values never appear in `Debug` output.
+fn is_secret_header(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n == "authorization" || n == "private-token" || n == "x-redmine-api-key" || n.contains("token")
+}
+
+impl std::fmt::Debug for HttpRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let headers: Vec<(&str, &str)> = self
+            .headers
+            .iter()
+            .map(|(k, v)| (k.as_str(), if is_secret_header(k) { "[redacted]" } else { v.as_str() }))
+            .collect();
+        f.debug_struct("HttpRequest")
+            .field("method", &self.method)
+            .field("url", &kelta_proto::redact::redact_url(&self.url))
+            .field("headers", &headers)
+            .field("query", &self.query.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>())
+            .field("json", &self.json.is_some())
+            .field("etag", &self.etag)
+            .finish()
+    }
 }
 
 impl HttpRequest {
@@ -121,6 +159,9 @@ impl HttpRequest {
     }
     pub fn put(url: impl Into<String>) -> Self {
         Self::new(Method::Put, url)
+    }
+    pub fn patch(url: impl Into<String>) -> Self {
+        Self::new(Method::Patch, url)
     }
     pub fn delete(url: impl Into<String>) -> Self {
         Self::new(Method::Delete, url)
@@ -153,139 +194,12 @@ impl HttpRequest {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HttpResponse<T> {
+    /// Wire status (`304` when served from the ETag cache).
     pub status: u16,
     /// Lowercased header names.
     pub headers: BTreeMap<String, String>,
     pub body: T,
     pub etag: Option<String>,
-    /// 304 served from the ETag cache (L5).
+    /// 304 answered from the ETag cache: `body` is the cached body of the previous 200.
     pub not_modified: bool,
-}
-
-/// Per-account context: shared client + semaphore (+ rate-limit state in L5).
-#[derive(Clone)]
-pub struct HttpCtx {
-    client: HttpClient,
-    account_id: AccountId,
-    policy: HttpPolicy,
-    permits: Arc<Semaphore>,
-}
-
-impl HttpCtx {
-    pub fn new(client: HttpClient, account_id: AccountId, policy: HttpPolicy) -> Self {
-        let permits = Arc::new(Semaphore::new(policy.max_concurrent.max(1)));
-        Self { client, account_id, policy, permits }
-    }
-
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
-    }
-
-    pub fn policy(&self) -> &HttpPolicy {
-        &self.policy
-    }
-
-    pub fn client(&self) -> &HttpClient {
-        &self.client
-    }
-
-    /// Send and deserialize a JSON body. Empty bodies deserialize from `null`.
-    pub async fn send_json<T: DeserializeOwned>(
-        &self,
-        req: HttpRequest,
-    ) -> Result<HttpResponse<T>, KeltaError> {
-        let raw = self.send_text(req).await?;
-        let body: T = if raw.body.trim().is_empty() {
-            serde_json::from_value(serde_json::Value::Null)
-        } else {
-            serde_json::from_str(&raw.body)
-        }
-        .map_err(|e| KeltaError::upstream(format!("invalid JSON from {}: {e}", self.account_id)))?;
-        Ok(HttpResponse {
-            status: raw.status,
-            headers: raw.headers,
-            body,
-            etag: raw.etag,
-            not_modified: raw.not_modified,
-        })
-    }
-
-    /// Send and return the body as text. Non-2xx statuses become errors.
-    pub async fn send_text(&self, req: HttpRequest) -> Result<HttpResponse<String>, KeltaError> {
-        let _permit =
-            self.permits.acquire().await.map_err(|_| KeltaError::cancelled("http context closed"))?;
-        let mut rb = self.client.inner.request(req.method.to_reqwest(), &req.url);
-        for (k, v) in &req.headers {
-            rb = rb.header(k, v);
-        }
-        if !req.query.is_empty() {
-            rb = rb.query(&req.query);
-        }
-        if let Some(j) = &req.json {
-            rb = rb.json(j);
-        }
-        let resp = rb.send().await.map_err(map_reqwest_error)?;
-        let status = resp.status().as_u16();
-        let headers: BTreeMap<String, String> = resp
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_ascii_lowercase(), v.to_owned())))
-            .collect();
-        let body = resp.text().await.map_err(map_reqwest_error)?;
-        if !(200..300).contains(&status) {
-            return Err(status_error(status, &headers, &body));
-        }
-        let etag = headers.get("etag").cloned();
-        Ok(HttpResponse { status, headers, body, etag, not_modified: false })
-    }
-}
-
-fn map_reqwest_error(e: reqwest::Error) -> KeltaError {
-    if e.is_timeout() {
-        KeltaError::timeout(format!("request timed out: {}", short(&e)))
-    } else if e.is_connect() || e.is_request() {
-        KeltaError::network(format!("network error: {}", short(&e)))
-    } else if e.is_decode() || e.is_body() {
-        KeltaError::upstream(format!("bad response body: {}", short(&e)))
-    } else {
-        KeltaError::network(short(&e))
-    }
-}
-
-/// Error text without the URL (may carry tokens).
-fn short(e: &reqwest::Error) -> String {
-    let mut s = e.to_string();
-    if let Some(u) = e.url() {
-        s = s.replace(u.as_str(), &kelta_proto::redact::redact_url(u.as_str()));
-    }
-    s
-}
-
-/// `Retry-After` (seconds or HTTP date — only seconds supported in the baseline) in ms.
-pub fn retry_after_ms(headers: &BTreeMap<String, String>) -> Option<u64> {
-    headers.get("retry-after").and_then(|v| v.trim().parse::<u64>().ok()).map(|s| s * 1000)
-}
-
-/// Map a non-2xx status to a `KeltaError`.
-pub fn status_error(status: u16, headers: &BTreeMap<String, String>, body: &str) -> KeltaError {
-    let snippet: String = body.chars().take(300).collect();
-    let code = match status {
-        401 => ErrorCode::NeedsAuth,
-        403 if headers.get("x-ratelimit-remaining").map(String::as_str) == Some("0") => {
-            ErrorCode::RateLimited
-        }
-        403 => ErrorCode::PermissionDenied,
-        404 => ErrorCode::NotFound,
-        409 | 412 => ErrorCode::Conflict,
-        400 | 422 => ErrorCode::InvalidArgument,
-        429 => ErrorCode::RateLimited,
-        408 | 504 => ErrorCode::Timeout,
-        _ => ErrorCode::Upstream,
-    };
-    let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}"))
-        .with_detail(serde_json::json!({ "status": status }));
-    if code == ErrorCode::RateLimited {
-        e.retry_after_ms = retry_after_ms(headers);
-    }
-    e
 }
