@@ -35,7 +35,7 @@ test.describe('scaffold', () => {
       active: 'shop',
       sessions: 10,
       layoutTabs: 3,
-      work: 3,
+      work: 6,
       theme: 'system',
       mock: true,
     });
@@ -52,7 +52,7 @@ test.describe('scaffold', () => {
       const mods = await Promise.all(loaders.map((l) => l()));
       return mods.filter((m) => typeof m.default === 'function').length;
     });
-    expect(loaded).toBe(12 + 5 + 1 + 17);
+    expect(loaded).toBe(12 + 8 + 1 + 17);
 
     // UiEvents from the backend reach the stores.
     await page.evaluate(() => {
