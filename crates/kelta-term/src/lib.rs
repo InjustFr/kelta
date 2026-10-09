@@ -147,20 +147,26 @@ impl TerminalHost for PtyTerminalHost {
             rows,
         };
         let child = self.backend.spawn(&req)?;
+        // Callers close the master first: on macOS a child exiting with unread output blocks in
+        // exit (even after SIGKILL) until the master is closed, and waitpid would never return.
         let kill_child = |pid: i32| {
-            // SAFETY: plain syscalls on our own, not yet reaped child.
+            // SAFETY: plain syscalls on our own, not yet reaped child (the pid itself too: the
+            // group does not exist until the child's setsid).
             unsafe {
                 libc::kill(-pid, libc::SIGKILL);
+                libc::kill(pid, libc::SIGKILL);
                 libc::waitpid(pid, std::ptr::null_mut(), 0);
             }
         };
         if let Err(e) = backend::set_nonblocking(&child.master) {
+            drop(child.master);
             kill_child(child.pid);
             return Err(e);
         }
         let (wake_r, wake_w) = match wake_pipe() {
             Ok(p) => p,
             Err(e) => {
+                drop(child.master);
                 kill_child(child.pid);
                 return Err(e);
             }
@@ -181,6 +187,7 @@ impl TerminalHost for PtyTerminalHost {
             if let Some(old) = map.get(&spec.id) {
                 if !old.exited.load(Ordering::SeqCst) {
                     drop(map);
+                    drop((session, master));
                     kill_child(child.pid);
                     return Err(KeltaError::conflict(format!("terminal session {} is running", spec.id)));
                 }
