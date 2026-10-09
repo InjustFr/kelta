@@ -4,7 +4,6 @@
   import type { KeltaError } from '$lib/gen';
 
   import Button from './Button.svelte';
-  import Icon from './Icon.svelte';
 
   interface Props {
     /** A KeltaError, an Error or a message. */
@@ -22,8 +21,7 @@
 </script>
 
 <div class="k-error" role="alert">
-  <Icon name="circle-alert" size={24} />
-  <p class="title">{title}</p>
+  <p class="title"><span class="mark" aria-hidden="true"></span>{title}</p>
   <p class="message k-selectable">{message}</p>
   {#if code}<p class="code">{code}</p>{/if}
   <div class="actions">
@@ -33,28 +31,33 @@
 </div>
 
 <style>
+  /* What happened and how to fix it, top-left; the error lamp shape marks it. */
   .k-error {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
     gap: var(--k-space-2);
-    height: 100%;
-    min-height: 120px;
-    padding: var(--k-space-6);
-    text-align: center;
-    color: var(--k-danger);
+    padding: var(--k-space-5);
   }
 
   .title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-3);
     margin: 0;
     color: var(--k-fg);
-    font-weight: 600;
+  }
+
+  .mark {
+    width: 7px;
+    height: 7px;
+    transform: rotate(45deg);
+    background: var(--k-danger);
   }
 
   .message {
     margin: 0;
-    max-width: 60ch;
+    max-width: var(--k-measure);
     color: var(--k-fg-muted);
     overflow-wrap: anywhere;
   }

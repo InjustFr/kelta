@@ -119,9 +119,21 @@ pub trait CodeHost: Send + Sync {
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
+    /// `approve`, `comment` and `request_changes` also publish my pending review (see
+    /// `add_pending_comment`), so its line comments go out with the decision.
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+    /// Adds a line comment (new-side `line` of `path`) to my pending (draft) review, creating it.
+    async fn add_pending_comment(
+        &self,
+        _r: &ReviewRef,
+        _path: &str,
+        _line: u32,
+        _body: &str,
+    ) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("pending review comments"))
+    }
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
     /// `pull/N/head:…` | `merge-requests/N/head:…`.

@@ -12,7 +12,7 @@
   import TextInput from '$lib/ui/TextInput.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
-  import { PALETTE } from '../../onboarding/draft';
+  import ColorPicker from '../../onboarding/ColorPicker.svelte';
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -98,18 +98,8 @@
                 }}
               >
                 <TextInput label="Name" bind:value={name} />
-                <div class="colors" role="group" aria-label="Colour">
-                  {#each PALETTE as c (c)}
-                    <button
-                      type="button"
-                      class="swatch"
-                      class:on={color === c}
-                      style:background={c}
-                      aria-label={c}
-                      aria-pressed={color === c}
-                      onclick={() => (color = color === c ? null : c)}
-                    ></button>
-                  {/each}
+                <div class="row">
+                  <ColorPicker value={color} onchange={(c) => (color = c)} />
                   <input class="icon" aria-label="Icon" maxlength="2" placeholder="Icon" bind:value={icon} />
                 </div>
                 <div class="row">
@@ -121,7 +111,9 @@
               <span class="dot" style:background={p.color ?? 'var(--k-border)'}></span>
               <div class="info">
                 <strong>{p.name}</strong>
-                <span class="muted">{p.id} · {p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span>
+                <span class="muted"
+                  ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
+                >
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
               </div>
               <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
@@ -215,27 +207,13 @@
     gap: var(--k-space-3);
   }
 
-  .row,
-  .colors {
+  .row {
     display: flex;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     align-items: center;
-  }
-
-  .swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-  }
-
-  .swatch.on {
-    border-color: var(--k-fg);
   }
 
   .icon {
     width: 56px;
-    margin-left: var(--k-space-3);
   }
 </style>

@@ -50,10 +50,11 @@
     padding: 0 var(--k-space-4);
     border-radius: var(--k-radius);
     border: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    background: var(--k-bezel-raised);
     color: var(--k-fg);
     white-space: nowrap;
     cursor: pointer;
+    transition: background var(--k-duration) ease-out;
   }
 
   .k-button.sm {
@@ -62,34 +63,34 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .k-button:hover:not(:disabled) {
-    background: var(--k-bg-hover);
-  }
-
-  .k-button:active:not(:disabled) {
+  .k-button:not(.primary, .danger, .ghost):hover:not(:disabled) {
     background: var(--k-bg-active);
   }
 
   .k-button.primary {
     background: var(--k-accent);
-    border-color: var(--k-accent);
+    border-color: transparent;
     color: var(--k-accent-fg);
-  }
-
-  .k-button.primary:hover:not(:disabled) {
-    filter: brightness(1.08);
-    background: var(--k-accent);
   }
 
   .k-button.danger {
     background: var(--k-danger);
-    border-color: var(--k-danger);
+    border-color: transparent;
     color: var(--k-danger-fg);
+  }
+
+  .k-button.primary:hover:not(:disabled),
+  .k-button.danger:hover:not(:disabled) {
+    background-image: linear-gradient(var(--k-bg-hover), var(--k-bg-hover));
   }
 
   .k-button.ghost {
     background: transparent;
     border-color: transparent;
+  }
+
+  .k-button.ghost:hover:not(:disabled) {
+    background: var(--k-bg-hover);
   }
 
   .k-button:disabled {
