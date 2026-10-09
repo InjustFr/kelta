@@ -47,7 +47,7 @@ pub fn account(kind: &str, base_url: &str, extra: Value) -> AccountConfig {
 pub fn host_with(id: &str, kind: &str, base_url: &str, token: &str) -> (Arc<dyn CodeHost>, Arc<FakeSecrets>) {
     let secrets = secrets_with(token);
     let h = CodeHostFactory
-        .code_host(&account(kind, base_url, json!({})), http(id), secrets.clone())
+        .code_host(&account(kind, base_url, json!({"email": "louis@acme.test"})), http(id), secrets.clone())
         .expect("code host");
     (h, secrets)
 }

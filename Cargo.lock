@@ -2967,6 +2967,7 @@ name = "kelta-codehosts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "futures",
  "insta",
  "kelta-http",
  "kelta-proto",

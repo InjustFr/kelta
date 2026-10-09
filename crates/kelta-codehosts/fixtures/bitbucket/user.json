@@ -1,0 +1,12 @@
+{
+  "type": "user",
+  "uuid": "{470c176d-3574-44ea-bb41-89e8638bcca4}",
+  "account_id": "557058:f1a2",
+  "nickname": "louis",
+  "display_name": "Louis D",
+  "links": {
+    "avatar": {
+      "href": "https://secure.gravatar.com/avatar/louis"
+    }
+  }
+}
