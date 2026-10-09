@@ -235,6 +235,34 @@ async fn concurrent_attaches_wait_for_the_restore() {
 }
 
 #[tokio::test]
+async fn kill_during_restore_leaves_no_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let id = {
+        let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+        let mut r = req(SessionKind::Shell, None, &[], RestorePolicy::None);
+        // the restore awaits a store lookup before the PTY exists: the kill lands in that gap
+        r.work_item_id = Some(kelta_proto::ids::WorkItemId::generate());
+        let s = h.core.session_spawn(r).await.unwrap();
+        h.core.shutdown().await.unwrap();
+        s.id
+    };
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+        let (attach, kill) = tokio::join!(
+            h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())),
+            h.core.session_kill(&id, false),
+        );
+        assert!(attach.is_err());
+        kill.unwrap();
+        assert!(h.core.session_list(None).is_empty());
+        assert!(h.term.spawned_ids().is_empty());
+        h.core.shutdown().await.unwrap();
+    }
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    assert!(h.core.session_list(None).is_empty(), "row not persisted again");
+}
+
+#[tokio::test]
 async fn claude_restart_resumes_instead_of_replaying_argv() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);

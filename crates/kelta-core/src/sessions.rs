@@ -639,6 +639,12 @@ impl Core {
         };
         let previous = {
             let mut s = self.sessions.lock();
+            // killed/removed while this restore/restart awaited: do not resurrect it
+            if mode != SpawnMode::New && !s.contains_key(&id) {
+                drop(s);
+                self.release_http_ref(http_ref);
+                return Err(KeltaError::not_found(format!("session {id}")));
+            }
             let entry = SessionEntry {
                 info: info.clone(),
                 spec: spec.clone(),
@@ -708,7 +714,8 @@ impl Core {
         let (spec, policy) = {
             let mut s = self.sessions.lock();
             let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
-            if e.info.lifecycle == Lifecycle::Live && !use_continue {
+            // the --continue fallback runs from Dormant too, so it never bypasses this guard
+            if e.restoring || e.info.lifecycle == Lifecycle::Live {
                 return Ok(e.info.clone());
             }
             // claim (a concurrent attach sees `restoring` and waits)
