@@ -271,7 +271,7 @@ pub trait SecretResolver: Send + Sync {
   async fn ticket_comment(&self, ticket: &TicketRef, markdown: &str, session: Option<&SessionId>) -> Result<(), KeltaError>;
   // work & editor (core delegates to kelta-work)
   async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
-  async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+  async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft, origin: ShipOrigin /*Ui|Mcp*/) -> Result<WorkItem, KeltaError>;
   async fn editor_open(&self, target: EditorTarget, path: &Path, line: Option<u32>) -> Result<(), KeltaError>;
   // tools/plugins/bus/ui
   async fn tool_open(&self, project: &ProjectId, tool: &ToolId, ctx: TemplateCtx, placement: Placement) -> Result<ToolHandle, KeltaError>;
@@ -356,8 +356,9 @@ pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
   repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
-  created_at: String }
-pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
+  created_at: String, review_due: bool /*Claude's changes wait for review: a UI Ship clears it, an MCP ship sets it*/ }
+pub enum WorkState { Planned, Starting, Active, PrOpen, Merged{ detail: Option<String> /*"choose Done status" | failed move*/ },
+  PrClosed /*closed unmerged*/, Finished, Failed{ step: String, message: String } }
 ```
 
 ### 5.1 Layout model
@@ -466,9 +467,12 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |
 | `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
-| `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
-| `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
-| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
+| `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | Ship, `origin = ui` (clears `review_due`); MCP `create_pr` is `origin = mcp` (sets it). `Conflict` while the item's Claude is `Working`/`NeedsInput` ("Claude is working in this worktree. Ship when it stops.", ui only), with no commits ahead of `<remote>/<base>` ("No commits ahead of main."), after a merge/close, or while another operation holds the item ("Claude is shipping this item." when it is Claude's MCP ship) |
+| `work_pr_draft` | `{id}` | `PrDraft` | the title / body / draft Ship would use (prefills the dialog) |
+| `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | for `Merged`/`PrClosed` items only an explicit `transition_to` moves the ticket; a clean merged branch is deleted with `-D` (squash merges) |
+| `work_finish_merged` | `{}` | `FinishMergedReport{finished: Vec<WorkItem>, skipped: Vec<SkippedItem{id, reason}>}` | finishes `Merged` items with clean worktrees (remove worktree + delete branch); dirty / unpushed ones and those waiting for a Done choice are skipped |
+| `work_check_prs` | `{}` | `()` | one `CodeHost::get` per unfinished item whose PR is missing from the authored open list; also run at startup (§8.4) |
+| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand; before a PR, `ahead` counts against `<remote>/<base>`) | |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
@@ -648,7 +652,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn me(&self) -> Result<User, KeltaError>;
   async fn changed_since_last(&self) -> Result<bool, KeltaError>;  // cheap gate; default Ok(true)
   async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;  // kind + include_team + include_drafts
-  async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
+  async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;  // ReviewDetail.state: PrState Open|Merged|Closed
   async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
   async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
   async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
@@ -681,6 +685,9 @@ One shared `reqwest::Client` (20 s timeout, pool idle 30 s, UA `kelta/<ver>`). P
 - Startup renders from `provider_cache` (SQLite) — no network before first paint.
 - Aggregation: `Scope::All` fans out over accounts referenced by open projects **plus all configured accounts** for reviews; de-dup by ref; items tagged with matching project ids; unmatched → `project_ids = []` (UI "Other" group).
 - `seen_reviews(account, repo, number, head_sha, first_seen)`: first poll after start/account creation fills silently; new key (or new head after my review) → `pr.review_requested`.
+- Authored PRs (FLOW §3.6): the authored query always includes drafts (`reviews.include_drafts` filters review requests only). Authored is also subscribed for every code-host account bound to a project with an unfinished work item whose PR is open, whatever panes are visible and notifications are on (core tracks those items from `work.updated`). An authored PR that leaves the open list gets one `get`: merged → `pr.merged`, closed → `pr.closed`. At startup and on `work_check_prs` (Now / Inbox open), every unfinished work item whose `pr_url` is missing from the authored open list gets the same `get`, so a merge while Kelta was closed lands as `Merged` on the next launch. Each PR's end is published once per process.
+- Branch join: an authored PR whose `(repo, source_branch)` is an `Active` work item's repo binding and branch becomes that item's PR (`pr_url`, `PrOpen`, `work.updated`, `work.on_pr` once), e.g. when Claude ran `gh pr create`.
+- kelta-work listens to `pr.merged` / `pr.closed` (idempotent per item): `Merged` plus the guarded `on_merge` move (SETTINGS `[work] on_merge`), or `PrClosed`. The move never guesses between Done statuses.
 
 ---
 
@@ -714,7 +721,7 @@ projects_open(project_id PK, ord, active)              -- open set + order; conf
 layouts(project_id PK, json, rev, updated_at)
 sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)
 work_items(id PK, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base, claude_uuid, nvim_socket,
-           tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at)
+           tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at, review_due /*v2*/)
 work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, detail, updated_at, PK(work_item_id, step))
 seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
 provider_cache(key PK, etag, body_json, fetched_at)

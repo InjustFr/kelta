@@ -48,6 +48,17 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts in lists/boards |
 
+Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
+
+| ActionId | macOS | Linux | Prefix | Behaviour |
+|---|---|---|---|---|
+| `toast.run_last` (palette "Run last toast action") | `cmd+shift+o` (⇧⌘O) | `ctrl+shift+a` | `o` | runs the primary action of the most recent toast still shown (e.g. "Opened PR #13" → Open); the chord is printed on that toast's button. Linux is not `Ctrl+Shift+O`: that is `pane.split_down`. |
+| `work.ship` (palette "Work: Ship") | none | none | none | Ship dialog for the focused tab's work item (push + PR); with a PR already open it offers Open. |
+| `work.finish` (palette "Work: Finish…") | none | none | none | Finish dialog for the focused tab's work item, prefilled when its PR is merged or closed. |
+| `work.finish_merged` (palette "Finish all merged") | none | none | none | one dialog listing merged items with clean worktrees (dirty ones are listed as skipped); the only bulk destructive action. |
+
+Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / `⇧Tab` move and stay inside, `Space` toggles the focused switch, `⌘↵` (`Ctrl+↵`) runs the primary button, `Esc` cancels; focus starts on the main input.
+
 ### [terminal]
 | `font_family` | str | `"JetBrains Mono, Menlo, DejaVu Sans Mono, monospace"` | system fonts only |
 | `font_size` | float (6..40) | `13` | |
@@ -150,14 +161,14 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `review_template` | str | `"review"` | |
 | `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}` |
 | `on_pr` | {transition_to: TransitionTarget? = {category="in_review"}, comment: Template? = "PR: {pr.url}"} | | |
-| `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | |
-| `pr.title_template` | Template | `"{ticket.key}: {ticket.title}"` | |
+| `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | applied on `pr.merged` (also for merges while Kelta was closed, found on the next launch) only when unambiguous: a `name` target, or a single `category` match, and no required fields. Otherwise the ticket stays as is, the item reads "Merged: choose Done status" and the Finish dialog asks. The project's `status_map.done` wins over it. |
+| `pr.title_template` | Template | `"{ticket.key}: {ticket.title}"` | prefills the Ship dialog title for ticket items; other items use the last commit subject |
 | `pr.body_template` | Template | `"{ticket.url}\n\n{closes}"` | `{closes}` = `Closes #n` for GitHub issues |
-| `pr.draft` | bool | `false` | |
+| `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
 
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
-| `include_drafts` | bool | `false` | |
+| `include_drafts` | bool | `false` | review requests only: my own (authored) PRs always include drafts |
 | `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets; applied at startup and on reload (an invalid pattern keeps the previous one) |
 | `repos_allow` / `repos_deny` | list<glob> | `[]` / `[]` | |
 

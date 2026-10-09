@@ -362,7 +362,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `pr.review_requested` | `{review: Review}` (new key only) |
 | `pr.updated` | `{review, changes: ["ci","decision","head"]}` |
 | `pr.ci_changed` | `{review, state, previous}` |
-| `pr.approved` / `pr.changes_requested` / `pr.merged` | `{review, linked_tickets}` |
+| `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Now-open check; `pr.closed` = closed without merge; once per PR) |
 | `tool.opened` / `tool.exited` | `{tool_id, instance_id, code?}` |
 | `settings.changed` | `{paths, layers}` |
 | `custom.*` | arbitrary (from `kelta-ctl emit`) |
