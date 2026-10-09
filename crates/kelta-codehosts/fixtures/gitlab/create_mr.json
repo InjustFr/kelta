@@ -1,0 +1,27 @@
+{
+  "id": 5030,
+  "iid": 30,
+  "project_id": 77,
+  "title": "Draft: SHOP-142 add limiter",
+  "description": "Fixes the **thing**.",
+  "state": "opened",
+  "draft": true,
+  "web_url": "https://gitlab.acme.test/grp/sub/proj/-/merge_requests/30",
+  "source_branch": "feature/SHOP-142-limit",
+  "target_branch": "main",
+  "sha": "deadbeef30",
+  "author": {
+    "id": 42,
+    "username": "louis",
+    "name": "Louis",
+    "avatar_url": "https://gl.test/a.png"
+  },
+  "labels": [],
+  "updated_at": "2026-09-30T10:00:00.000Z",
+  "detailed_merge_status": "mergeable",
+  "has_conflicts": false,
+  "references": {
+    "short": "!30",
+    "full": "grp/sub/proj!30"
+  }
+}

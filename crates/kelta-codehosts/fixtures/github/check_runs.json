@@ -1,0 +1,23 @@
+{
+  "total_count": 3,
+  "check_runs": [
+    {
+      "name": "build",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://ci.test/1"
+    },
+    {
+      "name": "lint",
+      "status": "completed",
+      "conclusion": "neutral",
+      "html_url": "https://ci.test/2"
+    },
+    {
+      "name": "e2e",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://ci.test/3"
+    }
+  ]
+}

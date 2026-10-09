@@ -1,0 +1,97 @@
+[
+  {
+    "id": 5007,
+    "iid": 7,
+    "project_id": 77,
+    "title": "Draft: SHOP-142 limiter",
+    "description": "Fixes the **thing**.",
+    "state": "opened",
+    "draft": true,
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/merge_requests/7",
+    "source_branch": "feature/SHOP-142-limit",
+    "target_branch": "main",
+    "sha": "deadbeef07",
+    "author": {
+      "id": 5,
+      "username": "carol",
+      "name": "Carol",
+      "avatar_url": "https://gl.test/a.png"
+    },
+    "labels": [],
+    "updated_at": "2026-09-30T10:00:00.000Z",
+    "detailed_merge_status": "mergeable",
+    "has_conflicts": false,
+    "references": {
+      "short": "!7",
+      "full": "grp/sub/proj!7"
+    },
+    "head_pipeline": {
+      "id": 907,
+      "status": "running"
+    }
+  },
+  {
+    "id": 5008,
+    "iid": 8,
+    "project_id": 77,
+    "title": "Fix #12 flicker",
+    "description": "Fixes the **thing**.",
+    "state": "opened",
+    "draft": false,
+    "web_url": "https://gitlab.acme.test/grp/other/-/merge_requests/8",
+    "source_branch": "fix/flicker",
+    "target_branch": "main",
+    "sha": "deadbeef08",
+    "author": {
+      "id": 6,
+      "username": "dave",
+      "name": "Dave",
+      "avatar_url": "https://gl.test/a.png"
+    },
+    "labels": [
+      "bug"
+    ],
+    "updated_at": "2026-09-30T10:00:00.000Z",
+    "detailed_merge_status": "not_approved",
+    "has_conflicts": false,
+    "references": {
+      "short": "!8",
+      "full": "grp/other!8"
+    },
+    "head_pipeline": {
+      "id": 908,
+      "status": "success"
+    }
+  },
+  {
+    "id": 5009,
+    "iid": 9,
+    "project_id": 77,
+    "title": "Conflicting change",
+    "description": "Fixes the **thing**.",
+    "state": "opened",
+    "draft": false,
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/merge_requests/9",
+    "source_branch": "chg",
+    "target_branch": "main",
+    "sha": "deadbeef09",
+    "author": {
+      "id": 6,
+      "username": "dave",
+      "name": "Dave",
+      "avatar_url": "https://gl.test/a.png"
+    },
+    "labels": [],
+    "updated_at": "2026-09-30T10:00:00.000Z",
+    "detailed_merge_status": "conflict",
+    "has_conflicts": true,
+    "references": {
+      "short": "!9",
+      "full": "grp/sub/proj!9"
+    },
+    "head_pipeline": {
+      "id": 909,
+      "status": "failed"
+    }
+  }
+]

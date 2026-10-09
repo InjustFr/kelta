@@ -1,0 +1,201 @@
+{
+  "data": {
+    "viewer": {
+      "login": "louis"
+    },
+    "reviewRequested": {
+      "nodes": [
+        {
+          "number": 101,
+          "title": "SHOP-142 add rate limiter",
+          "url": "https://github.com/acme/shop/pull/101",
+          "isDraft": false,
+          "headRefOid": "sha101",
+          "headRefName": "feature/SHOP-142-limit",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 40,
+          "deletions": 10,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": "REVIEW_REQUIRED",
+          "author": {
+            "login": "carol",
+            "avatarUrl": "https://avatars.test/carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "backend"
+              }
+            ]
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          },
+          "latestOpinionatedReviews": {
+            "nodes": []
+          }
+        },
+        {
+          "number": 102,
+          "title": "WIP: refactor cart",
+          "url": "https://github.com/acme/shop/pull/102",
+          "isDraft": true,
+          "headRefOid": "sha102",
+          "headRefName": "wip/cart",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 50,
+          "deletions": 11,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "dave",
+            "avatarUrl": "https://avatars.test/dave",
+            "name": "Dave"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "backend"
+              }
+            ]
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "PENDING"
+                  }
+                }
+              }
+            ]
+          },
+          "latestOpinionatedReviews": {
+            "nodes": []
+          }
+        },
+        {
+          "number": 103,
+          "title": "Fix #12 flicker",
+          "url": "https://github.com/acme/web/pull/103",
+          "isDraft": false,
+          "headRefOid": "sha103",
+          "headRefName": "fix/flicker",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 60,
+          "deletions": 12,
+          "mergeable": "CONFLICTING",
+          "reviewDecision": "APPROVED",
+          "author": {
+            "login": "erin",
+            "avatarUrl": "https://avatars.test/erin",
+            "name": "Erin"
+          },
+          "repository": {
+            "nameWithOwner": "acme/web"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "backend"
+              }
+            ]
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "EXPECTED"
+                  }
+                }
+              }
+            ]
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "author": {
+                  "login": "louis"
+                }
+              },
+              {
+                "state": "COMMENTED",
+                "author": {
+                  "login": "zed"
+                }
+              }
+            ]
+          }
+        },
+        {}
+      ]
+    },
+    "authored": {
+      "nodes": [
+        {
+          "number": 55,
+          "title": "Upgrade deps",
+          "url": "https://github.com/acme/shop/pull/55",
+          "isDraft": false,
+          "headRefOid": "sha055",
+          "headRefName": "chore/deps",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 65,
+          "deletions": 3,
+          "mergeable": "UNKNOWN",
+          "reviewDecision": "CHANGES_REQUESTED",
+          "author": {
+            "login": "louis",
+            "avatarUrl": "https://avatars.test/louis",
+            "name": "Louis"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "backend"
+              }
+            ]
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "FAILURE"
+                  }
+                }
+              }
+            ]
+          },
+          "latestOpinionatedReviews": {
+            "nodes": []
+          }
+        }
+      ]
+    }
+  }
+}

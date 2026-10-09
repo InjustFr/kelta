@@ -1,0 +1,33 @@
+[
+  {
+    "id": 5021,
+    "iid": 21,
+    "project_id": 77,
+    "title": "My MR",
+    "description": "Fixes the **thing**.",
+    "state": "opened",
+    "draft": false,
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/merge_requests/21",
+    "source_branch": "feature/mine",
+    "target_branch": "main",
+    "sha": "deadbeef21",
+    "author": {
+      "id": 42,
+      "username": "louis",
+      "name": "Louis",
+      "avatar_url": "https://gl.test/a.png"
+    },
+    "labels": [],
+    "updated_at": "2026-09-30T10:00:00.000Z",
+    "detailed_merge_status": "ci_must_pass",
+    "has_conflicts": false,
+    "references": {
+      "short": "!21",
+      "full": "grp/sub/proj!21"
+    },
+    "head_pipeline": {
+      "id": 921,
+      "status": "pending"
+    }
+  }
+]

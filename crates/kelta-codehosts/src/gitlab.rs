@@ -1,0 +1,508 @@
+//! GitLab (gitlab.com and self-managed) code host: merge requests over REST v4.
+//!
+//! Lists: `reviewer_username=<me>` / `scope=created_by_me`, bounded by `updated_after`, `draft=`
+//! on GitLab >= 16 and `wip=` before (`GET /version`). Approve sends the head `sha` (409 →
+//! `Conflict`). Request changes is a note (+ unapprove). Gate: pending `review_requested` todos
+//! (count + max id).
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use kelta_http::util::{percent_encode, trim_url, url_host};
+use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
+use kelta_proto::api::{CodeHost, SecretResolver};
+use kelta_proto::codehost::{
+    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, Review, ReviewDecision,
+    ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+};
+use kelta_proto::error::{ErrorCode, KeltaError};
+use kelta_proto::ids::AccountId;
+use kelta_proto::settings::{AccountConfig, AuthKind};
+use kelta_proto::tracker::User;
+use parking_lot::Mutex;
+use serde_json::{Value, json};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+
+use crate::common::{host_matches, linked_tickets, parse_remote, s};
+
+/// Merge requests untouched for longer than this are not listed.
+const STALE_AFTER_DAYS: i64 = 90;
+const PER_PAGE: &str = "100";
+
+#[derive(Default)]
+struct TodoGate {
+    disabled: bool,
+    last: Option<(usize, u64)>,
+}
+
+pub struct GitlabHost {
+    api: String,
+    web: String,
+    web_host: String,
+    auth: Authed,
+    me: Mutex<Option<User>>,
+    /// Major version from `GET /version` (cached; `None` = not fetched or unknown).
+    major: Mutex<Option<u32>>,
+    gate: Mutex<TodoGate>,
+}
+
+impl GitlabHost {
+    pub fn new(
+        account: &AccountConfig,
+        http: HttpCtx,
+        secrets: Arc<dyn SecretResolver>,
+    ) -> Result<Self, KeltaError> {
+        let base = account
+            .effective_base_url()
+            .map(|u| trim_url(&u))
+            .ok_or_else(|| KeltaError::invalid("gitlab account needs a base_url"))?;
+        let root = base.strip_suffix("/api/v4").unwrap_or(&base).to_owned();
+        let scheme = match account.auth {
+            Some(AuthKind::Bearer | AuthKind::Basic) => {
+                AuthScheme::from_account(account).unwrap_or(AuthScheme::Bearer)
+            }
+            _ => AuthScheme::Header("PRIVATE-TOKEN".into()),
+        };
+        let auth = Authed::new(http, secrets, account.effective_secret(), Some(&root), scheme)
+            .with_header("Accept", "application/json");
+        let web = account.web_url.as_deref().map(trim_url).unwrap_or_else(|| root.clone());
+        Ok(Self {
+            api: format!("{root}/api/v4"),
+            web_host: url_host(&web).unwrap_or_default(),
+            web,
+            auth,
+            me: Mutex::new(None),
+            major: Mutex::new(None),
+            gate: Mutex::new(TodoGate::default()),
+        })
+    }
+
+    fn account(&self) -> &AccountId {
+        self.auth.http().account_id()
+    }
+
+    async fn json(&self, req: HttpRequest) -> Result<kelta_http::HttpResponse<Value>, KeltaError> {
+        self.auth.send_json::<Value>(req).await
+    }
+
+    fn mr_url(&self, repo: &str, tail: &str) -> String {
+        format!("{}/projects/{}/merge_requests{tail}", self.api, percent_encode(repo))
+    }
+
+    fn user_from(v: &Value) -> User {
+        match s(v, "username") {
+            Some(l) => {
+                let id = v
+                    .get("id")
+                    .and_then(Value::as_u64)
+                    .map(|i| i.to_string())
+                    .unwrap_or_else(|| l.to_owned());
+                User {
+                    id,
+                    name: s(v, "name").filter(|n| !n.is_empty()).unwrap_or(l).to_owned(),
+                    login: Some(l.to_owned()),
+                    avatar_url: s(v, "avatar_url").map(str::to_owned),
+                }
+            }
+            None => User {
+                id: "ghost".into(),
+                name: "ghost".into(),
+                login: Some("ghost".into()),
+                avatar_url: None,
+            },
+        }
+    }
+
+    /// Server major version (cached); a failure means "recent" (`draft=`).
+    async fn major_version(&self) -> u32 {
+        if let Some(m) = *self.major.lock() {
+            return m;
+        }
+        let major = match self.json(HttpRequest::get(format!("{}/version", self.api))).await {
+            Ok(r) => {
+                s(&r.body, "version").and_then(|v| v.split('.').next()).and_then(|m| m.parse::<u32>().ok())
+            }
+            Err(_) => None,
+        };
+        if let Some(m) = major {
+            *self.major.lock() = Some(m);
+        }
+        major.unwrap_or(16)
+    }
+
+    /// `grp/proj` of a merge request (from `references.full` or `web_url`).
+    fn repo_of(&self, v: &Value) -> Option<String> {
+        if let Some(full) = v.pointer("/references/full").and_then(Value::as_str)
+            && let Some((repo, _)) = full.rsplit_once('!')
+            && !repo.is_empty()
+        {
+            return Some(repo.to_owned());
+        }
+        let url = s(v, "web_url")?;
+        let path = url.strip_prefix(&self.web)?.trim_start_matches('/');
+        path.split_once("/-/merge_requests").map(|(p, _)| p.to_owned())
+    }
+
+    fn review_from(&self, v: &Value, repo_hint: Option<&str>, kind: ReviewKind) -> Option<Review> {
+        let number = v.get("iid").and_then(Value::as_u64)?;
+        let repo = self.repo_of(v).or_else(|| repo_hint.map(str::to_owned))?;
+        let title = s(v, "title").unwrap_or("").to_owned();
+        let branch = s(v, "source_branch").unwrap_or("").to_owned();
+        let merge_status = s(v, "detailed_merge_status");
+        let draft = v
+            .get("draft")
+            .and_then(Value::as_bool)
+            .or_else(|| v.get("work_in_progress").and_then(Value::as_bool))
+            .unwrap_or(false);
+        let pipeline = v.get("head_pipeline").filter(|p| !p.is_null()).or_else(|| v.get("pipeline"));
+        Some(Review {
+            r#ref: ReviewRef { account: self.account().clone(), repo, number },
+            url: s(v, "web_url").unwrap_or("").to_owned(),
+            author: v.get("author").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
+            draft,
+            head_sha: s(v, "sha").unwrap_or("").to_owned(),
+            source_branch: branch.clone(),
+            target_branch: s(v, "target_branch").unwrap_or("").to_owned(),
+            ci: ci_from(pipeline.and_then(|p| s(p, "status"))),
+            decision: (merge_status == Some("not_approved")).then_some(ReviewDecision::ReviewRequired),
+            my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
+            mergeable: match (merge_status, v.get("has_conflicts").and_then(Value::as_bool)) {
+                (_, Some(true)) | (Some("conflict"), _) => Some(false),
+                (Some("mergeable"), _) => Some(true),
+                _ => None,
+            },
+            labels: v
+                .get("labels")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|l| l.as_str().map(str::to_owned)).collect())
+                .unwrap_or_default(),
+            kind,
+            updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
+            linked_tickets: linked_tickets(&[&branch, &title]),
+            additions: None,
+            deletions: None,
+            title,
+        })
+    }
+
+    async fn list_query(
+        &self,
+        kind: ReviewKind,
+        include_drafts: bool,
+    ) -> Result<Vec<(String, String)>, KeltaError> {
+        let mut q: Vec<(String, String)> = vec![("state".into(), "opened".into())];
+        match kind {
+            ReviewKind::ReviewRequested => {
+                let me = self.me().await?;
+                q.push(("scope".into(), "all".into()));
+                q.push(("reviewer_username".into(), me.login.unwrap_or(me.id)));
+            }
+            ReviewKind::Authored => q.push(("scope".into(), "created_by_me".into())),
+        }
+        if !include_drafts {
+            let key = if self.major_version().await >= 16 { "draft" } else { "wip" };
+            q.push((key.into(), "no".into()));
+        }
+        // Day granularity keeps the URL (and so the ETag entry) stable within a day.
+        let cutoff = (OffsetDateTime::now_utc() - time::Duration::days(STALE_AFTER_DAYS))
+            .replace_time(time::Time::MIDNIGHT);
+        q.push(("updated_after".into(), cutoff.format(&Rfc3339).unwrap_or_default()));
+        q.push(("order_by".into(), "updated_at".into()));
+        q.push(("sort".into(), "desc".into()));
+        q.push(("per_page".into(), PER_PAGE.into()));
+        Ok(q)
+    }
+}
+
+fn ci_from(status: Option<&str>) -> CiState {
+    match status {
+        Some("success") => CiState::Success,
+        Some("failed") => CiState::Failure,
+        Some("canceled" | "canceling" | "skipped") => CiState::Error,
+        Some(
+            "running"
+            | "pending"
+            | "created"
+            | "waiting_for_resource"
+            | "preparing"
+            | "scheduled"
+            | "manual"
+            | "waiting_for_callback",
+        ) => CiState::Pending,
+        _ => CiState::None,
+    }
+}
+
+/// `+`/`-` line counts of a unified diff (headers excluded).
+fn diff_counts(diff: &str) -> (u32, u32) {
+    let (mut a, mut d) = (0, 0);
+    for l in diff.lines() {
+        if l.starts_with('+') && !l.starts_with("+++") {
+            a += 1;
+        } else if l.starts_with('-') && !l.starts_with("---") {
+            d += 1;
+        }
+    }
+    (a, d)
+}
+
+#[async_trait]
+impl CodeHost for GitlabHost {
+    fn kind(&self) -> CodeHostKind {
+        CodeHostKind::Gitlab
+    }
+
+    async fn me(&self) -> Result<User, KeltaError> {
+        if let Some(u) = self.me.lock().clone() {
+            return Ok(u);
+        }
+        let v = self.json(HttpRequest::get(format!("{}/user", self.api))).await?.body;
+        if s(&v, "username").is_none() {
+            return Err(KeltaError::upstream("gitlab /user returned no username"));
+        }
+        let u = Self::user_from(&v);
+        *self.me.lock() = Some(u.clone());
+        Ok(u)
+    }
+
+    async fn changed_since_last(&self) -> Result<bool, KeltaError> {
+        if self.gate.lock().disabled {
+            return Ok(true);
+        }
+        let req = HttpRequest::get(format!("{}/todos", self.api))
+            .query("state", "pending")
+            .query("action", "review_requested")
+            .query("per_page", PER_PAGE);
+        let resp = match self.json(req).await {
+            Ok(r) => r,
+            Err(e) if matches!(e.code, ErrorCode::PermissionDenied | ErrorCode::NotFound) => {
+                self.gate.lock().disabled = true;
+                return Ok(true);
+            }
+            Err(e) => return Err(e),
+        };
+        let items = resp.body.as_array().map(Vec::as_slice).unwrap_or(&[]);
+        let count = resp.headers.get("x-total").and_then(|v| v.parse::<usize>().ok()).unwrap_or(items.len());
+        let max_id = items.iter().filter_map(|t| t.get("id").and_then(Value::as_u64)).max().unwrap_or(0);
+        let mut g = self.gate.lock();
+        let changed = g.last != Some((count, max_id));
+        g.last = Some((count, max_id));
+        Ok(changed)
+    }
+
+    async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
+        let mut req = HttpRequest::get(format!("{}/merge_requests", self.api));
+        for (k, v) in self.list_query(q.kind, q.include_drafts).await? {
+            req = req.query(k, v);
+        }
+        let resp = self.json(req.with_etag()).await?;
+        Ok(resp
+            .body
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|m| self.review_from(m, None, q.kind))
+                    .filter(|r| q.include_drafts || !r.draft)
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}", r.number));
+        let me = self.me().await?;
+        let (mr, approvals, changes) = tokio::join!(
+            self.json(HttpRequest::get(&url)),
+            self.json(HttpRequest::get(format!("{url}/approvals"))),
+            self.json(HttpRequest::get(format!("{url}/changes"))),
+        );
+        let mr = mr?.body;
+        // Approvals and changes are best effort (rules / tiers differ between instances).
+        let approvals = approvals.map(|a| a.body).unwrap_or(Value::Null);
+        let changes = changes.map(|c| c.body).unwrap_or(Value::Null);
+        let mine =
+            mr.pointer("/author/id").and_then(Value::as_u64).map(|i| i.to_string()) == Some(me.id.clone());
+        let kind = if mine { ReviewKind::Authored } else { ReviewKind::ReviewRequested };
+        let mut review = self
+            .review_from(&mr, Some(&r.repo), kind)
+            .ok_or_else(|| KeltaError::upstream("merge request response without iid"))?;
+        review.r#ref = r.clone();
+
+        let approved_by: Vec<String> = approvals
+            .get("approved_by")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.pointer("/user/id").and_then(Value::as_u64).map(|i| i.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if approvals.is_object() {
+            review.decision = Some(if approvals.get("approved").and_then(Value::as_bool) == Some(true) {
+                ReviewDecision::Approved
+            } else {
+                ReviewDecision::ReviewRequired
+            });
+        }
+        let reviewers: Vec<Reviewer> = mr
+            .get("reviewers")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .map(|u| {
+                        let user = Self::user_from(u);
+                        let st = if approved_by.contains(&user.id) {
+                            MyReviewState::Approved
+                        } else {
+                            MyReviewState::Pending
+                        };
+                        Reviewer { user, state: Some(st) }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        review.my_state = match kind {
+            ReviewKind::Authored => None,
+            ReviewKind::ReviewRequested => Some(if approved_by.contains(&me.id) {
+                MyReviewState::Approved
+            } else {
+                MyReviewState::Pending
+            }),
+        };
+
+        let (mut total_add, mut total_del) = (0u32, 0u32);
+        let files: Vec<FileChange> = changes
+            .get("changes")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .map(|c| {
+                        let (add, del) = diff_counts(s(c, "diff").unwrap_or(""));
+                        total_add += add;
+                        total_del += del;
+                        FileChange {
+                            path: s(c, "new_path").or_else(|| s(c, "old_path")).unwrap_or("").to_owned(),
+                            additions: add,
+                            deletions: del,
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if changes.is_object() {
+            review.additions = Some(total_add);
+            review.deletions = Some(total_del);
+        }
+
+        let mut checks: Vec<CiCheck> = Vec::new();
+        if let Some(pid) = mr.pointer("/head_pipeline/id").and_then(Value::as_u64) {
+            let jobs = self
+                .json(
+                    HttpRequest::get(format!(
+                        "{}/projects/{}/pipelines/{pid}/jobs",
+                        self.api,
+                        percent_encode(&r.repo)
+                    ))
+                    .query("per_page", PER_PAGE),
+                )
+                .await;
+            for j in jobs.ok().and_then(|j| j.body.as_array().cloned()).unwrap_or_default() {
+                checks.push(CiCheck {
+                    name: s(&j, "name").unwrap_or("").to_owned(),
+                    state: ci_from(s(&j, "status")),
+                    url: s(&j, "web_url").map(str::to_owned),
+                });
+            }
+        }
+        Ok(ReviewDetail {
+            body_html: markdown::to_html(s(&mr, "description").unwrap_or("")),
+            review,
+            reviewers,
+            checks,
+            files,
+        })
+    }
+
+    async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/approve", r.number));
+        // 409 (head moved: sha mismatch) maps to `Conflict` in the shared status mapping.
+        self.auth.send_text(HttpRequest::post(url).json(json!({"sha": head_sha}))).await?;
+        Ok(())
+    }
+
+    async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
+        self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
+        Ok(())
+    }
+
+    async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        // GitLab REST has no "request changes" state: leave a note and withdraw our approval.
+        self.comment(r, body).await?;
+        let url = self.mr_url(&r.repo, &format!("/{}/unapprove", r.number));
+        if let Err(e) = self.auth.send_text(HttpRequest::post(url)).await {
+            if e.code == ErrorCode::NeedsAuth {
+                return Err(e);
+            }
+            tracing::debug!(code = %e.code, "unapprove after request-changes note failed (nothing to withdraw?)");
+        }
+        Ok(())
+    }
+
+    async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError> {
+        let title = if d.draft && !d.title.to_ascii_lowercase().starts_with("draft:") {
+            format!("Draft: {}", d.title)
+        } else {
+            d.title.clone()
+        };
+        let body =
+            json!({"source_branch": d.head, "target_branch": d.base, "title": title, "description": d.body});
+        let v = self.json(HttpRequest::post(self.mr_url(&d.repo, "")).json(body)).await?.body;
+        self.review_from(&v, Some(&d.repo), ReviewKind::Authored)
+            .ok_or_else(|| KeltaError::upstream("create merge request response without iid"))
+    }
+
+    async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {
+        let v = self
+            .json(
+                HttpRequest::get(self.mr_url(repo, ""))
+                    .query("source_branch", branch)
+                    .query("state", "opened")
+                    .query("per_page", "1"),
+            )
+            .await?
+            .body;
+        let me = self.me().await.ok();
+        Ok(v.get(0).and_then(|m| {
+            let mine =
+                m.pointer("/author/id").and_then(Value::as_u64).map(|i| i.to_string()) == me.map(|u| u.id);
+            self.review_from(
+                m,
+                Some(repo),
+                if mine { ReviewKind::Authored } else { ReviewKind::ReviewRequested },
+            )
+        }))
+    }
+
+    fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String {
+        format!("merge-requests/{}/head:{local_branch}", r.number)
+    }
+
+    fn repo_from_remote(&self, url: &str) -> Option<String> {
+        let (host, path) = parse_remote(url)?;
+        if !host_matches(&host, &self.web_host) {
+            return None;
+        }
+        // Self-managed instances may live under a relative URL root; the project path is the tail
+        // that has at least a namespace and a project.
+        (path.split('/').filter(|p| !p.is_empty()).count() >= 2).then_some(path)
+    }
+}
+
+impl GitlabHost {
+    /// Browser base URL.
+    pub fn web_url(&self) -> &str {
+        &self.web
+    }
+}

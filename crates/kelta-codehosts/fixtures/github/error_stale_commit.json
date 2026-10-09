@@ -1,0 +1,7 @@
+{
+  "message": "Unprocessable Entity",
+  "errors": [
+    "commit_id is not part of the pull request"
+  ],
+  "documentation_url": "x"
+}

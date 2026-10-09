@@ -1,0 +1,12 @@
+{
+  "approved": false,
+  "approvals_left": 1,
+  "approved_by": [
+    {
+      "user": {
+        "id": 43,
+        "username": "zed"
+      }
+    }
+  ]
+}

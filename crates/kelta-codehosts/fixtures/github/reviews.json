@@ -1,0 +1,34 @@
+[
+  {
+    "id": 1,
+    "user": {
+      "login": "zed"
+    },
+    "state": "COMMENTED",
+    "commit_id": "abc123"
+  },
+  {
+    "id": 2,
+    "user": {
+      "login": "erin"
+    },
+    "state": "CHANGES_REQUESTED",
+    "commit_id": "abc123"
+  },
+  {
+    "id": 3,
+    "user": {
+      "login": "erin"
+    },
+    "state": "COMMENTED",
+    "commit_id": "abc123"
+  },
+  {
+    "id": 4,
+    "user": {
+      "login": "louis"
+    },
+    "state": "PENDING",
+    "commit_id": "abc123"
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "number": 101,
+  "title": "SHOP-142 add rate limiter",
+  "html_url": "https://github.com/acme/shop/pull/101",
+  "state": "open",
+  "draft": false,
+  "user": {
+    "login": "carol",
+    "avatar_url": "https://avatars.test/carol"
+  },
+  "head": {
+    "sha": "abc123",
+    "ref": "feature/SHOP-142-limit"
+  },
+  "base": {
+    "ref": "main",
+    "repo": {
+      "full_name": "acme/shop"
+    }
+  },
+  "body": "Adds a **limiter**.\n\n<script>alert(1)</script>",
+  "additions": 120,
+  "deletions": 8,
+  "mergeable": true,
+  "updated_at": "2026-09-30T12:00:00Z",
+  "labels": [
+    {
+      "name": "backend"
+    }
+  ],
+  "requested_reviewers": [
+    {
+      "login": "louis"
+    },
+    {
+      "login": "zed"
+    }
+  ]
+}
