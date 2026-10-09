@@ -156,6 +156,7 @@ export function nowSections(input: NowInput): Section[] {
     );
 
   // Oldest first, except In flight (latest activity first). Up next keeps tracker order (`at` = index).
+  // shortcut: work items are aged by created_at (no "asked at" time yet), add one to WorkItem when the order must be exact.
   const newestFirst = new Set<NowSection>(['in_flight']);
   return SECTIONS.flatMap((s) => {
     const ranked = by
