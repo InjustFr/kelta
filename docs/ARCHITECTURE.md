@@ -1,0 +1,775 @@
+# Kelta v0.1 — Architecture (contract)
+
+Status: **frozen contract** for the parallel build. Changes go through the merge owner (see BUILD_PLAN.md §5).
+Companion docs: SPEC.md (product), SETTINGS.md (config schema), PLUGINS.md (extensibility), BUILD_PLAN.md (lanes).
+
+Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ (Hyprland, Sway, GNOME). One window holds several **projects**; each project has tabs of split panes containing terminal sessions (Claude Code, nvim, shells, TUI tools), web tools (sl web / ISL), plugin screens and built-in views (tickets, board, reviews, inbox, settings).
+
+---
+
+## 0. Decision record (why this shape)
+
+| # | Decision | Rationale | Revisit if |
+|---|---|---|---|
+| D1 | **Tauri v2 + Svelte 5 + xterm.js 6.0.0**, Rust core | Electron misses the memory budget (Chromium multi-process baseline 250-350 MB). Native egui/GPUI cannot embed sl web in-window on native Wayland and is too risky for a one-pass parallel build. Tauri reuses the system webview (WKWebView / WebKitGTK). | Gate G1 or G2 fails after tuning (BUILD_PLAN §6) → replace only `apps/desktop` + `ui/` with a native front end over the Tauri-free crates. |
+| D2 | **Rust is the terminal source of truth.** One headless `alacritty_terminal::Term` per session; xterm.js instances exist only for visible panes plus a small LRU (`terminal.max_live_views`, default 4) | Hidden sessions cost only a Rust grid (no JS heap/DOM). Re-attach = compact ANSI snapshot. Background sessions still answer terminal queries correctly. | — |
+| D3 | **No session daemon in v0.1**; PTYs live in the app process behind the `TerminalHost` trait | Delivery risk; a `keltad` mux daemon is v0.2 and swaps in behind the same trait without UI changes. Closing the window ("background mode") keeps sessions alive and drops WebKit. | Users demand sessions surviving quit → v0.2 `keltad`. |
+| D4 | Blocking reader **thread per PTY** (256 KiB stack) + `poll(2)` with timeout for DEC 2026 sync deadlines | Simplest correct design; ~10-20 threads is cheap with `M_ARENA_MAX=2`. | Profiling shows thread overhead > 1 MB/session. |
+| D5 | **Typed IPC**: one Tauri command per operation, DTOs in `kelta-proto`, TS generated with `ts-rs`, CI drift check | Compile-time agreement between 10 parallel agents. | — |
+| D6 | Programs are **exec'd directly** with a login environment resolved once (sentinel-delimited) — no `$SHELL -c` wrapper | Works with fish/nushell, no quoting bugs, Dock-launched apps get the user's PATH. | — |
+| D7 | **xterm 6.0.0 stable, kitty keyboard off**; the Rust model runs with `kitty_keyboard = false`; Shift+Enter remapped per session kind | xterm 6.0.0 cannot encode kitty; model and encoder must agree. | xterm 6.1 stable ships → v0.2 setting `terminal.keyboard_protocol = "kitty"`. |
+| D8 | Claude status from **async command hooks** calling an **absolute, version-stable** `kelta-ctl` path; HTTP hook transport optional | Independent of PATH/AppImage mount; `SessionStart` only supports command hooks. | Claude Code changes hook semantics → version gate `claude.min_version`. |
+| D9 | Extensibility = declarative tools + declarative triggers + plugin manifests with **sandboxed iframe screens**; no resident plugin runtime | Zero memory when unused; strong sandbox. Provider plugins (process/KPP) are v0.2 — the `Tracker`/`CodeHost` traits are already object-safe for it. | Demand for third-party trackers → v0.2 KPP runtime. |
+| D10 | Plugin grants and repo trust live in **SQLite app state**, never in user/repo-editable TOML | A repo or a hand edit must not be able to grant permissions. | — |
+| D11 | One **deadline-heap scheduler** in core is the only owner of periodic work; nothing polls when nothing is visible/subscribed | Idle CPU ≈ 0, ≤ 1 wakeup/s. Lint-enforced. | — |
+| D12 | Markdown (ticket/PR bodies) rendered in Rust (`pulldown-cmark` + `ammonia`) to sanitized HTML | No markdown/sanitizer libs in the JS bundle. | — |
+| D13 | Clipboard via `arboard` in Rust (CLIPBOARD + Linux PRIMARY), never `navigator.clipboard` | Avoids the WKWebView paste callout; enables middle-click paste. | — |
+| D14 | Web tools embed `auto` = iframe → (HEAD probe finds X-Frame-Options/frame-ancestors) → local header-stripping proxy → external browser. Child webview (Tauri `unstable`) is v0.2 | Works on native Wayland in-window. | — |
+
+---
+
+## 1. Stack and pinned versions
+
+All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). Verified against crates.io / npm on 2026-10-09. The scaffold re-verifies with `cargo info` / `npm view` and fails if any pin does not resolve.
+
+### 1.1 Rust (toolchain `1.99.0`, edition 2024, `rust-toolchain.toml` with `rustfmt`, `clippy`)
+
+| Crate | Version | Features / notes | Used by |
+|---|---|---|---|
+| tauri | 2.12.2 | default features; no `unstable`, no `devtools` in release | desktop |
+| tauri-build | 2.7.1 | app manifest lists every command (explicit permissions) | desktop |
+| tauri-plugin-notification | 2.5.1 | | desktop |
+| tauri-plugin-opener | 2.7.0 | open URLs/files externally | desktop |
+| tauri-plugin-single-instance | 2.5.2 | forwards argv of 2nd launch | desktop |
+| tokio | 1.53.2 | rt-multi-thread, macros, net, process, sync, time, io-util, fs, signal | all async crates |
+| portable-pty | 0.9.0 | spawn/openpty only, behind `PtyBackend` trait; rustix fallback | kelta-term |
+| alacritty_terminal | 0.26.0 | headless `Term`, `vte::ansi::Processor` (vte 0.15 transitive) | kelta-term |
+| rustix | 1.1.5 | pty, process, event (poll), net (peer creds), termios, fs | term, server, platform |
+| libc | 0.2.190 | `mallopt(M_ARENA_MAX)`, `malloc_trim` (glibc only) | desktop/platform |
+| reqwest | 0.13.5 | `default-features = false`, features `rustls, json, gzip, http2, query, system-proxy` | kelta-http |
+| axum | 0.8.9 | lazy loopback HTTP server (MCP, http hooks, web proxy) | kelta-server, kelta-plugins |
+| hyper | 1.12.0 | proxy client | kelta-plugins |
+| tokio-tungstenite | 0.30.0 | proxy WebSocket passthrough | kelta-plugins |
+| rmcp | 3.5.1 | MCP server, streamable-HTTP transport (fallback: hand-rolled JSON-RPC for `initialize`, `tools/list`, `tools/call`) | kelta-server |
+| rmpv | 1.3.1 | hand-rolled msgpack-RPC client for nvim (`nvim-rs` not used: stale) | kelta-work |
+| rusqlite | 0.40.2 | `bundled`; WAL; `PRAGMA cache_size=-2000` | kelta-core |
+| toml | 1.1.8 | | kelta-config, kelta-plugins |
+| toml_edit | 0.25.17 | comment-preserving writes | kelta-config |
+| schemars | 1.2.2 | settings JSON Schema | kelta-proto, xtask |
+| jsonschema | 0.58.6 | validate settings + plugin manifests + plugin settings fragments | kelta-config, kelta-plugins |
+| serde / serde_json | 1.0.229 / 1.0.151 | | all |
+| notify / notify-debouncer-full | 8.2.0 / 0.7.0 | watch config dirs (FSEvents / inotify, no polling) | kelta-config |
+| keyring-core | 1.0.0 | | kelta-secrets |
+| apple-native-keyring-store | 1.0.2 | feature `keychain` (macOS only target dep) | kelta-secrets |
+| zbus-secret-service-keyring-store | 1.0.1 | tokio + pure-Rust crypto feature (exact feature name verified at scaffold) (Linux only) | kelta-secrets |
+| zbus | 5.19.0 | Linux: notification daemon / Secret Service probes | kelta-core, kelta-secrets |
+| arboard | 3.6.1 | feature `wayland-data-control`; CLIPBOARD + PRIMARY | kelta-core |
+| pulldown-cmark / ammonia | 0.13.4 / 4.2.1 | markdown → sanitized HTML | kelta-providers-common (in kelta-http crate `markdown` module) |
+| uuid | 1.27.0 | v4, v7, serde | proto |
+| regex / globset | 1.13.1 / 0.4.20 | | many |
+| directories / which | 6.0.0 / 8.0.6 | | config, work |
+| thiserror / anyhow | 2.0.21 / 1.0.104 | anyhow only in binaries/tests | all |
+| tracing / tracing-subscriber / tracing-appender | 0.1.44 / 0.3.23 / 0.2.5 | file log, size-capped, `info` default, no stdout in release | all |
+| ts-rs | 12.0.1 | export DTOs to `ui/src/lib/gen/` | proto |
+| async-trait | 0.1.92 | object-safe provider/core traits | proto + impls |
+| base64 / sha2 / time / bytes / parking_lot / futures / semver / mime_guess | 0.23.1 / 0.11.0 / 0.3.55 / 1.12.1 / 0.12.5 / 0.3.34 / 1.0.28 / 2.0.5 | | various |
+| objc2 | 0.6.5 | macOS only: WebContent-terminated delegate + bench WebContent pid | desktop (L10) |
+| webkit2gtk | exact version wry 0.57.0 resolves in Cargo.lock (Linux target dep; scaffold pins it) | Linux only: `CacheModel::DocumentViewer`, `web-process-terminated` via `with_webview` | desktop (L10) |
+| dev: insta / wiremock / proptest / tempfile / criterion | 1.49.0 / 0.6.5 / 1.11.0 / 3.27.0 / 0.8.2 | | tests |
+
+`kelta-ctl` depends **only** on `std`, `serde`, `serde_json`, `rustix` (peer socket) — target < 1 MB stripped, < 5 ms per hook invocation.
+
+### 1.2 Frontend (Node 22, pnpm 9 workspace; Node is not shipped)
+
+| Package | Version | Notes |
+|---|---|---|
+| svelte | 5.57.2 | runes; no SvelteKit, no router lib |
+| vite | 8.3.4 | |
+| @sveltejs/vite-plugin-svelte | 7.3.1 | |
+| typescript | 6.0.3 | not 7.x: svelte-check and typescript-eslint peer ranges |
+| svelte-check | 4.7.6 | |
+| @tauri-apps/api / @tauri-apps/cli | 2.12.2 / 2.12.1 | |
+| @xterm/xterm | 6.0.0 | exact |
+| @xterm/addon-fit / -unicode11 / -web-links | 0.11.0 / 0.9.0 / 0.12.0 | eager |
+| @xterm/addon-webgl / -search | 0.19.0 / 0.16.0 | dynamic import |
+| vitest / jsdom / @testing-library/svelte | 5.0.3 / 30.1.2 / 5.4.2 | |
+| @xterm/headless | 6.0.0 | dev only: parser-hook tests (query swallowing) |
+| @playwright/test | 1.64.0 | UI e2e against Vite dev server + IPC mock |
+| eslint / typescript-eslint / eslint-plugin-svelte | 10.12.0 / 8.71.1 / 3.23.1 | |
+| prettier / prettier-plugin-svelte | 3.9.9 / 4.1.1 | |
+
+**Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib. Icons: one inline SVG sprite.
+
+---
+
+## 2. Processes
+
+```
+kelta (one process; Rust)
+├─ main thread: tao event loop (AppKit / GTK3), Tauri IPC dispatch
+├─ tokio runtime: worker_threads=2, max_blocking_threads=8, thread_stack_size=1 MiB
+│    providers, git, scheduler, bus, server, config watch handling
+├─ per-session PTY reader thread (stack 256 KiB): poll → read 64 KiB → parse → forward
+├─ sqlite thread (single connection, WAL, channel of closures)
+└─ notify watcher thread (debouncer)
+WebKit helpers (OS-managed): WebContent (UI + all iframes), Network, GPU (macOS)
+children (each in its own PTY + session/process group): claude, nvim, $SHELL -l, lazygit, lazydocker …
+non-PTY children: web-tool servers (sl web …) owned by kelta-plugins, killed with their tool instance
+kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
+```
+
+- **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
+- **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
+- **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`, or first web tool in proxy mode); stops when its consumer count reaches 0 (event-driven, no idle timer).
+- **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
+- **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
+
+### 2.1 Filesystem locations
+
+| Kind | Linux | macOS |
+|---|---|---|
+| config | `$XDG_CONFIG_HOME/kelta` (`~/.config/kelta`) | `~/.config/kelta` (honours `XDG_CONFIG_HOME`) |
+| data (db, plugins, bin, logs) | `$XDG_DATA_HOME/kelta` (`~/.local/share/kelta`) | `~/Library/Application Support/dev.kelta.Kelta` |
+| state db | `<data>/kelta.db` | same |
+| logs | `$XDG_STATE_HOME/kelta/logs/kelta.log` (5 MB × 2) | `~/Library/Logs/Kelta/kelta.log` |
+| stable CLI copy | `<data>/bin/<version>/kelta-ctl` + `<data>/bin/current` symlink | same |
+| runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
+| per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
+
+`<sid8>` = first 8 hex chars of the session uuid (collision-checked). All socket paths are asserted < 100 bytes at startup.
+
+---
+
+## 3. Crates and module map
+
+```
+crates/kelta-proto      [scaffold]  ids, DTOs, IPC request/response types, UiEvent/BusEvent, settings structs (+Default, JsonSchema),
+                                    plugin manifest/tool/trigger types, hook payloads, frame consts, ActionId catalog,
+                                    service traits (§4), KeltaError, `testing` feature: FakeCore, FakeTerminalHost, FakeTracker,
+                                    FakeCodeHost, FakeSecrets, FakeSettings, fixtures
+crates/kelta-term       [L1]  TerminalHost impl: PtyBackend (portable-pty | rustix), login-env exec, reader threads, alacritty model,
+                              query responder, snapshot encoder, flow control, scrollback memory budget
+crates/kelta-config     [L4]  layered load/merge/provenance, validation, toml_edit writes, hot reload, repo trust check helpers,
+                              project files CRUD, early `linux.graphics` reader
+crates/kelta-secrets    [L4]  SecretRef resolution chain, keyring stores, backend status
+crates/kelta-http       [L5]  shared reqwest client, HttpCtx (retry, backoff, rate limits, ETag LRU), markdown→HTML
+                              (scaffold ships a functional baseline: plain send, no retry)
+crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues; ADF walker
+crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST)
+crates/kelta-work       [L6]  git CLI ops, templates (branch/path/slug), work saga (journaled), Claude launcher, editor adapters
+                              (nvim msgpack-RPC, vim keys, emacsclient, helix, external), review_start
+crates/kelta-server     [L7]  ctl socket server, hook ingestion + status machine, lazy axum server, MCP endpoint, http hooks
+crates/kelta-ctl        [L7]  CLI binary
+crates/kelta-plugins    [L8]  manifest load/validate/install, registry, grants, plugin_call gate, kelta-plugin:// handler, tools
+                              registry + web-tool lifecycle + proxy, trigger engine
+crates/kelta-core       [L3]  AppState composition, ProjectRegistry, SessionRegistry, Layout store, Store (sqlite + migrations),
+                              EventBus, Attention, Scheduler, ProviderRegistry + aggregation + caches + seen_reviews,
+                              Notifier, clipboard, implements CoreApi
+apps/desktop/src-tauri  [scaffold: Cargo.toml, build.rs, tauri.conf.json, capabilities/, main.rs, lib.rs, commands/mod.rs]
+   src/commands/<domain>.rs  [owner per §6 table]
+   src/platform/**           [L10] pre_init (linux graphics env, NVIDIA detect, mallopt, crash guard), diagnostics probes
+   src/window/**             [L10] window setup, decorations, menu, background mode, UiBridge impl (bridge.rs: events fan-out,
+                             badge, notifications), webview crash + hang reload
+xtask                   [scaffold] `codegen` (ts-rs + schema), `codegen --check`
+bench                   [L10] kelta-bench
+ui/                     Svelte app (ownership in BUILD_PLAN)
+packages/plugin-sdk     [L8] @kelta/plugin-sdk
+```
+
+Dependency rule: every lane crate depends only on `kelta-proto` (+ `kelta-http` for providers/core). `kelta-core` depends on all crates and wires them; only `apps/desktop` depends on Tauri. No crate other than desktop links Tauri; no crate links GTK/WebKit.
+
+---
+
+## 4. Service traits (kelta-proto `api` module) — the inter-lane contract
+
+All async traits use `#[async_trait]`, `Send + Sync`, return `Result<T, KeltaError>`.
+
+```rust
+// ---- errors -------------------------------------------------------------
+#[derive(Serialize, Deserialize, TS, thiserror::Error)]
+pub struct KeltaError { pub code: ErrorCode, pub message: String,
+  pub detail: Option<serde_json::Value>, pub retry_after_ms: Option<u64> }
+pub enum ErrorCode { NotFound, InvalidArgument, Conflict, PermissionDenied, NeedsAuth, RateLimited,
+  Network, Upstream, Timeout, Unsupported, Untrusted, NeedsFields, Dirty, Cancelled, Internal }
+// IpcError on the wire == KeltaError. Stubs return ErrorCode::Unsupported("not implemented: <fn>").
+
+// ---- terminal (impl: kelta-term) ---------------------------------------
+pub trait TerminalHost: Send + Sync {
+  fn spawn(&self, spec: PtySpawnSpec) -> Result<(), KeltaError>;            // id inside spec
+  fn attach(&self, id: &SessionId, cols: u16, rows: u16, sink: Box<dyn FrameSink>) -> Result<AttachInfo, KeltaError>;
+  fn detach(&self, id: &SessionId, generation: u32);
+  fn write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError>;
+  fn resize(&self, id: &SessionId, cols: u16, rows: u16) -> Result<(), KeltaError>;
+  fn ack(&self, id: &SessionId, generation: u32, bytes: u32);
+  fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError>; // Hup|Term|Kill, to process group
+  fn set_palette(&self, palette: TerminalPalette);                              // OSC 4/10/11/12 replies
+  fn set_limits(&self, limits: TerminalLimits);                                 // scrollback per kind, memory cap
+  fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>; // plain text (search, persistence)
+  fn stats(&self) -> TerminalStats;                                             // per-session bytes, lines, inflight
+}
+pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // false = channel closed → auto-detach
+pub trait TerminalEvents: Send + Sync { fn on_event(&self, id: &SessionId, ev: TerminalEvent); }
+pub enum TerminalEvent { Title(String), Cwd(PathBuf) /*OSC 7*/, Bell, Notify{title: Option<String>, body: String} /*OSC 9/777*/,
+  ClipboardStore{kind: ClipboardKind, text: String}, ClipboardLoad{kind: ClipboardKind}, Activity /*first output since mark_seen*/,
+  Exited{code: Option<i32>, signal: Option<i32>}, AckTimeout{generation: u32} }
+pub struct PtySpawnSpec { pub id: SessionId, pub program: PathBuf /*absolute, resolved*/, pub args: Vec<String>,
+  pub cwd: PathBuf, pub env: BTreeMap<String,String> /*complete env*/, pub cols: u16, pub rows: u16,
+  pub scrollback_lines: u32, pub kind: SessionKind, pub events: Arc<dyn TerminalEvents> }
+
+// ---- providers (impl: kelta-trackers / kelta-codehosts) ----------------
+pub trait Tracker: Send + Sync { /* §8.1 */ }
+pub trait CodeHost: Send + Sync { /* §8.2 */ }
+pub trait ProviderFactory: Send + Sync {   // impl in kelta-trackers + kelta-codehosts (two impls, core picks by kind)
+  fn tracker(&self, account: &AccountConfig, http: HttpCtx, secrets: Arc<dyn SecretResolver>) -> Result<Arc<dyn Tracker>, KeltaError>;
+  fn code_host(&self, account: &AccountConfig, http: HttpCtx, secrets: Arc<dyn SecretResolver>) -> Result<Arc<dyn CodeHost>, KeltaError>;
+}
+
+// ---- config/secrets (impl: kelta-config / kelta-secrets) ---------------
+pub trait SettingsSource: Send + Sync {
+  fn effective(&self, project: Option<&ProjectId>) -> Arc<Settings>;     // fully merged, validated
+  fn project(&self, id: &ProjectId) -> Option<Arc<ProjectConfig>>;
+  fn projects(&self) -> Vec<Arc<ProjectConfig>>;
+}
+pub trait SecretResolver: Send + Sync {
+  async fn resolve(&self, r: &SecretRef, ctx: &SecretCtx) -> Result<Secret, KeltaError>; // Secret zeroizes on drop, !Serialize
+  async fn set(&self, r: &SecretRef, value: &str) -> Result<(), KeltaError>;             // keyring refs only
+  async fn delete(&self, r: &SecretRef) -> Result<(), KeltaError>;
+  async fn backends_status(&self) -> Vec<SecretBackendStatus>;
+  fn invalidate(&self, r: &SecretRef);
+}
+
+// ---- the core API (impl: kelta-core) consumed by work, server, plugins -
+#[async_trait] pub trait CoreApi: Send + Sync {
+  // sessions & layout
+  async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError>;
+  async fn session_write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError>;
+  async fn session_kill(&self, id: &SessionId, force: bool) -> Result<(), KeltaError>;
+  fn session_get(&self, id: &SessionId) -> Option<SessionInfo>;
+  fn session_list(&self, project: Option<&ProjectId>) -> Vec<SessionInfo>;
+  async fn session_apply_hook(&self, id: &SessionId, change: StatusChange) -> Result<(), KeltaError>;
+  async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError>; // new tab / split / focus
+  // projects & settings
+  fn project(&self, id: &ProjectId) -> Option<ProjectInfo>;
+  fn settings(&self, project: Option<&ProjectId>) -> Arc<Settings>;
+  // providers
+  async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError>;
+  async fn code_host_for(&self, account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError>;
+  async fn review_list(&self, scope: Scope, kind: ReviewKind) -> Result<Vec<ReviewItem>, KeltaError>;
+  // work & editor (core delegates to kelta-work)
+  async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
+  async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+  async fn editor_open(&self, target: EditorTarget, path: &Path, line: Option<u32>) -> Result<(), KeltaError>;
+  // tools/plugins/bus/ui
+  async fn tool_open(&self, project: &ProjectId, tool: &ToolId, ctx: TemplateCtx, placement: Placement) -> Result<ToolHandle, KeltaError>;
+  fn publish(&self, ev: BusEvent);
+  fn subscribe(&self) -> tokio::sync::broadcast::Receiver<BusEvent>;
+  async fn notify(&self, n: Notification) -> Result<(), KeltaError>;
+  fn toast(&self, t: Toast);
+  async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>; // plugin net: (allowlist checked by caller)
+  async fn ctl(&self, cmd: CtlCommand) -> Result<serde_json::Value, KeltaError>;            // dispatch of ctl socket commands
+}
+
+// ---- UI bridge (impl: apps/desktop window/bridge.rs, L10) consumed by kelta-core --------------
+pub trait UiBridge: Send + Sync {
+  fn emit(&self, ev: UiEvent);                          // fan-out to all events_subscribe channels; dropped if none
+  fn set_badge(&self, needs_input: u32);                // macOS dock badge; Linux no-op
+  fn request_attention(&self);                          // Linux urgency hint / macOS bounce (informational)
+  fn notify(&self, n: Notification) -> Result<(), KeltaError>;  // tauri-plugin-notification
+  fn window_state(&self) -> WindowState;                // {exists, visible, focused}
+  fn reload_webview(&self, safe: bool);                 // hang/crash recovery (§12.4)
+}
+// Services owned by other lanes that core calls (constructor signatures frozen in scaffold stubs):
+//   kelta_work::WorkService::new(core: Weak<dyn CoreApi>, store: WorkStore) ; methods mirror §6 work_* commands
+//   kelta_server::Server::new(core: Weak<dyn CoreApi>, runtime_dir) ; start_ctl(), ensure_http() -> port, register_session_tokens()
+//   kelta_plugins::PluginHost::new(core: Weak<dyn CoreApi>, dirs, grants: GrantStore) ; tools, triggers, screens, uri handler
+//   kelta_config::ConfigService::load(dirs, cli_overrides) ; impl SettingsSource ; watch(tx)
+//   kelta_secrets::Secrets::new(settings) ; impl SecretResolver
+//   kelta_term::PtyTerminalHost::new(env: LoginEnv) ; impl TerminalHost ; kelta_term::resolve_login_env()
+```
+
+`WorkStore`, `GrantStore`, `TrustStore` are small traits in proto implemented by kelta-core over SQLite (fakes in `testing`).
+`PluginSettingsSource { fn fragments(&self) -> Vec<(PluginId, serde_json::Value /*flat schema*/)> }` is implemented by `PluginHost` and handed by core to `ConfigService::set_plugin_schemas` (Plugin-defaults layer + validation of `plugins.<id>`). `Dirs { config, data, state, logs, runtime, bin }` is defined and resolved in proto (`Dirs::resolve(env, overrides)`, per §2.1) so every crate shares it.
+
+---
+
+## 5. Domain model (kelta-proto, all `Serialize + Deserialize + TS`)
+
+```rust
+pub struct ProjectId(String);   // slug [a-z0-9-]{1,40}; "home" reserved; "inbox" reserved pseudo id
+pub struct SessionId(String);   // uuid v7
+pub struct WorkItemId(String);  // uuid v7
+pub struct AccountId(String);   // settings key, e.g. "jira-acme"
+pub struct TabId(String); pub struct PaneId(String); pub struct ToolInstanceId(String); pub struct ScreenInstanceId(String);
+pub struct PluginId(String);    // [a-z0-9-]{3,40}
+pub struct ToolId(String);      // "lazydocker" | "<plugin>/<tool>"
+
+pub struct ProjectInfo { id, name, color: Option<String>, icon: Option<String>, repos: Vec<RepoInfo>,
+  tracker: Option<TrackerBinding>, open: bool, active: bool, attention: AttentionSummary, builtin: bool /*home*/ }
+pub struct RepoInfo { id: String, path: PathBuf, primary: bool, remote: String, base: String,
+  code_host: Option<CodeHostBinding>, exists: bool }
+pub struct TrackerBinding { account: AccountId, views: Vec<TrackerView>, columns: Vec<ColumnSpec>, status_map: StatusMap }
+pub struct CodeHostBinding { account: AccountId, repo: String /* "acme/shop" | "grp/sub/proj" */ }
+
+pub enum SessionKind { Shell, Claude, Editor{ adapter: String }, Tool{ tool_id: ToolId }, Setup, Custom }
+pub enum SessionStatus { Starting, Running, Working, NeedsInput, WaitingUser, Done, Error, Exited, Unknown }
+pub enum Attention { None = 0, Activity = 1, Done = 2, Error = 3, NeedsInput = 4 }      // ordered; max-aggregated
+pub enum Lifecycle { Dormant, Live, Exited }
+pub enum RestorePolicy { None, Relaunch, ShellInCwd, ClaudeResume{ uuid: String }, Editor{ session_file: Option<PathBuf> } }
+pub enum CloseOnExit { Never, OnSuccess, Always }
+pub struct SpawnRequest { project_id: ProjectId, kind: SessionKind, name: Option<String>,
+  program: Option<String> /*None = $SHELL*/, args: Vec<String>, cwd: Option<PathBuf>, env: BTreeMap<String,String>,
+  cols: u16, rows: u16, work_item_id: Option<WorkItemId>, restore: RestorePolicy, close_on_exit: CloseOnExit,
+  template_id: Option<String> }
+pub struct SessionInfo { id, project_id, kind, name: String, title: Option<String>, cwd: PathBuf, status: SessionStatus,
+  status_source: StatusSource /*Hook|Heuristic|None*/, attention: Attention, seen: bool, lifecycle: Lifecycle,
+  pid: Option<u32>, exit_code: Option<i32>, work_item_id: Option<WorkItemId>, claude: Option<ClaudeMeta>,
+  editor: Option<EditorMeta>, cols: u16, rows: u16, created_at: String /*RFC3339*/ }
+pub struct ClaudeMeta { session_uuid: String, model: Option<String>, preview: Option<String>, files_touched: Vec<PathBuf>, hooks_active: bool }
+pub struct EditorMeta { adapter: String, socket: Option<PathBuf> }
+pub struct AttachInfo { generation: u32, cols: u16, rows: u16 }
+pub struct StatusChange { status: SessionStatus, preview: Option<String>, file_edited: Option<PathBuf>, raw_event: String }
+
+pub enum Scope { Project{ id: ProjectId }, All }
+pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
+  repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
+  session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
+  created_at: String }
+pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
+```
+
+### 5.1 Layout model
+
+```rust
+pub struct Layout { project_id: ProjectId, tabs: Vec<Tab>, active_tab: Option<TabId>, rev: u64 }
+pub struct Tab { id: TabId, title: String, work_item_id: Option<WorkItemId>, root: LayoutNode,
+  focused_pane: Option<PaneId>, zoomed_pane: Option<PaneId> }
+pub enum LayoutNode { Split{ dir: SplitDir /*Row|Column*/, ratios: Vec<f32> /*sum 1.0, each ≥ 0.05*/, children: Vec<LayoutNode> },
+                      Pane{ id: PaneId, content: PaneContent } }
+pub enum PaneContent {                       // serde tag = "kind"
+  Terminal{ session_id: SessionId }, Web{ tool_instance_id: ToolInstanceId },
+  PluginScreen{ plugin_id: PluginId, screen_id: String, instance_id: ScreenInstanceId, params: serde_json::Value },
+  Tickets{ scope: Scope, view_id: Option<String>, mode: TicketsMode /*List|Board*/ }, TicketDetail{ ticket: TicketRef },
+  Reviews{ scope: Scope }, ReviewDetail{ review: ReviewRef }, Inbox, WorkItem{ id: WorkItemId },
+  Settings{ section: Option<String> }, Diagnostics, Welcome, Empty }
+pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: bool, tab_title: Option<String>, work_item_id: Option<WorkItemId> }
+pub enum Placement { NewTab, SplitRight, SplitDown, ReplaceFocused, Focused /*focus existing pane with same content if any*/ }
+```
+
+- Window = ProjectRail (Inbox, open projects, Home, "+") + active project workspace (TabBar + LayoutNode tree) + StatusBar.
+- Only the active project workspace is mounted. A session is shown in **at most one pane**; opening it elsewhere moves it.
+- Layout is saved by the UI via `layout_save` debounced 500 ms after a change (timer exists only while dirty) with optimistic `rev` (stale rev → `Conflict`, UI refetches).
+- Project switch never touches processes; detached xterm instances go to the LRU (§9.4).
+
+---
+
+## 6. IPC command catalogue (Tauri commands)
+
+Conventions: every command is `async`, takes one argument object (TS: `invoke('<name>', { ... })`), returns `Result<T, KeltaError>`. TS wrappers in `ui/src/lib/ipc/commands.ts` (scaffold, generated names + typed signatures), mocks in `ui/src/lib/ipc/mock.ts`. Binary payloads (`session_write` data, frames) use `Uint8Array` / `tauri::ipc::Response` / `Channel<InvokeResponseBody>`.
+
+| Command | Args | Returns | Owner file |
+|---|---|---|---|
+| **app** | | | `commands/app.rs` (L3) |
+| `app_info` | `{}` | `AppInfo{version, platform, arch, data_dir, config_dir, runtime_dir, claude: Option<ToolVersion>, safe_graphics: bool}` | |
+| `app_ready` | `{t_ms: f64}` | `()` (clears launch crash guard; bench mark) | |
+| `events_subscribe` | `{channel: Channel<UiEvent>}` | `{sub_id: u64}` (one per window) | |
+| `open_external` | `{url: String}` (http/https/mailto only) | `()` | |
+| `perf_snapshot` | `{}` | `PerfSnapshot{processes: Vec<ProcMem{pid, name, role: Core|WebContent|Network|Gpu|Child, pss_or_footprint_kb}>, sessions: Vec<SessionMem>, live_views: u32, timers_armed: u32, http_server: bool}` | |
+| `diagnostics_run` | `{}` | `Diagnostics{checks: Vec<Check{id, label, status: Ok|Warn|Fail, detail, fix: Option<String>}>}` | `commands/diagnostics.rs` (L10) |
+| `clipboard_read` | `{kind: Clipboard|Primary}` | `String` | `commands/clipboard.rs` (L3) |
+| `clipboard_write` | `{kind, text}` | `()` | `commands/clipboard.rs` (L3) |
+| `notify_test` | `{}` | `()` | `commands/app.rs` (L3) |
+| **settings** | | | `commands/settings.rs` (L4) |
+| `settings_schema` | `{}` | `serde_json::Value` (flattened JSON Schema incl. `plugins.<id>`) | |
+| `settings_effective` | `{project_id?}` | `EffectiveSettings{value: Value, sources: BTreeMap<String /*dotted path*/, Layer>}` | |
+| `settings_layer_get` | `{layer: Layer, project_id?, repo_id?}` | `LayerDoc{path: PathBuf, value: Value, text: String, trusted: Option<bool>}` | |
+| `settings_set` | `{layer, project_id?, repo_id?, path: String, value: Value}` | `EffectiveSettings` | |
+| `settings_reset` | `{layer, project_id?, repo_id?, path}` | `EffectiveSettings` | |
+| `settings_validate` | `{layer, text: String}` | `Vec<ValidationIssue{path, message, line?, col?}>` | |
+| `settings_write_raw` | `{layer, project_id?, repo_id?, text}` | `EffectiveSettings` (validate first; refuse on error) | |
+| `settings_open_file` | `{layer, project_id?, repo_id?}` | `SessionInfo` (opens `$EDITOR`/nvim pane on the file) | |
+| `repo_trust` | `{project_id, repo_id, trust: bool}` | `TrustInfo{path, hash, trusted}` | |
+| `secret_set` | `{secret_ref: String, value: String}` | `()` (value never echoed/logged) | `commands/secrets.rs` (L4) |
+| `secret_delete` | `{secret_ref}` | `()` | |
+| `secret_backends_status` | `{}` | `Vec<SecretBackendStatus{backend, available, detail}>` | |
+| `account_test` | `{account_id}` | `AccountTestResult{ok, user: Option<User>, error: Option<KeltaError>}` | `commands/settings.rs` (L4) via CoreApi |
+| **projects** | | | `commands/project.rs` (L3) |
+| `project_list` | `{}` | `Vec<ProjectInfo>` | |
+| `project_detect` | `{path}` | `ProjectDraft{suggested_id, name, repos, code_host_hints, tracker_hints}` | |
+| `project_create` | `{draft: ProjectDraft}` | `ProjectInfo` (writes `projects/<id>.toml` through kelta-config) | |
+| `project_update` | `{id, patch: ProjectPatch}` | `ProjectInfo` | |
+| `project_remove` | `{id, kill_sessions: bool}` | `()` (config file moved to `projects/.trash/`) | |
+| `project_open` | `{id}` / `project_close` `{id, kill_sessions}` / `project_activate` `{id}` | `ProjectInfo` | |
+| `project_reorder` | `{ids: Vec<ProjectId>}` | `()` | |
+| **layout** | | | `commands/layout.rs` (L3) |
+| `layout_get` | `{project_id}` | `Layout` | |
+| `layout_save` | `{layout: Layout}` | `{rev: u64}` | |
+| **sessions** | | | `commands/session.rs` (L3) |
+| `session_spawn` | `{req: SpawnRequest}` | `SessionInfo` | |
+| `session_spawn_template` | `{project_id, template_id, ctx: TemplateCtx, placement: Placement}` | `Vec<SessionInfo>` (+ layout update event) | |
+| `session_attach` | `{id, cols, rows, channel: Channel<InvokeResponseBody>}` | `AttachInfo` — spawns Dormant sessions (lazy restore) | |
+| `session_detach` | `{id, generation}` | `()` | |
+| `session_write` | `{id, data: Uint8Array}` | `()` (fire-and-forget from UI) | |
+| `session_resize` | `{id, cols, rows}` | `()` | |
+| `session_ack` | `{id, generation, bytes: u32}` | `()` | |
+| `session_kill` | `{id, force: bool}` | `()` | |
+| `session_restart` | `{id}` | `SessionInfo` | |
+| `session_rename` | `{id, name}` | `SessionInfo` | |
+| `session_list` | `{project_id?}` | `Vec<SessionInfo>` | |
+| `session_mark_seen` | `{id}` | `()` | |
+| `session_link` | `{id, work_item_id?: WorkItemId, ticket?: TicketRef}` | `SessionInfo` | |
+| `session_text_tail` | `{id, max_lines}` | `String` | |
+| `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
+| **tickets** | | | `commands/tracker.rs` (L3) |
+| `tracker_list` | `{scope, view_id?, cursor?: Cursor, refresh: bool}` | `TicketPage{items: Vec<TicketItem{ticket, project_ids, work_item_id?}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
+| `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` | |
+| `tracker_columns` | `{project_id}` | `Vec<Column>` | |
+| `tracker_transitions` | `{ticket}` | `Vec<Transition>` | |
+| `tracker_transition` | `{ticket, transition_id, fields?: Value}` | `Ticket` (`NeedsFields` error carries `detail.fields`) | |
+| `tracker_move` | `{ticket, column_id}` | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
+| `tracker_comment` | `{ticket, markdown}` | `()` | |
+| `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
+| `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette) | |
+| **reviews** | | | `commands/review.rs` (L3) |
+| `review_list` | `{scope, kind: ReviewKind, refresh: bool}` | `ReviewPage{items: Vec<ReviewItem{review, project_ids}>, stale, errors}` | |
+| `review_get` | `{review: ReviewRef}` | `ReviewDetail` | |
+| `review_approve` | `{review, head_sha}` | `()` (`Conflict` if head moved) | |
+| `review_comment` | `{review, body}` | `()` | |
+| `review_request_changes` | `{review, body}` | `()` | |
+| **work** | | | `commands/work.rs` (L6) |
+| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name}*/}` | `StartWorkPlan` (§SPEC 3.1) | |
+| `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
+| `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
+| `work_resume` | `{id}` | `WorkItem` | |
+| `work_retry_step` | `{id, step}` | `WorkItem` | |
+| `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
+| `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
+| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
+| `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
+| `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
+| **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
+| `tool_list` | `{project_id}` | `Vec<ToolInfo{id, label, icon, kind: Pty|Web, installed: Option<bool>, source: Layer|Plugin}>` | |
+| `tool_check` | `{tool_id}` | `ToolCheck{installed, version?, install_hint?}` | |
+| `tool_open` | `{project_id, tool_id, ctx: TemplateCtx, placement}` | `ToolHandle /*Pty{session_id}|Web{instance_id, url, embed: EmbedMode}*/` | |
+| `tool_close` | `{instance_id}` | `()` | |
+| `plugin_list` | `{}` | `Vec<PluginInfo{id, name, version, enabled, permissions, granted, problems}>` | |
+| `plugin_inspect` | `{source: String /*dir|git url|tar path*/}` | `PluginInstallPreview{manifest, permissions, sha256, warnings}` | |
+| `plugin_install` | `{source, sha256, grant: Vec<String>}` | `PluginInfo` | |
+| `plugin_uninstall` / `plugin_enable` | `{id}` / `{id, enabled}` | `()` | |
+| `plugin_grant` | `{id, permissions: Vec<String>}` | `PluginInfo` | |
+| `plugin_screen_open` | `{plugin_id, screen_id, project_id?, params}` | `{instance_id, url}` | |
+| `plugin_screen_close` | `{instance_id}` | `()` | |
+| `plugin_call` | `{instance_id, method: PluginMethod, params: Value}` | `Value` (permission-gated, §11.3) | |
+| `command_run` | `{command_id, ctx: TemplateCtx}` | `()` (plugin/config `commands`) | |
+| `trigger_list` | `{project_id?}` | `Vec<TriggerInfo{id, origin, on, enabled}>` | |
+| `trigger_test` | `{trigger_id, payload: Value}` | `TriggerRun` | |
+| `trigger_log` | `{limit}` | `Vec<TriggerRun{ts, trigger_id, event, ok, detail, depth}>` | |
+
+### 6.1 Terminal channel frames (`session_attach` channel)
+
+First byte = tag. Little-endian.
+
+| Tag | Name | Payload | UI action |
+|---|---|---|---|
+| `0x01` | Data | raw PTY bytes | `term.write(bytes, () => ack(n))` |
+| `0x02` | Snapshot | ANSI repaint (§9.3) | `term.reset()` then write, ack |
+| `0x03` | Exit | `i32` code (`-1` = signal) | show exit banner |
+
+Acks are batched per animation frame (`session_ack` with summed bytes). A frame of a stale `generation` is ignored by the UI; a stale ack is ignored by Rust.
+
+### 6.2 UiEvent (single `Channel<UiEvent>`; serde tag `type`)
+
+```ts
+type UiEvent =
+ | {type:'session.updated', session: SessionInfo}
+ | {type:'session.removed', id: SessionId}
+ | {type:'attention.changed', project_id: ProjectId, level: Attention, needs_input_count: number, total_needs_input: number}
+ | {type:'project.updated', project: ProjectInfo} | {type:'project.removed', id: ProjectId}
+ | {type:'layout.changed', project_id: ProjectId, layout: Layout}            // only for backend-initiated changes
+ | {type:'tickets.changed', scope: Scope} | {type:'reviews.changed', scope: Scope, new_keys: ReviewRef[]}
+ | {type:'work.updated', work: WorkItem}
+ | {type:'settings.changed', layers: Layer[], paths: string[], requires_restart: string[]}
+ | {type:'account.status', account_id: AccountId, status: 'ok'|'needs_auth'|'rate_limited'|'offline'|'error', detail?: string}
+ | {type:'toast', toast: Toast /*{level:'info'|'warn'|'error', text, action?: {label, command: ActionId|string, args?}}*/}
+ | {type:'plugin.event', instance_id: ScreenInstanceId, name: string, payload: unknown}   // relayed bus events granted to a screen
+ | {type:'ctl.command', cmd: CtlCommand}                                                    // toggle, palette, focus-project…
+ | {type:'ui.open', request: OpenPaneRequest, project_id: ProjectId}                       // backend asks UI to open a pane
+```
+
+### 6.3 Internal bus (`BusEvent`) — catalogue in PLUGINS.md §6
+
+`BusEvent { name: String, ts: String, project_id: Option<ProjectId>, session_id: Option<SessionId>, work_item_id: Option<WorkItemId>, payload: Value, chain: TriggerChain{depth: u8, origin_triggers: Vec<String>} }` on a `tokio::sync::broadcast` (capacity 1024; lagged subscribers get a `lagged` marker and resync).
+
+---
+
+## 7. Session / PTY lifecycle
+
+### 7.1 Login environment (once per app start, background)
+
+1. `$SHELL` (fallback `/bin/zsh` macOS, `/bin/bash` Linux). Run `$SHELL -l -i -c '<probe>'` where probe prints `\0__KELTA_ENV_BEGIN__\0`, then `env -0`, then `\0__KELTA_ENV_END__\0` (external `env`, `printf` works in sh/zsh/bash/fish; nushell gets `^env -0`). stdin `/dev/null`, no controlling tty, timeout 3 s.
+2. On failure: retry `$SHELL -l -c`; then macOS `/usr/libexec/path_helper -s` + inherited env; Linux inherited env.
+3. Parse only between sentinels (rc files may print noise). Cache in memory (`LoginEnv`); `diagnostics_run` shows the source.
+
+### 7.2 Spawn
+
+- `program` resolved with `which::which_in(program, LoginEnv.PATH, cwd)` → absolute path; missing → `NotFound` with install hint (tools) or onboarding link (claude/nvim).
+- Plain shells: `$SHELL` with `-l` (login). Programs: exec'd directly (no shell wrapper).
+- Env = LoginEnv ⊕ settings `terminal.env` ⊕ project `env` ⊕ request env ⊕ Kelta vars: `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=kelta`, `TERM_PROGRAM_VERSION`, `KELTA_SESSION_ID`, `KELTA_PROJECT_ID`, `KELTA_SOCK=<runtime>/ctl.sock`, `KELTA_HOOK_TOKEN` (per-session 128-bit hex), `KELTA_TICKET` (if linked), `KELTA_MCP_TOKEN` (Claude only). `TERMINFO`/`LANG` passthrough; if `LANG` unset → `en_US.UTF-8`.
+- New session + process group (`setsid`), controlling tty = PTY. Kill = signal to the process group.
+
+### 7.3 Reader loop (L1, per session thread)
+
+```
+loop:
+  timeout = processor.sync_timeout() deadline (DEC 2026) or infinite
+  poll(master_fd, POLLIN, timeout)
+  if timeout fired: processor.stop_sync(&mut term)        // flush synchronized-update buffer
+  n = read(master, buf[64 KiB])  (EIO/0 → exit path)
+  lock(term); processor.advance(&mut term, &buf[..n]); collect Term events; unlock
+  Term events: PtyWrite(reply) → master.write (query responses), ColorRequest → palette reply,
+               Title/ResetTitle, Bell, ClipboardStore/Load, (OSC 7 cwd and OSC 9/777 via a pre-scan of the chunk)
+  if attached view and !paused: if inflight < HIGH(256 KiB) send Data frame, inflight += n
+                                 else paused = true (keep parsing, drop bytes for view)
+  scrollback accounting → memory budget (§9.5)
+exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
+```
+- `ack(gen, n)`: `inflight -= n`; if `paused && inflight < LOW(64 KiB)` → send Snapshot, `paused = false`.
+- **Ack watchdog:** while `inflight > 0`, a one-shot 5 s deadline; expiry emits `TerminalEvent::AckTimeout` → core considers the webview hung (§12.4). Disarmed when `inflight == 0`.
+- The child is never blocked by a slow view.
+- Input: `write()` on the master fd from the IPC thread (non-blocking fd; EAGAIN → per-session queue drained by the reader on POLLOUT).
+- Resize: model `Term::resize` then `master.resize` (TIOCSWINSZ → SIGWINCH). Hidden sessions keep their size. On attach with a different size: resize first, then snapshot (after reflow).
+
+### 7.4 Query responder (single responder = Rust model)
+
+- Model answers: DA1 (`CSI c`), DA2 (`CSI > c`), DSR 5/6 (`CSI n`), DECRQM (`CSI ? Ps $ p`), OSC 4/10/11/12 `?` (from the palette pushed by `terminal_set_palette`, re-pushed on theme change), plus anything else alacritty_terminal 0.26 answers. L1 records the exact answered set in `docs/contracts/terminal-queries.md` (L1-owned file) with tests.
+- xterm.js swallows exactly that set via `term.parser.registerCsiHandler` / `registerOscHandler` returning `true` (constant list in `ui/src/lib/gen/terminal_queries.ts`, generated from `kelta_proto::term::SWALLOWED_QUERIES`). Queries the model does not answer (e.g. XTVERSION if unsupported) are **not** swallowed.
+- Kitty: model `kitty_keyboard = false` (D7) — it ignores `CSI > u` pushes and does not answer `CSI ? u`; apps fall back via DA1.
+
+### 7.5 Lifecycle and persistence
+
+| Event | Behaviour |
+|---|---|
+| Spawn | `Live`, status `Starting` → `Running` on first output. |
+| Pane hidden / project switch / UI reload / webview crash | Session keeps running; view re-attaches with Snapshot. |
+| Window closed, `close_behavior=background` | Webview destroyed; sessions run; attention → dock badge / notifications. |
+| Process exit | `Exited{code}`; `close_on_exit` applies; else banner "Exited (code) — Enter restart, x close". |
+| App quit | Confirm if any Claude session is `Working`/`NeedsInput`. nvim sessions get RPC `:wall \| mksession! <data>/sessions/<sid>.vim`. All persisted as `Dormant` with `RestorePolicy`; SIGHUP → 2 s → SIGKILL. |
+| Next start | Layout restored; `Dormant` sessions spawn **when their pane is first attached** (`app.restore_mode = lazy`; `eager`, `none` available): Claude `claude --resume <uuid>` (fallback `--continue` if resume is refused), nvim `-S <file> --listen <sock>`, shell in last OSC 7 cwd, tools relaunched. A dimmed "restored" separator shows the persisted text tail (≤ 200 lines, `sessions.text_tail`). |
+
+### 7.6 Claude status machine (pure fn in kelta-server `hooks::map`)
+
+| Hook (`hook_event_name` / `notification_type`) | Status | Attention |
+|---|---|---|
+| SessionStart | Running (hooks_active = true) | — |
+| UserPromptSubmit | Working | Activity |
+| PermissionRequest; Notification `permission_prompt` \| `elicitation_dialog` \| `agent_needs_input` | NeedsInput | NeedsInput |
+| Notification `idle_prompt` | WaitingUser | NeedsInput if unseen |
+| Stop | Done (preview = `last_assistant_message`, 200 chars) | Done if pane not visible |
+| StopFailure | Error | Error |
+| SessionEnd / PTY exit | Exited | — |
+| PostToolUse `Edit\|Write\|MultiEdit` | unchanged; `file_edited = tool_input.file_path` → bus `claude.file_edited` | — |
+
+**Hooks-inactive fallback:** no SessionStart within 10 s of spawn (one-shot) → `hooks_active=false`, status source `Heuristic`: output → Working; BEL / OSC 9 / OSC 777 → NeedsInput; 3 s quiet after output (one-shot armed only by output) → Done. Pane header shows "status hooks inactive · Fix" → Diagnostics.
+
+---
+
+## 8. Integrations
+
+### 8.1 Tracker trait
+
+```rust
+#[async_trait] pub trait Tracker: Send + Sync {
+  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues
+  fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
+  async fn me(&self) -> Result<User, KeltaError>;
+  async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
+  async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError>;  // body_md + body_html (sanitized), last 20 comments
+  async fn columns(&self, b: &TrackerBinding) -> Result<Vec<Column>, KeltaError>;
+  async fn transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError>;
+  async fn transition(&self, t: &TicketRef, transition_id: &str, fields: Option<Value>) -> Result<Ticket, KeltaError>;
+  async fn comment(&self, t: &TicketRef, markdown: &str) -> Result<(), KeltaError>;
+  async fn assign(&self, t: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError>;
+  fn browser_url(&self, t: &TicketRef) -> String;
+  fn branch_key(&self, t: &TicketRef) -> String;       // "SHOP-123" | "4567" | "gh-12" | "gl-12"
+}
+pub struct TicketRef { account: AccountId, key: String, id: String }
+pub struct Ticket { r#ref: TicketRef, title, url, status: Status, kind: Option<String>, assignee: Option<User>,
+  labels: Vec<String>, priority: Option<String>, updated_at: String, project_hint: Option<String> }
+pub struct TicketDetail { ticket: Ticket, body_md: String, body_html: String, body_format: BodyFormat /*Adf|JiraWiki|Textile|Markdown*/,
+  comments: Vec<Comment{author, created_at, body_html}>, parent: Option<TicketRef> }
+pub struct Status { id, name, category: StatusCategory /*Todo|InProgress|InReview|Done|Unknown*/ }
+pub struct Transition { id, name, to: Status, needs_fields: bool }
+pub struct Column { id, name, category: StatusCategory, order: u32, match_names: Vec<String> }
+pub enum Cursor { Offset(u32), Token(String), Page(u32), After(String) }
+pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
+```
+
+| Provider (v0.1) | Auth | List | Move |
+|---|---|---|---|
+| Jira Cloud | Basic `email:api_token` | `POST /rest/api/3/search/jql` with explicit `fields`, `nextPageToken: null` first; stop on missing token **or** empty page, cap 20 pages | `GET`/`POST …/transitions`; match `to.statusCategory.key` or name; never hard-code ids; 400 `errors` → `NeedsFields` |
+| Jira DC/Server | Bearer PAT | `POST /rest/api/2/search` (`startAt`) | same, v2; assign by `name` |
+| Flavor | `GET /rest/api/2/serverInfo` → `deploymentType`, cached per account | | |
+| Redmine | `X-Redmine-API-Key` header | `/issues.json?assigned_to_id=me&status_id=open&sort=updated_on:desc&limit=100` (+ `project_id`, `query_id`) | `PUT /issues/{id}.json {issue:{status_id}}` restricted to `include=allowed_statuses`; 422 surfaced; poll ≥ 60 s |
+| GitHub Issues | gh-cli / keyring PAT / env | `GET /issues?filter=assigned&state=open` (drop items with `pull_request`) or per-repo; ETag | no project: open/closed; Projects v2: Status single-select field/option ids resolved **by name** at runtime, cached; `updateProjectV2ItemFieldValue` |
+| GitLab Issues | `PRIVATE-TOKEN` (keyring/glab-cli/env/command) | `/api/v4/issues?scope=assigned_to_me&state=opened` or `/projects/:id/issues` | scoped labels `<scope>::<value>` (default `workflow`): `PUT add_labels` + explicit `remove_labels` of same-scope labels; Done = `state_event=close` |
+
+ADF → Markdown: tolerant recursive walker (unknown nodes render children, never fail). Comments to Jira Cloud = ADF paragraphs (one per line). Redmine Textile shown preformatted unless account `text_format = "markdown"`. Linear: v0.2.
+
+### 8.2 CodeHost trait
+
+```rust
+#[async_trait] pub trait CodeHost: Send + Sync {
+  fn kind(&self) -> CodeHostKind;                      // Github | Gitlab
+  async fn me(&self) -> Result<User, KeltaError>;
+  async fn changed_since_last(&self) -> Result<bool, KeltaError>;  // cheap gate; default Ok(true)
+  async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;  // kind + include_team + include_drafts
+  async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
+  async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
+  async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+  async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+  async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
+  async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
+  fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:…
+  fn repo_from_remote(&self, url: &str) -> Option<String>;
+}
+pub struct ReviewRef { account: AccountId, repo: String, number: u64 }
+pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, source_branch, target_branch,
+  ci: CiState /*Success|Failure|Pending|Error|None*/, decision: Option<ReviewDecision /*Approved|ChangesRequested|ReviewRequired*/>,
+  my_state: Option<MyReviewState /*Pending|Approved|ChangesRequested|Commented*/>, mergeable: Option<bool>,
+  labels: Vec<String>, kind: ReviewKind /*ReviewRequested|Authored*/, updated_at: String, linked_tickets: Vec<String>,
+  additions: Option<u32>, deletions: Option<u32> }
+```
+
+- GitHub: list = one GraphQL request with aliased searches `is:pr is:open review-requested:@me archived:false` (`user-review-requested:@me` if `reviews.include_team_requests=false`) and `is:pr is:open author:@me`; small nested `first:`. Gate: `GET /notifications?participating=true` + `If-None-Match` only for classic/gh tokens (fine-grained → no gate). Actions REST: `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`. GHE via `base_url`.
+- GitLab: `GET /merge_requests?scope=all&state=opened&reviewer_username=<me>` and `scope=created_by_me`, `updated_after`; `draft=` if `/version` ≥ 16 else `wip=`; approve `POST …/approve {sha}` (409 → `Conflict`); request changes = note (+ optional unapprove). Gate: `/todos?state=pending&action=review_requested` count+max id.
+- `linked_tickets`: regex `reviews.ticket_key_regex` over branch + title.
+
+### 8.3 HttpCtx (kelta-http)
+
+One shared `reqwest::Client` (20 s timeout, pool idle 30 s, UA `kelta/<ver>`). Per-account `HttpCtx`: semaphore (4 concurrent), honours `Retry-After`, `x-ratelimit-*`, `RateLimit-*`, `X-RateLimit-*`; exponential backoff with jitter (max 10 min; secondary limit without header ≥ 60 s); ETag LRU (256, exact URL); 401 → `NeedsAuth` (account paused, banner); offline → `Network` (scheduler pauses the account until focus/manual refresh).
+
+### 8.4 Scheduler, aggregation, caches (kelta-core)
+
+- One task, `BinaryHeap<(Instant, SubscriptionKey)>`; `SubscriptionKey = (AccountId, QueryKey)`. Subscriptions exist only while (a) a visible pane needs that query, or (b) a notification rule needs it (`notifications.review_requested`, `ci_failed_mine` → review subscriptions of open projects + unbound accounts). Identical queries across projects share one subscription.
+- Interval: `polling.focused_secs` (focused) / `polling.background_secs` (unfocused; 0 = off) / off when window closed unless `polling.when_closed = "background"`; ±10 % jitter; floor `polling.min_secs` (Redmine 60).
+- Refresh triggers: view open, project switch, window focus when data older than focused interval, after any write, manual (`R`).
+- Startup renders from `provider_cache` (SQLite) — no network before first paint.
+- Aggregation: `Scope::All` fans out over accounts referenced by open projects **plus all configured accounts** for reviews; de-dup by ref; items tagged with matching project ids; unmatched → `project_ids = []` (UI "Other" group).
+- `seen_reviews(account, repo, number, head_sha, first_seen)`: first poll after start/account creation fills silently; new key (or new head after my review) → `pr.review_requested`.
+
+---
+
+## 9. Terminal frontend contract (L2)
+
+### 9.1 View pool
+- `TerminalView` = one xterm instance bound to one session. Pool keyed by session id; capacity `terminal.max_live_views` (default 4, min 1, max 12) **plus** currently visible panes. Hidden views beyond capacity: `dispose()` + `session_detach` (LRU).
+- Re-show of a pooled view: no snapshot needed (still attached). Re-show of a disposed view: new xterm + `session_attach` → Snapshot.
+
+### 9.2 Rendering
+- `terminal.renderer`: `auto` (WebGL on macOS, DOM on Linux) | `webgl` | `dom`. WebGL addon is dynamically imported; `onContextLoss` → dispose + DOM; hard cap 8 concurrent WebGL contexts (others use DOM).
+- Linux first-run probe: 2 s rAF scroll test; if WebGL ≥ 55 fps and DOM < 45 fps, toast offers switching (result stored in SQLite, not settings).
+- Cursor blink only on the focused pane and only if `terminal.cursor_blink=true` (default false). No CSS animations at idle; spinners only while an operation is in flight; respects `prefers-reduced-motion`.
+
+### 9.3 Snapshot encoder (L1) — required coverage (golden-tested with recorded nvim, Claude, lazygit, htop streams)
+Alt-screen state with main scrollback (`?1049`), last N history lines (`terminal.view_scrollback`, default 1000), visible grid with SGR runs incl. colon underline styles (`4:3` undercurl), underline colour (`58`), truecolor/256, OSC 8 hyperlinks, wide + combining chars, DECSTBM + origin mode, saved cursor (DECSC), G0/G1 charsets (DEC line drawing), cursor position/shape (DECSCUSR)/visibility (`?25`), modes DECCKM (`?1`), DECKPAM, bracketed paste `?2004`, mouse `?1000/1002/1003` + encodings `?1005/1006/1015`, focus `?1004`, sync `?2026` (always emitted off), title (OSC 2), cwd (OSC 7). Budget: ≤ 150 KB and ≤ 15 ms for 200×60 + 1000 lines.
+
+### 9.4 Keyboard routing
+`attachCustomKeyEventHandler`: Kelta chords (from `keys.*`, matched on `KeyboardEvent.code` + modifiers) and the prefix key return `false` (consumed); everything else reaches xterm → `onData` → `session_write`. Per-kind remaps (`terminal.shift_enter`): Claude default `esc-cr` (`\x1b\r`), others `passthrough`. Never send unsolicited CSI-u. macOS `Option as Meta` via `macOptionIsMeta` (+ left/right-only handling in the key handler). Default webview shortcuts (reload, zoom, find, context menu) are disabled.
+
+### 9.5 Memory budget for scrollback (L1)
+Scrollback per kind (`terminal.scrollback`: shell 3000, claude 3000, editor 500, tool 500, setup 1000). Global cap `terminal.memory_cap_mb` (default 160): computed from `history_lines × cols × 24 B` per session, updated on line growth (counter, event-driven). On exceed: shrink history of least-recently-viewed sessions to 500 lines (never below), oldest first; emit toast once.
+
+---
+
+## 10. Storage (SQLite `<data>/kelta.db`, WAL, migrations in kelta-core)
+
+```
+schema_version(v)
+projects_open(project_id PK, ord, active)              -- open set + order; config lives in TOML
+layouts(project_id PK, json, rev, updated_at)
+sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)
+work_items(id PK, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base, claude_uuid, nvim_socket,
+           tab_id, pr_url, state_json, created_at, updated_at)
+work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, detail, updated_at, PK(work_item_id, step))
+seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
+provider_cache(key PK, etag, body_json, fetched_at)
+plugin_grants(plugin_id, permission, granted_at, manifest_sha256, PK(plugin_id, permission))
+plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- v0.2 consumers; table exists
+repo_trust(path PK, sha256, trusted_at)
+trigger_log(id PK, ts, trigger_id, event, ok, detail, depth)   -- capped 1000 rows
+ui_state(key PK, value)                                   -- webgl probe result, onboarding done, window geometry
+```
+All writes go through the single sqlite thread. Startup reads (open projects, layouts, provider_cache) happen before window creation.
+
+---
+
+## 11. Security model
+
+### 11.1 Local surfaces
+- ctl socket: 0600 in a 0700 dir owned by the user; peer uid must equal ours; hook frames must carry the session's `KELTA_HOOK_TOKEN` (constant-time compare). Other ctl commands are allowed for same-uid peers.
+- HTTP server: binds `127.0.0.1` only; `/mcp/<sid>` and `/hook/<sid>` require `Authorization: Bearer <per-session token>`; `/proxy/<instance>/…` requires an unguessable instance path segment (128-bit) and only proxies to the tool's own loopback origin; `Host` header must be `127.0.0.1:<port>` (DNS-rebinding guard).
+- Per-session runtime files 0600; never inside the worktree (no repo pollution).
+- Tokens, secrets and tokenized URLs (ISL) are never logged (`tracing` field redaction helper in proto).
+
+### 11.2 Webview
+- CSP (tauri.conf): `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src ipc: http://ipc.localhost; frame-src kelta-plugin: http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'none'; form-action 'none'`.
+- Tauri app manifest declares every command; capability `capabilities/main.json` grants them only to window label `main` and local origin; no `remote` URLs.
+- Ticket/PR HTML is sanitized in Rust (ammonia: no scripts, no styles, no iframes, links `rel=noopener` and opened via `open_external`).
+
+### 11.3 Plugins
+- Plugin screens: `<iframe sandbox="allow-scripts allow-forms">` (no `allow-same-origin`, no popups, no top-navigation) loading `kelta-plugin://<id>/<path>`; the scheme handler serves only canonicalized files inside the plugin dir and adds `Content-Security-Policy: default-src 'self' kelta-plugin://<id>; script-src kelta-plugin://<id>; style-src kelta-plugin://<id> 'unsafe-inline'; img-src kelta-plugin://<id> data:; connect-src 'none'; frame-ancestors 'self'`.
+- Bridge: host creates a `MessageChannel` per instance, transfers `port2` only after verifying `event.source === iframe.contentWindow`; every call → `plugin_call(instance_id, method, params)`; Rust checks the plugin's grants (SQLite) and the method's required permission (PLUGINS.md §4). `net:<host>` is enforced in Rust (`http_fetch`), exact host or `*.domain` glob, https only (http only for `127.0.0.1`/`localhost` when granted explicitly). Grants are re-prompted when a manifest update adds permissions.
+- **Security gate S1 (CI):** automated test that a sandboxed plugin iframe and a localhost tool iframe cannot reach `window.__TAURI_INTERNALS__`, `window.parent` DOM, or invoke any command, on WKWebView and WebKitGTK.
+- Declarative tools/triggers from repo-local `.kelta/config.toml` that execute anything (`command`, `run`, `setup`, `http`) are **inert until trusted**: trust = SHA-256 of the file content stored in `repo_trust`; any change → untrusted again (banner).
+- Trigger engine: recursion guard (depth ≤ 4, a trigger never re-fires within a chain it started), per-trigger rate limit (10 runs / 60 s), `send_keys` requires `allow_send_keys = true` on the trigger and is rate-limited (1 / 2 s per session).
+
+---
+
+## 12. Error handling
+
+### 12.1 Rust
+- Library crates: `thiserror` enums mapped into `KeltaError` at crate boundary; never `unwrap()` outside tests (clippy `unwrap_used = deny` in lib crates).
+- Panics: each PTY reader thread and each spawned task is wrapped (`catch_unwind` / `JoinHandle` supervision); a panic marks that session `Error` / account `error` and logs; never aborts the app.
+- Provider errors are per account: one failing account never empties an aggregated view (`errors: Vec<AccountError>` alongside items).
+- Work saga: each step journaled in `work_steps`; failure → `WorkState::Failed{step}` + toast with **Retry** / **Skip** / **Open in browser**; tracker side effects never roll back git work.
+
+### 12.2 UI
+- Every pane has explicit states: loading (skeleton only after 150 ms), empty (with the next action), error (message + retry + "Open settings"/"Open diagnostics" where relevant), stale (cached data + "updated 5 min ago").
+- Toasts for async failures; never modal except destructive confirmations (kill running Claude, force-remove worktree, uninstall plugin, quit with working sessions).
+
+### 12.3 Config errors
+Parse/validation error → keep last good config, toast `file:line:col message`, Settings shows the issue list. Startup with invalid global config → defaults + banner.
+
+### 12.4 Webview crash / hang
+- WebContent termination (Linux `web-process-terminated`, macOS `webViewWebContentProcessDidTerminate`) → reload; views re-attach.
+- `AckTimeout` on any session while the window is visible ⇒ hung UI ⇒ reload with `?safe=1` (plugin screens not auto-remounted) + toast "A plugin screen stopped responding and was closed".
+- **Launch crash guard (Linux):** `<data>/launch-guard` written in `pre_init`, removed on `app_ready`. If present at next launch → start once with `linux.graphics` safe profile + banner; twice → print `kelta --safe-graphics` and diagnostics hint to stderr.
+
+---
+
+## 13. Performance contract (hard)
+
+Reference workload `bench/fixtures/3p10s`: 3 open projects, 10 live sessions (3 `fake-claude`, 3 `nvim --clean`, 2 bash, 1 `tui-sim`, 1 lazygit-like `tui-sim --alt`), ~500 lines each, 4 visible panes, tickets + reviews lists loaded from fixtures, idle 30 s. Children are **excluded** from Kelta's numbers and reported separately.
+
+| Metric | Budget | Mechanism | Measurement (`kelta-bench`) |
+|---|---|---|---|
+| Idle footprint (core + WebKit helpers) | ≤ 220 MB macOS (sum `phys_footprint`), ≤ 250 MB Linux Mesa (sum PSS); NVIDIA proprietary: informational, +30 % allowed | §9.1 pool, bounded scrollback, Svelte, no web fonts, lazy chunks, lazy HTTP server, `M_ARENA_MAX=2`, WebKitGTK `CacheModel::DocumentViewer`, iframes destroyed when hidden | Linux `/proc/<pid>/smaps_rollup` Pss over kelta + `WebKit*` descendants; macOS `proc_pid_rusage(RUSAGE_INFO_V4).ri_phys_footprint` of kelta + `com.apple.WebKit.*` started after launch |
+| Core process alone | ≤ 60 MB | | same |
+| Marginal hidden session (500 lines) | ≤ 2 MB | alacritty lazy rows, no xterm | delta when +1 session |
+| Background mode (window closed) | ≤ 60 MB | webview destroyed | same probe |
+| Cold start → restored layout interactive | ≤ 400 ms macOS M1, ≤ 700 ms Linux | config + sqlite read before window; Dormant not spawned; caches render first; heavy views dynamic-imported | process start → `app_ready` (first rAF after mount), median of 5 |
+| Project switch → interactive | ≤ 50 ms warm (pooled), ≤ 120 ms cold (snapshot) | pool + snapshot | in-app marks |
+| Keydown → PTY write | ≤ 2 ms p99 macOS, ≤ 3 ms Linux | direct invoke, no batching | UI timestamp vs Rust write timestamp (bench build) |
+| Echo → painted | ≤ 1 frame p95 (WebGL), ≤ 2 frames (Linux DOM) | binary channel, one frame per read | `cat` echo probe + rAF |
+| Claude-like redraw (G2) | UI frame p95 ≤ 25 ms Linux DOM | flow control | `tui-sim --ink` full-screen redraw 30 Hz |
+| Flood `cat` 200 MB visible | UI frame < 50 ms throughout; webview mem delta < 30 MB; in-flight ≤ 256 KiB/session | ack watermark + snapshot catch-up | scenario `flood` |
+| Idle CPU | ≤ 0.2 % avg, ≤ 1 wakeup/s over 120 s unfocused | scheduler is sole timer owner; no JS intervals | `/proc/<pid>/task/*/status` ctxt switches, `ri_pkg_idle_wkups`; utime+stime |
+| Bundle | initial JS ≤ 200 KB gz; each lazy chunk ≤ 120 KB gz; dmg ≤ 20 MB; deb ≤ 15 MB | dynamic imports | `bench/bundle-size.mjs`, artifact sizes |
+
+**Enforcement lints (scaffold):** `clippy.toml` `disallowed-methods`: `tokio::time::interval`, `tokio::time::sleep` outside `kelta-core::scheduler` and tests, `std::thread::sleep`, `std::thread::spawn` outside `kelta-term::reader` and `kelta-core::store`; `scripts/check-no-timers.sh` fails on `setInterval` and recursive `requestAnimationFrame` in `ui/src` outside `ui/src/lib/terminal/raf.ts`.
+
+---
+
+## 14. Platform specifics (summary; details in SPEC.md §8)
+
+- Linux: Tauri → WebKitGTK `webkit2gtk-4.1` (GTK3). `pre_init` (before any GTK init, single-threaded): read `[linux.graphics]` with a minimal TOML parse; NVIDIA detect (`/proc/driver/nvidia/version` or `/sys/module/nvidia_drm`) → `WEBKIT_DISABLE_DMABUF_RENDERER=1` + `__NV_DISABLE_EXPLICIT_SYNC=1`; toggles for `WEBKIT_DISABLE_COMPOSITING_MODE`, `GDK_BACKEND=x11`; `--safe-graphics` sets all; never set `GTK_IM_MODULE`. `mallopt(M_ARENA_MAX, 2)`. app_id/WM_CLASS `dev.kelta.Kelta`. `window.decorations=auto`: `none` if `HYPRLAND_INSTANCE_SIGNATURE` or `SWAYSOCK`, else `native`. No in-app global shortcuts: `kelta-ctl toggle` bound in compositor; raise uses `XDG_ACTIVATION_TOKEN` when provided.
+- macOS: WKWebView, WebGL default, Cmd is the app modifier, custom app menu replaces Tauri's default (Cmd+W/H/M/Q intentional), dock badge = sessions needing input, window close → background mode by default, `/tmp/kelta-<uid>` runtime dir, Developer ID signing + notarization in release CI.
