@@ -92,7 +92,7 @@ export function slugify(text: string): string {
 
 /** Suggested id: `jira-acme` from the kind and the host of the base URL. */
 export function suggestId(kind: AccountKind, baseUrl: string, taken: readonly string[]): string {
-  let host = '';
+  let host: string;
   try {
     host =
       new URL(baseUrl).hostname.replace(/^(www|api|gitlab|github|redmine|jira)\./, '').split('.')[0] ?? '';

@@ -48,6 +48,7 @@
   function conflictsFor(next: Record<string, string[]>): BindingConflict[] {
     const reserved = findConflicts(next, RESERVED_CHORDS);
     const dups = duplicateChords(next);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local scratch set, not state
     const seen = new Set<string>();
     const out: BindingConflict[] = [];
     for (const c of [...reserved, ...dups]) {
