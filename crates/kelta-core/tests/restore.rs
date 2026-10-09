@@ -249,10 +249,19 @@ async fn kill_during_restore_leaves_no_session() {
     };
     {
         let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
-        let (attach, kill) = tokio::join!(
-            h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())),
-            h.core.session_kill(&id, false),
-        );
+        // park the sqlite thread so the restore's store lookup cannot complete before the kill
+        // (an idle store thread can answer before the attach future is first polled to Pending)
+        let (open_gate, gate) = std::sync::mpsc::channel::<()>();
+        h.core.store().exec("test gate", move |_| {
+            let _ = gate.recv();
+            Ok(())
+        });
+        let (attach, kill) =
+            tokio::join!(h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())), async {
+                let r = h.core.session_kill(&id, false).await;
+                drop(open_gate);
+                r
+            },);
         assert!(attach.is_err());
         kill.unwrap();
         assert!(h.core.session_list(None).is_empty());
