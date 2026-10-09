@@ -10,13 +10,16 @@ use crate::{Authed, HttpRequest};
 /// GraphQL answers `200` with an `errors` array: with no usable `data` the first error is mapped
 /// (`RATE_LIMITED` → `RateLimited`, `NOT_FOUND` → `NotFound`, `FORBIDDEN` → `PermissionDenied`,
 /// `INSUFFICIENT_SCOPES` → `PermissionDenied`, anything else → `Upstream`). Partial data with
-/// errors is returned as is.
+/// errors is returned as is, unless every top-level field is null.
 pub async fn graphql(auth: &Authed, url: &str, query: &str, variables: Value) -> Result<Value, KeltaError> {
     let req = HttpRequest::post(url).json(json!({ "query": query, "variables": variables }));
     let resp = auth.send_json::<Value>(req).await?.body;
     let data = resp.get("data").filter(|d| !d.is_null()).cloned();
     let errors = resp.get("errors").and_then(Value::as_array).filter(|e| !e.is_empty());
+    // A rejected mutation or hidden owner answers `{"x": null}` plus errors: that is a failure too.
+    let all_null = |d: &Value| d.as_object().is_some_and(|o| o.values().all(Value::is_null));
     match (data, errors) {
+        (Some(d), Some(errs)) if all_null(&d) => Err(map_graphql_error(&errs[0])),
         (Some(d), _) => Ok(d),
         (None, Some(errs)) => Err(map_graphql_error(&errs[0])),
         (None, None) => Err(KeltaError::upstream("graphql response without data")),

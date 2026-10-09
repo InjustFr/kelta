@@ -42,8 +42,17 @@ impl HttpClient {
     /// and no connection pooling, so the client arms no timer at all (tests that run under paused
     /// tokio time would otherwise see the clock auto-advance to reqwest's own timers).
     pub fn with_timeout(user_agent: &str, timeout: Option<Duration>) -> Self {
-        let mut b =
-            reqwest::Client::builder().user_agent(user_agent).pool_idle_timeout(Duration::from_secs(30));
+        let mut b = reqwest::Client::builder()
+            .user_agent(user_agent)
+            .pool_idle_timeout(Duration::from_secs(30))
+            // reqwest strips only Authorization on cross-host redirects, not PRIVATE-TOKEN etc.
+            .redirect(reqwest::redirect::Policy::custom(|a| {
+                if a.previous().last().is_some_and(|p| p.host_str() == a.url().host_str()) {
+                    a.follow()
+                } else {
+                    a.stop()
+                }
+            }));
         match timeout {
             Some(t) => b = b.timeout(t),
             None => b = b.pool_max_idle_per_host(0),

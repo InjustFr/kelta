@@ -16,17 +16,16 @@ fn gh(server: &MockServer) -> std::sync::Arc<dyn kelta_proto::api::CodeHost> {
 }
 
 #[tokio::test]
-async fn one_graphql_request_with_aliased_searches() {
+async fn one_graphql_request_with_only_the_requested_alias() {
     let server = MockServer::start().await;
     mount(&server, "POST", "/graphql", 200, "github/gql_list.json").await;
     let h = gh(&server);
     let list = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
     let reqs = bodies(&server, "POST", "/graphql").await;
-    assert_eq!(reqs.len(), 1, "one request for both searches");
+    assert_eq!(reqs.len(), 1, "one request per kind");
     let q = reqs[0]["query"].as_str().unwrap();
-    assert!(q.contains("reviewRequested: search") && q.contains("authored: search"));
-    assert_eq!(reqs[0]["variables"]["rr"], "is:pr is:open review-requested:@me archived:false draft:false");
-    assert_eq!(reqs[0]["variables"]["au"], "is:pr is:open author:@me archived:false draft:false");
+    assert!(q.contains("reviewRequested: search") && !q.contains("authored: search"));
+    assert_eq!(reqs[0]["variables"]["s"], "is:pr is:open review-requested:@me archived:false draft:false");
 
     assert_eq!(
         list.iter().map(|r| r.r#ref.number).collect::<Vec<_>>(),
@@ -60,7 +59,7 @@ async fn direct_requests_only_and_drafts_on_demand() {
     let list = h.list_reviews(&query(ReviewKind::ReviewRequested, false, true)).await.unwrap();
     assert_eq!(list.iter().map(|r| r.r#ref.number).collect::<Vec<_>>(), vec![101, 102, 103]);
     let v = &bodies(&server, "POST", "/graphql").await[0]["variables"];
-    assert_eq!(v["rr"], "is:pr is:open user-review-requested:@me archived:false");
+    assert_eq!(v["s"], "is:pr is:open user-review-requested:@me archived:false");
 }
 
 #[tokio::test]
@@ -134,6 +133,12 @@ async fn notifications_gate_uses_etag_and_honours_poll_interval_for_classic_toke
     assert!(h.changed_since_last().await.unwrap(), "first poll: nothing cached, so changed");
     assert_eq!(count(&server, "GET", "/notifications").await, 1);
 
+    // the follow-up list has not succeeded yet: the change stays pending, still no request
+    assert!(h.changed_since_last().await.unwrap());
+    assert_eq!(count(&server, "GET", "/notifications").await, 1);
+    mount(&server, "POST", "/graphql", 200, "github/gql_list.json").await;
+    h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+
     // within X-Poll-Interval: no request at all
     tokio::time::advance(Duration::from_secs(30)).await;
     assert!(!h.changed_since_last().await.unwrap());
@@ -143,7 +148,13 @@ async fn notifications_gate_uses_etag_and_honours_poll_interval_for_classic_toke
     tokio::time::advance(Duration::from_secs(31)).await;
     assert!(!h.changed_since_last().await.unwrap());
     assert_eq!(count(&server, "GET", "/notifications").await, 2);
-    let reqs = server.received_requests().await.unwrap();
+    let reqs: Vec<_> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.url.path() == "/notifications")
+        .collect();
     assert_eq!(reqs[1].headers.get("if-none-match").unwrap().to_str().unwrap(), "\"n1\"");
 }
 

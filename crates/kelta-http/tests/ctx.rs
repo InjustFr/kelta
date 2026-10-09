@@ -303,3 +303,17 @@ async fn a_304_for_a_caller_supplied_validator_is_reported_as_unchanged() {
     assert_eq!(r.status, 304);
     assert!(r.body.is_empty());
 }
+
+#[tokio::test]
+async fn cross_host_redirect_is_not_followed() {
+    let (a, b) = (MockServer::start().await, MockServer::start().await);
+    Mock::given(path("/x"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", format!("{}/y", b.uri())))
+        .mount(&a)
+        .await;
+    // 127.0.0.1 vs localhost: same IP, different host string
+    let from = a.uri().replace("127.0.0.1", "localhost");
+    let r = ctx().send_text(HttpRequest::get(format!("{from}/x")).header("PRIVATE-TOKEN", "t")).await;
+    assert!(r.is_err());
+    assert!(b.received_requests().await.unwrap().is_empty());
+}

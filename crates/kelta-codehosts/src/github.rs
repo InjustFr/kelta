@@ -29,10 +29,7 @@ use crate::common::{host_matches, linked_tickets, parse_remote, s, user};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
-const LIST_QUERY: &str = "query($rr:String!,$au:String!){ viewer{ login } \
-reviewRequested: search(query:$rr, type:ISSUE, first:50){ nodes{ ...Pr } } \
-authored: search(query:$au, type:ISSUE, first:50){ nodes{ ...Pr } } } \
-fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
+const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state author{ login } } } }";
@@ -43,6 +40,8 @@ struct Gate {
     disabled: bool,
     last_poll: Option<Instant>,
     interval: Option<Duration>,
+    /// A poll reported a change that no successful `list_reviews` has consumed yet.
+    pending: bool,
 }
 
 pub struct GithubHost {
@@ -339,6 +338,9 @@ impl CodeHost for GithubHost {
                 return Ok(true);
             }
             // X-Poll-Interval: asking earlier than the server allows is both rude and pointless.
+            if g.pending {
+                return Ok(true);
+            }
             if let (Some(last), Some(iv)) = (g.last_poll, g.interval)
                 && Instant::now() < last + iv
             {
@@ -359,6 +361,7 @@ impl CodeHost for GithubHost {
                 let mut g = self.gate.lock();
                 g.last_poll = Some(Instant::now());
                 g.interval = Some(interval);
+                g.pending = !resp.not_modified;
                 Ok(!resp.not_modified)
             }
             // Classic token without the `notifications` scope, or a server without the endpoint.
@@ -373,16 +376,22 @@ impl CodeHost for GithubHost {
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
         let draft = if q.include_drafts { "" } else { " draft:false" };
         let requested = if q.include_team { "review-requested:@me" } else { "user-review-requested:@me" };
-        let vars = json!({
-            "rr": format!("is:pr is:open {requested} archived:false{draft}"),
-            "au": format!("is:pr is:open author:@me archived:false{draft}"),
-        });
-        let data = graphql(&self.auth, &self.graphql, LIST_QUERY, vars).await?;
-        let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("").to_owned();
-        let (alias, kind) = match q.kind {
-            ReviewKind::ReviewRequested => ("reviewRequested", ReviewKind::ReviewRequested),
-            ReviewKind::Authored => ("authored", ReviewKind::Authored),
+        let (alias, kind, search) = match q.kind {
+            ReviewKind::ReviewRequested => (
+                "reviewRequested",
+                ReviewKind::ReviewRequested,
+                format!("is:pr is:open {requested} archived:false{draft}"),
+            ),
+            ReviewKind::Authored => {
+                ("authored", ReviewKind::Authored, format!("is:pr is:open author:@me archived:false{draft}"))
+            }
         };
+        let query = format!(
+            "query($s:String!){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }} }} {PR_FRAGMENT}"
+        );
+        let data = graphql(&self.auth, &self.graphql, &query, json!({ "s": search })).await?;
+        self.gate.lock().pending = false;
+        let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("").to_owned();
         let nodes =
             data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
         Ok(nodes

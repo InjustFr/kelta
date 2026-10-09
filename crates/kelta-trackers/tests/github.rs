@@ -363,3 +363,22 @@ async fn keys_and_caps() {
     let real = tracker("github-work", "github", "https://api.github.com", json!({}));
     assert_eq!(real.browser_url(&r()), "https://github.com/acme/shop/issues/12");
 }
+
+#[tokio::test]
+async fn rejected_mutation_with_null_field_is_an_error() {
+    let server = MockServer::start().await;
+    gql(&server, "projectItems", "github/gql_issue_projects.json").await;
+    gql(&server, "node(id", "github/gql_project_fields.json").await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("updateProjectV2ItemFieldValue"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"updateProjectV2ItemFieldValue": null},
+            "errors": [{"type": "FORBIDDEN", "message": "no write access"}]
+        })))
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
+    let e = gh(&server).transition(&r(), "status:In Review", None).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+}

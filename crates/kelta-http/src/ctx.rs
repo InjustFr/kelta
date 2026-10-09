@@ -33,36 +33,59 @@ struct EtagEntry {
     tick: u64,
 }
 
-/// Exact-URL ETag cache with least-recently-used eviction (capacity <= a few hundred, so eviction
-/// scans the map instead of keeping a linked list).
+/// Total cached body bytes per account; bigger bodies are not cached.
+const ETAG_BYTES_MAX: usize = 2 * 1024 * 1024;
+
+/// Exact-URL ETag cache with least-recently-used eviction, bounded by entry count and total body
+/// bytes (capacity <= a few hundred, so eviction scans the map instead of keeping a linked list).
 struct EtagCache {
     map: HashMap<String, EtagEntry>,
     tick: u64,
     capacity: usize,
+    bytes: usize,
 }
 
 impl EtagCache {
     fn new(capacity: usize) -> Self {
-        Self { map: HashMap::new(), tick: 0, capacity: capacity.max(1) }
+        Self { map: HashMap::new(), tick: 0, capacity: capacity.max(1), bytes: 0 }
     }
 
-    fn get(&mut self, key: &str) -> Option<(String, String)> {
+    /// The validator only; the body is cloned by [`EtagCache::body`] on a 304.
+    fn get(&mut self, key: &str) -> Option<String> {
         self.tick += 1;
         let tick = self.tick;
         self.map.get_mut(key).map(|e| {
             e.tick = tick;
-            (e.etag.clone(), e.body.clone())
+            e.etag.clone()
         })
+    }
+
+    fn body(&self, key: &str) -> Option<String> {
+        self.map.get(key).map(|e| e.body.clone())
+    }
+
+    fn evict_oldest(&mut self) {
+        if let Some(oldest) = self.map.iter().min_by_key(|(_, e)| e.tick).map(|(k, _)| k.clone())
+            && let Some(e) = self.map.remove(&oldest)
+        {
+            self.bytes -= e.body.len();
+        }
     }
 
     fn put(&mut self, key: String, etag: String, body: String) {
         self.tick += 1;
-        if !self.map.contains_key(&key)
-            && self.map.len() >= self.capacity
-            && let Some(oldest) = self.map.iter().min_by_key(|(_, e)| e.tick).map(|(k, _)| k.clone())
-        {
-            self.map.remove(&oldest);
+        if let Some(old) = self.map.remove(&key) {
+            self.bytes -= old.body.len();
         }
+        if body.len() > ETAG_BYTES_MAX {
+            return;
+        }
+        while !self.map.is_empty()
+            && (self.map.len() >= self.capacity || self.bytes + body.len() > ETAG_BYTES_MAX)
+        {
+            self.evict_oldest();
+        }
+        self.bytes += body.len();
         self.map.insert(key, EtagEntry { etag, body, tick: self.tick });
     }
 }
@@ -253,7 +276,7 @@ impl HttpCtx {
             rb = rb.json(j);
         }
         let cached = cache_key.and_then(|k| self.shared.etags.lock().get(k));
-        if let Some((etag, _)) = &cached
+        if let Some(etag) = &cached
             && !req.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("if-none-match"))
         {
             rb = rb.header("If-None-Match", etag);
@@ -272,8 +295,10 @@ impl HttpCtx {
             Ok(b) => b,
             Err(e) => return Attempt::Transport(map_reqwest_error(e)),
         };
+        // shortcut: a concurrent eviction between request and 304 falls to the empty-body branch, next call refetches.
         if status == 304
-            && let Some((etag, cached_body)) = cached
+            && let Some(etag) = cached
+            && let Some(cached_body) = cache_key.and_then(|k| self.shared.etags.lock().body(k))
         {
             return Attempt::Done(HttpResponse {
                 status,
