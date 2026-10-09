@@ -1502,6 +1502,7 @@ export const settingsDefault: Settings = {
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "work.new": "w",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000

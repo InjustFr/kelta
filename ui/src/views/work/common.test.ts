@@ -9,9 +9,26 @@ import {
   parseDirtyFiles,
   parseFields,
   planValid,
+  scratchBranch,
+  taskTitle,
   validateBranch,
   validatePlan,
 } from './common';
+
+describe('scratch branch preview', () => {
+  it('slugs the first line like the backend', () => {
+    expect(taskTitle('\n  Fix the login flake  \nmore')).toBe('Fix the login flake');
+    expect(scratchBranch('Fix the login flake\nIt fails on CI', 'wip/{slug}', 40)).toBe(
+      'wip/fix-the-login-flake',
+    );
+    expect(scratchBranch('Éviter les doublons', 'wip/{slug}', 40)).toBe('wip/eviter-les-doublons');
+    expect(scratchBranch('The palette fuzzy matcher is slow with 5k cached tickets', 'wip/{slug}', 30)).toBe(
+      'wip/the-palette-fuzzy-matcher-is',
+    );
+    expect(scratchBranch('  \n ', 'wip/{slug}', 40)).toBe('');
+    expect(taskTitle('x'.repeat(80))).toHaveLength(72);
+  });
+});
 
 describe('validateBranch', () => {
   it('accepts normal names', () => {

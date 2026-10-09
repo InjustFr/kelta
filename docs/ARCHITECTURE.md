@@ -126,6 +126,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
+- **`kelta-ctl start --task "<text>" [--project <id>]`** sends `CtlCommand::StartTask{task, project}`: core plans `WorkSource::Branch{name: "", task}` for the project (default: active), runs the start-work saga without a sheet and focuses the project. Same branch rule and refusals as New work item (`⇧⌘N`); a ticket key and `--task` together are a usage error.
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids.
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
 - **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
@@ -356,7 +357,9 @@ pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
   repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
-  created_at: String }
+  created_at: String,
+  title: Option<String> /*scratch: task's first line, ≤72 chars*/, pr_title_needs_key: bool /*set by work_link when a PR exists; the next Ship/Push prefixes the key (kelta_work::pr_title_with_key) unless the title has one*/ }
+pub enum WorkSource { Ticket{ ticket }, Review{ review }, Branch{ name, task: Option<String>, repo: Option<String> } } // Branch with empty name: name from work.scratch_branch_template + task slug; task is the {task} of claude.prompt_templates.standalone; no tracker steps
 pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
 ```
 
@@ -461,7 +464,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_comment` | `{review, body}` | `()` | |
 | `review_request_changes` | `{review, body}` | `()` | |
 | **work** | | | `commands/work.rs` (L6) |
-| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name}*/}` | `StartWorkPlan` (§SPEC 3.1) | |
+| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/}` | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |
@@ -469,6 +472,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
 | `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
+| `work_link` | `{id, ticket: TicketRef, apply_side_effects: bool}` | `WorkItem` | scratch (Branch) items only; becomes Ticket-kind, branch never renamed; side effects = `work.on_start`, plus `work.on_pr` when a PR exists (then `pr_title_needs_key`) |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |

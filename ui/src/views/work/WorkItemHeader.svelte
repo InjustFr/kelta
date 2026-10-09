@@ -13,6 +13,7 @@
   import { statusTone, type Tone } from './common';
   import CreatePrDialog from './CreatePrDialog.svelte';
   import FinishDialog from './FinishDialog.svelte';
+  import { linkToTicket } from './actions';
   import { openContent } from './nav';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
@@ -134,6 +135,9 @@
       </button>
     {:else if item.review}
       <span class="key">{item.review.repo}#{item.review.number}</span>
+    {:else}
+      <span class="key" data-testid="work-key">wip</span>
+      {#if item.title}<span class="title">{item.title}</span>{/if}
     {/if}
     <Badge tone={stateInfo.tone} title="Work item state">{stateInfo.label}</Badge>
     <span class="branch" title={item.worktree}>
@@ -191,6 +195,10 @@
       >
         Browser
       </Button>
+    {:else if item.state.kind !== 'finished'}
+      <Button size="sm" variant="ghost" icon="ticket" onclick={() => linkToTicket(item.id)}
+        >Link ticket</Button
+      >
     {/if}
     {#if item.state.kind !== 'finished'}
       <Button size="sm" variant="danger" onclick={() => (finishing = true)}>Finish</Button>
@@ -235,6 +243,13 @@
   .key {
     font-family: var(--k-font-mono);
     font-weight: 600;
+  }
+
+  .title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .branch {

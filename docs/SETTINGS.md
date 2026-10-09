@@ -107,7 +107,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `extra_args` | list<str> | `[]` | appended before the prompt |
 | `extra_hooks` | JSON-compatible table | `{}` | merged into generated `--settings` hooks |
 | `profiles` | map<str, ClaudeProfile> | `default = {model="opus", effort="high", permission_mode="acceptEdits"}`, `review = {model="opus", effort="high", permission_mode="plan"}`, `plan = {model="opus", effort="high", permission_mode="plan"}` | ClaudeProfile = {model: str, effort: enum(low\|medium\|high\|xhigh\|max), permission_mode: enum(default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions)} |
-| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = ""` | |
+| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = "{task}"` | `{task}` = the task of a New work item / `kelta-ctl start --task` | |
 | `ide_bridge` | bool | `false` | v0.2; ignored in v0.1 |
 
 ### [editor]
@@ -148,6 +148,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
 | `default_template` | str | `"claude+editor"` | |
 | `review_template` | str | `"review"` | |
+| `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
 | `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}` |
 | `on_pr` | {transition_to: TransitionTarget? = {category="in_review"}, comment: Template? = "PR: {pr.url}"} | | |
 | `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | |

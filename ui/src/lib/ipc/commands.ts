@@ -189,6 +189,7 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -296,6 +297,7 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_link',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -475,6 +477,7 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workLink = wrap('work_link');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 
