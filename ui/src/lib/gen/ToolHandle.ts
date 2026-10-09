@@ -4,6 +4,6 @@ import type { SessionId } from "./SessionId";
 import type { ToolInstanceId } from "./ToolInstanceId";
 
 /**
- * `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}`.
+ * `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}` | `{"kind":"external"}`.
  */
-export type ToolHandle = { "kind": "pty", session_id: SessionId, } | { "kind": "web", instance_id: ToolInstanceId, url: string, embed: EmbedMode, };
+export type ToolHandle = { "kind": "pty", session_id: SessionId, } | { "kind": "web", instance_id: ToolInstanceId, url: string, embed: EmbedMode, } | { "kind": "external" };

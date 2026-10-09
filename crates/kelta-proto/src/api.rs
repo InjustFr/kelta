@@ -199,6 +199,10 @@ pub trait CoreApi: Send + Sync {
     fn toast(&self, t: Toast);
     /// Plugin `net:` (allowlist checked by caller).
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>;
+    /// `PATH` of the user's login shell (what pty sessions search); `None` when unknown.
+    fn login_path(&self) -> Option<String> {
+        None
+    }
     /// Dispatch of ctl socket commands.
     async fn ctl(&self, cmd: CtlCommand) -> Result<Value, KeltaError>;
 }
