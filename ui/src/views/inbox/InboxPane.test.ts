@@ -62,7 +62,7 @@ describe('InboxPane', () => {
     await screen.findByText('Terraform: add read replica');
 
     // The review request on a repo bound to no project lands in "Other".
-    const rows = [...container.querySelectorAll('.row, [data-group], [data-section]')];
+    const rows = [...container.querySelectorAll('.k-row, [data-group], [data-section]')];
     const underOther = rows
       .map((r, i) => (r.getAttribute('data-group') === 'Other' ? rows[i + 1]?.textContent : null))
       .filter(Boolean);
@@ -79,8 +79,11 @@ describe('InboxPane', () => {
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: 'j' });
     await fireEvent.keyDown(pane, { key: 'k' });
-    const selected = container.querySelector('.row[aria-current="true"]') as HTMLElement;
-    expect(selected.textContent).toMatch(/\w+-?\d+|#\d+/);
+    // Needs-input sessions come first; j walks down to the first ticket.
+    const selected = () => container.querySelector('.k-row[aria-current="true"]') as HTMLElement;
+    for (let i = 0; i < 5 && !/[A-Z]+-\d+/.test(selected().textContent ?? ''); i++)
+      await fireEvent.keyDown(pane, { key: 'j' });
+    expect(selected().textContent).toMatch(/[A-Z]+-\d+/);
     await fireEvent.keyDown(pane, { key: 's' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(true));
   });

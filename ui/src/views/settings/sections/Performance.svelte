@@ -81,7 +81,7 @@
           </table>
         {/if}
         <p class="muted">
-          Live terminal views: {snap.live_views} · armed timers: {snap.timers_armed} · local server:
+          Live terminal views: {snap.live_views}. Armed timers: {snap.timers_armed}. Local server:
           {snap.http_server ? 'running' : 'stopped'}. Plugin screens are destroyed when hidden unless kept
           alive below.
         </p>

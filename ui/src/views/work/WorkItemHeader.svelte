@@ -147,7 +147,8 @@
       >
         <span data-testid="ahead">↑{git.ahead}</span>
         <span data-testid="behind">↓{git.behind}</span>
-        {#if git.dirty}<span class="dirty" aria-label="Uncommitted changes">●</span>{/if}
+        <!-- A mono "*" like a modified buffer, not a dot: saturated dots are reserved for lamps. -->
+        {#if git.dirty}<span aria-label="Uncommitted changes">*</span>{/if}
       </span>
     {:else if gitError}
       <button type="button" class="link" onclick={() => void refreshGit()}>status unavailable, retry</button>
@@ -193,7 +194,7 @@
       </Button>
     {/if}
     {#if item.state.kind !== 'finished'}
-      <Button size="sm" variant="danger" onclick={() => (finishing = true)}>Finish</Button>
+      <Button size="sm" onclick={() => (finishing = true)}>Finish</Button>
     {/if}
   </div>
 {:else}
@@ -225,16 +226,17 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--k-space-2);
+    gap: var(--k-space-2) var(--k-space-4);
+    min-height: var(--k-tabbar-height);
     padding: var(--k-space-1) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-chrome);
     font-size: var(--k-font-size-sm);
   }
 
   .key {
     font-family: var(--k-font-mono);
-    font-weight: 600;
+    color: var(--k-fg);
   }
 
   .branch {
@@ -246,13 +248,10 @@
 
   .git {
     display: inline-flex;
-    gap: var(--k-space-1);
+    gap: var(--k-space-2);
     font-family: var(--k-font-mono);
+    font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
-  }
-
-  .dirty {
-    color: var(--k-warn);
   }
 
   .spacer {
