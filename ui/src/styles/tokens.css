@@ -1,0 +1,131 @@
+/* Design tokens. Light/dark via [data-theme] on <html> (set by the shell from app.theme),
+   falling back to prefers-color-scheme. No web fonts: system UI + system monospace only. */
+
+:root {
+  --k-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Cantarell, Ubuntu, 'Noto Sans', sans-serif;
+  --k-font-mono: 'JetBrains Mono', Menlo, 'DejaVu Sans Mono', monospace;
+  --k-font-size: 13px;
+  --k-font-size-sm: 12px;
+  --k-font-size-xs: 11px;
+  --k-font-size-lg: 15px;
+  --k-line-height: 1.4;
+
+  --k-space-1: 2px;
+  --k-space-2: 4px;
+  --k-space-3: 8px;
+  --k-space-4: 12px;
+  --k-space-5: 16px;
+  --k-space-6: 24px;
+
+  --k-radius-sm: 4px;
+  --k-radius: 6px;
+  --k-radius-lg: 10px;
+
+  --k-rail-width: 48px;
+  --k-tabbar-height: 34px;
+  --k-statusbar-height: 24px;
+  --k-control-height: 28px;
+  --k-row-height: 28px;
+
+  --k-z-pane: 1;
+  --k-z-menu: 30;
+  --k-z-sheet: 40;
+  --k-z-dialog: 50;
+  --k-z-toast: 60;
+
+  --k-duration: 120ms;
+
+  /* light palette */
+  --k-bg: #ffffff;
+  --k-bg-elev: #f6f6f7;
+  --k-bg-sunken: #eeeef0;
+  --k-bg-hover: rgba(0, 0, 0, 0.05);
+  --k-bg-active: rgba(0, 0, 0, 0.09);
+  --k-bg-selected: #dbe7fb;
+  --k-fg: #1d1e22;
+  --k-fg-muted: #5b5e66;
+  --k-fg-subtle: #8a8d96;
+  --k-border: #dcdde1;
+  --k-border-strong: #c3c5cb;
+  --k-accent: #2f6fdf;
+  --k-accent-fg: #ffffff;
+  --k-focus: #2f6fdf;
+  --k-danger: #c9353d;
+  --k-danger-fg: #ffffff;
+  --k-warn: #b86e00;
+  --k-ok: #2b8a3e;
+  --k-info: #2f6fdf;
+  --k-overlay: rgba(10, 12, 16, 0.32);
+  --k-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* attention dots (SPEC §1) */
+  --k-att-needs-input: #d93a3a;
+  --k-att-error: #e09b1a;
+  --k-att-done: #2f9e44;
+  --k-att-activity: #3b82f6;
+
+  /* terminal default palette (pushed to Rust with terminal_set_palette) */
+  --k-term-bg: #ffffff;
+  --k-term-fg: #1d1e22;
+  --k-term-cursor: #1d1e22;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --k-bg: #17181b;
+    --k-bg-elev: #1f2024;
+    --k-bg-sunken: #121315;
+    --k-bg-hover: rgba(255, 255, 255, 0.06);
+    --k-bg-active: rgba(255, 255, 255, 0.1);
+    --k-bg-selected: #23395e;
+    --k-fg: #e6e7ea;
+    --k-fg-muted: #a3a6ae;
+    --k-fg-subtle: #747882;
+    --k-border: #2c2e33;
+    --k-border-strong: #3b3e45;
+    --k-accent: #5b93f5;
+    --k-accent-fg: #0d1220;
+    --k-focus: #5b93f5;
+    --k-danger: #ef5b62;
+    --k-danger-fg: #1a0c0d;
+    --k-warn: #f0b23e;
+    --k-ok: #52c46b;
+    --k-info: #5b93f5;
+    --k-overlay: rgba(0, 0, 0, 0.5);
+    --k-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --k-term-bg: #17181b;
+    --k-term-fg: #e6e7ea;
+    --k-term-cursor: #e6e7ea;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --k-bg: #17181b;
+  --k-bg-elev: #1f2024;
+  --k-bg-sunken: #121315;
+  --k-bg-hover: rgba(255, 255, 255, 0.06);
+  --k-bg-active: rgba(255, 255, 255, 0.1);
+  --k-bg-selected: #23395e;
+  --k-fg: #e6e7ea;
+  --k-fg-muted: #a3a6ae;
+  --k-fg-subtle: #747882;
+  --k-border: #2c2e33;
+  --k-border-strong: #3b3e45;
+  --k-accent: #5b93f5;
+  --k-accent-fg: #0d1220;
+  --k-focus: #5b93f5;
+  --k-danger: #ef5b62;
+  --k-danger-fg: #1a0c0d;
+  --k-warn: #f0b23e;
+  --k-ok: #52c46b;
+  --k-info: #5b93f5;
+  --k-overlay: rgba(0, 0, 0, 0.5);
+  --k-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --k-term-bg: #17181b;
+  --k-term-fg: #e6e7ea;
+  --k-term-cursor: #e6e7ea;
+  color-scheme: dark;
+}

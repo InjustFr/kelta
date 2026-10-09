@@ -1,0 +1,32 @@
+{
+  "name": "kelta-workspace",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@9.12.1",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=9.0.0 <10"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @kelta/ui run dev",
+    "dev:mock": "pnpm --filter @kelta/ui run dev:mock",
+    "build": "pnpm --filter @kelta/ui run build",
+    "check": "pnpm -r --if-present run check",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "e2e": "pnpm --filter @kelta/ui run e2e",
+    "format": "pnpm -r --if-present run format"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "eslint-plugin-svelte": "3.23.1",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "prettier-plugin-svelte": "4.1.1",
+    "svelte": "5.57.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1"
+  }
+}

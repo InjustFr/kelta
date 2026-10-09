@@ -1,0 +1,81 @@
+<script lang="ts" generics="T extends string">
+  import Icon from './Icon.svelte';
+
+  interface Item {
+    id: T;
+    label: string;
+    icon?: string;
+    disabled?: boolean;
+  }
+
+  interface Props {
+    items: readonly Item[];
+    value?: T;
+    label?: string;
+    onchange?: (id: T) => void;
+  }
+
+  let { items, value = $bindable(), label, onchange }: Props = $props();
+
+  function select(id: T): void {
+    value = id;
+    onchange?.(id);
+  }
+
+  function onkeydown(e: KeyboardEvent): void {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const enabled = items.filter((i) => !i.disabled);
+    const at = enabled.findIndex((i) => i.id === value);
+    const next = enabled[(at + (e.key === 'ArrowRight' ? 1 : enabled.length - 1)) % enabled.length];
+    if (next) {
+      e.preventDefault();
+      select(next.id);
+    }
+  }
+</script>
+
+<div class="k-tabs" role="tablist" aria-label={label} tabindex="-1" {onkeydown}>
+  {#each items as item (item.id)}
+    <button
+      type="button"
+      role="tab"
+      aria-selected={item.id === value}
+      tabindex={item.id === value ? 0 : -1}
+      disabled={item.disabled}
+      onclick={() => select(item.id)}
+    >
+      {#if item.icon}<Icon name={item.icon} size={14} />{/if}
+      {item.label}
+    </button>
+  {/each}
+</div>
+
+<style>
+  .k-tabs {
+    display: flex;
+    gap: var(--k-space-1);
+    border-bottom: 1px solid var(--k-border);
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    height: var(--k-control-height);
+    padding: 0 var(--k-space-4);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--k-fg-muted);
+    cursor: pointer;
+  }
+
+  button[aria-selected='true'] {
+    color: var(--k-fg);
+    border-bottom-color: var(--k-accent);
+  }
+
+  button:hover:not(:disabled) {
+    color: var(--k-fg);
+  }
+</style>

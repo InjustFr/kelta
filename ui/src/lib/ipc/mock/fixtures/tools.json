@@ -1,0 +1,54 @@
+[
+  {
+    "id": "lazydocker",
+    "label": "lazydocker",
+    "icon": "box",
+    "kind": "pty",
+    "installed": true,
+    "source": {
+      "kind": "layer",
+      "layer": "default"
+    },
+    "keybinding": null,
+    "description": "Docker TUI"
+  },
+  {
+    "id": "lazygit",
+    "label": "lazygit",
+    "icon": "git-branch",
+    "kind": "pty",
+    "installed": true,
+    "source": {
+      "kind": "layer",
+      "layer": "default"
+    },
+    "keybinding": "mod+g",
+    "description": "Git TUI, opens files in the tab's nvim"
+  },
+  {
+    "id": "sl-web",
+    "label": "Sapling ISL",
+    "icon": "globe",
+    "kind": "web",
+    "installed": false,
+    "source": {
+      "kind": "layer",
+      "layer": "global"
+    },
+    "keybinding": null,
+    "description": "sl web (Interactive Smartlog)"
+  },
+  {
+    "id": "tools-pack/htop",
+    "label": "htop",
+    "icon": "activity",
+    "kind": "pty",
+    "installed": true,
+    "source": {
+      "kind": "plugin",
+      "plugin_id": "tools-pack"
+    },
+    "keybinding": null,
+    "description": null
+  }
+]

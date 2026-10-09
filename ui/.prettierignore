@@ -1,0 +1,6 @@
+dist/
+node_modules/
+src/lib/gen/
+test-results/
+playwright-report/
+src/assets/sprite.svg

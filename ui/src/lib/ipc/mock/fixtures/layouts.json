@@ -1,0 +1,232 @@
+{
+  "shop": {
+    "project_id": "shop",
+    "rev": 7,
+    "active_tab": "shop-t1",
+    "tabs": [
+      {
+        "id": "shop-t1",
+        "title": "SHOP-142 Rate-limit login",
+        "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
+        "root": {
+          "type": "split",
+          "dir": "row",
+          "ratios": [0.5, 0.5],
+          "children": [
+            {
+              "type": "pane",
+              "id": "shop-p1",
+              "content": {
+                "kind": "terminal",
+                "session_id": "0199a6b2-0000-7000-8000-000000000001"
+              }
+            },
+            {
+              "type": "pane",
+              "id": "shop-p2",
+              "content": {
+                "kind": "terminal",
+                "session_id": "0199a6b2-0000-7000-8000-000000000002"
+              }
+            }
+          ]
+        },
+        "focused_pane": "shop-p1",
+        "zoomed_pane": null
+      },
+      {
+        "id": "shop-t2",
+        "title": "Shell",
+        "work_item_id": null,
+        "root": {
+          "type": "split",
+          "dir": "column",
+          "ratios": [0.6, 0.4],
+          "children": [
+            {
+              "type": "pane",
+              "id": "shop-p3",
+              "content": {
+                "kind": "terminal",
+                "session_id": "0199a6b2-0000-7000-8000-000000000003"
+              }
+            },
+            {
+              "type": "pane",
+              "id": "shop-p4",
+              "content": {
+                "kind": "terminal",
+                "session_id": "0199a6b2-0000-7000-8000-000000000004"
+              }
+            }
+          ]
+        },
+        "focused_pane": "shop-p3",
+        "zoomed_pane": null
+      },
+      {
+        "id": "shop-t3",
+        "title": "Board",
+        "work_item_id": null,
+        "root": {
+          "type": "pane",
+          "id": "shop-p5",
+          "content": {
+            "kind": "tickets",
+            "scope": {
+              "kind": "project",
+              "id": "shop"
+            },
+            "view_id": "mine",
+            "mode": "board"
+          }
+        },
+        "focused_pane": "shop-p5",
+        "zoomed_pane": null
+      }
+    ]
+  },
+  "billing": {
+    "project_id": "billing",
+    "rev": 3,
+    "active_tab": "billing-t1",
+    "tabs": [
+      {
+        "id": "billing-t1",
+        "title": "4567 Invoice rounding",
+        "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
+        "root": {
+          "type": "split",
+          "dir": "row",
+          "ratios": [0.55, 0.45],
+          "children": [
+            {
+              "type": "pane",
+              "id": "billing-p1",
+              "content": {
+                "kind": "terminal",
+                "session_id": "0199a6b2-0000-7000-8000-000000000005"
+              }
+            },
+            {
+              "type": "split",
+              "dir": "column",
+              "ratios": [0.7, 0.3],
+              "children": [
+                {
+                  "type": "pane",
+                  "id": "billing-p2",
+                  "content": {
+                    "kind": "terminal",
+                    "session_id": "0199a6b2-0000-7000-8000-000000000006"
+                  }
+                },
+                {
+                  "type": "pane",
+                  "id": "billing-p3",
+                  "content": {
+                    "kind": "terminal",
+                    "session_id": "0199a6b2-0000-7000-8000-000000000007"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "focused_pane": "billing-p1",
+        "zoomed_pane": null
+      },
+      {
+        "id": "billing-t2",
+        "title": "Reviews",
+        "work_item_id": null,
+        "root": {
+          "type": "pane",
+          "id": "billing-p4",
+          "content": {
+            "kind": "reviews",
+            "scope": {
+              "kind": "project",
+              "id": "billing"
+            }
+          }
+        },
+        "focused_pane": "billing-p4",
+        "zoomed_pane": null
+      }
+    ]
+  },
+  "kelta-tools": {
+    "project_id": "kelta-tools",
+    "rev": 2,
+    "active_tab": "kt-t1",
+    "tabs": [
+      {
+        "id": "kt-t1",
+        "title": "gh-12 JSON output",
+        "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
+        "root": {
+          "type": "pane",
+          "id": "kt-p1",
+          "content": {
+            "kind": "terminal",
+            "session_id": "0199a6b2-0000-7000-8000-000000000008"
+          }
+        },
+        "focused_pane": "kt-p1",
+        "zoomed_pane": null
+      },
+      {
+        "id": "kt-t2",
+        "title": "Shell",
+        "work_item_id": null,
+        "root": {
+          "type": "pane",
+          "id": "kt-p2",
+          "content": {
+            "kind": "terminal",
+            "session_id": "0199a6b2-0000-7000-8000-000000000009"
+          }
+        },
+        "focused_pane": "kt-p2",
+        "zoomed_pane": null
+      }
+    ]
+  },
+  "home": {
+    "project_id": "home",
+    "rev": 1,
+    "active_tab": "home-t1",
+    "tabs": [
+      {
+        "id": "home-t1",
+        "title": "Shell",
+        "work_item_id": null,
+        "root": {
+          "type": "pane",
+          "id": "home-p1",
+          "content": {
+            "kind": "terminal",
+            "session_id": "0199a6b2-0000-7000-8000-000000000010"
+          }
+        },
+        "focused_pane": "home-p1",
+        "zoomed_pane": null
+      },
+      {
+        "id": "home-t2",
+        "title": "Inbox",
+        "work_item_id": null,
+        "root": {
+          "type": "pane",
+          "id": "home-p2",
+          "content": {
+            "kind": "inbox"
+          }
+        },
+        "focused_pane": "home-p2",
+        "zoomed_pane": null
+      }
+    ]
+  }
+}

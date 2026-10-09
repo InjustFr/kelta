@@ -1,0 +1,194 @@
+[
+  {
+    "review": {
+      "ref": {
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 311
+      },
+      "title": "SHOP-150: cache product images",
+      "url": "https://github.com/acme/shop-api/pull/311",
+      "author": {
+        "id": "u-bob",
+        "name": "Bob Martin",
+        "login": "bob",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "0d05e71cb80a1fc6eb7b2e9df548a1f960b7c2a7",
+      "source_branch": "feat/SHOP-150-image-cache",
+      "target_branch": "main",
+      "ci": "pending",
+      "decision": "review_required",
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "review_requested",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": ["SHOP-150"],
+      "additions": 220,
+      "deletions": 31
+    },
+    "project_ids": ["shop"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "github-acme",
+        "repo": "acme/shop-web",
+        "number": 98
+      },
+      "title": "Bump vite to 8",
+      "url": "https://github.com/acme/shop-web/pull/98",
+      "author": {
+        "id": "u-cat",
+        "name": "Cat Hopper",
+        "login": "cat",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "3bdcdf2b15b1e7a21df3ab8c72835d43be678a19",
+      "source_branch": "deps/vite-8",
+      "target_branch": "main",
+      "ci": "failure",
+      "decision": "review_required",
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "review_requested",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": [],
+      "additions": 40,
+      "deletions": 38
+    },
+    "project_ids": ["shop"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 305
+      },
+      "title": "SHOP-120: upgrade payment SDK",
+      "url": "https://github.com/acme/shop-api/pull/305",
+      "author": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "0d664f5667dd23194b774a9d18b98400ce86167e",
+      "source_branch": "feat/SHOP-120-payment-sdk",
+      "target_branch": "main",
+      "ci": "success",
+      "decision": "changes_requested",
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "authored",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": ["SHOP-120"],
+      "additions": 512,
+      "deletions": 300
+    },
+    "project_ids": ["shop"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "gitlab-corp",
+        "repo": "fin/billing/core",
+        "number": 42
+      },
+      "title": "Draft: 4567 fix invoice rounding",
+      "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/42",
+      "author": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "draft": true,
+      "head_sha": "576f8e39ca1865a64bd0f75a56472f2ed2761b08",
+      "source_branch": "fix/4567-invoice-rounding",
+      "target_branch": "main",
+      "ci": "pending",
+      "decision": null,
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "authored",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": ["4567"],
+      "additions": 18,
+      "deletions": 6
+    },
+    "project_ids": ["billing"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "github-oss",
+        "repo": "ada/kelta-tools",
+        "number": 13
+      },
+      "title": "kt status --json",
+      "url": "https://github.com/ada/kelta-tools/pull/13",
+      "author": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "4fa15de23ef62b68eb017294281fe63101bec484",
+      "source_branch": "feat/gh-12-json-output",
+      "target_branch": "main",
+      "ci": "success",
+      "decision": "approved",
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "authored",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": ["#12"],
+      "additions": 140,
+      "deletions": 12
+    },
+    "project_ids": ["kelta-tools"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "gitlab-corp",
+        "repo": "ops/infra",
+        "number": 7
+      },
+      "title": "Terraform: add read replica",
+      "url": "https://gitlab.corp.example/ops/infra/-/merge_requests/7",
+      "author": {
+        "id": "u-cat",
+        "name": "Cat Hopper",
+        "login": "cat",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "b6f27935c2bb039f314d877f7662d84447b9cb19",
+      "source_branch": "replica",
+      "target_branch": "main",
+      "ci": "success",
+      "decision": null,
+      "my_state": null,
+      "mergeable": true,
+      "labels": [],
+      "kind": "review_requested",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": [],
+      "additions": 95,
+      "deletions": 0
+    },
+    "project_ids": []
+  }
+]

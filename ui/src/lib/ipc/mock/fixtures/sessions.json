@@ -1,0 +1,259 @@
+[
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000001",
+    "project_id": "shop",
+    "kind": {
+      "type": "claude"
+    },
+    "name": "claude",
+    "title": "SHOP-142 Rate-limit login",
+    "cwd": "/Users/ada/code/shop-api.worktrees/SHOP-142",
+    "status": "working",
+    "status_source": "hook",
+    "attention": "activity",
+    "seen": false,
+    "lifecycle": "live",
+    "pid": 4101,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
+    "claude": {
+      "session_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0001",
+      "model": "claude-sonnet-5",
+      "preview": null,
+      "files_touched": ["/Users/ada/code/shop-api.worktrees/SHOP-142/src/rate_limit.rs"],
+      "hooks_active": true
+    },
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000002",
+    "project_id": "shop",
+    "kind": {
+      "type": "editor",
+      "adapter": "nvim"
+    },
+    "name": "nvim",
+    "title": null,
+    "cwd": "/Users/ada/code/shop-api.worktrees/SHOP-142",
+    "status": "running",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "live",
+    "pid": 4102,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
+    "claude": null,
+    "editor": {
+      "adapter": "nvim",
+      "socket": "/tmp/kelta-501/s/0199a6b2/nvim.sock"
+    },
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000003",
+    "project_id": "shop",
+    "kind": {
+      "type": "shell"
+    },
+    "name": "zsh",
+    "title": "~/code/shop-api",
+    "cwd": "/Users/ada/code/shop-api",
+    "status": "running",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "live",
+    "pid": 4103,
+    "exit_code": null,
+    "work_item_id": null,
+    "claude": null,
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000004",
+    "project_id": "shop",
+    "kind": {
+      "type": "tool",
+      "tool_id": "lazydocker"
+    },
+    "name": "lazydocker",
+    "title": null,
+    "cwd": "/Users/ada/code/shop-api",
+    "status": "running",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "live",
+    "pid": 4104,
+    "exit_code": null,
+    "work_item_id": null,
+    "claude": null,
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000005",
+    "project_id": "billing",
+    "kind": {
+      "type": "claude"
+    },
+    "name": "claude",
+    "title": null,
+    "cwd": "/Users/ada/code/billing.worktrees/4567",
+    "status": "needs_input",
+    "status_source": "hook",
+    "attention": "needs_input",
+    "seen": false,
+    "lifecycle": "live",
+    "pid": 4201,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
+    "claude": {
+      "session_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0005",
+      "model": "claude-sonnet-5",
+      "preview": "Allow Bash(cargo test)?",
+      "files_touched": [],
+      "hooks_active": true
+    },
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000006",
+    "project_id": "billing",
+    "kind": {
+      "type": "editor",
+      "adapter": "nvim"
+    },
+    "name": "nvim",
+    "title": null,
+    "cwd": "/Users/ada/code/billing.worktrees/4567",
+    "status": "running",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "live",
+    "pid": 4202,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
+    "claude": null,
+    "editor": {
+      "adapter": "nvim",
+      "socket": "/tmp/kelta-501/s/0199a6b2/nvim6.sock"
+    },
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000007",
+    "project_id": "billing",
+    "kind": {
+      "type": "shell"
+    },
+    "name": "zsh",
+    "title": null,
+    "cwd": "/Users/ada/code/billing",
+    "status": "exited",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "exited",
+    "pid": null,
+    "exit_code": 1,
+    "work_item_id": null,
+    "claude": null,
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000008",
+    "project_id": "kelta-tools",
+    "kind": {
+      "type": "claude"
+    },
+    "name": "claude",
+    "title": null,
+    "cwd": "/Users/ada/oss/kelta-tools.worktrees/gh-12",
+    "status": "done",
+    "status_source": "hook",
+    "attention": "done",
+    "seen": false,
+    "lifecycle": "live",
+    "pid": 4301,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
+    "claude": {
+      "session_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0008",
+      "model": "claude-sonnet-5",
+      "preview": "Done: added the --json flag and tests. All 42 tests pass.",
+      "files_touched": [],
+      "hooks_active": true
+    },
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000009",
+    "project_id": "kelta-tools",
+    "kind": {
+      "type": "shell"
+    },
+    "name": "zsh",
+    "title": null,
+    "cwd": "/Users/ada/oss/kelta-tools",
+    "status": "unknown",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "dormant",
+    "pid": null,
+    "exit_code": null,
+    "work_item_id": null,
+    "claude": null,
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000010",
+    "project_id": "home",
+    "kind": {
+      "type": "shell"
+    },
+    "name": "zsh",
+    "title": "~",
+    "cwd": "/Users/ada",
+    "status": "running",
+    "status_source": "none",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "live",
+    "pid": 4401,
+    "exit_code": null,
+    "work_item_id": null,
+    "claude": null,
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
+  }
+]

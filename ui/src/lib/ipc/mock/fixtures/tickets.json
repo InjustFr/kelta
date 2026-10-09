@@ -1,0 +1,321 @@
+[
+  {
+    "ticket": {
+      "ref": {
+        "account": "jira-acme",
+        "key": "SHOP-142",
+        "id": "10142"
+      },
+      "title": "Rate-limit login attempts",
+      "url": "https://acme.atlassian.net/browse/SHOP-142",
+      "status": {
+        "id": "3",
+        "name": "In Progress",
+        "category": "in_progress"
+      },
+      "kind": "Story",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": ["security"],
+      "priority": "High",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "SHOP"
+    },
+    "project_ids": ["shop"],
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a001"
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "jira-acme",
+        "key": "SHOP-151",
+        "id": "10151"
+      },
+      "title": "Checkout: show tax breakdown",
+      "url": "https://acme.atlassian.net/browse/SHOP-151",
+      "status": {
+        "id": "1",
+        "name": "To Do",
+        "category": "todo"
+      },
+      "kind": "Story",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Medium",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "SHOP"
+    },
+    "project_ids": ["shop"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "jira-acme",
+        "key": "SHOP-155",
+        "id": "10155"
+      },
+      "title": "Flaky test in cart service",
+      "url": "https://acme.atlassian.net/browse/SHOP-155",
+      "status": {
+        "id": "1",
+        "name": "To Do",
+        "category": "todo"
+      },
+      "kind": "Bug",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Low",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "SHOP"
+    },
+    "project_ids": ["shop"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "jira-acme",
+        "key": "SHOP-120",
+        "id": "10120"
+      },
+      "title": "Upgrade payment SDK",
+      "url": "https://acme.atlassian.net/browse/SHOP-120",
+      "status": {
+        "id": "10002",
+        "name": "In Review",
+        "category": "in_review"
+      },
+      "kind": "Task",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Medium",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "SHOP"
+    },
+    "project_ids": ["shop"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "redmine-corp",
+        "key": "4567",
+        "id": "4567"
+      },
+      "title": "Invoice rounding differs from ledger",
+      "url": "https://redmine.corp.example/issues/4567",
+      "status": {
+        "id": "2",
+        "name": "In Progress",
+        "category": "in_progress"
+      },
+      "kind": "Bug",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Urgent",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "billing"
+    },
+    "project_ids": ["billing"],
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a002"
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "redmine-corp",
+        "key": "4590",
+        "id": "4590"
+      },
+      "title": "Export invoices as CSV",
+      "url": "https://redmine.corp.example/issues/4590",
+      "status": {
+        "id": "1",
+        "name": "New",
+        "category": "todo"
+      },
+      "kind": "Feature",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Normal",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "billing"
+    },
+    "project_ids": ["billing"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "redmine-corp",
+        "key": "4602",
+        "id": "4602"
+      },
+      "title": "VAT rate table for 2027",
+      "url": "https://redmine.corp.example/issues/4602",
+      "status": {
+        "id": "5",
+        "name": "Resolved",
+        "category": "done"
+      },
+      "kind": "Feature",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Normal",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "billing"
+    },
+    "project_ids": ["billing"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "github-oss",
+        "key": "#12",
+        "id": "I_kwDOAbc012"
+      },
+      "title": "Add --json output to `kt status`",
+      "url": "https://github.com/ada/kelta-tools/issues/12",
+      "status": {
+        "id": "in-progress",
+        "name": "In progress",
+        "category": "in_progress"
+      },
+      "kind": null,
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": ["enhancement"],
+      "priority": null,
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "ada/kelta-tools"
+    },
+    "project_ids": ["kelta-tools"],
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a003"
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "github-oss",
+        "key": "#15",
+        "id": "I_kwDOAbc015"
+      },
+      "title": "Crash when config dir is missing",
+      "url": "https://github.com/ada/kelta-tools/issues/15",
+      "status": {
+        "id": "todo",
+        "name": "Todo",
+        "category": "todo"
+      },
+      "kind": null,
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": ["bug"],
+      "priority": null,
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "ada/kelta-tools"
+    },
+    "project_ids": ["kelta-tools"],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "gitlab-corp",
+        "key": "#88",
+        "id": "88"
+      },
+      "title": "Rotate staging database credentials",
+      "url": "https://gitlab.corp.example/ops/infra/-/issues/88",
+      "status": {
+        "id": "workflow::doing",
+        "name": "doing",
+        "category": "in_progress"
+      },
+      "kind": null,
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": ["workflow::doing", "ops"],
+      "priority": null,
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "ops/infra"
+    },
+    "project_ids": [],
+    "work_item_id": null
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "gitlab-corp",
+        "key": "#91",
+        "id": "91"
+      },
+      "title": "Document backup restore drill",
+      "url": "https://gitlab.corp.example/ops/infra/-/issues/91",
+      "status": {
+        "id": "opened",
+        "name": "Open",
+        "category": "todo"
+      },
+      "kind": null,
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": ["docs"],
+      "priority": null,
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "ops/infra"
+    },
+    "project_ids": [],
+    "work_item_id": null
+  }
+]

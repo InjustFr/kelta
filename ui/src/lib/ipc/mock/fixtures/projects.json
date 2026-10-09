@@ -1,0 +1,236 @@
+[
+  {
+    "id": "home",
+    "name": "Home",
+    "color": null,
+    "icon": null,
+    "repos": [],
+    "tracker": null,
+    "open": true,
+    "active": false,
+    "attention": {
+      "level": "none",
+      "needs_input": 0
+    },
+    "builtin": true
+  },
+  {
+    "id": "shop",
+    "name": "Shop",
+    "color": "#e07a5f",
+    "icon": "S",
+    "repos": [
+      {
+        "id": "api",
+        "path": "/Users/ada/code/shop-api",
+        "primary": true,
+        "remote": "origin",
+        "base": "main",
+        "code_host": {
+          "account": "github-acme",
+          "repo": "acme/shop-api"
+        },
+        "exists": true
+      },
+      {
+        "id": "web",
+        "path": "/Users/ada/code/shop-web",
+        "primary": false,
+        "remote": "origin",
+        "base": "main",
+        "code_host": {
+          "account": "github-acme",
+          "repo": "acme/shop-web"
+        },
+        "exists": true
+      }
+    ],
+    "tracker": {
+      "account": "jira-acme",
+      "views": [
+        {
+          "id": "mine",
+          "label": "My open",
+          "jql": "project = SHOP AND assignee = currentUser() AND statusCategory != Done",
+          "board_id": null,
+          "project_id": null,
+          "query_id": null,
+          "assigned_to": null,
+          "status": null,
+          "repo": null,
+          "search": null,
+          "project_v2": null,
+          "project": null,
+          "scope": null,
+          "labels": null,
+          "workflow_scope": null
+        },
+        {
+          "id": "sprint",
+          "label": "Current sprint",
+          "jql": "project = SHOP AND sprint in openSprints()",
+          "board_id": null,
+          "project_id": null,
+          "query_id": null,
+          "assigned_to": null,
+          "status": null,
+          "repo": null,
+          "search": null,
+          "project_v2": null,
+          "project": null,
+          "scope": null,
+          "labels": null,
+          "workflow_scope": null
+        }
+      ],
+      "columns": [],
+      "status_map": {
+        "start": {
+          "category": "in_progress"
+        },
+        "review": {
+          "category": "in_review"
+        },
+        "done": {
+          "category": "done"
+        }
+      },
+      "repo_rules": []
+    },
+    "open": true,
+    "active": true,
+    "attention": {
+      "level": "activity",
+      "needs_input": 0
+    },
+    "builtin": false
+  },
+  {
+    "id": "billing",
+    "name": "Billing",
+    "color": "#3d85c6",
+    "icon": "B",
+    "repos": [
+      {
+        "id": "core",
+        "path": "/Users/ada/code/billing",
+        "primary": true,
+        "remote": "origin",
+        "base": "main",
+        "code_host": {
+          "account": "gitlab-corp",
+          "repo": "fin/billing/core"
+        },
+        "exists": true
+      }
+    ],
+    "tracker": {
+      "account": "redmine-corp",
+      "views": [
+        {
+          "id": "mine",
+          "label": "Assigned to me",
+          "jql": null,
+          "board_id": null,
+          "project_id": "billing",
+          "query_id": null,
+          "assigned_to": "me",
+          "status": "open",
+          "repo": null,
+          "search": null,
+          "project_v2": null,
+          "project": null,
+          "scope": null,
+          "labels": null,
+          "workflow_scope": null
+        }
+      ],
+      "columns": [],
+      "status_map": {
+        "start": {
+          "category": "in_progress"
+        },
+        "review": {
+          "category": "in_review"
+        },
+        "done": {
+          "category": "done"
+        }
+      },
+      "repo_rules": []
+    },
+    "open": true,
+    "active": false,
+    "attention": {
+      "level": "needs_input",
+      "needs_input": 1
+    },
+    "builtin": false
+  },
+  {
+    "id": "kelta-tools",
+    "name": "Kelta tools",
+    "color": "#81b29a",
+    "icon": "K",
+    "repos": [
+      {
+        "id": "tools",
+        "path": "/Users/ada/oss/kelta-tools",
+        "primary": true,
+        "remote": "origin",
+        "base": "main",
+        "code_host": {
+          "account": "github-oss",
+          "repo": "ada/kelta-tools"
+        },
+        "exists": true
+      }
+    ],
+    "tracker": {
+      "account": "github-oss",
+      "views": [
+        {
+          "id": "mine",
+          "label": "Assigned issues",
+          "jql": null,
+          "board_id": null,
+          "project_id": null,
+          "query_id": null,
+          "assigned_to": null,
+          "status": null,
+          "repo": "ada/kelta-tools",
+          "search": null,
+          "project_v2": {
+            "owner": "ada",
+            "number": 3,
+            "status_field": "Status"
+          },
+          "project": null,
+          "scope": null,
+          "labels": null,
+          "workflow_scope": null
+        }
+      ],
+      "columns": [],
+      "status_map": {
+        "start": {
+          "category": "in_progress"
+        },
+        "review": {
+          "category": "in_review"
+        },
+        "done": {
+          "category": "done"
+        }
+      },
+      "repo_rules": []
+    },
+    "open": true,
+    "active": false,
+    "attention": {
+      "level": "done",
+      "needs_input": 0
+    },
+    "builtin": false
+  }
+]

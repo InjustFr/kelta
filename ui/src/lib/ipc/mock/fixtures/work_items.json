@@ -1,0 +1,298 @@
+[
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a001",
+    "project_id": "shop",
+    "kind": "ticket",
+    "ticket": {
+      "account": "jira-acme",
+      "key": "SHOP-142",
+      "id": "10142"
+    },
+    "review": null,
+    "repo_id": "api",
+    "worktree": "/Users/ada/code/shop-api.worktrees/SHOP-142",
+    "branch": "feat/SHOP-142-rate-limit-login",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0001",
+    "nvim_socket": "/tmp/kelta-501/s/0199a6b2/nvim.sock",
+    "session_ids": ["0199a6b2-0000-7000-8000-000000000001", "0199a6b2-0000-7000-8000-000000000002"],
+    "tab_id": "shop-t1",
+    "pr_url": null,
+    "state": {
+      "kind": "active"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "skipped",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-09T08:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a002",
+    "project_id": "billing",
+    "kind": "ticket",
+    "ticket": {
+      "account": "redmine-corp",
+      "key": "4567",
+      "id": "4567"
+    },
+    "review": null,
+    "repo_id": "core",
+    "worktree": "/Users/ada/code/billing.worktrees/4567",
+    "branch": "fix/4567-invoice-rounding",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0005",
+    "nvim_socket": null,
+    "session_ids": ["0199a6b2-0000-7000-8000-000000000005", "0199a6b2-0000-7000-8000-000000000006"],
+    "tab_id": "billing-t1",
+    "pr_url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/42",
+    "state": {
+      "kind": "failed",
+      "step": "tracker_side_effects",
+      "message": "Redmine: status transition not allowed (422)"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "failed",
+        "detail": "Redmine returned 422: Status is invalid",
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "pending",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-08T14:00:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a003",
+    "project_id": "kelta-tools",
+    "kind": "ticket",
+    "ticket": {
+      "account": "github-oss",
+      "key": "#12",
+      "id": "I_kwDOAbc012"
+    },
+    "review": null,
+    "repo_id": "tools",
+    "worktree": "/Users/ada/oss/kelta-tools.worktrees/gh-12",
+    "branch": "feat/gh-12-json-output",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0008",
+    "nvim_socket": null,
+    "session_ids": ["0199a6b2-0000-7000-8000-000000000008"],
+    "tab_id": "kt-t1",
+    "pr_url": "https://github.com/ada/kelta-tools/pull/13",
+    "state": {
+      "kind": "pr_open"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-07T10:00:00Z"
+  }
+]

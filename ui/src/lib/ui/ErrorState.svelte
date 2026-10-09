@@ -1,0 +1,74 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte';
+
+  import type { KeltaError } from '$lib/gen';
+
+  import Button from './Button.svelte';
+  import Icon from './Icon.svelte';
+
+  interface Props {
+    /** A KeltaError, an Error or a message. */
+    error: KeltaError | Error | string;
+    title?: string;
+    onretry?: () => void;
+    /** Extra actions ("Open settings", "Open diagnostics"…). */
+    actions?: Snippet;
+  }
+
+  let { error, title = 'Something went wrong', onretry, actions }: Props = $props();
+
+  const message = $derived(typeof error === 'string' ? error : error.message);
+  const code = $derived(typeof error === 'object' && 'code' in error ? String(error.code) : null);
+</script>
+
+<div class="k-error" role="alert">
+  <Icon name="circle-alert" size={24} />
+  <p class="title">{title}</p>
+  <p class="message k-selectable">{message}</p>
+  {#if code}<p class="code">{code}</p>{/if}
+  <div class="actions">
+    {#if onretry}<Button icon="refresh-cw" onclick={onretry}>Retry</Button>{/if}
+    {@render actions?.()}
+  </div>
+</div>
+
+<style>
+  .k-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--k-space-2);
+    height: 100%;
+    min-height: 120px;
+    padding: var(--k-space-6);
+    text-align: center;
+    color: var(--k-danger);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--k-fg);
+    font-weight: 600;
+  }
+
+  .message {
+    margin: 0;
+    max-width: 60ch;
+    color: var(--k-fg-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .code {
+    margin: 0;
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--k-space-3);
+    margin-top: var(--k-space-3);
+  }
+</style>
