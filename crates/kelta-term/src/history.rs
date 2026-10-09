@@ -37,13 +37,13 @@ enum Msg {
     Caps(u64, u64),
     Delete(SessionId),
     Tail(SessionId, usize, mpsc::Sender<String>),
-    Search(Vec<SessionId>, String, usize, mpsc::Sender<Vec<HistoryHit>>),
     Sync(mpsc::Sender<()>),
 }
 
 /// Handle to the writer thread (it ends when the last handle is dropped).
 pub(crate) struct HistoryLog {
     tx: SyncSender<Msg>,
+    dir: PathBuf,
 }
 
 /// `(per-session, total)` caps in bytes.
@@ -64,9 +64,12 @@ impl HistoryLog {
         #[allow(clippy::disallowed_methods)] // allowlisted: one history writer per host (ARCHITECTURE §9.6)
         std::thread::Builder::new()
             .name("kelta-history".into())
-            .spawn(move || Writer::new(dir, per, total).run(rx))
+            .spawn({
+                let dir = dir.clone();
+                move || Writer::new(dir, per, total).run(rx)
+            })
             .map_err(|e| KeltaError::internal(format!("history thread: {e}")))?;
-        Ok(Self { tx })
+        Ok(Self { tx, dir })
     }
 
     /// Queue a batch without waiting; a full queue hands the text back.
@@ -97,8 +100,12 @@ impl HistoryLog {
         self.request(|tx| Msg::Tail(id.clone(), max_lines, tx)).unwrap_or_default()
     }
 
+    /// Scans on the calling thread (a long scan must not stall the writer) once queued batches landed.
+    // shortcut: a rotation during the scan can skip or repeat lines near the boundary; snapshot the
+    // files first if search results must be exact.
     pub fn search(&self, ids: &[SessionId], query: &str, limit: usize) -> Vec<HistoryHit> {
-        self.request(|tx| Msg::Search(ids.to_vec(), query.to_lowercase(), limit, tx)).unwrap_or_default()
+        self.request(Msg::Sync);
+        search(&self.dir, ids, &query.to_lowercase(), limit)
     }
 
     fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg) -> Option<T> {
@@ -177,9 +184,6 @@ impl Writer {
                 Msg::Tail(id, n, tx) => {
                     let _ = tx.send(self.tail(&id, n));
                 }
-                Msg::Search(ids, q, limit, tx) => {
-                    let _ = tx.send(self.search(&ids, &q, limit));
-                }
                 Msg::Sync(tx) => {
                     let _ = tx.send(());
                 }
@@ -189,8 +193,7 @@ impl Writer {
 
     /// `[current, previous]` paths.
     fn paths(&self, id: &SessionId) -> Option<[PathBuf; 2]> {
-        let s = stem(id)?;
-        Some([self.dir.join(format!("{s}.log")), self.dir.join(format!("{s}.1.log"))])
+        paths(&self.dir, id)
     }
 
     fn append(&mut self, id: &SessionId, text: &str) -> std::io::Result<()> {
@@ -245,34 +248,40 @@ impl Writer {
         let lines: Vec<&str> = text.lines().collect();
         lines[lines.len().saturating_sub(n)..].join("\n")
     }
+}
 
-    /// Newest `limit` matching lines per session, at most `limit` in all.
-    fn search(&self, ids: &[SessionId], q: &str, limit: usize) -> Vec<HistoryHit> {
-        let mut out = Vec::new();
-        for id in ids {
-            let Some([cur, old]) = self.paths(id) else { continue };
-            let mut hits: VecDeque<String> = VecDeque::new();
-            for path in [old, cur] {
-                let Ok(f) = File::open(&path) else { continue };
-                let mut r = BufReader::new(f);
-                let mut raw = Vec::new();
-                while matches!(r.read_until(b'\n', &mut raw), Ok(n) if n > 0) {
-                    let line = String::from_utf8_lossy(&raw);
-                    let line = line.trim_end_matches('\n');
-                    if line.to_lowercase().contains(q) {
-                        if hits.len() == limit {
-                            hits.pop_front();
-                        }
-                        hits.push_back(line.to_owned());
+/// `[current, previous]` log paths of a session in `dir`.
+fn paths(dir: &Path, id: &SessionId) -> Option<[PathBuf; 2]> {
+    let s = stem(id)?;
+    Some([dir.join(format!("{s}.log")), dir.join(format!("{s}.1.log"))])
+}
+
+/// Newest `limit` matching lines per session, at most `limit` in all.
+fn search(dir: &Path, ids: &[SessionId], q: &str, limit: usize) -> Vec<HistoryHit> {
+    let mut out = Vec::new();
+    for id in ids {
+        let Some([cur, old]) = paths(dir, id) else { continue };
+        let mut hits: VecDeque<String> = VecDeque::new();
+        for path in [old, cur] {
+            let Ok(f) = File::open(&path) else { continue };
+            let mut r = BufReader::new(f);
+            let mut raw = Vec::new();
+            while matches!(r.read_until(b'\n', &mut raw), Ok(n) if n > 0) {
+                let line = String::from_utf8_lossy(&raw);
+                let line = line.trim_end_matches('\n');
+                if line.to_lowercase().contains(q) {
+                    if hits.len() == limit {
+                        hits.pop_front();
                     }
-                    raw.clear();
+                    hits.push_back(line.to_owned());
                 }
+                raw.clear();
             }
-            out.extend(hits.into_iter().map(|line| HistoryHit { session_id: id.clone(), line }));
         }
-        out.truncate(limit);
-        out
+        out.extend(hits.into_iter().map(|line| HistoryHit { session_id: id.clone(), line }));
     }
+    out.truncate(limit);
+    out
 }
 
 /// `(mtime, path, len)` of every `*.log` file in `dir`.
@@ -366,11 +375,23 @@ mod tests {
         let (a, b) = (SessionId::new("a"), SessionId::new("b"));
         w.append(&a, "Error one\nok\nerror two\nERROR three\n").unwrap();
         w.append(&b, "no match\nan error here\n").unwrap();
-        let hits = w.search(&[a.clone(), b.clone()], "error", 2);
+        let hits = search(d.path(), &[a.clone(), b.clone()], "error", 2);
         let lines: Vec<&str> = hits.iter().map(|h| h.line.as_str()).collect();
         assert_eq!(lines, ["error two", "ERROR three"]);
-        let hits = w.search(&[a, b.clone()], "here", 10);
+        let hits = search(d.path(), &[a, b.clone()], "here", 10);
         assert_eq!(hits, [HistoryHit { session_id: b, line: "an error here".into() }]);
+    }
+
+    #[test]
+    fn search_sees_batches_queued_before_it() {
+        let d = tempfile::tempdir().unwrap();
+        let log = HistoryLog::start(d.path().to_owned(), &TerminalLimits::default()).unwrap();
+        let id = SessionId::new("s");
+        log.append(&id, "Queued line\n".into()).unwrap();
+        assert_eq!(
+            log.search(std::slice::from_ref(&id), "QUEUED", 5),
+            [HistoryHit { session_id: id, line: "Queued line".into() }]
+        );
     }
 
     #[test]

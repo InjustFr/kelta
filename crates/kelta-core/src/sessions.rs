@@ -1054,7 +1054,7 @@ impl Core {
                 .map(|e| e.info.id.clone())
                 .collect()
         };
-        self.terminal.history_search(&ids, query, limit.min(1000))
+        self.terminal.history_search(&ids, query, limit.clamp(1, 1000))
     }
 
     // =========================================================================================
