@@ -253,6 +253,14 @@ async fn mcp_initialize_list_and_call() {
         call(port, sid.as_str(), "mt", "add_ticket_comment", json!({"markdown":"Fixed in **abc**"})).await;
     assert!(!err);
     assert!(tracker.calls().iter().any(|c| c.starts_with("comment")), "{:?}", tracker.calls());
+    let evs = e.fake.published();
+    let moved = evs.iter().find(|ev| ev.name == "ticket.transitioned").expect("ticket.transitioned");
+    assert_eq!(moved.payload["ticket"]["key"], "SHOP-142");
+    assert_eq!(moved.payload["to"]["name"], "In Review");
+    assert!(moved.payload["from"]["name"].is_string(), "{:?}", moved.payload);
+    assert_eq!(moved.session_id.as_ref(), Some(&sid));
+    let commented = evs.iter().find(|ev| ev.name == "ticket.commented").expect("ticket.commented");
+    assert_eq!(commented.payload["ticket"]["key"], "SHOP-142");
 
     let (_, err) =
         call(port, sid.as_str(), "mt", "open_in_editor", json!({"path":"src/login.rs","line":12})).await;
