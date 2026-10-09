@@ -51,7 +51,18 @@ end
 local l1, l2 = math.min(s[2], e[2]), math.max(s[2], e[2])
 local text = ''
 local ok, region = pcall(vim.fn.getregion, s, e, { type = (vmode ~= '' and vmode) or 'v' })
-if ok and type(region) == 'table' then text = table.concat(region, '\n') end
+if ok and type(region) == 'table' then
+  text = table.concat(region, '\n')
+else
+  -- nvim < 0.10 has no getregion: whole lines, trimmed to the columns for charwise mode.
+  if s[2] > e[2] or (s[2] == e[2] and s[3] > e[3]) then s, e = e, s end
+  local lines = vim.fn.getline(l1, l2)
+  if vmode == 'v' and #lines > 0 then
+    lines[#lines] = string.sub(lines[#lines], 1, e[3])
+    lines[1] = string.sub(lines[1], s[3])
+  end
+  text = table.concat(lines, '\n')
+end
 return { path = vim.api.nvim_buf_get_name(0), l1 = l1, l2 = l2, text = text }
 "#;
 

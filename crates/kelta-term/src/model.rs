@@ -578,6 +578,12 @@ impl TermModel {
             return;
         }
         self.term.grid_mut().truncate();
+        // glibc keeps freed rows in per-thread arenas; hand them back like macOS does on its own.
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        // SAFETY: malloc_trim has no preconditions.
+        unsafe {
+            libc::malloc_trim(0);
+        }
     }
 
     /// Plain text of the last `max_lines` lines of the primary screen (wrapped lines joined,
