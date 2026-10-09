@@ -732,15 +732,31 @@ pub(crate) fn apply_schema_defaults(values: &mut Value, schema: &Value) {
     }
 }
 
-/// Effective settings without accounts' secret refs (`settings.read`).
+/// Effective settings without secrets (`settings.read`): accounts' secret refs, every `env` and
+/// `headers` map (tools, triggers, terminal, project), and tool URLs marked `url_is_secret`.
 fn non_secret_settings(s: &kelta_proto::settings::Settings) -> Value {
+    fn scrub(v: &mut Value) {
+        match v {
+            Value::Object(o) => {
+                for k in ["secret", "env", "headers"] {
+                    o.remove(k);
+                }
+                o.values_mut().for_each(scrub);
+            }
+            Value::Array(a) => a.iter_mut().for_each(scrub),
+            _ => {}
+        }
+    }
     let mut v = serde_json::to_value(s).unwrap_or(Value::Null);
-    if let Some(accounts) = v.get_mut("accounts").and_then(Value::as_object_mut) {
-        for a in accounts.values_mut() {
-            if let Some(o) = a.as_object_mut() {
-                o.remove("secret");
+    if let Some(tools) = v.get_mut("tools").and_then(Value::as_array_mut) {
+        for (t, def) in tools.iter_mut().zip(&s.tools) {
+            if def.url_is_secret.unwrap_or(def.start.is_some())
+                && let Some(o) = t.as_object_mut()
+            {
+                o.remove("url");
             }
         }
     }
+    scrub(&mut v);
     v
 }

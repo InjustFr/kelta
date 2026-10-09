@@ -126,7 +126,16 @@ async fn dynamic_permissions_check_their_argument() {
 #[tokio::test]
 async fn settings_get_returns_defaults_and_effective_only_with_settings_read() {
     let schema = r#"{"type":"object","properties":{"greeting":{"type":"string","default":"Hello"}}}"#;
-    let env = common::Env::new();
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(kelta_proto::ext::ToolDef {
+            id: "grafana".into(),
+            kind: kelta_proto::ext::ToolKind::Web,
+            url: Some("http://localhost:3000/?auth_token=XYZ".into()),
+            url_is_secret: Some(true),
+            env: [("TOKEN".to_owned(), "XYZ".to_owned())].into(),
+            ..Default::default()
+        });
+    });
     let m = format!(
         "{}{SCREEN}\n[contributes.settings]\nschema = \"s.json\"\n",
         common::manifest("cfg", &["settings.read"], "")
@@ -146,7 +155,9 @@ async fn settings_get_returns_defaults_and_effective_only_with_settings_read() {
         .call(&s.instance_id, PluginMethod::SettingsGet, json!({}), origin(&s.instance_id))
         .await
         .unwrap();
-    assert!(v.get("$effective").is_some());
+    let effective = v.get("$effective").unwrap();
+    assert!(!effective.to_string().contains("XYZ"), "secrets leaked: {effective}");
+    assert_eq!(effective["tools"][0]["id"], "grafana");
     let fragments = kelta_proto::api::PluginSettingsSource::fragments(&*env.host);
     assert_eq!(fragments.len(), 1);
     assert_eq!(fragments[0].0, id);
