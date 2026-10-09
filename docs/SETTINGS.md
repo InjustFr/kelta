@@ -44,7 +44,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 ### [keys]
 | `prefix` | Chord \| "off" | `ctrl+shift+space` | app-prefix key |
 | `prefix_timeout_ms` | int (200..5000) | `1000` | one-shot timer |
-| `bindings` | map<ActionId, list<Chord>> | platform defaults (SPEC §4) | `[]` unbinds |
+| `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts in lists/boards |
 

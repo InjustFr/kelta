@@ -43,39 +43,42 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). Verified aga
 | tauri-plugin-single-instance | 2.5.2 | forwards argv of 2nd launch | desktop |
 | tokio | 1.53.2 | rt-multi-thread, macros, net, process, sync, time, io-util, fs, signal | all async crates |
 | portable-pty | 0.9.0 | spawn/openpty only, behind `PtyBackend` trait; rustix fallback | kelta-term |
-| alacritty_terminal | 0.26.0 | headless `Term`, `vte::ansi::Processor` (vte 0.15 transitive) | kelta-term |
-| rustix | 1.1.5 | pty, process, event (poll), net (peer creds), termios, fs | term, server, platform |
+| alacritty_terminal | 0.26.0 | `default-features = false` (no serde); headless `Term`, `vte::ansi::Processor` (vte 0.15 transitive) | kelta-term |
+| rustix | 1.1.5 | pty, process, event (poll), net (peer creds), termios, fs | term, server, work, platform |
 | libc | 0.2.190 | `mallopt(M_ARENA_MAX)`, `malloc_trim` (glibc only) | desktop/platform |
 | reqwest | 0.13.5 | `default-features = false`, features `rustls, json, gzip, http2, query, system-proxy` | kelta-http |
 | axum | 0.8.9 | lazy loopback HTTP server (MCP, http hooks, web proxy) | kelta-server, kelta-plugins |
 | hyper | 1.12.0 | proxy client | kelta-plugins |
-| tokio-tungstenite | 0.30.0 | proxy WebSocket passthrough | kelta-plugins |
+| hyper-util / http-body-util | 0.1.21 / 0.1.5 | `client-legacy, tokio, http1`: hyper 1.x client + `TokioIo` (already in the graph via axum) | kelta-plugins |
+| tokio-tungstenite | 0.30.0 | proxy WebSocket passthrough; axum 0.8.9 `ws` brings its own 0.29, so both are in the lockfile: never mix axum `WebSocket` types with 0.30 types | kelta-plugins |
 | rmcp | 3.5.1 | MCP server, streamable-HTTP transport (fallback: hand-rolled JSON-RPC for `initialize`, `tools/list`, `tools/call`) | kelta-server |
 | rmpv | 1.3.1 | hand-rolled msgpack-RPC client for nvim (`nvim-rs` not used: stale) | kelta-work |
 | rusqlite | 0.40.2 | `bundled`; WAL; `PRAGMA cache_size=-2000` | kelta-core |
 | toml | 1.1.8 | | kelta-config, kelta-plugins |
 | toml_edit | 0.25.17 | comment-preserving writes | kelta-config |
 | schemars | 1.2.2 | settings JSON Schema | kelta-proto, xtask |
-| jsonschema | 0.58.6 | validate settings + plugin manifests + plugin settings fragments | kelta-config, kelta-plugins |
+| jsonschema | 0.58.6 | `default-features = false` (no remote `$ref` resolution); validate settings + plugin manifests + plugin settings fragments | kelta-config, kelta-plugins |
 | serde / serde_json | 1.0.229 / 1.0.151 | | all |
 | notify / notify-debouncer-full | 8.2.0 / 0.7.0 | watch config dirs (FSEvents / inotify, no polling) | kelta-config |
 | keyring-core | 1.0.0 | | kelta-secrets |
 | apple-native-keyring-store | 1.0.2 | feature `keychain` (macOS only target dep) | kelta-secrets |
-| zbus-secret-service-keyring-store | 1.0.1 | tokio + pure-Rust crypto feature (exact feature name verified at scaffold) (Linux only) | kelta-secrets |
-| zbus | 5.19.0 | Linux: notification daemon / Secret Service probes | kelta-core, kelta-secrets |
-| arboard | 3.6.1 | feature `wayland-data-control`; CLIPBOARD + PRIMARY | kelta-core |
+| zbus-secret-service-keyring-store | 1.0.1 | feature `rt-tokio-crypto-rust` (Linux only) | kelta-secrets |
+| zbus | 5.19.0 | `default-features = false`, feature `tokio`; Linux: notification daemon / Secret Service probes | kelta-core, kelta-secrets, desktop |
+| arboard | 3.6.1 | `default-features = false`, feature `wayland-data-control` (no image data); CLIPBOARD + PRIMARY | kelta-core |
 | pulldown-cmark / ammonia | 0.13.4 / 4.2.1 | markdown → sanitized HTML | kelta-providers-common (in kelta-http crate `markdown` module) |
 | uuid | 1.27.0 | v4, v7, serde | proto |
 | regex / globset | 1.13.1 / 0.4.20 | | many |
-| directories / which | 6.0.0 / 8.0.6 | | config, work |
+| directories / which | 6.0.0 / 8.0.6 | | config, work, plugins |
 | thiserror / anyhow | 2.0.21 / 1.0.104 | anyhow only in binaries/tests | all |
 | tracing / tracing-subscriber / tracing-appender | 0.1.44 / 0.3.23 / 0.2.5 | file log, size-capped, `info` default, no stdout in release | all |
 | ts-rs | 12.0.1 | export DTOs to `ui/src/lib/gen/` | proto |
 | async-trait | 0.1.92 | object-safe provider/core traits | proto + impls |
-| base64 / sha2 / time / bytes / parking_lot / futures / semver / mime_guess | 0.23.1 / 0.11.0 / 0.3.55 / 1.12.1 / 0.12.5 / 0.3.34 / 1.0.28 / 2.0.5 | | various |
-| objc2 | 0.6.5 | macOS only: WebContent-terminated delegate + bench WebContent pid | desktop (L10) |
-| webkit2gtk | exact version wry 0.57.0 resolves in Cargo.lock (Linux target dep; scaffold pins it) | Linux only: `CacheModel::DocumentViewer`, `web-process-terminated` via `with_webview` | desktop (L10) |
+| base64 / sha2 / time / bytes / parking_lot / futures / semver / mime_guess | 0.23.1 / 0.11.0 / 0.3.55 / 1.12.1 / 0.12.5 / 0.3.34 / 1.0.28 / 2.0.5 | `semver`: plugins, config, work | various |
+| objc2 / objc2-foundation / objc2-web-kit | 0.6.5 / 0.3.2 / 0.3.2 | macOS only: WebContent-terminated delegate + bench WebContent pid | desktop (L10) |
+| webkit2gtk | 2.0.2 (the version wry 0.57.0 resolves; Linux target dep) | Linux only: `CacheModel::DocumentViewer`, `web-process-terminated` via `with_webview` | desktop (L10) |
 | dev: insta / wiremock / proptest / tempfile / criterion | 1.49.0 / 0.6.5 / 1.11.0 / 3.27.0 / 0.8.2 | | tests |
+
+`toml`/`toml_edit` are published as `1.1.8+spec-1.1.0` / `0.25.17+spec-1.1.0`; `=x.y.z` matches them. License policy (`deny.toml`): MIT, MIT-0, Apache-2.0 (± LLVM exception), BSD-2/3-Clause, 0BSD, ISC, MPL-2.0, Zlib, Unicode-3.0, plus a single exception for `notify` (CC0-1.0); the graph is restricted to macOS/Linux targets.
 
 `kelta-ctl` depends **only** on `std`, `serde`, `serde_json`, `rustix` (peer socket) — target < 1 MB stripped, < 5 ms per hook invocation.
 
@@ -97,6 +100,10 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). Verified aga
 | @playwright/test | 1.64.0 | UI e2e against Vite dev server + IPC mock |
 | eslint / typescript-eslint / eslint-plugin-svelte | 10.12.0 / 8.71.1 / 3.23.1 | |
 | prettier / prettier-plugin-svelte | 3.9.9 / 4.1.1 | |
+| @eslint/js / globals | 10.0.1 / 17.12.0 | root devDependencies for the flat `eslint.config.js` (the lint toolchain, `svelte` and `typescript` are also declared at the root) |
+| @types/node | 22.20.5 | ui, `vite.config.ts` and Node-side test helpers |
+
+`jsdom 30.1.2` declares `engines.node ^22.22.2`; it runs on Node 22.16+, and `.npmrc` sets `engine-strict=false`. `packageManager` is `pnpm@9.12.1`.
 
 **Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib. Icons: one inline SVG sprite.
 
@@ -219,6 +226,8 @@ pub struct PtySpawnSpec { pub id: SessionId, pub program: PathBuf /*absolute, re
 // ---- providers (impl: kelta-trackers / kelta-codehosts) ----------------
 pub trait Tracker: Send + Sync { /* §8.1 */ }
 pub trait CodeHost: Send + Sync { /* §8.2 */ }
+// ProviderFactory lives in kelta_http::provider (re-exported as kelta_http::ProviderFactory), not in proto:
+// it takes kelta_http::HttpCtx, and kelta-http depends on kelta-proto.
 pub trait ProviderFactory: Send + Sync {   // impl in kelta-trackers + kelta-codehosts (two impls, core picks by kind)
   fn tracker(&self, account: &AccountConfig, http: HttpCtx, secrets: Arc<dyn SecretResolver>) -> Result<Arc<dyn Tracker>, KeltaError>;
   fn code_host(&self, account: &AccountConfig, http: HttpCtx, secrets: Arc<dyn SecretResolver>) -> Result<Arc<dyn CodeHost>, KeltaError>;
@@ -277,14 +286,17 @@ pub trait UiBridge: Send + Sync {
   fn notify(&self, n: Notification) -> Result<(), KeltaError>;  // tauri-plugin-notification
   fn window_state(&self) -> WindowState;                // {exists, visible, focused}
   fn reload_webview(&self, safe: bool);                 // hang/crash recovery (§12.4)
+  fn webview_pids(&self) -> Vec<u32> { Vec::new() }     // WebKit helper pids for perf_snapshot (macOS)
 }
 // Services owned by other lanes that core calls (constructor signatures frozen in scaffold stubs):
-//   kelta_work::WorkService::new(core: Weak<dyn CoreApi>, store: WorkStore) ; methods mirror §6 work_* commands
-//   kelta_server::Server::new(core: Weak<dyn CoreApi>, runtime_dir) ; start_ctl(), ensure_http() -> port, register_session_tokens()
-//   kelta_plugins::PluginHost::new(core: Weak<dyn CoreApi>, dirs, grants: GrantStore) ; tools, triggers, screens, uri handler
-//   kelta_config::ConfigService::load(dirs, cli_overrides) ; impl SettingsSource ; watch(tx)
-//   kelta_secrets::Secrets::new(settings) ; impl SecretResolver
-//   kelta_term::PtyTerminalHost::new(env: LoginEnv) ; impl TerminalHost ; kelta_term::resolve_login_env()
+// (exact signatures: BUILD_PLAN §2.2)
+//   kelta_work::WorkService::new(core: Weak<dyn CoreApi>, store: Arc<dyn WorkStore>, dirs: Dirs) ; methods mirror §6 work_* commands (+ for_session)
+//   kelta_server::Server::new(core: Weak<dyn CoreApi>, dirs: Dirs) ; start_ctl(), ensure_http() -> port, register_session(sid, hook_token, mcp_token)
+//   kelta_plugins::PluginHost::new(core: Weak<dyn CoreApi>, dirs: Dirs, grants: Arc<dyn GrantStore>) ; tools, triggers, screens,
+//       uri::handle(host: &PluginHost, req) (the handler needs the plugin directories)
+//   kelta_config::ConfigService::load(dirs: &Dirs, overrides: RuntimeOverrides) ; impl SettingsSource ; watch(on_change) ; set_plugin_schemas
+//   kelta_secrets::Secrets::new(settings: Arc<dyn SettingsSource>) ; impl SecretResolver
+//   kelta_term::PtyTerminalHost::new(env: LoginEnv, limits: TerminalLimits) ; impl TerminalHost ; kelta_term::resolve_login_env(timeout)
 ```
 
 `WorkStore`, `GrantStore`, `TrustStore` are small traits in proto implemented by kelta-core over SQLite (fakes in `testing`).
@@ -328,6 +340,7 @@ pub struct ClaudeMeta { session_uuid: String, model: Option<String>, preview: Op
 pub struct EditorMeta { adapter: String, socket: Option<PathBuf> }
 pub struct AttachInfo { generation: u32, cols: u16, rows: u16 }
 pub struct StatusChange { status: SessionStatus, preview: Option<String>, file_edited: Option<PathBuf>, raw_event: String }
+// status == Unknown means "unchanged" (e.g. PostToolUse): core keeps the previous status.
 
 pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
@@ -365,6 +378,8 @@ pub enum Placement { NewTab, SplitRight, SplitDown, ReplaceFocused, Focused /*fo
 ## 6. IPC command catalogue (Tauri commands)
 
 Conventions: every command is `async`, takes one argument object (TS: `invoke('<name>', { ... })`), returns `Result<T, KeltaError>`. TS wrappers in `ui/src/lib/ipc/commands.ts` (scaffold, generated names + typed signatures), mocks in `ui/src/lib/ipc/mock.ts`. Binary payloads (`session_write` data, frames) use `Uint8Array` / `tauri::ipc::Response` / `Channel<InvokeResponseBody>`.
+
+Wire format (frozen by the scaffold, checked by the fixture round-trips): enums serialize in `snake_case` (`ErrorCode` → `"not_found"`, `SessionStatus` → `"needs_input"`), except `PermissionMode` (Claude's camelCase values), `ClaudeEffort` (lowercase), `Osc52`/`ShiftEnter` (kebab-case), `PluginMethod` (`"tickets.list"`) and `Permission` (its string form). Tagged unions: `UiEvent`, `SessionKind`, `LayoutNode` tag `type`; `PaneContent`, `Scope`, `RestorePolicy`, `WorkState`, `WorkSource`, `ToolHandle`, `EditorTarget`, `Assignee` tag `kind`; `Cursor` adjacently tagged `{kind, value}`; `ActionDef` tag `action`; `CtlCommand` tag `cmd`. `Option` fields serialize as `null` (TS `T | null`; missing keys read as `None`); `u64`/`i64` are TS `number`. Small result DTOs not spelled out below (`SubscribeResult{sub_id}`, `LayoutSaveResult{rev}`, `ScreenOpenResult{instance_id, url}`, `PaneRef`, `ProjectPatch`, …) live in `kelta-proto`. The TS wrappers are camelCase functions taking the snake_case argument object (`projectClose({id, kill_sessions})`). In the scaffold stubs every command returns `Unsupported` except `app_info` and `events_subscribe`.
 
 | Command | Args | Returns | Owner file |
 |---|---|---|---|
@@ -408,7 +423,7 @@ Conventions: every command is `async`, takes one argument object (TS: `invoke('<
 | `session_spawn_template` | `{project_id, template_id, ctx: TemplateCtx, placement: Placement}` | `Vec<SessionInfo>` (+ layout update event) | |
 | `session_attach` | `{id, cols, rows, channel: Channel<InvokeResponseBody>}` | `AttachInfo` — spawns Dormant sessions (lazy restore) | |
 | `session_detach` | `{id, generation}` | `()` | |
-| `session_write` | `{id, data: Uint8Array}` | `()` (fire-and-forget from UI) | |
+| `session_write` | `{id, data: Uint8Array}` | `()` (fire-and-forget from UI). Wire: raw `Uint8Array` body + header `x-kelta-session-id` (preferred), or JSON `{id, data}` with `data` as number array, index-keyed object or string | |
 | `session_resize` | `{id, cols, rows}` | `()` | |
 | `session_ack` | `{id, generation, bytes: u32}` | `()` | |
 | `session_kill` | `{id, force: bool}` | `()` | |
@@ -566,7 +581,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 | Stop | Done (preview = `last_assistant_message`, 200 chars) | Done if pane not visible |
 | StopFailure | Error | Error |
 | SessionEnd / PTY exit | Exited | — |
-| PostToolUse `Edit\|Write\|MultiEdit` | unchanged; `file_edited = tool_input.file_path` → bus `claude.file_edited` | — |
+| PostToolUse `Edit\|Write\|MultiEdit` | unchanged (`StatusChange.status = Unknown`); `file_edited = tool_input.file_path` → bus `claude.file_edited` | — |
 
 **Hooks-inactive fallback:** no SessionStart within 10 s of spawn (one-shot) → `hooks_active=false`, status source `Heuristic`: output → Working; BEL / OSC 9 / OSC 777 → NeedsInput; 3 s quiet after output (one-shot armed only by output) → Done. Pane header shows "status hooks inactive · Fix" → Diagnostics.
 
@@ -765,7 +780,7 @@ Reference workload `bench/fixtures/3p10s`: 3 open projects, 10 live sessions (3 
 | Idle CPU | ≤ 0.2 % avg, ≤ 1 wakeup/s over 120 s unfocused | scheduler is sole timer owner; no JS intervals | `/proc/<pid>/task/*/status` ctxt switches, `ri_pkg_idle_wkups`; utime+stime |
 | Bundle | initial JS ≤ 200 KB gz; each lazy chunk ≤ 120 KB gz; dmg ≤ 20 MB; deb ≤ 15 MB | dynamic imports | `bench/bundle-size.mjs`, artifact sizes |
 
-**Enforcement lints (scaffold):** `clippy.toml` `disallowed-methods`: `tokio::time::interval`, `tokio::time::sleep` outside `kelta-core::scheduler` and tests, `std::thread::sleep`, `std::thread::spawn` outside `kelta-term::reader` and `kelta-core::store`; `scripts/check-no-timers.sh` fails on `setInterval` and recursive `requestAnimationFrame` in `ui/src` outside `ui/src/lib/terminal/raf.ts`.
+**Enforcement lints (scaffold):** `clippy.toml` `disallowed-methods` (workspace-wide, BUILD_PLAN §2.6): `tokio::time::interval`, `tokio::time::interval_at`, `std::thread::sleep`, `std::thread::spawn` (allowed only in `kelta-term::reader`, `kelta-core::scheduler`, `kelta-core::store` and tests via `#[allow]` + `// allowlisted:`), `std::process::exit`. `tokio::time::sleep` is not lint-banned: it is allowed only as an event-armed one-shot marked `// one-shot: <reason>` (BUILD_PLAN §1.5); `scripts/check-no-timers.sh` fails on `setInterval` and recursive `requestAnimationFrame` in `ui/src` outside `ui/src/lib/terminal/raf.ts`.
 
 ---
 
