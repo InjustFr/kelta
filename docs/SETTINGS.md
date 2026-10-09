@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]

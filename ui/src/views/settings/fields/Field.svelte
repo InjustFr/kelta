@@ -151,16 +151,29 @@
     grid-row: auto;
   }
 
-  /* A toggle carries its own label: toggle left, markers right. */
+  /* A toggle carries its own label: it spans the row with its text left and the switch in the
+     control column, and the head (markers) sits over column 1 so badges keep one slot per row. */
   .field[data-kind='bool'] > :global(*) {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 1;
   }
 
+  .field[data-kind='bool'] > :global(.control .k-toggle) {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    min-height: var(--k-control-height);
+  }
+
   .field[data-kind='bool'] > .head {
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
-    justify-content: flex-end;
+    position: relative;
+    pointer-events: none;
+  }
+
+  .field[data-kind='bool'] > .head > .markers {
+    pointer-events: auto;
   }
 
   .field[data-kind='bool'] > .desc {

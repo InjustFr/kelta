@@ -54,8 +54,11 @@ function projectName(id: ProjectId): string {
 }
 
 function sessionDetail(s: SessionInfo): string {
-  const status = statusLabel(s.status);
-  return [projectName(s.project_id), sessionKindName(s.kind), status].filter(Boolean).join(SEP);
+  const kind = sessionKindName(s.kind);
+  // The kind only adds information when the session was renamed ("claude" titled "claude" says it twice).
+  return [projectName(s.project_id), kind === s.name ? null : kind, statusLabel(s.status)]
+    .filter(Boolean)
+    .join(SEP);
 }
 
 export function sessionItems(): PaletteItem[] {

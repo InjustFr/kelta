@@ -63,7 +63,7 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .k-button:hover:not(:disabled) {
+  .k-button:not(.primary, .danger, .ghost):hover:not(:disabled) {
     background: var(--k-bg-active);
   }
 

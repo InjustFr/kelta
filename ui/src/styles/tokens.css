@@ -58,7 +58,7 @@
   --k-bg-selected: #e3edf3; /* hex fallback, overridden below */
   --k-fg: #1b2026;
   --k-fg-muted: #56606b;
-  --k-fg-subtle: #737c87; /* 4.5:1 on well, safe at 11px */
+  --k-fg-subtle: #5f6873; /* >= 4.5:1 on every light surface (4.51 on bezel) */
   --k-fg-chrome: #5d6772;
   --k-border: #cfd4d9;
   --k-border-strong: #b6bdc4;
@@ -78,6 +78,7 @@
   --k-lamp-error: #a86f00;
   --k-lamp-done: #2e8550;
   --k-lamp-activity: #737c87;
+  --k-lit-mix: 14%; /* lit rail tile: needs-input share of the tile face */
 
   /* terminal (mirror of lib/terminal/theme.ts LIGHT, which is the source of truth) */
   --k-term-bg: #fafbfb;
@@ -125,9 +126,9 @@
     --k-bg-active: rgba(216, 221, 227, 0.1);
     --k-bg-selected: #1e2a33;
     --k-fg: #d8dde3;
-    --k-fg-muted: #8b95a1;
-    --k-fg-subtle: #6b7580;
-    --k-fg-chrome: #7f8995;
+    --k-fg-muted: #9ca6b1;
+    --k-fg-subtle: #88929e;
+    --k-fg-chrome: #8e98a4;
     --k-border: #2a3038;
     --k-border-strong: #39414b;
     --k-accent: #6fa8c7;
@@ -144,6 +145,7 @@
     --k-lamp-error: #d9a03f;
     --k-lamp-done: #5db37e;
     --k-lamp-activity: #8b95a1;
+    --k-lit-mix: 30%;
     --k-term-bg: #121519;
     --k-term-fg: #d3d9df;
     --k-term-cursor: #d3d9df;
@@ -181,9 +183,9 @@
   --k-bg-active: rgba(216, 221, 227, 0.1);
   --k-bg-selected: #1e2a33;
   --k-fg: #d8dde3;
-  --k-fg-muted: #8b95a1;
-  --k-fg-subtle: #6b7580;
-  --k-fg-chrome: #7f8995;
+  --k-fg-muted: #9ca6b1;
+  --k-fg-subtle: #88929e;
+  --k-fg-chrome: #8e98a4;
   --k-border: #2a3038;
   --k-border-strong: #39414b;
   --k-accent: #6fa8c7;
@@ -200,6 +202,7 @@
   --k-lamp-error: #d9a03f;
   --k-lamp-done: #5db37e;
   --k-lamp-activity: #8b95a1;
+  --k-lit-mix: 30%;
   --k-term-bg: #121519;
   --k-term-fg: #d3d9df;
   --k-term-cursor: #d3d9df;

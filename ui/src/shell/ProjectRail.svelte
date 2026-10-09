@@ -333,21 +333,16 @@
       0 0 0 4px var(--k-focus);
   }
 
-  .item.active {
-    color: var(--k-fg);
-  }
-
-  .project {
+  /* Only the current destination (a project, home or the inbox) wears a tile face. */
+  .item.active,
+  .project:not(.home) {
     background: var(--k-well);
     overflow: visible;
   }
 
-  .project:hover {
-    background: var(--k-well);
-  }
-
-  /* Index bar: raw project colour, short when idle, full height on the active project. */
-  .project:not(.home)::before {
+  /* Index bar: raw project colour, short when idle, full height on the current destination. */
+  .project:not(.home)::before,
+  .item.active::before {
     content: '';
     position: absolute;
     left: 0;
@@ -355,12 +350,17 @@
     bottom: 8px;
     width: 3px;
     border-radius: var(--k-radius) 0 0 var(--k-radius);
-    background: var(--project-color);
+    background: var(--project-color, var(--k-fg-muted));
   }
 
-  .project.active::before {
+  .item.active::before {
     top: 0;
     bottom: 0;
+  }
+
+  .item.active,
+  .project:not(.home):hover {
+    color: var(--k-fg);
   }
 
   .project.active .glyph {
@@ -369,7 +369,7 @@
 
   /* Claude waiting is the brightest thing in the window. */
   .project.lit {
-    background: color-mix(in oklab, var(--k-lamp-needs-input) 14%, var(--k-well));
+    background: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well));
   }
 
   .glyph {

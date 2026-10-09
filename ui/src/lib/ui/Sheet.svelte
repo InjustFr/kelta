@@ -44,10 +44,15 @@
   style:width="min({width}px, calc(100vw - 32px))"
   {onkeydown}
 >
-  <header>
-    <h2 id={titleId}>{title}</h2>
-    <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
-  </header>
+  {#if side === 'top'}
+    <!-- Palette-like: the input is the top edge; Esc and the backdrop close it. -->
+    <h2 id={titleId} class="k-visually-hidden">{title}</h2>
+  {:else}
+    <header>
+      <h2 id={titleId}>{title}</h2>
+      <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
+    </header>
+  {/if}
   <div class="body">{@render children()}</div>
   {#if actions}<footer>{@render actions()}</footer>{/if}
 </div>

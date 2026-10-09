@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { ProjectId, Tab, ToolInfo } from '$lib/gen';
-  import { activeTab, moveTab } from '$lib/layout';
+  import { activeTab, allPanes, moveTab, paneSession } from '$lib/layout';
   import { layout, toasts, tools, ui } from '$lib/stores';
   import { Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
@@ -140,7 +140,9 @@
     >
       <span class="lamp-slot"><Lamp {level} /></span>
       {#if tab.work_item_id}<Icon name="git-branch" size={12} />{/if}
-      <span class="title">{tab.title}</span>
+      <span class="title" class:session={tab.work_item_id || allPanes(tab.root).some((p) => paneSession(p))}
+        >{tab.title}</span
+      >
       <button
         type="button"
         class="close"
@@ -259,6 +261,11 @@
   .title {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Session tabs (session / branch) in mono, view tabs in the UI face (DESIGN §6.3). */
+  .title.session {
+    font-family: var(--k-font-mono);
   }
 
   .close {

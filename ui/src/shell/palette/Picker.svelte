@@ -41,12 +41,18 @@
     testid = 'picker',
   }: Props = $props();
 
+  // One header per group: groups keep the order of their best hit, items keep score order inside.
+  const shown = $derived.by(() => {
+    const order = [...new Set(items.map((i) => i.group))];
+    return [...items].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+  });
+
   let selected = $state(0);
   let list = $state<HTMLElement>();
 
   $effect(() => {
     // New results: select the first one.
-    void items;
+    void shown;
     selected = 0;
   });
 
@@ -58,13 +64,13 @@
   function onkeydown(e: KeyboardEvent): void {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
       e.preventDefault();
-      selected = items.length === 0 ? 0 : (selected + 1) % items.length;
+      selected = shown.length === 0 ? 0 : (selected + 1) % shown.length;
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) {
       e.preventDefault();
-      selected = items.length === 0 ? 0 : (selected - 1 + items.length) % items.length;
+      selected = shown.length === 0 ? 0 : (selected - 1 + shown.length) % shown.length;
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const item = items[selected];
+      const item = shown[selected];
       if (item) onpick(item.id);
     }
   }
@@ -89,8 +95,8 @@
       {#if busy}<Spinner size={14} />{/if}
     </div>
     <div class="list" bind:this={list} role="listbox" aria-label="Results">
-      {#each items as item, i (item.id)}
-        {#if item.group && item.group !== items[i - 1]?.group}
+      {#each shown as item, i (item.id)}
+        {#if item.group && item.group !== shown[i - 1]?.group}
           <div class="group" role="presentation">{item.group}</div>
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -105,9 +111,11 @@
           onpointermove={() => (selected = i)}
           onclick={() => onpick(item.id)}
         >
+          <span class="lamp-slot"
+            >{#if item.lamp}<Lamp level={item.lamp} />{/if}</span
+          >
           <Icon name={item.icon ?? 'command'} size={14} />
           <span class="label">{item.label}</span>
-          {#if item.lamp}<Lamp level={item.lamp} />{/if}
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
           {#if item.kbd}<Kbd chord={item.kbd} />{/if}
         </div>
@@ -172,6 +180,12 @@
     border-radius: var(--k-radius-sm);
     color: var(--k-fg);
     cursor: pointer;
+  }
+
+  .lamp-slot {
+    display: inline-flex;
+    flex: none;
+    width: 10px;
   }
 
   .row > :global(.k-icon) {

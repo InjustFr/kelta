@@ -15,6 +15,7 @@
     ErrorState,
     Icon,
     IconButton,
+    Lamp,
     Menu,
     Tabs,
     VirtualList,
@@ -23,6 +24,7 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError, statusTone } from '../work/common';
+  import { sessionsLamp } from '../../shell/nav';
   import { openContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
@@ -346,8 +348,9 @@
     void move.moveToColumn(item.ticket, column);
   }
 
-  const hasWork = (item: TicketItem): boolean =>
-    item.work_item_id !== null || work.forTicket(item.ticket.ref) !== null;
+  const workOf = (item: TicketItem) =>
+    work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
+  const hasWork = (item: TicketItem): boolean => item.work_item_id !== null || workOf(item) !== null;
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -377,8 +380,8 @@
         value={viewId ?? undefined}
         onchange={setView}
       />
-    {:else}
-      <span class="title">{views[0]?.label ?? (scope.kind === 'all' ? 'All projects' : 'Tickets')}</span>
+    {:else if views[0] || scope.kind === 'all'}
+      <span class="title">{views[0]?.label ?? 'All projects'}</span>
     {/if}
     <span class="spacer"></span>
     {#if project?.tracker}
@@ -521,8 +524,9 @@
                   onclick={() => (selKey = keyOf(item))}
                   ondblclick={() => openDetail(item)}
                 >
-                  <span class="card-row">
+                  <span class="card-row first">
                     <span class="key">{item.ticket.ref.key}</span>
+                    <Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} />
                     {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
@@ -599,25 +603,14 @@
 <MoveDialogs {move} />
 
 <style>
-  .title {
-    font-weight: var(--k-weight-strong);
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .list {
-    flex: 1;
-    min-height: 0;
-  }
-
+  /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */
   .board {
     flex: 1;
     min-height: 0;
     display: flex;
-    gap: var(--k-gap);
-    background: var(--k-bezel);
+    gap: var(--k-space-3);
+    padding: var(--k-space-3);
+    background: var(--k-well);
     overflow: auto;
   }
 
@@ -626,6 +619,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    border-radius: var(--k-radius-sm);
     background: var(--k-bezel);
   }
 
@@ -642,12 +636,6 @@
     font-size: var(--k-font-size-sm);
     font-weight: var(--k-weight-strong);
     color: var(--k-fg-muted);
-  }
-
-  .count {
-    font-size: var(--k-font-size-xs);
-    font-weight: 400;
-    color: var(--k-fg-subtle);
   }
 
   .cards {
@@ -682,6 +670,11 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
+  }
+
+  /* Fixed to chip height on every card so titles line up across lanes. */
+  .card-row.first {
+    height: 18px;
   }
 
   .key {

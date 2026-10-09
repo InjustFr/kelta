@@ -244,7 +244,6 @@
   {onkeydown}
 >
   <header class="k-toolbar">
-    <span class="title">Inbox</span>
     <span class="spacer"></span>
     <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
   </header>
@@ -347,19 +346,6 @@
 </div>
 
 <style>
-  .title {
-    font-weight: var(--k-weight-strong);
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .list {
-    flex: 1;
-    min-height: 0;
-  }
-
   .section {
     color: var(--k-fg);
   }
@@ -376,12 +362,6 @@
   }
 
   .empty {
-    color: var(--k-fg-subtle);
-  }
-
-  .count {
-    font-size: var(--k-font-size-xs);
-    font-weight: 400;
     color: var(--k-fg-subtle);
   }
 </style>

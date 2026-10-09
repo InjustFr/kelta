@@ -147,7 +147,8 @@
       >
         <span data-testid="ahead">↑{git.ahead}</span>
         <span data-testid="behind">↓{git.behind}</span>
-        {#if git.dirty}<span class="dirty" aria-label="Uncommitted changes">●</span>{/if}
+        <!-- A mono "*" like a modified buffer, not a dot: saturated dots are reserved for lamps. -->
+        {#if git.dirty}<span aria-label="Uncommitted changes">*</span>{/if}
       </span>
     {:else if gitError}
       <button type="button" class="link" onclick={() => void refreshGit()}>status unavailable, retry</button>
@@ -251,10 +252,6 @@
     font-family: var(--k-font-mono);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
-  }
-
-  .dirty {
-    color: var(--k-warn);
   }
 
   .spacer {

@@ -78,7 +78,7 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-bg-selected: #e3edf3;                     /* hex fallback, overridden below */
   --k-fg: #1b2026;
   --k-fg-muted: #56606b;
-  --k-fg-subtle: #737c87;                       /* 4.5:1 on well, safe at 11px */
+  --k-fg-subtle: #5f6873;                       /* >= 4.5:1 on every light surface */
   --k-fg-chrome: #5d6772;
   --k-border: #cfd4d9;
   --k-border-strong: #b6bdc4;
@@ -143,9 +143,9 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
     --k-bg-active: rgba(216, 221, 227, 0.1);
     --k-bg-selected: #1e2a33;
     --k-fg: #d8dde3;
-    --k-fg-muted: #8b95a1;
-    --k-fg-subtle: #6b7580;
-    --k-fg-chrome: #7f8995;
+    --k-fg-muted: #9ca6b1;
+    --k-fg-subtle: #88929e;
+    --k-fg-chrome: #8e98a4;
     --k-border: #2a3038;
     --k-border-strong: #39414b;
     --k-accent: #6fa8c7;
@@ -195,9 +195,9 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-bg-active: rgba(216, 221, 227, 0.1);
   --k-bg-selected: #1e2a33;
   --k-fg: #d8dde3;
-  --k-fg-muted: #8b95a1;
-  --k-fg-subtle: #6b7580;
-  --k-fg-chrome: #7f8995;
+  --k-fg-muted: #9ca6b1;
+  --k-fg-subtle: #88929e;
+  --k-fg-chrome: #8e98a4;
   --k-border: #2a3038;
   --k-border-strong: #39414b;
   --k-accent: #6fa8c7;
@@ -241,20 +241,21 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
 ### 2.1 Project hue
 
 - `Shell.svelte` sets `document.documentElement.style.setProperty('--k-project', color)` in an `$effect` keyed on the active project. No timer.
-- If the project has no colour, or its oklch chroma is below 0.03 (greys, black, white), the shell removes the property so the static fallback accent is used. One JS check in the shell; an achromatic colour has no hue to borrow.
+- If the project has no colour, a colour the browser cannot parse, an oklch chroma below 0.03 (greys, black, white), or a hue within 30° of the needs-input lamp (brick, rose, any red), the shell removes the property so the static fallback accent is used. One JS check in the shell (`shell/accent.ts`): an achromatic colour has no hue to borrow, an invalid one would void every focus ring, and a red accent would make every selected row read as an alarm.
 - Switching project never re-pushes the terminal palette: the cursor and selection are neutral.
 
 ### 2.2 Contrast floor
 
 | Pair | Light | Dark |
 |---|---|---|
-| `--k-fg` on `--k-well` | 15.6:1 | 13.4:1 |
-| `--k-fg-muted` on `--k-well` | 6.3:1 | 6.0:1 |
-| `--k-fg-subtle` on `--k-well` | 4.5:1 | 3.9:1 (meta only, never sole carrier of meaning) |
-| `--k-fg-chrome` on `--k-bezel-raised` | 5.0:1 | 4.6:1 |
+| `--k-fg` on `--k-well` | 15.8:1 | 13.4:1 |
+| `--k-fg-muted` on `--k-well` / `--k-bg-float` | 6.2 / 6.4:1 | 7.4 / 5.8:1 |
+| `--k-fg-subtle` on well / bezel-raised / bezel / float (lowest) | 4.51:1 (bezel) | 4.51:1 (float) |
+| `--k-fg-chrome` on `--k-bezel-raised` / `--k-bg-float` | 4.95 / 5.8:1 | 5.2 / 4.9:1 |
 | accent (any hue, fixed L) on well | at least 3:1 (focus marks, non-text) | at least 3:1 |
 
-Recheck with a script after any token edit; the numbers above are targets, not measurements.
+Every text token clears 4.5:1 on every surface it can sit on, so 11-12px labels and state words may use it.
+Measured (WCAG 2 relative luminance). Recheck with a script after any token edit.
 
 ## 3. Typography
 
@@ -331,11 +332,11 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 
 ### 6.2 Rail (`shell/ProjectRail.svelte`)
 
-- 44px wide, `--k-bezel`. Inbox at top, home / settings / add pinned at the bottom.
+- 44px wide, `--k-bezel`. Inbox at top, home / settings / add pinned at the bottom. Inbox, home, settings and add are flat ghost icons; only the current destination (a project, home or the inbox) wears the `--k-well` tile face and the full-height index bar.
 - Project tile: 28px square, radius 4, `--k-well` face, initial(s) in `--k-fg-chrome`, a 3px project-colour index bar on the tile's left edge (raw project colour, not the clamped accent). No fill with the project colour, no text-shadow.
 - Active: index bar runs full tile height, initial goes to `--k-fg` 600.
 - Lamp socket at the top-right corner, 10px.
-- **Lit tile** *(from Faceplate)*: when any session in the project needs input, the tile face takes `color-mix(in oklab, var(--k-lamp-needs-input) 14%, var(--k-well))` and the socket shows the lamp plus a tabular count (10px/600). That makes Claude waiting the brightest thing in the window, readable in peripheral vision.
+- **Lit tile** *(from Faceplate)*: when any session in the project needs input, the tile face takes `color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well))` (`--k-lit-mix` 14% light, 30% dark, where 14% vanished into the graphite) and the socket shows the lamp plus a tabular count (10px/600). That makes Claude waiting the brightest thing in the window, readable in peripheral vision.
 - Focus: 2px `--k-focus` ring with a 2px `--k-bezel` gap (`box-shadow: 0 0 0 2px var(--k-bezel), 0 0 0 4px var(--k-focus)`).
 - Drag-over: 2px accent insertion line.
 
@@ -366,7 +367,7 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 ### 6.6 Command palette
 
 - Top-anchored at 14vh, `min(600px, 100vw - 32px)`, `--k-bg-float`, radius 8, `--k-shadow`.
-- Input 36px, query in mono. Results 26px rows: 14px kind icon (no text label), title, right-aligned kbd hint. Session and tab hits show their lamp.
+- No title bar or close button: the 36px input is the top edge, Esc or the backdrop closes it. Query in mono. Results 26px rows: 10px lamp slot (session and tab hits), 14px kind icon (no text label), title, meta, right-aligned kbd hint. Results are grouped (one header per group, groups in order of their best hit).
 - Selected row: `--k-bg-selected` plus a 2px accent left bar.
 
 ### 6.7 Sheets, dialogs, menus, toasts
@@ -399,8 +400,8 @@ One row grammar for all three, so they read as one instrument:
 
 ### 6.10 Board
 
-- Lanes 264px on `--k-bezel`, no border, header = name (12/600) + count (11, tabular, `--k-fg-subtle`).
-- Cards `--k-well`, radius 2, 1px `--k-border`, no shadow. Line 1: key (mono 11) + lamp of the linked session, if any *(from Faceplate)*. Lines 2-3: title 13, clamped. Bottom: avatar + age.
+- Lanes 264px, `--k-bezel` trays (radius 2) on a `--k-well` board with 8px gutters, so each lane and an empty drop target has an edge. Header = name (12/600) + count (11, tabular, `--k-fg-subtle`).
+- Cards `--k-well`, radius 2, 1px `--k-border`, no shadow. Line 1 (fixed 18px, chips centred in it, so titles line up across lanes): key (mono 11) + lamp of the linked work item's sessions, if any *(from Faceplate)*. Lines 2-3: title 13, clamped. Bottom: avatar + age.
 - Drag target: 2px accent insertion line. Focused card: focus ring.
 
 ### 6.11 Chips and badges

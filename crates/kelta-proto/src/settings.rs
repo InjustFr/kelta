@@ -165,7 +165,7 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
-    /// Confirm quit if a Claude session is Working/NeedsInput.
+    /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,

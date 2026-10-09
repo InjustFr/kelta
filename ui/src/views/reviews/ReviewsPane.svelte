@@ -214,7 +214,8 @@
       aria-label="Filter reviews"
       onkeydown={filterKeys}
     />
-    <span class="title">{scope.kind === 'all' ? 'Reviews, all projects' : 'Reviews'}</span>
+    <!-- The tab and pane header already say "Reviews"; only the cross-project scope is news. -->
+    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
     <span class="spacer"></span>
     {#if repos.length > 1}
       <Select
@@ -317,25 +318,6 @@
 </div>
 
 <style>
-  .title {
-    font-weight: var(--k-weight-strong);
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .list {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .count {
-    font-size: var(--k-font-size-xs);
-    font-weight: 400;
-    color: var(--k-fg-subtle);
-  }
-
   .add {
     color: var(--k-ok);
   }

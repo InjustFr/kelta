@@ -112,6 +112,24 @@ pre,
   background: var(--k-well);
   color: var(--k-fg);
 }
+.k-listpane:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--k-focus);
+}
+.k-listpane .title {
+  font-weight: var(--k-weight-strong);
+}
+.k-listpane .spacer {
+  flex: 1;
+}
+.k-listpane .list {
+  flex: 1;
+  min-height: 0;
+}
+.k-listpane .count {
+  font-size: var(--k-font-size-xs);
+  font-weight: 400;
+  color: var(--k-fg-subtle);
+}
 
 .k-toolbar {
   display: flex;

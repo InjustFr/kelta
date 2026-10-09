@@ -358,10 +358,12 @@ export function workItemOfTab(tab: Tab) {
 
 /** Lamp of the sessions shown in a tab (max attention, or working). */
 export function tabAttention(tab: Tab) {
-  const tabSessions = allPanes(tab.root)
-    .map((p) => paneSession(p))
-    .filter((s): s is SessionId => s !== null)
-    .map((s) => sessions.get(s));
+  return sessionsLamp(allPanes(tab.root).map((p) => paneSession(p)));
+}
+
+/** One lamp for a set of sessions (a tab's panes, a ticket's work item). */
+export function sessionsLamp(ids: (SessionId | null)[]) {
+  const tabSessions = ids.filter((s): s is SessionId => s !== null).map((s) => sessions.get(s));
   return lampOf(
     maxAttention(tabSessions.map((s) => s?.attention ?? 'none')),
     tabSessions.some((s) => s?.status === 'working'),
