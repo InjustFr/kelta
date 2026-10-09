@@ -6,6 +6,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, tickets, toasts } from '$lib/stores';
 
+import { selection } from '../work/selection.svelte';
 import TicketsPane from './TicketsPane.svelte';
 
 let mock: MockControls;
@@ -202,6 +203,14 @@ describe('TicketsPane states', () => {
     mock.clearFailures();
     await fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     await waitFor(() => expect(screen.queryByText('Could not load tickets')).toBeNull());
+  });
+
+  it('clears the work.start selection when the pane unmounts', async () => {
+    const { container, unmount } = mountBoard('list');
+    await ready(container);
+    expect(selection.ticket?.key).toBe('SHOP-151');
+    unmount();
+    expect(selection.ticket).toBeNull();
   });
 
   it('shows "No tracker bound" for a project without a tracker', async () => {

@@ -18,6 +18,7 @@
   let busy = $state(false);
 
   async function create(): Promise<void> {
+    if (busy) return;
     busy = true;
     try {
       const updated = await workCreatePr({

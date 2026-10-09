@@ -177,12 +177,6 @@
     }
   }
 
-  /** The saga has no skip command yet (contract request L9): leave the work item as is. */
-  function skip(step: string): void {
-    toasts.warn(`${stepLabel(step)} skipped. Use Retry from the work item header to run it later.`);
-    onclose();
-  }
-
   function browse(): void {
     if (ticketUrl) openExternal({ url: ticketUrl }).catch((err) => toasts.error(err, 'Open in browser'));
   }
@@ -335,7 +329,6 @@
                   <Button size="sm" loading={retrying === s.name} onclick={() => void retry(s.name)}
                     >Retry</Button
                   >
-                  <Button size="sm" variant="ghost" onclick={() => skip(s.name)}>Skip</Button>
                 </span>
               {/if}
             </li>

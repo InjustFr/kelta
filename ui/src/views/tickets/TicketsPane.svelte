@@ -128,7 +128,9 @@
   });
 
   $effect(() => {
-    if (focused && cur) selectTicket(cur.ticket.ref, cur.project_ids[0] ?? projectId);
+    if (!focused || !cur) return;
+    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? projectId);
+    return () => selectTicket(null, null);
   });
 
   let vlist = $state<{ scrollToIndex(i: number): void }>();
@@ -236,6 +238,7 @@
   function shiftLane(delta: number): void {
     if (!cur || mode !== 'board') return;
     const at = columns.findIndex((c) => c.id === columnFor(columns, cur.ticket.status)?.id);
+    if (at < 0) return;
     const target = columns[at + delta];
     if (target) void move.moveToColumn(cur.ticket, target);
   }

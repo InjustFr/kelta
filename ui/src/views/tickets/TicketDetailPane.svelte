@@ -47,7 +47,9 @@
   });
 
   $effect(() => {
-    if (focused) selectTicket(ref, projectId);
+    if (!focused) return;
+    selectTicket(ref, projectId);
+    return () => selectTicket(null, null);
   });
 
   let root = $state<HTMLDivElement>();

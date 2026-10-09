@@ -112,10 +112,6 @@
   });
 
   $effect(() => {
-    if (cur) reviews.markSeen(cur.item.review.ref);
-  });
-
-  $effect(() => {
     if (focused && root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
   });
 
@@ -132,6 +128,7 @@
   }
 
   function openDetail(item: ReviewItem): void {
+    reviews.markSeen(item.review.ref);
     void openContent(projectId, { kind: 'review_detail', review: item.review.ref });
   }
 

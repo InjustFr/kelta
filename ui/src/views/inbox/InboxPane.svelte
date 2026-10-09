@@ -113,8 +113,9 @@
   });
 
   $effect(() => {
-    if (focused && cur?.type === 'ticket')
-      selectTicket(cur.item.ticket.ref, cur.item.project_ids[0] ?? projectId);
+    if (!focused || cur?.type !== 'ticket') return;
+    selectTicket(cur.item.ticket.ref, cur.item.project_ids[0] ?? projectId);
+    return () => selectTicket(null, null);
   });
 
   $effect(() => {
