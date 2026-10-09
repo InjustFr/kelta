@@ -206,7 +206,9 @@ describe('FrameHandler on a headless terminal', () => {
     await barrier();
     expect(line(0)).toBe('FRESH');
     driver.runFrame();
-    expect(sent).toEqual([new TextEncoder().encode('stale text').length + new TextEncoder().encode('\x1b[1;1HFRESH').length]);
+    expect(sent).toEqual([
+      new TextEncoder().encode('stale text').length + new TextEncoder().encode('\x1b[1;1HFRESH').length,
+    ]);
   });
 
   it('reports the exit code and ignores frames after close()', async () => {

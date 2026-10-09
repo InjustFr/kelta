@@ -1,12 +1,7 @@
 import { Terminal } from '@xterm/headless';
 import { describe, expect, it } from 'vitest';
 
-import {
-  SWALLOWED_CSI,
-  SWALLOWED_OSC,
-  type CsiQuery,
-  type OscQuery,
-} from '$lib/gen/terminal_queries';
+import { SWALLOWED_CSI, SWALLOWED_OSC, type CsiQuery, type OscQuery } from '$lib/gen/terminal_queries';
 
 import { csiMatches, installQueryHandlers, isOscQuery } from './queries';
 

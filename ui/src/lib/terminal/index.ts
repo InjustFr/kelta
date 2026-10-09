@@ -7,6 +7,7 @@
 
 import type { SessionId } from '$lib/gen';
 
+import type { TerminalConfig } from './config';
 import type { TerminalViewDeps } from './view';
 
 export { DEFAULT_CONFIG, configFromSettings, type TerminalConfig } from './config';
@@ -31,6 +32,8 @@ export interface PoolView {
   /** Attaches to the session (idempotent). Resolves when the attach completed. */
   attach(): Promise<void>;
   focus(): void;
+  /** Applies new settings / theme to a live view. */
+  applyConfig?(config: TerminalConfig): void;
   /** Frees the xterm instance and detaches from the session. */
   dispose(): void;
 }
@@ -133,6 +136,11 @@ export class TerminalViewPool {
     this.#views.get(sessionId)?.focus();
   }
 
+  /** Applies settings / theme changes to every live view. */
+  applyConfig(config: TerminalConfig): void {
+    for (const view of this.#views.values()) view.applyConfig?.(config);
+  }
+
   setCapacity(capacity: number): void {
     this.capacity = clampCapacity(capacity);
     this.#queueEvict();
@@ -206,4 +214,3 @@ export class TerminalViewPool {
 
 /** The window-wide pool (configured by the shell). */
 export const terminalPool = new TerminalViewPool({ capacity: 4 });
-

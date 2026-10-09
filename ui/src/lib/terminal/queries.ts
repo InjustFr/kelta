@@ -4,12 +4,7 @@
 // `kelta_proto::term::SWALLOWED_QUERIES`) by returning `true`. Queries the model does not answer
 // (e.g. XTVERSION) are not registered and keep xterm's own behaviour.
 
-import {
-  SWALLOWED_CSI,
-  SWALLOWED_OSC,
-  type CsiQuery,
-  type OscQuery,
-} from '$lib/gen/terminal_queries';
+import { SWALLOWED_CSI, SWALLOWED_OSC, type CsiQuery, type OscQuery } from '$lib/gen/terminal_queries';
 
 interface Disposable {
   dispose(): void;

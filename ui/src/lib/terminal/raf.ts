@@ -15,7 +15,10 @@ export interface FrameDriver {
 /** rAF when the page is visible, a one-shot timeout otherwise (rAF is paused in hidden pages). */
 export const browserDriver: FrameDriver = {
   request(callback) {
-    if (typeof requestAnimationFrame === 'function' && !(typeof document !== 'undefined' && document.hidden)) {
+    if (
+      typeof requestAnimationFrame === 'function' &&
+      !(typeof document !== 'undefined' && document.hidden)
+    ) {
       return { raf: requestAnimationFrame(callback) };
     }
     // one-shot: rAF does not fire in hidden pages and acks must not starve

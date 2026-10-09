@@ -5,7 +5,10 @@
 import type { OptionAsMeta, ShiftEnter } from '$lib/gen';
 
 /** Setting value for a session kind name (`claude`, `shell`, …), falling back to `default`. */
-export function resolveShiftEnter(map: Readonly<Record<string, ShiftEnter>> | undefined, kind: string): ShiftEnter {
+export function resolveShiftEnter(
+  map: Readonly<Record<string, ShiftEnter>> | undefined,
+  kind: string,
+): ShiftEnter {
   return map?.[kind] ?? map?.default ?? 'passthrough';
 }
 
@@ -22,7 +25,9 @@ export function shiftEnterSequence(mode: ShiftEnter): string | null {
 }
 
 /** `Shift+Enter` and nothing else (Ctrl/Alt/Meta+Enter are other keys). */
-export function isShiftEnter(e: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'ctrlKey' | 'altKey' | 'metaKey'>): boolean {
+export function isShiftEnter(
+  e: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'ctrlKey' | 'altKey' | 'metaKey'>,
+): boolean {
   return e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey;
 }
 

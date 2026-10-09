@@ -70,6 +70,7 @@ const SEARCH_DECORATIONS = {
 
 /** Removes bracketed-paste markers from pasted text (paste injection). */
 export function sanitizePaste(text: string): string {
+  // eslint-disable-next-line no-control-regex
   return text.replace(/\x1b\[20[01]~/g, '');
 }
 
@@ -152,7 +153,10 @@ export class TerminalView implements PoolView {
       for (let i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 0xff;
       this.#writeBytes(bytes);
     });
-    this.#disposers.push(() => onData.dispose(), () => onBinary.dispose());
+    this.#disposers.push(
+      () => onData.dispose(),
+      () => onBinary.dispose(),
+    );
 
     this.#listen(this.host, 'mouseup', (e) => this.#onMouseUp(e as MouseEvent), true);
     this.#listen(this.host, 'mousedown', (e) => this.#onMouseDown(e as MouseEvent), true);
@@ -250,7 +254,8 @@ export class TerminalView implements PoolView {
       this.#sent = { cols, rows };
       this.#acks.setGeneration(info.generation);
       this.#setState({ attaching: false, attached: true });
-      if (info.cols !== this.term.cols || info.rows !== this.term.rows) this.term.resize(info.cols, info.rows);
+      if (info.cols !== this.term.cols || info.rows !== this.term.rows)
+        this.term.resize(info.cols, info.rows);
       this.requestFit();
     } catch (err) {
       if (this.#attachSeq !== seq) return;
@@ -319,7 +324,10 @@ export class TerminalView implements PoolView {
     if (this.#disposed || !this.#container) return;
     const { cols, rows } = this.#dimensions();
     if (cols !== this.term.cols || rows !== this.term.rows) this.term.resize(cols, rows);
-    if (this.#generation !== null && (this.#sent.cols !== this.term.cols || this.#sent.rows !== this.term.rows)) {
+    if (
+      this.#generation !== null &&
+      (this.#sent.cols !== this.term.cols || this.#sent.rows !== this.term.rows)
+    ) {
       this.#sent = { cols: this.term.cols, rows: this.term.rows };
       void sessionResize({ id: this.id, cols: this.term.cols, rows: this.term.rows }).catch(() => {});
     }
@@ -538,7 +546,9 @@ export class TerminalView implements PoolView {
 
   #middleClickPastes(): boolean {
     return (
-      this.#deps.platform === 'linux' && this.#cfg.primarySelection && this.term.modes.mouseTrackingMode === 'none'
+      this.#deps.platform === 'linux' &&
+      this.#cfg.primarySelection &&
+      this.term.modes.mouseTrackingMode === 'none'
     );
   }
 
@@ -563,7 +573,10 @@ export class TerminalView implements PoolView {
   }
 
   /** Lazy-loads the search addon on first use. Returns whether the query matched. */
-  async find(query: string, opts: { backwards?: boolean; caseSensitive?: boolean; regex?: boolean } = {}): Promise<boolean> {
+  async find(
+    query: string,
+    opts: { backwards?: boolean; caseSensitive?: boolean; regex?: boolean } = {},
+  ): Promise<boolean> {
     const addon = await this.#searchAddon();
     if (query === '') {
       addon.clearDecorations();
