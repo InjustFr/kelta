@@ -4,7 +4,7 @@
 // port goes through `plugin_call`, where Rust checks the plugin's grants.
 
 import type { JsonValue, PluginMethod, ScreenInstanceId } from '$lib/gen';
-import { pluginCall } from '$lib/ipc/commands';
+import { clipboardWrite, pluginCall } from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 
 export const SCREEN_API = '0.1';
@@ -91,6 +91,11 @@ export function connectScreen(
     if (typeof id !== 'number' || typeof method !== 'string') return;
     try {
       const result = await call(method as PluginMethod, (params ?? {}) as JsonValue);
+      // Rust only approves `clipboard.write` (grant check); the host performs the write.
+      const ok = result as { approved?: unknown; text?: unknown } | null;
+      if (method === 'clipboard.write' && ok?.approved === true && typeof ok.text === 'string') {
+        await clipboardWrite({ kind: 'clipboard', text: ok.text });
+      }
       port.postMessage({ id, result });
     } catch (err) {
       const e = toIpcError('plugin_call', err);

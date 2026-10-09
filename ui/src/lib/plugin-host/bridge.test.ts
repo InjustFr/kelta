@@ -76,6 +76,23 @@ describe('screen bridge', () => {
     port.close();
     b.destroy();
   });
+
+  it('performs an approved clipboard.write through clipboard_write', async () => {
+    const mock = createMockTransport();
+    setTransport(mock.transport);
+    const iframe = frame();
+    const post = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
+    const call = vi.fn(async () => ({ approved: true, text: 'x' }));
+    const b = connectScreen(iframe, init, () => ({}), call as never);
+    ready(iframe.contentWindow);
+    const port = (post.mock.calls[0] as unknown as [unknown, string, MessagePort[]])[2][0];
+    const got = new Promise((resolve) => (port.onmessage = resolve));
+    port.postMessage({ id: 1, method: 'clipboard.write', params: { text: 'x' } });
+    await got;
+    expect(mock.controls.calls).toContainEqual({ cmd: 'clipboard_write', args: { kind: 'clipboard', text: 'x' } });
+    port.close();
+    b.destroy();
+  });
 });
 
 describe('web tool registry', () => {
