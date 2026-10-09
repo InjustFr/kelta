@@ -4,7 +4,7 @@
   import type { TabHeaderProps } from '$app/registry';
   import type { GitStatus } from '$lib/gen';
   import { openExternal, workRetryStep, workStatus } from '$lib/ipc/commands';
-  import { reviews, tickets, toasts, work } from '$lib/stores';
+  import { tickets, toasts, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Badge, Button, Icon, Menu, type MenuItem } from '$lib/ui';
 
@@ -112,12 +112,7 @@
   }
 </script>
 
-<svelte:window
-  onfocus={() => {
-    void refreshGit();
-    if (item?.review) void reviews.refreshState([item.review]);
-  }}
-/>
+<svelte:window onfocus={() => void refreshGit()} />
 
 {#if item}
   <div class="header" role="toolbar" aria-label="Work item" data-testid="work-header">

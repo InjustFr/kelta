@@ -389,9 +389,20 @@ async fn add_review_comment(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Val
         .and_then(|n| u32::try_from(n).ok())
         .filter(|n| *n >= 1)
         .ok_or_else(|| "`line` must be a positive integer".to_owned())?;
-    let r =
-        work(core, sid).await.and_then(|w| w.review).ok_or("no pull request under review in this session")?;
+    let w = work(core, sid).await.ok_or("no pull request under review in this session")?;
+    let r = w.review.ok_or("no pull request under review in this session")?;
     let host = core.code_host_for(&r.account).await.map_err(|e| e.message)?;
+    // Line numbers come from the local checkout; the pending review lands on the remote head.
+    let remote = host.get(&r).await.map_err(|e| e.message)?.review.head_sha;
+    let local = tokio::process::Command::new("git")
+        .arg("-C")
+        .arg(&w.worktree)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .await;
+    if !local.is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == remote) {
+        return Err("checkout is behind the PR head, update it first".to_owned());
+    }
     host.add_pending_comment(&r, path, line, body).await.map_err(|e| e.message)?;
     Ok(format!(
         "Pending comment added on {path}:{line} of {}#{}. The user submits the review.",

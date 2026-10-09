@@ -32,7 +32,8 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
-latestOpinionatedReviews(first:20){ nodes{ state commit{ oid } author{ login } } } }";
+latestOpinionatedReviews(first:20){ nodes{ state commit{ oid } author{ login } } } \
+latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } }";
 
 #[derive(Default)]
 struct Gate {
@@ -114,7 +115,11 @@ impl GithubHost {
             .and_then(Value::as_array)
             .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)));
         let mine = mine_node.and_then(|r| s(r, "state"));
-        let reviewed_head = mine_node
+        // latestReviews also holds COMMENTED reviews, which the opinionated list leaves out.
+        let reviewed_head = n
+            .pointer("/latestReviews/nodes")
+            .and_then(Value::as_array)
+            .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)))
             .filter(|_| kind != ReviewKind::Authored)
             .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
             .map(str::to_owned);
@@ -434,7 +439,10 @@ impl CodeHost for GithubHost {
             .into_iter()
             .filter_map(|n| self.graphql_pr(&n, kind, &me))
             .filter(|r| r.reviewed_head.as_deref().is_some_and(|h| h != r.head_sha));
-        Ok(requested.chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
+        let requested: Vec<_> = requested.collect();
+        // A re-requested PR matches both searches.
+        let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();
+        Ok(requested.into_iter().chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -560,7 +568,7 @@ impl CodeHost for GithubHost {
         if let Some(p) = self.pending_review(r).await? {
             // The events endpoint takes no commit_id: a pending review is fixed to the head it began on.
             if p.commit != head_sha {
-                return Err(KeltaError::conflict(
+                return Err(KeltaError::invalid(
                     "the head moved after your pending comments began; submit them with Comment or Request changes first",
                 ));
             }

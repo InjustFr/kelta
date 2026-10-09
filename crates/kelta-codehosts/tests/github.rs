@@ -400,8 +400,11 @@ async fn reviewed_by_me_search_brings_back_only_prs_pushed_after_my_review() {
     );
     // 202 and the 101 duplicate were reviewed on their current head: not requests any more
     let numbers: Vec<_> = list.iter().map(|r| r.r#ref.number).collect();
-    assert_eq!(numbers, vec![101, 201]);
-    let updated = &list[1];
+    // 301 matches both searches (re-requested): listed once; 302 was only commented on
+    assert_eq!(numbers, vec![101, 301, 201, 302]);
+    assert_eq!(list[3].my_state, Some(MyReviewState::Pending));
+    assert_eq!(list[3].reviewed_head.as_deref(), Some("old302"));
+    let updated = &list[2];
     assert_eq!(updated.my_state, Some(MyReviewState::Approved));
     assert_eq!((updated.reviewed_head.as_deref(), updated.head_sha.as_str()), (Some("old201"), "new201"));
     // authored lists never carry the second search
@@ -474,5 +477,5 @@ async fn decisions_publish_the_pending_review_with_its_comments() {
     assert_eq!(count(&server, "POST", "/repos/acme/shop/issues/101/comments").await, 0);
     // the pending review began on abc123: approving another head would approve unseen code
     let e = h.approve(&r, "newer").await.unwrap_err();
-    assert_eq!(e.code, ErrorCode::Conflict);
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
 }

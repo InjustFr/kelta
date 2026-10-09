@@ -19,7 +19,7 @@
     relativeTime,
   } from '$lib/ui';
 
-  import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
+  import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openContent } from '../work/nav';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -193,9 +193,8 @@
   }
 </script>
 
-<svelte:window
-  onfocus={() => void reviews.refreshState(lists.review_requested.data?.items.map((i) => i.review.ref) ?? [])}
-/>
+<!-- One list query per focus (not a get per row): it also brings back PRs updated after my review. -->
+<svelte:window onfocus={() => void reviews.load(scope, 'review_requested', true)} />
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
@@ -292,6 +291,7 @@
                 {#if rv.draft}<Badge>draft</Badge>{/if}
                 {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
                 {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
+                {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
                 {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
                 <Badge title={rv.ref.repo}>{chip(r.item)}</Badge>
                 <span class="meta">{rv.author.name}</span>

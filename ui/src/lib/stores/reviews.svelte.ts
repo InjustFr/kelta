@@ -60,29 +60,6 @@ export class ReviewsStore {
     return next;
   }
 
-  /**
-   * Re-reads `my_state` and the heads of the given PRs through `reviewGet` (CodeHost::get) and
-   * patches the cached rows. Called on Now open and window focus; there is no polling.
-   */
-  async refreshState(refs: ReviewRef[]): Promise<void> {
-    const details = await Promise.all(refs.map((r) => this.loadDetail(r)));
-    const fresh = Object.fromEntries(
-      details.flatMap((d) => (d.data ? [[reviewKey(d.data.review.ref), d.data.review]] : [])),
-    );
-    const patch = (i: ReviewItem): ReviewItem => {
-      const f = fresh[reviewKey(i.review.ref)];
-      if (!f) return i;
-      const { my_state, head_sha, reviewed_head } = f;
-      return { ...i, review: { ...i.review, my_state, head_sha, reviewed_head } };
-    };
-    this.lists = Object.fromEntries(
-      Object.entries(this.lists).map(([k, l]) => [
-        k,
-        l.data ? { ...l, data: { ...l.data, items: l.data.items.map(patch) } } : l,
-      ]),
-    );
-  }
-
   apply(ev: UiEvent): void {
     if (ev.type !== 'reviews.changed') return;
     if (ev.new_keys.length > 0) {

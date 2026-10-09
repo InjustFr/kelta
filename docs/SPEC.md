@@ -73,6 +73,7 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 - **Reviews** pane per project (repos bound to the project) or aggregated (Inbox, all accounts, "Other" for unbound repos). Sections: *Review requested*, *My PRs*. Row: title, repo/project chip, author, draft, CI (✓ ✗ ● –), decision, my state, size (+/−), age, linked ticket keys. Filters: include drafts, repo (team requests follow `reviews.include_team_requests`).
 - **Detail:** sanitized description, reviewers, checks summary, file list (+/− counts). Actions: **Approve** (sends the shown `head_sha`; stale → "PR changed, refresh"), **Comment**, **Request changes** (GitLab: comment + optional unapprove), **Open in browser**, **Review locally**.
 - **Review locally** (`work_plan` with `Review` source → same sheet): fetch `pull/<n>/head:kelta/pr-<n>` (GitHub) / `merge-requests/<iid>/head:kelta/mr-<iid>` (GitLab) → worktree `<root>/review-<n>` → template `review` (Claude with profile `review`, `--permission-mode plan`, prompt from `claude.prompt_templates.review`; nvim with `editor.review_args`, e.g. `-c "DiffviewOpen origin/{base}...HEAD"`; shell with `git diff --stat origin/<base>...`).
+- Rows refresh on window focus through the list query (one request, also brings back PRs pushed after my review, badge "Updated since your review"), never through `get` on each row.
 - New review requests detected via `seen_reviews` (never on the first poll after start) → desktop notification (toggle) + rail/Inbox badge.
 
 ### 3.4 Move ticket status

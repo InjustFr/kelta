@@ -303,10 +303,31 @@ async fn add_review_comment_goes_to_the_pending_review_of_the_session_pr() {
     let host = Arc::new(FakeCodeHost::with_reviews(vec![review.clone()]));
     e.fake.add_code_host(review.r#ref.account.clone(), host.clone());
     let mut work = samples::work_item();
+    let repo = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git").arg("-C").arg(repo.path()).args(args).status().unwrap();
+        assert!(ok.success());
+    };
+    git(&["init", "-q"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"]);
+    work.worktree = repo.path().to_path_buf();
     work.review = Some(review.r#ref.clone());
     e.fake.add_work_item(work);
     e.server.register_session(&sid, "ht", Some("mt"));
     let port = e.server.ensure_http().await.unwrap();
+
+    // checkout behind the PR head: refused, nothing posted
+    let args = json!({"path": "src/prices.rs", "line": 12, "body": "stale"});
+    let (text, err) = call(port, sid.as_str(), "mt", "add_review_comment", args).await;
+    assert!(err && text.contains("behind"), "{text}");
+    assert!(host.pending_comments().is_empty());
+    let head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo.path())
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    host.set_head(&review.r#ref, String::from_utf8(head.stdout).unwrap().trim());
 
     let args = json!({"path": "src/prices.rs", "line": 12, "body": "cache never expires"});
     let (text, err) = call(port, sid.as_str(), "mt", "add_review_comment", args).await;
