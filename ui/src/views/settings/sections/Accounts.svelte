@@ -54,6 +54,8 @@
     try {
       backends = await ipc.secretBackendsStatus();
       backendError = null;
+      // No file yet: show the create fields straight away.
+      creating = !!backends.find((b) => b.backend === 'encrypted-file')?.detail?.startsWith('not set up');
     } catch (err) {
       backendError = toIpcError('secret_backends_status', err).message;
     }

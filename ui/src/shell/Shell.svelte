@@ -5,12 +5,7 @@
 
   import type { AnyComponent } from '$app/registry';
   import { onUiEvent } from '$lib/ipc/events';
-  import {
-    secretBackendsStatus,
-    secretUnlock,
-    sessionSpawnTemplate,
-    terminalSetPalette,
-  } from '$lib/ipc/commands';
+  import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
   import { layout, projects, reviews, sessions, settings, toasts, tools, ui } from '$lib/stores';
   import { configFromSettings, terminalPool } from '$lib/terminal';
@@ -28,6 +23,7 @@
   import TabBar from './TabBar.svelte';
   import ToastHost from './ToastHost.svelte';
   import WindowChrome from './WindowChrome.svelte';
+  import { startupUnlock } from './unlock';
   import Workspace from './Workspace.svelte';
 
   let prefixArmed = $state(false);
@@ -76,30 +72,8 @@
 
   // ---- encrypted secrets file ------------------------------------------------------------------
 
-  // Once per app run: when an account reads its token from the encrypted file and the file is
-  // still locked, ask for the passphrase (a miss can be retried in Settings → Accounts).
-  let unlockAsked = false;
-  $effect(() => {
-    const accounts = Object.values(settings.value()?.accounts ?? {});
-    if (unlockAsked || !accounts.some((a) => a?.secret?.startsWith('file:'))) return;
-    unlockAsked = true;
-    void askUnlock();
-  });
-
-  async function askUnlock(): Promise<void> {
-    const file = (await secretBackendsStatus().catch(() => [])).find((b) => b.backend === 'encrypted-file');
-    if (!file || file.available) return;
-    const passphrase = await prompts.ask({
-      title: 'Unlock secrets',
-      label: 'Passphrase of the encrypted secrets file',
-      type: 'password',
-      confirmLabel: 'Unlock',
-    });
-    if (!passphrase) return;
-    await secretUnlock({ passphrase, create: false }).catch((err: unknown) =>
-      toasts.error(err, 'Unlocking the secrets file failed'),
-    );
-  }
+  const unlockOnce = startupUnlock();
+  $effect(() => unlockOnce(settings.value()));
 
   // ---- layouts ---------------------------------------------------------------------------------
 
