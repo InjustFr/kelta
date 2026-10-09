@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.kelta.Kelta</id>
+  <name>Kelta</name>
+  <summary>Claude Code and nvim side by side, with tickets and pull request reviews</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer_name>Kelta contributors</developer_name>
+  <description>
+    <p>
+      Kelta is a small desktop workbench for developers who live in the terminal. It runs Claude
+      Code and nvim side by side in built-in terminals, shows tracker tickets and pull request
+      reviews next to them, and keeps many projects in one window with a very small memory footprint.
+    </p>
+  </description>
+  <launchable type="desktop-id">dev.kelta.Kelta.desktop</launchable>
+  <url type="homepage">https://github.com/InjustFr/kelta</url>
+  <url type="bugtracker">https://github.com/InjustFr/kelta/issues</url>
+  <provides>
+    <binary>kelta</binary>
+    <binary>kelta-ctl</binary>
+  </provides>
+  <categories>
+    <category>Development</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-10-09" />
+  </releases>
+</component>

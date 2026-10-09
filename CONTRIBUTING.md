@@ -1,3 +1,65 @@
 # Contributing
 
-Work in progress. See docs/BUILD_PLAN.md.
+Design documents live in `docs/`: `SPEC.md` (product), `ARCHITECTURE.md` (crates, contracts, performance
+budgets), `SETTINGS.md`, `PLUGINS.md`, `BUILD_PLAN.md` (how the work is split).
+
+## Setup
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev:mock            # UI in the browser against mock IPC, no Rust needed
+pnpm dev                 # Vite dev server on 127.0.0.1:5173, for `cargo run -p kelta-desktop`
+```
+
+Toolchain: Rust 1.99 (`rust-toolchain.toml`), Node 22, pnpm 9. Generated files (`ui/src/lib/gen`,
+`schema/`, `crates/kelta-proto/fixtures`) come from `cargo run -p xtask -- codegen`; never edit them by hand.
+
+## Contracts
+
+`kelta-proto` freezes the shared types and traits, `ui/src/lib/ipc/commands.ts` the IPC wrappers. If a
+contract is missing or wrong, do not patch it from your area: work around it locally and write the
+request down in `docs/contract-requests/<lane>.md`.
+
+Performance rules (ARCHITECTURE section 13) are part of the contract: no idle timers, intervals or polling
+loops, no ad hoc threads outside the allowlisted modules (`clippy.toml`, `scripts/check-no-timers.sh`).
+
+## Secrets in development
+
+Use `env:` references for tokens while developing, for example in `config.toml`:
+
+```toml
+secret = "env:JIRA_TOKEN"
+```
+
+On macOS every rebuild changes the code signature, so Keychain asks for permission again on each run of a
+`keyring:` secret. `env:` and `command:` references never prompt. Never commit tokens or `.env` files.
+
+## QA
+
+Before every pull request:
+
+```sh
+bash scripts/qa.sh
+```
+
+It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fmt --check`, clippy with
+`-D warnings`, `cargo test --workspace` and the codegen drift check. The Playwright suite on mock IPC runs with
+`pnpm e2e`.
+
+### Linux check in Docker
+
+`scripts/linux-check.sh` repeats the checks on Ubuntu 24.04 (`docker/ubuntu-build.Dockerfile`), which is the
+primary Linux target. Run it when you touch `platform/`, `window/`, packaging or anything with `cfg(target_os)`.
+
+## Packaging and benchmarks
+
+- `bash packaging/build.sh` builds the installers with `packaging/tauri.release.json`. It needs the
+  `kelta-ctl` sidecar, which the script builds.
+- `cargo run -p kelta-bench -- --scenario idle-3p10s --dry-run` checks the harness against fixtures. Real runs
+  need a release build of the app (`--app target/release/kelta`) and, on macOS, no running Kelta (the runtime
+  socket path is shared).
+- `node bench/bundle-size.mjs ui/dist` checks the JavaScript budgets.
+
+## Commits
+
+Conventional commits (`feat(scope): ...`). The nightly workflow publishes every merge to `main`.

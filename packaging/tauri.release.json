@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "enableGTKAppId": true
+  },
+  "bundle": {
+    "externalBin": ["binaries/kelta-ctl"],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"],
+        "desktopTemplate": "../../../packaging/linux/kelta.desktop.hbs",
+        "files": {
+          "/usr/share/metainfo/dev.kelta.Kelta.metainfo.xml": "../../../packaging/linux/dev.kelta.Kelta.metainfo.xml"
+        }
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+name: nightly
+
+# Every push to main: unsigned macOS universal dmg + Linux AppImage + deb, published to the rolling
+# "nightly" prerelease (deleted and recreated each time).
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config neovim desktop-file-utils appstream \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
+            libssl-dev libxdo-dev patchelf file
+      - name: Validate desktop entry and AppStream metadata
+        run: |
+          desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
+          appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: bash packaging/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # No APPLE_* variables: the app is built unsigned.
+      - run: UNIVERSAL=1 bash packaging/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  publish:
+    needs: [linux, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Rolling "nightly" prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          lanes="$(git log --format=%B | grep -oE '\bL[0-9]{1,2}\b' | sort -uV | paste -sd' ' -)"
+          {
+            echo "Unsigned build of \`${GITHUB_SHA}\` (main)."
+            echo
+            echo "Merged lanes: ${lanes:-none yet}"
+            echo
+            echo "macOS: the app is not signed, see the README (right-click Open, or xattr -dr com.apple.quarantine)."
+          } > notes.md
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly ${GITHUB_SHA::7}" --notes-file notes.md

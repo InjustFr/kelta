@@ -1,0 +1,97 @@
+name: release
+
+# Tag vX.Y.Z -> deb + AppImage (ubuntu-24.04), signed + notarized universal dmg (macos-14), checksums.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config neovim desktop-file-utils appstream \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
+            libssl-dev libxdo-dev patchelf file
+      - name: Validate desktop entry and AppStream metadata
+        run: |
+          desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
+          appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: bash packaging/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Universal dmg (signed and notarized by Tauri from the APPLE_* variables)
+        env:
+          UNIVERSAL: "1"
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash packaging/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  publish:
+    needs: [linux, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Size budgets and checksums
+        run: |
+          cd dist
+          [ "$(stat -c %s ./*.dmg)" -le 20971520 ] || { echo "dmg over 20 MB"; exit 1; }
+          [ "$(stat -c %s ./*.deb)" -le 15728640 ] || { echo "deb over 15 MB"; exit 1; }
+          sha256sum -- * > SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
