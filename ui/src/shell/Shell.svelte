@@ -22,6 +22,7 @@
   import StatusBar from './StatusBar.svelte';
   import TabBar from './TabBar.svelte';
   import ToastHost from './ToastHost.svelte';
+  import WindowChrome from './WindowChrome.svelte';
   import Workspace from './Workspace.svelte';
 
   let prefixArmed = $state(false);
@@ -184,6 +185,7 @@
   const active = $derived(projects.active);
 </script>
 
+<WindowChrome />
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
   <ProjectRail />
   <div class="main">

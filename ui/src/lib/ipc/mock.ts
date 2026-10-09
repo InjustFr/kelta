@@ -863,10 +863,14 @@ export function createMockTransport(options: MockOptions = {}): {
     work_retry_step: ({ id, step }) => {
       const w = work(id);
       const now = new Date().toISOString();
+      // `skip:<step>` marks the step skipped and continues the saga.
+      const skipped = step.startsWith('skip:') ? step.slice(5) : null;
       w.steps = w.steps.map((s) =>
-        s.step === step || (s.status === 'pending' && w.state.kind === 'failed')
-          ? { ...s, status: 'done', detail: null, updated_at: now }
-          : s,
+        s.step === skipped
+          ? { ...s, status: 'skipped', detail: 'skipped by user', updated_at: now }
+          : s.step === step || (s.status === 'pending' && w.state.kind === 'failed')
+            ? { ...s, status: 'done', detail: null, updated_at: now }
+            : s,
       );
       w.state = { kind: w.pr_url ? 'pr_open' : 'active' };
       emit({ type: 'work.updated', work: clone(w) });

@@ -329,6 +329,12 @@
                   <Button size="sm" loading={retrying === s.name} onclick={() => void retry(s.name)}
                     >Retry</Button
                   >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={retrying === `skip:${s.name}`}
+                    onclick={() => void retry(`skip:${s.name}`)}>Skip</Button
+                  >
                 </span>
               {/if}
             </li>

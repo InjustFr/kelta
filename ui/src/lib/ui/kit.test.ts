@@ -10,7 +10,6 @@ import ErrorState from './ErrorState.svelte';
 import HtmlContent from './HtmlContent.svelte';
 import Kbd from './Kbd.svelte';
 import Menu from './Menu.svelte';
-import NotImplemented from './NotImplemented.svelte';
 import Tabs from './Tabs.svelte';
 import Toggle from './Toggle.svelte';
 import VirtualList from './VirtualList.svelte';
@@ -68,11 +67,6 @@ describe('components', () => {
     expect(screen.getByRole('alert').textContent).toContain('offline');
     await fireEvent.click(screen.getByText('Retry'));
     expect(onretry).toHaveBeenCalledOnce();
-  });
-
-  it('NotImplemented exposes its name', () => {
-    render(NotImplemented, { props: { name: 'TicketsPane', owner: 'L9' } });
-    expect(screen.getByTestId('not-implemented').dataset.name).toBe('TicketsPane');
   });
 
   it('Kbd shows chord parts', () => {

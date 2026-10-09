@@ -35,7 +35,7 @@ Escapes: `\e` = ESC, `\a` = BEL, `\\` = backslash. `—` = no reply.
 | OSC11_BG | `\e]11;?\a` | `\e]11;rgb:1e1e/1e1e/1e1e\a` | yes |
 | OSC11_BG | `\e]11;?\e\\` | `\e]11;rgb:1e1e/1e1e/1e1e\e\\` | yes |
 | OSC12_CURSOR | `\e]12;?\a` | `\e]12;rgb:d4d4/d4d4/d4d4\a` | yes |
-| XTWINOPS_CHARS | `\e[18t` | `\e[8;24;80t` | no |
+| XTWINOPS_CHARS | `\e[18t` | `\e[8;24;80t` | yes |
 | DA3 | `\e[=c` | — | no |
 | DECXCPR | `\e[?6n` | — | no |
 | XTVERSION | `\e[>0q` | — | no |
@@ -58,11 +58,8 @@ Escapes: `\e` = ESC, `\a` = BEL, `\\` = backslash. `—` = no reply.
   latest after alacritty's 150 ms deadline).
 - Kitty keyboard is off (D7): `CSI ? u` gets no reply, so applications fall back via DA1.
 - OSC 52 is copy-only: reads are not answered (and not swallowed).
-- **XTWINOPS 18 (`CSI 18 t`, text area size in characters)** is answered by the model but is not
-  in `SWALLOWED_QUERIES`. xterm.js does not answer it with its default `windowOptions` (all off),
-  so it is still answered exactly once; adding `csi("XTWINOPS_CHARS", None, None, "t", &[18])`
-  to `SWALLOWED_QUERIES` is requested in `docs/contract-requests/L1.md` so the swallowed list
-  stays the exact answered set if `windowOptions` is ever enabled.
+- XTWINOPS 18 (`CSI 18 t`, text area size in characters) is answered by the model and swallowed,
+  so the swallowed list stays the exact answered set even if xterm.js `windowOptions` is enabled.
 - Rows marked `—` are not answered by the model and must not be swallowed. xterm.js answers some
   of them itself (for example DECRQSS and DECXCPR) while a view is attached; hidden sessions
   leave them unanswered, as most terminals do for unknown queries.

@@ -97,6 +97,12 @@
             {#if s.detail}<small>{s.detail}</small>{/if}
             {#if s.status === 'failed'}
               <Button size="sm" loading={busy === s.step} onclick={() => void retry(s.step)}>Retry</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={busy === `skip:${s.step}`}
+                onclick={() => void retry(`skip:${s.step}`)}>Skip</Button
+              >
             {/if}
           </li>
         {/each}

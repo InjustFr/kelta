@@ -122,7 +122,7 @@ describe('StartWorkSheet resume and progress', () => {
     expect(mock.calls.some((c) => c.cmd === 'work_start')).toBe(false);
   });
 
-  it('drives the checklist from work.updated and offers Retry on failure', async () => {
+  it('drives the checklist from work.updated and offers Retry and Skip on failure', async () => {
     const { plan } = await mountSheet(() => {}, true);
     await fireEvent.click(start());
     const form = await screen.findByTestId('start-progress');
@@ -160,7 +160,7 @@ describe('StartWorkSheet resume and progress', () => {
     expect(await screen.findByText('git worktree add failed')).toBeTruthy();
     const row = form.querySelector('[data-step="worktree"]') as HTMLElement;
     expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
-    expect(within(row).queryByRole('button', { name: 'Skip' })).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Skip' })).toBeTruthy();
     await fireEvent.click(within(row).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_retry_step')).toBe(true));
     expect(mock.calls.filter((c) => c.cmd === 'work_retry_step').at(-1)?.args).toEqual({

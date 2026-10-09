@@ -1,5 +1,5 @@
-// Loads the plugin list once the backend answered (projects loaded). This also starts the backend
-// plugin host, whose trigger engine subscribes to the bus on first use (see contract-requests/L8.md).
+// Loads the plugin list once the backend answered (projects loaded): the palette and the new-session
+// sheet list plugin commands and screens from it.
 
 import { plugins, projects } from '$lib/stores';
 

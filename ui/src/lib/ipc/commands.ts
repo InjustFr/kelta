@@ -184,6 +184,7 @@ export interface Commands {
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };
   work_list: { args: { project_id?: ProjectId | null }; result: WorkItem[] };
   work_resume: { args: { id: WorkItemId }; result: WorkItem };
+  /** `step`: a saga step id to re-run, or `skip:<step>` to mark it skipped and continue. */
   work_retry_step: { args: { id: WorkItemId; step: string }; result: WorkItem };
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
