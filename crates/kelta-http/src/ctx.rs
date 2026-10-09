@@ -283,6 +283,11 @@ impl HttpCtx {
                 not_modified: true,
             });
         }
+        if status == 304 {
+            // The caller sent its own validator (nothing cached here): report "unchanged".
+            let etag = headers.get("etag").cloned();
+            return Attempt::Done(HttpResponse { status, headers, body: String::new(), etag, not_modified: true });
+        }
         if !(200..300).contains(&status) {
             return Attempt::Status { status, headers, body };
         }
