@@ -3,8 +3,11 @@
 //! cursor, modes and title. The snapshot bytes are pinned with insta.
 
 mod common;
+#[path = "common/workload.rs"]
+mod workload;
 
 use common::*;
+use workload::build_log;
 use kelta_term::inspect::{diff, dump};
 use kelta_term::model::TermModel;
 use proptest::prelude::*;
@@ -152,25 +155,6 @@ fn sync_is_always_emitted_off_and_title_cwd_present() {
     assert!(s.contains("4:3"), "undercurl uses the colon form");
     assert!(s.contains(";58;2;255;0;0"), "underline colour");
     assert!(s.contains("\x1b]8;id=k1;https://example.com/a;b\x1b\\"), "hyperlink with id");
-}
-
-/// Build-log-like workload (≈ 90 columns per line, a few SGR runs), shared with the benches.
-fn build_log(lines: usize) -> Vec<u8> {
-    let mut s = String::new();
-    for i in 0..lines {
-        s.push_str(&format!(
-            "\x1b[32m{i:>6}\x1b[0m \x1b[1;32mCompiling\x1b[0m crate-{} v0.{}.{} (/home/dev/src/workspace/crates/crate-{}{})\r\n",
-            i % 97,
-            i % 13,
-            i % 7,
-            i % 97,
-            "/src".repeat(i % 5)
-        ));
-        if i % 10 == 0 {
-            s.push_str("\x1b[33mwarning\x1b[0m: unused variable: `x` \x1b[2m--> src/lib.rs:12:9\x1b[0m\r\n");
-        }
-    }
-    s.into_bytes()
 }
 
 #[test]
