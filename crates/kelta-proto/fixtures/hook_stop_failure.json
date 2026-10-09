@@ -1,0 +1,16 @@
+{
+  "cwd": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+  "error": "rate_limit",
+  "hook_event_name": "StopFailure",
+  "last_assistant_message": null,
+  "message": null,
+  "notification_type": null,
+  "permission_mode": "acceptEdits",
+  "prompt": null,
+  "reason": null,
+  "session_id": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "source": null,
+  "tool_input": null,
+  "tool_name": null,
+  "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl"
+}

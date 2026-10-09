@@ -1,0 +1,88 @@
+{
+  "active": true,
+  "attention": {
+    "level": "needs_input",
+    "needs_input": 1
+  },
+  "builtin": false,
+  "color": "#e07a5f",
+  "icon": "S",
+  "id": "shop",
+  "name": "Shop",
+  "open": true,
+  "repos": [
+    {
+      "base": "main",
+      "code_host": {
+        "account": "github-work",
+        "repo": "acme/shop-api"
+      },
+      "exists": true,
+      "id": "api",
+      "path": "/home/ada/code/shop-api",
+      "primary": true,
+      "remote": "origin"
+    }
+  ],
+  "tracker": {
+    "account": "jira-acme",
+    "columns": [
+      {
+        "categories": [
+          "todo"
+        ],
+        "id": "todo",
+        "label": "To do",
+        "names": []
+      },
+      {
+        "categories": [],
+        "id": "review",
+        "label": "Review",
+        "names": [
+          "In Review"
+        ]
+      }
+    ],
+    "repo_rules": [
+      {
+        "match": {
+          "component": "frontend",
+          "label": null,
+          "type": null
+        },
+        "repo": "web"
+      }
+    ],
+    "status_map": {
+      "done": {
+        "category": "done"
+      },
+      "review": {
+        "name": "In Review"
+      },
+      "start": {
+        "category": "in_progress"
+      }
+    },
+    "views": [
+      {
+        "assigned_to": null,
+        "board_id": null,
+        "id": "mine",
+        "jql": "project = SHOP AND assignee = currentUser()",
+        "label": "My open",
+        "labels": null,
+        "project": null,
+        "project_id": null,
+        "project_v2": null,
+        "query_id": null,
+        "repo": null,
+        "scope": null,
+        "search": null,
+        "status": null,
+        "workflow_scope": null
+      }
+    ]
+  }
+}

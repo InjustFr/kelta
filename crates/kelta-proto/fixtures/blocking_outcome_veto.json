@@ -1,0 +1,5 @@
+{
+  "kind": "veto",
+  "reason": "main checkout is dirty",
+  "trigger_id": "guard-dirty-main"
+}

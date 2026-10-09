@@ -1,0 +1,60 @@
+{
+  "active_tab": "tab-1",
+  "project_id": "shop",
+  "rev": 7,
+  "tabs": [
+    {
+      "focused_pane": "pane-1",
+      "id": "tab-1",
+      "root": {
+        "children": [
+          {
+            "content": {
+              "kind": "terminal",
+              "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203"
+            },
+            "id": "pane-1",
+            "type": "pane"
+          },
+          {
+            "content": {
+              "kind": "terminal",
+              "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
+            },
+            "id": "pane-2",
+            "type": "pane"
+          }
+        ],
+        "dir": "row",
+        "ratios": [
+          0.5,
+          0.5
+        ],
+        "type": "split"
+      },
+      "title": "SHOP-142 Rate-limit login",
+      "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
+      "zoomed_pane": null
+    },
+    {
+      "focused_pane": null,
+      "id": "tab-2",
+      "root": {
+        "content": {
+          "kind": "tickets",
+          "mode": "board",
+          "scope": {
+            "id": "shop",
+            "kind": "project"
+          },
+          "view_id": "mine"
+        },
+        "id": "pane-3",
+        "type": "pane"
+      },
+      "title": "Board",
+      "work_item_id": null,
+      "zoomed_pane": null
+    }
+  ]
+}

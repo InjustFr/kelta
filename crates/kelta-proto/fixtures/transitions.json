@@ -1,0 +1,12 @@
+[
+  {
+    "id": "31",
+    "name": "Start review",
+    "needs_fields": false,
+    "to": {
+      "category": "in_review",
+      "id": "10",
+      "name": "In Review"
+    }
+  }
+]

@@ -1,0 +1,33 @@
+[package]
+name = "kelta-bench"
+description = "Kelta performance harness: memory, latency, wakeups, bundle size (L10)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "kelta-bench"
+path = "src/main.rs"
+
+[dependencies]
+kelta-proto = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+rustix = { workspace = true }
+libc = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

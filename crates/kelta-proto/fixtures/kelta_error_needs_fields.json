@@ -1,0 +1,14 @@
+{
+  "code": "needs_fields",
+  "detail": {
+    "fields": [
+      {
+        "id": "resolution",
+        "name": "Resolution",
+        "required": true
+      }
+    ]
+  },
+  "message": "Resolution is required",
+  "retry_after_ms": null
+}

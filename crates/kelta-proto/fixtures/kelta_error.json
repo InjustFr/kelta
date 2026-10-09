@@ -1,0 +1,6 @@
+{
+  "code": "unsupported",
+  "detail": null,
+  "message": "not implemented: session_spawn",
+  "retry_after_ms": null
+}

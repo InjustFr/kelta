@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# fake-claude: a Claude Code stand-in for Kelta tests and benches (BUILD_PLAN §2.1).
+#
+#   fake-claude [--settings FILE] [--session-id UUID] [-n NAME] [--resume UUID] [--continue]
+#               [--model M] [--effort E] [--permission-mode P] [--mcp-config F]
+#               [--allowedTools T] [--append-system-prompt-file F] [PROMPT]
+#
+# Runs every hook command found in the --settings file (Claude's `hooks` format) with Claude-shaped
+# JSON on stdin, following a scripted timeline:
+#   SessionStart → UserPromptSubmit (if PROMPT) → PostToolUse Edit → PermissionRequest →
+#   Notification permission_prompt → Stop → (idle) Notification idle_prompt
+# and prints ink-like output. Typing a line sends UserPromptSubmit … Stop again; "q" (or EOF) sends
+# SessionEnd and exits 0.
+#
+# Environment: FAKE_CLAUDE_STEP_MS (delay between timeline steps, default 200),
+#              FAKE_CLAUDE_NO_IDLE=1 (skip the idle notification), FAKE_CLAUDE_EXIT_AFTER=1 (exit after Stop).
+# Only `type: "command"` hooks are executed (http hooks are ignored). Requires bash, awk, sed.
+
+set -u
+
+SETTINGS=""
+SESSION_ID=""
+NAME=""
+PROMPT=""
+RESUME=""
+MODEL="claude-opus"
+PERMISSION_MODE="default"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --settings) SETTINGS="${2:-}"; shift 2 ;;
+    --settings=*) SETTINGS="${1#*=}"; shift ;;
+    --session-id) SESSION_ID="${2:-}"; shift 2 ;;
+    --session-id=*) SESSION_ID="${1#*=}"; shift ;;
+    -n|--name) NAME="${2:-}"; shift 2 ;;
+    --resume|-r) RESUME="${2:-}"; shift 2 ;;
+    --continue|-c) RESUME="continue"; shift ;;
+    --model) MODEL="${2:-}"; shift 2 ;;
+    --permission-mode) PERMISSION_MODE="${2:-}"; shift 2 ;;
+    --effort|--mcp-config|--allowedTools|--allowed-tools|--append-system-prompt-file|--append-system-prompt)
+      shift 2 ;;
+    --version|-v) echo "2.1.999 (Claude Code)"; exit 0 ;;
+    --) shift; PROMPT="$*"; break ;;
+    -*) shift ;;
+    *) PROMPT="$1"; shift ;;
+  esac
+done
+
+[ -n "$SESSION_ID" ] || SESSION_ID="${RESUME:-00000000-0000-4000-8000-000000000000}"
+[ "$SESSION_ID" = "continue" ] && SESSION_ID="00000000-0000-4000-8000-000000000000"
+STEP_MS="${FAKE_CLAUDE_STEP_MS:-200}"
+CWD="$(pwd)"
+TRANSCRIPT="${TMPDIR:-/tmp}/fake-claude-${SESSION_ID}.jsonl"
+
+step_sleep() { sleep "$(awk -v ms="$STEP_MS" 'BEGIN { printf "%.3f", ms / 1000 }')"; }
+
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | awk 'BEGIN { ORS = "" } NR > 1 { print "\\n" } { print }'
+}
+
+# ---- hook table: lines "EVENT<TAB>MATCHER<TAB>COMMAND" parsed from the settings JSON -----------
+HOOKS=""
+
+# Parse lines "EVENT<US>MATCHER<US>COMMAND" (US = \x1f) out of the settings JSON (tiny JSON scanner in awk;
+# tracks nesting under the top-level "hooks" object: hooks.<Event>[].{matcher, hooks[].{type, command}}).
+parse_hooks() {
+  awk '
+    { buf = buf $0 "\n" }
+    END {
+      s = buf; n = length(s); i = 1; depth = 0; hooks_depth = -1; lastkey = ""
+      while (i <= n) {
+        c = substr(s, i, 1)
+        if (c == "\"") {
+          j = i + 1; str = ""
+          while (j <= n) {
+            d = substr(s, j, 1)
+            if (d == "\\") {
+              e = substr(s, j + 1, 1)
+              if (e == "n") str = str " "; else if (e == "t") str = str " "; else str = str e
+              j += 2; continue
+            }
+            if (d == "\"") break
+            str = str d; j++
+          }
+          i = j + 1
+          k = i; while (k <= n && substr(s, k, 1) ~ /[ \t\r\n]/) k++
+          if (substr(s, k, 1) == ":") { lastkey = str; keyat[depth] = str }
+          else { val(str) }
+          continue
+        }
+        if (c == "{" || c == "[") {
+          depth++
+          if (c == "{" && keyat[depth - 1] == "hooks" && hooks_depth < 0) hooks_depth = depth
+          if (hooks_depth > 0 && depth == hooks_depth + 1 && c == "[") event = keyat[hooks_depth]
+          if (hooks_depth > 0 && depth == hooks_depth + 2 && c == "{") matcher = ""
+          if (hooks_depth > 0 && depth == hooks_depth + 4 && c == "{") { htype = ""; hcmd = "" }
+          keyat[depth] = ""
+          i++; continue
+        }
+        if (c == "}" || c == "]") {
+          if (hooks_depth > 0 && depth == hooks_depth + 4 && c == "}" && htype == "command" && hcmd != "")
+            printf "%s\037%s\037%s\n", event, matcher, hcmd
+          if (depth == hooks_depth) hooks_depth = -1
+          depth--; i++; continue
+        }
+        if (c ~ /[ \t\r\n:,]/) { i++; continue }
+        j = i; while (j <= n && substr(s, j, 1) !~ /[ \t\r\n,}\]]/) j++
+        val(substr(s, i, j - i)); i = j
+      }
+    }
+    function val(v) {
+      if (hooks_depth > 0 && depth == hooks_depth + 2 && keyat[depth] == "matcher") matcher = v
+      if (hooks_depth > 0 && depth == hooks_depth + 4 && keyat[depth] == "type") htype = v
+      if (hooks_depth > 0 && depth == hooks_depth + 4 && keyat[depth] == "command") hcmd = v
+    }
+  ' "$1" 2>/dev/null
+}
+
+if [ -n "$SETTINGS" ] && [ -f "$SETTINGS" ]; then
+  HOOKS="$(parse_hooks "$SETTINGS")"
+fi
+
+# run_hook EVENT MATCH_VALUE JSON_EXTRA
+run_hook() {
+  local event="$1" match_value="$2" extra="$3" ev m cmd payload
+  payload="{\"session_id\":\"$SESSION_ID\",\"transcript_path\":\"$(json_escape "$TRANSCRIPT")\",\"cwd\":\"$(json_escape "$CWD")\",\"permission_mode\":\"$PERMISSION_MODE\",\"hook_event_name\":\"$event\"${extra:+,$extra}}"
+  [ -n "$HOOKS" ] || return 0
+  while IFS=$'\037' read -r ev m cmd; do
+    [ "$ev" = "$event" ] || continue
+    if [ -n "$m" ] && [ "$m" != "*" ]; then
+      [[ "$match_value" =~ ^($m)$ ]] || continue
+    fi
+    printf '%s' "$payload" | bash -c "$cmd" >/dev/null 2>&1 &
+  done <<EOF
+$HOOKS
+EOF
+}
+
+ink() { printf '\r\033[K\033[38;5;208m✻\033[0m %s\r\n' "$*"; }
+
+banner() {
+  printf '\033[38;5;208m╭──────────────────────────────────────────╮\033[0m\r\n'
+  printf '\033[38;5;208m│\033[0m ✻ Welcome to \033[1mfake Claude Code\033[0m               \033[38;5;208m│\033[0m\r\n'
+  printf '\033[38;5;208m│\033[0m   session %s \033[38;5;208m│\033[0m\r\n' "${SESSION_ID:0:8}…"
+  [ -n "$NAME" ] && printf '\033[38;5;208m│\033[0m   %s\r\n' "$NAME"
+  printf '\033[38;5;208m╰──────────────────────────────────────────╯\033[0m\r\n'
+}
+
+turn() {
+  local prompt="$1"
+  run_hook UserPromptSubmit "" "\"prompt\":\"$(json_escape "$prompt")\""
+  printf '\033[2m> %s\033[0m\r\n' "$prompt"
+  for s in "Thinking…" "Reading files…" "Editing src/main.rs…"; do
+    ink "$s"; step_sleep
+  done
+  run_hook PostToolUse "Edit" "\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$(json_escape "$CWD/src/main.rs")\",\"old_string\":\"a\",\"new_string\":\"b\"},\"tool_response\":{\"success\":true}"
+  step_sleep
+  run_hook PermissionRequest "Bash" "\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cargo test\"}"
+  run_hook Notification "permission_prompt" "\"notification_type\":\"permission_prompt\",\"message\":\"Claude needs your permission to use Bash\""
+  ink "Bash(cargo test) — allowed"; step_sleep
+  ink "Done."
+  run_hook Stop "" "\"stop_hook_active\":false,\"last_assistant_message\":\"Done. All tests pass.\""
+}
+
+cleanup() {
+  run_hook SessionEnd "" "\"reason\":\"prompt_input_exit\""
+  wait 2>/dev/null
+  printf '\r\nbye\r\n'
+}
+
+banner
+if [ -n "$RESUME" ]; then source="resume"; else source="startup"; fi
+run_hook SessionStart "$source" "\"source\":\"$source\",\"model\":\"$(json_escape "$MODEL")\""
+step_sleep
+
+[ -n "$PROMPT" ] && turn "$PROMPT"
+if [ "${FAKE_CLAUDE_EXIT_AFTER:-0}" = "1" ]; then cleanup; exit 0; fi
+if [ "${FAKE_CLAUDE_NO_IDLE:-0}" != "1" ]; then
+  step_sleep
+  run_hook Notification "idle_prompt" "\"notification_type\":\"idle_prompt\",\"message\":\"Claude is waiting for your input\""
+fi
+
+printf '\r\n> '
+while IFS= read -r line; do
+  line="${line%$'\r'}"
+  case "$line" in
+    q|quit|/exit) break ;;
+    "") printf '> ' ;;
+    *) turn "$line"; printf '\r\n> ' ;;
+  esac
+done
+cleanup
+exit 0

@@ -1,0 +1,14 @@
+{
+  "toast": {
+    "action": {
+      "args": {
+        "url": "https://acme.atlassian.net/browse/SHOP-142"
+      },
+      "command": "open_external",
+      "label": "Open in browser"
+    },
+    "level": "error",
+    "text": "Transition failed"
+  },
+  "type": "toast"
+}

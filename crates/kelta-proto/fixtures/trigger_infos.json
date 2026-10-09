@@ -1,0 +1,12 @@
+[
+  {
+    "description": null,
+    "enabled": true,
+    "id": "start-db",
+    "on": "ticket.started",
+    "origin": {
+      "kind": "project",
+      "project_id": "shop"
+    }
+  }
+]

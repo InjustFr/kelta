@@ -1,0 +1,31 @@
+[package]
+name = "kelta-codehosts"
+description = "Code-host providers: GitHub (GraphQL + REST), GitLab (L5)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+kelta-proto = { workspace = true }
+kelta-http = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+time = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+kelta-proto = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

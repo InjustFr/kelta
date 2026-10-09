@@ -1,0 +1,14 @@
+{
+  "arch": "aarch64",
+  "claude": {
+    "ok": true,
+    "path": "/opt/homebrew/bin/claude",
+    "version": "2.1.210"
+  },
+  "config_dir": "/Users/ada/.config/kelta",
+  "data_dir": "/Users/ada/Library/Application Support/dev.kelta.Kelta",
+  "platform": "macos",
+  "runtime_dir": "/tmp/kelta-501",
+  "safe_graphics": false,
+  "version": "0.1.0"
+}

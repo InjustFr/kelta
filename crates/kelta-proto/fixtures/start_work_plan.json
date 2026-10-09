@@ -1,0 +1,37 @@
+{
+  "base": "main",
+  "branch": "feat/SHOP-142-rate-limit-login",
+  "branch_exists": null,
+  "claude": {
+    "effort": "high",
+    "model": "opus",
+    "permission_mode": "acceptEdits",
+    "profile": "default",
+    "prompt": "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing."
+  },
+  "existing": null,
+  "project_id": "shop",
+  "repo_choices": [
+    "api",
+    "web"
+  ],
+  "repo_id": "api",
+  "side_effects": {
+    "assign_me": true,
+    "comment": null,
+    "run_setup": true,
+    "transition_to": {
+      "category": "in_progress"
+    }
+  },
+  "source": {
+    "kind": "ticket",
+    "ticket": {
+      "account": "jira-acme",
+      "id": "10142",
+      "key": "SHOP-142"
+    }
+  },
+  "template_id": "claude+editor",
+  "worktree_path": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+}

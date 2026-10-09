@@ -1,0 +1,50 @@
+{
+  "allow_send_keys": false,
+  "blocking": false,
+  "continue_on_error": false,
+  "debounce_ms": 1500,
+  "description": null,
+  "do": [
+    {
+      "action": "run",
+      "args": [
+        "compose",
+        "up",
+        "-d",
+        "db"
+      ],
+      "command": "docker",
+      "cwd": "{worktree}",
+      "env": {},
+      "show": "toast_on_error",
+      "stdin": null,
+      "timeout_ms": null
+    },
+    {
+      "action": "open_tool",
+      "placement": "split_down",
+      "tool": "lazydocker"
+    },
+    {
+      "action": "prompt",
+      "no": [],
+      "text": "Remove worktree?",
+      "yes": [
+        {
+          "action": "command",
+          "id": "kelta.work.finish"
+        }
+      ]
+    }
+  ],
+  "enabled": true,
+  "id": "start-db",
+  "match": {
+    "payload.status": [
+      "needs_input",
+      "!done"
+    ],
+    "project.id": "shop"
+  },
+  "on": "ticket.started"
+}

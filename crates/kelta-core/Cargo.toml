@@ -1,0 +1,52 @@
+[package]
+name = "kelta-core"
+description = "Core composition: projects, sessions, layouts, store, bus, scheduler, providers, attention (L3)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+kelta-proto = { workspace = true }
+kelta-term = { workspace = true }
+kelta-config = { workspace = true }
+kelta-secrets = { workspace = true }
+kelta-http = { workspace = true }
+kelta-trackers = { workspace = true }
+kelta-codehosts = { workspace = true }
+kelta-work = { workspace = true }
+kelta-server = { workspace = true }
+kelta-plugins = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+rusqlite = { workspace = true }
+arboard = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+which = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+sha2 = { workspace = true }
+semver = { workspace = true }
+globset = { workspace = true }
+regex = { workspace = true }
+parking_lot = { workspace = true }
+futures = { workspace = true }
+rustix = { workspace = true }
+libc = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { workspace = true }
+
+[dev-dependencies]
+kelta-proto = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

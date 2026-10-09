@@ -1,0 +1,28 @@
+{
+  "http_server": false,
+  "live_views": 3,
+  "processes": [
+    {
+      "name": "kelta",
+      "pid": 100,
+      "pss_or_footprint_kb": 48000,
+      "role": "core"
+    },
+    {
+      "name": "com.apple.WebKit.WebContent",
+      "pid": 101,
+      "pss_or_footprint_kb": 120000,
+      "role": "web_content"
+    }
+  ],
+  "sessions": [
+    {
+      "child_kb": 210000,
+      "history_lines": 500,
+      "id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+      "model_bytes": 1440000,
+      "name": "SHOP-142 claude"
+    }
+  ],
+  "timers_armed": 0
+}

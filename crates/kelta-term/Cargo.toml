@@ -1,0 +1,39 @@
+[package]
+name = "kelta-term"
+description = "Terminal host: PTYs, headless alacritty model, snapshots, flow control (L1)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# openpty/fork fallback backend instead of portable-pty.
+rustix-pty = []
+
+[dependencies]
+kelta-proto = { workspace = true }
+portable-pty = { workspace = true }
+alacritty_terminal = { workspace = true }
+rustix = { workspace = true }
+libc = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+base64 = { workspace = true }
+
+[dev-dependencies]
+kelta-proto = { workspace = true, features = ["testing"] }
+tempfile = { workspace = true }
+insta = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "term"
+harness = false
+
+[lints]
+workspace = true

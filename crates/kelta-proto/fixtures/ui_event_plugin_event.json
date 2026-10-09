@@ -1,0 +1,12 @@
+{
+  "instance_id": "scr-1",
+  "name": "ticket.transitioned",
+  "payload": {
+    "ticket": {
+      "account": "jira-acme",
+      "id": "10142",
+      "key": "SHOP-142"
+    }
+  },
+  "type": "plugin.event"
+}

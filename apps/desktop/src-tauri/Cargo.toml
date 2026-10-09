@@ -1,0 +1,54 @@
+[package]
+name = "kelta-desktop"
+description = "Kelta desktop app (Tauri v2 shell over kelta-core)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+default-run = "kelta"
+
+[lib]
+name = "kelta_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kelta"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+kelta-proto = { workspace = true }
+kelta-core = { workspace = true }
+kelta-config = { workspace = true }
+kelta-plugins = { workspace = true }
+tauri = { workspace = true }
+tauri-plugin-notification = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-single-instance = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+rustix = { workspace = true }
+libc = { workspace = true }
+time = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { workspace = true }
+
+[dev-dependencies]
+kelta-proto = { workspace = true, features = ["testing"] }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

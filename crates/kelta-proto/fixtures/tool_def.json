@@ -1,0 +1,50 @@
+{
+  "args": [],
+  "autostart": false,
+  "check": [
+    "sl",
+    "--version"
+  ],
+  "close_on_exit": "never",
+  "command": null,
+  "cwd": null,
+  "description": null,
+  "embed": "auto",
+  "enabled": true,
+  "env": {},
+  "icon": "branch",
+  "id": "isl",
+  "install_hint": "https://sapling-scm.com/docs/introduction/installation",
+  "keep_alive": null,
+  "keybinding": null,
+  "kind": "web",
+  "label": "Sapling ISL",
+  "lifecycle": "on_close",
+  "placement": "new_tab",
+  "scrollback": null,
+  "start": {
+    "args": [
+      "web",
+      "--no-open",
+      "--foreground",
+      "--json",
+      "--port",
+      "{port}",
+      "--cwd",
+      "{repo.path}"
+    ],
+    "command": "sl",
+    "cwd": null,
+    "env": {},
+    "ready": {
+      "stdout_json": "url"
+    },
+    "ready_timeout_ms": 10000,
+    "stop": {
+      "grace_ms": 3000,
+      "signal": "TERM"
+    }
+  },
+  "url": null,
+  "url_is_secret": true
+}

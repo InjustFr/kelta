@@ -1,0 +1,20 @@
+# Kelta lint configuration (ARCHITECTURE §1.5/§13, BUILD_PLAN §2.6).
+#
+# Timers and threads are owned by a few allowlisted modules only:
+#   kelta-core::scheduler, kelta-core::store, kelta-term::reader, tests,
+#   (and the fixtures/bench binaries).
+# In those modules use `#[allow(clippy::disallowed_methods)]` with a `// allowlisted: <reason>` comment.
+# One-shot timers armed by an event (`tokio::time::sleep`/`timeout`) are allowed with a
+# `// one-shot: <reason>` comment.
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = false
+
+disallowed-methods = [
+  { path = "tokio::time::interval", reason = "periodic work belongs to kelta-core::scheduler (ARCH D11)" },
+  { path = "tokio::time::interval_at", reason = "periodic work belongs to kelta-core::scheduler (ARCH D11)" },
+  { path = "std::thread::sleep", reason = "no sleeping threads; use event-armed one-shots (BUILD_PLAN §1.5)" },
+  { path = "std::thread::spawn", reason = "threads only in kelta-term::reader / kelta-core::store (BUILD_PLAN §1.5)" },
+  { path = "std::process::exit", reason = "libraries must not exit the process; return errors (binaries return ExitCode)" },
+]

@@ -1,0 +1,6 @@
+{
+  "account_id": "jira-acme",
+  "detail": "401 Unauthorized",
+  "status": "needs_auth",
+  "type": "account.status"
+}

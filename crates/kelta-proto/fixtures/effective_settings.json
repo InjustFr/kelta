@@ -1,0 +1,10 @@
+{
+  "sources": {
+    "terminal.font_size": "project"
+  },
+  "value": {
+    "terminal": {
+      "font_size": 14
+    }
+  }
+}

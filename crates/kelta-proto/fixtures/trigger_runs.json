@@ -1,0 +1,10 @@
+[
+  {
+    "depth": 0,
+    "detail": "docker: exit 1",
+    "event": "ticket.started",
+    "ok": false,
+    "trigger_id": "start-db",
+    "ts": "2026-10-09T12:00:00Z"
+  }
+]

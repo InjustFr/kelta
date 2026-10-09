@@ -1,0 +1,27 @@
+{
+  "args": [
+    "--listen",
+    "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "."
+  ],
+  "close_on_exit": "never",
+  "cols": 120,
+  "cwd": "/home/ada/code/shop-api",
+  "env": {
+    "FOO": "bar"
+  },
+  "kind": {
+    "adapter": "nvim",
+    "type": "editor"
+  },
+  "name": "nvim",
+  "program": "nvim",
+  "project_id": "shop",
+  "restore": {
+    "kind": "editor",
+    "session_file": null
+  },
+  "rows": 40,
+  "template_id": "claude+editor",
+  "work_item_id": null
+}

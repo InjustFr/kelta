@@ -1,0 +1,436 @@
+{
+  "accounts": {},
+  "app": {
+    "confirm_quit_with_running": true,
+    "log_level": "info",
+    "restore_mode": "lazy",
+    "theme": "system"
+  },
+  "claude": {
+    "allowed_tools": [
+      "mcp__kelta__*"
+    ],
+    "append_system_prompt": "",
+    "binary": "claude",
+    "extra_args": [],
+    "extra_hooks": {},
+    "hook_transport": "command",
+    "ide_bridge": false,
+    "mcp": true,
+    "min_version": "2.1.200",
+    "profiles": {
+      "default": {
+        "effort": "high",
+        "model": "opus",
+        "permission_mode": "acceptEdits"
+      },
+      "plan": {
+        "effort": "high",
+        "model": "opus",
+        "permission_mode": "plan"
+      },
+      "review": {
+        "effort": "high",
+        "model": "opus",
+        "permission_mode": "plan"
+      }
+    },
+    "prompt_templates": {
+      "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
+      "standalone": "",
+      "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
+    }
+  },
+  "commands": [],
+  "editor": {
+    "default": "nvim",
+    "follow_claude_edits": "reload",
+    "presets": [
+      {
+        "args": [
+          "--listen",
+          "{sock}",
+          "{path}"
+        ],
+        "command": "nvim",
+        "enabled": true,
+        "external": false,
+        "id": "nvim",
+        "label": "Neovim",
+        "open": "rpc",
+        "open_cmd": null,
+        "open_keys": null,
+        "restore": "mksession"
+      },
+      {
+        "args": [
+          "{path}"
+        ],
+        "command": "vim",
+        "enabled": true,
+        "external": false,
+        "id": "vim",
+        "label": "Vim",
+        "open": "keys",
+        "open_cmd": null,
+        "open_keys": "<C-\\><C-N>:edit +{line} {file}<CR>",
+        "restore": "none"
+      },
+      {
+        "args": [
+          "{path}"
+        ],
+        "command": "hx",
+        "enabled": true,
+        "external": false,
+        "id": "helix",
+        "label": "Helix",
+        "open": "none",
+        "open_cmd": null,
+        "open_keys": null,
+        "restore": "none"
+      },
+      {
+        "args": [
+          "-nw",
+          "--eval",
+          "(progn (setq server-name \"kelta-{sid8}\") (server-start))",
+          "{path}"
+        ],
+        "command": "emacs",
+        "enabled": true,
+        "external": false,
+        "id": "emacs",
+        "label": "Emacs",
+        "open": "command",
+        "open_cmd": [
+          "emacsclient",
+          "-s",
+          "kelta-{sid8}",
+          "-n",
+          "+{line}",
+          "{file}"
+        ],
+        "open_keys": null,
+        "restore": "none"
+      },
+      {
+        "args": [
+          "{path}"
+        ],
+        "command": "code",
+        "enabled": true,
+        "external": true,
+        "id": "vscode",
+        "label": "VS Code",
+        "open": "command",
+        "open_cmd": [
+          "code",
+          "-g",
+          "{file}:{line}"
+        ],
+        "open_keys": null,
+        "restore": "none"
+      },
+      {
+        "args": [
+          "{path}"
+        ],
+        "command": "zed",
+        "enabled": true,
+        "external": true,
+        "id": "zed",
+        "label": "Zed",
+        "open": "command",
+        "open_cmd": [
+          "zed",
+          "{file}:{line}"
+        ],
+        "open_keys": null,
+        "restore": "none"
+      }
+    ],
+    "review_args": []
+  },
+  "env": {},
+  "keys": {
+    "bindings": {},
+    "list_keys": true,
+    "prefix": "ctrl+shift+space",
+    "prefix_bindings": {
+      "attention.next": "u",
+      "editor.send_selection": "@",
+      "inbox.open": "0",
+      "palette.open": ":",
+      "pane.close": "x",
+      "pane.focus_down": "j",
+      "pane.focus_left": "h",
+      "pane.focus_right": "l",
+      "pane.focus_up": "k",
+      "pane.split_down": "\"",
+      "pane.split_right": "%",
+      "pane.zoom": "z",
+      "project.goto.1": "1",
+      "project.goto.2": "2",
+      "project.goto.3": "3",
+      "project.goto.4": "4",
+      "project.goto.5": "5",
+      "project.goto.6": "6",
+      "project.goto.7": "7",
+      "project.goto.8": "8",
+      "project.goto.9": "9",
+      "project.next": ")",
+      "project.prev": "(",
+      "project.switcher": "p",
+      "reviews.open": "r",
+      "session.new": "c",
+      "settings.open": ",",
+      "tab.next": "n",
+      "tab.prev": "N",
+      "terminal.copy": "[",
+      "terminal.paste": "]",
+      "terminal.search": "/",
+      "tickets.open": "t",
+      "work.start": "s"
+    },
+    "prefix_timeout_ms": 1000
+  },
+  "linux": {
+    "graphics": {
+      "auto_nvidia": true,
+      "disable_compositing": false,
+      "disable_dmabuf": false,
+      "gdk_backend": "auto",
+      "nvidia_disable_explicit_sync": false,
+      "profile": "auto"
+    }
+  },
+  "notifications": {
+    "bell_background": false,
+    "ci_failed_mine": true,
+    "claude_done": true,
+    "claude_needs_input": true,
+    "enabled": true,
+    "only_when_unfocused": true,
+    "pr_approved": true,
+    "pr_changes_requested": true,
+    "quiet_hours": "",
+    "review_requested": true
+  },
+  "performance": {
+    "hud": false
+  },
+  "plugins": {
+    "dev_paths": [],
+    "disabled": []
+  },
+  "polling": {
+    "background_secs": 600,
+    "focused_secs": 120,
+    "min_secs": 30,
+    "when_closed": "off"
+  },
+  "reviews": {
+    "include_drafts": false,
+    "include_team_requests": true,
+    "repos_allow": [],
+    "repos_deny": [],
+    "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
+  },
+  "session_templates": [
+    {
+      "enabled": true,
+      "id": "claude+editor",
+      "label": "Claude + editor",
+      "layout": {
+        "children": [
+          {
+            "command": null,
+            "name": null,
+            "profile": null,
+            "session": "claude"
+          },
+          {
+            "command": null,
+            "name": null,
+            "profile": null,
+            "session": "editor"
+          }
+        ],
+        "ratios": [
+          0.5,
+          0.5
+        ],
+        "split": "row"
+      }
+    },
+    {
+      "enabled": true,
+      "id": "review",
+      "label": "Review",
+      "layout": {
+        "children": [
+          {
+            "command": null,
+            "name": null,
+            "profile": "review",
+            "session": "claude"
+          },
+          {
+            "children": [
+              {
+                "command": null,
+                "name": null,
+                "profile": null,
+                "session": "editor"
+              },
+              {
+                "command": "git diff --stat origin/{base}...HEAD",
+                "name": null,
+                "profile": null,
+                "session": "shell"
+              }
+            ],
+            "ratios": [
+              0.75,
+              0.25
+            ],
+            "split": "column"
+          }
+        ],
+        "ratios": [
+          0.5,
+          0.5
+        ],
+        "split": "row"
+      }
+    },
+    {
+      "enabled": true,
+      "id": "claude",
+      "label": "Claude",
+      "layout": {
+        "command": null,
+        "name": null,
+        "profile": null,
+        "session": "claude"
+      }
+    },
+    {
+      "enabled": true,
+      "id": "editor",
+      "label": "Editor",
+      "layout": {
+        "command": null,
+        "name": null,
+        "profile": null,
+        "session": "editor"
+      }
+    },
+    {
+      "enabled": true,
+      "id": "shell",
+      "label": "Shell",
+      "layout": {
+        "command": null,
+        "name": null,
+        "profile": null,
+        "session": "shell"
+      }
+    }
+  ],
+  "terminal": {
+    "bell": "attention",
+    "confirm_multiline_paste": true,
+    "copy_on_select": false,
+    "cursor_blink": false,
+    "cursor_style": "block",
+    "env": {},
+    "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
+    "font_size": 13.0,
+    "keyboard_protocol": "legacy",
+    "letter_spacing": 0.0,
+    "line_height": 1.15,
+    "max_live_views": 4,
+    "memory_cap_mb": 160,
+    "minimum_contrast_ratio": 1.0,
+    "option_as_meta": "both",
+    "osc52": "write",
+    "primary_selection": true,
+    "renderer": "auto",
+    "scrollback": {
+      "claude": 3000,
+      "custom": 3000,
+      "editor": 500,
+      "setup": 1000,
+      "shell": 3000,
+      "tool": 500
+    },
+    "shell": "",
+    "shift_enter": {
+      "claude": "esc-cr",
+      "default": "passthrough"
+    },
+    "view_scrollback": 1000
+  },
+  "tools": [],
+  "triggers": [],
+  "web": {
+    "embed_default": "auto",
+    "keep_alive": false
+  },
+  "window": {
+    "close_behavior": "auto",
+    "decorations": "auto",
+    "restore_geometry": true
+  },
+  "work": {
+    "default_template": "claude+editor",
+    "on_merge": {
+      "offer_cleanup": true,
+      "transition_to": {
+        "category": "done"
+      }
+    },
+    "on_pr": {
+      "comment": "PR: {pr.url}",
+      "transition_to": {
+        "category": "in_review"
+      }
+    },
+    "on_start": {
+      "assign_me": true,
+      "comment": null,
+      "transition_to": {
+        "category": "in_progress"
+      }
+    },
+    "plan_preview": true,
+    "pr": {
+      "body_template": "{ticket.url}\n\n{closes}",
+      "draft": false,
+      "title_template": "{ticket.key}: {ticket.title}"
+    },
+    "review_template": "review"
+  },
+  "worktree": {
+    "branch_template": "{type}/{key}-{slug}",
+    "cleanup": "ask",
+    "fetch_timeout_secs": 20,
+    "include": [
+      ".env",
+      ".env.*"
+    ],
+    "root": "~/.kelta-worktrees/{project}/{repo}/{key}-{slug}",
+    "setup": [],
+    "setup_blocking": true,
+    "slug_max": 40,
+    "type_map": {
+      "bug": "fix",
+      "default": "chore",
+      "feature": "feat",
+      "story": "feat",
+      "task": "feat"
+    }
+  }
+}

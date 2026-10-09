@@ -1,0 +1,18 @@
+{
+  "project_id": "shop",
+  "request": {
+    "content": {
+      "kind": "ticket_detail",
+      "ticket": {
+        "account": "jira-acme",
+        "id": "10142",
+        "key": "SHOP-142"
+      }
+    },
+    "focus": true,
+    "placement": "split_right",
+    "tab_title": null,
+    "work_item_id": null
+  },
+  "type": "ui.open"
+}

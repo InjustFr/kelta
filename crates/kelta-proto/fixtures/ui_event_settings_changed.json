@@ -1,0 +1,13 @@
+{
+  "layers": [
+    "global"
+  ],
+  "paths": [
+    "terminal.font_size",
+    "window.decorations"
+  ],
+  "requires_restart": [
+    "window.decorations"
+  ],
+  "type": "settings.changed"
+}

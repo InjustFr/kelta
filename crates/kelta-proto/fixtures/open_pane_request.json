@@ -1,0 +1,13 @@
+{
+  "content": {
+    "instance_id": "scr-1",
+    "kind": "plugin_screen",
+    "params": {},
+    "plugin_id": "sprint-burndown",
+    "screen_id": "burndown"
+  },
+  "focus": true,
+  "placement": "new_tab",
+  "tab_title": "Burndown",
+  "work_item_id": null
+}

@@ -1,0 +1,12 @@
+{
+  "path": "/home/ada/code/shop-api/.kelta/config.toml",
+  "text": "[worktree]\nsetup = [\"pnpm install\"]\n",
+  "trusted": false,
+  "value": {
+    "worktree": {
+      "setup": [
+        "pnpm install"
+      ]
+    }
+  }
+}

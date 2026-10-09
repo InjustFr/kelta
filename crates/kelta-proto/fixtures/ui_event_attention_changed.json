@@ -1,0 +1,7 @@
+{
+  "level": "needs_input",
+  "needs_input_count": 1,
+  "project_id": "shop",
+  "total_needs_input": 2,
+  "type": "attention.changed"
+}

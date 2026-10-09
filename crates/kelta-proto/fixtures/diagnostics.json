@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "detail": "2.1.210 at /opt/homebrew/bin/claude",
+      "fix": null,
+      "id": "claude",
+      "label": "Claude Code",
+      "status": "ok"
+    },
+    {
+      "detail": "org.freedesktop.secrets not available",
+      "fix": "gnome-keyring-daemon --start --components=secrets",
+      "id": "secret-service",
+      "label": "Secret Service",
+      "status": "warn"
+    }
+  ]
+}

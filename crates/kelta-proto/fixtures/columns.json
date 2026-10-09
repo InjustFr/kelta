@@ -1,0 +1,16 @@
+[
+  {
+    "category": "todo",
+    "id": "todo",
+    "match_names": [],
+    "name": "To do",
+    "order": 0
+  },
+  {
+    "category": "in_progress",
+    "id": "doing",
+    "match_names": [],
+    "name": "In progress",
+    "order": 1
+  }
+]

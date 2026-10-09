@@ -1,0 +1,8 @@
+{
+  "delete_branch": true,
+  "force": false,
+  "remove_worktree": true,
+  "transition_to": {
+    "name": "Done"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "chain": {
+    "depth": 1,
+    "origin_triggers": [
+      "claude-needs-me"
+    ]
+  },
+  "name": "session.status_changed",
+  "payload": {
+    "previous": "working",
+    "source": "hook",
+    "status": "needs_input"
+  },
+  "project_id": "shop",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+  "ts": "2026-10-09T12:00:00Z",
+  "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
+}

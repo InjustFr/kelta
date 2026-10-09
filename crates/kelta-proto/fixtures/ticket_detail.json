@@ -1,0 +1,45 @@
+{
+  "body_format": "adf",
+  "body_html": "<p>Limit login attempts to <strong>5/min</strong>.</p>",
+  "body_md": "Limit login attempts to **5/min**.",
+  "comments": [
+    {
+      "author": {
+        "avatar_url": null,
+        "id": "5b10ac8d82e05b22cc7d4ef5",
+        "login": "ada",
+        "name": "Ada Lovelace"
+      },
+      "body_html": "<p>On it.</p>",
+      "created_at": "2026-10-09T12:00:00Z"
+    }
+  ],
+  "parent": null,
+  "ticket": {
+    "assignee": {
+      "avatar_url": null,
+      "id": "5b10ac8d82e05b22cc7d4ef5",
+      "login": "ada",
+      "name": "Ada Lovelace"
+    },
+    "kind": "Story",
+    "labels": [
+      "api"
+    ],
+    "priority": "High",
+    "project_hint": "SHOP",
+    "ref": {
+      "account": "jira-acme",
+      "id": "10142",
+      "key": "SHOP-142"
+    },
+    "status": {
+      "category": "in_progress",
+      "id": "3",
+      "name": "In Progress"
+    },
+    "title": "Rate-limit login",
+    "updated_at": "2026-10-09T12:00:00Z",
+    "url": "https://acme.atlassian.net/browse/SHOP-142"
+  }
+}

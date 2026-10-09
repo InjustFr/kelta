@@ -1,0 +1,4273 @@
+{
+  "$defs": {
+    "ActionDef": {
+      "description": "Trigger/command action; serde tag `action` (PLUGINS §3.1).",
+      "oneOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "notify",
+              "type": "string"
+            },
+            "body": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "urgency": {
+              "default": null,
+              "enum": [
+                "low",
+                "normal",
+                "critical",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "toast",
+              "type": "string"
+            },
+            "level": {
+              "default": null,
+              "enum": [
+                "info",
+                "warn",
+                "error",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "run",
+              "type": "string"
+            },
+            "args": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "command": {
+              "type": "string"
+            },
+            "cwd": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "env": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {},
+              "type": "object"
+            },
+            "show": {
+              "default": null,
+              "enum": [
+                "none",
+                "toast_on_error",
+                "pane",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stdin": {
+              "default": null,
+              "enum": [
+                "event",
+                "none",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "timeout_ms": {
+              "default": null,
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "command"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "spawn_session",
+              "type": "string"
+            },
+            "args": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "command": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cwd": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "focus": {
+              "default": false,
+              "type": "boolean"
+            },
+            "placement": {
+              "anyOf": [
+                {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "new_tab",
+                        "split_right",
+                        "split_down",
+                        "replace_focused"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "const": "focused",
+                      "description": "Focus an existing pane with the same content if any.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "template": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "send_keys",
+              "type": "string"
+            },
+            "bracketed": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "session": {
+              "description": "`\"{event.session_id}\"` | `\"claude\"` | `\"editor\"`.",
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "session",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "open_tool",
+              "type": "string"
+            },
+            "placement": {
+              "anyOf": [
+                {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "new_tab",
+                        "split_right",
+                        "split_down",
+                        "replace_focused"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "const": "focused",
+                      "description": "Focus an existing pane with the same content if any.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "tool": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "tool"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "open_screen",
+              "type": "string"
+            },
+            "params": {
+              "default": null
+            },
+            "placement": {
+              "anyOf": [
+                {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "new_tab",
+                        "split_right",
+                        "split_down",
+                        "replace_focused"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "const": "focused",
+                      "description": "Focus an existing pane with the same content if any.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "plugin": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "screen": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "screen"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "start_work",
+              "type": "string"
+            },
+            "project": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ticket": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "ticket"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "transition_ticket",
+              "type": "string"
+            },
+            "to_category": {
+              "default": null,
+              "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+              "enum": [
+                "todo",
+                "in_progress",
+                "in_review",
+                "done",
+                "unknown",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "to_name": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "comment_ticket",
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "body"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "assign_ticket",
+              "type": "string"
+            },
+            "to": {
+              "description": "`\"me\"` | `\"none\"`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "to"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "http",
+              "type": "string"
+            },
+            "body": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "headers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {},
+              "type": "object"
+            },
+            "method": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "secret_headers": {
+              "additionalProperties": {
+                "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                "type": "string"
+              },
+              "default": {},
+              "type": "object"
+            },
+            "timeout_ms": {
+              "default": null,
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "focus",
+              "type": "string"
+            },
+            "project": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "set_attention",
+              "type": "string"
+            },
+            "level": {
+              "description": "Ordered; max-aggregated. Serialized as a string (`\"none\"`, `\"activity\"`, ...).",
+              "enum": [
+                "none",
+                "activity",
+                "done",
+                "error",
+                "needs_input"
+              ],
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "session",
+            "level"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "prompt",
+              "type": "string"
+            },
+            "no": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ActionDef"
+              },
+              "type": "array"
+            },
+            "text": {
+              "type": "string"
+            },
+            "yes": {
+              "items": {
+                "$ref": "#/$defs/ActionDef"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "action",
+            "text",
+            "yes"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "command",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Matcher": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "format": "double",
+          "type": "number"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/Matcher"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "Matcher: a string (exact; `glob:…`; `re:…`; `!…` negation), bool, number, or any-of list."
+    },
+    "TemplateNode": {
+      "anyOf": [
+        {
+          "properties": {
+            "children": {
+              "items": {
+                "$ref": "#/$defs/TemplateNode"
+              },
+              "type": "array"
+            },
+            "ratios": {
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "split": {
+              "enum": [
+                "row",
+                "column"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "split",
+            "ratios",
+            "children"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "command": {
+              "default": null,
+              "description": "Shell: run this then stay interactive.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "profile": {
+              "default": null,
+              "description": "Claude profile.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "description": "`claude` | `editor` | `shell` | `setup` | `tool:<id>`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "session"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "`{ split = \"row\", ratios = [..], children = [..] }` | `{ session = \"claude\", ... }`."
+    }
+  },
+  "$id": "https://kelta.dev/schema/0.1/settings.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Effective (merged) settings. Also the schema of the global `config.toml`.",
+  "properties": {
+    "accounts": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "One tracker / code-host account (global scope only).",
+        "properties": {
+          "auth": {
+            "default": null,
+            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`.",
+            "enum": [
+              "basic",
+              "bearer",
+              "api_key",
+              "token",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "base_url": {
+            "default": null,
+            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; required for jira/redmine.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "flavor": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "cloud",
+              "dc"
+            ],
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "jira",
+              "redmine",
+              "github",
+              "gitlab"
+            ],
+            "type": "string"
+          },
+          "poll_secs": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "secret": {
+            "default": null,
+            "description": "Default github `gh-cli`, gitlab `glab-cli`.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-kelta-secret": true
+          },
+          "text_format": {
+            "default": "textile",
+            "enum": [
+              "textile",
+              "markdown"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "web_url": {
+            "default": null,
+            "description": "Browser links (GHE/GitLab); derived when absent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "default": {},
+      "type": "object",
+      "x-kelta-category": "Accounts",
+      "x-kelta-order": 6,
+      "x-kelta-scope": [
+        "global"
+      ]
+    },
+    "app": {
+      "additionalProperties": false,
+      "default": {
+        "confirm_quit_with_running": true,
+        "log_level": "info",
+        "restore_mode": "lazy",
+        "theme": "system"
+      },
+      "properties": {
+        "confirm_quit_with_running": {
+          "default": true,
+          "description": "Confirm quit if a Claude session is Working/NeedsInput.",
+          "type": "boolean"
+        },
+        "log_level": {
+          "default": "info",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "type": "string",
+          "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "restore_mode": {
+          "default": "lazy",
+          "description": "Dormant session respawn policy.",
+          "enum": [
+            "lazy",
+            "eager",
+            "none"
+          ],
+          "type": "string"
+        },
+        "theme": {
+          "default": "system",
+          "enum": [
+            "system",
+            "dark",
+            "light"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "General",
+      "x-kelta-order": 0
+    },
+    "claude": {
+      "additionalProperties": false,
+      "default": {
+        "allowed_tools": [
+          "mcp__kelta__*"
+        ],
+        "append_system_prompt": "",
+        "binary": "claude",
+        "extra_args": [],
+        "extra_hooks": {},
+        "hook_transport": "command",
+        "ide_bridge": false,
+        "mcp": true,
+        "min_version": "2.1.200",
+        "profiles": {
+          "default": {
+            "effort": "high",
+            "model": "opus",
+            "permission_mode": "acceptEdits"
+          },
+          "plan": {
+            "effort": "high",
+            "model": "opus",
+            "permission_mode": "plan"
+          },
+          "review": {
+            "effort": "high",
+            "model": "opus",
+            "permission_mode": "plan"
+          }
+        },
+        "prompt_templates": {
+          "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
+          "standalone": "",
+          "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
+        }
+      },
+      "properties": {
+        "allowed_tools": {
+          "default": [
+            "mcp__kelta__*"
+          ],
+          "description": "Passed via `--allowedTools`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "append_system_prompt": {
+          "default": "",
+          "description": "Appended to the generated `context.md`.",
+          "type": "string",
+          "x-kelta-scope": [
+            "global",
+            "project",
+            "repo"
+          ]
+        },
+        "binary": {
+          "default": "claude",
+          "description": "Resolved in the login PATH.",
+          "type": "string",
+          "x-kelta-exec": true
+        },
+        "extra_args": {
+          "default": [],
+          "description": "Appended before the prompt.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-kelta-exec": true
+        },
+        "extra_hooks": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Merged into the generated `--settings` hooks.",
+          "type": "object",
+          "x-kelta-exec": true
+        },
+        "hook_transport": {
+          "default": "command",
+          "description": "SessionStart always uses a command hook.",
+          "enum": [
+            "command",
+            "http"
+          ],
+          "type": "string"
+        },
+        "ide_bridge": {
+          "default": false,
+          "description": "v0.2; ignored in v0.1.",
+          "type": "boolean"
+        },
+        "mcp": {
+          "default": true,
+          "description": "Kelta MCP server for Claude sessions.",
+          "type": "boolean"
+        },
+        "min_version": {
+          "default": "2.1.200",
+          "description": "Semver; older → warning, hooks still attempted.",
+          "type": "string"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "effort": {
+                "default": "high",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "type": "string"
+              },
+              "model": {
+                "default": "opus",
+                "type": "string"
+              },
+              "permission_mode": {
+                "default": "acceptEdits",
+                "enum": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "auto",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "default": {
+            "default": {
+              "effort": "high",
+              "model": "opus",
+              "permission_mode": "acceptEdits"
+            },
+            "plan": {
+              "effort": "high",
+              "model": "opus",
+              "permission_mode": "plan"
+            },
+            "review": {
+              "effort": "high",
+              "model": "opus",
+              "permission_mode": "plan"
+            }
+          },
+          "type": "object"
+        },
+        "prompt_templates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {
+            "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
+            "standalone": "",
+            "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
+          },
+          "type": "object"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Claude",
+      "x-kelta-order": 7
+    },
+    "commands": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "description": "Palette command (config `[[commands]]` and plugin `contributes.commands`).",
+        "properties": {
+          "do": {
+            "default": [],
+            "items": {
+              "description": "Trigger/command action; serde tag `action` (PLUGINS §3.1).",
+              "oneOf": [
+                {
+                  "properties": {
+                    "action": {
+                      "const": "notify",
+                      "type": "string"
+                    },
+                    "body": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "urgency": {
+                      "default": null,
+                      "enum": [
+                        "low",
+                        "normal",
+                        "critical",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "title"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "toast",
+                      "type": "string"
+                    },
+                    "level": {
+                      "default": null,
+                      "enum": [
+                        "info",
+                        "warn",
+                        "error",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "run",
+                      "type": "string"
+                    },
+                    "args": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "env": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "show": {
+                      "default": null,
+                      "enum": [
+                        "none",
+                        "toast_on_error",
+                        "pane",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "stdin": {
+                      "default": null,
+                      "enum": [
+                        "event",
+                        "none",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "timeout_ms": {
+                      "default": null,
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "command"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "spawn_session",
+                      "type": "string"
+                    },
+                    "args": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "command": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cwd": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "focus": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "template": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "send_keys",
+                      "type": "string"
+                    },
+                    "bracketed": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "session": {
+                      "description": "`\"{event.session_id}\"` | `\"claude\"` | `\"editor\"`.",
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "session",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "open_tool",
+                      "type": "string"
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "tool": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "tool"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "open_screen",
+                      "type": "string"
+                    },
+                    "params": {
+                      "default": null
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "plugin": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "screen": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "screen"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "start_work",
+                      "type": "string"
+                    },
+                    "project": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ticket": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "ticket"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "transition_ticket",
+                      "type": "string"
+                    },
+                    "to_category": {
+                      "default": null,
+                      "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                      "enum": [
+                        "todo",
+                        "in_progress",
+                        "in_review",
+                        "done",
+                        "unknown",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "to_name": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "comment_ticket",
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "assign_ticket",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "`\"me\"` | `\"none\"`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "to"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "http",
+                      "type": "string"
+                    },
+                    "body": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "headers": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "method": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secret_headers": {
+                      "additionalProperties": {
+                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "timeout_ms": {
+                      "default": null,
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "url"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "focus",
+                      "type": "string"
+                    },
+                    "project": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "session": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "set_attention",
+                      "type": "string"
+                    },
+                    "level": {
+                      "description": "Ordered; max-aggregated. Serialized as a string (`\"none\"`, `\"activity\"`, ...).",
+                      "enum": [
+                        "none",
+                        "activity",
+                        "done",
+                        "error",
+                        "needs_input"
+                      ],
+                      "type": "string"
+                    },
+                    "session": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "session",
+                    "level"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "prompt",
+                      "type": "string"
+                    },
+                    "no": {
+                      "default": [],
+                      "items": {
+                        "$ref": "#/$defs/ActionDef"
+                      },
+                      "type": "array"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "yes": {
+                      "items": {
+                        "$ref": "#/$defs/ActionDef"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "text",
+                    "yes"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "command",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "id"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "keybinding": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          },
+          "when": {
+            "default": null,
+            "enum": [
+              "terminal",
+              "ticket",
+              "review",
+              "always",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Tools",
+      "x-kelta-exec": true,
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 13,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    },
+    "editor": {
+      "additionalProperties": false,
+      "default": {
+        "default": "nvim",
+        "follow_claude_edits": "reload",
+        "presets": [
+          {
+            "args": [
+              "--listen",
+              "{sock}",
+              "{path}"
+            ],
+            "command": "nvim",
+            "enabled": true,
+            "external": false,
+            "id": "nvim",
+            "label": "Neovim",
+            "open": "rpc",
+            "open_cmd": null,
+            "open_keys": null,
+            "restore": "mksession"
+          },
+          {
+            "args": [
+              "{path}"
+            ],
+            "command": "vim",
+            "enabled": true,
+            "external": false,
+            "id": "vim",
+            "label": "Vim",
+            "open": "keys",
+            "open_cmd": null,
+            "open_keys": "<C-\\><C-N>:edit +{line} {file}<CR>",
+            "restore": "none"
+          },
+          {
+            "args": [
+              "{path}"
+            ],
+            "command": "hx",
+            "enabled": true,
+            "external": false,
+            "id": "helix",
+            "label": "Helix",
+            "open": "none",
+            "open_cmd": null,
+            "open_keys": null,
+            "restore": "none"
+          },
+          {
+            "args": [
+              "-nw",
+              "--eval",
+              "(progn (setq server-name \"kelta-{sid8}\") (server-start))",
+              "{path}"
+            ],
+            "command": "emacs",
+            "enabled": true,
+            "external": false,
+            "id": "emacs",
+            "label": "Emacs",
+            "open": "command",
+            "open_cmd": [
+              "emacsclient",
+              "-s",
+              "kelta-{sid8}",
+              "-n",
+              "+{line}",
+              "{file}"
+            ],
+            "open_keys": null,
+            "restore": "none"
+          },
+          {
+            "args": [
+              "{path}"
+            ],
+            "command": "code",
+            "enabled": true,
+            "external": true,
+            "id": "vscode",
+            "label": "VS Code",
+            "open": "command",
+            "open_cmd": [
+              "code",
+              "-g",
+              "{file}:{line}"
+            ],
+            "open_keys": null,
+            "restore": "none"
+          },
+          {
+            "args": [
+              "{path}"
+            ],
+            "command": "zed",
+            "enabled": true,
+            "external": true,
+            "id": "zed",
+            "label": "Zed",
+            "open": "command",
+            "open_cmd": [
+              "zed",
+              "{file}:{line}"
+            ],
+            "open_keys": null,
+            "restore": "none"
+          }
+        ],
+        "review_args": []
+      },
+      "properties": {
+        "default": {
+          "default": "nvim",
+          "description": "Preset id.",
+          "type": "string"
+        },
+        "follow_claude_edits": {
+          "default": "reload",
+          "enum": [
+            "off",
+            "reload",
+            "open"
+          ],
+          "type": "string"
+        },
+        "presets": {
+          "default": [
+            {
+              "args": [
+                "--listen",
+                "{sock}",
+                "{path}"
+              ],
+              "command": "nvim",
+              "enabled": true,
+              "external": false,
+              "id": "nvim",
+              "label": "Neovim",
+              "open": "rpc",
+              "open_cmd": null,
+              "open_keys": null,
+              "restore": "mksession"
+            },
+            {
+              "args": [
+                "{path}"
+              ],
+              "command": "vim",
+              "enabled": true,
+              "external": false,
+              "id": "vim",
+              "label": "Vim",
+              "open": "keys",
+              "open_cmd": null,
+              "open_keys": "<C-\\><C-N>:edit +{line} {file}<CR>",
+              "restore": "none"
+            },
+            {
+              "args": [
+                "{path}"
+              ],
+              "command": "hx",
+              "enabled": true,
+              "external": false,
+              "id": "helix",
+              "label": "Helix",
+              "open": "none",
+              "open_cmd": null,
+              "open_keys": null,
+              "restore": "none"
+            },
+            {
+              "args": [
+                "-nw",
+                "--eval",
+                "(progn (setq server-name \"kelta-{sid8}\") (server-start))",
+                "{path}"
+              ],
+              "command": "emacs",
+              "enabled": true,
+              "external": false,
+              "id": "emacs",
+              "label": "Emacs",
+              "open": "command",
+              "open_cmd": [
+                "emacsclient",
+                "-s",
+                "kelta-{sid8}",
+                "-n",
+                "+{line}",
+                "{file}"
+              ],
+              "open_keys": null,
+              "restore": "none"
+            },
+            {
+              "args": [
+                "{path}"
+              ],
+              "command": "code",
+              "enabled": true,
+              "external": true,
+              "id": "vscode",
+              "label": "VS Code",
+              "open": "command",
+              "open_cmd": [
+                "code",
+                "-g",
+                "{file}:{line}"
+              ],
+              "open_keys": null,
+              "restore": "none"
+            },
+            {
+              "args": [
+                "{path}"
+              ],
+              "command": "zed",
+              "enabled": true,
+              "external": true,
+              "id": "zed",
+              "label": "Zed",
+              "open": "command",
+              "open_cmd": [
+                "zed",
+                "{file}:{line}"
+              ],
+              "open_keys": null,
+              "restore": "none"
+            }
+          ],
+          "items": {
+            "additionalProperties": false,
+            "description": "Placeholders: `{sock}`, `{path}`, `{file}`, `{line}`, `{cwd}`, `{sid8}`.",
+            "properties": {
+              "args": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "command": {
+                "default": "",
+                "type": "string"
+              },
+              "enabled": {
+                "default": true,
+                "type": "boolean"
+              },
+              "external": {
+                "default": false,
+                "description": "Launched outside Kelta (the template's editor pane becomes a shell).",
+                "type": "boolean"
+              },
+              "id": {
+                "default": "",
+                "type": "string"
+              },
+              "label": {
+                "default": "",
+                "type": "string"
+              },
+              "open": {
+                "default": "none",
+                "enum": [
+                  "rpc",
+                  "keys",
+                  "command",
+                  "none"
+                ],
+                "type": "string"
+              },
+              "open_cmd": {
+                "default": null,
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "open_keys": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "restore": {
+                "default": "none",
+                "enum": [
+                  "mksession",
+                  "none"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array",
+          "x-kelta-exec": true,
+          "x-kelta-merge": "by_id"
+        },
+        "review_args": {
+          "default": [],
+          "description": "Appended for review sessions, e.g. `[\"-c\",\"DiffviewOpen origin/{base}...HEAD\"]`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-kelta-scope": [
+            "global",
+            "project",
+            "repo"
+          ]
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Editors",
+      "x-kelta-order": 8
+    },
+    "env": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Environment added to every session of the project (project/repo files).",
+      "type": "object",
+      "x-kelta-category": "Projects",
+      "x-kelta-exec": true,
+      "x-kelta-order": 5,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    },
+    "keys": {
+      "additionalProperties": false,
+      "default": {
+        "bindings": {},
+        "list_keys": true,
+        "prefix": "ctrl+shift+space",
+        "prefix_bindings": {
+          "attention.next": "u",
+          "editor.send_selection": "@",
+          "inbox.open": "0",
+          "palette.open": ":",
+          "pane.close": "x",
+          "pane.focus_down": "j",
+          "pane.focus_left": "h",
+          "pane.focus_right": "l",
+          "pane.focus_up": "k",
+          "pane.split_down": "\"",
+          "pane.split_right": "%",
+          "pane.zoom": "z",
+          "project.goto.1": "1",
+          "project.goto.2": "2",
+          "project.goto.3": "3",
+          "project.goto.4": "4",
+          "project.goto.5": "5",
+          "project.goto.6": "6",
+          "project.goto.7": "7",
+          "project.goto.8": "8",
+          "project.goto.9": "9",
+          "project.next": ")",
+          "project.prev": "(",
+          "project.switcher": "p",
+          "reviews.open": "r",
+          "session.new": "c",
+          "settings.open": ",",
+          "tab.next": "n",
+          "tab.prev": "N",
+          "terminal.copy": "[",
+          "terminal.paste": "]",
+          "terminal.search": "/",
+          "tickets.open": "t",
+          "work.start": "s"
+        },
+        "prefix_timeout_ms": 1000
+      },
+      "properties": {
+        "bindings": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "description": "ActionId → chords. Overrides only: unlisted actions use the platform defaults of the\nActionId catalog (`ui/src/lib/gen/actions.ts`); `[]` unbinds.",
+          "type": "object"
+        },
+        "list_keys": {
+          "default": true,
+          "description": "Single-key shortcuts in lists/boards.",
+          "type": "boolean"
+        },
+        "prefix": {
+          "default": "ctrl+shift+space",
+          "description": "App-prefix chord or `\"off\"`.",
+          "type": "string"
+        },
+        "prefix_bindings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {
+            "attention.next": "u",
+            "editor.send_selection": "@",
+            "inbox.open": "0",
+            "palette.open": ":",
+            "pane.close": "x",
+            "pane.focus_down": "j",
+            "pane.focus_left": "h",
+            "pane.focus_right": "l",
+            "pane.focus_up": "k",
+            "pane.split_down": "\"",
+            "pane.split_right": "%",
+            "pane.zoom": "z",
+            "project.goto.1": "1",
+            "project.goto.2": "2",
+            "project.goto.3": "3",
+            "project.goto.4": "4",
+            "project.goto.5": "5",
+            "project.goto.6": "6",
+            "project.goto.7": "7",
+            "project.goto.8": "8",
+            "project.goto.9": "9",
+            "project.next": ")",
+            "project.prev": "(",
+            "project.switcher": "p",
+            "reviews.open": "r",
+            "session.new": "c",
+            "settings.open": ",",
+            "tab.next": "n",
+            "tab.prev": "N",
+            "terminal.copy": "[",
+            "terminal.paste": "]",
+            "terminal.search": "/",
+            "tickets.open": "t",
+            "work.start": "s"
+          },
+          "description": "ActionId → single key after the prefix.",
+          "type": "object"
+        },
+        "prefix_timeout_ms": {
+          "default": 1000,
+          "format": "uint32",
+          "maximum": 5000,
+          "minimum": 200,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Keys",
+      "x-kelta-order": 2
+    },
+    "linux": {
+      "additionalProperties": false,
+      "default": {
+        "graphics": {
+          "auto_nvidia": true,
+          "disable_compositing": false,
+          "disable_dmabuf": false,
+          "gdk_backend": "auto",
+          "nvidia_disable_explicit_sync": false,
+          "profile": "auto"
+        }
+      },
+      "properties": {
+        "graphics": {
+          "additionalProperties": false,
+          "default": {
+            "auto_nvidia": true,
+            "disable_compositing": false,
+            "disable_dmabuf": false,
+            "gdk_backend": "auto",
+            "nvidia_disable_explicit_sync": false,
+            "profile": "auto"
+          },
+          "description": "`[linux.graphics]`, read by `platform::pre_init` through `kelta_config::early::linux_graphics`.",
+          "properties": {
+            "auto_nvidia": {
+              "default": true,
+              "description": "NVIDIA proprietary → dmabuf off + explicit sync off.",
+              "type": "boolean"
+            },
+            "disable_compositing": {
+              "default": false,
+              "description": "`WEBKIT_DISABLE_COMPOSITING_MODE=1`.",
+              "type": "boolean"
+            },
+            "disable_dmabuf": {
+              "default": false,
+              "description": "`WEBKIT_DISABLE_DMABUF_RENDERER=1`.",
+              "type": "boolean"
+            },
+            "gdk_backend": {
+              "default": "auto",
+              "description": "`GDK_BACKEND`.",
+              "enum": [
+                "auto",
+                "wayland",
+                "x11"
+              ],
+              "type": "string"
+            },
+            "nvidia_disable_explicit_sync": {
+              "default": false,
+              "description": "`__NV_DISABLE_EXPLICIT_SYNC=1`.",
+              "type": "boolean"
+            },
+            "profile": {
+              "default": "auto",
+              "description": "safe = all workarounds.",
+              "enum": [
+                "auto",
+                "default",
+                "safe"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Linux graphics",
+      "x-kelta-order": 4,
+      "x-kelta-restart": true,
+      "x-kelta-scope": [
+        "global"
+      ]
+    },
+    "notifications": {
+      "additionalProperties": false,
+      "default": {
+        "bell_background": false,
+        "ci_failed_mine": true,
+        "claude_done": true,
+        "claude_needs_input": true,
+        "enabled": true,
+        "only_when_unfocused": true,
+        "pr_approved": true,
+        "pr_changes_requested": true,
+        "quiet_hours": "",
+        "review_requested": true
+      },
+      "properties": {
+        "bell_background": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ci_failed_mine": {
+          "default": true,
+          "type": "boolean"
+        },
+        "claude_done": {
+          "default": true,
+          "type": "boolean"
+        },
+        "claude_needs_input": {
+          "default": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "only_when_unfocused": {
+          "default": true,
+          "description": "Or pane hidden.",
+          "type": "boolean"
+        },
+        "pr_approved": {
+          "default": true,
+          "type": "boolean"
+        },
+        "pr_changes_requested": {
+          "default": true,
+          "type": "boolean"
+        },
+        "quiet_hours": {
+          "default": "",
+          "description": "`\"HH:MM-HH:MM\"` local time, or empty.",
+          "type": "string"
+        },
+        "review_requested": {
+          "default": true,
+          "description": "Keeps review subscriptions polling in background.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Notifications",
+      "x-kelta-order": 12
+    },
+    "performance": {
+      "additionalProperties": false,
+      "default": {
+        "hud": false
+      },
+      "properties": {
+        "hud": {
+          "default": false,
+          "description": "StatusBar memory HUD.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Performance",
+      "x-kelta-order": 16
+    },
+    "plugins": {
+      "additionalProperties": true,
+      "default": {
+        "dev_paths": [],
+        "disabled": []
+      },
+      "properties": {
+        "dev_paths": {
+          "default": [],
+          "description": "Unpacked plugin dirs loaded in dev mode (global only; still require grants).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "disabled": {
+          "default": [],
+          "items": {
+            "description": "Plugin id `[a-z0-9-]{3,40}`, not starting with `kelta`.",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Plugins",
+      "x-kelta-order": 15
+    },
+    "polling": {
+      "additionalProperties": false,
+      "default": {
+        "background_secs": 600,
+        "focused_secs": 120,
+        "min_secs": 30,
+        "when_closed": "off"
+      },
+      "properties": {
+        "background_secs": {
+          "default": 600,
+          "description": "Window unfocused; 0 = off.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "focused_secs": {
+          "default": 120,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_secs": {
+          "default": 30,
+          "description": "Redmine floor 60 enforced in code.",
+          "format": "uint32",
+          "minimum": 30,
+          "type": "integer"
+        },
+        "when_closed": {
+          "default": "off",
+          "enum": [
+            "off",
+            "background"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Polling",
+      "x-kelta-order": 11
+    },
+    "reviews": {
+      "additionalProperties": false,
+      "default": {
+        "include_drafts": false,
+        "include_team_requests": true,
+        "repos_allow": [],
+        "repos_deny": [],
+        "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
+      },
+      "properties": {
+        "include_drafts": {
+          "default": false,
+          "type": "boolean"
+        },
+        "include_team_requests": {
+          "default": true,
+          "type": "boolean"
+        },
+        "repos_allow": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repos_deny": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ticket_key_regex": {
+          "default": "[A-Z][A-Z0-9]+-\\d+|#\\d+",
+          "description": "Linked tickets regex over branch + title.",
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Reviews",
+      "x-kelta-order": 10
+    },
+    "session_templates": {
+      "default": [
+        {
+          "enabled": true,
+          "id": "claude+editor",
+          "label": "Claude + editor",
+          "layout": {
+            "children": [
+              {
+                "command": null,
+                "name": null,
+                "profile": null,
+                "session": "claude"
+              },
+              {
+                "command": null,
+                "name": null,
+                "profile": null,
+                "session": "editor"
+              }
+            ],
+            "ratios": [
+              0.5,
+              0.5
+            ],
+            "split": "row"
+          }
+        },
+        {
+          "enabled": true,
+          "id": "review",
+          "label": "Review",
+          "layout": {
+            "children": [
+              {
+                "command": null,
+                "name": null,
+                "profile": "review",
+                "session": "claude"
+              },
+              {
+                "children": [
+                  {
+                    "command": null,
+                    "name": null,
+                    "profile": null,
+                    "session": "editor"
+                  },
+                  {
+                    "command": "git diff --stat origin/{base}...HEAD",
+                    "name": null,
+                    "profile": null,
+                    "session": "shell"
+                  }
+                ],
+                "ratios": [
+                  0.75,
+                  0.25
+                ],
+                "split": "column"
+              }
+            ],
+            "ratios": [
+              0.5,
+              0.5
+            ],
+            "split": "row"
+          }
+        },
+        {
+          "enabled": true,
+          "id": "claude",
+          "label": "Claude",
+          "layout": {
+            "command": null,
+            "name": null,
+            "profile": null,
+            "session": "claude"
+          }
+        },
+        {
+          "enabled": true,
+          "id": "editor",
+          "label": "Editor",
+          "layout": {
+            "command": null,
+            "name": null,
+            "profile": null,
+            "session": "editor"
+          }
+        },
+        {
+          "enabled": true,
+          "id": "shell",
+          "label": "Shell",
+          "layout": {
+            "command": null,
+            "name": null,
+            "profile": null,
+            "session": "shell"
+          }
+        }
+      ],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "type": "string"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "properties": {
+                  "children": {
+                    "items": {
+                      "$ref": "#/$defs/TemplateNode"
+                    },
+                    "type": "array"
+                  },
+                  "ratios": {
+                    "items": {
+                      "format": "float",
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "split": {
+                    "enum": [
+                      "row",
+                      "column"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "split",
+                  "ratios",
+                  "children"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "command": {
+                    "default": null,
+                    "description": "Shell: run this then stay interactive.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "profile": {
+                    "default": null,
+                    "description": "Claude profile.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "session": {
+                    "description": "`claude` | `editor` | `shell` | `setup` | `tool:<id>`.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "session"
+                ],
+                "type": "object"
+              }
+            ],
+            "default": {
+              "command": null,
+              "name": null,
+              "profile": null,
+              "session": "shell"
+            },
+            "description": "`{ split = \"row\", ratios = [..], children = [..] }` | `{ session = \"claude\", ... }`."
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 9,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    },
+    "terminal": {
+      "additionalProperties": false,
+      "default": {
+        "bell": "attention",
+        "confirm_multiline_paste": true,
+        "copy_on_select": false,
+        "cursor_blink": false,
+        "cursor_style": "block",
+        "env": {},
+        "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
+        "font_size": 13.0,
+        "keyboard_protocol": "legacy",
+        "letter_spacing": 0.0,
+        "line_height": 1.15,
+        "max_live_views": 4,
+        "memory_cap_mb": 160,
+        "minimum_contrast_ratio": 1.0,
+        "option_as_meta": "both",
+        "osc52": "write",
+        "primary_selection": true,
+        "renderer": "auto",
+        "scrollback": {
+          "claude": 3000,
+          "custom": 3000,
+          "editor": 500,
+          "setup": 1000,
+          "shell": 3000,
+          "tool": 500
+        },
+        "shell": "",
+        "shift_enter": {
+          "claude": "esc-cr",
+          "default": "passthrough"
+        },
+        "view_scrollback": 1000
+      },
+      "properties": {
+        "bell": {
+          "default": "attention",
+          "enum": [
+            "attention",
+            "visual",
+            "none"
+          ],
+          "type": "string"
+        },
+        "confirm_multiline_paste": {
+          "default": true,
+          "description": "Only when bracketed paste is off.",
+          "type": "boolean"
+        },
+        "copy_on_select": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cursor_blink": {
+          "default": false,
+          "description": "Focused pane only.",
+          "type": "boolean"
+        },
+        "cursor_style": {
+          "default": "block",
+          "enum": [
+            "block",
+            "bar",
+            "underline"
+          ],
+          "type": "string"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object",
+          "x-kelta-exec": true
+        },
+        "font_family": {
+          "default": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
+          "description": "System fonts only.",
+          "type": "string"
+        },
+        "font_size": {
+          "default": 13.0,
+          "format": "double",
+          "maximum": 40.0,
+          "minimum": 6.0,
+          "type": "number"
+        },
+        "keyboard_protocol": {
+          "default": "legacy",
+          "enum": [
+            "legacy"
+          ],
+          "type": "string"
+        },
+        "letter_spacing": {
+          "default": 0.0,
+          "format": "double",
+          "type": "number"
+        },
+        "line_height": {
+          "default": 1.15,
+          "format": "double",
+          "maximum": 2.0,
+          "minimum": 1.0,
+          "type": "number"
+        },
+        "max_live_views": {
+          "default": 4,
+          "format": "uint32",
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "memory_cap_mb": {
+          "default": 160,
+          "format": "uint32",
+          "maximum": 2048,
+          "minimum": 32,
+          "type": "integer"
+        },
+        "minimum_contrast_ratio": {
+          "default": 1.0,
+          "format": "double",
+          "type": "number"
+        },
+        "option_as_meta": {
+          "default": "both",
+          "description": "macOS.",
+          "enum": [
+            "none",
+            "left",
+            "right",
+            "both"
+          ],
+          "type": "string"
+        },
+        "osc52": {
+          "default": "write",
+          "enum": [
+            "off",
+            "write",
+            "read-write"
+          ],
+          "type": "string"
+        },
+        "primary_selection": {
+          "default": true,
+          "description": "Linux: select → PRIMARY, middle-click paste.",
+          "type": "boolean"
+        },
+        "renderer": {
+          "default": "auto",
+          "description": "auto = webgl on macOS, dom on Linux.",
+          "enum": [
+            "auto",
+            "webgl",
+            "dom"
+          ],
+          "type": "string"
+        },
+        "scrollback": {
+          "additionalProperties": false,
+          "default": {
+            "claude": 3000,
+            "custom": 3000,
+            "editor": 500,
+            "setup": 1000,
+            "shell": 3000,
+            "tool": 500
+          },
+          "description": "Rust-model scrollback lines per session kind.",
+          "properties": {
+            "claude": {
+              "default": 3000,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "custom": {
+              "default": 3000,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "editor": {
+              "default": 500,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "setup": {
+              "default": 1000,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "shell": {
+              "default": 3000,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "tool": {
+              "default": 500,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "shell": {
+          "default": "",
+          "description": "Empty = `$SHELL`.",
+          "type": "string"
+        },
+        "shift_enter": {
+          "additionalProperties": {
+            "enum": [
+              "passthrough",
+              "esc-cr",
+              "newline"
+            ],
+            "type": "string"
+          },
+          "default": {
+            "claude": "esc-cr",
+            "default": "passthrough"
+          },
+          "description": "Session kind name (or `default`) → Shift+Enter handling.",
+          "type": "object"
+        },
+        "view_scrollback": {
+          "default": 1000,
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 100,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Terminal",
+      "x-kelta-order": 3
+    },
+    "tools": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "description": "A declarative tool. Every field except `id` has a default so `{ id = \"x\", enabled = false }`\ndisables an inherited entry (by_id merge).",
+        "properties": {
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "autostart": {
+            "default": false,
+            "type": "boolean"
+          },
+          "check": {
+            "default": null,
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "close_on_exit": {
+            "default": "never",
+            "enum": [
+              "never",
+              "on_success",
+              "always"
+            ],
+            "type": "string"
+          },
+          "command": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cwd": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "embed": {
+            "default": null,
+            "description": "`None` = `web.embed_default`.",
+            "enum": [
+              "auto",
+              "iframe",
+              "proxy",
+              "external",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "type": "object"
+          },
+          "icon": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": "",
+            "description": "`[a-z0-9-]`; plugin tools are namespaced `<plugin>/<id>` by the host.",
+            "type": "string"
+          },
+          "install_hint": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "keep_alive": {
+            "default": null,
+            "description": "`None` = `web.keep_alive`.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "keybinding": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "default": "pty",
+            "enum": [
+              "pty",
+              "web"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "type": "string"
+          },
+          "lifecycle": {
+            "default": "on_close",
+            "enum": [
+              "on_close",
+              "on_project_close",
+              "never"
+            ],
+            "type": "string"
+          },
+          "placement": {
+            "default": "new_tab",
+            "oneOf": [
+              {
+                "enum": [
+                  "new_tab",
+                  "split_right",
+                  "split_down",
+                  "replace_focused"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "focused",
+                "description": "Focus an existing pane with the same content if any.",
+                "type": "string"
+              }
+            ]
+          },
+          "scrollback": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start": {
+            "additionalProperties": false,
+            "default": null,
+            "properties": {
+              "args": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "command": {
+                "type": "string"
+              },
+              "cwd": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "env": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "default": {},
+                "type": "object"
+              },
+              "ready": {
+                "default": {
+                  "port_open": true
+                },
+                "description": "Readiness detection: `{ stdout_json = \"url\" }` | `{ stdout_regex = \"http://\\\\S+\" }` | `{ port_open = true }`.",
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stdout_json": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "stdout_json"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stdout_regex": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "stdout_regex"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "port_open": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "port_open"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "ready_timeout_ms": {
+                "default": 10000,
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stop": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "grace_ms": {
+                        "default": 3000,
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "signal": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "signal"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "command": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "command"
+                    ],
+                    "type": "object"
+                  }
+                ],
+                "default": {
+                  "grace_ms": 3000,
+                  "signal": "TERM"
+                },
+                "description": "`{ signal = \"TERM\", grace_ms = 3000 }` | `{ command = [...] }`."
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url_is_secret": {
+            "default": null,
+            "description": "`None` = true when `start` is set.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Tools",
+      "x-kelta-exec": true,
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 13,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    },
+    "triggers": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_send_keys": {
+            "default": false,
+            "type": "boolean"
+          },
+          "blocking": {
+            "default": false,
+            "description": "Only honoured on `*.before_*` events (30 s cap).",
+            "type": "boolean"
+          },
+          "continue_on_error": {
+            "default": false,
+            "type": "boolean"
+          },
+          "debounce_ms": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "do": {
+            "default": [],
+            "items": {
+              "description": "Trigger/command action; serde tag `action` (PLUGINS §3.1).",
+              "oneOf": [
+                {
+                  "properties": {
+                    "action": {
+                      "const": "notify",
+                      "type": "string"
+                    },
+                    "body": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "urgency": {
+                      "default": null,
+                      "enum": [
+                        "low",
+                        "normal",
+                        "critical",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "title"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "toast",
+                      "type": "string"
+                    },
+                    "level": {
+                      "default": null,
+                      "enum": [
+                        "info",
+                        "warn",
+                        "error",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "run",
+                      "type": "string"
+                    },
+                    "args": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "env": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "show": {
+                      "default": null,
+                      "enum": [
+                        "none",
+                        "toast_on_error",
+                        "pane",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "stdin": {
+                      "default": null,
+                      "enum": [
+                        "event",
+                        "none",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "timeout_ms": {
+                      "default": null,
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "command"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "spawn_session",
+                      "type": "string"
+                    },
+                    "args": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "command": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cwd": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "focus": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "template": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "send_keys",
+                      "type": "string"
+                    },
+                    "bracketed": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "session": {
+                      "description": "`\"{event.session_id}\"` | `\"claude\"` | `\"editor\"`.",
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "session",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "open_tool",
+                      "type": "string"
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "tool": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "tool"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "open_screen",
+                      "type": "string"
+                    },
+                    "params": {
+                      "default": null
+                    },
+                    "placement": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "enum": [
+                                "new_tab",
+                                "split_right",
+                                "split_down",
+                                "replace_focused"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "const": "focused",
+                              "description": "Focus an existing pane with the same content if any.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "plugin": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "screen": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "screen"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "start_work",
+                      "type": "string"
+                    },
+                    "project": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ticket": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "ticket"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "transition_ticket",
+                      "type": "string"
+                    },
+                    "to_category": {
+                      "default": null,
+                      "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                      "enum": [
+                        "todo",
+                        "in_progress",
+                        "in_review",
+                        "done",
+                        "unknown",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "to_name": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "comment_ticket",
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "assign_ticket",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "`\"me\"` | `\"none\"`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "to"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "http",
+                      "type": "string"
+                    },
+                    "body": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "headers": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "method": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secret_headers": {
+                      "additionalProperties": {
+                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                        "type": "string"
+                      },
+                      "default": {},
+                      "type": "object"
+                    },
+                    "timeout_ms": {
+                      "default": null,
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "url"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "focus",
+                      "type": "string"
+                    },
+                    "project": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "session": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "set_attention",
+                      "type": "string"
+                    },
+                    "level": {
+                      "description": "Ordered; max-aggregated. Serialized as a string (`\"none\"`, `\"activity\"`, ...).",
+                      "enum": [
+                        "none",
+                        "activity",
+                        "done",
+                        "error",
+                        "needs_input"
+                      ],
+                      "type": "string"
+                    },
+                    "session": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "session",
+                    "level"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "prompt",
+                      "type": "string"
+                    },
+                    "no": {
+                      "default": [],
+                      "items": {
+                        "$ref": "#/$defs/ActionDef"
+                      },
+                      "type": "array"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "yes": {
+                      "items": {
+                        "$ref": "#/$defs/ActionDef"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "text",
+                    "yes"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "action": {
+                      "const": "command",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "id"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "format": "double",
+                  "type": "number"
+                },
+                {
+                  "items": {
+                    "$ref": "#/$defs/Matcher"
+                  },
+                  "type": "array"
+                }
+              ],
+              "description": "Matcher: a string (exact; `glob:…`; `re:…`; `!…` negation), bool, number, or any-of list."
+            },
+            "default": {},
+            "description": "Dotted path into `{event, payload, project, session, ticket, pr, app}` → matcher.",
+            "type": "object"
+          },
+          "on": {
+            "default": "",
+            "description": "Event name or glob (`\"pr.*\"`, `\"custom.*\"`).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Triggers",
+      "x-kelta-exec": true,
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 14,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    },
+    "web": {
+      "additionalProperties": false,
+      "default": {
+        "embed_default": "auto",
+        "keep_alive": false
+      },
+      "properties": {
+        "embed_default": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "iframe",
+            "proxy",
+            "external"
+          ],
+          "type": "string"
+        },
+        "keep_alive": {
+          "default": false,
+          "description": "Keep hidden iframes.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Tools",
+      "x-kelta-order": 13
+    },
+    "window": {
+      "additionalProperties": false,
+      "default": {
+        "close_behavior": "auto",
+        "decorations": "auto",
+        "restore_geometry": true
+      },
+      "properties": {
+        "close_behavior": {
+          "default": "auto",
+          "description": "auto = background on macOS, quit on Linux.",
+          "enum": [
+            "auto",
+            "background",
+            "quit"
+          ],
+          "type": "string",
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "decorations": {
+          "default": "auto",
+          "description": "auto = none on Hyprland/Sway, native elsewhere.",
+          "enum": [
+            "auto",
+            "native",
+            "none",
+            "custom"
+          ],
+          "type": "string",
+          "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "restore_geometry": {
+          "default": true,
+          "type": "boolean",
+          "x-kelta-scope": [
+            "global"
+          ]
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Window",
+      "x-kelta-order": 1
+    },
+    "work": {
+      "additionalProperties": false,
+      "default": {
+        "default_template": "claude+editor",
+        "on_merge": {
+          "offer_cleanup": true,
+          "transition_to": {
+            "category": "done"
+          }
+        },
+        "on_pr": {
+          "comment": "PR: {pr.url}",
+          "transition_to": {
+            "category": "in_review"
+          }
+        },
+        "on_start": {
+          "assign_me": true,
+          "comment": null,
+          "transition_to": {
+            "category": "in_progress"
+          }
+        },
+        "plan_preview": true,
+        "pr": {
+          "body_template": "{ticket.url}\n\n{closes}",
+          "draft": false,
+          "title_template": "{ticket.key}: {ticket.title}"
+        },
+        "review_template": "review"
+      },
+      "properties": {
+        "default_template": {
+          "default": "claude+editor",
+          "type": "string"
+        },
+        "on_merge": {
+          "additionalProperties": false,
+          "default": {
+            "offer_cleanup": true,
+            "transition_to": {
+              "category": "done"
+            }
+          },
+          "properties": {
+            "offer_cleanup": {
+              "default": true,
+              "type": "boolean"
+            },
+            "transition_to": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "category": {
+                          "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                          "enum": [
+                            "todo",
+                            "in_progress",
+                            "in_review",
+                            "done",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": {
+                "category": "done"
+              }
+            }
+          },
+          "type": "object"
+        },
+        "on_pr": {
+          "additionalProperties": false,
+          "default": {
+            "comment": "PR: {pr.url}",
+            "transition_to": {
+              "category": "in_review"
+            }
+          },
+          "properties": {
+            "comment": {
+              "default": "PR: {pr.url}",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "transition_to": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "category": {
+                          "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                          "enum": [
+                            "todo",
+                            "in_progress",
+                            "in_review",
+                            "done",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": {
+                "category": "in_review"
+              }
+            }
+          },
+          "type": "object"
+        },
+        "on_start": {
+          "additionalProperties": false,
+          "default": {
+            "assign_me": true,
+            "comment": null,
+            "transition_to": {
+              "category": "in_progress"
+            }
+          },
+          "properties": {
+            "assign_me": {
+              "default": true,
+              "type": "boolean"
+            },
+            "comment": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "transition_to": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "category": {
+                          "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                          "enum": [
+                            "todo",
+                            "in_progress",
+                            "in_review",
+                            "done",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": {
+                "category": "in_progress"
+              }
+            }
+          },
+          "type": "object"
+        },
+        "plan_preview": {
+          "default": true,
+          "description": "Show the StartWorkPlan sheet.",
+          "type": "boolean"
+        },
+        "pr": {
+          "additionalProperties": false,
+          "default": {
+            "body_template": "{ticket.url}\n\n{closes}",
+            "draft": false,
+            "title_template": "{ticket.key}: {ticket.title}"
+          },
+          "properties": {
+            "body_template": {
+              "default": "{ticket.url}\n\n{closes}",
+              "description": "`{closes}` = `Closes #n` for GitHub issues.",
+              "type": "string"
+            },
+            "draft": {
+              "default": false,
+              "type": "boolean"
+            },
+            "title_template": {
+              "default": "{ticket.key}: {ticket.title}",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "review_template": {
+          "default": "review",
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-order": 9
+    },
+    "worktree": {
+      "additionalProperties": false,
+      "default": {
+        "branch_template": "{type}/{key}-{slug}",
+        "cleanup": "ask",
+        "fetch_timeout_secs": 20,
+        "include": [
+          ".env",
+          ".env.*"
+        ],
+        "root": "~/.kelta-worktrees/{project}/{repo}/{key}-{slug}",
+        "setup": [],
+        "setup_blocking": true,
+        "slug_max": 40,
+        "type_map": {
+          "bug": "fix",
+          "default": "chore",
+          "feature": "feat",
+          "story": "feat",
+          "task": "feat"
+        }
+      },
+      "properties": {
+        "branch_template": {
+          "default": "{type}/{key}-{slug}",
+          "description": "Validated with `git check-ref-format --branch`.",
+          "type": "string"
+        },
+        "cleanup": {
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "never"
+          ],
+          "type": "string"
+        },
+        "fetch_timeout_secs": {
+          "default": 20,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "include": {
+          "default": [
+            ".env",
+            ".env.*"
+          ],
+          "description": "Globs copied from the main checkout; `.worktreeinclude` patterns appended.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "root": {
+          "default": "~/.kelta-worktrees/{project}/{repo}/{key}-{slug}",
+          "description": "Template; outside the repo.",
+          "type": "string"
+        },
+        "setup": {
+          "default": [],
+          "description": "Each run in the visible setup pane.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-kelta-exec": true
+        },
+        "setup_blocking": {
+          "default": true,
+          "description": "Claude waits for setup exit 0.",
+          "type": "boolean"
+        },
+        "slug_max": {
+          "default": 40,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_map": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {
+            "bug": "fix",
+            "default": "chore",
+            "feature": "feat",
+            "story": "feat",
+            "task": "feat"
+          },
+          "description": "Issue type (lowercased) → `{type}`.",
+          "type": "object"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-order": 9,
+      "x-kelta-scope": [
+        "global",
+        "project",
+        "repo"
+      ]
+    }
+  },
+  "title": "Kelta settings",
+  "type": "object"
+}

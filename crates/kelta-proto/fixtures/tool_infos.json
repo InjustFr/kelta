@@ -1,0 +1,28 @@
+[
+  {
+    "description": null,
+    "icon": "container",
+    "id": "lazydocker",
+    "installed": true,
+    "keybinding": null,
+    "kind": "pty",
+    "label": "Docker",
+    "source": {
+      "kind": "layer",
+      "layer": "global"
+    }
+  },
+  {
+    "description": null,
+    "icon": null,
+    "id": "tools-pack/k9s",
+    "installed": null,
+    "keybinding": null,
+    "kind": "pty",
+    "label": "Kubernetes",
+    "source": {
+      "kind": "plugin",
+      "plugin_id": "tools-pack"
+    }
+  }
+]

@@ -1,0 +1,94 @@
+{
+  "activation": [
+    "onScreen:burndown",
+    "onCommand:sprint-burndown.open"
+  ],
+  "author": "Jane Doe",
+  "contributes": {
+    "commands": [
+      {
+        "do": [
+          {
+            "action": "open_screen",
+            "params": null,
+            "placement": "new_tab",
+            "plugin": null,
+            "screen": "burndown"
+          }
+        ],
+        "enabled": true,
+        "id": "sprint-burndown.open",
+        "keybinding": null,
+        "title": "Burndown: open",
+        "when": null
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sprint-burndown.open",
+        "key": "mod+b"
+      }
+    ],
+    "review_actions": [],
+    "screens": [
+      {
+        "entry": "dist/index.html",
+        "icon": "chart",
+        "id": "burndown",
+        "keep_alive": false,
+        "min_width": null,
+        "placement": [
+          "tab",
+          "pane"
+        ],
+        "scope": "project",
+        "title": "Burndown"
+      }
+    ],
+    "session_templates": [],
+    "settings": {
+      "schema": "settings.schema.json"
+    },
+    "ticket_actions": [],
+    "tools": [],
+    "triggers": [
+      {
+        "allow_send_keys": false,
+        "blocking": false,
+        "continue_on_error": false,
+        "debounce_ms": null,
+        "description": null,
+        "do": [
+          {
+            "action": "toast",
+            "level": null,
+            "text": "{ticket.key} done"
+          }
+        ],
+        "enabled": true,
+        "id": "sprint-done-toast",
+        "match": {
+          "payload.to.category": "done"
+        },
+        "on": "ticket.transitioned"
+      }
+    ]
+  },
+  "description": "Burndown chart of the active sprint for the current project",
+  "homepage": null,
+  "id": "sprint-burndown",
+  "kelta_api": "^0.1",
+  "license": "MIT",
+  "name": "Sprint Burndown",
+  "permissions": [
+    "tickets.read",
+    "settings.read",
+    "events:ticket.*",
+    "notify"
+  ],
+  "platforms": [
+    "macos",
+    "linux"
+  ],
+  "version": "0.2.0"
+}

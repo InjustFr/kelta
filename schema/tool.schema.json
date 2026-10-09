@@ -1,0 +1,312 @@
+{
+  "$id": "https://kelta.dev/schema/0.1/tool.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A declarative tool. Every field except `id` has a default so `{ id = \"x\", enabled = false }`\ndisables an inherited entry (by_id merge).",
+  "properties": {
+    "args": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "autostart": {
+      "default": false,
+      "type": "boolean"
+    },
+    "check": {
+      "default": null,
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "close_on_exit": {
+      "default": "never",
+      "enum": [
+        "never",
+        "on_success",
+        "always"
+      ],
+      "type": "string"
+    },
+    "command": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cwd": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "embed": {
+      "default": null,
+      "description": "`None` = `web.embed_default`.",
+      "enum": [
+        "auto",
+        "iframe",
+        "proxy",
+        "external",
+        null
+      ],
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "env": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "icon": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "default": "",
+      "description": "`[a-z0-9-]`; plugin tools are namespaced `<plugin>/<id>` by the host.",
+      "type": "string"
+    },
+    "install_hint": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "keep_alive": {
+      "default": null,
+      "description": "`None` = `web.keep_alive`.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "keybinding": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "kind": {
+      "default": "pty",
+      "enum": [
+        "pty",
+        "web"
+      ],
+      "type": "string"
+    },
+    "label": {
+      "default": "",
+      "type": "string"
+    },
+    "lifecycle": {
+      "default": "on_close",
+      "enum": [
+        "on_close",
+        "on_project_close",
+        "never"
+      ],
+      "type": "string"
+    },
+    "placement": {
+      "default": "new_tab",
+      "oneOf": [
+        {
+          "enum": [
+            "new_tab",
+            "split_right",
+            "split_down",
+            "replace_focused"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "focused",
+          "description": "Focus an existing pane with the same content if any.",
+          "type": "string"
+        }
+      ]
+    },
+    "scrollback": {
+      "default": null,
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "start": {
+      "additionalProperties": false,
+      "default": null,
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command": {
+          "type": "string"
+        },
+        "cwd": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "ready": {
+          "default": {
+            "port_open": true
+          },
+          "description": "Readiness detection: `{ stdout_json = \"url\" }` | `{ stdout_regex = \"http://\\\\S+\" }` | `{ port_open = true }`.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "stdout_json": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stdout_json"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "stdout_regex": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stdout_regex"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "port_open": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "port_open"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "ready_timeout_ms": {
+          "default": 10000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "properties": {
+                "grace_ms": {
+                  "default": 3000,
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "signal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "signal"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            }
+          ],
+          "default": {
+            "grace_ms": 3000,
+            "signal": "TERM"
+          },
+          "description": "`{ signal = \"TERM\", grace_ms = 3000 }` | `{ command = [...] }`."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "url": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "url_is_secret": {
+      "default": null,
+      "description": "`None` = true when `start` is set.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "title": "ToolDef",
+  "type": "object"
+}

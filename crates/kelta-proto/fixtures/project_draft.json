@@ -1,0 +1,36 @@
+{
+  "code_host_hints": [
+    {
+      "account": "github-work",
+      "host": "github.com",
+      "kind": "github",
+      "repo": "acme/shop-api",
+      "repo_id": "api"
+    }
+  ],
+  "color": null,
+  "default_template": null,
+  "icon": null,
+  "name": "Shop",
+  "repos": [
+    {
+      "base": "main",
+      "code_host": null,
+      "id": "api",
+      "path": "/home/ada/code/shop-api",
+      "primary": true,
+      "remote": "origin",
+      "remote_url": "git@github.com:acme/shop-api.git"
+    }
+  ],
+  "suggested_id": "shop",
+  "tracker": null,
+  "tracker_hints": [
+    {
+      "account": "jira-acme",
+      "key": "SHOP",
+      "kind": "jira",
+      "reason": "branch names contain SHOP-123"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "scope": {
+    "kind": "all"
+  },
+  "type": "tickets.changed"
+}
