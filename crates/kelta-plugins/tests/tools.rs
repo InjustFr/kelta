@@ -530,3 +530,33 @@ async fn gate_w1_sapling_isl_embeds_via_iframe_and_proxy() {
     assert!(ws_roundtrip(&host, port, &format!("/ws?{query}"), heartbeat).await.contains("heartbeat"));
     env.host.tool_close(&instance_id).await.unwrap();
 }
+
+/// A Dock-launched app has a bare PATH: web tools must be found and run through the login PATH,
+/// with the project env (regression for `launch_env` / `check_tool`).
+#[tokio::test]
+async fn web_tool_found_and_launched_through_login_path_with_project_env() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = common::Env::new().with_settings(|s| {
+        let mut t = sh_tool("fake", "", 5_000);
+        let start = t.start.as_mut().unwrap();
+        start.command = "kelta-fake-tool".into();
+        start.args.clear();
+        s.tools.push(t);
+        s.env.insert("KELTA_PROJECT_VAR".into(), "proj".into());
+    });
+    let bin_dir = env.tmp.path().join("login-bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let bin = bin_dir.join("kelta-fake-tool");
+    let script = "#!/bin/sh\necho \"{\\\"url\\\":\\\"http://127.0.0.1:9/?v=$KELTA_PROJECT_VAR&p=$PATH\\\"}\"\nexec /bin/sleep 30\n";
+    std::fs::write(&bin, script).unwrap();
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let id = ToolId::new("fake");
+    assert!(!env.host.tool_check(&id).await.unwrap().installed, "not on the dev PATH");
+
+    env.core.respond("login_path", serde_json::json!(bin_dir));
+    assert!(env.host.tool_check(&id).await.unwrap().installed, "found through the login PATH");
+    let h = env.host.tool_open(&shop(), &id, TemplateCtx::default(), Placement::NewTab).await.unwrap();
+    let ToolHandle::Web { instance_id, url, .. } = h else { panic!("expected a web handle") };
+    assert!(url.contains(&format!("?v=proj&p={}", bin_dir.display())), "{url}");
+    env.host.tool_close(&instance_id).await.unwrap();
+}
