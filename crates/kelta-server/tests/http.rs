@@ -276,6 +276,7 @@ async fn mcp_initialize_list_and_call() {
     let pr = e.fake.calls().into_iter().find(|c| c.method == "work_create_pr").unwrap();
     assert_eq!(pr.args["draft"]["title"], "Rate limit");
     assert_eq!(pr.args["draft"]["draft"], true);
+    assert_eq!(pr.args["origin"], "mcp", "Claude's ship leaves review_due set");
 
     let (text, err) = call(port, sid.as_str(), "mt", "list_review_requests", json!({})).await;
     assert!(!err, "{text}");

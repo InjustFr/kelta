@@ -1,5 +1,6 @@
 //! Bus listener (one task, event-driven): `claude.file_edited` → editor reload/open
-//! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session.
+//! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
+//! `pr.merged` / `pr.closed` → Merged / PrClosed work items (FLOW §4.6).
 
 use std::path::PathBuf;
 use std::sync::Weak;
@@ -29,6 +30,20 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                 tokio::spawn(async move {
                     if let Err(e) = svc.follow_edit(&sid, &path).await {
                         tracing::debug!(error = %e.message, "follow_claude_edits failed");
+                    }
+                });
+            }
+            bus::PR_MERGED | bus::PR_CLOSED => {
+                let Some(review) =
+                    ev.payload.get("review").cloned().and_then(|r| serde_json::from_value(r).ok())
+                else {
+                    continue;
+                };
+                let merged = ev.name == bus::PR_MERGED;
+                // Waits on the item lock and the tracker; keep the listener responsive.
+                tokio::spawn(async move {
+                    if let Err(e) = svc.pr_ended(&review, merged).await {
+                        tracing::warn!(error = %e.message, "pr end not applied");
                     }
                 });
             }

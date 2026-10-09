@@ -23,7 +23,7 @@ use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
 use crate::ipc::WindowState;
 use crate::model::{
     AttachInfo, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
-    SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
+    ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -178,7 +178,12 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<(), KeltaError>;
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError>;
     async fn editor_open(
         &self,
         target: EditorTarget,

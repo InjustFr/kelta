@@ -51,7 +51,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
-    SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
+    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
@@ -335,6 +335,15 @@ impl Core {
         self.plugins.start();
         self.scheduler.run(&self.rt);
         self.resubscribe();
+        // Merges and closes that happened while Kelta was closed (FLOW §3.6).
+        let weak = self.me.clone();
+        self.rt.spawn(async move {
+            if let Some(core) = weak.upgrade()
+                && let Err(e) = core.check_work_prs().await
+            {
+                tracing::warn!(error = %e.message, "work PR check failed");
+            }
+        });
         if self.start_services {
             if let Err(e) = self.server.start_ctl().await {
                 tracing::warn!(error = %e, "ctl socket not started");
@@ -576,8 +585,13 @@ impl CoreApi for Core {
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
     }
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
-        self.work.create_pr(id, draft).await
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.create_pr(id, draft, origin).await
     }
     async fn editor_open(
         &self,

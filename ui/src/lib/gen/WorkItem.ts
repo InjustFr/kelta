@@ -9,4 +9,9 @@ import type { WorkKind } from "./WorkKind";
 import type { WorkState } from "./WorkState";
 import type { WorkStepStatus } from "./WorkStepStatus";
 
-export type WorkItem = { id: WorkItemId, project_id: ProjectId, kind: WorkKind, ticket: TicketRef | null, review: ReviewRef | null, repo_id: string, worktree: string, branch: string, base: string, claude_uuid: string | null, nvim_socket: string | null, session_ids: Array<SessionId>, tab_id: TabId | null, pr_url: string | null, state: WorkState, steps: Array<WorkStepStatus>, created_at: string, };
+export type WorkItem = { id: WorkItemId, project_id: ProjectId, kind: WorkKind, ticket: TicketRef | null, review: ReviewRef | null, repo_id: string, worktree: string, branch: string, base: string, claude_uuid: string | null, nvim_socket: string | null, session_ids: Array<SessionId>, tab_id: TabId | null, pr_url: string | null, state: WorkState, steps: Array<WorkStepStatus>, created_at: string, 
+/**
+ * Claude's changes wait for Louis's review (FLOW §2.3). A UI Ship clears it; a Ship Claude
+ * does through MCP sets it.
+ */
+review_due: boolean, };

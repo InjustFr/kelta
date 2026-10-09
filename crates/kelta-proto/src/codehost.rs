@@ -117,9 +117,21 @@ pub struct FileChange {
     pub deletions: u32,
 }
 
+/// Host state of a PR / MR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PrState {
+    #[default]
+    Open,
+    Merged,
+    Closed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReviewDetail {
     pub review: Review,
+    #[serde(default)]
+    pub state: PrState,
     /// Sanitized HTML description.
     pub body_html: String,
     pub reviewers: Vec<Reviewer>,

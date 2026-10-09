@@ -191,6 +191,7 @@
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "toast.run_last": "o",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000

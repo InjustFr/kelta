@@ -30,15 +30,15 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use kelta_proto::api::{CoreApi, WorkStore};
-use kelta_proto::codehost::PrDraft;
+use kelta_proto::codehost::{PrDraft, Review};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    EditorTarget, FinishOpts, GitStatus, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource,
-    WorkStepStatus,
+    EditorTarget, FinishMergedReport, FinishOpts, GitStatus, ShipOrigin, StartWorkPlan, StepStatus,
+    WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
 use parking_lot::{Mutex, RwLock};
 
@@ -63,6 +63,8 @@ pub struct WorkService {
     versions: Mutex<HashMap<PathBuf, Option<semver::Version>>>,
     /// Serializes saga/finish/PR operations per work item.
     item_locks: Mutex<HashMap<WorkItemId, Arc<tokio::sync::Mutex<()>>>>,
+    /// Items whose PR Claude is creating through MCP (names the holder of a busy item lock).
+    shipping: Mutex<HashSet<WorkItemId>>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,
     /// Bus listener (follow_claude_edits, HTTP consumer release); started on first need.
@@ -83,6 +85,7 @@ impl WorkService {
             host: RwLock::new(None),
             versions: Mutex::new(HashMap::new()),
             item_locks: Mutex::new(HashMap::new()),
+            shipping: Mutex::new(HashSet::new()),
             start_lock: tokio::sync::Mutex::new(()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
@@ -160,14 +163,43 @@ impl WorkService {
         self.retry(id, step).await
     }
 
-    /// `work_create_pr`.
-    pub async fn create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
-        self.create_pr_impl(id, draft).await
+    /// `work_create_pr` (UI Ship) and the MCP `create_pr` tool.
+    pub async fn create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError> {
+        if origin == ShipOrigin::Mcp {
+            self.shipping.lock().insert(id.clone());
+        }
+        let r = self.create_pr_impl(id, draft, origin).await;
+        if origin == ShipOrigin::Mcp {
+            self.shipping.lock().remove(id);
+        }
+        r
+    }
+
+    /// `work_pr_draft`: the title, body and draft flag Ship would use (prefills the dialog).
+    pub async fn pr_draft(&self, id: &WorkItemId) -> Result<PrDraft, KeltaError> {
+        self.pr_draft_impl(id).await
     }
 
     /// `work_finish`.
     pub async fn finish(&self, id: &WorkItemId, opts: FinishOpts) -> Result<WorkItem, KeltaError> {
         self.finish_impl(id, opts).await
+    }
+
+    /// `work_finish_merged`: finish every merged item whose worktree is clean and whose ticket
+    /// needs no Done choice; the rest are skipped with a reason.
+    pub async fn finish_merged(&self) -> Result<FinishMergedReport, KeltaError> {
+        self.finish_merged_impl().await
+    }
+
+    /// Branch join (FLOW §3.1): an open PR found for this item's branch becomes its PR
+    /// (`pr_url`, `PrOpen`, `work.on_pr`), once.
+    pub async fn link_pr(&self, id: &WorkItemId, review: &Review) -> Result<(), KeltaError> {
+        self.link_pr_impl(id, review).await
     }
 
     /// `work_status` (on demand).
@@ -227,6 +259,15 @@ impl WorkService {
 
     pub(crate) fn item_lock(&self, id: &WorkItemId) -> Arc<tokio::sync::Mutex<()>> {
         self.item_locks.lock().entry(id.clone()).or_default().clone()
+    }
+
+    /// Conflict for a held item lock, naming Claude's MCP ship when that is the holder.
+    pub(crate) fn busy(&self, id: &WorkItemId) -> KeltaError {
+        if self.shipping.lock().contains(id) {
+            KeltaError::conflict("Claude is shipping this item.")
+        } else {
+            KeltaError::conflict("work item is busy")
+        }
     }
 
     /// Steps from the store merged into saga order (missing → pending).
@@ -294,7 +335,8 @@ impl WorkService {
         self.save(item).await
     }
 
-    pub(crate) fn ensure_listener(&self) {
+    /// Starts the bus listener (`pr.merged`, hooks, …) if it is not running.
+    pub fn ensure_listener(&self) {
         let mut l = self.listener.lock();
         if l.as_ref().is_some_and(|h| !h.is_finished()) {
             return;

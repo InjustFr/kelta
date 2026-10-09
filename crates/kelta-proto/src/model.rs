@@ -490,8 +490,26 @@ pub enum WorkState {
     Starting,
     Active,
     PrOpen,
+    /// The PR was merged on the host. `detail`: why the ticket was not moved to Done yet
+    /// ("choose Done status", or a failed transition); `None` = moved, or nothing to move.
+    Merged {
+        #[serde(default)]
+        detail: Option<String>,
+    },
+    /// The PR was closed without merge.
+    PrClosed,
     Finished,
-    Failed { step: String, message: String },
+    Failed {
+        step: String,
+        message: String,
+    },
+}
+
+impl WorkState {
+    /// The PR is merged or closed: only Finish is left to do.
+    pub fn pr_done(&self) -> bool {
+        matches!(self, Self::Merged { .. } | Self::PrClosed)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -547,6 +565,10 @@ pub struct WorkItem {
     pub state: WorkState,
     pub steps: Vec<WorkStepStatus>,
     pub created_at: String,
+    /// Claude's changes wait for Louis's review (FLOW §2.3). A UI Ship clears it; a Ship Claude
+    /// does through MCP sets it.
+    #[serde(default)]
+    pub review_due: bool,
 }
 
 /// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` | `{"kind":"branch","name":".."}`.
@@ -615,6 +637,29 @@ pub struct FinishOpts {
     pub force: bool,
     #[serde(default)]
     pub transition_to: Option<TransitionTarget>,
+}
+
+/// Who asked for a PR (`work_create_pr`, FLOW §4.5): the UI (Ship) or Claude through the MCP
+/// `create_pr` tool. Only a UI Ship clears `WorkItem.review_due`; an MCP ship sets it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ShipOrigin {
+    Ui,
+    Mcp,
+}
+
+/// `work_finish_merged` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct FinishMergedReport {
+    pub finished: Vec<WorkItem>,
+    /// Merged items left for a single Finish (dirty worktree, Done status to choose, busy).
+    pub skipped: Vec<SkippedItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SkippedItem {
+    pub id: WorkItemId,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

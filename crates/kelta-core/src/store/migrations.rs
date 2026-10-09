@@ -108,8 +108,13 @@ CREATE TABLE IF NOT EXISTS ui_state (
 );
 "#;
 
+/// v2: Claude's changes wait for review on work items (FLOW §2.3).
+const V2: &str = r#"
+ALTER TABLE work_items ADD COLUMN review_due INTEGER NOT NULL DEFAULT 0;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1];
+pub const MIGRATIONS: &[&str] = &[V1, V2];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

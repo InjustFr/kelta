@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use common::{Fx, git, has_git, project};
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::model::{FinishOpts, SessionKind, WorkItem, WorkSource, WorkState};
+use kelta_proto::model::{FinishOpts, SessionKind, ShipOrigin, WorkItem, WorkSource, WorkState};
 use kelta_proto::samples;
 use kelta_work::WorkService;
 
@@ -29,6 +29,13 @@ async fn started(fx: &Fx, key: &str) -> (std::sync::Arc<WorkService>, WorkItem) 
     let item = w.start(plan).await.unwrap();
     assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
     (w, item)
+}
+
+/// One commit ahead of the base (something to ship).
+fn commit(item: &WorkItem, file: &str) {
+    std::fs::write(item.worktree.join(file), "x\n").unwrap();
+    git(&item.worktree, &["add", file]);
+    git(&item.worktree, &["commit", "-q", "-m", file]);
 }
 
 fn opts(force: bool) -> FinishOpts {
@@ -130,9 +137,10 @@ async fn create_pr_pushes_in_a_pane_creates_and_applies_on_pr() {
     need_git!();
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.kind == SessionKind::Custom && s.name == "git push").await;
     let call = fx
@@ -168,9 +176,10 @@ async fn create_pr_links_existing_and_reports_push_failure() {
     // SHOP-142's branch already has PR #90 (Claude used `gh`).
     let (w, item) = started(&fx, "SHOP-142").await;
     assert_eq!(item.branch, "feat/SHOP-142-rate-limit-login");
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.exit_session(&push, 0);
@@ -180,9 +189,10 @@ async fn create_pr_links_existing_and_reports_push_failure() {
 
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.exit_session(&push, 128);

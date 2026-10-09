@@ -10,7 +10,7 @@ use kelta_core::clipboard::MemClipboard;
 use kelta_core::{ConfigBackend, Core, CoreDeps};
 use kelta_http::{HttpCtx, ProviderFactory};
 use kelta_proto::api::{CodeHost, SecretResolver, SettingsSource, Tracker};
-use kelta_proto::codehost::{CodeHostKind, PrCreate, Review, ReviewDetail, ReviewQuery, ReviewRef};
+use kelta_proto::codehost::{CodeHostKind, PrCreate, PrState, Review, ReviewDetail, ReviewQuery, ReviewRef};
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
@@ -162,11 +162,18 @@ pub struct ListHost {
     pub calls: Mutex<u32>,
     /// `changed_since_last` answer (the notifications-ETag gate).
     pub changed: Mutex<bool>,
+    /// PRs no longer open (`get` answers their state; `list_reviews` omits them).
+    pub ended: Mutex<Vec<(Review, PrState)>>,
 }
 
 impl ListHost {
     pub fn new(reviews: Vec<Review>) -> Arc<Self> {
-        Arc::new(Self { reviews: Mutex::new(reviews), calls: Mutex::new(0), changed: Mutex::new(true) })
+        Arc::new(Self {
+            reviews: Mutex::new(reviews),
+            calls: Mutex::new(0),
+            changed: Mutex::new(true),
+            ended: Mutex::new(Vec::new()),
+        })
     }
 }
 
@@ -183,10 +190,27 @@ impl CodeHost for ListHost {
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
         *self.calls.lock() += 1;
-        Ok(self.reviews.lock().iter().filter(|r| r.kind == q.kind).cloned().collect())
+        Ok(self
+            .reviews
+            .lock()
+            .iter()
+            .filter(|r| r.kind == q.kind && (q.include_drafts || !r.draft))
+            .cloned()
+            .collect())
     }
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
-        Err(KeltaError::not_found(format!("{}", r.number)))
+        let open = self.reviews.lock().iter().find(|x| &x.r#ref == r).map(|x| (x.clone(), PrState::Open));
+        let (review, state) = open
+            .or_else(|| self.ended.lock().iter().find(|(x, _)| &x.r#ref == r).cloned())
+            .ok_or_else(|| KeltaError::not_found(format!("{}", r.number)))?;
+        Ok(ReviewDetail {
+            review,
+            state,
+            body_html: String::new(),
+            reviewers: vec![],
+            checks: vec![],
+            files: vec![],
+        })
     }
     async fn approve(&self, _r: &ReviewRef, _head_sha: &str) -> Result<(), KeltaError> {
         Ok(())

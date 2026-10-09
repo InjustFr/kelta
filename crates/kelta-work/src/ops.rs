@@ -11,8 +11,9 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
-    CloseOnExit, EditorTarget, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement, RestorePolicy,
-    SessionInfo, SessionKind, SpawnRequest, StepStatus, WorkItem, WorkState,
+    CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement,
+    RestorePolicy, SessionInfo, SessionKind, SessionStatus, ShipOrigin, SkippedItem, SpawnRequest,
+    StepStatus, WorkItem, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore};
 
@@ -28,13 +29,15 @@ use crate::{WorkService, editor, files, git};
 const PUSH_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// A resumed Claude that exits non-zero this fast had its `--resume` refused.
 const RESUME_GRACE: Duration = Duration::from_secs(5);
+/// `WorkState::Merged.detail` when several Done transitions fit (the Finish dialog asks).
+pub const CHOOSE_DONE: &str = "choose Done status";
 
 impl WorkService {
     // ---- resume ------------------------------------------------------------------------------
 
     pub(crate) async fn resume_item(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let mut item = self.load(id).await?;
         match &item.state {
             WorkState::Finished => Err(KeltaError::conflict("work item is finished")),
@@ -44,7 +47,9 @@ impl WorkService {
                 }
                 self.run_saga_locked(id).await
             }
-            WorkState::Active | WorkState::PrOpen => self.reopen(&mut item).await.map(|()| item),
+            WorkState::Active | WorkState::PrOpen | WorkState::Merged { .. } | WorkState::PrClosed => {
+                self.reopen(&mut item).await.map(|()| item)
+            }
         }
     }
 
@@ -241,14 +246,28 @@ impl WorkService {
         &self,
         id: &WorkItemId,
         draft: PrDraft,
+        origin: ShipOrigin,
     ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let mut item = self.load(id).await?;
         if item.state == WorkState::Finished {
             return Err(KeltaError::conflict("work item is finished"));
         }
+        if item.state.pr_done() {
+            return Err(KeltaError::conflict("The PR of this work item is already merged or closed."));
+        }
         let env = self.env(&item.project_id, &item.repo_id)?;
+        // MCP: Claude is the caller, so its session is Working by definition.
+        if origin == ShipOrigin::Ui && self.claude_busy(&env, &item) {
+            return Err(KeltaError::conflict("Claude is working in this worktree. Ship when it stops."));
+        }
+        let remote_base = format!("{}/{}", env.repo.remote, item.base);
+        if git::ref_exists(&item.worktree, &remote_base).await?
+            && git::ahead_behind(&item.worktree, &remote_base).await?.0 == 0
+        {
+            return Err(KeltaError::conflict(format!("No commits ahead of {}.", item.base)));
+        }
         let binding = env.repo.code_host.clone().ok_or_else(|| {
             KeltaError::unsupported(format!("repo {} has no code host binding", env.repo.id))
         })?;
@@ -265,48 +284,28 @@ impl WorkService {
         let review: Review = match host.find_for_branch(&binding.repo, &item.branch).await? {
             Some(r) => r,
             None => {
-                let mut ctx = self.item_ctx(&env, &item, &j);
-                let closes = match &j.ticket {
-                    Some(t) if t.is_github() => {
-                        let (repo, num) = t.key.rsplit_once('#').unwrap_or(("", t.key.as_str()));
-                        if repo.is_empty() || repo == binding.repo {
-                            format!("Closes #{num}")
-                        } else {
-                            format!("Closes {}", t.key)
-                        }
-                    }
-                    _ => String::new(),
-                };
-                ctx.set("closes", closes);
-                let pr = &env.settings.work.pr;
-                let title = match draft.title.clone().filter(|t| !t.trim().is_empty()) {
-                    Some(t) => t,
-                    None if j.ticket.is_some() || item.ticket.is_some() => {
-                        render(&pr.title_template, &ctx, Mode::Lenient)?
-                    }
-                    None => git::last_subject(&item.worktree)
-                        .await
-                        .ok()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or(item.branch.clone()),
-                };
-                let body = match draft.body.clone() {
-                    Some(b) => b,
-                    None => render(&pr.body_template, &ctx, Mode::Lenient)?.trim().to_owned(),
-                };
+                let defaults = self.pr_defaults(&env, &item, &j, &binding.repo).await?;
                 host.create(&PrCreate {
                     repo: binding.repo.clone(),
                     head: item.branch.clone(),
                     base: item.base.clone(),
-                    title,
-                    body,
-                    draft: draft.draft.unwrap_or(pr.draft),
+                    title: draft
+                        .title
+                        .filter(|t| !t.trim().is_empty())
+                        .or(defaults.title)
+                        .unwrap_or_default(),
+                    body: draft.body.or(defaults.body).unwrap_or_default(),
+                    draft: draft.draft.or(defaults.draft).unwrap_or(false),
                 })
                 .await?
             }
         };
+        // Re-load: only the PR fields are ours (a hook may have changed the item during the push).
+        let mut item = self.load(id).await?;
         item.pr_url = Some(review.url.clone());
         item.state = WorkState::PrOpen;
+        // Claude's own ship is not a review (FLOW §2.3).
+        item.review_due = origin == ShipOrigin::Mcp;
         self.save(&item).await?;
         env.core.publish(
             BusEvent::new(bus::PR_CREATED, serde_json::json!({ "review": review }))
@@ -315,6 +314,129 @@ impl WorkService {
         );
         self.on_pr(&env, &item, &j, &review).await;
         Ok(item)
+    }
+
+    /// A Claude session of the item is mid-turn or waiting on a permission prompt.
+    fn claude_busy(&self, env: &Env, item: &WorkItem) -> bool {
+        item.session_ids.iter().filter_map(|sid| env.core.session_get(sid)).any(|s| {
+            s.kind == SessionKind::Claude
+                && s.lifecycle != Lifecycle::Exited
+                && matches!(s.status, SessionStatus::Working | SessionStatus::NeedsInput)
+        })
+    }
+
+    pub(crate) async fn pr_draft_impl(&self, id: &WorkItemId) -> Result<PrDraft, KeltaError> {
+        let item = self.load(id).await?;
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let repo = env.repo.code_host.as_ref().map(|b| b.repo.clone()).unwrap_or_default();
+        self.pr_defaults(&env, &item, &self.load_journal(id), &repo).await
+    }
+
+    /// Ship defaults: ticket items render `work.pr.*`; other items use the last commit subject.
+    /// shortcut: scratch items have no title/task field yet; use them here once WorkItem has one.
+    async fn pr_defaults(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        j: &Journal,
+        host_repo: &str,
+    ) -> Result<PrDraft, KeltaError> {
+        let mut ctx = self.item_ctx(env, item, j);
+        let closes = match &j.ticket {
+            Some(t) if t.is_github() => {
+                let (repo, num) = t.key.rsplit_once('#').unwrap_or(("", t.key.as_str()));
+                if repo.is_empty() || repo == host_repo {
+                    format!("Closes #{num}")
+                } else {
+                    format!("Closes {}", t.key)
+                }
+            }
+            _ => String::new(),
+        };
+        ctx.set("closes", closes);
+        let pr = &env.settings.work.pr;
+        let title = if j.ticket.is_some() || item.ticket.is_some() {
+            render(&pr.title_template, &ctx, Mode::Lenient)?
+        } else {
+            git::last_subject(&item.worktree)
+                .await
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(item.branch.clone())
+        };
+        let body = render(&pr.body_template, &ctx, Mode::Lenient)?.trim().to_owned();
+        Ok(PrDraft { title: Some(title), body: Some(body), draft: Some(pr.draft) })
+    }
+
+    pub(crate) async fn link_pr_impl(&self, id: &WorkItemId, review: &Review) -> Result<(), KeltaError> {
+        let lock = self.item_lock(id);
+        // Busy: a Ship or Finish runs and owns the PR fields; the next poll retries.
+        let Ok(_guard) = lock.try_lock() else { return Ok(()) };
+        let mut item = self.load(id).await?;
+        if item.pr_url.is_some() || item.state != WorkState::Active {
+            return Ok(());
+        }
+        item.pr_url = Some(review.url.clone());
+        item.state = WorkState::PrOpen;
+        self.save(&item).await?;
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        self.on_pr(&env, &item, &self.load_journal(id), review).await;
+        Ok(())
+    }
+
+    /// `pr.merged` / `pr.closed` (idempotent): Merged + guarded Done move, or PrClosed.
+    pub(crate) async fn pr_ended(&self, review: &Review, merged: bool) -> Result<(), KeltaError> {
+        let items = self.store.list_items(None).await?;
+        let ours = items.into_iter().filter(|w| w.pr_url.as_deref() == Some(review.url.as_str()));
+        for it in ours {
+            let lock = self.item_lock(&it.id);
+            let _guard = lock.lock().await;
+            let mut item = self.load(&it.id).await?;
+            if item.state.pr_done() || matches!(item.state, WorkState::Finished | WorkState::Failed { .. }) {
+                continue;
+            }
+            item.state = if merged {
+                WorkState::Merged { detail: self.move_done(&item).await }
+            } else {
+                WorkState::PrClosed
+            };
+            self.save(&item).await?;
+        }
+        Ok(())
+    }
+
+    /// On merge, move the ticket to Done only when exactly one transition fits and needs no
+    /// fields (FLOW §4.6). Returns why it was not moved, for the phase detail.
+    async fn move_done(&self, item: &WorkItem) -> Option<String> {
+        let t = item.ticket.as_ref()?;
+        let env = match self.env(&item.project_id, &item.repo_id) {
+            Ok(e) => e,
+            Err(e) => return Some(format!("ticket not moved: {}", e.message)),
+        };
+        let target = env
+            .project
+            .tracker
+            .as_ref()
+            .and_then(|b| b.status_map.done.clone())
+            .or_else(|| env.settings.work.on_merge.transition_to.clone())?;
+        let tracker = match env.core.tracker_for(&t.account).await {
+            Ok(x) => x,
+            Err(e) => return Some(format!("ticket not moved: {}", e.message)),
+        };
+        match saga::transition_ticket_strict(
+            &env.core,
+            tracker.as_ref(),
+            t,
+            &target,
+            &item.project_id,
+            &item.id,
+        )
+        .await
+        {
+            Ok(_) => None,
+            Err(e) if e.code == ErrorCode::Conflict => Some(CHOOSE_DONE.into()),
+            Err(e) => Some(format!("ticket not moved: {}", e.message)),
+        }
     }
 
     /// `git push -u <remote> <branch>` in a visible transient pane, awaited through `session.exited`.
@@ -409,7 +531,7 @@ impl WorkService {
         opts: FinishOpts,
     ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let mut item = self.load(id).await?;
         if item.state == WorkState::Finished {
             return Ok(item);
@@ -429,6 +551,9 @@ impl WorkService {
             && !git::same_path(&item.worktree, &repo)
             && git::worktree_at(&repo, &item.worktree).await?.is_some();
         let mut copies: Vec<String> = Vec::new();
+        // Clean and nothing unpushed (or merged upstream): a merged branch may be force-deleted.
+        let mut verified_clean = false;
+        let merged = matches!(item.state, WorkState::Merged { .. });
         if opts.remove_worktree && is_worktree {
             if item.pr_url.is_some() {
                 // Best effort: see a merge that happened on the code host since the last fetch.
@@ -454,6 +579,7 @@ impl WorkService {
                     "unpushed_commits": report.unpushed,
                 })));
             }
+            verified_clean = report.files.is_empty() && report.unpushed == 0;
         }
 
         for sid in &item.session_ids {
@@ -487,16 +613,23 @@ impl WorkService {
         }
         if opts.delete_branch
             && git::local_branch_exists(&repo, &item.branch).await.unwrap_or(false)
-            && let Err(e) = git::delete_branch(&repo, &item.branch, opts.force).await
+            // `-d` refuses squash-merged branches; their work is verified to be in the base.
+            && let Err(e) =
+                git::delete_branch(&repo, &item.branch, opts.force || (merged && verified_clean)).await
         {
             env.core.toast(Toast::warn(format!("Branch {} kept: {}", item.branch, e.message)));
         }
         if let Some(t) = &item.ticket {
-            let target = opts
-                .transition_to
-                .clone()
-                .or_else(|| env.project.tracker.as_ref().and_then(|b| b.status_map.done.clone()))
-                .or_else(|| item.pr_url.as_ref().and(env.settings.work.on_merge.transition_to.clone()));
+            // Merged / closed: the merge listener already made the unambiguous move; any other
+            // Done status is an explicit choice, never a default.
+            let target = if item.state.pr_done() {
+                opts.transition_to.clone()
+            } else {
+                opts.transition_to
+                    .clone()
+                    .or_else(|| env.project.tracker.as_ref().and_then(|b| b.status_map.done.clone()))
+                    .or_else(|| item.pr_url.as_ref().and(env.settings.work.on_merge.transition_to.clone()))
+            };
             if let Some(target) = target {
                 match env.core.tracker_for(&t.account).await {
                     Ok(tracker) => {
@@ -523,6 +656,7 @@ impl WorkService {
         }
         let _ = std::fs::remove_file(self.journal_path(id));
         item.state = WorkState::Finished;
+        item.review_due = false;
         self.save(&item).await?;
         env.core.publish(
             BusEvent::new(bus::WORK_FINISHED, serde_json::json!({ "work_item_id": item.id, "opts": opts }))
@@ -530,6 +664,29 @@ impl WorkService {
                 .with_work_item(item.id.clone()),
         );
         Ok(item)
+    }
+
+    pub(crate) async fn finish_merged_impl(&self) -> Result<FinishMergedReport, KeltaError> {
+        let mut report = FinishMergedReport::default();
+        let merged = self
+            .store
+            .list_items(None)
+            .await?
+            .into_iter()
+            .filter(|w| matches!(w.state, WorkState::Merged { .. }));
+        for item in merged {
+            if let WorkState::Merged { detail: Some(why) } = &item.state {
+                report.skipped.push(SkippedItem { id: item.id.clone(), reason: why.clone() });
+                continue;
+            }
+            let opts =
+                FinishOpts { remove_worktree: true, delete_branch: true, force: false, transition_to: None };
+            match self.finish_impl(&item.id, opts).await {
+                Ok(done) => report.finished.push(done),
+                Err(e) => report.skipped.push(SkippedItem { id: item.id.clone(), reason: e.message }),
+            }
+        }
+        Ok(report)
     }
 
     async fn dirty_report(&self, env: &Env, item: &WorkItem, j: &Journal) -> Result<DirtyReport, KeltaError> {
@@ -563,7 +720,8 @@ impl WorkService {
         if !item.worktree.is_dir() {
             return Err(KeltaError::not_found(format!("worktree {} is gone", item.worktree.display())));
         }
-        let upstream = match git::upstream(&item.worktree).await? {
+        // Before a PR, "ahead" means commits to ship, so compare with the base even if pushed.
+        let upstream = match git::upstream(&item.worktree).await?.filter(|_| item.pr_url.is_some()) {
             Some(u) => Some(u),
             None => {
                 let rb = format!("{}/{}", env.repo.remote, item.base);

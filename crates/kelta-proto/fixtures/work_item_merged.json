@@ -6,7 +6,7 @@
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
-  "pr_url": null,
+  "pr_url": "https://github.com/acme/shop-api/pull/90",
   "project_id": "shop",
   "repo_id": "api",
   "review": null,
@@ -16,9 +16,8 @@
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
   ],
   "state": {
-    "kind": "failed",
-    "message": "branch exists",
-    "step": "worktree"
+    "detail": "choose Done status",
+    "kind": "merged"
   },
   "steps": [
     {
