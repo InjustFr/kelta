@@ -267,6 +267,7 @@ impl Core {
                     .tool_open(project, &ToolId::new(tool), ctx.clone(), Placement::Focused)
                     .await?;
                 Ok(Some(match handle {
+                    ToolHandle::External => return Ok(None), // launched beside Kelta, no pane
                     ToolHandle::Pty { session_id } => {
                         let info = self.sessions.lock().get(&session_id).map(|e| e.info.clone());
                         (PaneContent::Terminal { session_id }, info)

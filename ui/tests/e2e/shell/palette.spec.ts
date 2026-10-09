@@ -36,7 +36,7 @@ test.describe('palette', () => {
     await input.fill('kelta tools');
     await expect(page.getByTestId('palette-item').first()).toContainText('Kelta tools');
     await input.fill('lazygit');
-    await expect(page.getByTestId('palette-item').first()).toContainText('Open tool: lazygit');
+    await expect(page.getByTestId('palette-item').first()).toContainText('Open lazygit');
     await input.fill('settings keys');
     await expect(page.getByTestId('palette-item').first()).toContainText('Settings: Keys');
     await input.fill('zzzzqqq');

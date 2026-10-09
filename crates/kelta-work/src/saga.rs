@@ -1345,6 +1345,8 @@ impl WorkService {
                             opened.insert(op.leaf, c.clone());
                             last = Some(c);
                         }
+                        // External tools have no pane; the template leaf just stays empty.
+                        Ok(ToolHandle::External) => {}
                         Err(e) => env.core.toast(Toast::warn(format!("Tool {id}: {}", e.message))),
                     }
                     continue;

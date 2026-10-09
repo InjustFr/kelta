@@ -6,6 +6,7 @@
   import { Icon, Menu, type MenuItem } from '$lib/ui';
 
   import AttentionDot from './AttentionDot.svelte';
+  import ToolStrip from './ToolStrip.svelte';
   import { requestCloseTab, selectTab, tabAttention } from './nav';
 
   interface Props {
@@ -168,6 +169,7 @@
   >
     <Icon name="plus" size={15} />
   </button>
+  <ToolStrip {projectId} />
 </div>
 
 {#if tabMenu}
