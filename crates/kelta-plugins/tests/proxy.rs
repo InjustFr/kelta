@@ -146,8 +146,16 @@ async fn own_listener_guards_host_and_stops_when_idle() {
     let inst = "3123456789abcdef0123456789abcdef";
     let up = serve(upstream()).await;
     proxy::register(inst, &format!("http://127.0.0.1:{up}/")).unwrap();
-    let port = proxy::ensure_listener().await.unwrap();
-    assert_eq!(proxy::ensure_listener().await.unwrap(), port);
+    let port = proxy::ensure_listener(inst).await.unwrap();
+    assert_eq!(proxy::ensure_listener(inst).await.unwrap(), port);
+    // Each instance gets its own listener (origin), which serves only that instance.
+    let other = "4123456789abcdef0123456789abcdef";
+    proxy::register(other, &format!("http://127.0.0.1:{up}/")).unwrap();
+    let other_port = proxy::ensure_listener(other).await.unwrap();
+    assert_ne!(other_port, port);
+    let (status, _) = raw_get(port, &format!("/proxy/{other}/page"), &format!("127.0.0.1:{port}")).await;
+    assert_eq!(status, 404, "another instance is unreachable from this origin");
+    proxy::unregister(other);
     let (status, _) = raw_get(port, &format!("/proxy/{inst}/page"), &format!("127.0.0.1:{port}")).await;
     assert_eq!(status, 200);
     let (status, _) = raw_get(port, &format!("/proxy/{inst}/page"), "evil.example:80").await;
@@ -175,6 +183,16 @@ async fn own_listener_guards_host_and_stops_when_idle() {
     s.read_to_string(&mut buf).await.unwrap();
     assert!(buf.starts_with("HTTP/1.1 404"), "{buf}");
     proxy::unregister(inst);
+    // The aborted accept task drops its socket shortly after.
+    let mut closed = false;
+    for _ in 0..200 {
+        if TcpStream::connect(("127.0.0.1", port)).await.is_err() {
+            closed = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(closed, "listener stops on unregister");
 }
 
 #[tokio::test]

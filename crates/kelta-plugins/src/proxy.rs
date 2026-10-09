@@ -5,11 +5,12 @@
 //! rewrites `Location` to the proxy prefix and only ever talks to loopback upstreams.
 //!
 //! [`router`] can be mounted by kelta-server (at `/proxy` or `/proxy/`); kelta-plugins also serves
-//! it from its own lazy loopback listener ([`ensure_listener`]) while at least one proxied instance
-//! exists, so web tools work without knowing kelta-server's port (see `docs/contract-requests/L8.md`).
+//! each proxied instance from its own loopback listener ([`ensure_listener`]), so web tools work
+//! without knowing kelta-server's port and every tool gets a distinct origin (its iframe keeps
+//! `allow-same-origin`, so a shared origin would let one tool read another's frames and storage).
 
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use axum::Router;
 use axum::body::Body;
@@ -63,9 +64,9 @@ static REGISTRY: LazyLock<RwLock<HashMap<String, Upstream>>> = LazyLock::new(|| 
 static CLIENT: LazyLock<Client<HttpConnector, Body>> =
     LazyLock::new(|| Client::builder(TokioExecutor::new()).build_http());
 
-/// Own listener: `(port, accept task)`.
-static LISTENER: LazyLock<Mutex<Option<(u16, tokio::task::AbortHandle)>>> =
-    LazyLock::new(|| Mutex::new(None));
+/// Own listeners, one per instance: `instance → (port, accept task)`.
+static LISTENERS: LazyLock<Mutex<HashMap<String, (u16, tokio::task::AbortHandle)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Register `instance` → `upstream_url` (loopback only).
 pub fn register(instance: &str, upstream_url: &str) -> Result<Upstream, KeltaError> {
@@ -77,14 +78,10 @@ pub fn register(instance: &str, upstream_url: &str) -> Result<Upstream, KeltaErr
     Ok(up)
 }
 
-/// Forget `instance`; stops the own listener when nothing is proxied any more.
+/// Forget `instance` and stop its own listener.
 pub fn unregister(instance: &str) {
-    let empty = {
-        let mut r = REGISTRY.write();
-        r.remove(instance);
-        r.is_empty()
-    };
-    if empty && let Some((_, task)) = LISTENER.lock().take() {
+    REGISTRY.write().remove(instance);
+    if let Some((_, task)) = LISTENERS.lock().remove(instance) {
         task.abort();
     }
 }
@@ -104,9 +101,12 @@ pub fn proxy_path(instance: &str, upstream_url: &str) -> String {
     format!("/proxy/{instance}{rest}")
 }
 
-/// Port of the own loopback listener, started on demand (event-driven: first proxied instance).
-pub async fn ensure_listener() -> Result<u16, KeltaError> {
-    if let Some((port, _)) = LISTENER.lock().as_ref() {
+/// Port of `instance`'s own loopback listener (its own origin), started on demand.
+pub async fn ensure_listener(instance: &str) -> Result<u16, KeltaError> {
+    if !is_registered(instance) {
+        return Err(KeltaError::not_found("unknown web tool instance"));
+    }
+    if let Some((port, _)) = LISTENERS.lock().get(instance) {
         return Ok(*port);
     }
     let listener = TcpListener::bind(("127.0.0.1", 0))
@@ -114,36 +114,33 @@ pub async fn ensure_listener() -> Result<u16, KeltaError> {
         .map_err(|e| KeltaError::internal(format!("proxy listener: {e}")))?;
     let port =
         listener.local_addr().map_err(|e| KeltaError::internal(format!("proxy listener: {e}")))?.port();
-    let app = router_with(Cfg { port: Some(port) });
+    let app = router_with(Cfg { port: Some(port), instance: Some(instance.into()) });
     let task = tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, app).await {
             tracing::warn!(error = %e, "web proxy listener stopped");
         }
     });
-    let mut slot = LISTENER.lock();
-    if let Some((existing, _)) = slot.as_ref() {
+    let mut all = LISTENERS.lock();
+    if let Some((existing, _)) = all.get(instance) {
         // Lost a race: keep the first listener.
         task.abort();
         return Ok(*existing);
     }
-    *slot = Some((port, task.abort_handle()));
+    all.insert(instance.to_owned(), (port, task.abort_handle()));
     Ok(port)
 }
 
-/// Port of the own listener if running.
-pub fn listener_port() -> Option<u16> {
-    LISTENER.lock().as_ref().map(|(p, _)| *p)
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Cfg {
     /// Own listener: the `Host` header must be `127.0.0.1:<port>`/`localhost:<port>` (DNS rebinding).
     port: Option<u16>,
+    /// Own listener: the only instance it serves.
+    instance: Option<Arc<str>>,
 }
 
 /// The proxy router (mountable by kelta-server; requests are `/<instance>/…` or `/proxy/<instance>/…`).
 pub fn router() -> Router {
-    router_with(Cfg { port: None })
+    router_with(Cfg { port: None, instance: None })
 }
 
 fn router_with(cfg: Cfg) -> Router {
@@ -171,46 +168,55 @@ fn error(status: StatusCode, msg: &str) -> Response {
 
 /// Resolve which instance a request targets. Falls back to the `Referer` (path-absolute subresource
 /// URLs of the proxied page) and, when exactly one instance is proxied, to that one.
-fn resolve(req: &Request) -> Option<(String, Upstream, String)> {
+fn resolve(cfg: &Cfg, req: &Request) -> Option<(String, Upstream, String)> {
     let path = req.uri().path();
     let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
     let reg = REGISTRY.read();
     if let Some((id, rest)) = split_instance(path)
+        && cfg.instance.as_deref().is_none_or(|i| i == id)
         && let Some(up) = reg.get(&id)
     {
         return Some((id, up.clone(), format!("{rest}{query}")));
     }
-    let from_referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|r| r.parse::<Uri>().ok())
-        .and_then(|u| split_instance(u.path()))
-        .and_then(|(id, _)| reg.get(&id).map(|up| (id, up.clone())));
-    // Single-instance fallback only for the proxied page itself (its WebSockets carry no Referer):
-    // a foreign page must never reach a tool without knowing the 128-bit instance id.
+    // Unprefixed requests (path-absolute subresources, WebSockets) only from the proxied page
+    // itself: a foreign page must never reach a tool without knowing the 128-bit instance id.
     let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
     let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
     let same_origin = matches!((host, origin), (Some(h), Some(o)) if o == format!("http://{h}"));
-    let fallback = from_referer.or_else(|| {
-        (same_origin && reg.len() == 1)
-            .then(|| reg.iter().next().map(|(k, v)| (k.clone(), v.clone())))
-            .flatten()
-    })?;
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|r| r.parse::<Uri>().ok());
+    let fallback = match cfg.instance.as_deref() {
+        // Own listener = one origin per instance: any same-origin request is that tool's page.
+        Some(id) => {
+            let same_referer = referer.as_ref().is_some_and(|u| u.authority().map(|a| a.as_str()) == host);
+            (same_origin || same_referer).then(|| reg.get(id).map(|up| (id.to_owned(), up.clone()))).flatten()
+        }
+        None => referer
+            .and_then(|u| split_instance(u.path()))
+            .and_then(|(id, _)| reg.get(&id).map(|up| (id, up.clone())))
+            .or_else(|| {
+                (same_origin && reg.len() == 1)
+                    .then(|| reg.iter().next().map(|(k, v)| (k.clone(), v.clone())))
+                    .flatten()
+            }),
+    }?;
     Some((fallback.0, fallback.1, format!("{path}{query}")))
 }
 
-fn host_ok(cfg: Cfg, headers: &HeaderMap) -> bool {
+fn host_ok(cfg: &Cfg, headers: &HeaderMap) -> bool {
     let Some(port) = cfg.port else { return true };
     let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else { return false };
     host == format!("127.0.0.1:{port}") || host == format!("localhost:{port}")
 }
 
 async fn handle(State(cfg): State<Cfg>, req: Request) -> Response {
-    if !host_ok(cfg, req.headers()) {
+    if !host_ok(&cfg, req.headers()) {
         return error(StatusCode::MISDIRECTED_REQUEST, "unexpected Host header");
     }
-    let Some((id, upstream, rest)) = resolve(&req) else {
+    let Some((id, upstream, rest)) = resolve(&cfg, &req) else {
         return error(StatusCode::NOT_FOUND, "unknown web tool instance");
     };
     let result = if is_upgrade(req.headers()) {

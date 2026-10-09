@@ -399,7 +399,7 @@ impl PluginHost {
         if embed == EmbedMode::Proxy {
             match crate::proxy::register(instance_id.as_str(), &url) {
                 Ok(_) => {
-                    let port = crate::proxy::ensure_listener().await?;
+                    let port = crate::proxy::ensure_listener(instance_id.as_str()).await?;
                     public_url = format!(
                         "http://127.0.0.1:{port}{}",
                         crate::proxy::proxy_path(instance_id.as_str(), &url)
