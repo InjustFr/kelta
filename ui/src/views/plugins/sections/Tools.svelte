@@ -18,7 +18,7 @@
   let checks = $state<Record<string, ToolCheck | string>>({});
 
   $effect(() => {
-    if (pid && !tools.byProject[pid]?.fetchedAt) void tools.load(pid);
+    if (pid && (!slot || (slot.fetchedAt === null && !slot.loading && !slot.error))) void tools.load(pid);
   });
 
   async function check(id: string): Promise<void> {

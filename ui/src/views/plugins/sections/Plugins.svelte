@@ -18,7 +18,8 @@
   let removing = $state<PluginInfo | null>(null);
 
   $effect(() => {
-    if (plugins.plugins.fetchedAt === null && !plugins.plugins.loading) void plugins.load();
+    if (plugins.plugins.fetchedAt === null && !plugins.plugins.loading && !plugins.plugins.error)
+      void plugins.load();
   });
 
   const missing = (p: PluginInfo): string[] => p.permissions.filter((x) => !p.granted.includes(x));

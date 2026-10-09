@@ -30,7 +30,8 @@
   );
 
   $effect(() => {
-    if (projectId && !tools.byProject[projectId]?.fetchedAt) void tools.load(projectId);
+    if (projectId && (!slot || (slot.fetchedAt === null && !slot.loading && !slot.error)))
+      void tools.load(projectId);
   });
 
   function installed(t: ToolInfo): boolean {

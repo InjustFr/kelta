@@ -22,7 +22,8 @@
   let result = $state<TriggerRun | null>(null);
 
   $effect(() => {
-    if (plugins.triggers.fetchedAt === null && !plugins.triggers.loading) void plugins.loadTriggers();
+    if (plugins.triggers.fetchedAt === null && !plugins.triggers.loading && !plugins.triggers.error)
+      void plugins.loadTriggers();
   });
   onMount(() => void loadLog());
 

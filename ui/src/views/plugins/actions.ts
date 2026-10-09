@@ -4,6 +4,7 @@
 import type { TemplateCtx } from '$lib/gen';
 import { registerAction } from '$lib/actions';
 import { commandRun } from '$lib/ipc/commands';
+import '$lib/plugin-host/boot.svelte';
 import { toasts } from '$lib/stores';
 
 import { EMPTY_CTX } from '../tools/actions';
