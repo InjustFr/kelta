@@ -3,8 +3,6 @@
 //! Local surfaces (ARCHITECTURE §2, §7.6, §11.1, PLUGINS §8): ctl socket server (line JSON,
 //! peer-uid + per-session hook token checks), hook ingestion → `hooks::map`, lazy loopback axum
 //! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`, web-tool proxy at `/proxy/`).
-//!
-//! SCAFFOLD STUB: every fallible method returns `Unsupported("not implemented: <fn>")`.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
@@ -13,15 +11,37 @@ use kelta_proto::api::CoreApi;
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
+use parking_lot::Mutex;
+use tokio::task::AbortHandle;
+
+mod auth;
+mod ctl;
+pub mod hooks;
+mod http;
+mod mcp;
+
+struct CtlRunning {
+    path: PathBuf,
+    task: AbortHandle,
+}
 
 pub struct Server {
     core: Weak<dyn CoreApi>,
     dirs: Dirs,
+    tokens: Arc<auth::TokenTable>,
+    ctl: Mutex<Option<CtlRunning>>,
+    http: Mutex<http::HttpState>,
 }
 
 impl Server {
     pub fn new(core: Weak<dyn CoreApi>, dirs: Dirs) -> Arc<Self> {
-        Arc::new(Self { core, dirs })
+        Arc::new(Self {
+            core,
+            dirs,
+            tokens: Arc::new(auth::TokenTable::default()),
+            ctl: Mutex::new(None),
+            http: Mutex::new(http::HttpState::default()),
+        })
     }
 
     pub fn core(&self) -> Option<Arc<dyn CoreApi>> {
@@ -33,32 +53,53 @@ impl Server {
     }
 
     /// Bind `<runtime>/ctl.sock` (0600 in a 0700 dir) and serve; returns the socket path.
+    /// Idempotent: a second call returns the path of the running socket.
     pub async fn start_ctl(&self) -> Result<PathBuf, KeltaError> {
-        Err(KeltaError::not_implemented("Server::start_ctl"))
+        let mut guard = self.ctl.lock();
+        if let Some(r) = guard.as_ref() {
+            return Ok(r.path.clone());
+        }
+        let path = self.dirs.ctl_socket();
+        let listener = ctl::bind(&path)?;
+        let cx = Arc::new(ctl::CtlCtx { core: self.core.clone(), tokens: self.tokens.clone() });
+        let task = tokio::spawn(ctl::accept_loop(listener, cx)).abort_handle();
+        tracing::info!(path = %path.display(), "ctl socket listening");
+        *guard = Some(CtlRunning { path: path.clone(), task });
+        Ok(path)
     }
 
     /// Start the loopback HTTP server if needed and take a consumer reference; returns the port.
     pub async fn ensure_http(&self) -> Result<u16, KeltaError> {
-        Err(KeltaError::not_implemented("Server::ensure_http"))
+        http::ensure(&self.http, self.core.clone(), self.tokens.clone())
     }
 
     /// Release a consumer reference; the server stops at 0 (no idle timer).
-    pub fn release_http(&self) {}
+    pub fn release_http(&self) {
+        http::release(&self.http);
+    }
+
+    /// Port of the running HTTP server; `None` while no consumer holds it.
+    pub fn http_port(&self) -> Option<u16> {
+        http::port(&self.http)
+    }
 
     /// Per-session tokens for hooks (ctl + `/hook/<sid>`) and MCP (`/mcp/<sid>`).
-    pub fn register_session(&self, _sid: &SessionId, _hook_token: &str, _mcp_token: Option<&str>) {}
+    pub fn register_session(&self, sid: &SessionId, hook_token: &str, mcp_token: Option<&str>) {
+        self.tokens.register(sid, hook_token, mcp_token);
+    }
 
-    pub fn unregister_session(&self, _sid: &SessionId) {}
+    pub fn unregister_session(&self, sid: &SessionId) {
+        self.tokens.unregister(sid);
+    }
 }
 
-/// Claude status machine (ARCHITECTURE §7.6), a pure function.
-pub mod hooks {
-    use kelta_proto::hooks::HookPayload;
-    use kelta_proto::model::StatusChange;
-
-    /// Map a hook payload to a status change; `None` for ignored events. Stub: `None`.
-    pub fn map(_payload: &HookPayload) -> Option<StatusChange> {
-        None
+impl Drop for Server {
+    fn drop(&mut self) {
+        if let Some(r) = self.ctl.get_mut().take() {
+            r.task.abort();
+            let _ = std::fs::remove_file(&r.path);
+        }
+        http::stop(&self.http);
     }
 }
 
@@ -68,12 +109,20 @@ mod tests {
     use kelta_proto::testing::FakeCore;
 
     #[tokio::test]
-    async fn stub_is_unsupported() {
+    async fn refcount_starts_and_stops() {
         let core = FakeCore::new();
-        let weak: Weak<dyn CoreApi> = Arc::downgrade(&(core.clone() as Arc<dyn CoreApi>));
-        let s = Server::new(weak, Dirs::under(&std::env::temp_dir()));
-        assert_eq!(s.ensure_http().await.unwrap_err().code, kelta_proto::ErrorCode::Unsupported);
-        assert!(hooks::map(&kelta_proto::hooks::HookPayload::default()).is_none());
-        let _ = kelta_plugins::proxy::router();
+        let dyn_core: Arc<dyn CoreApi> = core.clone();
+        let tmp = tempfile::tempdir().unwrap();
+        let s = Server::new(Arc::downgrade(&dyn_core), Dirs::under(tmp.path()));
+        assert_eq!(s.http_port(), None);
+        let p1 = s.ensure_http().await.unwrap();
+        let p2 = s.ensure_http().await.unwrap();
+        assert_eq!(p1, p2);
+        s.release_http();
+        assert_eq!(s.http_port(), Some(p1));
+        s.release_http();
+        assert_eq!(s.http_port(), None);
+        s.release_http();
+        assert_eq!(s.http_port(), None);
     }
 }
