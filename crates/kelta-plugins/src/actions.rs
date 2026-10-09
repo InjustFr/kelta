@@ -18,7 +18,7 @@ use kelta_proto::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId};
 use kelta_proto::model::{Attention, SessionKind, SessionStatus, StatusChange, TemplateCtx};
 use kelta_proto::tracker::{Assignee, StatusCategory, TicketRef};
 use serde_json::{Map, Value, json};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 use crate::PluginHost;
 use crate::context::CtxSpec;
@@ -743,12 +743,17 @@ pub(crate) async fn run_process(
             let _ = w.shutdown().await;
         });
     }
+    let (out, err) = (child.stdout.take(), child.stderr.take());
+    let run = async {
+        let (stdout, stderr, status) = tokio::join!(capped(out), capped(err), child.wait());
+        status.map(|s| (s, stdout, stderr))
+    };
     // one-shot: `run` action timeout
-    match tokio::time::timeout(timeout, child.wait_with_output()).await {
-        Ok(Ok(o)) => Ok(ProcOutput {
-            code: o.status.code().unwrap_or(-1),
-            stdout: truncate(&String::from_utf8_lossy(&o.stdout), RUN_OUTPUT_CAP),
-            stderr: truncate(&String::from_utf8_lossy(&o.stderr), RUN_OUTPUT_CAP),
+    match tokio::time::timeout(timeout, run).await {
+        Ok(Ok((status, stdout, stderr))) => Ok(ProcOutput {
+            code: status.code().unwrap_or(-1),
+            stdout: truncate(&String::from_utf8_lossy(&stdout), RUN_OUTPUT_CAP),
+            stderr: truncate(&String::from_utf8_lossy(&stderr), RUN_OUTPUT_CAP),
         }),
         Ok(Err(e)) => Err(KeltaError::internal(format!("`{command}`: {e}"))),
         Err(_) => {
@@ -760,9 +765,36 @@ pub(crate) async fn run_process(
     }
 }
 
+/// First `RUN_OUTPUT_CAP + 1` bytes (so `truncate` marks overflow); the rest is drained and dropped
+/// so the child never blocks on a full pipe and memory stays bounded.
+async fn capped<R: AsyncRead + Unpin>(r: Option<R>) -> Vec<u8> {
+    let Some(mut r) = r else { return Vec::new() };
+    let mut out = Vec::new();
+    let _ = (&mut r).take(RUN_OUTPUT_CAP as u64 + 1).read_to_end(&mut out).await;
+    let _ = tokio::io::copy(&mut r, &mut tokio::io::sink()).await;
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn run_output_is_capped_while_streaming() {
+        // ~1 MiB of output: only the cap is kept.
+        let o = run_process(
+            "sh",
+            &["-c".into(), "head -c 1048576 /dev/zero | tr '\\0' a".into()],
+            None,
+            &Default::default(),
+            None,
+            Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+        assert_eq!(o.code, 0);
+        assert!(o.stdout.len() <= RUN_OUTPUT_CAP + 4 && o.stdout.ends_with('…'));
+    }
 
     #[test]
     fn patch_filter_keeps_allowed_keys() {
