@@ -281,6 +281,8 @@ pub fn work_item() -> WorkItem {
             })
             .collect(),
         created_at: TS.into(),
+        review_due: false,
+        claude_replied: false,
     }
 }
 
@@ -821,7 +823,20 @@ pub fn all() -> Vec<Fixture> {
                 transition_to: Some(TransitionTarget::Name { name: "Done".into() }),
             }
         ),
-        fx!("git_status", GitStatus, GitStatus { ahead: 2, behind: 0, dirty: true, unpushed: true }),
+        fx!(
+            "git_status",
+            GitStatus,
+            GitStatus {
+                ahead: 2,
+                behind: 0,
+                dirty: true,
+                unpushed: true,
+                files: 3,
+                insertions: 41,
+                deletions: 7,
+                missing: false
+            }
+        ),
         fx!(
             "pr_draft",
             PrDraft,

@@ -1,0 +1,89 @@
+//! Durable Claude signals on work items (FLOW §2.3): `review_due` / `claude_replied` from real
+//! `Stop` hooks, cleared by `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
+//! session id (B3). Everything travels in `work.updated`.
+
+use kelta_proto::error::KeltaError;
+use kelta_proto::events::Notification;
+use kelta_proto::ext::Urgency;
+use kelta_proto::hooks::{HookPayload, names};
+use kelta_proto::ids::{SessionId, WorkItemId};
+use kelta_proto::model::{SessionKind, WorkItem, WorkKind, WorkState};
+
+use crate::WorkService;
+
+/// Short name of an item in notifications: ticket key, `#n` for a review, else the branch.
+pub(crate) fn item_key(item: &WorkItem) -> String {
+    match (&item.ticket, &item.review) {
+        (Some(t), _) => t.key.clone(),
+        (None, Some(r)) => format!("#{}", r.number),
+        _ => item.branch.clone(),
+    }
+}
+
+impl WorkService {
+    /// A `claude.hook` of `sid`. The bus only carries real hooks, so heuristic sessions (hooks
+    /// inactive) never get here and never set a flag.
+    pub(crate) async fn on_claude_hook(&self, sid: &SessionId, hook: HookPayload) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        if core.session_get(sid).is_none_or(|s| s.kind != SessionKind::Claude) {
+            return Ok(());
+        }
+        let Some(item) = self.for_session(sid).await else { return Ok(()) };
+        if item.state == WorkState::Finished {
+            return Ok(());
+        }
+        let event = hook.hook_event_name.as_str();
+        // Review checkouts are someone else's code: no "to review" signal for them.
+        let own = item.kind != WorkKind::Review;
+        let changes = if own && event == names::STOP {
+            let env = self.env(&item.project_id, &item.repo_id)?;
+            let st = self.git_status(&env, &item).await?;
+            Some(st.ahead > 0 || st.dirty)
+        } else {
+            None
+        };
+        let uuid = hook.session_id.filter(|u| !u.is_empty());
+        let mut became_due = false;
+        let item = self
+            .update(&item.id, |w| {
+                let before = (w.review_due, w.claude_replied, w.claude_uuid.clone());
+                if uuid.is_some() {
+                    w.claude_uuid.clone_from(&uuid);
+                }
+                match (event, changes) {
+                    (names::USER_PROMPT_SUBMIT, _) => (w.review_due, w.claude_replied) = (false, false),
+                    (names::STOP, Some(true)) => {
+                        became_due = !w.review_due;
+                        (w.review_due, w.claude_replied) = (true, false);
+                    }
+                    (names::STOP, Some(false)) => w.claude_replied = true,
+                    _ => {}
+                }
+                before != (w.review_due, w.claude_replied, w.claude_uuid.clone())
+            })
+            .await?;
+        if changes.is_some() && core.settings(Some(&item.project_id)).notifications.claude_done {
+            let title = if became_due || item.review_due {
+                format!("{} ready to review", item_key(&item))
+            } else {
+                format!("{}: Claude replied", item_key(&item))
+            };
+            let body = hook.last_assistant_message.map(|m| m.chars().take(200).collect());
+            // Core drops it when the session's pane is visible in the focused window.
+            core.notify(Notification {
+                title,
+                body,
+                urgency: Urgency::Normal,
+                project_id: Some(item.project_id.clone()),
+                session_id: Some(sid.clone()),
+            })
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// `work_mark_reviewed`: Louis looked at Claude's changes.
+    pub async fn mark_reviewed(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| std::mem::replace(&mut w.review_due, false)).await
+    }
+}

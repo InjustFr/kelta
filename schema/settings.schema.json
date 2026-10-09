@@ -2026,6 +2026,7 @@
           "terminal.paste": "]",
           "terminal.search": "/",
           "tickets.open": "t",
+          "work.menu": ".",
           "work.start": "s"
         },
         "prefix_timeout_ms": 1000
@@ -2090,6 +2091,7 @@
             "terminal.paste": "]",
             "terminal.search": "/",
             "tickets.open": "t",
+            "work.menu": ".",
             "work.start": "s"
           },
           "description": "ActionId → single key after the prefix.",
