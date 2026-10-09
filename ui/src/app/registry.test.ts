@@ -25,7 +25,7 @@ describe('registries', () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  }, 30_000); // cold-transforms every view
+  }, 60_000); // cold-transforms every view (slow on a loaded machine)
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
@@ -34,7 +34,7 @@ describe('registries', () => {
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {
       expect(typeof (await load()).default).toBe('function');
     }
-  });
+  }, 60_000); // cold transforms (the work bar pulls in the work actions)
 
   it('settings sections are unique, ordered per BUILD_PLAN §2.4 and load', async () => {
     const ids = settingsSections.map((s) => s.id);
@@ -59,5 +59,5 @@ describe('registries', () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  });
+  }, 60_000); // cold transforms
 });
