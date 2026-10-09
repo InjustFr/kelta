@@ -199,6 +199,19 @@ describe('FrameHandler on a headless terminal', () => {
     expect(sent).toEqual([11]);
   });
 
+  it('drops acks for writes that finish after close()', async () => {
+    const { barrier, driver, sent, term } = setup();
+    const acks = new AckBatcher((_g, n) => sent.push(n), new FrameScheduler(driver));
+    const h = new FrameHandler({ term, acks });
+    h.handle(frame(FRAME_DATA, 'late'));
+    h.close();
+    acks.reset();
+    await barrier();
+    acks.setGeneration(2);
+    driver.runFrame();
+    expect(sent).toEqual([]);
+  });
+
   it('snapshot resets the screen before painting and acks its bytes', async () => {
     const { handler, barrier, driver, sent, line } = setup();
     handler.handle(frame(FRAME_DATA, 'stale text'));

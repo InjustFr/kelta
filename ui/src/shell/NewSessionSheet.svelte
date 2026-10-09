@@ -80,7 +80,11 @@
   });
 
   function context(): TemplateCtx {
-    const repo = projects.byId(projectId)?.repos.find((r) => cwd !== '' && cwd.startsWith(r.path));
+    const repo = projects
+      .byId(projectId)
+      ?.repos.find(
+        (r) => cwd !== '' && (cwd === r.path || cwd.startsWith(r.path.endsWith('/') ? r.path : r.path + '/')),
+      );
     return {
       repo_id: repo?.id ?? null,
       cwd: cwd === '' ? null : cwd,

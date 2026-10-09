@@ -114,7 +114,9 @@ export class FrameHandler {
         const n = decoded.bytes.length;
         if (n === 0) return;
         this.#opts.onData?.(n);
-        term.write(decoded.bytes, () => acks.add(n));
+        term.write(decoded.bytes, () => {
+          if (!this.#closed) acks.add(n);
+        });
         return;
       }
       case 'snapshot': {
@@ -123,7 +125,9 @@ export class FrameHandler {
         term.write('\x1bc');
         this.#opts.onSnapshot?.();
         const n = decoded.bytes.length;
-        term.write(decoded.bytes, () => acks.add(n));
+        term.write(decoded.bytes, () => {
+          if (!this.#closed) acks.add(n);
+        });
         return;
       }
       case 'exit':

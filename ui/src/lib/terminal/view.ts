@@ -216,10 +216,11 @@ export class TerminalView implements PoolView {
     if (this.#attachPromise) return this.#attachPromise;
     const seq = ++this.#attachSeq;
     this.#setState({ attaching: true, error: null });
-    this.#attachPromise = this.#doAttach(seq).finally(() => {
-      this.#attachPromise = null;
+    const p: Promise<void> = this.#doAttach(seq).finally(() => {
+      if (this.#attachPromise === p) this.#attachPromise = null;
     });
-    return this.#attachPromise;
+    this.#attachPromise = p;
+    return p;
   }
 
   async #doAttach(seq: number): Promise<void> {
@@ -262,6 +263,7 @@ export class TerminalView implements PoolView {
   /** Detaches from the session (the process keeps running). */
   detach(): void {
     this.#attachSeq += 1;
+    this.#attachPromise = null;
     this.#handler?.close();
     this.#handler = null;
     const generation = this.#generation;
