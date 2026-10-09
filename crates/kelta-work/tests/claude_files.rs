@@ -1,4 +1,5 @@
 //! Generated Claude files: PLUGINS §8 settings (exact), mcp.json, argv; paths with spaces.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::Path;
 

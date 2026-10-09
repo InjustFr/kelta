@@ -1,5 +1,5 @@
 //! Shared fixture: a temp "remote" + working repo, FakeCore, FakeTracker, FakeCodeHost, MemWorkStore.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

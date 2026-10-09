@@ -1,4 +1,5 @@
 //! nvim msgpack-RPC against a real headless `nvim --listen` (skipped when nvim is absent).
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};

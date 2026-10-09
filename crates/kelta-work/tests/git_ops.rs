@@ -1,4 +1,5 @@
 //! Finish (dirty/unpushed refusal, force), create PR, status, git timeouts / non-interactivity.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
 

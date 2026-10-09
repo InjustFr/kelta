@@ -1,4 +1,5 @@
 //! Start-work saga against FakeCore + FakeTracker + a temp git repo.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
 
@@ -431,7 +432,7 @@ async fn host_veto_patch_and_mcp_port() {
         format!("http://127.0.0.1:4242/mcp/{}", sid.as_str()),
         "mcp.json points at the session id core assigned"
     );
-    assert_eq!(call.args["env"]["KELTA_SESSION_ID"].as_str().is_some(), true);
+    assert!(call.args["env"]["KELTA_SESSION_ID"].as_str().is_some());
 }
 
 #[tokio::test]
