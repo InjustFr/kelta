@@ -1,0 +1,11 @@
+# expect: unknown command
+id = "badkb"
+name = "X"
+version = "1.2.3"
+kelta_api = "^0.1"
+description = "d"
+author = "a"
+license = "MIT"
+[[contributes.keybindings]]
+command = "nope"
+key = "mod+x"

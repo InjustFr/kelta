@@ -1,0 +1,45 @@
+:root {
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+  font: var(--k-font-size, 13px) / 1.4 var(--k-font-ui, system-ui, sans-serif);
+  background: var(--k-bg, Canvas);
+  color: var(--k-fg, CanvasText);
+}
+main {
+  padding: 16px 20px;
+  max-width: 720px;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--k-fg-muted, GrayText);
+  margin: 20px 0 6px;
+}
+ul,
+ol {
+  margin: 0;
+  padding-left: 18px;
+}
+.muted {
+  color: var(--k-fg-muted, GrayText);
+}
+.mono {
+  font-family: var(--k-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+button {
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: var(--k-radius, 6px);
+  border: 1px solid var(--k-border, ButtonBorder);
+  background: var(--k-bg-elev, ButtonFace);
+  color: inherit;
+  cursor: pointer;
+}

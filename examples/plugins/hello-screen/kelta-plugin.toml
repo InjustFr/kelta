@@ -1,0 +1,33 @@
+# Example plugin: a custom screen (sandboxed iframe) talking to Kelta through @kelta/plugin-sdk.
+# Install it from Settings → Plugins → Install (choose this directory), or with
+# `kelta-ctl plugin install examples/plugins/hello-screen`.
+id = "hello-screen"
+name = "Hello screen"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "A minimal custom screen: greets you, shows the current project and its sessions, and live session events"
+author = "Kelta contributors"
+license = "MIT"
+platforms = ["macos", "linux"]
+permissions = ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open"]
+activation = ["onScreen:hello", "onCommand:hello-screen.open"]
+
+[[contributes.screens]]
+id = "hello"
+title = "Hello"
+icon = "star"
+entry = "dist/index.html"
+scope = "project"
+placement = ["tab", "pane"]
+
+[[contributes.commands]]
+id = "hello-screen.open"
+title = "Hello: open screen"
+do = [{ action = "open_screen", screen = "hello", placement = "new_tab" }]
+
+[[contributes.keybindings]]
+command = "hello-screen.open"
+key = "mod+shift+h"
+
+[contributes.settings]
+schema = "settings.schema.json"

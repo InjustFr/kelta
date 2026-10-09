@@ -525,6 +525,11 @@ impl PluginHost {
         }
     }
 
+    /// Process ids of running web tool servers (perf reporting of children, tests).
+    pub fn web_tool_pids(&self) -> Vec<u32> {
+        self.tools.web.lock().values().filter_map(|i| i.proc_.as_ref().map(|p| p.pid)).collect()
+    }
+
     /// Number of running web tool instances (tests, perf).
     pub fn web_tools_running(&self) -> usize {
         self.tools.running()

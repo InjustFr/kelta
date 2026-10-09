@@ -1,0 +1,9 @@
+# expect: macos
+id = "badplat"
+name = "X"
+version = "1.2.3"
+kelta_api = "^0.1"
+description = "d"
+author = "a"
+license = "MIT"
+platforms = ["windows"]

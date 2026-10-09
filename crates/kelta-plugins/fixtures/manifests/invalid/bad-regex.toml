@@ -1,0 +1,12 @@
+# expect: invalid regex
+id = "badre"
+name = "X"
+version = "1.2.3"
+kelta_api = "^0.1"
+description = "d"
+author = "a"
+license = "MIT"
+[[contributes.triggers]]
+id = "t"
+on = "pr.*"
+match = { "payload.x" = "re:(" }

@@ -1,0 +1,7 @@
+# expect: license
+id = "nolicense"
+name = "X"
+version = "1.0.0"
+kelta_api = "^0.1"
+description = "d"
+author = "a"

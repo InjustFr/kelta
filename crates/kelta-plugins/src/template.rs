@@ -51,7 +51,7 @@ pub fn is_known_path(path: &str) -> bool {
         return rest.is_none();
     }
     if OPEN.contains(&root) {
-        return rest.is_some_and(|r| !r.is_empty());
+        return rest.is_none_or(|r| !r.is_empty());
     }
     if let Some((_, keys)) = STRUCTURED.iter().find(|(r, _)| *r == root) {
         return rest.is_some_and(|r| keys.contains(&r));
@@ -216,26 +216,28 @@ impl Vars {
     }
 
     fn resolve(&self, body: &str) -> Result<String, KeltaError> {
-        let mut value: Option<String> = None;
+        let mut value: Option<Value> = None;
+        let as_str = |v: &Option<Value>| v.as_ref().map(json_to_string).unwrap_or_default();
         for part in body.split('|') {
             match part {
-                "slug" => value = Some(slugify(value.as_deref().unwrap_or(""))),
-                "shell" => value = Some(shell_quote(value.as_deref().unwrap_or(""))),
+                "slug" => value = Some(Value::String(slugify(&as_str(&value)))),
+                "shell" => value = Some(Value::String(shell_quote(&as_str(&value)))),
                 "json" => {
-                    value = Some(Value::String(value.unwrap_or_default()).to_string());
+                    let v = value.take().unwrap_or(Value::String(String::new()));
+                    value = Some(Value::String(v.to_string()));
                 }
                 path => {
-                    if value.as_deref().is_some_and(|v| !v.is_empty()) {
+                    if value.as_ref().is_some_and(|v| !json_to_string(v).is_empty()) {
                         continue;
                     }
                     if !is_known_path(path) {
                         return Err(KeltaError::invalid(format!("unknown placeholder `{{{path}}}`")));
                     }
-                    value = Some(self.get(path).map(json_to_string).unwrap_or_default());
+                    value = Some(self.get(path).cloned().unwrap_or(Value::Null));
                 }
             }
         }
-        Ok(value.unwrap_or_default())
+        Ok(as_str(&value))
     }
 
     /// Expand every placeholder in `s`.
@@ -282,6 +284,8 @@ mod tests {
         assert_eq!(v.expand("{payload.n}").unwrap(), "3");
         assert_eq!(v.expand("{{literal}}").unwrap(), "{literal}");
         assert_eq!(v.expand("{branch}").unwrap(), "");
+        assert_eq!(v.expand("{payload|json}").unwrap(), r#"{"n":3,"path":"src/main.rs"}"#);
+        assert_eq!(v.expand("{payload.n|json}").unwrap(), "3");
     }
 
     #[test]

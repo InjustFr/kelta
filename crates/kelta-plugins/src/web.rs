@@ -70,7 +70,10 @@ pub fn free_port() -> Result<u16, KeltaError> {
 fn ready_from_line(ready: &Ready, re: Option<&Regex>, line: &str) -> Option<String> {
     match ready {
         Ready::StdoutJson(key) => {
-            let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+            // The JSON object may be preceded by a log prefix on the same line.
+            let start = line.find('{')?;
+            let end = line.rfind('}')?;
+            let v: serde_json::Value = serde_json::from_str(line.get(start..=end)?).ok()?;
             crate::util::json_path(&v, key).and_then(|u| u.as_str()).map(str::to_owned)
         }
         Ready::StdoutRegex(_) => re.and_then(|r| r.find(line)).map(|m| m.as_str().to_owned()),
@@ -260,6 +263,10 @@ mod tests {
             Some("http://localhost:3011/?token=x")
         );
         assert_eq!(ready_from_line(&json, None, "starting…"), None);
+        assert_eq!(
+            ready_from_line(&json, None, r#"INFO ready {"url":"http://x/"}"#).as_deref(),
+            Some("http://x/")
+        );
         let re = Regex::new(r"http://\S+").unwrap();
         let rx = Ready::StdoutRegex(r"http://\S+".into());
         assert_eq!(
