@@ -183,11 +183,8 @@ fn resolve(cfg: &Cfg, req: &Request) -> Option<(String, Upstream, String)> {
     let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
     let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
     let same_origin = matches!((host, origin), (Some(h), Some(o)) if o == format!("http://{h}"));
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|r| r.parse::<Uri>().ok());
+    let referer =
+        req.headers().get(header::REFERER).and_then(|v| v.to_str().ok()).and_then(|r| r.parse::<Uri>().ok());
     let fallback = match cfg.instance.as_deref() {
         // Own listener = one origin per instance: any same-origin request is that tool's page.
         Some(id) => {
