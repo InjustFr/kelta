@@ -2,8 +2,14 @@
 //! `--safe-graphics`, early `[linux.graphics]` read, NVIDIA detection, WebKit env vars, launch crash
 //! guard, `mallopt(M_ARENA_MAX, 2)` on glibc.
 
+pub mod decorations;
+#[cfg(target_os = "macos")]
+pub mod dock;
+pub mod geometry;
 pub mod graphics;
 pub mod guard;
+pub mod probes;
+pub mod webview;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
