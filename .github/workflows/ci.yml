@@ -1,20 +1,69 @@
 name: ci
 
+# Runs on ready (non-draft) pull requests only; verify locally first with scripts/ci-local.sh.
+# Jobs run only for the areas the PR touches.
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["docs/**", "**/*.md", "LICENSE"]
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  qa:
-    name: qa (${{ matrix.os }})
+  changes:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    # A manual run (workflow_dispatch) always runs every job.
+    outputs:
+      rust: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      ui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.ui == 'true' }}
+      packaging: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.packaging == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'apps/**'
+              - 'xtask/**'
+              - 'bench/**'
+              - 'fixtures/**'
+              - 'schema/**'
+              - 'ui/src/lib/gen/**'
+              - 'Cargo.*'
+              - '*.toml'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+            ui:
+              - 'ui/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-*.yaml'
+              - 'eslint.config.js'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+            packaging:
+              - 'packaging/**'
+              - '.github/workflows/ci.yml'
+
+  rust:
+    name: rust (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,29 +84,26 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: bash scripts/qa.sh
+      - run: bash scripts/qa.sh rust
 
-  e2e:
-    name: e2e (playwright, mock IPC)
+  ui:
+    name: ui (checks, vitest, playwright)
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/qa.sh ui
       - run: pnpm --filter @kelta/ui exec playwright install --with-deps chromium
-      - run: pnpm --filter @kelta/ui run build
       - run: pnpm --filter @kelta/ui run e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -69,6 +115,8 @@ jobs:
 
   deny:
     name: cargo-deny licenses
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +126,8 @@ jobs:
 
   packaging-meta:
     name: desktop entry + AppStream
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
