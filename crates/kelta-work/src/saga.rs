@@ -320,7 +320,7 @@ impl WorkService {
                     plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
                         .ok_or_else(|| KeltaError::invalid("no repository"))?;
                 let repo = repo_of(&project, &repo_id)?;
-                let branch = plan::valid_branch(&repo.path, name.trim()).await?;
+                let branch = git::check_branch_name(&repo.path, name.trim()).await?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
