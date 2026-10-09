@@ -1,6 +1,6 @@
 //! Placeholder templates (PLUGINS §1, SETTINGS §6): `{path}`, filters `|slug`, `|shell`, `|json`,
-//! fallbacks `{a|b}` (first non-empty). `{{` / `}}` are literal braces. Text in braces that does not
-//! look like a placeholder (e.g. `{"veto": "…"}`) is copied verbatim. Values are substituted per
+//! fallbacks `{a|b}` (first non-empty). Text in braces that does not look like a placeholder (e.g.
+//! `{"veto": "…"}`, `{{filename}}`) is copied verbatim. Values are substituted per
 //! argv element: no shell parsing ever happens here.
 
 use kelta_proto::error::KeltaError;
@@ -78,14 +78,13 @@ fn parse(s: &str) -> Vec<Piece<'_>> {
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
-        if c == b'{' && bytes.get(i + 1) == Some(&b'{') {
-            lit.push('{');
-            i += 2;
-            continue;
-        }
-        if c == b'}' && bytes.get(i + 1) == Some(&b'}') {
-            lit.push('}');
-            i += 2;
+        // `{{…}}` (Go/handlebars templates of other tools, e.g. lazygit) is copied verbatim.
+        if c == b'{'
+            && bytes.get(i + 1) == Some(&b'{')
+            && let Some(end) = s[i..].find("}}")
+        {
+            lit.push_str(&s[i..i + end + 2]);
+            i += end + 2;
             continue;
         }
         if c == b'{'
@@ -282,7 +281,8 @@ mod tests {
         assert_eq!(v.expand("{project.name|shell}").unwrap(), "'Shop'");
         assert_eq!(v.expand("{payload.path|json}").unwrap(), "\"src/main.rs\"");
         assert_eq!(v.expand("{payload.n}").unwrap(), "3");
-        assert_eq!(v.expand("{{literal}}").unwrap(), "{literal}");
+        assert_eq!(v.expand("{{filename}}").unwrap(), "{{filename}}");
+        assert_eq!(v.expand(r#"{"a":{"b":1}}"#).unwrap(), r#"{"a":{"b":1}}"#);
         assert_eq!(v.expand("{branch}").unwrap(), "");
         assert_eq!(v.expand("{payload|json}").unwrap(), r#"{"n":3,"path":"src/main.rs"}"#);
         assert_eq!(v.expand("{payload.n|json}").unwrap(), "3");
