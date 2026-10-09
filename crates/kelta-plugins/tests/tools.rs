@@ -197,6 +197,12 @@ async fn plugin_tools_need_exec_and_spawn_grants() {
         .await
         .unwrap();
     assert!(env.host.tool_open(&shop(), &k9s, TemplateCtx::default(), Placement::NewTab).await.is_ok());
+    // A disabled plugin's tools are gone, even after the picker listed them.
+    env.host.tools(&shop()).await.unwrap();
+    env.host.enable(&PluginId::new("tools-pack"), false).await.unwrap();
+    let e = env.host.tool_open(&shop(), &k9s, TemplateCtx::default(), Placement::NewTab).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(env.host.tool_check(&k9s).await.unwrap_err().code, ErrorCode::NotFound);
 }
 
 #[tokio::test]

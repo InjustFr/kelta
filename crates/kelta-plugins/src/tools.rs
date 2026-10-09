@@ -55,7 +55,6 @@ pub(crate) struct WebInstance {
 
 #[derive(Default)]
 pub(crate) struct State {
-    known: Mutex<HashMap<String, Resolved>>,
     checks: Mutex<HashMap<String, ToolCheck>>,
     web: Mutex<HashMap<String, Arc<WebInstance>>>,
 }
@@ -114,10 +113,6 @@ impl PluginHost {
                 });
             }
         }
-        let mut known = self.tools.known.lock();
-        for r in &out {
-            known.insert(r.id.to_string(), r.clone());
-        }
         out
     }
 
@@ -139,15 +134,18 @@ impl PluginHost {
     }
 
     fn find_tool(&self, project: Option<&ProjectId>, tool: &ToolId) -> Result<Resolved, KeltaError> {
-        if let Some(r) = self.resolve_tools(project).into_iter().find(|r| &r.id == tool) {
-            return Ok(r);
-        }
-        self.tools
-            .known
-            .lock()
-            .get(tool.as_str())
-            .cloned()
+        self.resolve_tools(project)
+            .into_iter()
+            .find(|r| &r.id == tool)
             .ok_or_else(|| KeltaError::not_found(format!("tool `{tool}` not found")))
+    }
+
+    /// `tool_check` has no project: global + plugin tools first, then each project's config tools.
+    fn find_tool_any(&self, tool: &ToolId) -> Result<Resolved, KeltaError> {
+        self.find_tool(None, tool).or_else(|e| {
+            let projects = self.wiring().settings.map(|s| s.projects()).unwrap_or_default();
+            projects.iter().find_map(|p| self.find_tool(Some(&p.id), tool).ok()).ok_or(e)
+        })
     }
 
     fn program_of(def: &ToolDef) -> Option<&str> {
@@ -169,7 +167,7 @@ impl PluginHost {
     }
 
     pub(crate) async fn check_tool(&self, tool: &ToolId) -> Result<ToolCheck, KeltaError> {
-        let r = self.find_tool(None, tool)?;
+        let r = self.find_tool_any(tool)?;
         let vars = self.build_vars(CtxSpec { plugin: r.plugin.as_deref(), ..Default::default() }).await;
         let hint = r.def.install_hint.clone();
         let result = match &r.def.check {
