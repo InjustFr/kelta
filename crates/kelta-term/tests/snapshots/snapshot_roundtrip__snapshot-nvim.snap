@@ -1,0 +1,34 @@
+---
+source: crates/kelta-term/tests/snapshot_roundtrip.rs
+expression: escape(&snap)
+---
+␛c␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␛[1;1H␛[?1049h␛[2J␛[1;1Hline 36: the quick brown ␛[30;103mfox␛[51G␛[0m│ 37 line 36: the quick brown ␛[30;103mfox␛[2;1H␛[0mline 37: the quick brown ␛[30;103mfox␛[51G␛[0m│ 38 line 37: the quick brown ␛[30;103mfox␛[3;1H␛[0mline 38: the quick brown ␛[30;103mfox␛[51G␛[0m│ 39 line 38: the quick brown ␛[30;103mfox␛[4;1H␛[0mline 39: the quick brown ␛[30;103mfox␛[51G␛[0m│ 40 line 39: the quick brown ␛[30;103mfox␛[5;1H␛[0mline 40: the quick brown ␛[30;103mfox␛[51G␛[0m│ 41 line 40: the quick brown ␛[30;103mfox␛[6;1H␛[0mline 41: the quick brown ␛[30;103mfox␛[51G␛[0m│ 42 line 41: the quick brown ␛[30;103mfox␛[7;1H␛[0mline 42: the quick brown ␛[30;103mfox␛[51G␛[0m│ 43 line 42: the quick brown ␛[30;103mfox␛[8;1H␛[0mline 43: the quick brown ␛[30;103mfox␛[51G␛[0m│ 44 line 43: the quick brown ␛[30;103mfox␛[9;1H␛[0mline 44: the quick brown ␛[30;103mfox␛[51G␛[0m│ 45 line 44: the quick brown ␛[30;103mfox␛[10;1H␛[0mline 45: the quick brown ␛[30;103mfox␛[51G␛[0m│ 46 line 45: the quick brown ␛[30;103mfox␛[11;1H␛[0mline 46: the quick brown ␛[30;103mfox␛[51G␛[0m│ 47 line 46: the quick brown ␛[30;103mfox␛[12;1H␛[0mline 47: the quick brown ␛[30;103mfox␛[51G␛[0m│ 48 line 47: the quick brown ␛[30;103mfox␛[13;1H␛[0mline 48: the quick brown ␛[30;103mfox␛[51G␛[0m│ 49 line 48: the quick brown ␛[30;103mfox␛[14;1H␛[0mline 49: the quick brown ␛[30;103mfox␛[51G␛[0m│ 50 line 49: the quick brown ␛[30;103mfox␛[15;1H␛[0mhello ✓ world␛[51G│␛[1m 51 ␛[0mhello ✓ world␛[16;1Hline 50: the quick brown ␛[30;103mfox␛[51G␛[0m│ 52 line 50: the quick brown ␛[30;103mfox␛[17;1H␛[0mline 51: the quick brown ␛[30;103mfox␛[51G␛[0m│ 53 line 51: the quick brown ␛[30;103mfox␛[18;1H␛[0mline 52: the quick brown ␛[30;103mfox␛[51G␛[0m│ 54 line 52: the quick brown ␛[30;103mfox␛[19;1H␛[0mline 53: the quick brown ␛[30;103mfox␛[51G␛[0m│ 55 line 53: the quick brown ␛[30;103mfox␛[20;1H␛[0mline 54: the quick brown ␛[30;103mfox␛[51G␛[0m│ 56 line 54: the quick brown ␛[30;103mfox␛[21;1H␛[0mline 55: the quick brown ␛[30;103mfox␛[51G␛[0m│ 57 line 55: the quick brown ␛[30;103mfox␛[22;1H␛[0mline 56: the quick brown ␛[30;103mfox␛[51G␛[0m│ 58 line 56: the quick brown ␛[30;103mfox␛[23;1H␛[0mline 57: the quick brown ␛[30;103mfox␛[51G␛[0m│ 59 line 57: the quick brown ␛[30;103mfox␛[24;1H␛[0mline 58: the quick brown ␛[30;103mfox␛[51G␛[0m│ 60 line 58: the quick brown ␛[30;103mfox␛[25;1H␛[0mline 59: the quick brown ␛[30;103mfox␛[51G␛[0m│ 61 line 59: the quick brown ␛[30;103mfox␛[26;1H␛[0mline 60: the quick brown ␛[30;103mfox␛[51G␛[0m│ 62 line 60: the quick brown ␛[30;103mfox␛[27;1H␛[0mline 61: the quick brown ␛[30;103mfox␛[51G␛[0m│ 63 line 61: the quick brown ␛[30;103mfox␛[28;1H␛[0mline 62: the quick brown ␛[30;103mfox␛[51G␛[0m│ 64 line 62: the quick brown ␛[30;103mfox␛[29;1H␛[0;7mkelta-rec.txt [+]               52,26          20% ␛[0;1;4mkelta-rec.txt [+]              51,15-13       20%␛[30;1H␛[0m/fox␛[80G[51/200]␛[?1h␛[?1002h␛[?1004h␛[?1006h␛[?2004h␛=␛[16;26H␛[30;103m␛[?2026l

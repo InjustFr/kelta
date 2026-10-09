@@ -1,0 +1,12 @@
+[38;5;208m╭──────────────────────────────────────────╮[0m
+[38;5;208m│[0m ✻ Welcome to [1mfake Claude Code[0m               [38;5;208m│[0m
+[38;5;208m│[0m   session 00000000… [38;5;208m│[0m
+[38;5;208m╰──────────────────────────────────────────╯[0m
+[2m> fix the bug[0m
+[K[38;5;208m✻[0m Thinking…
+[K[38;5;208m✻[0m Reading files…
+[K[38;5;208m✻[0m Editing src/main.rs…
+[K[38;5;208m✻[0m Bash(cargo test) — allowed
+[K[38;5;208m✻[0m Done.
+
+bye
