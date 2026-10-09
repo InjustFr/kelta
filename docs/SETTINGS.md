@@ -171,15 +171,15 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 ### [accounts.<id>]  (map; scope global only; ids `[a-z0-9-]+`)
 | Key | Type | Default | Applies to |
 |---|---|---|---|
-| `kind` | enum(jira\|redmine\|github\|gitlab\|linear) | — (required) | all |
-| `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app` | all (jira/redmine required) |
+| `kind` | enum(jira\|redmine\|github\|gitlab\|linear\|bitbucket\|gitea) | — (required) | all |
+| `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0` | all (jira/redmine/gitea required; gitea accepts a trailing `/api/v1`) |
 | `flavor` | enum(auto\|cloud\|dc) | `auto` | jira |
-| `auth` | enum(basic\|bearer\|api_key\|token) | per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
-| `email` / `user` | str | — | jira cloud email / basic user |
+| `auth` | enum(basic\|bearer\|api_key\|token) | per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + Atlassian API token; `bearer` for repository/workspace access tokens), linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
+| `email` / `user` | str | — | jira cloud and bitbucket email / basic user |
 | `secret` | SecretRef | — (required) github default `gh-cli`, gitlab default `glab-cli`, linear a personal API key (`keyring:`, `env:` or `command:`) | x-kelta-secret |
 | `text_format` | enum(textile\|markdown) | `textile` | redmine |
 | `poll_secs` | int? | none | override |
-| `web_url` | str? | derived | browser links (GHE/GitLab) |
+| `web_url` | str? | derived | browser links (GHE/GitLab/Gitea); bitbucket: only used to match git remotes (default `https://bitbucket.org`) |
 
 ### [[session_templates]]  (by_id; scope global+project+repo)
 `{ id, label, layout: TemplateNode, enabled = true }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
@@ -296,8 +296,9 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always):
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
 - github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`, plus the shared `status` and (per-repo views) `assigned_to` keys below.
 - gitlab: `project?` (`group/sub/proj`), `scope = "assigned_to_me"|"all"`, `labels?`, `workflow_scope = "workflow"`, plus the shared `status` key.
+- gitea: `project?` (`owner/name`), `scope = "assigned_to_me"|"all"` (a `project` with `scope = "all"` lists that repository; with `assigned_to_me` the search results are filtered to it), `labels?`, plus the shared `status` key. Columns are Open and Closed; moves are Close / Reopen. Bitbucket Cloud has no tracker (its issues were removed in August 2026): bind a Jira account for tickets and use Bitbucket as the code host.
 - linear: `team?` (team key, e.g. `ENG`), `project?` (project name), `scope = "assigned_to_me"|"all"` (default `assigned_to_me`), `labels?` (label names), plus the shared `status` key. Columns are the team's workflow states; moves resolve state ids by name at runtime.
-- Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
+- Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab, gitea and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 

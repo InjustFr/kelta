@@ -161,8 +161,8 @@ crates/kelta-config     [L4]  layered load/merge/provenance, validation, toml_ed
 crates/kelta-secrets    [L4]  SecretRef resolution chain, keyring stores, backend status
 crates/kelta-http       [L5]  shared reqwest client, HttpCtx (retry, backoff, rate limits, ETag LRU), markdown→HTML
                               (scaffold ships a functional baseline: plain send, no retry)
-crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Linear; ADF walker
-crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST)
+crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Gitea/Forgejo Issues, Linear; ADF walker
+crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST), Bitbucket Cloud (REST 2.0), Gitea/Forgejo (REST v1)
 crates/kelta-work       [L6]  git CLI ops, templates (branch/path/slug), work saga (journaled), Claude launcher, editor adapters
                               (nvim msgpack-RPC, vim keys, emacsclient, helix, external), review_start
 crates/kelta-server     [L7]  ctl socket server, hook ingestion + status machine, lazy axum server, MCP endpoint, http hooks
@@ -603,7 +603,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 
 ```rust
 #[async_trait] pub trait Tracker: Send + Sync {
-  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | Linear
+  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | GiteaIssues | Linear
   fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
   async fn me(&self) -> Result<User, KeltaError>;
   async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
@@ -635,6 +635,7 @@ pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
 | Flavor | `GET /rest/api/2/serverInfo` → `deploymentType`, cached per account | | |
 | Redmine | `X-Redmine-API-Key` header | `/issues.json?assigned_to_id=me&status_id=open&sort=updated_on:desc&limit=100` (+ `project_id`, `query_id`) | `PUT /issues/{id}.json {issue:{status_id}}` restricted to `include=allowed_statuses`; 422 surfaced; poll ≥ 60 s |
 | GitHub Issues | gh-cli / keyring PAT / env | `GET /issues?filter=assigned&state=open` (drop items with `pull_request`) or per-repo; ETag | no project: open/closed; Projects v2: Status single-select field/option ids resolved **by name** at runtime, cached; `updateProjectV2ItemFieldValue` |
+| Gitea Issues | `Authorization: Bearer` (keyring/env/command) | `/repos/issues/search?type=issues&assigned=true` or `/repos/:o/:r/issues` | open / closed only: Close / Reopen via `PATCH {state}` |
 | GitLab Issues | `PRIVATE-TOKEN` (keyring/glab-cli/env/command) | `/api/v4/issues?scope=assigned_to_me&state=opened` or `/projects/:id/issues` | scoped labels `<scope>::<value>` (default `workflow`): `PUT add_labels` + explicit `remove_labels` of same-scope labels; Done = `state_event=close` |
 | Linear | personal API key, raw `Authorization` header (`auth = "bearer"` for OAuth) | `POST https://api.linear.app/graphql` `issues(filter, first: 50, after, orderBy: updatedAt)` (assignee `isMe`, team key, project name, labels); `pageInfo.endCursor`, cap 20 pages | `issueUpdate(stateId)` with state ids read at runtime from the issue's team `states` (matched by name, never hard-coded); rate limit = HTTP 400 + `RATELIMITED` → `RateLimited` |
 
@@ -644,7 +645,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
 
 ```rust
 #[async_trait] pub trait CodeHost: Send + Sync {
-  fn kind(&self) -> CodeHostKind;                      // Github | Gitlab
+  fn kind(&self) -> CodeHostKind;                      // Github | Gitlab | Bitbucket | Gitea
   async fn me(&self) -> Result<User, KeltaError>;
   async fn changed_since_last(&self) -> Result<bool, KeltaError>;  // cheap gate; default Ok(true)
   async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;  // kind + include_team + include_drafts
@@ -654,7 +655,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
   async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
   async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
-  fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:…
+  fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:… | <source branch>:… (Bitbucket)
   fn repo_from_remote(&self, url: &str) -> Option<String>;
 }
 pub struct ReviewRef { account: AccountId, repo: String, number: u64 }
@@ -667,6 +668,8 @@ pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, sour
 
 - GitHub: list = one GraphQL request with aliased searches `is:pr is:open review-requested:@me archived:false` (`user-review-requested:@me` if `reviews.include_team_requests=false`) and `is:pr is:open author:@me`; small nested `first:`. Gate: `GET /notifications?participating=true` + `If-None-Match` only for classic/gh tokens (fine-grained → no gate). Actions REST: `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`. GHE via `base_url`.
 - GitLab: `GET /merge_requests?scope=all&state=opened&reviewer_username=<me>` and `scope=created_by_me`, `updated_after`; `draft=` if `/version` ≥ 16 else `wip=`; approve `POST …/approve {sha}` (409 → `Conflict`); request changes = note (+ optional unapprove). Gate: `/todos?state=pending&action=review_requested` count+max id.
+- Gitea/Forgejo: `GET /api/v1/repos/issues/search?type=pulls&state=open&review_requested=true` (or `created=true`) returns issue-shaped rows, each expanded with `GET …/pulls/{n}` (branches, head sha); pagination follows `Link: rel="next"`. Approve / request changes = `POST …/pulls/{n}/reviews {event, commit_id}`; comment = issue comment; draft = `draft` or a `WIP:` title. Bearer token auth, `base_url` required. No change gate (always `true`).
+- Bitbucket Cloud: the cross-workspace endpoints were retired in April 2026, so lists walk `GET /user/workspaces`: my PRs from `/workspaces/{ws}/pullrequests/{me}`, review requests from `reviewers.uuid` queries over the workspace's 50 most recently updated member repositories; `next` URLs are followed. Auth is `Basic <email>:<API token>` (app passwords were retired in 2026) or Bearer for access tokens. Request changes = comment + `POST …/request-changes`; approve has no head-sha guard; no PR refs exist, so "review locally" fetches the source branch (no forks). List rows carry no CI (detail rolls up `/statuses`). No change gate.
 - `linked_tickets`: regex `reviews.ticket_key_regex` over branch + title.
 
 ### 8.3 HttpCtx (kelta-http)
