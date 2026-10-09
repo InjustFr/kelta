@@ -110,12 +110,12 @@ impl Run {
         out
     }
 
-    /// Wait for SessionEnd and the PTY exit.
-    async fn wait_exit(&self, sid: &SessionId) {
+    /// Wait for the `ends`-th SessionEnd and the PTY exit.
+    async fn wait_exit(&self, sid: &SessionId, ends: usize) {
         let start = Instant::now();
         loop {
             let info = self.core.session_get(sid).unwrap();
-            if info.lifecycle == Lifecycle::Exited && !self.hooks(sid, "SessionEnd").is_empty() {
+            if info.lifecycle == Lifecycle::Exited && !self.hooks(sid, "SessionEnd").len() >= ends {
                 return;
             }
             assert!(
@@ -232,7 +232,7 @@ async fn real_claude_gate_c1() {
         .find(|s| s.kind == SessionKind::Claude)
         .expect("claude session spawned")
         .id;
-    r.wait_exit(&sid).await;
+    r.wait_exit(&sid, 1).await;
 
     let started = &r.hooks(&sid, "SessionStart")[0];
     assert_eq!(started["session_id"], uuid.as_str(), "--session-id honoured");
@@ -259,25 +259,34 @@ async fn real_claude_gate_c1() {
         ui.notifications()
     );
 
-    // 2. Kelta's restore argv for a work-item Claude (`--resume <uuid>`, files regenerated), still in
-    //    the worktree; the resumed conversation remembers step 1.
+    // 2. Kelta's restart of the same session: the work item's restore argv (`--resume <uuid>`, files
+    //    regenerated for this id), still in the worktree; MCP still reaches this session and the
+    //    resumed conversation remembers step 1.
     cfg.update(|s| {
         s.claude.extra_args = vec![
             "-p".into(),
-            "What exact message did you send with the notify tool? Reply with only that message.".into(),
+            "Call the MCP tool mcp__kelta__notify with message \"c1-resume-ok\". Then reply with only \
+             the exact message you sent with the notify tool in the previous turn."
+                .into(),
         ];
     });
-    let mut req = core.work().claude_restore_request(&sid, false).await.unwrap().expect("work item session");
-    let at = req.args.iter().position(|a| a == "--resume").expect("--resume in the restore argv");
-    assert_eq!(req.args[at + 1], uuid);
-    assert_eq!(req.cwd.as_deref(), Some(item.worktree.as_path()));
-    req.id = None;
-    let resumed = core.session_spawn(req).await.unwrap().id;
-    r.wait_exit(&resumed).await;
-    let again = &r.hooks(&resumed, "SessionStart")[0];
+    core.session_restart(&sid).await.unwrap();
+    r.wait_exit(&sid, 2).await;
+    let again = &r.hooks(&sid, "SessionStart")[1];
     assert_eq!(again["source"], "resume", "{again}");
     assert_eq!(again["session_id"], uuid.as_str(), "same conversation");
-    let answer = r.hooks(&resumed, "Stop")[0]["last_assistant_message"].as_str().unwrap_or("").to_owned();
+    assert_eq!(
+        Path::new(again["cwd"].as_str().unwrap()).canonicalize().unwrap(),
+        item.worktree.canonicalize().unwrap(),
+        "resumes in the Kelta worktree"
+    );
+    assert!(
+        ui.notifications().iter().any(|n| n.body.as_deref() == Some("c1-resume-ok")),
+        "MCP notify reached Kelta after the restart: {:?}",
+        ui.notifications()
+    );
+    let answer =
+        r.hooks(&sid, "Stop").last().unwrap()["last_assistant_message"].as_str().unwrap_or("").to_owned();
     assert!(answer.contains("c1-mcp-ok"), "resumed conversation lost its context: {answer:?}");
     eprintln!("c1: resumed {uuid} in the worktree, answer {answer:?}");
 
