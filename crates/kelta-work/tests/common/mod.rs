@@ -57,6 +57,9 @@ impl Fx {
         std::fs::create_dir_all(&repo).unwrap();
         git(&remote, &["init", "-q", "--bare", "-b", "main"]);
         git(&repo, &["init", "-q", "-b", "main"]);
+        // Kelta's own git calls (rebase) commit too: give the repo an identity (CI has no global one).
+        git(&repo, &["config", "user.name", "Kelta Test"]);
+        git(&repo, &["config", "user.email", "test@kelta.dev"]);
         std::fs::write(repo.join("README.md"), "hello\n").unwrap();
         std::fs::write(repo.join(".gitignore"), ".env\n.env.*\n").unwrap();
         git(&repo, &["add", "."]);
