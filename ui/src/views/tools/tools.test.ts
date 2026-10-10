@@ -146,6 +146,27 @@ describe('tools.open', () => {
     expect(opens()[0].args).toMatchObject({ project_id: 'billing', ctx: { work_item_id: null } });
   });
 
+  it('the Open tool sheet asks for a project for a needs_project tool in Home, and from a global view', async () => {
+    const { m, id, opens } = await needsProject();
+    const label = m.state.tools.find((x) => x.id === id)!.label;
+    for (const [view, projectId] of [
+      [null, 'home'],
+      ['now', 'shop'],
+    ] as const) {
+      ui.view = view;
+      projects.list = projects.list.map((p) => ({ ...p, active: p.id === projectId }));
+      await tools.load(projectId);
+      const onclose = vi.fn();
+      const { getByText, unmount } = render(ToolPicker, { onclose, projectId });
+      await fireEvent.click(getByText(label, { selector: '.label' }));
+      await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+      expect(onclose).toHaveBeenCalled();
+      expect(opens()).toHaveLength(0);
+      ui.closeOverlay();
+      unmount();
+    }
+  });
+
   it('Esc on the project picker opens nothing', async () => {
     const { id, opens } = await needsProject();
     ui.view = 'now';
