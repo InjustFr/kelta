@@ -651,12 +651,15 @@ mod external_tests {
 
     #[tokio::test]
     async fn external_command_uses_env_path_for_lookup() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("kelta-ext-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let bin = dir.join("kelta-fake-tool");
-        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Written by a child `sh`: a write fd held here leaks into concurrent forks -> ETXTBSY (Linux).
+        let ok = std::process::Command::new("sh")
+            .args(["-c", "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && chmod 755 \"$1\"", "sh"])
+            .arg(dir.join("kelta-fake-tool"))
+            .status()
+            .unwrap();
+        assert!(ok.success());
         let env = BTreeMap::from([("PATH".to_owned(), dir.to_string_lossy().into_owned())]);
         let st = external_command("kelta-fake-tool", &[], &dir, &env).status().await.unwrap();
         assert!(st.success());
