@@ -52,4 +52,13 @@ describe('BatchStartSheet project', () => {
       ['4602', 'kelta-tools'],
     ]);
   });
+
+  it('never offers Home, even with repos', () => {
+    const home = projects.list.find((p) => p.builtin)!;
+    home.repos = projects.list.find((p) => p.repos.length > 0)!.repos;
+    render(BatchStartSheet, { props: { onclose: vi.fn() } });
+    const options = [...(screen.getByLabelText('Project') as HTMLSelectElement).options].map((o) => o.value);
+    expect(options).not.toContain(home.id);
+    expect(options).toContain('kelta-tools');
+  });
 });

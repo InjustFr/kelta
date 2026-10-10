@@ -141,6 +141,8 @@
   });
 
   async function start(): Promise<void> {
+    // a re-plan in flight: starting now would use the old project and branch
+    if (switching) return;
     touched = true;
     if (!valid || phase === 'running') return;
     const toSend = $state.snapshot(built) as StartWorkPlan;
@@ -402,7 +404,12 @@
       <Button variant="ghost" onclick={onclose}>Close</Button>
     {:else if phase === 'edit'}
       <Button variant="ghost" onclick={onclose}>Cancel</Button>
-      <Button variant="primary" type="submit" form="start-work-form" disabled={!valid && touched}>
+      <Button
+        variant="primary"
+        type="submit"
+        form="start-work-form"
+        disabled={switching || (!valid && touched)}
+      >
         {resuming ? 'Resume' : 'Start'}
       </Button>
     {/if}
