@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use kelta_core::Core;
 use kelta_proto::prelude::*;
-use tauri::State;
 use tauri::ipc::Channel;
+use tauri::{AppHandle, State};
 
 use super::Res;
 
@@ -32,10 +32,31 @@ pub async fn events_subscribe(
 /// The UI rendered its first frame: clears the launch crash guard, records the bench mark, binds
 /// the runtime and kicks deferred startup work.
 #[tauri::command(rename_all = "snake_case")]
-pub async fn app_ready(core: State<'_, Arc<Core>>, t_ms: f64) -> Res<()> {
+pub async fn app_ready(app: AppHandle, core: State<'_, Arc<Core>>, t_ms: f64) -> Res<()> {
     crate::platform::launch_succeeded();
     crate::window::bench::app_ready();
+    crate::platform::update::auto_check(&app);
     core.app_ready(t_ms).await
+}
+
+/// Updates (Settings → General, the restart banner).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn app_update_status(app: AppHandle) -> Res<UpdateStatus> {
+    Ok(crate::platform::update::status(&app))
+}
+
+/// "Check now": checks, installs what it finds, then returns the status.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn app_update_check(app: AppHandle) -> Res<UpdateStatus> {
+    crate::platform::update::check_and_install(&app).await;
+    Ok(crate::platform::update::status(&app))
+}
+
+/// Restart through the normal exit (`Core::shutdown`: keltad keeps the kept sessions running).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn app_restart(app: AppHandle) -> Res<()> {
+    app.request_restart();
+    Ok(())
 }
 
 /// kelta-bench metric measured in the UI (no-op unless `KELTA_BENCH_MARKS` is set).

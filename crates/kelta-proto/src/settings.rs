@@ -201,6 +201,9 @@ pub struct AppSettings {
     /// Theme id used in light mode (`bezel-light` or a `[themes.<id>]` with `base = "light"`).
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub light_theme: String,
+    /// Check for updates automatically (on start and on focus, at most every 6 h); "Check now" works either way.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub updates: bool,
 }
 
 impl Default for AppSettings {
@@ -212,6 +215,7 @@ impl Default for AppSettings {
             log_level: LogLevel::Info,
             dark_theme: "bezel-dark".into(),
             light_theme: "bezel-light".into(),
+            updates: true,
         }
     }
 }

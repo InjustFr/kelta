@@ -4,6 +4,8 @@
 #   macOS: bash packaging/build.sh            -> host-arch dmg
 #          UNIVERSAL=1 bash packaging/build.sh -> universal dmg (needs both rust targets)
 # Signing and notarization read APPLE_* variables when set; without them the dmg is unsigned.
+# TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) also makes the signed updater bundles (`.app.tar.gz`, AppImage,
+# each with its `.sig`); without it the build has no update artifacts. KELTA_VERSION overrides the app version.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -32,9 +34,13 @@ else
 fi
 
 pnpm install --frozen-lockfile
-if [[ "$(uname)" == Darwin ]]; then bundles=dmg; else bundles=deb,appimage; fi
+# `app` makes bundle/macos/Kelta.app(.tar.gz), the bundle the updater installs.
+if [[ "$(uname)" == Darwin ]]; then bundles=app,dmg; else bundles=deb,appimage; fi
+extra=()
+[[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]] || extra+=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+[[ -z "${KELTA_VERSION:-}" ]] || extra+=(--config "{\"version\":\"$KELTA_VERSION\"}")
 cd apps/desktop/src-tauri
 # CI=true makes tauri pass --skip-jenkins to bundle_dmg.sh: no Finder AppleScript, which otherwise
 # opens the volume in Finder and leaves it mounted (on the Desktop) after every build.
 CI=true ../../../ui/node_modules/.bin/tauri build --config ../../../packaging/tauri.release.json \
-  --bundles "$bundles" "${target[@]}"
+  "${extra[@]}" --bundles "$bundles" "${target[@]}"

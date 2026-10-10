@@ -9,6 +9,7 @@ pub mod geometry;
 pub mod graphics;
 pub mod guard;
 pub mod probes;
+pub mod update;
 pub mod webview;
 
 use std::path::PathBuf;

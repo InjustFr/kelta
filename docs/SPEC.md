@@ -160,6 +160,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
 | `settings.open` | Cmd+, | Ctrl+Shift+, | `,` |
+| `app.restart` (update banner Restart; asks first when a working Claude session would stop) | unbound | unbound | |
 | `window.toggle` (global) | via `kelta-ctl toggle` bound in the compositor/system | | |
 
 In-view single keys (only when a list/board has focus, never in terminals): `j/k` move, `Enter` open, `/` filter, `R` refresh, `m` move ticket, `a` assign me, `c` comment, `o` open in browser, `s` start work.
@@ -194,9 +195,9 @@ Terminal key handling: programs that enable the kitty keyboard protocol get kitt
 
 ## 6. v0.1 scope
 
-**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; GitHub and GitLab sign-in with a pasted token or the OAuth device flow (user-registered OAuth apps, `oauth.client_ids`); code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; Claude IDE bridge (opt-in `claude.ide_bridge`: openFile/openDiff in the editor pane); process (KPP) provider plugins with a conformance suite (`kelta-plugin.toml` `[provider]`, PLUGINS §9); deb + AppImage + dmg (signed/notarized on tag); docs.
+**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; GitHub and GitLab sign-in with a pasted token or the OAuth device flow (user-registered OAuth apps, `oauth.client_ids`); code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; Claude IDE bridge (opt-in `claude.ide_bridge`: openFile/openDiff in the editor pane); process (KPP) provider plugins with a conformance suite (`kelta-plugin.toml` `[provider]`, PLUGINS §9); deb + AppImage + dmg (signed/notarized on tag); Tauri updater for the AppImage and macOS builds (signed nightly manifest, restart banner); docs.
 
-**Later (designed, not built):** v0.2 — child-webview embed mode, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth for the other providers, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — child-webview embed mode, AUR + Homebrew cask publishing, OAuth for the other providers, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 
