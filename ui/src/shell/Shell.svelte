@@ -13,6 +13,7 @@
   import { terminalPalette } from '$lib/terminal/theme';
   import { resolveTheme } from '$lib/theme';
   import { Button, currentPlatform, EmptyState } from '$lib/ui';
+  import { startWorkOnTicket } from '../views/work/startWork';
 
   import { confirms, prompts } from './confirm.svelte';
   import DialogHost from './DialogHost.svelte';
@@ -182,7 +183,10 @@
         import('./bench')
           .then((b) => b.runScenario(cmd.payload))
           .catch((err: unknown) => toasts.error(err, 'Bench scenario failed'));
-      else if (cmd.cmd === 'new') {
+      else if (cmd.cmd === 'start') {
+        // The backend asked for the Start sheet (guessed project or plan preview).
+        if (cmd.resolved) void startWorkOnTicket(cmd.resolved, cmd.project, { preview: true });
+      } else if (cmd.cmd === 'new') {
         const project = cmd.project ?? projects.activeId;
         if (!project) return;
         sessionSpawnTemplate({

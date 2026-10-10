@@ -2572,6 +2572,7 @@ export const ctlRequestHook: CtlRequest = {
 export const ctlRequestStart: CtlRequest = {
   "cmd": "start",
   "project": "shop",
+  "resolved": null,
   "ticket": "SHOP-142",
   "v": 1
 };

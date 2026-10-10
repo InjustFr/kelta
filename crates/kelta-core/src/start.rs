@@ -48,7 +48,8 @@ impl Core {
             default_project(&source, project.as_ref(), &items, &choices, account_project, &active)?;
         let mut plan = self.work.plan(&project, source).await?;
         plan.project_choices = choices;
-        plan.project_guessed = guessed && plan.existing.is_none();
+        // One choice: nothing to confirm (the sheet shows no Project field).
+        plan.project_guessed = guessed && plan.existing.is_none() && plan.project_choices.len() > 1;
         Ok(plan)
     }
 }

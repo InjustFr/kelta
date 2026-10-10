@@ -12,6 +12,7 @@ use ts_rs::TS;
 use crate::error::KeltaError;
 use crate::hooks::HookPayload;
 use crate::ids::{ProjectId, SessionId};
+use crate::tracker::TicketRef;
 
 /// Protocol version.
 pub const CTL_PROTOCOL_VERSION: u32 = 1;
@@ -47,6 +48,9 @@ pub enum CtlCommand {
         ticket: String,
         #[serde(default)]
         project: Option<ProjectId>,
+        /// Set by the backend when it asks the app to show the Start sheet: the ticket `ticket` resolved to.
+        #[serde(default)]
+        resolved: Option<TicketRef>,
     },
     /// Scratch work item from a task (`kelta-ctl start --task`), same saga as New work item.
     StartTask {

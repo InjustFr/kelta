@@ -1241,7 +1241,8 @@ pub fn all() -> Vec<Fixture> {
             CtlRequest,
             CtlRequest::new(CtlCommand::Start {
                 ticket: "SHOP-142".into(),
-                project: Some(ProjectId::new("shop"))
+                project: Some(ProjectId::new("shop")),
+                resolved: None
             })
         ),
         fx!("ctl_response", CtlResponse, CtlResponse::ok(json!({"focused": true}))),

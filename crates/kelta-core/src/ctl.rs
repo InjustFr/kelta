@@ -274,7 +274,7 @@ impl Core {
                 self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id } });
                 Ok(serde_json::to_value(info)?)
             }
-            CtlCommand::Start { ticket, project } => {
+            CtlCommand::Start { ticket, project, .. } => {
                 // A bare key: the first tracker account (the given project's, else every project's, the
                 // active one's first) that has it, by GET, so unassigned or unlisted tickets resolve too;
                 // none answers → the first account.
@@ -317,12 +317,21 @@ impl Core {
                     }
                 }
                 let tref = tref.unwrap_or(TicketRef { account: first, key: key.clone(), id: key });
-                let plan = self.work_plan(project, WorkSource::Ticket { ticket: tref }).await?;
+                let asked = project.clone();
+                let plan = self.work_plan(project, WorkSource::Ticket { ticket: tref.clone() }).await?;
+                // An explicit --project that cannot host the start is an error, not a silent switch.
+                if let Some(p) = asked.filter(|p| plan.existing.is_none() && *p != plan.project_id) {
+                    return Err(KeltaError::invalid(format!("project {p} is closed or has no repository")));
+                }
                 let project = plan.project_id.clone();
                 // A guessed project is confirmed in the sheet, as with `plan_preview`.
                 if plan.project_guessed || self.cfg.effective(Some(&project)).work.plan_preview {
                     self.emit(UiEvent::CtlCommand {
-                        cmd: CtlCommand::Start { ticket, project: Some(project.clone()) },
+                        cmd: CtlCommand::Start {
+                            ticket,
+                            project: Some(project.clone()),
+                            resolved: Some(tref),
+                        },
                     });
                     self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
                     Ok(serde_json::to_value(plan)?)

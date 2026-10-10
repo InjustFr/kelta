@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { dispatch } from '$lib/actions';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, settings, toasts, ui } from '$lib/stores';
 
+import './actions';
+import { selectTicket } from './selection.svelte';
 import { reviewLocally, startWorkOnTicket } from './startWork';
 
 let mock: MockControls;
@@ -32,6 +35,13 @@ describe('start entry points', () => {
     await reviewLocally(review);
     await startWorkOnTicket(ticket, 'billing');
     expect(planArgs()).toEqual([null, null, null, 'billing']);
+  });
+
+  it('work.start on a selected ticket without a project passes null, not the active project', async () => {
+    selectTicket(ticket, null);
+    await dispatch('work.start');
+    expect(planArgs()).toEqual([null]);
+    selectTicket(null, null);
   });
 
   it('a guessed project shows the sheet even with no preview (S)', async () => {

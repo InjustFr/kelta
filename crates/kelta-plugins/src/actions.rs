@@ -359,7 +359,12 @@ impl PluginHost {
                     Some(p) => Some(ProjectId::new(cx.x(p)?)),
                     None => cx.project.clone(),
                 };
-                core.ctl(kelta_proto::ctl::CtlCommand::Start { ticket: cx.x(ticket)?, project }).await?;
+                core.ctl(kelta_proto::ctl::CtlCommand::Start {
+                    ticket: cx.x(ticket)?,
+                    project,
+                    resolved: None,
+                })
+                .await?;
                 Ok(String::new())
             }
             ActionDef::TransitionTicket { to_category, to_name } => {

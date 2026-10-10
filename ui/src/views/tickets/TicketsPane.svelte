@@ -334,7 +334,7 @@
 
   $effect(() => {
     if (!focused || !cur) return;
-    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? projectId);
+    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? null);
     return () => selectTicket(null, null);
   });
 
