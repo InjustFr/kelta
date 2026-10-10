@@ -123,10 +123,11 @@ impl WorkService {
             .is_some_and(|s| route(Some(&s)) == Route::Paste && check_idle(&s).is_err());
         let run = self.ensure_claude_run(&item, &mut j)?;
         self.save_journal(id, &j)?;
-        // A prompt already held names these files: append, so its brief is not lost to this one.
-        let held = j.pending_prompt.is_some();
         for f in &sent {
             let path = run.join(&f.name);
+            // A held prompt that names this file still needs its brief: append. Any other (a review
+            // note) leaves the file stale, so overwrite.
+            let held = j.pending_prompt.as_deref().is_some_and(|p| p.contains(&*path.to_string_lossy()));
             let old = if held { std::fs::read_to_string(&path).ok() } else { None };
             let body = old.map_or_else(|| f.content.clone(), |o| format!("{o}\n---\n\n{}", f.content));
             files::write_private(&path, body.as_bytes())?;

@@ -187,6 +187,23 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
 }
 
 #[tokio::test]
+async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    let sid = claude(&fx);
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    let old = vec![SendFile { name: "feedback.md".into(), content: "# Old threads\n".into() }];
+    w.send(&item.id, "Fix {file}", old, None).await.unwrap();
+    set_status(&fx, &sid, SessionStatus::Working, StatusSource::Hook);
+    w.send(&item.id, "A review note, no file", vec![], None).await.unwrap();
+    let new = vec![SendFile { name: "feedback.md".into(), content: "# Checks failed\n".into() }];
+    w.send(&item.id, "Fix {file}", new, None).await.unwrap();
+    let file = run_dir(&fx).join("feedback.md");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Checks failed\n", "no stale feedback");
+}
+
+#[tokio::test]
 async fn send_copies_the_prompt_when_kelta_cannot_tell_claude_is_idle() {
     need_git!();
     let fx = Fx::new();
