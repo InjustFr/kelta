@@ -8,6 +8,7 @@
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import {
     Button,
     EmptyState,
@@ -558,7 +559,7 @@
                   class:selected={cur === l.row}
                   aria-current={cur === l.row ? 'true' : undefined}
                   data-row={l.row.id}
-                  style:--hue={v.color ?? 'transparent'}
+                  style:--hue={resolveProjectColor(v.color, ui.theme) ?? 'transparent'}
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
                   oncontextmenu={(e) => rowMenu(e, l.row)}
@@ -583,7 +584,11 @@
                   <span class="meta age">{v.age}</span>
                 </button>
               {:else}
-                <div class="row detail" style:--hue={v.color ?? 'transparent'} data-testid="now-detail">
+                <div
+                  class="row detail"
+                  style:--hue={resolveProjectColor(v.color, ui.theme) ?? 'transparent'}
+                  data-testid="now-detail"
+                >
                   <span class="msg" title={v.more}>{v.more}</span>
                   {#each v.actions as a (a.key)}
                     <span class="ghost"><Kbd chord={a.key} />{a.label}</span>

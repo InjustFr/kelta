@@ -15,6 +15,7 @@
     ui,
     type GlobalView,
   } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
   import { formatChord } from '$lib/ui/format';
 
@@ -335,7 +336,7 @@
           aria-label={p.name}
           data-testid="rail-band"
           data-project-id={p.id}
-          style:--project-color={p.color ?? 'var(--k-border-strong)'}
+          style:--project-color={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border-strong)'}
         >
           <!-- The caption: click = the project's last row, ⋯ / right-click = project menu, drag = reorder. -->
           <div class="row caption-row" class:over={overId === p.id && dragId !== p.id}>

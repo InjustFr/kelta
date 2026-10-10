@@ -255,7 +255,14 @@ impl ConfigService {
             Ok(p) => p,
             Err(issue) => return Ok(vec![issue]),
         };
-        let mut raw = validate::layer_issues(layer, &parsed.value, None);
+        // same lenient reading as the load path: a bad project colour is dropped, not a blocking error
+        // (the warning has no channel to the UI yet: ValidationIssue carries no severity)
+        let mut value = parsed.value.clone();
+        let mut raw = if layer == Layer::Project {
+            validate::lenient_project_color(&mut value, None, &mut Vec::new())
+        } else {
+            validate::layer_issues(layer, &value, None)
+        };
         if raw.is_empty() {
             let inner = self.inner.read();
             let pd = inner.plugin_defaults.clone();
@@ -266,16 +273,16 @@ impl ConfigService {
             };
             drop(inner);
             let res = match layer {
-                Layer::Global => self.compute(&pd, &parsed.value, None, &[], None),
+                Layer::Global => self.compute(&pd, &value, None, &[], None),
                 Layer::Project => {
                     let dt = parsed
                         .value
                         .pointer("/project/default_template")
                         .and_then(Value::as_str)
                         .map(str::to_owned);
-                    self.compute(&pd, &gv, Some(&parsed.value), &[], dt.as_deref())
+                    self.compute(&pd, &gv, Some(&value), &[], dt.as_deref())
                 }
-                _ => self.compute(&pd, &gv, None, std::slice::from_ref(&parsed.value), None),
+                _ => self.compute(&pd, &gv, None, std::slice::from_ref(&value), None),
             };
             if let Err(e) = res {
                 raw.extend(e);

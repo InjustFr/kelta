@@ -1820,6 +1820,11 @@ pub struct ProjectConfig {
     /// Must equal the file stem.
     pub id: ProjectId,
     pub name: String,
+    /// `theme:<slot>` follows the active theme's ANSI colour (`red`..`cyan`, `bright-red`..`bright-cyan`);
+    /// a `#rrggbb` hex stays as typed (`#rgb` reads as `#rrggbb`).
+    #[schemars(regex(
+        pattern = r"^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$"
+    ))]
     pub color: Option<String>,
     /// 1-2 chars or sprite icon name.
     pub icon: Option<String>,

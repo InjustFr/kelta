@@ -547,20 +547,24 @@ impl ConfigService {
             // still applies (a failed migration must not make the project vanish).
             let personal =
                 kind != FileKind::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some();
-            let raw = validate::layer_issues(kind.layer(), &value, stem);
-            if personal && raw.is_empty() {
-                let issues = validate::position(
-                    &text,
-                    Some(&parsed),
-                    vec![validate::RawIssue::new(
-                        &["tools".to_owned()],
-                        if kind == FileKind::Repo {
-                            validate::REPO_TOOLS_PERSONAL
-                        } else {
-                            validate::PROJECT_TOOLS_GLOBAL
-                        },
-                    )],
-                );
+            let mut warnings = Vec::new();
+            if personal {
+                warnings.push(RawIssue::new(
+                    &["tools".to_owned()],
+                    if kind == FileKind::Repo {
+                        validate::REPO_TOOLS_PERSONAL
+                    } else {
+                        validate::PROJECT_TOOLS_GLOBAL
+                    },
+                ));
+            }
+            let raw = if kind == FileKind::Project {
+                validate::lenient_project_color(&mut value, stem, &mut warnings)
+            } else {
+                validate::layer_issues(kind.layer(), &value, stem)
+            };
+            if raw.is_empty() && !warnings.is_empty() {
+                let issues = validate::position(&text, Some(&parsed), warnings);
                 return FileLayer { path: path.to_owned(), exists, text, hash, value, valid: true, issues };
             }
             (value, raw)

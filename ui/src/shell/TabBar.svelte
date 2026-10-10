@@ -5,6 +5,7 @@
   import type { ProjectId, ToolInfo } from '$lib/gen';
   import { activeTab } from '$lib/layout';
   import { layout, projects, toasts, tools, ui } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import { Button, Menu, type MenuItem } from '$lib/ui';
 
   import { chordFor } from './labels';
@@ -65,7 +66,7 @@
   <span
     class="context"
     data-testid="tabbar-context"
-    style:--project-color={project?.color ?? 'var(--k-border-strong)'}
+    style:--project-color={resolveProjectColor(project?.color, ui.theme) ?? 'var(--k-border-strong)'}
   >
     <span class="project">{project?.name ?? ''}</span>
     <span class="sep" aria-hidden="true">›</span>

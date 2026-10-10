@@ -15,7 +15,7 @@ Three rules:
 
 ## 2. Tokens
 
-Every existing `--k-*` name is kept, so components that only read tokens need no edit. New names: `--k-bezel`, `--k-bezel-raised`, `--k-well`, `--k-bg-float`, `--k-fg-chrome`, `--k-project`, `--k-gap`, `--k-pane-header-height`, `--k-lamp-*`, `--k-term-selection`, `--k-measure`, `--k-swatch-*`.
+Every existing `--k-*` name is kept, so components that only read tokens need no edit. New names: `--k-bezel`, `--k-bezel-raised`, `--k-well`, `--k-bg-float`, `--k-fg-chrome`, `--k-project`, `--k-gap`, `--k-pane-header-height`, `--k-lamp-*`, `--k-term-selection`, `--k-measure`. (`--k-swatch-*` was dropped by #253: project colours come from the theme's ANSI slots, §2.1.)
 
 `src/styles/tokens.css` becomes:
 
@@ -109,17 +109,6 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-term-cursor: #1b2026;
   --k-term-selection: #c9daea;
 
-  /* project colour picker defaults (custom hex still allowed) */
-  --k-swatch-harbor: #3e7cb1;
-  --k-swatch-moss: #5e8c4a;
-  --k-swatch-ochre: #b88a2e;
-  --k-swatch-brick: #b5533c;
-  --k-swatch-plum: #8a5a9e;
-  --k-swatch-teal: #2f8c86;
-  --k-swatch-rose: #b85278;
-  --k-swatch-slate: #5f6b7a;
-  --k-swatch-olive: #85863a;
-  --k-swatch-cobalt: #4b5fc4;
 
   color-scheme: light;
 }
@@ -166,16 +155,6 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
     --k-term-fg: #d3d9df;
     --k-term-cursor: #d3d9df;
     --k-term-selection: #2c3f52;
-    --k-swatch-harbor: #6fa6d6;
-    --k-swatch-moss: #8bb874;
-    --k-swatch-ochre: #d6ac55;
-    --k-swatch-brick: #dd7d64;
-    --k-swatch-plum: #b48ac7;
-    --k-swatch-teal: #5bb7b0;
-    --k-swatch-rose: #de7fa2;
-    --k-swatch-slate: #8a95a5;
-    --k-swatch-olive: #b2b360;
-    --k-swatch-cobalt: #8395ef;
     color-scheme: dark;
   }
   @supports (color: oklch(from red l c h)) {
@@ -218,16 +197,6 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-term-fg: #d3d9df;
   --k-term-cursor: #d3d9df;
   --k-term-selection: #2c3f52;
-  --k-swatch-harbor: #6fa6d6;
-  --k-swatch-moss: #8bb874;
-  --k-swatch-ochre: #d6ac55;
-  --k-swatch-brick: #dd7d64;
-  --k-swatch-plum: #b48ac7;
-  --k-swatch-teal: #5bb7b0;
-  --k-swatch-rose: #de7fa2;
-  --k-swatch-slate: #8a95a5;
-  --k-swatch-olive: #b2b360;
-  --k-swatch-cobalt: #8395ef;
   color-scheme: dark;
 }
 @supports (color: oklch(from red l c h)) {
@@ -240,7 +209,10 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
 
 ### 2.1 Project hue
 
-- `Shell.svelte` sets `document.documentElement.style.setProperty('--k-project', color)` in an `$effect` keyed on the active project. No timer.
+- A project colour (`ProjectInfo.color`) is a **theme slot** or a **custom hex**. `theme:<slot>` names one of the 12 ANSI hues every theme has (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan` = ANSI 1-6, `bright-red` .. `bright-cyan` = ANSI 9-14) and becomes the active theme's colour, re-resolved live on every theme or appearance change. A `#rrggbb` hex is a custom colour and never changes with the theme. `resolveProjectColor` (`lib/theme/projectColor.ts`) turns either into the hex to paint, with the active theme from `ui.theme`.
+- The ten pre-#253 Bezel swatch hexes were theme picks, so they read as the slot closest in oklch hue (harbor → blue, moss → green, ochre → yellow, brick → red, plum → magenta, teal → cyan, rose → bright-magenta, cobalt → bright-blue, olive → bright-yellow). Slate has no slot and stays a hex. This is a read-time table; no config file is rewritten.
+- Everything paints the resolved colour: the raw bars (rail, tiles, Now rows, start sheet) and `--k-project` below.
+- `Shell.svelte` sets `document.documentElement.style.setProperty('--k-project', color)` (the resolved colour) in an `$effect` keyed on the active project. No timer.
 - If the project has no colour, a colour the browser cannot parse, an oklch chroma below 0.03 (greys, black, white), or a hue within 30° of the needs-input lamp (brick, rose, any red), the shell removes the property so the static fallback accent is used. One JS check in the shell (`shell/accent.ts`): an achromatic colour has no hue to borrow, an invalid one would void every focus ring, and a red accent would make every selected row read as an alarm.
 - Switching project never re-pushes the terminal palette: the cursor and selection are neutral.
 
@@ -335,7 +307,7 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 - 240px wide (64px compact), `--k-bezel`. Under Search, the global views in loop order: **Tickets** (`ticket` icon, `12 mine`), **Now** (`inbox` icon, red badge), **Reviews** (`git-pull-request` icon, `2 to review`), 44px two-line rows. Settings is pinned at the bottom. Only the current destination (a row or a global view) wears the selected row style and the full-height index bar (a global view's bar is the accent); rows drop theirs while a global view is shown.
 - Counts: only Now's badge is red. Tickets and Reviews counts are muted (the sub line in the wide rail; a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot of the compact rail), so nothing is counted twice in red.
 - **Bands**: one per open project, Home last. A caption (project name, `--k-fg-muted` 12/500, `⋯` on hover) over one row per tab. No project tile, status word, lamp or ready count on the caption: its rows carry them.
-- **Rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][glyph 16px][title]`, a 2px project-colour bar on the left (55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus. Background sessions are `--k-fg-muted` rows at the end of the band.
+- **Rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][glyph 16px][title]`, a 2px project-colour bar on the left (raw resolved colour, §2.1; 55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus. Background sessions are `--k-fg-muted` rows at the end of the band.
 - **Lit row** *(from Faceplate)*: a row whose session needs input takes `--k-lit` (`color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well))`, `--k-lit-mix` 14% light, 30% dark), the brightest thing in the window, readable in peripheral vision. The selected row keeps its face; its lamp speaks.
 - **Tools**: the same 32px rows, `[lamp][icon or 2 letters][label]`, `↗` (`external-link` 12px, `--k-fg-muted`) for web and external tools, 55% opacity when not installed. Live instances are `--k-fg-muted` sub-lines `└ KEY` indented under the lamp column.
 - Compact (< 1100px): the caption becomes a 1px rule in the project colour and each row a 28px tile (bar, lamp, glyph); names are in the tooltips and the accessibility tree; sub-lines, `×` and `⋯` are hidden.
@@ -428,7 +400,7 @@ One row grammar for all three, so they read as one instrument:
 - Tabs (in-view segmented): text only, active = `--k-fg` 600 + 2px accent underline, same grammar as the tab bar.
 - Kbd: mono 11, 1px `--k-border-strong` bottom border only, no box.
 - Settings (schema-generated): all UI face, 26px rows, labels left, controls right-aligned in a column, help text 12 `--k-fg-muted` under the label.
-- Project colour picker: the ten `--k-swatch-*` chips plus a custom hex field *(from Spine)*; value stored in `ProjectInfo.color` as today.
+- Project colour picker: the active theme's 12 slot colours as chips (tooltip "Green", "Bright blue"; picking one stores `theme:<slot>`), then a custom hex field *(from Spine)*. A custom hex shows as its own chip with a "Custom" mark and stays selected across theme switches.
 
 ### 6.13 Empty and error states
 
@@ -462,7 +434,7 @@ One row grammar for all three, so they read as one instrument:
 - **No serif reading voice** (Spine rejected). A bundled serif breaks the "no fonts" rule's spirit and system serifs on Linux are uneven at small sizes; Spine's 68-72ch measure and label/value meta grid were kept because they help reading without a font.
 - **No key shadows or press travel** (Faceplate rejected). Paint cost on WebKitGTK and a skeuomorphic look that competes with terminal content. Kept only the toggle notch and kbd styling.
 - **Ink accent rejected** (Faceplate). Removing hue from focus and selection loses the project-at-a-glance signal and makes links ambiguous.
-- **Partial themes over Bezel.** A theme overrides only the tokens it names (chrome surfaces, text, borders, status colours, terminal colours) on top of the Bezel base of its mode; lamps, swatches, hover/overlay tints and `*_fg` stay Bezel so the lamp shape and contrast rules hold. A theme's accent is only the `--k-project` fallback for projects without a colour, so the project hue stays the accent.
+- **Partial themes over Bezel.** A theme overrides only the tokens it names (chrome surfaces, text, borders, status colours, terminal colours) on top of the Bezel base of its mode; lamps, hover/overlay tints and `*_fg` stay Bezel so the lamp shape and contrast rules hold. A theme's accent is only the `--k-project` fallback for projects without a colour, so the project hue stays the accent.
 - **Neutral terminal cursor.** Project-hued or amber cursors would force a palette re-push on every project switch and clash with nvim themes.
 - **No pane borders.** A 1px bezel gap separates panes with less ink and gives terminals every pixel.
 - **Mono only for pasteable strings, no middle dots, no uppercase.** Each mark encodes data; template chrome is gone.
