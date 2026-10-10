@@ -400,6 +400,50 @@ impl PluginHost {
                     _ => Err(KeltaError::not_found(format!("work item `{}`", q.id))),
                 }
             }
+            PluginMethod::ExecRun => {
+                #[derive(Deserialize)]
+                struct Q {
+                    command: String,
+                    #[serde(default)]
+                    args: Vec<String>,
+                    #[serde(default)]
+                    cwd: Option<String>,
+                    #[serde(default)]
+                    env: std::collections::BTreeMap<String, String>,
+                    #[serde(default)]
+                    stdin: Option<String>,
+                    #[serde(default)]
+                    timeout_ms: Option<u64>,
+                }
+                let mut q: Q = p(method, params)?;
+                let dir = self.active_entry(screen.plugin.as_str())?.dir.clone();
+                // A path runs a file of the plugin itself (no `..`, absolute or escaping symlink); a bare name
+                // is looked up on the login PATH.
+                let command = if q.command.contains('/') {
+                    crate::uri::resolve_path(&dir, &q.command).ok_or_else(|| {
+                        KeltaError::invalid(format!(
+                            "exec.run: `{}` is not a file inside the plugin directory",
+                            q.command
+                        ))
+                    })?
+                } else {
+                    q.command.into()
+                };
+                if let Some(path) = core.login_path() {
+                    q.env.entry("PATH".to_owned()).or_insert(path);
+                }
+                let cwd = dir.join(q.cwd.unwrap_or_default());
+                let out = crate::actions::run_process(
+                    &command.to_string_lossy(),
+                    &q.args,
+                    cwd.to_str(),
+                    &q.env,
+                    q.stdin.map(String::into_bytes),
+                    std::time::Duration::from_millis(q.timeout_ms.unwrap_or(60_000).min(600_000)),
+                )
+                .await?;
+                Ok(json!({ "code": out.code, "stdout": out.stdout, "stderr": out.stderr }))
+            }
             PluginMethod::ToolsOpen => {
                 #[derive(Deserialize)]
                 struct Q {

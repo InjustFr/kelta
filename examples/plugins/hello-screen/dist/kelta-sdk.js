@@ -157,6 +157,7 @@ function createClient(win, init, port) {
             set: (key, value) => call('settings.set', { key, value }),
         },
         fetch: (url, i = {}) => call('net.fetch', { url, ...i }),
+        exec: (command, args = [], o = {}) => call('exec.run', { command, args, ...o }),
         ui: {
             toast: (text, level) => call('ui.toast', { text, level }),
             openScreen: (screen_id, p) => call('ui.open_screen', { screen_id, params: p ?? null }),

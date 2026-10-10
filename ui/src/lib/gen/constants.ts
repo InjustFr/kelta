@@ -74,6 +74,7 @@ export const PLUGIN_METHODS = [
   "work.list",
   "work.get",
   "tools.open",
+  "exec.run",
   "events.subscribe",
   "events.unsubscribe",
   "settings.get",

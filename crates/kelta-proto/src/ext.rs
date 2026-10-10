@@ -843,6 +843,8 @@ pub enum PluginMethod {
     WorkGet,
     #[serde(rename = "tools.open")]
     ToolsOpen,
+    #[serde(rename = "exec.run")]
+    ExecRun,
     #[serde(rename = "events.subscribe")]
     EventsSubscribe,
     #[serde(rename = "events.unsubscribe")]
@@ -881,7 +883,8 @@ pub enum MethodPermission {
     /// A fixed permission.
     Static(Permission),
     /// Depends on params: `events:<glob>` (subscribe), `net:<host>` (fetch),
-    /// `exec:<cmd>` in addition to `sessions.spawn` (spawn with command), `settings.read` (get, optional).
+    /// `exec:<cmd>` in addition to `sessions.spawn` (spawn with command), `exec:<cmd>` (exec.run),
+    /// `settings.read` (get, optional).
     Dynamic,
 }
 
@@ -908,6 +911,7 @@ impl PluginMethod {
         Self::WorkList,
         Self::WorkGet,
         Self::ToolsOpen,
+        Self::ExecRun,
         Self::EventsSubscribe,
         Self::EventsUnsubscribe,
         Self::SettingsGet,
@@ -941,7 +945,11 @@ impl PluginMethod {
             }
             Self::SessionsList => Static(Permission::SessionsRead),
             Self::WorkList | Self::WorkGet => Static(Permission::WorkRead),
-            Self::SessionsSpawn | Self::EventsSubscribe | Self::NetFetch | Self::SettingsGet => Dynamic,
+            Self::SessionsSpawn
+            | Self::ExecRun
+            | Self::EventsSubscribe
+            | Self::NetFetch
+            | Self::SettingsGet => Dynamic,
             Self::EventsUnsubscribe => Free,
             Self::SessionsSendText => Static(Permission::TerminalWrite),
             Self::ToolsOpen => Static(Permission::SessionsSpawn),
@@ -1051,6 +1059,6 @@ mod tests {
     #[test]
     fn method_names() {
         assert_eq!(serde_json::to_string(&PluginMethod::TicketsList).unwrap(), "\"tickets.list\"");
-        assert_eq!(PluginMethod::ALL.len(), 35);
+        assert_eq!(PluginMethod::ALL.len(), 36);
     }
 }

@@ -123,6 +123,7 @@ describe('connect', () => {
     await k.kv.delete('n');
     await k.kv.list();
     await k.work.get('w1');
+    await k.exec('./bin/deploy.sh', ['qa'], { cwd: '/w' });
     expect(h.requests.map((r) => r.method)).toEqual([
       'net.fetch',
       'ui.open_screen',
@@ -133,9 +134,11 @@ describe('connect', () => {
       'kv.delete',
       'kv.list',
       'work.get',
+      'exec.run',
     ]);
     expect(h.requests[4]?.params).toEqual({ key: 'n', value: { a: 1 } });
     expect(h.requests[8]?.params).toEqual({ id: 'w1' });
+    expect(h.requests[9]?.params).toEqual({ command: './bin/deploy.sh', args: ['qa'], cwd: '/w' });
     expect(h.requests[0]?.params).toEqual({ url: 'https://api.example.com/x', method: 'POST', body: '{}' });
   });
 });
