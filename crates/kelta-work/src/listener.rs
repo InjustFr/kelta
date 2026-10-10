@@ -1,6 +1,6 @@
 //! Bus listener (one task, event-driven): `claude.file_edited` → editor reload/open
 //! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
-//! Claude `Stop` → re-read the item's rebase state.
+//! Claude hooks → the item's `claude_uuid` follows the conversation, `Stop` re-reads the rebase state.
 
 use std::path::PathBuf;
 use std::sync::Weak;
@@ -33,14 +33,25 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     }
                 });
             }
-            // Claude may have finished (or aborted) a rebase it was asked to resolve.
-            bus::CLAUDE_HOOK if ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop") => {
+            bus::CLAUDE_HOOK => {
                 let Some(sid) = ev.session_id.clone() else { continue };
+                let stop = ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop");
+                let uuid =
+                    ev.payload.pointer("/payload/session_id").and_then(|u| u.as_str()).map(str::to_owned);
                 tokio::spawn(async move {
-                    let Some(item) = svc.for_session(&sid).await.filter(|w| w.rebase.is_some()) else {
-                        return;
-                    };
-                    if let Err(e) = svc.refresh_rebase(&item.id).await {
+                    let Some(item) = svc.for_session(&sid).await else { return };
+                    // B3: `/clear` or an in-Claude `/resume` changes the conversation; Fix with
+                    // Claude must resume the one the user was really in.
+                    if let Some(u) = uuid.filter(|u| !u.is_empty() && item.claude_uuid.as_deref() != Some(u))
+                        && let Err(e) = svc.set_claude_uuid(&item.id, u).await
+                    {
+                        tracing::debug!(error = %e.message, "claude_uuid update failed");
+                    }
+                    // Claude may have finished (or aborted) a rebase it was asked to resolve.
+                    if stop
+                        && item.rebase.is_some()
+                        && let Err(e) = svc.refresh_rebase(&item.id).await
+                    {
                         tracing::debug!(error = %e.message, "rebase re-read on Stop failed");
                     }
                 });

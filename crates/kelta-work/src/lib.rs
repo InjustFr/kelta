@@ -301,6 +301,13 @@ impl WorkService {
     }
 
     /// Persist + publish `work.updated`.
+    /// Write only `claude_uuid` (the hook-learned conversation id) on a fresh load.
+    pub(crate) async fn set_claude_uuid(&self, id: &WorkItemId, uuid: String) -> Result<(), KeltaError> {
+        let mut fresh = self.load(id).await?;
+        fresh.claude_uuid = Some(uuid);
+        self.save(&fresh).await
+    }
+
     pub(crate) async fn save(&self, item: &WorkItem) -> Result<(), KeltaError> {
         self.store.put_item(item).await?;
         if let Ok(core) = self.api() {
