@@ -229,6 +229,7 @@ impl GitlabIssues {
             status: self.status_from(&labels, s(v, "state").unwrap_or("opened")),
             kind: s(v, "issue_type").or_else(|| s(v, "type")).map(str::to_owned),
             assignee,
+            reporter: v.get("author").and_then(Self::user_from),
             priority: labels.iter().find_map(|l| l.strip_prefix("priority::").map(str::to_owned)),
             priority_rank: priority_rank(&labels),
             labels,

@@ -124,6 +124,7 @@ impl GiteaIssues {
                 .filter(|a| !a.is_null())
                 .or_else(|| v.get("assignees").and_then(|a| a.get(0)))
                 .and_then(Self::user_from),
+            reporter: v.get("user").and_then(Self::user_from),
             priority: labels.iter().find_map(|l| l.strip_prefix("priority/").map(str::to_owned)),
             priority_rank: labels_rank(&labels),
             labels,

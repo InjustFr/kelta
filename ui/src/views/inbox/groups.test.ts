@@ -45,6 +45,7 @@ const review = (
     ...patch,
   },
   project_ids,
+  waiting: [],
 });
 
 const ticket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => ({
@@ -58,6 +59,7 @@ const ticket = (key: string, category: TicketItem['ticket']['status']['category'
   view_ids: [],
   prs: [],
   caps: samples.ticketPage.items[0]!.caps,
+  waiting: [],
 });
 
 const empty: NowInput = { work: [], sessions: [], requested: [], authored: [], tickets: [] };

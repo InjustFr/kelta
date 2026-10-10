@@ -29,10 +29,14 @@ requested_at?: string | null,
  */
 blocking: boolean, 
 /**
- * Reviewers my PR waits on (authored only): asked and not reviewed since, or who requested
- * changes before my last push.
+ * Reviewers the PR waits on: asked and not reviewed since, or who requested changes before
+ * the last push.
  */
 waiting_on: Array<string>, 
+/**
+ * Changes were requested on the current head, so the author must act.
+ */
+author_to_act: boolean, 
 /**
  * My last nudge from Kelta (authored only, `nudges` table; core-filled).
  */

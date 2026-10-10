@@ -391,7 +391,7 @@ impl CoreApi for FakeCore {
         let mut out = Vec::new();
         for h in hosts {
             for review in h.list_reviews(&q).await? {
-                out.push(ReviewItem { review, project_ids: vec![] });
+                out.push(ReviewItem { review, project_ids: vec![], waiting: vec![] });
             }
         }
         Ok(out)

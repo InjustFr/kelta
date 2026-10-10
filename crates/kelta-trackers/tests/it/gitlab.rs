@@ -48,6 +48,7 @@ async fn list_assigned_pages_and_maps_scoped_labels() {
     assert_eq!(t.priority.as_deref(), Some("high"));
     assert_eq!(t.assignee.as_ref().unwrap().id, "42");
     assert_eq!(t.assignee.as_ref().unwrap().login.as_deref(), Some("louis"));
+    assert_eq!(t.reporter.as_ref().unwrap().login.as_deref(), Some("anna"));
     assert_eq!(page.items[1].status.category, StatusCategory::Todo);
 }
 

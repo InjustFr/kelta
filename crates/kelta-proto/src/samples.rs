@@ -64,6 +64,7 @@ pub fn user() -> User {
         name: "Ada Lovelace".into(),
         login: Some("ada".into()),
         avatar_url: None,
+        email: None,
     }
 }
 
@@ -83,6 +84,7 @@ pub fn ticket() -> Ticket {
         status: status("3", "In Progress", StatusCategory::InProgress),
         kind: Some("Story".into()),
         assignee: Some(user()),
+        reporter: None,
         labels: vec!["api".into()],
         priority: Some("High".into()),
         updated_at: TS.into(),
@@ -109,7 +111,13 @@ pub fn review() -> Review {
         r#ref: review_ref(),
         title: "SHOP-140: Cache product prices".into(),
         url: "https://github.com/acme/shop-api/pull/87".into(),
-        author: User { id: "bob".into(), name: "Bob".into(), login: Some("bob".into()), avatar_url: None },
+        author: User {
+            id: "bob".into(),
+            name: "Bob".into(),
+            login: Some("bob".into()),
+            avatar_url: None,
+            email: None,
+        },
         draft: false,
         head_sha: "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa".into(),
         source_branch: "feat/SHOP-140-cache-prices".into(),
@@ -129,6 +137,7 @@ pub fn review() -> Review {
         requested_at: None,
         blocking: false,
         waiting_on: Vec::new(),
+        author_to_act: false,
         nudged_at: None,
     }
 }
@@ -838,6 +847,7 @@ pub fn all() -> Vec<Fixture> {
                         transitions_need_fetch: true,
                         projects_v2: false,
                     },
+                    waiting: vec![],
                 }],
                 next: Some(Cursor::Token("eyJuZXh0IjoyfQ".into())),
                 stale: false,
@@ -929,7 +939,11 @@ pub fn all() -> Vec<Fixture> {
             "review_page",
             ReviewPage,
             ReviewPage {
-                items: vec![ReviewItem { review: review(), project_ids: vec![ProjectId::new("shop")] }],
+                items: vec![ReviewItem {
+                    review: review(),
+                    project_ids: vec![ProjectId::new("shop")],
+                    waiting: vec![]
+                }],
                 stale: true,
                 errors: vec![],
             }

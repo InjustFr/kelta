@@ -33,7 +33,7 @@ use crate::common::{
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
-author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
+author{ login avatarUrl ... on User{ name email } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state } } } } \
 reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ combinedSlug } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
@@ -120,12 +120,16 @@ impl GithubHost {
 
     fn user_from(v: &Value) -> User {
         match s(v, "login") {
-            Some(l) => user(l, s(v, "name"), s(v, "avatar_url").or_else(|| s(v, "avatarUrl"))),
+            Some(l) => User {
+                email: s(v, "email").filter(|e| !e.is_empty()).map(str::to_owned),
+                ..user(l, s(v, "name"), s(v, "avatar_url").or_else(|| s(v, "avatarUrl")))
+            },
             None => User {
                 id: "ghost".into(),
                 name: "ghost".into(),
                 login: Some("ghost".into()),
                 avatar_url: None,
+                email: None,
             },
         }
     }
@@ -157,16 +161,18 @@ impl GithubHost {
         };
         let decision = decision_from(s(n, "reviewDecision"));
         let head_sha = s(n, "headRefOid").unwrap_or("").to_owned();
-        let (requested_at, blocking, waiting_on) = match kind {
-            ReviewKind::Authored => {
-                let (who, since) = waiting_state(n, &head_sha);
-                (since, false, who)
-            }
-            ReviewKind::ReviewRequested => {
-                let (at, blocking) = request_state(n, me, decision);
-                (at, blocking, Vec::new())
-            }
+        let (waiting_on, since) = waiting_state(n, &head_sha);
+        let (requested_at, blocking) = match kind {
+            ReviewKind::Authored => (since, false),
+            ReviewKind::ReviewRequested => request_state(n, me, decision),
         };
+        let author_to_act =
+            n.pointer("/latestOpinionatedReviews/nodes").and_then(Value::as_array).is_some_and(|a| {
+                a.iter().any(|r| {
+                    s(r, "state") == Some("CHANGES_REQUESTED")
+                        && r.pointer("/commit/oid").and_then(Value::as_str) == Some(head_sha.as_str())
+                })
+            });
         Some(Review {
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(n, "url").unwrap_or("").to_owned(),
@@ -205,6 +211,7 @@ impl GithubHost {
             requested_at,
             blocking,
             waiting_on,
+            author_to_act,
             nudged_at: None,
             title,
         })
@@ -243,6 +250,7 @@ impl GithubHost {
             requested_at: None,
             blocking: false,
             waiting_on: Vec::new(),
+            author_to_act: false,
             nudged_at: None,
             title,
         })

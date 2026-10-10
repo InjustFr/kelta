@@ -45,6 +45,7 @@ async fn list_assigned_pages_and_filters_by_project() {
     );
     assert_eq!(p1.next, Some(Cursor::Page(2)));
     let t = &p1.items[0];
+    assert_eq!(t.reporter.as_ref().unwrap().id, "dave");
     assert_eq!(
         (t.status.category, t.priority.as_deref(), t.assignee.as_ref().map(|u| u.id.as_str())),
         (StatusCategory::Todo, Some("high"), Some("louis"))

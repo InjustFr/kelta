@@ -41,6 +41,10 @@ pub struct User {
     pub login: Option<String>,
     #[serde(default)]
     pub avatar_url: Option<String>,
+    /// Email when the provider exposes one (Jira `emailAddress`); joins identities across providers.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -139,6 +143,9 @@ pub struct Ticket {
     #[serde(default)]
     pub assignee: Option<User>,
     #[serde(default)]
+    #[ts(optional = nullable)]
+    pub reporter: Option<User>,
+    #[serde(default)]
     pub labels: Vec<String>,
     #[serde(default)]
     pub priority: Option<String>,
@@ -200,6 +207,57 @@ pub struct TicketDetail {
     /// The ticket account's caps, filled by kelta-core (a standalone detail has no list item).
     #[serde(default)]
     pub caps: TrackerCaps,
+}
+
+/// A person seen in a scope's cached data, identities merged across trackers and code hosts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Person {
+    /// Stable key: the first identity, `account:id`; `me` for the signed-in user.
+    pub key: String,
+    pub name: String,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    pub ids: Vec<PersonId>,
+    /// False when no proof ties the tracker and code host identities together.
+    pub matched: bool,
+    pub me: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PersonId {
+    pub account: AccountId,
+    pub id: String,
+    #[serde(default)]
+    pub login: Option<String>,
+    /// The identity is a code host account (else a tracker's).
+    #[serde(default)]
+    pub code_host: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitWhy {
+    /// Asked for a review and has not reviewed since.
+    Review,
+    /// Changes were requested on the current head: the PR author must act.
+    Author,
+    /// Assigned a ticket that is not done.
+    Assigned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Waiting {
+    /// `Person.key`.
+    pub person: String,
+    pub name: String,
+    pub why: WaitWhy,
+    /// RFC 3339; `None` when unknown (assignments carry no time).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub since: Option<String>,
+    /// The person's tracker and code host identities are tied together (the hover says when not).
+    #[serde(default)]
+    pub matched: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -274,6 +332,9 @@ pub struct TicketItem {
     /// What the ticket's tracker can do (actions it cannot are disabled in the UI).
     #[serde(default)]
     pub caps: TrackerCaps,
+    /// Who this ticket waits on (core-computed): its main open PR's waits, then the assignee.
+    #[serde(default)]
+    pub waiting: Vec<Waiting>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]

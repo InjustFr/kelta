@@ -3,6 +3,7 @@ import type { PrLink } from "./PrLink";
 import type { ProjectId } from "./ProjectId";
 import type { Ticket } from "./Ticket";
 import type { TrackerCaps } from "./TrackerCaps";
+import type { Waiting } from "./Waiting";
 import type { WorkItemId } from "./WorkItemId";
 
 export type TicketItem = { ticket: Ticket, 
@@ -21,4 +22,8 @@ prs: Array<PrLink>,
 /**
  * What the ticket's tracker can do (actions it cannot are disabled in the UI).
  */
-caps: TrackerCaps, };
+caps: TrackerCaps, 
+/**
+ * Who this ticket waits on (core-computed): its main open PR's waits, then the assignee.
+ */
+waiting: Array<Waiting>, };

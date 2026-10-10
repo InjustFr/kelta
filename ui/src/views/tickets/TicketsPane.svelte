@@ -7,6 +7,7 @@
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
   import { GLOBAL, layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { scopeKey } from '$lib/stores/reducers';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -54,13 +55,14 @@
   import PrChip from './PrChip.svelte';
   import { ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems } from './prs';
   import RowButton from './RowButton.svelte';
+  import { waitChip } from '../people/waiting';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
-  const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
+  const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Team' };
   const GROUP_LABELS: Record<GroupBy, string> = {
     flow: 'By flow',
     status: 'By status',
@@ -117,7 +119,7 @@
   let sortOverride = $state<TicketSort | undefined>(undefined);
   const sort = $derived<TicketSort>(sortOverride ?? content.sort ?? 'priority');
   let personOverride = $state<string | null | undefined>(undefined);
-  /** Assignee user id the list narrows to (on top of Anyone); client-side. */
+  /** Person key (or a tracker user id saved before team people) the list narrows to; client-side. */
   const person = $derived(personOverride !== undefined ? personOverride : (content.person ?? null));
   /** "Current sprint" quick filter (`f s`), client-side on `sprint.active`. */
   let currentSprint = $state(false);
@@ -184,7 +186,7 @@
     const needle = filter.trim().toLowerCase();
     return items.filter((i) => {
       const t = i.ticket;
-      if (person && t.assignee?.id !== person) return false;
+      if (person && !isPerson(t)) return false;
       if (currentSprint && !t.sprint?.active) return false;
       return (
         needle === '' ||
@@ -195,14 +197,28 @@
     });
   });
 
-  // shortcut: people come from the loaded first page per source, upgrade = a tracker user search.
-  const people = $derived.by(() => {
-    const all: Record<string, string> = person ? { [person]: person } : {};
-    for (const i of tickets.list(scope, viewId, 'anyone').data?.items ?? items)
-      if (i.ticket.assignee) all[i.ticket.assignee.id] = i.ticket.assignee.name;
-    return Object.entries(all).sort((a, b) => a[1].localeCompare(b[1]));
-  });
+  // Team people with a tracker identity (the core merges them across trackers and code hosts).
+  const people = $derived(
+    (tickets.team[scopeKey(scope)]?.data ?? [])
+      .filter((p) => p.ids.some((i) => !i.code_host))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+  /** The picked person's entry, by key or by a user id saved before team people. */
+  const personEntry = $derived(
+    person ? people.find((p) => p.key === person || p.ids.some((i) => i.id === person)) : undefined,
+  );
+  const isPerson = (t: Ticket): boolean =>
+    personEntry
+      ? personEntry.ids.some((i) => !i.code_host && i.account === t.ref.account && i.id === t.assignee?.id)
+      : t.assignee?.id === person;
   const hasSprints = $derived(items.some((i) => i.ticket.sprint));
+
+  // `team_people` reads the core's cache: ask again once the lists it reads have loaded.
+  $effect(() => {
+    const s = scope;
+    void [list.fetchedAt, tickets.list(s, viewId, 'anyone').fetchedAt];
+    if (!noSource) untrack(() => void tickets.loadTeam(s));
+  });
 
   $effect(() => {
     const [s, v, w, tab] = [scope, viewId, who, whoTab];
@@ -765,10 +781,14 @@
         {#if people.length > 0 || person}
           <Select
             label="Person"
-            value={person ?? ''}
+            value={personEntry?.key ?? person ?? ''}
             options={[
               { value: '', label: 'Any person' },
-              ...people.map(([value, label]) => ({ value, label })),
+              ...(person && !personEntry ? [{ value: person, label: person }] : []),
+              ...people.map((p) => ({
+                value: p.key,
+                label: p.matched ? p.name : `${p.name} (tracker only)`,
+              })),
             ]}
             onchange={(id) => setPerson(id === '' ? null : id)}
           />
@@ -921,6 +941,7 @@
                 {@const item = r.item}
                 {@const t = item.ticket}
                 {@const pr = prOf(item)}
+                {@const wait = waitChip(item.waiting.filter((w) => w.why !== 'assigned'))}
                 {@const isPicked = picked.includes(r.key)}
                 {@const phase = phaseFor(item)}
                 {@const age = ageLevel(t, Date.now())}
@@ -984,6 +1005,7 @@
                           ><PrChip {pr} /></RowButton
                         ></span
                       >{/if}
+                    {#if wait}<Badge tone="neutral" title={wait.title}>{wait.label}</Badge>{/if}
                     {#if t.sprint && groupBy !== 'sprint'}
                       <span
                         class="sprint"

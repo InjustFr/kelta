@@ -24,6 +24,11 @@
             "48x48": "https://avatar.test/louis.png"
           }
         },
+        "reporter": {
+          "accountId": "5b10ac8d82e05b22cc7d4ef6",
+          "displayName": "Anna Reporter",
+          "emailAddress": "anna@acme.test"
+        },
         "labels": [
           "backend"
         ],

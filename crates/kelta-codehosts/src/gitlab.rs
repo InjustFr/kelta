@@ -114,6 +114,7 @@ impl GitlabHost {
                     name: s(v, "name").filter(|n| !n.is_empty()).unwrap_or(l).to_owned(),
                     login: Some(l.to_owned()),
                     avatar_url: s(v, "avatar_url").map(str::to_owned),
+                    email: None,
                 }
             }
             None => User {
@@ -121,6 +122,7 @@ impl GitlabHost {
                 name: "ghost".into(),
                 login: Some("ghost".into()),
                 avatar_url: None,
+                email: None,
             },
         }
     }
@@ -208,6 +210,7 @@ impl GitlabHost {
             requested_at: None,
             blocking: false,
             waiting_on: Vec::new(),
+            author_to_act: false,
             nudged_at: None,
             title,
         })
@@ -243,6 +246,8 @@ impl GitlabHost {
                 .and_then(|a| a.iter().find(|x| is_me(x)))
                 .and_then(|x| s(x, "created_at"))
                 .map(str::to_owned);
+            (review.waiting_on, _) = pending_reviewers(&r.body);
+            review.author_to_act = changes_requested(&r.body);
         }
         if let Ok(a) = approvals {
             let a = a.body;
@@ -276,21 +281,8 @@ impl GitlabHost {
     async fn waiting_state(&self, review: &mut Review) {
         let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
         let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
-        let pending: Vec<(String, Option<String>)> = r
-            .body
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|x| !matches!(s(x, "state"), Some("reviewed" | "requested_changes" | "approved")))
-            .filter_map(|x| {
-                Some((
-                    x.pointer("/user/username")?.as_str()?.to_owned(),
-                    s(x, "created_at").map(str::to_owned),
-                ))
-            })
-            .collect();
-        review.requested_at = pending.iter().filter_map(|(_, t)| t.clone()).min();
-        review.waiting_on = pending.into_iter().map(|(u, _)| u).collect();
+        (review.waiting_on, review.requested_at) = pending_reviewers(&r.body);
+        review.author_to_act = changes_requested(&r.body);
     }
 
     fn project_url(&self, repo: &str, tail: &str) -> String {
@@ -844,4 +836,25 @@ impl GitlabHost {
     pub fn web_url(&self) -> &str {
         &self.web
     }
+}
+
+/// Reviewers who have not reviewed yet (`/reviewers` states) and the earliest time they were asked.
+fn pending_reviewers(body: &Value) -> (Vec<String>, Option<String>) {
+    let pending: Vec<(String, Option<String>)> = body
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|x| !matches!(s(x, "state"), Some("reviewed" | "requested_changes" | "approved")))
+        .filter_map(|x| {
+            Some((x.pointer("/user/username")?.as_str()?.to_owned(), s(x, "created_at").map(str::to_owned)))
+        })
+        .collect();
+    let since = pending.iter().filter_map(|(_, t)| t.clone()).min();
+    (pending.into_iter().map(|(u, _)| u).collect(), since)
+}
+
+// shortcut: GitLab ties no review state to a commit, so any `requested_changes` reviewer makes the
+// author act, even after a newer push; compare with the push time if it misleads.
+fn changes_requested(body: &Value) -> bool {
+    body.as_array().into_iter().flatten().any(|x| s(x, "state") == Some("requested_changes"))
 }

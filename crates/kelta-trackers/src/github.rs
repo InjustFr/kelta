@@ -312,6 +312,7 @@ impl GithubIssues {
             status: Self::status_for(s(v, "state") != Some("closed"), project_status),
             kind: v.pointer("/type/name").and_then(Value::as_str).map(str::to_owned),
             assignee,
+            reporter: v.get("user").and_then(Self::user_from),
             priority_rank: labels_rank(&labels),
             labels,
             priority: None,
@@ -347,7 +348,7 @@ impl GithubIssues {
         const Q: &str = concat!(
             "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ",
             field_value_fragments!(),
-            " } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }"
+            " } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } author{ login avatarUrl } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }"
         );
         let data = self
             .gql(Q, json!({"owner": p.owner, "number": p.number, "after": after, "query": filter}))
@@ -394,6 +395,7 @@ impl GithubIssues {
                 status: Self::status_for(!closed, status.as_deref()),
                 kind: c.pointer("/issueType/name").and_then(Value::as_str).map(str::to_owned),
                 assignee: c.pointer("/assignees/nodes/0").and_then(Self::user_from),
+                reporter: c.get("author").and_then(Self::user_from),
                 priority_rank: labels_rank(&labels),
                 labels,
                 priority: None,

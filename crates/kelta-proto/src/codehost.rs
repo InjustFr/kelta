@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::{AccountId, ProjectId};
-use crate::tracker::{AccountError, User};
+use crate::tracker::{AccountError, User, Waiting};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -106,10 +106,13 @@ pub struct Review {
     /// I am the last required reviewer: my approval unblocks the author (review requests only).
     #[serde(default)]
     pub blocking: bool,
-    /// Reviewers my PR waits on (authored only): asked and not reviewed since, or who requested
-    /// changes before my last push.
+    /// Reviewers the PR waits on: asked and not reviewed since, or who requested changes before
+    /// the last push.
     #[serde(default)]
     pub waiting_on: Vec<String>,
+    /// Changes were requested on the current head, so the author must act.
+    #[serde(default)]
+    pub author_to_act: bool,
     /// My last nudge from Kelta (authored only, `nudges` table; core-filled).
     #[serde(default)]
     #[ts(optional = nullable)]
@@ -234,6 +237,9 @@ pub struct PrLink {
 pub struct ReviewItem {
     pub review: Review,
     pub project_ids: Vec<ProjectId>,
+    /// Who the PR waits on (core-computed, merged identities).
+    #[serde(default)]
+    pub waiting: Vec<Waiting>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]

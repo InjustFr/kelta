@@ -17,6 +17,7 @@ import type {
   Layer,
   NextUp,
   Layout,
+  Person,
   ProjectInfo,
   ReviewDetail,
   ReviewItem,
@@ -944,6 +945,25 @@ export function createMockTransport(options: MockOptions = {}): {
       if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
       const q = query.trim().toLowerCase();
       return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
+    },
+    team_people: ({ scope }) => {
+      const people = new Map<string, Person>();
+      for (const t of state.tickets.filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))) {
+        for (const u of [t.ticket.assignee, t.ticket.reporter]) {
+          if (!u) continue;
+          const me = u.id === ME.id;
+          const key = me ? 'me' : `${t.ticket.ref.account}:${u.id}`;
+          people.set(key, {
+            key,
+            name: me ? 'You' : u.name,
+            avatar_url: u.avatar_url,
+            ids: [{ account: t.ticket.ref.account, id: u.id, login: u.login, code_host: false }],
+            matched: me,
+            me,
+          });
+        }
+      }
+      return clone([...people.values()]);
     },
     next_up_list: () => clone(state.nextUp),
     next_up_put: ({ item }) => {

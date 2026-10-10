@@ -29,6 +29,7 @@
       view_ids: [],
       prs: detail.prs,
       caps: detail.caps,
+      waiting: [],
     },
   );
 

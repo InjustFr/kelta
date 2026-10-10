@@ -19,10 +19,12 @@
     "additions": 120,
     "author": {
       "avatar_url": null,
+      "email": null,
       "id": "bob",
       "login": "bob",
       "name": "Bob"
     },
+    "author_to_act": false,
     "blocking": false,
     "ci": "success",
     "decision": "review_required",
@@ -57,6 +59,7 @@
       "state": "pending",
       "user": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"

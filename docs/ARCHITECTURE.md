@@ -526,6 +526,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_set_priority` | `{ticket, priority}` | `Ticket` | |
 | `tracker_refine` | `{ticket, project_id?}` | `String` (Markdown proposal of a one-shot `claude -p` in the project's primary repo: acceptance criteria, open questions, sub-tasks; MCP `get_ticket` resolves to the ticket for that run) | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
+| `team_people` | `{scope}` | `Vec<Person>` (people in the scope's cached tickets and review lists, identities merged; reads caches only) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette; searched by each tracker) | |
 | **reviews** | | | `commands/review.rs` (L3) |
 | `review_list` | `{scope, kind: ReviewKind, refresh: bool}` | `ReviewPage{items: Vec<ReviewItem{review, project_ids}>, stale, errors}` | |

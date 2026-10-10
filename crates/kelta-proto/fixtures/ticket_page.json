@@ -40,6 +40,7 @@
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -58,6 +59,7 @@
           "id": "10142",
           "key": "SHOP-142"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -77,6 +79,7 @@
       "view_ids": [
         "mine"
       ],
+      "waiting": [],
       "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
     }
   ],

@@ -31,14 +31,20 @@ accounts, so one project can show Jira and GitHub tickets together.
   `Enter` on a result. Providers that cannot list sources tell you so; edit the TOML instead
   ([views schema](../SETTINGS.md)).
 
-## Mine, Unassigned, Anyone
+## Mine, Unassigned, Team
 
 Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. For a team view use
-Anyone and group by Assignee (`Shift+g`).
+Team and group by Assignee (`Shift+g`).
 
-The person menu next to the tabs narrows the list to one assignee (it lists the assignees of the loaded tickets,
-so it only knows people on the first page of each source). Choosing a person switches to Anyone and is remembered
+The person menu next to the tabs narrows the list to one team person. Kelta builds the team from tickets and pull
+requests it already loaded (assignees, reporters, PR authors and requested reviewers), and joins a tracker user to a
+code host user only when it can prove they are the same: you, the same login on the same host, or the same email.
+Otherwise the person stays apart and is marked "(tracker only)". Choosing a person switches to Team and is remembered
 with the pane; "Any person" clears it. Picking a tab clears it too.
+
+A row whose pull request waits on someone shows `waiting on Anna · 26h` (`+2` when several; hover for who and why)
+next to the PR chip. Reviews and Now show the same chip. A ticket that only waits on its assignee shows no chip:
+the avatar already says it.
 
 ## Current iteration
 
@@ -64,7 +70,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 | `Space` | show or hide the detail column |
 | `Esc` | from the detail column back to the list; in the list, clear the multi-selection |
 | `/` | filter |
-| `1` `2` `3` | Mine, Unassigned, Anyone |
+| `1` `2` `3` | Mine, Unassigned, Team |
 | `v` | choose sources |
 | `Shift+g` | cycle the grouping |
 | `f` `s` | only the current sprint (press again to clear) |
@@ -172,7 +178,7 @@ Statuses are shown as the tracker names them; Kelta only uses the category (to d
 to order and colour them.
 
 - **Kanban**: Mine, group by Status or Flow. Pull the next ticket with `m`, start it with `s`.
-- **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Anyone grouped by Assignee for stand-up, or by Sprint to see the carry-over.
+- **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
 
