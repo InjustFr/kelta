@@ -456,3 +456,55 @@ async fn commands_run_actions_with_plugin_permissions() {
         matches!(req.content, kelta_proto::model::PaneContent::PluginScreen { ref screen_id, .. } if screen_id == "hello")
     );
 }
+
+#[tokio::test]
+async fn ticket_and_review_actions_get_their_subject_and_the_work_items_project() {
+    let env = common::Env::new();
+    let m = common::manifest(
+        "acts",
+        &["ui.open"],
+        r#"
+[[contributes.screens]]
+id = "s"
+title = "S"
+entry = "s.html"
+
+[[contributes.ticket_actions]]
+id = "open"
+title = "Open"
+do = [{ action = "open_screen", screen = "s", params = { ticket = "{ticket.key}", work = "{work.id}", n = [1, "{branch}"] } }]
+
+[[contributes.review_actions]]
+id = "say"
+title = "Say"
+do = [{ action = "toast", text = "{pr.number} {pr.head}" }]
+"#,
+    );
+    env.write_plugin("acts", &m, &[("s.html", "<p>s</p>")]);
+    env.host.grant(&PluginId::new("acts"), vec!["ui.open".into()]).await.unwrap();
+
+    // A review ctx: the ref gives `pr.number`, `extra` the rest of `pr.*`.
+    let mut ctx = TemplateCtx {
+        review: Some(kelta_proto::codehost::ReviewRef {
+            account: kelta_proto::ids::AccountId::new("github-work"),
+            repo: "acme/shop-api".into(),
+            number: 42,
+        }),
+        ..Default::default()
+    };
+    ctx.extra.insert("project_id".into(), "shop".into());
+    ctx.extra.insert("pr.head".into(), "feat/x".into());
+    env.host.command_run("acts/say", ctx).await.unwrap();
+    assert_eq!(toasts(&env).pop().unwrap(), "42 feat/x");
+
+    // No project, no session: the work item gives the project (never Home) and `{work.id}`.
+    let w = kelta_proto::samples::work_item();
+    env.core.add_work_item(w.clone());
+    let ctx =
+        TemplateCtx { work_item_id: Some(w.id.clone()), ticket: w.ticket.clone(), ..Default::default() };
+    env.host.command_run("acts/open", ctx).await.unwrap();
+    let (project, req) = env.core.opened().pop().unwrap();
+    assert_eq!(project, w.project_id);
+    let kelta_proto::model::PaneContent::PluginScreen { params, .. } = req.content else { panic!() };
+    assert_eq!(params, json!({ "ticket": w.ticket.unwrap().key, "work": w.id, "n": [1, w.branch] }));
+}

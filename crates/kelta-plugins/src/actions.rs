@@ -351,7 +351,7 @@ impl PluginHost {
                     &plugin_id,
                     &cx.x(screen)?,
                     &project,
-                    params.clone().unwrap_or(Value::Null),
+                    params.as_ref().map(|p| cx.vars.expand_value(p)).transpose()?.unwrap_or(Value::Null),
                     placement.unwrap_or_default(),
                 )
                 .await?;
@@ -642,11 +642,16 @@ impl PluginHost {
             return if ok { Ok(()) } else { Err(KeltaError::upstream(details.join("; "))) };
         }
         let core = self.core_or_err()?;
-        let project = ctx
+        let mut project = ctx
             .extra
             .get("project_id")
             .map(|p| ProjectId::new(p.clone()))
             .or_else(|| ctx.session_id.as_ref().and_then(|s| core.session_get(s)).map(|s| s.project_id));
+        if project.is_none()
+            && let Some(id) = &ctx.work_item_id
+        {
+            project = core.work_get(id).await.map(|w| w.project_id);
+        }
         let entry = self
             .command_defs(project.as_ref())
             .into_iter()
