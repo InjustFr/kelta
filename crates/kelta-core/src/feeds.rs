@@ -721,7 +721,7 @@ impl Core {
 
     /// `ticket.transitioned` / `ticket.assigned` from anywhere (`tracker_*`, the work saga,
     /// plugins): refresh the account's subscribed lists now instead of at the next poll.
-    // shortcut: only subscribed lists refresh and a kick during an in-flight poll is lost, upgrade = rerun flag in scheduler
+    // shortcut: only subscribed lists refresh, upgrade = patch cached rows like tracker_*
     pub(crate) fn on_ticket_written(&self, payload: &serde_json::Value) {
         // a `TicketRef`, or a whole `Ticket` (plugin actions)
         let t = payload.get("ticket").map(|v| v.get("ref").unwrap_or(v));

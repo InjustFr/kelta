@@ -115,6 +115,8 @@ struct Sub {
     due: Option<Instant>,
     last: Option<Instant>,
     inflight: bool,
+    /// Kicked while in flight: re-poll as soon as the running poll completes.
+    rerun: bool,
 }
 
 /// Observable state (tests, perf).
@@ -151,7 +153,9 @@ impl State {
                     }
                     s
                 }
-                None => Sub { policy, due: self.sched(&policy, now), last: None, inflight: false },
+                None => {
+                    Sub { policy, due: self.sched(&policy, now), last: None, inflight: false, rerun: false }
+                }
             };
             next.insert(k, sub);
         }
@@ -191,8 +195,12 @@ impl State {
             None => self.paused.clear(),
         }
         for (k, s) in self.subs.iter_mut() {
-            if account.is_none_or(|a| &k.account == a) && !s.inflight {
-                s.due = Some(now);
+            if account.is_none_or(|a| &k.account == a) {
+                if s.inflight {
+                    s.rerun = true;
+                } else {
+                    s.due = Some(now);
+                }
             }
         }
     }
@@ -220,6 +228,9 @@ impl State {
             };
             now + jitter(iv)
         });
+        if std::mem::take(&mut s.rerun) {
+            s.due = Some(now);
+        }
     }
 
     fn runnable(&self, k: &SubKey, s: &Sub) -> bool {
@@ -403,5 +414,23 @@ mod tests {
         assert_eq!(redmine.interval(focused), Some(Duration::from_secs(60)));
         let j = jitter(Duration::from_secs(100));
         assert!(j >= Duration::from_secs(90) && j <= Duration::from_secs(110));
+    }
+
+    #[test]
+    fn kick_during_inflight_poll_reruns_once() {
+        let focused = WindowState { exists: true, visible: true, focused: true };
+        let mut st = State { subs: BTreeMap::new(), paused: HashMap::new(), window: focused, refreshes: 0 };
+        let key = SubKey { account: AccountId::new("acc"), query: "tickets:x".into() };
+        let policy = IntervalPolicy::from_settings(&PollingSettings::default(), 0, None);
+        let t0 = Instant::now();
+        st.set(vec![(key.clone(), policy)], t0);
+        st.kick(None, t0);
+        assert_eq!(st.take_due(t0), vec![key.clone()]);
+        st.kick(None, t0); // arrives while the poll is in flight
+        assert!(st.take_due(t0).is_empty());
+        st.done(&key, Ok(()), t0);
+        assert_eq!(st.take_due(t0), vec![key.clone()], "re-polls right after the in-flight poll");
+        st.done(&key, Ok(()), t0);
+        assert!(st.take_due(t0).is_empty(), "rerun flag is consumed");
     }
 }
