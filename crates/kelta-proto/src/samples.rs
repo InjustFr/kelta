@@ -22,7 +22,7 @@ use crate::model::*;
 use crate::secret::SecretBackendStatus;
 use crate::settings::*;
 use crate::term::{
-    LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::*;
 
@@ -108,6 +108,7 @@ pub fn review() -> Review {
         decision: Some(ReviewDecision::ReviewRequired),
         my_state: Some(MyReviewState::Pending),
         mergeable: Some(true),
+        reviewed_head: None,
         labels: vec![],
         kind: ReviewKind::ReviewRequested,
         updated_at: TS.into(),
@@ -281,6 +282,8 @@ pub fn work_item() -> WorkItem {
             })
             .collect(),
         created_at: TS.into(),
+        review_due: false,
+        claude_replied: false,
     }
 }
 
@@ -799,6 +802,7 @@ pub fn all() -> Vec<Fixture> {
                     url: Some("https://github.com/acme/shop-api/actions/runs/1".into()),
                 }],
                 files: vec![FileChange { path: "src/prices.rs".into(), additions: 120, deletions: 14 }],
+                pending_comments: 0,
             }
         ),
         fx!("start_work_plan", StartWorkPlan, start_work_plan()),
@@ -821,7 +825,20 @@ pub fn all() -> Vec<Fixture> {
                 transition_to: Some(TransitionTarget::Name { name: "Done".into() }),
             }
         ),
-        fx!("git_status", GitStatus, GitStatus { ahead: 2, behind: 0, dirty: true, unpushed: true }),
+        fx!(
+            "git_status",
+            GitStatus,
+            GitStatus {
+                ahead: 2,
+                behind: 0,
+                dirty: true,
+                unpushed: true,
+                files: 3,
+                insertions: 41,
+                deletions: 7,
+                missing: false
+            }
+        ),
         fx!(
             "pr_draft",
             PrDraft,
@@ -1131,8 +1148,16 @@ pub fn all() -> Vec<Fixture> {
             TerminalLimits {
                 scrollback: ScrollbackSettings::default(),
                 memory_cap_mb: 160,
-                view_scrollback: 1000
+                view_scrollback: 1000,
+                history_log: true,
+                history_log_mb: 16,
+                history_log_total_mb: 512
             }
+        ),
+        fx!(
+            "history_hit",
+            HistoryHit,
+            HistoryHit { session_id: SessionId::new(SID), line: "error[E0308]: mismatched types".into() }
         ),
         fx!(
             "login_env",

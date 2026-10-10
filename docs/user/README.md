@@ -7,6 +7,7 @@
 - [Bitbucket Cloud](bitbucket.md)
 - [Gitea and Forgejo](gitea.md)
 - [Linear](linear.md)
+- [Sapling ISL (`sl web`)](sapling-isl.md)
 - [Wayland notes](wayland.md)
 
 Plugin authors: [docs/plugins-guide](../plugins-guide/README.md).

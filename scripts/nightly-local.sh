@@ -42,17 +42,21 @@ notes="$(mktemp)"
   echo "macOS: the app is not signed, see the README (right-click Open, or xattr -dr com.apple.quarantine)."
 } > "$notes"
 
+# Update path: upload first, so a failed upload leaves the old tag and notes with the old build
+# (--clobber replaces files one by one: a partial failure can still mix builds; re-run to fix).
+# Tag and notes move only once the new files are in. Create path: the tag must exist first.
 git tag -f nightly "$sha"
-git push -f origin refs/tags/nightly
 if gh release view nightly >/dev/null 2>&1; then
+  gh release upload nightly "$dist"/* --clobber
+  git push -f origin refs/tags/nightly
   gh release edit nightly --prerelease --title nightly --notes-file "$notes"
+  # Delete assets of older builds (names change with the version).
+  gh release view nightly --json assets --jq '.assets[].name' | while read -r a; do
+    [[ -e "$dist/$a" ]] || gh release delete-asset nightly "$a" --yes
+  done
 else
-  gh release create nightly --prerelease --verify-tag --title nightly --notes-file "$notes"
+  git push -f origin refs/tags/nightly
+  gh release create nightly --prerelease --verify-tag --title nightly --notes-file "$notes" "$dist"/*
 fi
 rm "$notes"
-gh release upload nightly "$dist"/* --clobber
-# Delete assets of older builds (names change with the version).
-gh release view nightly --json assets --jq '.assets[].name' | while read -r a; do
-  [[ -e "$dist/$a" ]] || gh release delete-asset nightly "$a" --yes
-done
 gh release view nightly --json url,assets --jq '.url, (.assets[] | "\(.name) \(.size)")'

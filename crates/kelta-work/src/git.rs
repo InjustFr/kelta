@@ -310,6 +310,20 @@ pub async fn dirty_files(worktree: &Path) -> Result<Vec<String>, KeltaError> {
     Ok(files)
 }
 
+/// Hash of HEAD, the tracked diff to the working tree and the untracked paths: equal hashes mean
+/// nothing changed in between (in-process comparison only).
+/// shortcut: an untracked file edited in place keeps the hash, hash its content if that matters.
+pub async fn fingerprint(worktree: &Path) -> Result<u64, KeltaError> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for args in
+        [&["rev-parse", "HEAD"][..], &["diff", "HEAD"], &["ls-files", "-z", "--others", "--exclude-standard"]]
+    {
+        run_ok(worktree, args, LOCAL_TIMEOUT).await?.stdout.hash(&mut h);
+    }
+    Ok(h.finish())
+}
+
 /// Is `path` tracked in the index of `worktree`?
 pub async fn is_tracked(worktree: &Path, path: &str) -> Result<bool, KeltaError> {
     Ok(run(worktree, &["ls-files", "--error-unmatch", "--", path], LOCAL_TIMEOUT).await?.ok())
@@ -341,6 +355,27 @@ pub async fn ahead_behind(worktree: &Path, upstream: &str) -> Result<(u32, u32),
     let out = run_ok(worktree, &["rev-list", "--left-right", "--count", &range], LOCAL_TIMEOUT).await?;
     let mut it = out.stdout.split_whitespace().map(|n| n.parse::<u32>().unwrap_or(0));
     Ok((it.next().unwrap_or(0), it.next().unwrap_or(0)))
+}
+
+/// `(files, insertions, deletions)` from the merge base of HEAD and `base` to the working tree, so
+/// uncommitted work counts; untracked files count in `files` only. Zeros when there is no merge base.
+pub async fn diffstat(worktree: &Path, base: &str) -> Result<(u32, u32, u32), KeltaError> {
+    let mb = run(worktree, &["merge-base", base, "HEAD"], LOCAL_TIMEOUT).await?;
+    if !mb.ok() {
+        return Ok((0, 0, 0));
+    }
+    let out = run_ok(worktree, &["diff", "--numstat", mb.stdout.trim()], LOCAL_TIMEOUT).await?;
+    let (mut files, mut ins, mut del) = (0u32, 0u32, 0u32);
+    for line in out.stdout.lines() {
+        let mut it = line.split('\t').map(|n| n.parse::<u32>().unwrap_or(0)); // binary files: "-"
+        files += 1;
+        ins += it.next().unwrap_or(0);
+        del += it.next().unwrap_or(0);
+    }
+    let untracked =
+        run_ok(worktree, &["ls-files", "-z", "--others", "--exclude-standard"], LOCAL_TIMEOUT).await?;
+    files += untracked.stdout.split('\0').filter(|s| !s.is_empty()).count() as u32;
+    Ok((files, ins, del))
 }
 
 /// Upstream of HEAD (`origin/feat/x`) if configured.

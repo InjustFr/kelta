@@ -39,5 +39,10 @@
       "username": "zed",
       "name": "Zed"
     }
-  ]
+  ],
+  "diff_refs": {
+    "base_sha": "b0",
+    "start_sha": "s0",
+    "head_sha": "h0"
+  }
 }

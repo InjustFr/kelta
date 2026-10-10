@@ -70,6 +70,7 @@ mocks!(gitlab_mocks, |s| {
     mount(s, "GET", mr, 200, "gitlab/mr.json").await;
     mount(s, "GET", &format!("{mr}/approvals"), 200, "gitlab/approvals.json").await;
     mount(s, "GET", &format!("{mr}/changes"), 200, "gitlab/changes.json").await;
+    mount(s, "GET", &format!("{mr}/draft_notes"), 200, "gitlab/no_drafts.json").await;
     mount(s, "GET", "/api/v4/projects/grp%2Fother/pipelines/908/jobs", 200, "gitlab/jobs.json").await;
     mount(s, "POST", &format!("{mr}/approve"), 201, "gitlab/approve_ok.json").await;
     ok(s, "POST", &format!("{mr}/notes"), 201).await;

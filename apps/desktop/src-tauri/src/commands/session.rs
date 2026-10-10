@@ -114,6 +114,23 @@ pub async fn session_text_tail(core: State<'_, Arc<Core>>, id: SessionId, max_li
     core.session_text_tail(&id, max_lines)
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn session_history_search(
+    core: State<'_, Arc<Core>>,
+    project_id: ProjectId,
+    session_id: Option<SessionId>,
+    query: String,
+    limit: u32,
+) -> Res<Vec<HistoryHit>> {
+    let core = Arc::clone(&core);
+    // The scan reads up to every log of the project: keep it off the async workers.
+    tokio::task::spawn_blocking(move || {
+        core.session_history_search(&project_id, session_id.as_ref(), &query, limit)
+    })
+    .await
+    .map_err(|e| KeltaError::internal(format!("history search task failed: {e}")))?
+}
+
 /// Pushed on theme change (OSC 4/10/11/12 replies).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn terminal_set_palette(core: State<'_, Arc<Core>>, palette: TerminalPalette) -> Res<()> {

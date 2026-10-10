@@ -95,7 +95,9 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-09T08:00:00Z"
+    "created_at": "2026-10-09T08:00:00Z",
+    "review_due": false,
+    "claude_replied": false
   },
   {
     "id": "0199a6b2-0000-7000-8000-00000000a002",
@@ -195,7 +197,9 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-08T14:00:00Z"
+    "created_at": "2026-10-08T14:00:00Z",
+    "review_due": false,
+    "claude_replied": false
   },
   {
     "id": "0199a6b2-0000-7000-8000-00000000a003",
@@ -293,6 +297,204 @@
         "updated_at": "2026-10-09T08:00:00Z"
       }
     ],
-    "created_at": "2026-10-07T10:00:00Z"
+    "created_at": "2026-10-07T10:00:00Z",
+    "review_due": false,
+    "claude_replied": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a004",
+    "project_id": "shop",
+    "kind": "ticket",
+    "ticket": {
+      "account": "jira-acme",
+      "key": "SHOP-155",
+      "id": "10155"
+    },
+    "review": null,
+    "repo_id": "api",
+    "worktree": "/Users/ada/code/shop-api.worktrees/SHOP-155",
+    "branch": "feat/SHOP-155-flaky-cart-test",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0011",
+    "nvim_socket": null,
+    "session_ids": ["0199a6b2-0000-7000-8000-000000000011"],
+    "tab_id": null,
+    "pr_url": null,
+    "state": {
+      "kind": "active"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "skipped",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-09T07:30:00Z",
+    "review_due": true,
+    "claude_replied": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a005",
+    "project_id": "billing",
+    "kind": "branch",
+    "ticket": null,
+    "review": null,
+    "repo_id": "core",
+    "worktree": "/Users/ada/work/billing.worktrees/wip-retry-queue",
+    "branch": "wip/retry-queue-spike",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0012",
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": null,
+    "state": {
+      "kind": "active"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "skipped",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-09T09:10:00Z",
+    "review_due": false,
+    "claude_replied": true
   }
 ]

@@ -32,7 +32,8 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
-latestOpinionatedReviews(first:20){ nodes{ state author{ login } } } }";
+latestOpinionatedReviews(first:20){ nodes{ state commit{ oid } author{ login } } } \
+latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } }";
 
 #[derive(Default)]
 struct Gate {
@@ -109,11 +110,19 @@ impl GithubHost {
         let repo = n.pointer("/repository/nameWithOwner").and_then(Value::as_str)?.to_owned();
         let title = s(n, "title").unwrap_or("").to_owned();
         let branch = s(n, "headRefName").unwrap_or("").to_owned();
-        let mine = n
+        let mine_node = n
             .pointer("/latestOpinionatedReviews/nodes")
             .and_then(Value::as_array)
+            .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)));
+        let mine = mine_node.and_then(|r| s(r, "state"));
+        // latestReviews also holds COMMENTED reviews, which the opinionated list leaves out.
+        let reviewed_head = n
+            .pointer("/latestReviews/nodes")
+            .and_then(Value::as_array)
             .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)))
-            .and_then(|r| s(r, "state"));
+            .filter(|_| kind != ReviewKind::Authored)
+            .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
+            .map(str::to_owned);
         let my_state = match (kind, mine) {
             (ReviewKind::Authored, _) => None,
             (_, Some("APPROVED")) => Some(MyReviewState::Approved),
@@ -135,6 +144,7 @@ impl GithubHost {
             decision: decision_from(s(n, "reviewDecision")),
             my_state,
             mergeable: mergeable_from(s(n, "mergeable")),
+            reviewed_head,
             labels: n
                 .pointer("/labels/nodes")
                 .and_then(Value::as_array)
@@ -167,6 +177,7 @@ impl GithubHost {
             decision: None,
             my_state: None,
             mergeable: v.get("mergeable").and_then(Value::as_bool),
+            reviewed_head: None,
             labels: v
                 .get("labels")
                 .and_then(Value::as_array)
@@ -293,6 +304,22 @@ fn combine_ci(checks: &[CiCheck]) -> CiState {
     }
 }
 
+/// My pending (draft) review of a pull request; GitHub only shows a pending review to its author.
+struct Pending {
+    id: u64,
+    node_id: String,
+    commit: String,
+}
+
+fn pending_of(reviews: &[Value]) -> Option<Pending> {
+    let v = reviews.iter().find(|r| s(r, "state") == Some("PENDING"))?;
+    Some(Pending {
+        id: v.get("id").and_then(Value::as_u64)?,
+        node_id: s(v, "node_id")?.to_owned(),
+        commit: s(v, "commit_id").unwrap_or("").to_owned(),
+    })
+}
+
 /// 422 answers of the review endpoints that really mean "your view of the PR is stale".
 fn stale_head(e: KeltaError) -> KeltaError {
     if e.code != ErrorCode::InvalidArgument {
@@ -386,19 +413,36 @@ impl CodeHost for GithubHost {
                 ("authored", ReviewKind::Authored, format!("is:pr is:open author:@me archived:false{draft}"))
             }
         };
+        // user-review-requested drops a PR once I submit a review, so a second search in the same
+        // request finds the PRs I reviewed; they only come back when the head moved since (below).
+        let reviewed =
+            format!("is:pr is:open reviewed-by:@me -author:@me archived:false{draft} sort:updated-desc");
+        let (decl, extra, vars) = match kind {
+            ReviewKind::ReviewRequested => (
+                ",$r:String!",
+                " reviewedByMe: search(query:$r, type:ISSUE, first:50){ nodes{ ...Pr } }",
+                json!({ "s": search, "r": reviewed }),
+            ),
+            ReviewKind::Authored => ("", "", json!({ "s": search })),
+        };
         let query = format!(
-            "query($s:String!){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }} }} {PR_FRAGMENT}"
+            "query($s:String!{decl}){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }}{extra} }} {PR_FRAGMENT}"
         );
-        let data = graphql(&self.auth, &self.graphql, &query, json!({ "s": search })).await?;
+        let data = graphql(&self.auth, &self.graphql, &query, vars).await?;
         self.gate.lock().pending = false;
         let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("").to_owned();
-        let nodes =
-            data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
-        Ok(nodes
-            .iter()
-            .filter_map(|n| self.graphql_pr(n, kind, &me))
-            .filter(|r| q.include_drafts || !r.draft)
-            .collect())
+        let nodes = |alias: &str| {
+            data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default()
+        };
+        let requested = nodes(alias).into_iter().filter_map(|n| self.graphql_pr(&n, kind, &me));
+        let updated = nodes("reviewedByMe")
+            .into_iter()
+            .filter_map(|n| self.graphql_pr(&n, kind, &me))
+            .filter(|r| r.reviewed_head.as_deref().is_some_and(|h| h != r.head_sha));
+        let requested: Vec<_> = requested.collect();
+        // A re-requested PR matches both searches.
+        let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();
+        Ok(requested.into_iter().chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -461,6 +505,26 @@ impl CodeHost for GithubHost {
 
         let by_reviewer = latest_by_reviewer(&reviews);
         review.decision = Some(decision_from_reviews(&by_reviewer));
+        let is_me = |r: &&Value| r.pointer("/user/login").and_then(Value::as_str) == me.login.as_deref();
+        if kind == ReviewKind::ReviewRequested {
+            review.reviewed_head = reviews
+                .iter()
+                .filter(is_me)
+                .rfind(|r| s(r, "state").and_then(review_state).is_some())
+                .and_then(|r| s(r, "commit_id").map(str::to_owned));
+        }
+        let pending_comments = match pending_of(&reviews) {
+            Some(p) => self
+                .rest(
+                    HttpRequest::get(format!("{pull_url}/reviews/{}/comments", p.id))
+                        .query("per_page", "100"),
+                )
+                .await?
+                .body
+                .as_array()
+                .map_or(0, Vec::len) as u32,
+            None => 0,
+        };
         review.my_state = match kind {
             ReviewKind::Authored => None,
             ReviewKind::ReviewRequested => Some(
@@ -496,10 +560,20 @@ impl CodeHost for GithubHost {
             reviewers,
             checks,
             files,
+            pending_comments,
         })
     }
 
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            // The events endpoint takes no commit_id: a pending review is fixed to the head it began on.
+            if p.commit != head_sha {
+                return Err(KeltaError::invalid(
+                    "the head moved after your pending comments began; submit them with Comment or Request changes first",
+                ));
+            }
+            return self.publish(r, &p, "APPROVE", "").await;
+        }
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "APPROVE", "commit_id": head_sha})))
@@ -509,6 +583,9 @@ impl CodeHost for GithubHost {
     }
 
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            return self.publish(r, &p, "COMMENT", body).await;
+        }
         // PR conversation comments live on the issue endpoint.
         let url = self.repo_url(&r.repo, &format!("/issues/{}/comments", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
@@ -516,12 +593,46 @@ impl CodeHost for GithubHost {
     }
 
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            return self.publish(r, &p, "REQUEST_CHANGES", body).await;
+        }
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "REQUEST_CHANGES", "body": body})))
             .await
             .map(|_| ())
             .map_err(stale_head)
+    }
+
+    async fn add_pending_comment(
+        &self,
+        r: &ReviewRef,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> Result<(), KeltaError> {
+        let p = match self.pending_review(r).await? {
+            Some(p) => p,
+            // No event = a pending review, created on the current head.
+            None => {
+                let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+                let v = self.auth.send_json::<Value>(HttpRequest::post(url).json(json!({}))).await?.body;
+                let (Some(id), Some(node_id)) = (v["id"].as_u64(), s(&v, "node_id")) else {
+                    return Err(KeltaError::upstream("create pending review response without id"));
+                };
+                Pending { id, node_id: node_id.to_owned(), commit: String::new() }
+            }
+        };
+        // REST cannot add to an existing pending review; GraphQL can.
+        let q = "mutation($id:ID!,$path:String!,$line:Int!,$body:String!){ addPullRequestReviewThread(input:{pullRequestReviewId:$id, path:$path, line:$line, side:RIGHT, body:$body}){ thread{ id } } }";
+        graphql(
+            &self.auth,
+            &self.graphql,
+            q,
+            json!({"id": p.node_id, "path": path, "line": line, "body": body}),
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError> {
@@ -577,6 +688,21 @@ impl CodeHost for GithubHost {
 }
 
 impl GithubHost {
+    async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+        let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
+        Ok(v.as_array().and_then(|a| pending_of(a)))
+    }
+
+    async fn publish(&self, r: &ReviewRef, p: &Pending, event: &str, body: &str) -> Result<(), KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews/{}/events", r.number, p.id));
+        self.auth
+            .send_text(HttpRequest::post(url).json(json!({"event": event, "body": body})))
+            .await
+            .map(|_| ())
+            .map_err(stale_head)
+    }
+
     /// Browser base URL (`https://github.com`, GHE web root).
     pub fn web_url(&self) -> &str {
         &self.web

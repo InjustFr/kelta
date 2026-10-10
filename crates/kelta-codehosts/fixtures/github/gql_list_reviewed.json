@@ -1,0 +1,375 @@
+{
+  "data": {
+    "viewer": {
+      "login": "louis"
+    },
+    "reviewRequested": {
+      "nodes": [
+        {
+          "number": 101,
+          "title": "PR 101",
+          "url": "https://github.com/acme/shop/pull/101",
+          "isDraft": false,
+          "headRefOid": "sha101",
+          "headRefName": "b101",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "sha101"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "sha101"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 301,
+          "title": "PR 301",
+          "url": "https://github.com/acme/shop/pull/301",
+          "isDraft": false,
+          "headRefOid": "new301",
+          "headRefName": "b301",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old301"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old301"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "reviewedByMe": {
+      "nodes": [
+        {
+          "number": 201,
+          "title": "PR 201",
+          "url": "https://github.com/acme/shop/pull/201",
+          "isDraft": false,
+          "headRefOid": "new201",
+          "headRefName": "b201",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old201"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old201"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 202,
+          "title": "PR 202",
+          "url": "https://github.com/acme/shop/pull/202",
+          "isDraft": false,
+          "headRefOid": "same202",
+          "headRefName": "b202",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "same202"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "same202"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 101,
+          "title": "PR 101",
+          "url": "https://github.com/acme/shop/pull/101",
+          "isDraft": false,
+          "headRefOid": "sha101",
+          "headRefName": "b101",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "sha101"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "sha101"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 301,
+          "title": "PR 301",
+          "url": "https://github.com/acme/shop/pull/301",
+          "isDraft": false,
+          "headRefOid": "new301",
+          "headRefName": "b301",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old301"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "commit": {
+                  "oid": "old301"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 302,
+          "title": "PR 302",
+          "url": "https://github.com/acme/shop/pull/302",
+          "isDraft": false,
+          "headRefOid": "new302",
+          "headRefName": "b302",
+          "baseRefName": "main",
+          "updatedAt": "2026-09-30T12:00:00Z",
+          "additions": 1,
+          "deletions": 1,
+          "mergeable": "MERGEABLE",
+          "reviewDecision": null,
+          "author": {
+            "login": "carol",
+            "name": "Carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "commits": {
+            "nodes": []
+          },
+          "latestOpinionatedReviews": {
+            "nodes": []
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "old302"
+                },
+                "author": {
+                  "login": "louis"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
