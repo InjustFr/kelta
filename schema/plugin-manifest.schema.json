@@ -2970,7 +2970,7 @@
                 "type": "string"
               },
               "placement": {
-                "default": "new_tab",
+                "default": "split_right",
                 "oneOf": [
                   {
                     "enum": [

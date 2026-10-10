@@ -114,6 +114,27 @@ fn pty(id: &str) -> ToolDef {
 }
 
 #[tokio::test]
+async fn open_tool_without_placement_uses_the_tools_own() {
+    let env = common::Env::new().with_settings(|st| {
+        st.tools = vec![ToolDef { placement: Placement::NewTab, ..pty("tabbed") }, pty("plain")];
+        st.triggers = vec![trigger(
+            "open",
+            "custom.go",
+            &[],
+            vec![
+                ActionDef::OpenTool { tool: "tabbed".into(), placement: None },
+                ActionDef::OpenTool { tool: "plain".into(), placement: None },
+                ActionDef::OpenTool { tool: "plain".into(), placement: Some(Placement::SplitDown) },
+            ],
+        )];
+    });
+    env.host.on_event(&ev("custom.go", json!({}))).await;
+    env.host.settle().await;
+    let got: Vec<Placement> = env.core.opened().into_iter().map(|(_, r)| r.placement).collect();
+    assert_eq!(got, [Placement::NewTab, Placement::SplitRight, Placement::SplitDown]);
+}
+
+#[tokio::test]
 async fn self_triggering_chains_stop_at_depth_four() {
     let env = common::Env::new().with_settings(|st| {
         st.tools = (0..=6).map(|i| pty(&format!("t{i}"))).collect();

@@ -171,7 +171,7 @@ impl Default for ToolDef {
             keep_alive: None,
             check: None,
             install_hint: None,
-            placement: Placement::NewTab,
+            placement: Placement::SplitRight,
             keybinding: None,
             autostart: false,
             enabled: true,
@@ -198,6 +198,7 @@ pub struct ToolInfo {
     pub source: ToolSource,
     pub keybinding: Option<Chord>,
     pub description: Option<String>,
+    pub placement: Placement,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

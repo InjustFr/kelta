@@ -6,7 +6,7 @@ import { setTransport } from '$lib/ipc/transport';
 import PluginScreenPane from '../../views/plugin-screen/PluginScreenPane.svelte';
 import WebToolPane from '../../views/web-tool/WebToolPane.svelte';
 
-import { connectScreen } from './bridge';
+import { connectScreen, onThemeChange, themeTokens } from './bridge';
 import { applyWebToolEvent, rememberWebTool, webTools } from './web.svelte';
 
 function frame(): HTMLIFrameElement {
@@ -95,6 +95,19 @@ describe('screen bridge', () => {
     });
     port.close();
     b.destroy();
+  });
+});
+
+describe('theme push', () => {
+  it('sees inline theme overrides on <html> (lib/theme) and reports the change', async () => {
+    const cb = vi.fn();
+    const off = onThemeChange(cb);
+    document.documentElement.style.setProperty('--k-fg', '#93a1a1');
+    await Promise.resolve();
+    expect(cb).toHaveBeenCalled();
+    expect(themeTokens('dark')['--k-fg']).toBe('#93a1a1');
+    document.documentElement.style.removeProperty('--k-fg');
+    off();
   });
 });
 

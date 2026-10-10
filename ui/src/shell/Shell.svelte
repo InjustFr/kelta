@@ -11,6 +11,7 @@
   import { layout, projects, reviews, sessions, settings, toasts, tools, ui } from '$lib/stores';
   import { configFromSettings, terminalPool } from '$lib/terminal';
   import { terminalPalette } from '$lib/terminal/theme';
+  import { resolveTheme } from '$lib/theme';
   import { Button, currentPlatform, EmptyState } from '$lib/ui';
 
   import { confirms, prompts } from './confirm.svelte';
@@ -44,7 +45,8 @@
   const resolvedTheme = $derived<'dark' | 'light'>(
     themeSetting === 'system' ? (systemDark ? 'dark' : 'light') : themeSetting,
   );
-  const terminalConfig = $derived(configFromSettings(settings.value()?.terminal, resolvedTheme));
+  const resolved = $derived(resolveTheme(settings.value(), resolvedTheme));
+  const terminalConfig = $derived(configFromSettings(settings.value()?.terminal, resolved.terminal));
 
   $effect(() => {
     const root = document.documentElement;
@@ -52,9 +54,18 @@
     else root.dataset.theme = themeSetting;
   });
 
+  let themeKeys: string[] = [];
   $effect(() => {
-    // The window takes the hue of the active project; the terminal palette is not re-pushed.
-    const accent = projectAccent(projects.active?.color);
+    // Theme overrides sit inline on <html> over tokens.css; drop the keys the previous theme set.
+    const style = document.documentElement.style;
+    for (const key of themeKeys) if (!(key in resolved.vars)) style.removeProperty(key);
+    for (const [key, value] of Object.entries(resolved.vars)) style.setProperty(key, value);
+    themeKeys = Object.keys(resolved.vars);
+  });
+
+  $effect(() => {
+    // The window takes the hue of the active project (else the theme's); the palette is not re-pushed.
+    const accent = projectAccent(projects.active?.color) ?? projectAccent(resolved.accent);
     const style = document.documentElement.style;
     if (accent) style.setProperty('--k-project', accent);
     else style.removeProperty('--k-project');
@@ -63,7 +74,7 @@
   $effect(() => {
     // The Rust model answers OSC 4/10/11/12 queries from this palette: push it at startup and on
     // every theme change.
-    const palette = terminalPalette(resolvedTheme);
+    const palette = terminalPalette(resolved.terminal);
     terminalSetPalette({ palette }).catch(() => {});
   });
 

@@ -1480,6 +1480,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "placement": "split_right",
     "source": {
       "kind": "layer",
       "layer": "global"
@@ -1493,6 +1494,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "placement": "split_right",
     "source": {
       "kind": "plugin",
       "plugin_id": "tools-pack"
@@ -1824,6 +1826,8 @@ export const settingsDefault: Settings = {
   "accounts": {},
   "app": {
     "confirm_quit_with_running": true,
+    "dark_theme": "bezel-dark",
+    "light_theme": "bezel-light",
     "log_level": "info",
     "restore_mode": "lazy",
     "theme": "system"
@@ -2228,6 +2232,7 @@ export const settingsDefault: Settings = {
     },
     "view_scrollback": 1000
   },
+  "themes": {},
   "tickets": {
     "wip_limit": 3
   },
@@ -2416,7 +2421,7 @@ export const toolDef: ToolDef = {
   "kind": "web",
   "label": "Sapling ISL",
   "lifecycle": "on_close",
-  "placement": "new_tab",
+  "placement": "split_right",
   "scrollback": null,
   "start": {
     "args": [

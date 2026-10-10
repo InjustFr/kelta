@@ -234,6 +234,7 @@ describe('mock transport', () => {
       tracker_assignable_users: { ticket, query: 'gra' },
       tracker_priorities: { ticket },
       tracker_set_priority: { ticket, priority: 'Low' },
+      tracker_refine: { ticket, project_id: null },
       tracker_search: { scope: { kind: 'all' }, text: 'rate' },
       tracker_sources: { account_id: 'jira-acme', query: '' },
       next_up_put: { item: { project_id: 'shop', ticket, rank: 1, snoozed_until: null } },

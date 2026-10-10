@@ -2,6 +2,8 @@
   "accounts": {},
   "app": {
     "confirm_quit_with_running": true,
+    "dark_theme": "bezel-dark",
+    "light_theme": "bezel-light",
     "log_level": "info",
     "restore_mode": "lazy",
     "theme": "system"
@@ -406,6 +408,7 @@
     },
     "view_scrollback": 1000
   },
+  "themes": {},
   "tickets": {
     "wip_limit": 3
   },

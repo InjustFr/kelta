@@ -326,7 +326,7 @@ impl PluginHost {
                     id = format!("{}/{id}", p.id);
                 }
                 let tctx = TemplateCtx { session_id: cx.session.clone(), ..Default::default() };
-                self.open_tool(&project, &ToolId::new(id), tctx, placement.unwrap_or_default()).await?;
+                self.open_tool(&project, &ToolId::new(id), tctx, *placement).await?;
                 Ok(String::new())
             }
             ActionDef::OpenScreen { plugin, screen, params, placement } => {

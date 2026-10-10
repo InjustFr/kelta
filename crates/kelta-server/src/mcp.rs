@@ -289,7 +289,9 @@ fn html_text(html: &str) -> String {
 }
 
 async fn get_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId) -> ToolResult {
-    let (tracker, t) = linked(core, sid).await?;
+    // Not `linked`: a refine's sid reads its ticket but has no work item to write through.
+    let t = core.ticket_for_session(sid).await.ok_or_else(|| NO_TICKET.to_owned())?;
+    let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
     let d = tracker.get(&t).await.map_err(|e| e.message)?;
     let tk = &d.ticket;
     let mut s = format!("# {}: {}\n\nStatus: {}\nURL: {}\n", tk.r#ref.key, tk.title, tk.status.name, tk.url);

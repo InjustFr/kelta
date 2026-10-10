@@ -20,7 +20,7 @@
   "kind": "web",
   "label": "Sapling ISL",
   "lifecycle": "on_close",
-  "placement": "new_tab",
+  "placement": "split_right",
   "scrollback": null,
   "start": {
     "args": [

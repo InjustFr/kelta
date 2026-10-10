@@ -37,7 +37,7 @@ pub struct ToolDef {
   // common
   pub check: Option<Vec<String>>,      // argv run by tool_check; exit 0 = installed
   pub install_hint: Option<String>,
-  pub placement: Placement,            // new_tab (default) | split_right | split_down
+  pub placement: Placement,            // split_right (default) | split_down | new_tab
   pub keybinding: Option<Chord>,
   pub autostart: bool,                 // open when its project opens (default false)
   pub enabled: bool,                   // default true
@@ -143,7 +143,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `run` | `command`, `args?`, `cwd?`, `env?`, `stdin? = "event"\|"none"`, `timeout_ms? = 60000`, `show? = none\|toast_on_error\|pane` | background exec (no shell; `sh -c` must be explicit); output to trigger log; `pane` runs it in a visible session instead | `exec:<command>` |
 | `spawn_session` | `template? \| command+args`, `cwd?`, `placement?`, `focus? = false` | new session in the event's project | `sessions.spawn` |
 | `send_keys` | `session = "{event.session_id}"\|"claude"\|"editor"`, `text`, `bracketed? = true` | writes into a PTY | `terminal.write` |
-| `open_tool` | `tool`, `placement?` | `tool_open` | `sessions.spawn` |
+| `open_tool` | `tool`, `placement?` (default: the tool's) | `tool_open` | `sessions.spawn` |
 | `open_screen` | `plugin?`, `screen`, `params?`, `placement?` | opens a plugin screen | `ui.open` |
 | `start_work` | `ticket = "{ticket.key}"`, `project?` | opens StartWorkPlan (preview unless `work.plan_preview=false`) | `tickets.read`,`sessions.spawn` |
 | `transition_ticket` | `to_category?` \| `to_name?` | via provider transitions | `tickets.write` |

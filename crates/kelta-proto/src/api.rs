@@ -288,6 +288,10 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<(), KeltaError>;
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
+    /// The ticket MCP `get_ticket` reads for `id`: its work item's, or the ticket a refine runs on (T10).
+    async fn ticket_for_session(&self, id: &SessionId) -> Option<TicketRef> {
+        self.work_for_session(id).await.and_then(|w| w.ticket)
+    }
     async fn work_get(&self, _id: &WorkItemId) -> Option<WorkItem> {
         None
     }
