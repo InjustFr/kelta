@@ -17,6 +17,11 @@
 
   let { items, value = $bindable(), label, onchange }: Props = $props();
 
+  /** The tab Tab lands on: the selected one, else the first enabled (nothing selected yet). */
+  const focusId = $derived(
+    items.find((i) => i.id === value && !i.disabled)?.id ?? items.find((i) => !i.disabled)?.id,
+  );
+
   function select(id: T): void {
     value = id;
     onchange?.(id);
@@ -40,7 +45,7 @@
       type="button"
       role="tab"
       aria-selected={item.id === value}
-      tabindex={item.id === value ? 0 : -1}
+      tabindex={item.id === focusId ? 0 : -1}
       disabled={item.disabled}
       onclick={() => select(item.id)}
     >

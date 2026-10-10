@@ -11,7 +11,8 @@ have a stable path.
 1. Open a project: `+` in the project rail, or `kelta-ctl open ~/code/shop`.
 2. Add an account (Settings > Accounts) for your tracker and code host. Tokens go to the OS keyring; if you have
    none, use `env:` or `command:` references ([keyring setup](keyring-and-notifications.md)).
-3. Pick a ticket in the board and press **Start work**: Kelta creates a worktree and opens Claude and nvim
+3. Open the Tickets pane. It shows your tickets (Mine); `2` and `3` switch to Unassigned and Anyone, `v` picks other
+   sources ([working with tickets](tickets.md)). Select one and press **Start work**: Kelta creates a worktree and opens Claude and nvim
    side by side.
 
 Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, notification daemon, keyring,

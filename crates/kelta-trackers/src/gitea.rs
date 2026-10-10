@@ -15,13 +15,14 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 use crate::common::{self, COMMENT_LIMIT, columns_from_binding, idstr, last_n, s, split_repo_number};
+use crate::github::{date_of, labels_rank, today};
 
 const PER_PAGE: u32 = 50;
 
@@ -94,6 +95,18 @@ impl GiteaIssues {
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
             .unwrap_or_default();
+        let updated_at = s(v, "updated_at").unwrap_or("").to_owned();
+        // A milestone is the sprint: active while open and not past its due date (or undated).
+        let milestone_due = v.pointer("/milestone/due_on").and_then(Value::as_str).and_then(date_of);
+        let sprint = v.get("milestone").filter(|m| !m.is_null()).and_then(|m| {
+            Some(Sprint {
+                id: m.get("id").and_then(idstr)?,
+                name: s(m, "title")?.to_owned(),
+                active: s(m, "state") != Some("closed")
+                    && milestone_due.as_deref().is_none_or(|d| d >= today().as_str()),
+                ends_at: milestone_due.clone(),
+            })
+        });
         Some(Ticket {
             r#ref: TicketRef {
                 account: self.account().clone(),
@@ -112,9 +125,19 @@ impl GiteaIssues {
                 .or_else(|| v.get("assignees").and_then(|a| a.get(0)))
                 .and_then(Self::user_from),
             priority: labels.iter().find_map(|l| l.strip_prefix("priority/").map(str::to_owned)),
+            priority_rank: labels_rank(&labels),
             labels,
-            updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
+            // A closed issue entered its status when it closed.
+            status_since: Some(
+                s(v, "closed_at")
+                    .filter(|_| s(v, "state") == Some("closed"))
+                    .map_or(updated_at.clone(), str::to_owned),
+            ),
+            updated_at,
+            sprint,
+            due: s(v, "due_date").and_then(date_of).or(milestone_due),
             project_hint: Some(repo.to_owned()),
+            ..Default::default()
         })
     }
 
@@ -165,7 +188,11 @@ impl Tracker for GiteaIssues {
             Some(_) => return Err(KeltaError::invalid("gitea issues expect a page cursor")),
         };
         let project = view.project.as_deref().filter(|p| !p.is_empty());
-        let all = view.scope.as_deref() == Some("all");
+        // `who` wins over the legacy `scope`.
+        let all = view.who.map_or(view.scope.as_deref() == Some("all"), |w| w != Who::Mine);
+        if matches!(view.who, Some(Who::Unassigned | Who::Anyone)) && project.is_none() {
+            return Err(KeltaError::invalid("gitea needs a repository to list unassigned or all tickets"));
+        }
         let url = match (project, all) {
             (Some(p), true) => {
                 let (owner, name) = p
@@ -194,12 +221,45 @@ impl Tracker for GiteaIssues {
             .map(|a| {
                 a.iter()
                     .filter_map(|i| self.ticket_from(i))
-                    // shortcut: a project filter on the search endpoint trims a page, it does not refill it
+                    // shortcut: short pages, page-refill later (project and unassigned filters trim a page)
+                    .filter(|t| view.who != Some(Who::Unassigned) || t.assignee.is_none())
                     .filter(|t| project.is_none_or(|p| t.project_hint.as_deref() == Some(p)))
                     .collect()
             })
             .unwrap_or_default();
         Ok(Page { items, next: link_rel(&resp.headers, "next").map(|_| Cursor::Page(page + 1)) })
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let body = self
+            .json(
+                HttpRequest::get(format!("{}/repos/search", self.api))
+                    .query("q", query.trim())
+                    .query("limit", "50"),
+            )
+            .await?
+            .body;
+        Ok(body
+            .get("data")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|r| {
+                let name = s(r, "full_name")?;
+                Some(SourceHit {
+                    kind: "repo".into(),
+                    label: name.to_owned(),
+                    detail: s(r, "description").filter(|d| !d.is_empty()).map(str::to_owned),
+                    view: TrackerView {
+                        id: format!("gitea:repo:{name}"),
+                        label: name.to_owned(),
+                        project: Some(name.to_owned()),
+                        who: Some(Who::Mine),
+                        ..TrackerView::default()
+                    },
+                })
+            })
+            .collect())
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
@@ -230,6 +290,8 @@ impl Tracker for GiteaIssues {
             body_format: BodyFormat::Markdown,
             comments: last_n(comments, COMMENT_LIMIT),
             parent: None,
+            prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

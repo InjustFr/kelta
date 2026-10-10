@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::{ProjectV2Ref, TrackerBinding};
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -57,6 +57,11 @@ async fn assigned_list_drops_pull_requests_and_follows_link_headers() {
     assert_eq!(t.assignee.as_ref().unwrap().id, "louis");
     assert_eq!(t.project_hint.as_deref(), Some("acme/shop"));
     assert_eq!(page.items[1].r#ref.key, "acme/web#7");
+    assert_eq!((t.priority_rank, t.due.as_deref(), t.sprint.is_none()), (None, None, true));
+    // labels P2 and `priority: high` → best rank wins; milestone due date; no closed_at → updated_at
+    let w = &page.items[1];
+    assert_eq!((w.priority_rank, w.due.as_deref()), (Some(1), Some("2026-10-14")));
+    assert_eq!(w.status_since.as_deref(), Some("2026-09-30T09:00:00Z"));
 }
 
 #[tokio::test]
@@ -136,6 +141,20 @@ async fn project_v2_views_take_the_status_from_the_board() {
     assert_eq!(page.items[0].status.category, StatusCategory::InProgress);
     assert_eq!(page.items[0].kind.as_deref(), Some("Bug"));
     assert_eq!(page.items[1].status.category, StatusCategory::Done);
+    // Priority = position of the option in the board's single-select, not its name
+    let (a, b) = (&page.items[0], &page.items[1]);
+    assert_eq!((a.priority.as_deref(), a.priority_rank), (Some("High"), Some(1)));
+    assert_eq!((b.priority.as_deref(), b.priority_rank), (None, None));
+    // Iteration field: the window around now is active, a finished one is not
+    let (sa, sb) = (a.sprint.as_ref().unwrap(), b.sprint.as_ref().unwrap());
+    assert_eq!((sa.id.as_str(), sa.name.as_str(), sa.active), ("it_now", "Sprint 9", true));
+    assert_eq!((sb.id.as_str(), sb.active, sb.ends_at.as_deref()), ("it_old", false, Some("2020-01-14")));
+    // Number field named Estimate/Points only; other number fields are ignored
+    assert_eq!((a.estimate.as_deref(), b.estimate.as_deref()), (Some("5"), Some("2.5")));
+    // milestone due date; closed issues enter their status at closedAt
+    assert_eq!((a.due.as_deref(), b.due.as_deref()), (Some("2026-10-31"), None));
+    assert_eq!(a.status_since.as_deref(), Some("2026-09-30T09:00:00Z"));
+    assert_eq!(b.status_since.as_deref(), Some("2026-08-02T10:00:00Z"));
     assert_eq!(page.next, Some(Cursor::After("CUR1".into())));
     // the cursor goes back as the `after` variable
     gh(&server).list(&project_view(), page.next).await.unwrap();
@@ -233,6 +252,8 @@ async fn project_moves_resolve_field_and_option_ids_by_name_and_cache_them() {
     let moved = t.transition(&r(), "status:In Review", None).await.unwrap();
     assert_eq!(moved.status.name, "In Review");
     assert_eq!(moved.status.category, StatusCategory::InReview);
+    assert_eq!(moved.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
+    assert_eq!(moved.priority_rank, Some(1));
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     let field_queries =
         gql_bodies.iter().filter(|b| b["query"].as_str().unwrap_or("").contains("node(id")).count();
@@ -336,6 +357,22 @@ async fn comment_and_assign() {
 }
 
 #[tokio::test]
+async fn assign_keeps_the_board_fields_of_a_project_item() {
+    let server = MockServer::start().await;
+    gql(&server, "projectItems", "github/gql_issue_projects.json").await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    Mock::given(method("PATCH"))
+        .and(path("/repos/acme/shop/issues/12"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/issue.json")))
+        .mount(&server)
+        .await;
+    let t = gh(&server).assign(&r(), Assignee::Me).await.unwrap();
+    assert_eq!(t.status.name, "In Progress");
+    assert_eq!(t.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
+    assert_eq!(t.priority_rank, Some(1));
+}
+
+#[tokio::test]
 async fn auth_and_rate_limit_errors() {
     let server = MockServer::start().await;
     Mock::given(path("/user")).respond_with(ResponseTemplate::new(401)).mount(&server).await;
@@ -379,4 +416,140 @@ async fn rejected_mutation_with_null_field_is_an_error() {
     mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
     let e = gh(&server).transition(&r(), "status:In Review", None).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::PermissionDenied);
+}
+
+fn query_of(r: &wiremock::Request) -> std::collections::HashMap<String, String> {
+    r.url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect()
+}
+
+#[tokio::test]
+async fn repo_views_send_the_assignee_for_each_who() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    mount(&server, "GET", "/repos/acme/shop/issues", 200, "github/issues_repo.json").await;
+    let t = gh(&server);
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    v.assigned_to = Some("me".into()); // ignored once `who` is set
+    for who in [Who::Mine, Who::Unassigned, Who::Anyone] {
+        v.who = Some(who);
+        t.list(&v, None).await.unwrap();
+    }
+    let got: Vec<_> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|r| r.url.path() == "/repos/acme/shop/issues")
+        .map(|r| query_of(r).get("assignee").cloned())
+        .collect();
+    assert_eq!(got, [Some("louis".to_owned()), Some("none".to_owned()), None]);
+}
+
+#[tokio::test]
+async fn legacy_repo_views_without_assigned_to_skip_the_user_call() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/repos/acme/shop/issues", 200, "github/issues_repo.json").await;
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    gh(&server).list(&v, None).await.unwrap();
+    let reqs = server.received_requests().await.unwrap();
+    assert!(reqs.iter().all(|r| r.url.path() != "/user" && !query_of(r).contains_key("assignee")));
+}
+
+#[tokio::test]
+async fn search_views_add_the_assignee_qualifier() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/search.json")))
+        .mount(&server)
+        .await;
+    let t = gh(&server);
+    let mut v = view("search");
+    v.search = Some("org:acme".into());
+    for who in [Who::Mine, Who::Unassigned, Who::Anyone] {
+        v.who = Some(who);
+        t.list(&v, None).await.unwrap();
+    }
+    let got: Vec<_> =
+        server.received_requests().await.unwrap().iter().map(|r| query_of(r)["q"].clone()).collect();
+    assert_eq!(got, ["org:acme is:issue assignee:@me", "org:acme is:issue no:assignee", "org:acme is:issue"]);
+}
+
+#[tokio::test]
+async fn unassigned_and_anyone_need_a_repo_search_or_project() {
+    let server = MockServer::start().await;
+    let t = gh(&server);
+    for who in [Who::Unassigned, Who::Anyone] {
+        let mut v = view("none");
+        v.who = Some(who);
+        let e = t.list(&v, None).await.unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidArgument);
+        assert!(e.message.contains("repository, search or project"));
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn project_v2_views_filter_server_side_by_who_and_iteration() {
+    let server = MockServer::start().await;
+    gql(&server, "projectV2(number", "github/gql_project_items.json").await;
+    let t = gh(&server);
+    let mut v = project_view();
+    t.list(&v, None).await.unwrap(); // legacy: open only
+    v.who = Some(Who::Mine);
+    t.list(&v, None).await.unwrap();
+    v.who = Some(Who::Unassigned);
+    v.current_iteration = true;
+    t.list(&v, None).await.unwrap();
+    v.who = Some(Who::Anyone);
+    t.list(&v, None).await.unwrap();
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert!(b[0]["query"].as_str().unwrap().contains("query:$query"));
+    let q: Vec<_> = b.iter().map(|b| b["variables"]["query"].clone()).collect();
+    assert_eq!(
+        q,
+        [
+            json!("is:open"),
+            json!("is:open assignee:@me"),
+            json!("is:open no:assignee iteration:@current"),
+            json!("is:open iteration:@current")
+        ]
+    );
+}
+
+#[tokio::test]
+async fn sources_list_repos_and_open_projects_filtered_by_query() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user/repos", 200, "github/user_repos.json").await;
+    gql(&server, "projectsV2", "github/gql_viewer_projects.json").await;
+    let hits = gh(&server).sources("ACME").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        [
+            ("repo", "github:repo:acme/shop", "acme/shop"),
+            ("repo", "github:repo:acme/api", "acme/api"),
+            ("project_v2", "github:project:acme/5", "Roadmap"),
+            ("project_v2", "github:project:louis/9", "Personal"),
+        ]
+    );
+    assert_eq!(hits[0].detail.as_deref(), Some("The storefront"));
+    assert_eq!(hits[2].detail.as_deref(), Some("acme #5"));
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+    assert_eq!(hits[0].view.repo.as_deref(), Some("acme/shop"));
+    let p = hits[2].view.project_v2.as_ref().unwrap();
+    assert_eq!((p.owner.as_str(), p.number, p.status_field.as_str()), ("acme", 5, "Status"));
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(b[0]["variables"]["q"], "ACME");
+}
+
+#[tokio::test]
+async fn sources_keep_the_repos_when_projects_are_not_readable() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user/repos", 200, "github/user_repos.json").await;
+    gql(&server, "projectsV2", "github/gql_rate_limited.json").await;
+    let hits = gh(&server).sources("").await.unwrap();
+    assert_eq!(hits.len(), 3);
 }

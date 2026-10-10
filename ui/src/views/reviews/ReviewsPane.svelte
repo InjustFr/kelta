@@ -4,8 +4,8 @@
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
-  import { openExternal } from '$lib/ipc/commands';
-  import { projects, reviews, toasts, work } from '$lib/stores';
+  import { openExternal, reviewNudge } from '$lib/ipc/commands';
+  import { projects, reviews, settings, toasts, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -13,20 +13,25 @@
     EmptyState,
     ErrorState,
     Lamp,
+    Menu,
     Select,
     Toggle,
     ROW_HEIGHT,
     VirtualList,
     relativeTime,
+    type MenuItem,
   } from '$lib/ui';
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openContent } from '../work/nav';
+  import LinkedTicket from './LinkedTicket.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+
+  import { nudgedRecently, pingBody, waitingChip } from './nudge';
 
   let { projectId, content, focused }: PaneProps<'reviews'> = $props();
 
@@ -149,6 +154,48 @@
     openExternal({ url: item.review.url }).catch((err) => toasts.error(err, 'Open in browser'));
   }
 
+  // ---- nudge (my PRs) -------------------------------------------------------------------------
+  let nudgeMenu = $state<{ x: number; y: number; item: ReviewItem } | null>(null);
+  const slaHours = $derived(settings.value()?.reviews.sla_hours ?? 24);
+
+  function openNudge(item: ReviewItem): void {
+    if (item.review.kind !== 'authored') return;
+    const r = root?.querySelector('.k-row.selected')?.getBoundingClientRect();
+    nudgeMenu = { x: r ? r.right - 220 : 40, y: (r?.bottom ?? 40) + 2, item };
+  }
+
+  const nudgeItems = $derived.by((): MenuItem[] => {
+    const rv = nudgeMenu?.item.review;
+    const why =
+      rv?.nudged_at && nudgedRecently(rv)
+        ? `Nudged ${relativeTime(Date.parse(rv.nudged_at))}; again 24 h after`
+        : undefined;
+    return [
+      {
+        id: 'rerequest',
+        label: 'Re-request review',
+        key: 'r',
+        kbd: 'r',
+        disabled: !!why || !rv?.waiting_on.length,
+        title: why,
+      },
+      { id: 'ping', label: 'Comment ping', key: 'c', kbd: 'c', disabled: !!why, title: why },
+    ];
+  });
+
+  async function nudge(id: string): Promise<void> {
+    const item = nudgeMenu?.item;
+    if (!item) return;
+    const template = settings.value()?.reviews.nudge_template ?? '{reviewers}';
+    const comment = id === 'ping' ? pingBody(template, item.review) : null;
+    try {
+      await reviewNudge({ review: item.review.ref, who: item.review.waiting_on, comment });
+      toasts.info(id === 'ping' ? 'Ping posted' : 'Review re-requested');
+    } catch (err) {
+      toasts.error(err, 'Nudge');
+    }
+  }
+
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -185,6 +232,9 @@
         break;
       case 's':
         if (item) void reviewLocally(item.review.ref, item.project_ids[0] ?? projectId);
+        break;
+      case 'n':
+        if (item) openNudge(item);
         break;
       default:
         return;
@@ -291,6 +341,7 @@
               {@const ci = ciGlyph(rv.ci)}
               {@const dec = decisionInfo(rv.decision)}
               {@const mine = myStateInfo(rv.my_state)}
+              {@const wait = waitingChip(rv, slaHours)}
               <button
                 type="button"
                 tabindex="-1"
@@ -308,10 +359,16 @@
                   {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
                   {#if rv.draft}<Badge>draft</Badge>{/if}
                   {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
-                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
+                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
+                      ticketKey={t}
+                      {projectId}
+                      repo={rv.ref.repo}
+                      tabindex={-1}
+                    />{/each}
                   {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
                   {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
                   {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
+                  {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'}>{wait.label}</Badge>{/if}
                   <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
                   <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
                   {#if rv.additions !== null || rv.deletions !== null}
@@ -336,12 +393,27 @@
       ['enter', 'Open'],
       ['/', 'Filter'],
       ['s', 'Review locally'],
+      ['n', 'Nudge (my PRs)'],
       ['o', 'Open in browser'],
       ['shift+m', 'Merge when ready'],
       ['shift+r', 'Refresh'],
     ]}
   />
 </div>
+
+{#if nudgeMenu}
+  <Menu
+    items={nudgeItems}
+    x={nudgeMenu.x}
+    y={nudgeMenu.y}
+    label="Nudge reviewers"
+    onselect={(id) => void nudge(id)}
+    onclose={() => {
+      nudgeMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
 
 <style>
   .add {

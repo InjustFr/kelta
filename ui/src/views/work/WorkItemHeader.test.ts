@@ -48,6 +48,25 @@ async function openMenu(): Promise<HTMLElement> {
 }
 
 describe('work bar', () => {
+  it("the ticket's status chip opens the status picker and a digit moves the ticket", async () => {
+    const w = item(0); // SHOP-142, In Progress
+    mountHeader(w);
+    const chip = await screen.findByTestId('work-status');
+    await waitFor(() => expect(chip.hasAttribute('disabled')).toBe(false));
+    await fireEvent.click(chip);
+    const menu = await screen.findByRole('menu', { name: `Move ${w.ticket!.key}` });
+    expect(menu.querySelector('[aria-current="step"]')?.textContent).toBe('In Progress');
+    await screen.findAllByRole('menuitem');
+    await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Filter statuses' }), { key: '2' }); // In review
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
+        ticket: { key: w.ticket!.key },
+        transition_id: 'to-in_review',
+      }),
+    );
+    await waitFor(() => expect(chip.textContent).toContain('In review'));
+  });
+
   it('shows the phase, branch, ahead/behind and diffstat from work_status_all', async () => {
     const w = item(0);
     mountHeader(w);

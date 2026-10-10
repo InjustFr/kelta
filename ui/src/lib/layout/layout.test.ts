@@ -235,8 +235,8 @@ describe('sessions in layouts', () => {
   it('contentEquals ignores key order', () => {
     expect(
       contentEquals(
-        { kind: 'tickets', scope: { kind: 'project', id: 'x' }, view_id: null, mode: 'list' },
-        { mode: 'list', view_id: null, scope: { id: 'x', kind: 'project' }, kind: 'tickets' },
+        { kind: 'tickets', scope: { kind: 'project', id: 'x' }, view_id: null, mode: 'list', who: null },
+        { who: null, mode: 'list', view_id: null, scope: { id: 'x', kind: 'project' }, kind: 'tickets' },
       ),
     ).toBe(true);
   });

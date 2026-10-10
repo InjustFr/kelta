@@ -20,10 +20,20 @@ linked_tickets: Array<string>, additions: number | null, deletions: number | nul
  */
 decision_head?: string | null, 
 /**
- * When my review was requested (review requests only); `None`: the UI ages the row by `updated_at`.
+ * When my review was requested (review requests only), or since when my PR waits on
+ * `waiting_on` (authored); `None`: the UI ages the row by `updated_at`.
  */
 requested_at?: string | null, 
 /**
  * I am the last required reviewer: my approval unblocks the author (review requests only).
  */
-blocking: boolean, };
+blocking: boolean, 
+/**
+ * Reviewers my PR waits on (authored only): asked and not reviewed since, or who requested
+ * changes before my last push.
+ */
+waiting_on: Array<string>, 
+/**
+ * My last nudge from Kelta (authored only, `nudges` table; core-filled).
+ */
+nudged_at?: string | null, };

@@ -3,13 +3,15 @@
   // pane keeps one line and drops the hints that no longer fit, whole.
   import { Kbd } from '$lib/ui';
 
-  /** `[keys, label]`; several keys are separated by a space (`'j k'`). */
+  /** `[keys, label]`; alternative keys are separated by a space (`'j k'`), a sequence by `then` (`'f then s'`). */
   let { hints }: { hints: readonly (readonly [string, string])[] } = $props();
 </script>
 
 <footer class="hints" aria-hidden="true">
   {#each hints as [keys, label] (keys)}<span class="hint"
-      >{#each keys.split(' ') as k (k)}<Kbd chord={k} />{/each}
+      >{#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">then</span>{:else}<Kbd
+            chord={k}
+          />{/if}{/each}
       {label}</span
     >{/each}
 </footer>
@@ -29,6 +31,11 @@
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-muted);
     white-space: nowrap;
+  }
+
+  .then {
+    padding: 0 2px;
+    color: var(--k-fg-subtle);
   }
 
   .hint {

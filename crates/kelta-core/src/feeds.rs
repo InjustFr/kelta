@@ -5,13 +5,13 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use kelta_proto::api::{CodeHost, Tracker};
 use kelta_proto::codehost::{
-    CiState, MyReviewState, PrState, Review, ReviewDecision, ReviewDetail, ReviewItem, ReviewKind,
-    ReviewPage, ReviewQuery, ReviewRef,
+    CiState, MyReviewState, PrLink, PrSource, PrState, Review, ReviewDecision, ReviewDetail, ReviewItem,
+    ReviewKind, ReviewPage, ReviewQuery, ReviewRef,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
@@ -21,8 +21,8 @@ use kelta_proto::model::{PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
-    AccountError, Assignee, Column, Cursor, Page, StatusCategory, Ticket, TicketDetail, TicketItem,
-    TicketPage, TicketRef, Transition,
+    AccountError, Assignee, Column, Cursor, Page, SourceHit, StatusCategory, Ticket, TicketDetail,
+    TicketItem, TicketPage, TicketRef, Transition, Who,
 };
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -31,6 +31,9 @@ use crate::Core;
 use crate::scheduler::{IntervalPolicy, Refresher, SubKey};
 use crate::status::NotifyKind;
 use crate::store::q;
+
+/// `tracker_transitions` of one ticket: (status id when fetched, fetched at, transitions).
+type CachedTransitions = (Option<String>, Instant, Vec<Transition>);
 
 #[derive(Default)]
 pub struct Feeds {
@@ -47,6 +50,7 @@ pub struct Feeds {
     pr_items: Mutex<HashMap<WorkItemId, ProjectId>>,
     /// PRs whose merge / close was published in this process (live diff and check publish once).
     ended: Mutex<HashSet<ReviewRef>>,
+    transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
 }
 
 /// One tracker list query shared by the projects that use it.
@@ -79,9 +83,8 @@ fn review_kind_str(k: ReviewKind) -> &'static str {
     }
 }
 
-fn default_view() -> TrackerView {
-    TrackerView { id: "mine".into(), label: "My open".into(), ..TrackerView::default() }
-}
+/// A PR's reviewers are nudged at most once per this long (`review_nudge`).
+const NUDGE_COOLDOWN: Duration = Duration::from_secs(24 * 3600);
 
 /// Seconds since an RFC 3339 timestamp (`u64::MAX`-ish when unparsable).
 pub fn age_of(ts: &str) -> Duration {
@@ -95,14 +98,94 @@ pub fn age_of(ts: &str) -> Duration {
     }
 }
 
-/// Merge pages from several queries: de-dup by ref, union of project ids.
+/// PR number from its URL (GitHub `/pull/n`, GitLab `/merge_requests/n`, Gitea, Bitbucket).
+fn pr_number(url: &str) -> Option<u64> {
+    url.trim_end_matches('/').rsplit('/').next()?.parse().ok()
+}
+
+/// A review's `linked_tickets` badge names `key` (UI `sameKey`): case-insensitive; `#12` is
+/// `repo#12` on forges and the bare `12` on Redmine.
+fn same_key(key: &str, linked: &str, repo: &str) -> bool {
+    let (k, l) = (key.to_lowercase(), linked.to_lowercase());
+    k == l || (l.starts_with('#') && (k == format!("{}{l}", repo.to_lowercase()) || format!("#{k}") == l))
+}
+
+fn pr_link(r: &Review, source: PrSource) -> PrLink {
+    PrLink {
+        url: r.url.clone(),
+        account: Some(r.r#ref.account.clone()),
+        repo: r.r#ref.repo.clone(),
+        number: r.r#ref.number,
+        title: r.title.clone(),
+        branch: r.source_branch.clone(),
+        // The polled feeds only list open PRs.
+        state: PrState::Open,
+        draft: r.draft,
+        ci: r.ci,
+        review: r.decision,
+        source,
+    }
+}
+
+/// A ticket's PRs (TICKETS.md T1), no network: its work item's `pr_url` (enriched from the feed
+/// when listed there), then open PRs of the polled feeds naming the ticket; de-duplicated by URL.
+/// `bound` is the code-host `(account, repo)` of the work item's repo; `repos` are the code-host
+/// repos of the ticket's projects, the only ones a bare-number key (Redmine `12` ~ `#12`) matches in.
+pub fn ticket_prs(
+    key: &str,
+    work: Option<&WorkItem>,
+    bound: Option<(AccountId, String)>,
+    reviews: &[Review],
+    repos: &[String],
+) -> Vec<PrLink> {
+    let mut out: Vec<PrLink> = Vec::new();
+    if let Some(w) = work
+        && let Some(url) = &w.pr_url
+    {
+        let mut link = match reviews.iter().find(|r| &r.url == url) {
+            Some(r) => pr_link(r, PrSource::WorkItem),
+            None => PrLink {
+                url: url.clone(),
+                account: bound.as_ref().map(|(a, _)| a.clone()),
+                repo: bound.map(|(_, r)| r).unwrap_or_default(),
+                number: pr_number(url).unwrap_or(0),
+                title: w.title.clone().unwrap_or_default(),
+                branch: w.branch.clone(),
+                state: PrState::Open,
+                draft: false,
+                ci: CiState::None,
+                review: None,
+                source: PrSource::WorkItem,
+            },
+        };
+        link.state = match w.state {
+            WorkState::Merged { .. } => PrState::Merged,
+            WorkState::PrClosed => PrState::Closed,
+            _ => link.state,
+        };
+        out.push(link);
+    }
+    let bare = key.bytes().all(|b| b.is_ascii_digit());
+    let in_scope = |r: &Review| !bare || repos.iter().any(|x| x.eq_ignore_ascii_case(&r.r#ref.repo));
+    for r in reviews
+        .iter()
+        .filter(|r| in_scope(r) && r.linked_tickets.iter().any(|l| same_key(key, l, &r.r#ref.repo)))
+    {
+        if !out.iter().any(|l| l.url == r.url) {
+            out.push(pr_link(r, PrSource::KeyMatch));
+        }
+    }
+    out
+}
+
+/// Merge pages from several queries: de-dup by ref, union of project ids and view ids.
 pub fn merge_tickets(
-    pages: Vec<(Vec<Ticket>, Vec<ProjectId>)>,
-    work: &HashMap<TicketRef, WorkItemId>,
+    pages: Vec<(Vec<Ticket>, Vec<ProjectId>, String)>,
+    work: &HashMap<TicketRef, WorkItem>,
 ) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
-    for (tickets, projects) in pages {
+    for (tickets, projects, view_id) in pages {
         for t in tickets {
             match index.get(&t.r#ref) {
                 Some(&i) => {
@@ -111,11 +194,20 @@ pub fn merge_tickets(
                             out[i].project_ids.push(p.clone());
                         }
                     }
+                    if !out[i].view_ids.contains(&view_id) {
+                        out[i].view_ids.push(view_id.clone());
+                    }
                 }
                 None => {
                     index.insert(t.r#ref.clone(), out.len());
-                    let work_item_id = work.get(&t.r#ref).cloned();
-                    out.push(TicketItem { ticket: t, project_ids: projects.clone(), work_item_id });
+                    let work_item_id = work.get(&t.r#ref).map(|w| w.id.clone());
+                    out.push(TicketItem {
+                        ticket: t,
+                        project_ids: projects.clone(),
+                        work_item_id,
+                        view_ids: vec![view_id.clone()],
+                        ..TicketItem::default()
+                    });
                 }
             }
         }
@@ -247,7 +339,7 @@ impl Core {
         }
     }
 
-    fn tracker_of(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
+    pub(crate) fn tracker_of(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
         let r = self.providers.tracker(account, &self.accounts_settings().accounts);
         if let Err(e) = &r
             && e.code != ErrorCode::NotFound
@@ -298,8 +390,9 @@ impl Core {
     // Tickets
     // =========================================================================================
 
-    /// The list queries behind a scope (one per distinct `(account, view)`).
-    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>) -> Vec<TicketQuery> {
+    /// The list queries behind a scope (one per distinct `(account, view)`). `view_id` None = every
+    /// view of each project (the union). `who` overrides `view.who`.
+    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
         let projects: Vec<Arc<ProjectConfig>> = match scope {
             Scope::Project { id } => self.cfg.project(id).into_iter().collect(),
             Scope::All => {
@@ -310,21 +403,25 @@ impl Core {
         let mut out: Vec<TicketQuery> = Vec::new();
         for p in projects {
             let Some(b) = &p.tracker else { continue };
-            let view = match view_id {
-                Some(v) => b.views.iter().find(|x| x.id == v).or(b.views.first()),
-                None => b.views.first(),
-            }
-            .cloned()
-            .unwrap_or_else(default_view);
-            let key = tickets_key(&b.account, &view);
-            match out.iter_mut().find(|q| q.cache_key == key) {
-                Some(q) => q.projects.push(p.id.clone()),
-                None => out.push(TicketQuery {
-                    account: b.account.clone(),
-                    view,
-                    projects: vec![p.id.clone()],
-                    cache_key: key,
-                }),
+            // shortcut: first page per source, add per-source Load more when needed
+            // an unknown view id (source removed or renamed) falls back to the union
+            let views: Vec<TrackerView> = match view_id.and_then(|v| b.views.iter().find(|x| x.id == v)) {
+                Some(v) => vec![v.clone()],
+                None => b.views.clone(),
+            };
+            for mut view in views {
+                if who.is_some() {
+                    view.who = who;
+                }
+                let account = view.account.clone().unwrap_or_else(|| b.account.clone());
+                let key = tickets_key(&account, &view);
+                match out.iter_mut().find(|q| q.cache_key == key) {
+                    Some(q) if !q.projects.contains(&p.id) => q.projects.push(p.id.clone()),
+                    Some(_) => {}
+                    None => {
+                        out.push(TicketQuery { account, view, projects: vec![p.id.clone()], cache_key: key })
+                    }
+                }
             }
         }
         let mut views = self.feeds.views.lock();
@@ -341,9 +438,26 @@ impl Core {
     ) -> Result<Page<Ticket>, KeltaError> {
         let tracker = self.tracker_of(&q.account)?;
         let r = tracker.list(&q.view, cursor.clone()).await;
-        self.note_account(&q.account, &r);
-        let page = r?;
+        // `Invalid` is a view the provider cannot answer (e.g. Unassigned without a repo), not account health
+        if !matches!(&r, Err(e) if e.code == ErrorCode::InvalidArgument) {
+            self.note_account(&q.account, &r);
+        }
+        let mut page = r?;
         if cursor.is_none() {
+            // Open-only default lists never return done tickets: add the ones done in the last 7 days (Flow's Done).
+            // shortcut: first page of the provider's closed list, page on when 7 days of closures exceed it.
+            if q.view.status.is_none() {
+                let closed = TrackerView { status: Some("closed".into()), ..q.view.clone() };
+                let week = Duration::from_secs(7 * 86_400);
+                let done = tracker.list(&closed, None).await.map(|p| p.items).unwrap_or_default();
+                let fresh: Vec<Ticket> = done
+                    .into_iter()
+                    .filter(|t| t.status.category == StatusCategory::Done)
+                    .filter(|t| age_of(t.status_since.as_deref().unwrap_or(&t.updated_at)) <= week)
+                    .filter(|t| !page.items.iter().any(|o| o.r#ref == t.r#ref))
+                    .collect();
+                page.items.extend(fresh);
+            }
             self.cache_put(&q.cache_key, &page);
         }
         Ok(page)
@@ -401,13 +515,34 @@ impl Core {
         }
     }
 
-    async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItemId> {
+    async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItem> {
         let items = self.store.call(|c| q::work_list(c, None)).await.unwrap_or_default();
         items
             .into_iter()
             .filter(|w| w.state != WorkState::Finished)
-            .filter_map(|w| w.ticket.clone().map(|t| (t, w.id)))
+            .filter_map(|w| w.ticket.clone().map(|t| (t, w)))
             .collect()
+    }
+
+    /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
+    async fn cached_reviews(&self) -> Vec<Review> {
+        let mut out = Vec::new();
+        for a in self.review_accounts(&Scope::All) {
+            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
+                    out.extend(list);
+                }
+            }
+        }
+        out
+    }
+
+    /// Core-filled ticket fields: linked PRs and the tracker's caps.
+    fn enrich(&self, i: &mut TicketItem, work: &HashMap<TicketRef, WorkItem>, reviews: &[Review]) {
+        let w = work.get(&i.ticket.r#ref);
+        let repos = self.code_repos(&i.project_ids);
+        i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews, &repos);
+        i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
     }
 
     /// `tracker_list`.
@@ -415,6 +550,7 @@ impl Core {
         &self,
         scope: Scope,
         view_id: Option<String>,
+        who: Option<Who>,
         cursor: Option<Cursor>,
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
@@ -424,7 +560,7 @@ impl Core {
         {
             return Err(KeltaError::not_found(format!("project {id}")));
         }
-        let queries = self.ticket_queries(&scope, view_id.as_deref());
+        let queries = self.ticket_queries(&scope, view_id.as_deref(), who);
         if queries.is_empty() {
             return Ok(TicketPage::default());
         }
@@ -447,18 +583,23 @@ impl Core {
                 if single {
                     next = p.next.clone();
                 }
-                pages.push((p.items, q.projects.clone()));
+                pages.push((p.items, q.projects.clone(), q.view.id.clone()));
             }
         }
         let work = self.work_by_ticket().await;
-        Ok(TicketPage { items: merge_tickets(pages, &work), next, stale, errors })
+        let reviews = self.cached_reviews().await;
+        let mut items = merge_tickets(pages, &work);
+        for i in &mut items {
+            self.enrich(i, &work, &reviews);
+        }
+        Ok(TicketPage { items, next, stale, errors })
     }
 
     /// `tracker_search` over the (cached) lists of a scope.
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
-        let page = self.tracker_list(scope, None, None, false).await?;
+        let page = self.tracker_list(scope.clone(), None, None, None, false).await?;
         let needle = text.trim().to_lowercase();
-        Ok(page
+        let hits: Vec<TicketItem> = page
             .items
             .into_iter()
             .filter(|i| {
@@ -467,22 +608,87 @@ impl Core {
                     || i.ticket.title.to_lowercase().contains(&needle)
             })
             .take(50)
-            .collect())
+            .collect();
+        // a key outside every list (someone else's or nobody's ticket): resolve it by GET on each account
+        let key = text.trim();
+        if !hits.is_empty()
+            || !key.contains(|c: char| c.is_ascii_digit())
+            || key.contains(char::is_whitespace)
+        {
+            return Ok(hits);
+        }
+        let mut tried: Vec<AccountId> = Vec::new();
+        for q in self.ticket_queries(&scope, None, None) {
+            if tried.contains(&q.account) {
+                continue;
+            }
+            tried.push(q.account.clone());
+            let probe = TicketRef { account: q.account, key: key.into(), id: key.into() };
+            if let Ok(d) = self.tracker_get(&probe).await {
+                let work = self.work_by_ticket().await;
+                return Ok(vec![TicketItem {
+                    work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
+                    ticket: d.ticket,
+                    project_ids: q.projects,
+                    prs: d.prs,
+                    caps: d.caps,
+                    ..TicketItem::default()
+                }]);
+            }
+        }
+        Ok(hits)
+    }
+
+    /// `tracker_sources`: ticket sources of an account matching `query`.
+    pub async fn tracker_sources(
+        &self,
+        account: &AccountId,
+        query: &str,
+    ) -> Result<Vec<SourceHit>, KeltaError> {
+        self.rt.capture();
+        // the core owns `view.account`: providers leave it None
+        let r = self.tracker_of(account)?.sources(query).await.map(|mut hits| {
+            for h in &mut hits {
+                h.view.account = Some(account.clone());
+            }
+            hits
+        });
+        // `Unsupported` says nothing about the account's health
+        if !matches!(&r, Err(e) if e.code == ErrorCode::Unsupported) {
+            self.note_account(account, &r);
+        }
+        r
     }
 
     pub async fn tracker_get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.rt.capture();
         let r = self.tracker_of(&t.account)?.get(t).await;
-        self.note_account(&t.account, &r);
-        r
+        // a missing or malformed key says nothing about the account's health
+        if !matches!(&r, Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::InvalidArgument)) {
+            self.note_account(&t.account, &r);
+        }
+        let mut d = r?;
+        let work = self.work_by_ticket().await;
+        let w = work.get(&d.ticket.r#ref);
+        let projects: Vec<ProjectId> =
+            self.project_for_account(&t.account).map(|p| p.id.clone()).into_iter().collect();
+        let repos = self.code_repos(&projects);
+        d.prs =
+            ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &self.cached_reviews().await, &repos);
+        d.caps = self.tracker_of(&t.account)?.caps();
+        Ok(d)
     }
 
-    /// The project bound to a ticket's account (active first, then open, then any).
+    /// The project whose binding or one of its views uses a ticket's account (active first, then open, then any).
     fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
         let all: Vec<Arc<ProjectConfig>> = self
             .project_configs()
             .into_iter()
-            .filter(|p| p.tracker.as_ref().is_some_and(|b| &b.account == account))
+            .filter(|p| {
+                p.tracker.as_ref().is_some_and(|b| {
+                    &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
+                })
+            })
             .collect();
         let active = self.active_project();
         let open = self.open_projects();
@@ -517,11 +723,25 @@ impl Core {
         }
     }
 
+    /// Cached for the focused polling interval. Keyed per ticket + current status, not account + status:
+    /// Jira/Redmine/GitLab/Linear workflows differ per project, issue type, team or role at the same status.
     pub async fn tracker_transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError> {
         self.rt.capture();
+        let status = self.cached_ticket(t).await.map(|x| x.status.id);
+        let fresh = self.focused_interval();
+        if let Some((s, at, list)) = self.feeds.transitions.lock().get(t)
+            && *s == status
+            && at.elapsed() < fresh
+        {
+            return Ok(list.clone());
+        }
         let r = self.tracker_of(&t.account)?.transitions(t).await;
         self.note_account(&t.account, &r);
-        r
+        let list = r?;
+        let mut cache = self.feeds.transitions.lock();
+        cache.retain(|_, (_, at, _)| at.elapsed() < fresh);
+        cache.insert(t.clone(), (status, Instant::now(), list.clone()));
+        Ok(list)
     }
 
     pub async fn tracker_transition(
@@ -535,6 +755,7 @@ impl Core {
         let tracker = self.tracker_of(&t.account)?;
         let from = self.cached_ticket(t).await.map(|x| x.status);
         let ticket = tracker.transition(t, transition_id, fields).await?;
+        self.after_ticket_write(&ticket).await;
         self.publish_from(
             session,
             BusEvent::new(
@@ -542,20 +763,24 @@ impl Core {
                 serde_json::json!({ "ticket": t, "from": from, "to": ticket.status }),
             ),
         );
-        self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
 
     /// `tracker_move`: column → transition (by names, then categories); ambiguous → `Conflict`.
+    /// `project` picks the columns; `None` = the project bound to the ticket's account.
     pub async fn tracker_move(
         &self,
         t: &TicketRef,
         column_id: &str,
+        project: Option<&ProjectId>,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
-        let project = self
-            .project_for_account(&t.account)
-            .ok_or_else(|| KeltaError::not_found(format!("no project uses tracker account {}", t.account)))?;
+        let project = match project {
+            Some(id) => self.cfg.project(id).ok_or_else(|| KeltaError::not_found(format!("project {id}")))?,
+            None => self.project_for_account(&t.account).ok_or_else(|| {
+                KeltaError::not_found(format!("no project uses tracker account {}", t.account))
+            })?,
+        };
         let binding = project.tracker.clone().unwrap_or_default();
         let (label, categories, names) = match binding.columns.iter().find(|c| c.id == column_id) {
             Some(s) => (
@@ -622,11 +847,11 @@ impl Core {
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let ticket = self.tracker_of(&t.account)?.assign(t, who.clone()).await?;
+        self.after_ticket_write(&ticket).await;
         self.publish_ev(BusEvent::new(
             bus::TICKET_ASSIGNED,
             serde_json::json!({ "ticket": t, "assignee": who }),
         ));
-        self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
 
@@ -649,8 +874,10 @@ impl Core {
         None
     }
 
-    /// After a write: patch cached pages, notify views, refresh the account soon.
+    /// After a write, before its bus event: patch cached pages and notify views (the event's
+    /// [`Core::on_ticket_written`] refreshes the account; patching first keeps that fetch last).
     async fn after_ticket_write(&self, ticket: &Ticket) {
+        self.feeds.transitions.lock().remove(&ticket.r#ref);
         let queries: Vec<TicketQuery> =
             self.feeds.views.lock().values().filter(|q| q.account == ticket.r#ref.account).cloned().collect();
         let mut projects = Vec::new();
@@ -668,7 +895,17 @@ impl Core {
             projects.extend(q.projects.clone());
         }
         self.emit_tickets_changed(&projects);
-        self.scheduler.kick(Some(ticket.r#ref.account.clone()));
+    }
+
+    /// `ticket.transitioned` / `ticket.assigned` from anywhere (`tracker_*`, the work saga,
+    /// plugins): refresh the account's subscribed lists now instead of at the next poll.
+    // shortcut: only subscribed lists refresh, upgrade = patch cached rows like tracker_*
+    pub(crate) fn on_ticket_written(&self, payload: &serde_json::Value) {
+        // a `TicketRef`, or a whole `Ticket` (plugin actions)
+        let t = payload.get("ticket").map(|v| v.get("ref").unwrap_or(v));
+        if let Some(Ok(t)) = t.cloned().map(serde_json::from_value::<TicketRef>) {
+            self.scheduler.kick(Some(t.account));
+        }
     }
 
     // =========================================================================================
@@ -930,6 +1167,20 @@ impl Core {
         self.publish_ev(ev);
     }
 
+    /// The code-host repos of `projects`.
+    fn code_repos(&self, projects: &[ProjectId]) -> Vec<String> {
+        projects
+            .iter()
+            .filter_map(|id| self.cfg.project(id))
+            .flat_map(|p| {
+                p.repos
+                    .iter()
+                    .filter_map(|r| r.code_host.as_ref().map(|c| c.repo.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     /// `(account, repo)` of the code host bound to a work item's repo.
     fn work_binding(&self, w: &WorkItem) -> Option<(AccountId, String)> {
         let p = self.cfg.project(&w.project_id)?;
@@ -993,10 +1244,7 @@ impl Core {
                 continue;
             }
             // shortcut: the PR number is the last URL segment (GitHub /pull/n, GitLab /merge_requests/n).
-            let Some(number) = url.trim_end_matches('/').rsplit('/').next().and_then(|n| n.parse().ok())
-            else {
-                continue;
-            };
+            let Some(number) = pr_number(url) else { continue };
             self.pr_left_open(&ReviewRef { account, repo, number }).await;
         }
         Ok(())
@@ -1114,6 +1362,11 @@ impl Core {
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         let stamps = self.reviewed_stamps().await;
         all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
+        if kind == ReviewKind::Authored {
+            let nudges = self.store.call(|c| q::nudges(c)).await.unwrap_or_default();
+            all.iter_mut()
+                .for_each(|r| r.nudged_at = nudges.get(&(r.r#ref.repo.clone(), r.r#ref.number)).cloned());
+        }
         Ok(ReviewPage { items: merge_reviews(all, &bindings), stale, errors })
     }
 
@@ -1162,6 +1415,32 @@ impl Core {
         Ok(())
     }
 
+    /// Nudges the reviewers of my PR: re-requests `who` (its `waiting_on`; `comment` `None`) or
+    /// posts `comment`. One nudge per PR per 24 h, kept in `nudges` across restarts.
+    pub async fn review_nudge(
+        &self,
+        r: &ReviewRef,
+        who: &[String],
+        comment: Option<&str>,
+    ) -> Result<(), KeltaError> {
+        self.rt.capture();
+        let key = (r.repo.clone(), r.number);
+        let last = self.store.call(|c| q::nudges(c)).await?.remove(&key);
+        if last.is_some_and(|at| age_of(&at) < NUDGE_COOLDOWN) {
+            return Err(KeltaError::invalid("already nudged in the last 24 h"));
+        }
+        let host = self.code_host_of(&r.account)?;
+        match comment {
+            Some(body) => host.post_note(r, body).await?,
+            None if who.is_empty() => return Err(KeltaError::invalid("this pull request waits on nobody")),
+            None => drop(host.rerequest_review(r, who).await?),
+        }
+        let rr = r.clone();
+        self.store.call(move |c| q::nudge_put(c, &rr, &kelta_proto::now_rfc3339())).await?;
+        self.after_review_write(r).await;
+        Ok(())
+    }
+
     // =========================================================================================
     // Subscriptions
     // =========================================================================================
@@ -1184,8 +1463,11 @@ impl Core {
         let contents: Vec<PaneContent> =
             self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
-        let tickets = |scope: &Scope, view: Option<&str>, want: &mut BTreeMap<SubKey, IntervalPolicy>| {
-            for q in self.ticket_queries(scope, view) {
+        let tickets = |scope: &Scope,
+                       view: Option<&str>,
+                       who: Option<Who>,
+                       want: &mut BTreeMap<SubKey, IntervalPolicy>| {
+            for q in self.ticket_queries(scope, view, who) {
                 if s.accounts.contains_key(&q.account) {
                     let p = self.policy_for(&q.account, &s);
                     want.insert(SubKey { account: q.account, query: q.cache_key }, p);
@@ -1209,10 +1491,13 @@ impl Core {
         let both = [ReviewKind::ReviewRequested, ReviewKind::Authored];
         for c in &contents {
             match c {
-                PaneContent::Tickets { scope, view_id, .. } => tickets(scope, view_id.as_deref(), &mut want),
+                PaneContent::Tickets { scope, view_id, who, .. } => {
+                    tickets(scope, view_id.as_deref(), *who, &mut want)
+                }
                 PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
                 PaneContent::Inbox => {
-                    tickets(&Scope::All, None, &mut want);
+                    // Now reads `tracker_list(All, None, Mine)`: poll that cache key
+                    tickets(&Scope::All, None, Some(Who::Mine), &mut want);
                     reviews(self.review_accounts(&Scope::All), &both, &mut want);
                 }
                 _ => {}

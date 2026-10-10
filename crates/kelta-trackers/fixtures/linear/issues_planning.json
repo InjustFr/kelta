@@ -1,0 +1,124 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "iss-uuid-31",
+          "identifier": "ENG-31",
+          "title": "Issue 31",
+          "url": "https://linear.app/acme/issue/ENG-31",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "Urgent",
+          "priority": 1,
+          "estimate": 3.0,
+          "dueDate": "2026-10-14",
+          "startedAt": "2026-10-02T09:00:00.000Z",
+          "cycle": {
+            "id": "cyc-1",
+            "name": "Sprint 12",
+            "number": 12,
+            "isActive": true,
+            "endsAt": "2026-10-16T00:00:00.000Z"
+          },
+          "state": {
+            "id": "st-started",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          }
+        },
+        {
+          "id": "iss-uuid-32",
+          "identifier": "ENG-32",
+          "title": "Issue 32",
+          "url": "https://linear.app/acme/issue/ENG-32",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "Low",
+          "priority": 4,
+          "estimate": 2.5,
+          "dueDate": null,
+          "startedAt": "2026-09-20T09:00:00.000Z",
+          "cycle": {
+            "id": "cyc-0",
+            "name": null,
+            "number": 11,
+            "isActive": false,
+            "endsAt": "2026-10-02T00:00:00.000Z"
+          },
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          }
+        },
+        {
+          "id": "iss-uuid-33",
+          "identifier": "ENG-33",
+          "title": "Issue 33",
+          "url": "https://linear.app/acme/issue/ENG-33",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "Medium",
+          "priority": 3,
+          "estimate": null,
+          "dueDate": null,
+          "startedAt": null,
+          "cycle": null,
+          "state": {
+            "id": "st-started",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          }
+        },
+        {
+          "id": "iss-uuid-34",
+          "identifier": "ENG-34",
+          "title": "Issue 34",
+          "url": "https://linear.app/acme/issue/ENG-34",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "No priority",
+          "priority": 0,
+          "estimate": null,
+          "dueDate": null,
+          "startedAt": null,
+          "cycle": null,
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      }
+    }
+  }
+}

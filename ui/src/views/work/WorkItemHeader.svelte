@@ -11,8 +11,8 @@
 
   import { focusedSessionId } from '../../shell/nav';
   import { itemCost, overBudget, usd } from '../../shell/usage';
-  import MoveDialogs from '../tickets/MoveDialogs.svelte';
-  import { MoveController } from '../tickets/move.svelte';
+  import StatusChip from '../tickets/StatusChip.svelte';
+  import StatusPicker from '../tickets/StatusPicker.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
   import { claudeOf, phaseNow, workTitle } from './live';
   import { openContent } from './nav';
@@ -21,11 +21,9 @@
 
   let { projectId, workItemId }: TabHeaderProps = $props();
 
-  const move = new MoveController();
   const item = $derived(work.get(workItemId));
   const ticketRef = $derived(item?.ticket ?? null);
   const detail = $derived(ticketRef ? tickets.details[ticketKey(ticketRef)]?.data : null);
-  const transitions = $derived(ticketRef ? (tickets.transitions[ticketKey(ticketRef)]?.data ?? []) : []);
   const phase = $derived(item ? phaseNow(item) : null);
   const git = $derived(work.git[workItemId] ?? null);
   const spent = $derived(item ? itemCost(item, sessions.all) : 0);
@@ -81,26 +79,14 @@
     e.preventDefault();
   }
 
-  let statusMenu = $state<{ x: number; y: number } | null>(null);
+  /** The status button the picker opens under; null = closed. */
+  let picking = $state<HTMLElement | null>(null);
   let workBtn = $state<HTMLElement>();
 
   $effect(() => {
     const ref = ticketRef;
-    if (ref) {
-      untrack(() => {
-        void tickets.loadDetail(ref);
-        void tickets.loadTransitions(ref);
-      });
-    }
+    if (ref) untrack(() => void tickets.loadDetail(ref));
   });
-
-  const statusItems = $derived<MenuItem[]>(
-    transitions.map((t) => ({
-      id: t.id,
-      label: t.name === t.to.name ? t.name : `${t.name} → ${t.to.name}`,
-      disabled: detail?.ticket.status.name === t.to.name,
-    })),
-  );
 
   const menuItems = $derived.by((): MenuItem[] => {
     if (!item || !phase) return [];
@@ -148,16 +134,6 @@
     const sid = focusedSessionId();
     if (sid) terminalPool.focus(sid);
   }
-
-  function openStatusMenu(e: MouseEvent): void {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    statusMenu = { x: r.left, y: r.bottom + 2 };
-  }
-
-  function statusSelect(id: string): void {
-    const t = transitions.find((x) => x.id === id);
-    if (t && detail) void move.moveViaTransition(detail.ticket, t);
-  }
 </script>
 
 {#if item && phase}
@@ -174,10 +150,11 @@
           variant="secondary"
           aria-haspopup="menu"
           title="Move to…"
+          data-testid="work-status"
           disabled={!detail}
-          onclick={openStatusMenu}
+          onclick={(e: MouseEvent) => (picking = e.currentTarget as HTMLElement)}
         >
-          {detail?.ticket.status.name ?? '…'}
+          {#if detail}<StatusChip status={detail.ticket.status} />{:else}…{/if}
           <Icon name="chevron-down" size={14} />
         </Button>
       {/if}
@@ -303,20 +280,12 @@
   </div>
 {/if}
 
-{#if statusMenu}
-  <Menu
-    items={statusItems}
-    x={statusMenu.x}
-    y={statusMenu.y}
-    label="Move to"
-    onselect={statusSelect}
-    onclose={() => (statusMenu = null)}
-  />
+{#if picking && detail}
+  <StatusPicker tickets={[detail.ticket]} {projectId} anchor={picking} onclose={() => (picking = null)} />
 {/if}
 {#if menuPos}
   <Menu items={menuItems} x={menuPos.x} y={menuPos.y} label="Work" onselect={onMenu} onclose={closeMenu} />
 {/if}
-<MoveDialogs {move} />
 
 <style>
   .brief {

@@ -34,8 +34,8 @@ use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::{
-    Assignee, Column, Cursor, Page, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition,
-    User,
+    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind,
+    Transition, User,
 };
 
 // ---- terminal (impl: kelta-term) ---------------------------------------------------------------
@@ -127,6 +127,10 @@ pub trait Tracker: Send + Sync {
     fn browser_url(&self, t: &TicketRef) -> String;
     /// `"SHOP-123"` | `"4567"` | `"gh-12"` | `"gl-12"`.
     fn branch_key(&self, t: &TicketRef) -> String;
+    /// Ticket sources (boards, projects, filters...) matching `query`, as ready views.
+    async fn sources(&self, _query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot list sources"))
+    }
 }
 
 #[async_trait]
@@ -144,6 +148,10 @@ pub trait CodeHost: Send + Sync {
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+    /// A plain conversation comment that leaves my pending review / draft notes unpublished.
+    async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        self.comment(r, body).await
+    }
     /// Adds a line comment (new-side `line` of `path`) to my pending (draft) review, creating it.
     async fn add_pending_comment(
         &self,
@@ -167,8 +175,9 @@ pub trait CodeHost: Send + Sync {
     async fn feedback(&self, _r: &ReviewRef) -> Result<Feedback, KeltaError> {
         Err(KeltaError::unsupported("this code host cannot read review feedback"))
     }
-    /// Ask everyone who reviewed to review again; returns their logins.
-    async fn rerequest_review(&self, _r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+    /// Ask `who` (`Review::waiting_on` entries) to review again, or everyone who reviewed when
+    /// `who` is empty; returns the logins asked.
+    async fn rerequest_review(&self, _r: &ReviewRef, _who: &[String]) -> Result<Vec<String>, KeltaError> {
         Err(KeltaError::unsupported("this code host cannot re-request reviews"))
     }
     /// Resolve review threads by id (`FeedbackThread::id`).

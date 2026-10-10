@@ -2458,8 +2458,10 @@
         ],
         "include_drafts": false,
         "include_team_requests": true,
+        "nudge_template": "{reviewers} friendly ping: this is waiting on your review.",
         "repos_allow": [],
         "repos_deny": [],
+        "sla_hours": 24,
         "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
       },
       "properties": {
@@ -2486,6 +2488,11 @@
           "default": true,
           "type": "boolean"
         },
+        "nudge_template": {
+          "default": "{reviewers} friendly ping: this is waiting on your review.",
+          "description": "Comment ping of the nudge action (`n` on my PR); `{reviewers}` = `@anna @bob`.",
+          "type": "string"
+        },
         "repos_allow": {
           "default": [],
           "items": {
@@ -2499,6 +2506,13 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "sla_hours": {
+          "default": 24,
+          "description": "Hours a PR of mine may wait on a reviewer before its chip turns amber.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         },
         "ticket_key_regex": {
           "default": "[A-Z][A-Z0-9]+-\\d+|#\\d+",
@@ -3008,6 +3022,24 @@
       "type": "object",
       "x-kelta-category": "Terminal",
       "x-kelta-order": 3
+    },
+    "tickets": {
+      "additionalProperties": false,
+      "default": {
+        "wip_limit": 3
+      },
+      "properties": {
+        "wip_limit": {
+          "default": 3,
+          "description": "Soft WIP limit: the Doing group header warns above it; blocks nothing.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-order": 9
     },
     "tools": {
       "default": [],

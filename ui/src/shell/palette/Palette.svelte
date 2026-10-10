@@ -28,7 +28,7 @@
       // Group order for the empty query; sessions needing input stay first within their group.
       return [...local].sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
     }
-    return [...local, ...ticketItems(hits)].slice(0, 80);
+    return [...local, ...ticketItems(hits)];
   });
 
   $effect(() => {

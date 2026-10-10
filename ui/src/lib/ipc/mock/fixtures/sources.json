@@ -1,0 +1,162 @@
+{
+  "jira-acme": [
+    {
+      "kind": "project",
+      "label": "SHOP",
+      "detail": "Shop",
+      "view": {
+        "id": "src-shop",
+        "label": "SHOP",
+        "jql": "project = SHOP",
+        "board_id": null,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": null,
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": false,
+        "account": "jira-acme"
+      }
+    },
+    {
+      "kind": "board",
+      "label": "SHOP board",
+      "detail": "Scrum",
+      "view": {
+        "id": "src-shop-board",
+        "label": "SHOP board",
+        "jql": "project = SHOP",
+        "board_id": 12,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": null,
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": false,
+        "account": "jira-acme"
+      }
+    },
+    {
+      "kind": "sprint",
+      "label": "SHOP board, current sprint",
+      "detail": "Scrum",
+      "view": {
+        "id": "src-shop-sprint",
+        "label": "SHOP board, current sprint",
+        "jql": "project = SHOP",
+        "board_id": 12,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": null,
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": true,
+        "account": "jira-acme"
+      }
+    },
+    {
+      "kind": "filter",
+      "label": "Hot bugs",
+      "detail": "Favourite filter",
+      "view": {
+        "id": "src-filter-10",
+        "label": "Hot bugs",
+        "jql": "filter = 10",
+        "board_id": null,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": null,
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": false,
+        "account": "jira-acme"
+      }
+    }
+  ],
+  "github-oss": [
+    {
+      "kind": "repo",
+      "label": "kelta/tools",
+      "detail": null,
+      "view": {
+        "id": "src-kelta-tools",
+        "label": "kelta/tools",
+        "jql": null,
+        "board_id": null,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": "kelta/tools",
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": false,
+        "account": "github-oss"
+      }
+    },
+    {
+      "kind": "repo",
+      "label": "kelta/site",
+      "detail": null,
+      "view": {
+        "id": "src-kelta-site",
+        "label": "kelta/site",
+        "jql": null,
+        "board_id": null,
+        "project_id": null,
+        "query_id": null,
+        "assigned_to": null,
+        "status": null,
+        "repo": "kelta/site",
+        "search": null,
+        "project_v2": null,
+        "project": null,
+        "team": null,
+        "scope": null,
+        "labels": null,
+        "workflow_scope": null,
+        "who": "mine",
+        "current_iteration": false,
+        "account": "github-oss"
+      }
+    }
+  ]
+}

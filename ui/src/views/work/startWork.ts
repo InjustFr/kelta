@@ -22,11 +22,20 @@ export function needsChoice(plan: StartWorkPlan): boolean {
   return plan.existing !== null || plan.branch_exists !== null || plan.repo_choices.length > 1;
 }
 
+/** Options of a start: `preview` overrides `work.plan_preview` (`false` = start with no sheet). */
+export interface StartOpts {
+  preview?: boolean;
+}
+
 /** Requests a plan and shows the sheet, or starts/resumes directly when previews are off. */
-export async function beginStartWork(projectId: ProjectId, source: WorkSource): Promise<WorkItem | null> {
+export async function beginStartWork(
+  projectId: ProjectId,
+  source: WorkSource,
+  opts: StartOpts = {},
+): Promise<WorkItem | null> {
   try {
     const plan = await ipc.workPlan({ project_id: projectId, source });
-    const preview = settings.value()?.work.plan_preview ?? true;
+    const preview = opts.preview ?? settings.value()?.work.plan_preview ?? true;
     if (preview || (needsChoice(plan) && plan.existing === null)) {
       ui.openSheet('start_work', { plan });
       return null;
@@ -42,13 +51,17 @@ export async function beginStartWork(projectId: ProjectId, source: WorkSource): 
   }
 }
 
-export function startWorkOnTicket(ref: TicketRef, projectId?: ProjectId | null): Promise<WorkItem | null> {
+export function startWorkOnTicket(
+  ref: TicketRef,
+  projectId?: ProjectId | null,
+  opts: StartOpts = {},
+): Promise<WorkItem | null> {
   const pid = projectId ?? projectForTicket(ref);
   if (!pid) {
     toasts.warn('Open a project first to start work on a ticket');
     return Promise.resolve(null);
   }
-  return beginStartWork(pid, { kind: 'ticket', ticket: ref });
+  return beginStartWork(pid, { kind: 'ticket', ticket: ref }, opts);
 }
 
 /** Kelta project a review belongs to (first match of any loaded list), else `fallback`/the active one. */

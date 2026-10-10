@@ -26,6 +26,11 @@ pub fn sanitize(html: &str) -> String {
     ammonia::Builder::default()
         .link_rel(Some("noopener noreferrer"))
         .url_schemes(["http", "https", "mailto"].into_iter().collect())
+        // Task-list boxes only: any `<input>` is forced to a read-only checkbox.
+        .add_tags(["input"])
+        .add_tag_attributes("input", ["checked"])
+        .set_tag_attribute_value("input", "type", "checkbox")
+        .set_tag_attribute_value("input", "disabled", "")
         .clean(html)
         .to_string()
 }
@@ -45,6 +50,16 @@ mod tests {
         assert!(!s.contains("iframe"));
         assert!(!s.contains("javascript"));
         assert!(!s.contains("<style"));
+    }
+
+    #[test]
+    fn task_lists_keep_read_only_checkboxes() {
+        let h = to_html("- [x] a\n- [ ] b");
+        assert_eq!(h.matches("type=\"checkbox\"").count(), 2, "{h}");
+        assert_eq!(h.matches("disabled").count(), 2, "{h}");
+        assert_eq!(h.matches("checked").count(), 1, "{h}");
+        let s = sanitize("<input type=\"text\" value=\"x\" name=\"n\">");
+        assert!(s.contains("type=\"checkbox\"") && s.contains("disabled") && !s.contains("value"), "{s}");
     }
 
     #[test]

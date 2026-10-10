@@ -113,7 +113,7 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Work bar (tab header, above all panes, survives pane zoom) | key, title, ticket status menu, phase lamp + label + detail, branch, `↑a ↓b`, `+ins −del` (and a `dirty` tag), primary button, **Work ⌘.** menu. Mockup `f2-work-tab.png`. Clicking the phase label opens the existing `WorkItemPane` (saga steps, sessions) as a split down: this is the missing UI path to it. |
+| Work bar (tab header, above all panes, survives pane zoom) | key, title, ticket status chip (opens the status picker), phase lamp + label + detail, branch, `↑a ↓b`, `+ins −del` (and a `dirty` tag), primary button, **Work ⌘.** menu. Mockup `f2-work-tab.png`. Clicking the phase label opens the existing `WorkItemPane` (saga steps, sessions) as a split down: this is the missing UI path to it. |
 | Rail tile | aggregate lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
@@ -204,6 +204,8 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |
 | `s` | Start work (Up next rows) / Review locally (Review requests rows) / Skip step (Failed rows) |
 | `o` | open on the host (PR) or tracker (ticket) |
+
+In the Tickets list (not Now): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 | `N` | New work item |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
@@ -364,6 +366,7 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 - **Review requests** in Now, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
 - `Enter`: the review detail opens in the project's Reviews tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
 - `o` in Now: open on the host.
+- **My PRs** (Reviews pane): `waiting on @anna · 26h`, amber past `reviews.sla_hours`, for the reviewers still asked (since their latest request) or who requested changes before my last push (since the head commit; GitLab: `/reviewers` not reviewed yet). `n`: Re-request review from those it waits on (`CodeHost::rerequest_review` with `waiting_on`) or Comment ping (`reviews.nudge_template`); one nudge per PR per 24 h (`nudges` table), the picker greys both out meanwhile. No extra poll: the authored list query carries it.
 - `s` (Now or detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.
 - Line comments without leaving Kelta: MCP tool `add_review_comment{path, line, body}` adds to a **pending (draft) review** on the host. Claude adds its findings, Louis asks it to add his own notes; the detail pane shows "n pending comments" and `a` / `c` / `m` submit them with the decision. No thread UI in Kelta.
 - When `my_state` stops being pending (submitted in Kelta or on github.com, seen by the `get` refresh), the row moves to Ship and clean up as "Reviewed", `Enter` = Finish (removes the review worktree).

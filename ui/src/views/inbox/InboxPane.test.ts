@@ -25,6 +25,9 @@ beforeEach(async () => {
   layout.byProject = {};
   work.git = {};
   toasts.clear();
+  // Now lists my tickets only: SHOP-155 (a work item's ticket) must be mine for its title to resolve.
+  const flaky = mock.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-155');
+  if (flaky) flaky.ticket.assignee = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
   await Promise.all([projects.load(), sessions.load(), work.load()]);
   ui.inboxActive = true;
 });
@@ -160,6 +163,30 @@ describe('Now', () => {
     await waitFor(() => expect(container.querySelectorAll('.row[data-row]')).toHaveLength(1));
   });
 
+  it('loads my tickets across every source, and Show all opens the Tickets list for them', async () => {
+    const mine = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
+    if (!mine) throw new Error('fixture missing');
+    for (let i = 0; i < 12; i += 1)
+      mock.state.tickets.push({
+        ...mine,
+        ticket: { ...mine.ticket, ref: { ...mine.ticket.ref, key: `MINE-${i}`, id: `m${i}` } },
+      });
+    mountNow();
+    await screen.findByText('MINE-0');
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
+    const more = await screen.findByRole('button', { name: /more, show all$/ });
+    const lists = mock.calls.filter((c) => c.cmd === 'tracker_list');
+    expect(lists.length).toBeGreaterThan(0);
+    expect(lists.every((c) => (c.args as { who: string }).who === 'mine')).toBe(true);
+    await fireEvent.click(more);
+    await waitFor(() => {
+      const l = layout.get(projects.activeId!)!;
+      expect(
+        findContent(l, (c) => c.kind === 'tickets' && c.mode === 'list' && c.who === 'mine'),
+      ).toBeTruthy();
+    });
+  });
+
   it('shows an error state when nothing loads', async () => {
     mock.failAlways('tracker_list', { code: 'needs_auth', message: '401' });
     mock.failAlways('review_list', { code: 'needs_auth', message: '401' });
@@ -184,7 +211,7 @@ async function nextWaitingTo(container: HTMLElement, prefix: string): Promise<vo
 describe('Next waiting (Mod+J)', () => {
   it('walks the jump queue across projects, focusing the row and counting in the HUD, cycling', async () => {
     await Promise.all([
-      tickets.load({ kind: 'all' }, null),
+      tickets.load({ kind: 'all' }, null, false, 'mine'),
       reviews.load({ kind: 'all' }, 'review_requested'),
       reviews.load({ kind: 'all' }, 'authored'),
     ]);

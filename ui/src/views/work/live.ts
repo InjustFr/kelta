@@ -61,6 +61,13 @@ export function workTitle(item: WorkItem): string {
     if (detail) return detail;
     for (const l of Object.values(tickets.lists))
       for (const it of l.data?.items ?? []) if (ticketKey(it.ticket.ref) === key) return it.ticket.title;
+    // Lists loaded but none has it: fetch it once (tracker_get, cached in details). Deferred: callers are reactive reads.
+    const ref = item.ticket;
+    const listed = Object.values(tickets.lists).some((l) => l.data);
+    if (listed && !tickets.details[key])
+      queueMicrotask(() => {
+        if (!tickets.details[key]) void tickets.loadDetail(ref);
+      });
   }
   return prOf(item)?.title ?? item.title ?? item.branch;
 }

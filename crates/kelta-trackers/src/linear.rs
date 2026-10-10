@@ -16,8 +16,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -29,7 +29,8 @@ const PAGE_SIZE: u32 = 50;
 pub const MAX_PAGES: u32 = 20;
 
 const USER: &str = "id name displayName avatarUrl";
-const ISSUE: &str = "id identifier title url updatedAt priorityLabel state { id name type } \
+const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
+    startedAt cycle { id name number isActive endsAt } state { id name type } \
     assignee { id name displayName avatarUrl } labels { nodes { name } } team { key }";
 
 pub struct LinearTracker {
@@ -66,11 +67,18 @@ fn user_from(v: &Value) -> Option<User> {
     }))
 }
 
-/// Linear's `IssueFilter` for a view (`scope = "all"` drops the assignee filter).
+/// Linear's `IssueFilter` for a view. `who` wins over the legacy `scope` (`all` drops the assignee filter).
 fn filter_of(view: &TrackerView) -> Value {
     let mut f = json!({});
-    if view.scope.as_deref() != Some("all") {
-        f["assignee"] = json!({"isMe": {"eq": true}});
+    match view.who {
+        Some(Who::Mine) => f["assignee"] = json!({"isMe": {"eq": true}}),
+        Some(Who::Unassigned) => f["assignee"] = json!({"null": true}),
+        Some(Who::Anyone) => {}
+        None if view.scope.as_deref() == Some("all") => {}
+        None => f["assignee"] = json!({"isMe": {"eq": true}}),
+    }
+    if view.current_iteration {
+        f["cycle"] = json!({"isActive": {"eq": true}});
     }
     match view.status.as_deref() {
         Some("*") => {}
@@ -122,11 +130,16 @@ impl LinearTracker {
         let url = s(v, "url").unwrap_or("").to_owned();
         self.urls.lock().insert(key.clone(), url.clone());
         let priority = s(v, "priorityLabel").filter(|p| *p != "No priority").map(str::to_owned);
+        let status = status_from(v.get("state")?);
+        let updated_at = s(v, "updatedAt").unwrap_or("").to_owned();
+        let started = matches!(status.category, StatusCategory::InProgress | StatusCategory::InReview)
+            .then(|| s(v, "startedAt"))
+            .flatten();
         Some(Ticket {
             r#ref: TicketRef { account: self.account().clone(), id: s(v, "id")?.to_owned(), key },
             title: s(v, "title").unwrap_or("").to_owned(),
             url,
-            status: status_from(v.get("state")?),
+            status,
             kind: None,
             assignee: v.get("assignee").and_then(user_from),
             labels: v
@@ -135,8 +148,21 @@ impl LinearTracker {
                 .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
                 .unwrap_or_default(),
             priority,
-            updated_at: s(v, "updatedAt").unwrap_or("").to_owned(),
+            // 0 = none, 1 urgent .. 4 low.
+            priority_rank: v["priority"].as_u64().filter(|p| (1..=4).contains(p)).map(|p| (p - 1) as u8),
+            status_since: Some(started.map_or(updated_at.clone(), str::to_owned)),
+            updated_at,
             project_hint: v.pointer("/team/key").and_then(Value::as_str).map(str::to_owned),
+            sprint: v.get("cycle").filter(|c| !c.is_null()).and_then(|c| {
+                Some(Sprint {
+                    id: s(c, "id")?.to_owned(),
+                    name: s(c, "name").map_or_else(|| format!("Cycle {}", c["number"]), str::to_owned),
+                    active: c["isActive"].as_bool() == Some(true),
+                    ends_at: s(c, "endsAt").map(str::to_owned),
+                })
+            }),
+            estimate: v["estimate"].as_f64().map(|e| e.to_string()),
+            due: s(v, "dueDate").map(str::to_owned),
         })
     }
 
@@ -224,6 +250,55 @@ impl Tracker for LinearTracker {
         Ok(Page { items, next })
     }
 
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let (teams, projects) = if query.is_empty() {
+            (json!({}), json!({}))
+        } else {
+            let m = |f: &str| json!({f: {"containsIgnoreCase": query}});
+            (json!({"or": [m("name"), m("key")]}), m("name"))
+        };
+        // shortcut: first page only, type-ahead reaches the rest; paginate if users hit the cap
+        let d = self
+            .gql(
+                "query($teams: TeamFilter, $projects: ProjectFilter) { \
+                 teams(filter: $teams, first: 50) { nodes { key name cyclesEnabled } } \
+                 projects(filter: $projects, first: 50) { nodes { id name } } }",
+                json!({"teams": teams, "projects": projects}),
+            )
+            .await?;
+        let nodes = |k: &str| d[k]["nodes"].as_array().cloned().unwrap_or_default();
+        let hit =
+            |kind: &str, id: String, label: String, detail: Option<String>, view: TrackerView| SourceHit {
+                kind: kind.into(),
+                label: label.clone(),
+                detail,
+                view: TrackerView { id, label, who: Some(Who::Mine), ..view },
+            };
+        let mut out = Vec::new();
+        for t in nodes("teams") {
+            let Some(key) = s(&t, "key") else { continue };
+            let name = s(&t, "name").unwrap_or(key);
+            let team = TrackerView { team: Some(key.to_owned()), ..TrackerView::default() };
+            out.push(hit("team", format!("team-{key}"), name.to_owned(), Some(key.to_owned()), team.clone()));
+            if t["cyclesEnabled"].as_bool() == Some(true) {
+                let view = TrackerView { current_iteration: true, ..team };
+                out.push(hit(
+                    "cycle",
+                    format!("team-{key}-cycle"),
+                    format!("{name} current cycle"),
+                    Some(key.to_owned()),
+                    view,
+                ));
+            }
+        }
+        for p in nodes("projects") {
+            let (Some(id), Some(name)) = (s(&p, "id"), s(&p, "name")) else { continue };
+            let view = TrackerView { project: Some(name.to_owned()), ..TrackerView::default() };
+            out.push(hit("project", format!("project-{id}"), name.to_owned(), None, view));
+        }
+        Ok(out)
+    }
+
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         let q = format!(
             "query($id: String!, $n: Int) {{ issue(id: $id) {{ {ISSUE} description \
@@ -255,6 +330,8 @@ impl Tracker for LinearTracker {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

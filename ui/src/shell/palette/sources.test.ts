@@ -1,8 +1,11 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createMockTransport } from '$lib/ipc/mock';
+import { sheetRegistry } from '$app/registry';
+
+import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, sessions, settings, tools, work } from '$lib/stores';
+import { layout, plugins, projects, sessions, settings, tools, ui, work } from '$lib/stores';
 
 import '../actions';
 import { rank } from './fuzzy';
@@ -19,8 +22,12 @@ import {
   toolItems,
 } from './sources';
 
+let mock: MockControls;
+
 beforeEach(async () => {
-  setTransport(createMockTransport().transport);
+  const created = createMockTransport();
+  mock = created.controls;
+  setTransport(created.transport);
   layout.byProject = {};
   await Promise.all([projects.load(), sessions.load(), work.load(), settings.load()]);
   await tools.load('shop');
@@ -82,13 +89,87 @@ describe('palette sources', () => {
           priority: null,
           updated_at: '2026-10-01T00:00:00Z',
           project_hint: null,
+          priority_rank: null,
+          status_since: null,
+          sprint: null,
+          estimate: null,
+          due: null,
         },
         project_ids: ['shop'],
         work_item_id: null,
+        view_ids: [],
+        prs: [],
+        caps: {
+          board_columns: false,
+          assign: true,
+          comment: true,
+          transitions_need_fetch: false,
+          projects_v2: false,
+        },
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });
     expect(items[0]!.detail).toBe('In progress\u2002\u2002Shop');
+  });
+
+  it('offers verbs on the best ticket hits only, each acting on the exact ticket', async () => {
+    const hits = mock.state.tickets.slice(0, 5);
+    const items = ticketItems(hits);
+    const key = hits[0]!.ticket.ref.key;
+    expect(items.map((i) => i.label).slice(0, 5)).toEqual([
+      `${key} ${hits[0]!.ticket.title}`,
+      `Start work on ${key}`,
+      `Move ${key} to…`,
+      `Assign ${key} to me`,
+      `Open ${key} in browser`,
+    ]);
+    // 3 hits with 4 verbs + 2 plain hits
+    expect(items).toHaveLength(5 + 3 * 4);
+    expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+
+    await items.find((i) => i.label === `Assign ${key} to me`)!.run();
+    expect(mock.calls.find((c) => c.cmd === 'tracker_assign')?.args).toMatchObject({
+      ticket: hits[0]!.ticket.ref,
+      assignee: { kind: 'me' },
+    });
+    await import('../../views/tickets/actions'); // registered late: an earlier test needs tickets.open absent
+    await items.find((i) => i.label === `Open ${key} in browser`)!.run();
+    expect(mock.calls.find((c) => c.cmd === 'open_external')?.args).toMatchObject({
+      url: hits[0]!.ticket.url,
+    });
+  });
+
+  it('"Move KEY to…" opens the status picker for that ticket; filter and Enter move it', async () => {
+    ui.sheets = [];
+    const hit = mock.state.tickets[0]!;
+    await ticketItems([hit])
+      .find((i) => i.label === `Move ${hit.ticket.ref.key} to…`)!
+      .run();
+    expect(ui.sheet).toMatchObject({
+      key: 'tickets.move',
+      props: { ticket: hit.ticket, project_id: hit.project_ids[0] },
+    });
+    const Sheet = (await sheetRegistry['tickets.move']()).default;
+    render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet('tickets.move') } });
+    await screen.findByRole('menu', { name: `Move ${hit.ticket.ref.key}` });
+    await screen.findAllByRole('menuitem');
+    const filter = screen.getByRole('textbox', { name: 'Filter statuses' });
+    await fireEvent.input(filter, { target: { value: 'review' } });
+    await fireEvent.keyDown(filter, { key: 'Enter' });
+    await waitFor(() =>
+      expect(mock.calls.find((c) => c.cmd === 'tracker_transition')?.args).toMatchObject({
+        ticket: hit.ticket.ref,
+        transition_id: 'to-in_review',
+      }),
+    );
+    await waitFor(() => expect(ui.sheet).toBeNull());
+  });
+
+  it('offers no assign verb on a tracker that cannot assign', () => {
+    const hit = mock.state.tickets.find((t) => !t.caps.assign)!;
+    const labels = ticketItems([hit]).map((i) => i.label);
+    expect(labels).toContain(`Move ${hit.ticket.ref.key} to…`);
+    expect(labels).not.toContain(`Assign ${hit.ticket.ref.key} to me`);
   });
 
   it('ranks across groups and keeps the display group order', () => {
