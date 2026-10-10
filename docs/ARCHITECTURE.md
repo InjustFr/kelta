@@ -468,6 +468,9 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `claude_mcp_status` | `{}` | `Option<bool>` (Kelta's MCP registered in Claude Code at user scope; `None` = Claude Code not found) | `commands/app.rs` |
 | `claude_mcp_install` | `{}` | `()` (`claude mcp add --scope user`, opens the global `/mcp`) | `commands/app.rs` |
 | `claude_mcp_remove` | `{}` | `()` (`claude mcp remove --scope user kelta`, revokes the install token) | `commands/app.rs` |
+| `app_update_status` | `{}` | `UpdateStatus` (running version, channel, `state`, `checked_at`, `restart_needs_confirm`) | `commands/app.rs` |
+| `app_update_check` | `{}` | `UpdateStatus` after checking and installing what it found ("Check now") | `commands/app.rs` |
+| `app_restart` | `{}` | `()` (`request_restart`: the normal exit path, then the installed build starts) | `commands/app.rs` |
 | **settings** | | | `commands/settings.rs` (L4) |
 | `settings_schema` | `{}` | `serde_json::Value` (flattened JSON Schema incl. `plugins.<id>`) | |
 | `settings_effective` | `{project_id?}` | `EffectiveSettings{value: Value, sources: BTreeMap<String /*dotted path*/, Layer>}` | |

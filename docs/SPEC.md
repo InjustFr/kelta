@@ -160,6 +160,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
 | `settings.open` | Cmd+, | Ctrl+Shift+, | `,` |
+| `app.restart` (update banner Restart; asks first when a working Claude session would stop) | unbound | unbound | |
 | `window.toggle` (global) | via `kelta-ctl toggle` bound in the compositor/system | | |
 
 In-view single keys (only when a list/board has focus, never in terminals): `j/k` move, `Enter` open, `/` filter, `R` refresh, `m` move ticket, `a` assign me, `c` comment, `o` open in browser, `s` start work.
