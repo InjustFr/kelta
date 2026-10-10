@@ -32,8 +32,30 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/mrs_review.json")))
         .mount(&server)
         .await;
+    // !8: I was asked on 09-29 and mine is the one approval left; !9 has neither endpoint (best effort).
+    let reply = |body: serde_json::Value| ResponseTemplate::new(200).set_body_json(body);
+    let mr8 = "/api/v4/projects/grp%2Fother/merge_requests/8";
+    Mock::given(path(format!("{mr8}/reviewers")))
+        .respond_with(reply(json!([
+            { "user": { "id": 43, "username": "zed" }, "state": "reviewed", "created_at": "2026-09-28T10:00:00Z" },
+            { "user": { "id": 42, "username": "louis" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(path(format!("{mr8}/approvals")))
+        .respond_with(reply(json!({
+            "approvals_left": 1,
+            "approved_by": [{ "user": { "id": 43 } }],
+            "approvers": [],
+            "suggested_approvers": [{ "id": 42, "username": "louis" }],
+        })))
+        .mount(&server)
+        .await;
     let h = gl(&server);
     let list = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-29T10:00:00Z"));
+    assert!(list[0].blocking, "one approval left and I am an approver");
+    assert!(list[1].requested_at.is_none() && !list[1].blocking);
     let q = &queries(&server, "GET", "/api/v4/merge_requests").await[0];
     assert!(q.contains("updated_after=20"), "{q}");
     assert!(!q.contains("wip="));

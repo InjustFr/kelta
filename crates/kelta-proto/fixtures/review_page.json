@@ -13,6 +13,7 @@
           "login": "bob",
           "name": "Bob"
         },
+        "blocking": false,
         "ci": "success",
         "decision": "review_required",
         "decision_head": null,
@@ -31,6 +32,7 @@
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "requested_at": null,
         "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",

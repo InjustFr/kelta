@@ -116,6 +116,8 @@ pub fn review() -> Review {
         additions: Some(120),
         deletions: Some(14),
         decision_head: None,
+        requested_at: None,
+        blocking: false,
     }
 }
 

@@ -196,8 +196,41 @@ impl GitlabHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: None,
             deletions: None,
+            requested_at: None,
+            blocking: false,
             title,
         })
+    }
+
+    /// Review requests: when I was asked (`/reviewers`) and whether mine is the last approval
+    /// missing (`/approvals`: one left and I am an approver). Best effort, like the detail.
+    async fn request_state(&self, review: &mut Review, me: &User) {
+        let url = self.mr_url(&review.r#ref.repo, &format!("/{}", review.r#ref.number));
+        let (reviewers, approvals) = tokio::join!(
+            self.json(HttpRequest::get(format!("{url}/reviewers"))),
+            self.json(HttpRequest::get(format!("{url}/approvals"))),
+        );
+        // `approvers` / `approved_by` / `/reviewers` wrap the user, `suggested_approvers` does not.
+        let is_me = |x: &Value| {
+            x.get("user").unwrap_or(x).get("id").and_then(Value::as_u64).map(|i| i.to_string())
+                == Some(me.id.clone())
+        };
+        let list = |v: &Value, k: &str| v.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
+        if let Ok(r) = reviewers {
+            review.requested_at = r
+                .body
+                .as_array()
+                .and_then(|a| a.iter().find(|x| is_me(x)))
+                .and_then(|x| s(x, "created_at"))
+                .map(str::to_owned);
+        }
+        if let Ok(a) = approvals {
+            let a = a.body;
+            review.blocking = a.get("approvals_left").and_then(Value::as_u64) == Some(1)
+                && !list(&a, "approved_by").iter().any(is_me)
+                && (list(&a, "approvers").iter().any(is_me)
+                    || list(&a, "suggested_approvers").iter().any(is_me));
+        }
     }
 
     fn project_url(&self, repo: &str, tail: &str) -> String {
@@ -324,7 +357,7 @@ impl CodeHost for GitlabHost {
         }
         let resp = self.json(req.with_etag()).await?;
         self.gate.lock().pending = false;
-        Ok(resp
+        let mut list: Vec<Review> = resp
             .body
             .as_array()
             .map(|a| {
@@ -333,7 +366,12 @@ impl CodeHost for GitlabHost {
                     .filter(|r| q.include_drafts || !r.draft)
                     .collect()
             })
-            .unwrap_or_default())
+            .unwrap_or_default();
+        if q.kind == ReviewKind::ReviewRequested {
+            let me = self.me().await?;
+            futures::future::join_all(list.iter_mut().map(|r| self.request_state(r, &me))).await;
+        }
+        Ok(list)
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
