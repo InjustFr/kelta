@@ -232,8 +232,11 @@ export interface Commands {
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
   /** Spawns the review diff session; the UI places it zoomed in the work tab. */
-  work_diff: { args: { id: WorkItemId }; result: SessionInfo };
+  /** `delta`: since the last review (`reviewed..last`); `from`: a review item's reviewed PR head. */
+  work_diff: { args: { id: WorkItemId; delta?: boolean; from?: string | null }; result: SessionInfo };
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
+  work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
+  work_left: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -360,6 +363,8 @@ export const COMMAND_NAMES = [
   'work_status_all',
   'work_diff',
   'work_mark_reviewed',
+  'work_set_note',
+  'work_left',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -558,6 +563,8 @@ export const workLink = wrap('work_link');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
+export const workSetNote = wrap('work_set_note');
+export const workLeft = wrap('work_left');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

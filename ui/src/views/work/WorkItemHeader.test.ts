@@ -73,11 +73,11 @@ describe('work bar', () => {
     );
   });
 
-  it('To review: the primary opens the diff zoomed in the work tab, x marks reviewed', async () => {
+  it('To review: the primary opens the delta zoomed in the work tab, R marks reviewed', async () => {
     const w = item(3); // SHOP-155, review_due
     mountHeader(w);
     await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('to_review'));
-    await fireEvent.click(screen.getByRole('button', { name: 'Review diff' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
     // No work tab for SHOP-155 in the fixtures: work_resume recreates it, the diff opens beside it.
     await waitFor(() =>
@@ -89,7 +89,7 @@ describe('work bar', () => {
       ).toBeTruthy(),
     );
     const menu = await openMenu();
-    await fireEvent.keyDown(menu, { key: 'x' });
+    await fireEvent.keyDown(menu, { key: 'R' });
     await waitFor(() => expect(work.get(w.id)?.review_due).toBe(false));
   });
 
@@ -107,7 +107,7 @@ describe('work bar', () => {
     const entries = within(menu).getAllByRole('menuitem');
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
     const labels = entries.map(label);
-    expect(labels.length).toBe(15); // primary + d p x f r c a n s g l t o ⇧F
+    expect(labels.length).toBe(17); // primary + v ⇧V p ⇧R f r c a n s b g l t o ⇧F
     const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
     expect(cont.getAttribute('aria-disabled')).toBe('true');
     expect(cont.title).toBe('Only while a rebase is stopped');
@@ -228,5 +228,40 @@ describe('work bar', () => {
   it('shows a placeholder for an unknown work item', async () => {
     render(WorkItemHeader, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();
+  });
+});
+
+describe('return strip', () => {
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+
+  it('shows the next: note, the delta and the last message after 20 min away; x dismisses', async () => {
+    const w = { ...item(3), left_at: ago(45) }; // SHOP-155: note, message and delta in the fixtures
+    work.upsert(w);
+    mountHeader(w);
+    const strip = await screen.findByTestId('return-brief');
+    expect(strip.textContent).toContain('next: check the retry path against staging');
+    expect(strip.textContent).toMatch(/\+1890\/−122 since you\s+reviewed/);
+    expect(strip.textContent).toContain('Added the retry wrapper');
+    await fireEvent.keyDown(strip, { key: 'v' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
+    await fireEvent.keyDown(strip, { key: 'x' });
+    await waitFor(() => expect(screen.queryByTestId('return-brief')).toBeNull());
+  });
+
+  it('not before the threshold, and never while Claude is working', async () => {
+    const recent = { ...item(3), left_at: ago(5) };
+    work.upsert(recent);
+    const { unmount } = mountHeader(recent);
+    await screen.findByTestId('work-header');
+    expect(screen.queryByTestId('return-brief')).toBeNull();
+    unmount();
+    // Leaving the item stamps when Louis left.
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_left')).toBe(true));
+
+    const busy = { ...item(0), left_at: ago(120), next_note: 'look at the cache' }; // Claude is working
+    work.upsert(busy);
+    mountHeader(busy);
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('working'));
+    expect(screen.queryByTestId('return-brief')).toBeNull();
   });
 });
