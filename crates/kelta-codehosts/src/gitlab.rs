@@ -211,6 +211,8 @@ impl GitlabHost {
             blocking: false,
             waiting_on: Vec::new(),
             author_to_act: false,
+            waiting_since: None,
+            author_since: None,
             nudged_at: None,
             title,
         })
@@ -246,7 +248,7 @@ impl GitlabHost {
                 .and_then(|a| a.iter().find(|x| is_me(x)))
                 .and_then(|x| s(x, "created_at"))
                 .map(str::to_owned);
-            (review.waiting_on, _) = pending_reviewers(&r.body);
+            (review.waiting_on, review.waiting_since) = pending_reviewers(&r.body);
             review.author_to_act = changes_requested(&r.body);
         }
         if let Ok(a) = approvals {
@@ -282,6 +284,7 @@ impl GitlabHost {
         let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
         let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
         (review.waiting_on, review.requested_at) = pending_reviewers(&r.body);
+        review.waiting_since = review.requested_at.clone();
         review.author_to_act = changes_requested(&r.body);
     }
 
@@ -853,7 +856,8 @@ fn pending_reviewers(body: &Value) -> (Vec<String>, Option<String>) {
     (pending.into_iter().map(|(u, _)| u).collect(), since)
 }
 
-// shortcut: GitLab ties no review state to a commit, so any `requested_changes` reviewer makes the
+// shortcut: `/reviewers` has no review time, so `author_since` stays None on GitLab;
+// GitLab ties no review state to a commit, so any `requested_changes` reviewer makes the
 // author act, even after a newer push; compare with the push time if it misleads.
 fn changes_requested(body: &Value) -> bool {
     body.as_array().into_iter().flatten().any(|x| s(x, "state") == Some("requested_changes"))

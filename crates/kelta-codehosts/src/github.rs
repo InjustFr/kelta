@@ -163,16 +163,22 @@ impl GithubHost {
         let head_sha = s(n, "headRefOid").unwrap_or("").to_owned();
         let (waiting_on, since) = waiting_state(n, &head_sha);
         let (requested_at, blocking) = match kind {
-            ReviewKind::Authored => (since, false),
+            ReviewKind::Authored => (since.clone(), false),
             ReviewKind::ReviewRequested => request_state(n, me, decision),
         };
-        let author_to_act =
-            n.pointer("/latestOpinionatedReviews/nodes").and_then(Value::as_array).is_some_and(|a| {
-                a.iter().any(|r| {
-                    s(r, "state") == Some("CHANGES_REQUESTED")
-                        && r.pointer("/commit/oid").and_then(Value::as_str) == Some(head_sha.as_str())
-                })
-            });
+        let changes_on_head: Vec<&Value> = n
+            .pointer("/latestOpinionatedReviews/nodes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|r| {
+                s(r, "state") == Some("CHANGES_REQUESTED")
+                    && r.pointer("/commit/oid").and_then(Value::as_str) == Some(head_sha.as_str())
+            })
+            .collect();
+        let author_to_act = !changes_on_head.is_empty();
+        let author_since =
+            changes_on_head.iter().filter_map(|r| s(r, "submittedAt")).max().map(str::to_owned);
         Some(Review {
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(n, "url").unwrap_or("").to_owned(),
@@ -212,6 +218,8 @@ impl GithubHost {
             blocking,
             waiting_on,
             author_to_act,
+            waiting_since: since,
+            author_since,
             nudged_at: None,
             title,
         })
@@ -251,6 +259,8 @@ impl GithubHost {
             blocking: false,
             waiting_on: Vec::new(),
             author_to_act: false,
+            waiting_since: None,
+            author_since: None,
             nudged_at: None,
             title,
         })

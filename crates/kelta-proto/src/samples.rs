@@ -138,6 +138,8 @@ pub fn review() -> Review {
         blocking: false,
         waiting_on: Vec::new(),
         author_to_act: false,
+        waiting_since: None,
+        author_since: None,
         nudged_at: None,
     }
 }

@@ -38,6 +38,14 @@ waiting_on: Array<string>,
  */
 author_to_act: boolean, 
 /**
+ * Since when `waiting_on` has been asked (earliest request, or the push after changes were requested).
+ */
+waiting_since?: string | null, 
+/**
+ * When the changes-requested review on the current head was submitted (`author_to_act`).
+ */
+author_since?: string | null, 
+/**
  * My last nudge from Kelta (authored only, `nudges` table; core-filled).
  */
 nudged_at?: string | null, };

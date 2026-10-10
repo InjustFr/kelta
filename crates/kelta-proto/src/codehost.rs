@@ -113,6 +113,14 @@ pub struct Review {
     /// Changes were requested on the current head, so the author must act.
     #[serde(default)]
     pub author_to_act: bool,
+    /// Since when `waiting_on` has been asked (earliest request, or the push after changes were requested).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub waiting_since: Option<String>,
+    /// When the changes-requested review on the current head was submitted (`author_to_act`).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub author_since: Option<String>,
     /// My last nudge from Kelta (authored only, `nudges` table; core-filled).
     #[serde(default)]
     #[ts(optional = nullable)]

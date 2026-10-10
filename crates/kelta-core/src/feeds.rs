@@ -673,17 +673,23 @@ impl Core {
         team::people(team::seen(tickets, reviews), mes, &hosts)
     }
 
+    /// The scope's cached Team ticket lists; no list is fetched.
+    async fn cached_tickets(&self, scope: &Scope) -> Vec<Ticket> {
+        let mut tickets = Vec::new();
+        for q in self.ticket_queries(scope, None, Some(Who::Anyone)) {
+            if let Some((p, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
+                tickets.extend(p.items);
+            }
+        }
+        tickets
+    }
+
     /// `team_people`: who the scope's cached tickets (the Team list) and review lists mention. Reads
     /// the provider cache only: no list is fetched.
     pub async fn team_people(&self, scope: Scope) -> Result<Vec<Person>, KeltaError> {
         self.rt.capture();
         self.check_scope(&scope)?;
-        let mut tickets = Vec::new();
-        for q in self.ticket_queries(&scope, None, Some(Who::Anyone)) {
-            if let Some((p, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
-                tickets.extend(p.items);
-            }
-        }
+        let tickets = self.cached_tickets(&scope).await;
         let mut reviews = Vec::new();
         for a in self.review_accounts(&scope) {
             for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
@@ -1621,10 +1627,11 @@ impl Core {
             all.iter_mut()
                 .for_each(|r| r.nudged_at = nudges.get(&(r.r#ref.repo.clone(), r.r#ref.number)).cloned());
         }
-        let people = self.people_of([], &all).await;
+        let tickets = self.cached_tickets(&scope).await;
+        let people = self.people_of(&tickets, &all).await;
         let mut items = merge_reviews(all, &bindings);
         for i in &mut items {
-            i.waiting = team::review_row_waiting(&i.review, &people);
+            i.waiting = team::review_row_waiting(&i.review, &tickets, &people);
         }
         Ok(ReviewPage { items, stale, errors })
     }

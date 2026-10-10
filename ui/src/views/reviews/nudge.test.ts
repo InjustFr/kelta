@@ -41,6 +41,12 @@ describe('nudge', () => {
     );
   });
 
+  it('an author wait is never late and takes no fallback age on my PRs', () => {
+    const bob: Waiting = { person: 'p:bob', name: 'Bob', why: 'author', since: null, matched: true };
+    const old = item({ updated_at: '2026-09-01T00:00:00Z' }, [bob]);
+    expect(waitingChip(old, 24, now)).toMatchObject({ label: 'waiting on Bob (author)', late: false });
+  });
+
   it('cooldown: 24 h after a nudge', () => {
     expect(nudgedRecently(pr({ nudged_at: '2026-10-09T13:00:00Z' }), now)).toBe(true);
     expect(nudgedRecently(pr({ nudged_at: '2026-10-09T11:00:00Z' }), now)).toBe(false);

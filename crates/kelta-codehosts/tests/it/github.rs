@@ -47,6 +47,8 @@ async fn one_graphql_request_with_only_the_requested_alias() {
     assert_eq!(a.requested_at.as_deref(), Some("2026-09-29T08:00:00Z"), "my latest request");
     assert_eq!(a.waiting_on, ["bob"], "request rows carry who is asked");
     assert!(a.author_to_act, "changes requested on the current head");
+    assert_eq!(a.waiting_since.as_deref(), Some("2026-09-28T08:00:00Z"), "bob's request");
+    assert_eq!(a.author_since.as_deref(), Some("2026-09-29T11:00:00Z"), "zed's changes-requested review");
     assert!(a.blocking, "bob approved after his request: I am the last reviewer");
     let b = &list[1];
     assert!(!b.blocking && b.requested_at.is_none(), "already approved, no timeline");

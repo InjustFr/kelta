@@ -35,10 +35,18 @@ export function waitChip(
   const [first, ...rest] = waits;
   if (!first) return null;
   const now = opts.now ?? Date.now();
-  const sinces = waits.map((w) => w.since ?? opts.fallbackSince).filter((s): s is string => !!s);
-  const oldest = sinces.length > 0 ? Math.min(...sinces.map((s) => Date.parse(s))) : null;
+  // The fallback and lateness belong to review waits: an author wait is not a slow reviewer.
+  const oldestOf = (ws: readonly Waiting[], fallback?: string): number | null => {
+    const ts = ws.map((w) => w.since ?? fallback).filter((s): s is string => !!s);
+    return ts.length > 0 ? Math.min(...ts.map((s) => Date.parse(s))) : null;
+  };
+  const reviews = waits.filter((w) => w.why === 'review');
+  const oldest = oldestOf(waits.filter((w) => w.why !== 'review'));
+  const oldestReview = oldestOf(reviews, opts.fallbackSince);
+  const oldestAll = [oldest, oldestReview].filter((t): t is number => t !== null);
+  const aged = oldestAll.length > 0 ? Math.min(...oldestAll) : null;
   const why = opts.withWhy || first.why === 'author' ? ` (${first.why})` : '';
-  const age = rest.length === 0 && oldest !== null ? ` · ${hours(oldest, now)}h` : '';
+  const age = rest.length === 0 && aged !== null ? ` · ${hours(aged, now)}h` : '';
   const more = rest.length > 0 ? ` +${rest.length}` : '';
   const title = waits
     .map((w) => {
@@ -51,6 +59,6 @@ export function waitChip(
   return {
     label: `waiting on ${who(first)}${why}${more}${age}`,
     title,
-    late: opts.slaHours !== undefined && oldest !== null && now - oldest > opts.slaHours * HOUR,
+    late: opts.slaHours !== undefined && oldestReview !== null && now - oldestReview > opts.slaHours * HOUR,
   };
 }

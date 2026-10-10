@@ -205,7 +205,11 @@
   );
   /** The picked person's entry, by key or by a user id saved before team people. */
   const personEntry = $derived(
-    person ? people.find((p) => p.key === person || p.ids.some((i) => i.id === person)) : undefined,
+    person
+      ? people.find(
+          (p) => p.key === person || p.ids.some((i) => i.id === person || `${i.account}:${i.id}` === person),
+        )
+      : undefined,
   );
   const isPerson = (t: Ticket): boolean =>
     personEntry

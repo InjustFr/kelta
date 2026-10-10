@@ -777,6 +777,7 @@ export const reviewPage: ReviewPage = {
           "login": "bob",
           "name": "Bob"
         },
+        "author_since": null,
         "author_to_act": false,
         "blocking": false,
         "ci": "success",
@@ -805,7 +806,8 @@ export const reviewPage: ReviewPage = {
         "title": "SHOP-140: Cache product prices",
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://github.com/acme/shop-api/pull/87",
-        "waiting_on": []
+        "waiting_on": [],
+        "waiting_since": null
       },
       "waiting": []
     }
@@ -839,6 +841,7 @@ export const reviewDetail: ReviewDetail = {
       "login": "bob",
       "name": "Bob"
     },
+    "author_since": null,
     "author_to_act": false,
     "blocking": false,
     "ci": "success",
@@ -867,7 +870,8 @@ export const reviewDetail: ReviewDetail = {
     "title": "SHOP-140: Cache product prices",
     "updated_at": "2026-10-09T12:00:00Z",
     "url": "https://github.com/acme/shop-api/pull/87",
-    "waiting_on": []
+    "waiting_on": [],
+    "waiting_since": null
   },
   "reviewers": [
     {

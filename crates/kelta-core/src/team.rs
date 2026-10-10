@@ -123,7 +123,8 @@ pub fn people(seen: Vec<Ident>, mes: Vec<Ident>, hosts: &HashMap<AccountId, Stri
             .map(|(i, _)| i)
             .filter(|i| !i.code_host)
             .chain(members.iter().map(|(i, _)| i).filter(|i| i.code_host));
-        let first = &members[0].0;
+        // the key follows the tracker identity, so a saved filter survives a code host merging in
+        let first = &members.iter().map(|(i, _)| i).find(|i| !i.code_host).unwrap_or(&members[0].0);
         out.push(Person {
             key: if me { "me".into() } else { format!("{}:{}", first.account, first.id) },
             name: if me {
@@ -178,16 +179,15 @@ fn wait(
     }
 }
 
-/// Who a PR waits on: the reviewers still asked (since the earliest request, my PRs only: other
-/// rows' `requested_at` is my own request), then the author when changes were requested.
-// shortcut: one `since` for every reviewer, and none for the author wait, because `Review` keeps
-// a single request time; carry one per reviewer if the chip must age them apart.
+/// Who a PR waits on: the reviewers still asked (since `waiting_since`), then the author when
+/// changes were requested (since that review).
+// shortcut: one `since` for every reviewer, because `Review` keeps a single request time; carry one
+// per reviewer if the chip must age them apart.
 pub fn review_waiting(r: &Review, people: &[Person]) -> Vec<Waiting> {
-    let since = (r.kind == ReviewKind::Authored).then(|| r.requested_at.clone()).flatten();
     let mut out: Vec<Waiting> = r
         .waiting_on
         .iter()
-        .map(|l| wait(people, &r.r#ref.account, true, l, WaitWhy::Review, since.clone()))
+        .map(|l| wait(people, &r.r#ref.account, true, l, WaitWhy::Review, r.waiting_since.clone()))
         .collect();
     if r.author_to_act {
         out.push(wait(
@@ -196,17 +196,33 @@ pub fn review_waiting(r: &Review, people: &[Person]) -> Vec<Waiting> {
             true,
             r.author.login.as_deref().unwrap_or(&r.author.id),
             WaitWhy::Author,
-            None,
+            r.author_since.clone(),
         ));
     }
     out
 }
 
-/// A PR row's waits. A review wait on me is dropped on someone else's PR: the tab says it.
-pub fn review_row_waiting(r: &Review, people: &[Person]) -> Vec<Waiting> {
+/// A ticket not done and assigned to someone but me (no `since`: trackers give no assignment time).
+fn assigned_wait(t: &Ticket, people: &[Person]) -> Option<Waiting> {
+    let a = t.assignee.as_ref().filter(|_| t.status.category != StatusCategory::Done)?;
+    Some(wait(people, &t.r#ref.account, false, &a.id, WaitWhy::Assigned, None)).filter(|w| w.person != "me")
+}
+
+/// A PR row's waits, then Assigned from its linked `tickets`. A review wait on me is dropped on
+/// someone else's PR: the tab says it.
+pub fn review_row_waiting(r: &Review, tickets: &[Ticket], people: &[Person]) -> Vec<Waiting> {
     let mut w = review_waiting(r, people);
     if r.kind == ReviewKind::ReviewRequested {
         w.retain(|w| !(w.person == "me" && w.why == WaitWhy::Review));
+    }
+    let assigned = tickets
+        .iter()
+        .filter(|t| r.linked_tickets.contains(&t.r#ref.key))
+        .find_map(|t| assigned_wait(t, people));
+    if let Some(a) = assigned
+        && !w.iter().any(|x| x.person == a.person)
+    {
+        w.push(a);
     }
     w
 }
@@ -220,14 +236,10 @@ pub fn ticket_waiting(item: &TicketItem, reviews: &[Review], people: &[Person]) 
         .and_then(|p| reviews.iter().find(|r| r.url == p.url))
         .map(|r| review_waiting(r, people))
         .unwrap_or_default();
-    let t = &item.ticket;
-    if t.status.category != StatusCategory::Done
-        && let Some(a) = &t.assignee
+    if let Some(w) = assigned_wait(&item.ticket, people)
+        && !out.iter().any(|x| x.person == w.person)
     {
-        let w = wait(people, &t.r#ref.account, false, &a.id, WaitWhy::Assigned, None);
-        if w.person != "me" && !out.iter().any(|x| x.person == w.person) {
-            out.push(w);
-        }
+        out.push(w);
     }
     out
 }
@@ -370,24 +382,50 @@ mod tests {
     }
 
     #[test]
-    fn review_waits_carry_the_request_time_on_my_prs_and_the_author_wait() {
+    fn review_and_author_waits_carry_their_since_on_every_kind() {
+        let people = team();
+        for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+            let mut r = pr(kind);
+            r.waiting_since = Some("2026-09-28T10:00:00Z".into());
+            r.author_to_act = true;
+            r.author_since = Some("2026-09-29T09:00:00Z".into());
+            r.author = User { id: "bob".into(), login: Some("bob".into()), ..User::default() };
+            let w = review_row_waiting(&r, &[], &people);
+            let got: Vec<_> = w.iter().map(|w| (w.name.as_str(), w.why, w.since.as_deref())).collect();
+            let mut want = vec![("bob", WaitWhy::Review, Some("2026-09-28T10:00:00Z"))];
+            // a wait on me is shown on my PRs only
+            if kind == ReviewKind::Authored {
+                want.push(("You", WaitWhy::Review, Some("2026-09-28T10:00:00Z")));
+            }
+            want.push(("bob", WaitWhy::Author, Some("2026-09-29T09:00:00Z")));
+            assert_eq!(got, want, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_pr_waits_on_the_assignee_of_its_linked_ticket() {
         let people = team();
         let mut r = pr(ReviewKind::Authored);
-        r.author_to_act = true;
-        r.author = User { id: "louis".into(), login: Some("louis".into()), ..User::default() };
-        let w = review_waiting(&r, &people);
-        let got: Vec<_> = w.iter().map(|w| (w.name.as_str(), w.why, w.since.as_deref())).collect();
+        r.waiting_on.clear();
+        let mut t = samples::ticket();
+        t.assignee = Some(User { id: "j2".into(), name: "Anna".into(), ..User::default() });
+        r.linked_tickets = vec![t.r#ref.key.clone()];
+        let w = review_row_waiting(&r, std::slice::from_ref(&t), &people);
         assert_eq!(
-            got,
-            [
-                ("bob", WaitWhy::Review, Some("2026-09-28T10:00:00Z")),
-                ("You", WaitWhy::Review, Some("2026-09-28T10:00:00Z")),
-                ("You", WaitWhy::Author, None),
-            ]
+            w.iter().map(|w| (w.name.as_str(), w.why, w.since.clone())).collect::<Vec<_>>(),
+            [("Anna", WaitWhy::Assigned, None)]
         );
-        // a request row: the request time is mine, and a wait on me is not shown
-        let w = review_row_waiting(&pr(ReviewKind::ReviewRequested), &people);
-        assert_eq!(w.iter().map(|w| (w.name.as_str(), w.since.clone())).collect::<Vec<_>>(), [("bob", None)]);
+        assert!(review_row_waiting(&r, &[], &people).is_empty(), "no cached ticket, no wait");
+    }
+
+    #[test]
+    fn a_saved_key_survives_a_code_host_identity_merging_in() {
+        let jira = id("jira", "j2", None, "Anna", Some("anna@acme.test"), false);
+        let before = people(vec![jira.clone()], vec![], &hosts());
+        let gh = id("gh", "adev", Some("adev"), "adev", Some("anna@acme.test"), true);
+        let after = people(vec![jira, gh], vec![], &hosts());
+        assert_eq!((after.len(), after[0].key.as_str()), (1, "jira:j2"));
+        assert_eq!(before[0].key, after[0].key);
     }
 
     #[test]
