@@ -510,6 +510,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_finish_merged` | `{ids}` | `FinishMergedReport{finished: Vec<WorkItem>, skipped: Vec<SkippedItem{id, reason}>}` | finishes the listed items still `Merged` with clean worktrees (remove worktree + delete branch); dirty / unpushed ones and those waiting for a Done choice are skipped |
 | `work_check_prs` | `{}` | `()` | one `CodeHost::get` per unfinished item whose PR is missing from the authored open list; also run at startup (§8.4) |
 | `work_link` | `{id, ticket: TicketRef, apply_side_effects: bool}` | `WorkItem` | scratch (Branch) items only; becomes Ticket-kind, branch never renamed; side effects = `work.on_start`, plus `work.on_pr` when a PR exists (then `pr_title_needs_key`) |
+| `work_create_ticket` | `{id, view_id, title, body_md, apply_side_effects: bool}` | `WorkItem` | Create ticket (FLOW §4.3 step 4): `Tracker::create` in the project tracker's view `view_id`, then `work_link` |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, diverged, remote_new, files, insertions, deletions, missing}` (on demand, no fetch; ahead/behind and diffstat against `<remote>/<base>`, never the branch's upstream; diffstat from the merge base to the working tree, untracked files count in `files`; `missing` = worktree deleted outside Kelta; re-reads a recorded rebase). `diverged` = own rewrite: the recorded `remote_sha` is still the remote tip, is in `pre_head` and not in HEAD. `remote_new` = commits on `<remote>/<branch>` in neither HEAD nor `pre_head` | |
 | `work_status_all` | `{}` | `Map<WorkItemId, GitStatus>` for every unfinished item: one `git fetch <remote>` per repo first, at most every 5 min (UI: startup, window focus, Now open) | |
 | `work_diff` | `{id, delta?: bool, from?: String}` | `SessionInfo`: the review diff session in the item's worktree (editor with `editor.review_args`, `{range}` = `<remote>/<base>`; empty → a shell running `git diff $(git merge-base <base> HEAD)`). `delta`: `{range}` = `<reviewed>..<last>` (shell: `git diff <reviewed> <last>`), `Invalid` when nothing changed since the last review. `from` (review items, the reviewed PR head): `{range}` = `<from>..HEAD`, or `git range-diff <from>...HEAD` in a shell after a force push. The UI places it split down, zoomed, in the work tab | |
@@ -674,6 +675,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
   async fn assign(&self, t: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError>;
   fn browser_url(&self, t: &TicketRef) -> String;
   fn branch_key(&self, t: &TicketRef) -> String;       // "SHOP-123" | "4567" | "gh-12" | "gl-12"
+  async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError>;  // new ticket where the view points (jira jql project, redmine project_id, github repo, gitlab/gitea project, linear team); default Unsupported
 }
 pub struct TicketRef { account: AccountId, key: String, id: String }
 pub struct Ticket { r#ref: TicketRef, title, url, status: Status, kind: Option<String>, assignee: Option<User>,

@@ -250,6 +250,27 @@ impl Tracker for LinearTracker {
         Ok(Page { items, next })
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let team = common::create_in(project, "team", project.team.as_deref())?;
+        let d = self
+            .gql("query($k: String!) { teams(filter: {key: {eq: $k}}) { nodes { id } } }", json!({"k": team}))
+            .await?;
+        let team_id = d
+            .pointer("/teams/nodes/0/id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| KeltaError::not_found(format!("linear team {team}")))?;
+        let q = format!(
+            "mutation($input: IssueCreateInput!) {{ issueCreate(input: $input) {{ success issue {{ {ISSUE} }} }} }}"
+        );
+        let input = json!({"teamId": team_id, "title": title, "description": body_md});
+        let d = self.gql(&q, json!({ "input": input })).await?;
+        let r = &d["issueCreate"];
+        if r["success"].as_bool() != Some(true) {
+            return Err(KeltaError::upstream("linear issueCreate was not applied"));
+        }
+        self.ticket_from(&r["issue"]).ok_or_else(|| KeltaError::upstream("linear issueCreate without issue"))
+    }
+
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let (teams, projects) = if query.is_empty() {
             (json!({}), json!({}))

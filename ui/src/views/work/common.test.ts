@@ -11,6 +11,7 @@ import {
   planValid,
   scratchBranch,
   taskTitle,
+  ticketBody,
   REVIEW_READONLY,
   reviewPhase,
   workActionDisabled,
@@ -30,6 +31,18 @@ describe('scratch branch preview', () => {
     );
     expect(scratchBranch('  \n ', 'wip/{slug}', 40)).toBe('');
     expect(taskTitle('x'.repeat(80))).toHaveLength(72);
+  });
+});
+
+describe('ticketBody', () => {
+  it('puts the diffstat after the task', () => {
+    const git = { ...samples.gitStatus, files: 3, insertions: 40, deletions: 2 };
+    expect(ticketBody(' Speed up search \n', 'wip/x', git)).toBe(
+      'Speed up search\n\nBranch `wip/x`: 3 files changed, +40 −2.',
+    );
+    expect(ticketBody('', 'wip/x', { ...git, files: 1 })).toBe('Branch `wip/x`: 1 file changed, +40 −2.');
+    expect(ticketBody('Task', 'wip/x', { ...git, files: 0 })).toBe('Task');
+    expect(ticketBody('Task', 'wip/x', null)).toBe('Task');
   });
 });
 

@@ -31,6 +31,7 @@ describe('registries', { timeout: 30_000 }, () => {
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
       [
+        'create_ticket',
         'finish',
         'finish_merged',
         'fix',
