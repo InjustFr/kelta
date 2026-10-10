@@ -38,7 +38,7 @@ describe('ThemePicker', () => {
       within(grid('Dark theme'))
         .getAllByRole('option')
         .map((o) => o.dataset.themeId),
-    ).toEqual(['bezel-dark', 'sol']);
+    ).toEqual(['bezel-dark', 'solarized-dark', 'gruvbox-dark', 'nord', 'dracula', 'catppuccin-mocha', 'sol']);
     expect(card('Dark theme', 'bezel-dark').getAttribute('aria-selected')).toBe('true');
     expect(card('Dark theme', 'sol').getAttribute('aria-selected')).toBe('false');
     expect((card('Dark theme', 'sol').querySelector('.strip') as HTMLElement).style.background).toBe(
@@ -51,8 +51,8 @@ describe('ThemePicker', () => {
   it('moves focus with arrows without writing, and writes the slot on Enter', async () => {
     render(ThemePicker);
     const before = writes().length;
-    card('Dark theme', 'bezel-dark').focus();
-    await fireEvent.keyDown(card('Dark theme', 'bezel-dark'), { key: 'ArrowRight' });
+    card('Dark theme', 'catppuccin-mocha').focus();
+    await fireEvent.keyDown(card('Dark theme', 'catppuccin-mocha'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(card('Dark theme', 'sol'));
     expect(card('Dark theme', 'sol').tabIndex).toBe(0);
     expect(writes()).toHaveLength(before);
@@ -82,7 +82,7 @@ describe('ThemePicker', () => {
         ['settings_reset', 'app.dark_theme'],
       ]),
     );
-    await waitFor(() => expect(within(grid('Dark theme')).getAllByRole('option')).toHaveLength(1));
+    await waitFor(() => expect(within(grid('Dark theme')).getAllByRole('option')).toHaveLength(6));
     expect(settings.value()?.app.dark_theme).toBe('bezel-dark');
     expect(card('Dark theme', 'bezel-dark').getAttribute('aria-selected')).toBe('true');
   });
