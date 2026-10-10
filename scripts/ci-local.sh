@@ -97,7 +97,7 @@ if [ "$(uname -s)" = Linux ]; then
   skip linux-check "host is Linux"
 elif [ "$linux" = 1 ] || linux_relevant; then
   if command -v docker >/dev/null 2>&1; then
-    run linux-check perl scripts/gate-slot.pl bash scripts/linux-check.sh "${qa_args[@]}"
+    run linux-check perl scripts/gate-slot.pl bash scripts/linux-check.sh ${qa_args[@]+"${qa_args[@]}"}  # bash 3.2: empty array is unbound under set -u
   elif [ "$linux" = 1 ] && [ "$full" = 0 ]; then
     echo "ci-local: docker not found but --linux was given" >&2
     run linux-check false
