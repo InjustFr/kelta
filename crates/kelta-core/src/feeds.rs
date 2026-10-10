@@ -51,6 +51,8 @@ pub struct Feeds {
     /// PRs whose merge / close was published in this process (live diff and check publish once).
     ended: Mutex<HashSet<ReviewRef>>,
     transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
+    /// The pane a global view on the rail shows outside any layout (`ui_set_global_view`).
+    global_view: Mutex<Option<PaneContent>>,
 }
 
 /// One tracker list query shared by the projects that use it.
@@ -1560,11 +1562,19 @@ impl Core {
     }
 
     /// Recompute subscriptions: visible panes of the active tab + notification rules.
+    /// `ui_set_global_view`: the rail's Tickets, Now or Reviews view (`None` = a project) is
+    /// polled like a visible pane.
+    pub fn ui_set_global_view(&self, content: Option<PaneContent>) {
+        *self.feeds.global_view.lock() = content;
+        self.resubscribe();
+    }
+
     pub(crate) fn resubscribe(&self) {
         let s = self.accounts_settings();
         let active = self.active_project();
-        let contents: Vec<PaneContent> =
+        let mut contents: Vec<PaneContent> =
             self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
+        contents.extend(self.feeds.global_view.lock().clone());
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
         let tickets = |scope: &Scope,
                        view: Option<&str>,

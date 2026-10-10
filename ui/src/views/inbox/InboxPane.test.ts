@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
+
+import { globalContent } from '../work/nav';
 import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import { prompts } from '../../shell/confirm.svelte';
@@ -30,7 +32,7 @@ beforeEach(async () => {
   const flaky = mock.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-155');
   if (flaky) flaky.ticket.assignee = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
   await Promise.all([projects.load(), sessions.load(), work.load()]);
-  ui.inboxActive = true;
+  ui.view = 'now';
 });
 
 function mountNow() {
@@ -105,7 +107,7 @@ describe('Now', () => {
     await fireEvent.keyDown(pane, { key: 'j' });
     await fireEvent.keyDown(pane, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
-    expect(ui.inboxActive).toBe(false);
+    expect(ui.view).toBeNull();
     expect(projects.activeId).toBe('shop');
     await waitFor(() => {
       const l = layout.get('shop')!;
@@ -136,7 +138,7 @@ describe('Now', () => {
     const diffs = () =>
       mock.calls.filter((c) => c.cmd === 'work_diff').map((c) => c.args as { delta?: boolean });
     await waitFor(() => expect(diffs()[0]?.delta).toBe(true));
-    ui.inboxActive = true;
+    ui.view = 'now';
     await fireEvent.keyDown(pane, { key: 'V' });
     await waitFor(() => expect(diffs()).toHaveLength(2));
     expect(diffs()[1]!.delta).toBeUndefined();
@@ -151,7 +153,7 @@ describe('Now', () => {
     await waitFor(() => expect(sectionIds(container)).toContain('requests'));
     await nextWaitingTo(container, 'r:');
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'Enter' });
-    await waitFor(() => expect(ui.inboxActive).toBe(false));
+    await waitFor(() => expect(ui.view).toBeNull());
     const tabs = () => layout.get('shop')!.tabs.filter((t) => t.title === 'Reviews');
     await waitFor(() => expect(tabs()).toHaveLength(1));
   });
@@ -166,7 +168,7 @@ describe('Now', () => {
     await waitFor(() => expect(container.querySelectorAll('.row[data-row]')).toHaveLength(1));
   });
 
-  it('loads my tickets across every source, and Show all opens the Tickets list for them', async () => {
+  it('loads my tickets across every source, and Show all opens the Tickets view on Mine', async () => {
     const mine = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
     if (!mine) throw new Error('fixture missing');
     for (let i = 0; i < 12; i += 1) {
@@ -185,13 +187,10 @@ describe('Now', () => {
     expect(lists.length).toBeGreaterThan(0);
     // Mine for Up next; unassigned only to resolve Next up items (#145).
     expect(lists.every((c) => ['mine', 'unassigned'].includes((c.args as { who: string }).who))).toBe(true);
+    localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone', person: 'u-bob' }));
     await fireEvent.click(more);
-    await waitFor(() => {
-      const l = layout.get(projects.activeId!)!;
-      expect(
-        findContent(l, (c) => c.kind === 'tickets' && c.mode === 'list' && c.who === 'mine'),
-      ).toBeTruthy();
-    });
+    expect(ui.view).toBe('tickets');
+    expect(globalContent('tickets')).toMatchObject({ scope: { kind: 'all' }, who: 'mine', person: null });
   });
 
   it('shows an error state when nothing loads', async () => {
@@ -268,7 +267,7 @@ describe('Next waiting (Mod+J)', () => {
       const before = projects.activeId; // a row without a project opens in the active one
       await nextWaiting();
       expect(hud.text).toBe(`${i + 1}/${queue.length} · ${j.label} · ${rowKey(j.row)}`);
-      expect(ui.inboxActive).toBe(false);
+      expect(ui.view).toBeNull();
       expect(projects.activeId).toBe(rowProject(j.row) ?? before);
       if (j.row.type === 'session') expect(focusedSessionId()).toBe(j.row.session.id);
     }

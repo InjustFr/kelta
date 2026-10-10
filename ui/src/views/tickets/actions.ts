@@ -1,25 +1,41 @@
-// Action handlers owned by L9 (tickets): `tickets.open` (+ the toast helper `tickets.open_in_browser`).
+// Action handlers owned by L9 (tickets): `tickets.open`, `tickets.board` (+ the toast helper
+// `tickets.open_in_browser`).
 import { registerAction } from '$lib/actions';
+import type { ProjectId, TicketsMode } from '$lib/gen';
 import { openExternal } from '$lib/ipc/commands';
 import { projects, toasts, ui } from '$lib/stores';
 
+import { openView } from '../../shell/nav';
 import { openContent } from '../work/nav';
 
-registerAction('tickets.open', async (args) => {
-  const projectId = (args?.project_id as string | undefined) ?? projects.activeId;
-  if (!projectId) {
-    toasts.info('Open a project first');
-    return;
-  }
+/** A project's Tickets tab (the board needs one project's columns). */
+async function openProjectTickets(projectId: ProjectId, mode: TicketsMode): Promise<void> {
   await openContent(
     projectId,
-    { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode: 'list', who: null },
+    { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode, who: null },
     {
       placement: 'new_tab',
       title: 'Tickets',
       match: (c) => c.kind === 'tickets' && c.scope.kind === 'project' && c.scope.id === projectId,
+      replace: mode === 'board',
     },
   );
+}
+
+// Without `project_id`: the cross-project Tickets view on the rail.
+registerAction('tickets.open', async (args) => {
+  const projectId = args?.project_id as string | undefined;
+  if (projectId) await openProjectTickets(projectId, 'list');
+  else openView('tickets');
+});
+
+registerAction('tickets.board', async () => {
+  const projectId = projects.activeId;
+  if (!projectId) {
+    toasts.info('Open a project first');
+    return;
+  }
+  await openProjectTickets(projectId, 'board');
 });
 
 registerAction('tickets.groom', () => ui.openSheet('groom'));

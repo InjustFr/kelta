@@ -1,3 +1,4 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
@@ -6,6 +7,7 @@ import { activeTab } from '$lib/layout';
 import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
 
 import { confirms } from './confirm.svelte';
+import NewSessionSheet from './NewSessionSheet.svelte';
 import {
   activateProject,
   closeFocusedPane,
@@ -15,9 +17,12 @@ import {
   focusedSessionId,
   gotoProjectIndex,
   openContent,
+  openView,
   railProjects,
   requestCloseTab,
   revealSession,
+  savedPlace,
+  savePlace,
   splitFocused,
   projectAttention,
   tabAttention,
@@ -34,7 +39,7 @@ beforeEach(async () => {
   mock = created.controls;
   setTransport(created.transport);
   layout.byProject = {};
-  ui.inboxActive = false;
+  ui.view = null;
   toasts.clear();
   await Promise.all([projects.load(), sessions.load(), work.load()]);
   await layout.ensure('shop');
@@ -77,10 +82,28 @@ describe('projects', () => {
     expect(projects.activeId).toBe('home');
   });
 
-  it('leaves the inbox when a project is activated', async () => {
-    ui.inboxActive = true;
+  it('leaves a global view when a project is activated, even the active one', async () => {
+    ui.view = 'now';
     await activateProject('shop');
-    expect(ui.inboxActive).toBe(false);
+    expect(ui.view).toBeNull();
+  });
+
+  it('a global view keeps the active project; next/prev from it go to the first/last project', () => {
+    openView('tickets');
+    expect(ui.view).toBe('tickets');
+    expect(projects.activeId).toBe('shop');
+    cycleProject(-1);
+    expect([ui.view, projects.activeId]).toEqual([null, 'home']);
+    openView('reviews');
+    cycleProject(1);
+    expect([ui.view, projects.activeId]).toEqual([null, 'shop']);
+  });
+
+  it('remembers the last place', () => {
+    savePlace('reviews');
+    expect(savedPlace()).toBe('reviews');
+    savePlace(null);
+    expect(savedPlace()).toBeNull();
   });
 });
 
@@ -138,6 +161,21 @@ describe('panes and tabs', () => {
     expect(after.id).toBe(before.id);
     expect(JSON.stringify(after.root)).not.toBe(JSON.stringify(before.root));
     expect(after.focused_pane).not.toBe(before.focused_pane);
+  });
+
+  it('a split from a global view shows the active project with the new pane', async () => {
+    openView('tickets');
+    await splitFocused('row');
+    expect(ui.view).toBeNull();
+    expect(calls('session_spawn')).toHaveLength(1);
+  });
+
+  it('a new session started from a global view shows its project, even the active one', async () => {
+    openView('tickets');
+    render(NewSessionSheet, { onclose: () => {} });
+    await fireEvent.click(await screen.findByTestId('new-session-start'));
+    await waitFor(() => expect(ui.view).toBeNull());
+    expect(calls('session_spawn_template')).toHaveLength(1);
   });
 
   it('toggles zoom on the focused pane', () => {

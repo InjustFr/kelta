@@ -158,7 +158,7 @@ The same letters are shown on the ghost buttons of the expanded Now row. The sam
 
 ![Now](images/flow/f1-now.png)
 
-Now replaces the Inbox. It keeps the Inbox's slot and plumbing (rail top tile, `⌘0`, `InboxHost`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change.
+Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, are polled like a visible pane while shown (`ui_set_global_view`), and follow the "leaves Now" rule of §3.3.
 
 ### 3.1 Sections
 
@@ -206,12 +206,12 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `s` | Start work (Up next rows) / Review locally (Review requests rows) / Skip step (Failed rows) |
 | `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not Now): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not Now; the same in the rail's Tickets view, where the source chip names the project and the board toggle is hidden): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 | `N` | New work item |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now **closes Now and focuses the target in its project** (`ui.inboxActive = false`, activate project, focus tab and pane). Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
 
 ### 3.4 Next waiting, without opening Now
 

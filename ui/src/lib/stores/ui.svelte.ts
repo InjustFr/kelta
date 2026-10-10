@@ -23,6 +23,10 @@ export type SheetKey =
   | 'tickets.move'
   | 'groom';
 export type OverlayKey = 'palette' | 'switcher';
+/** The cross-project places on the rail (SPEC §1), shown outside any project. */
+export type GlobalView = 'tickets' | 'now' | 'reviews';
+/** `projectId` of the panes a global view hosts: never a real project, never opened into. */
+export const GLOBAL = 'global';
 
 export interface SheetEntry {
   key: SheetKey;
@@ -36,8 +40,8 @@ export class UiStore {
   sheets = $state<SheetEntry[]>([]);
   /** Window visibility/focus as seen by the webview. */
   focused = $state(true);
-  /** Inbox pseudo-project selected on the rail. */
-  inboxActive = $state(false);
+  /** Global view shown instead of the active project (`null` = the project). */
+  view = $state<GlobalView | null>(null);
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive listener list
   #ctlListeners = new Set<(cmd: CtlCommand) => void>();
