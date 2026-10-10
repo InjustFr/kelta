@@ -47,10 +47,13 @@ comments(first:30){ nodes{ author{ login } body url } } } } latestReviews(first:
 const RESOLVE_THREAD: &str =
     "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
 
-const PR_ID: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ id } } }";
+const PR_ID: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ id mergeStateStatus } } }";
 
 const ARM_AUTO_MERGE: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
 enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }";
+
+const MERGE_PR: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
+mergePullRequest(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }";
 
 const DISARM_AUTO_MERGE: &str =
     "mutation($id:ID!){ disablePullRequestAutoMerge(input:{pullRequestId:$id}){ clientMutationId } }";
@@ -848,12 +851,14 @@ impl CodeHost for GithubHost {
             MergeMethod::Merge => "MERGE",
             MergeMethod::Rebase => "REBASE",
         };
-        let id = self.pr_node_id(r).await?;
-        graphql(&self.auth, &self.graphql, ARM_AUTO_MERGE, json!({ "id": id, "m": m })).await.map(|_| ())
+        let (id, state) = self.pr_node(r).await?;
+        // GitHub refuses auto-merge on a PR that is already mergeable ("clean status"): merge it now.
+        let q = if state.as_deref() == Some("CLEAN") { MERGE_PR } else { ARM_AUTO_MERGE };
+        graphql(&self.auth, &self.graphql, q, json!({ "id": id, "m": m })).await.map(|_| ())
     }
 
     async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
-        let id = self.pr_node_id(r).await?;
+        let (id, _) = self.pr_node(r).await?;
         graphql(&self.auth, &self.graphql, DISARM_AUTO_MERGE, json!({ "id": id })).await.map(|_| ())
     }
 
@@ -869,13 +874,18 @@ impl CodeHost for GithubHost {
 }
 
 impl GithubHost {
-    async fn pr_node_id(&self, r: &ReviewRef) -> Result<String, KeltaError> {
+    /// Node id and `mergeStateStatus` of a pull request.
+    async fn pr_node(&self, r: &ReviewRef) -> Result<(String, Option<String>), KeltaError> {
         let (owner, name) = r.repo.split_once('/').unwrap_or((r.repo.as_str(), ""));
         let vars = json!({ "o": owner, "n": name, "num": r.number });
         let data = graphql(&self.auth, &self.graphql, PR_ID, vars).await?;
+        let state = data
+            .pointer("/repository/pullRequest/mergeStateStatus")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
         data.pointer("/repository/pullRequest/id")
             .and_then(Value::as_str)
-            .map(str::to_owned)
+            .map(|id| (id.to_owned(), state))
             .ok_or_else(|| KeltaError::not_found(format!("pull request {}#{}", r.repo, r.number)))
     }
 

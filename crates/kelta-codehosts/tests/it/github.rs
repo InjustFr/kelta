@@ -622,3 +622,30 @@ async fn arm_auto_merge_enables_it_on_the_pr_node_and_surfaces_a_refusal() {
     assert_eq!(reqs[1]["variables"], json!({ "id": "PR_101", "m": "SQUASH" }));
     assert!(reqs[1]["query"].as_str().unwrap().contains("enablePullRequestAutoMerge"));
 }
+
+#[tokio::test]
+async fn arm_auto_merge_merges_a_clean_pr_directly() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "num": 101 } })))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"data":{"repository":{"pullRequest":{"id":"PR_101","mergeStateStatus":"CLEAN"}}}}"#,
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "id": "PR_101" } })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"data":{"mergePullRequest":{"clientMutationId":null}}}"#),
+        )
+        .mount(&server)
+        .await;
+    let r = rref("github-work", "acme/shop", 101);
+    gh(&server).arm_auto_merge(&r, MergeMethod::Rebase).await.unwrap();
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(reqs[1]["variables"], json!({ "id": "PR_101", "m": "REBASE" }));
+    assert!(reqs[1]["query"].as_str().unwrap().contains("mergePullRequest"));
+}
