@@ -680,6 +680,9 @@ impl WorkService {
         body_md: &str,
         apply_side_effects: bool,
     ) -> Result<WorkItem, KeltaError> {
+        // Held across create + link: a busy item must refuse before the ticket exists.
+        let lock = self.item_lock(id);
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let item = self.load(id).await?;
         // Checked before the tracker call: a refused link must not leave an orphan ticket.
         Self::linkable(&item)?;
@@ -696,8 +699,12 @@ impl WorkService {
             .find(|v| v.id == view_id)
             .ok_or_else(|| KeltaError::not_found(format!("tracker source {view_id}")))?;
         let tracker = env.core.tracker_for(view.account.as_ref().unwrap_or(&binding.account)).await?;
-        let ticket = tracker.create(view, title, body_md).await?;
-        self.link_impl(id, ticket.r#ref, apply_side_effects).await
+        let ticket = tracker.create(view, title, body_md).await?.r#ref;
+        let key = ticket.key.clone();
+        self.link_locked(item, ticket, apply_side_effects).await.map_err(|mut e| {
+            e.message = format!("created {key} but could not link it: {}", e.message);
+            e
+        })
     }
 
     /// `work_link` (FLOW §4.3 step 4): a scratch item becomes ticket-kind; the branch never changes.
@@ -708,9 +715,20 @@ impl WorkService {
         apply_side_effects: bool,
     ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
-        let mut item = self.load(id).await?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
+        let item = self.load(id).await?;
         Self::linkable(&item)?;
+        self.link_locked(item, ticket, apply_side_effects).await
+    }
+
+    /// `link_impl` past its lock and checks; the caller holds the item lock.
+    async fn link_locked(
+        &self,
+        mut item: WorkItem,
+        ticket: TicketRef,
+        apply_side_effects: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        let id = &item.id.clone();
         let items = self.store.list_items(Some(&item.project_id)).await?;
         if plan::existing_for(&items, &WorkSource::Ticket { ticket: ticket.clone() })
             .is_some_and(|w| w.id != item.id)

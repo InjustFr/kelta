@@ -4,12 +4,14 @@ use std::sync::Arc;
 
 use crate::common::{Fx, git, has_git, project};
 use async_trait::async_trait;
+use kelta_proto::codehost::PrDraft;
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::BusEvent;
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::AccountId;
 use kelta_proto::model::{
-    BranchChoice, PaneContent, Placement, SessionKind, StepStatus, WORK_STEPS, WorkSource, WorkState,
+    BranchChoice, PaneContent, Placement, SessionKind, ShipOrigin, StepStatus, WORK_STEPS, WorkSource,
+    WorkState,
 };
 use kelta_proto::samples;
 use kelta_proto::tracker::TicketRef;
@@ -663,6 +665,21 @@ async fn create_ticket_files_then_links_a_scratch_item() {
     let e = w.create_ticket(&a.id, "mine", "  ", "", false).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument);
     assert!(fx.tracker.calls().is_empty(), "{:?}", fx.tracker.calls());
+    // A ship holds the item lock: refused before the tracker call, so a retry cannot double-file.
+    std::fs::write(a.worktree.join("a.txt"), "x\n").unwrap();
+    git(&a.worktree, &["add", "a.txt"]);
+    git(&a.worktree, &["commit", "-q", "-m", "a"]);
+    let ship = tokio::spawn({
+        let (w, id) = (w.clone(), a.id.clone());
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
+    });
+    let push = fx.wait_session(|s| s.name == "git push").await;
+    let e = w.create_ticket(&a.id, "mine", "Explore caching", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(fx.tracker.calls().is_empty(), "{:?}", fx.tracker.calls());
+    git(&a.worktree, &["push", "-q", "-u", "origin", &a.branch]);
+    fx.core.exit_session(&push, 0);
+    ship.await.unwrap().unwrap();
 
     let linked = w.create_ticket(&a.id, "mine", " Explore caching ", "The task", false).await.unwrap();
     let key = linked.ticket.as_ref().map(|t| t.key.clone()).unwrap();
