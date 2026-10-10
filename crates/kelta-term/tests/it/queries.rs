@@ -127,28 +127,34 @@ fn pty_child_reads_each_reply_exactly_once() {
     let queries: Vec<u8> = rows.iter().flat_map(|r| r.query.clone()).collect();
     let expected: Vec<u8> = rows.iter().filter_map(|r| r.reply.clone()).flatten().collect();
     let backends: Vec<Arc<dyn PtyBackend>> = vec![Arc::new(PortablePty), Arc::new(RustixPty)];
-    for b in backends {
-        let name = b.name();
-        let h = PtyTerminalHost::with_backend(TerminalLimits::default(), b);
-        let dir = tempfile::tempdir().unwrap();
-        let q = dir.path().join("q.bin");
-        let out = dir.path().join("out.bin");
-        std::fs::write(&q, &queries).unwrap();
-        // Raw, no echo; `cat` ends after 1 s without input (VMIN 0, VTIME 10).
-        let script = format!(
-            "stty raw -echo; stty min 0 time 10; cat '{}'; cat > '{}'; echo DONE",
-            q.display(),
-            out.display()
-        );
-        let ev = Arc::new(Events::default());
-        h.spawn(spec("q", "/bin/sh", &["-c", &script], 80, 24, ev.clone())).unwrap();
-        assert_eq!(ev.wait_exit(Duration::from_secs(20)), (Some(0), None), "{name}");
-        let got = std::fs::read(&out).unwrap();
-        assert_eq!(
-            escape(&got),
-            escape(&expected),
-            "{name}: {}",
-            h.text_tail(&SessionId::new("q"), 5).unwrap()
-        );
-    }
+    // Backends side by side: each waits out the 1 s read timeout.
+    std::thread::scope(|s| {
+        for b in backends {
+            let (queries, expected) = (&queries, &expected);
+            s.spawn(move || {
+                let name = b.name();
+                let h = PtyTerminalHost::with_backend(TerminalLimits::default(), b);
+                let dir = tempfile::tempdir().unwrap();
+                let q = dir.path().join("q.bin");
+                let out = dir.path().join("out.bin");
+                std::fs::write(&q, queries).unwrap();
+                // Raw, no echo; `cat` ends after 1 s without input (VMIN 0, VTIME 10).
+                let script = format!(
+                    "stty raw -echo; stty min 0 time 10; cat '{}'; cat > '{}'; echo DONE",
+                    q.display(),
+                    out.display()
+                );
+                let ev = Arc::new(Events::default());
+                h.spawn(spec("q", "/bin/sh", &["-c", &script], 80, 24, ev.clone())).unwrap();
+                assert_eq!(ev.wait_exit(Duration::from_secs(20)), (Some(0), None), "{name}");
+                let got = std::fs::read(&out).unwrap();
+                assert_eq!(
+                    escape(&got),
+                    escape(expected),
+                    "{name}: {}",
+                    h.text_tail(&SessionId::new("q"), 5).unwrap()
+                );
+            });
+        }
+    });
 }
