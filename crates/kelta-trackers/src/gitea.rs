@@ -145,6 +145,64 @@ impl GiteaIssues {
         let v = self.json(HttpRequest::patch(self.issue_url(t, "")?).json(body)).await?.body;
         self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitea issue response without number"))
     }
+
+    /// `list`, narrowed to the tickets matching `text` when set.
+    async fn issues(
+        &self,
+        view: &TrackerView,
+        cursor: Option<Cursor>,
+        text: Option<&str>,
+    ) -> Result<Page<Ticket>, KeltaError> {
+        let page = match cursor {
+            None => 1,
+            Some(Cursor::Page(p)) => p.max(1),
+            Some(_) => return Err(KeltaError::invalid("gitea issues expect a page cursor")),
+        };
+        let project = view.project.as_deref().filter(|p| !p.is_empty());
+        // `who` wins over the legacy `scope`.
+        let all = view.who.map_or(view.scope.as_deref() == Some("all"), |w| w != Who::Mine);
+        if matches!(view.who, Some(Who::Unassigned | Who::Anyone)) && project.is_none() {
+            return Err(KeltaError::invalid("gitea needs a repository to list unassigned or all tickets"));
+        }
+        let url = match (project, all) {
+            (Some(p), true) => {
+                let (owner, name) = p
+                    .split_once('/')
+                    .filter(|(a, b)| !a.is_empty() && !b.is_empty() && !b.contains('/') && !p.contains(".."))
+                    .ok_or_else(|| KeltaError::invalid(format!("bad gitea project: {p}")))?;
+                format!("{}/repos/{}/{}/issues", self.api, percent_encode(owner), percent_encode(name))
+            }
+            _ => format!("{}/repos/issues/search", self.api),
+        };
+        let mut req = HttpRequest::get(url)
+            .query("type", "issues")
+            .query("state", state_param(view))
+            .query("limit", PER_PAGE.to_string())
+            .query("page", page.to_string());
+        if !all {
+            req = req.query("assigned", "true");
+        }
+        if let Some(t) = text {
+            req = req.query("q", t);
+        }
+        if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
+            req = req.query("labels", l.join(","));
+        }
+        let resp = self.json(req.with_etag()).await?;
+        let items: Vec<Ticket> = resp
+            .body
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|i| self.ticket_from(i))
+                    // shortcut: short pages, page-refill later (project and unassigned filters trim a page)
+                    .filter(|t| view.who != Some(Who::Unassigned) || t.assignee.is_none())
+                    .filter(|t| project.is_none_or(|p| t.project_hint.as_deref() == Some(p)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Page { items, next: link_rel(&resp.headers, "next").map(|_| Cursor::Page(page + 1)) })
+    }
 }
 
 fn state_param(view: &TrackerView) -> &'static str {
@@ -182,52 +240,11 @@ impl Tracker for GiteaIssues {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        let page = match cursor {
-            None => 1,
-            Some(Cursor::Page(p)) => p.max(1),
-            Some(_) => return Err(KeltaError::invalid("gitea issues expect a page cursor")),
-        };
-        let project = view.project.as_deref().filter(|p| !p.is_empty());
-        // `who` wins over the legacy `scope`.
-        let all = view.who.map_or(view.scope.as_deref() == Some("all"), |w| w != Who::Mine);
-        if matches!(view.who, Some(Who::Unassigned | Who::Anyone)) && project.is_none() {
-            return Err(KeltaError::invalid("gitea needs a repository to list unassigned or all tickets"));
-        }
-        let url = match (project, all) {
-            (Some(p), true) => {
-                let (owner, name) = p
-                    .split_once('/')
-                    .filter(|(a, b)| !a.is_empty() && !b.is_empty() && !b.contains('/') && !p.contains(".."))
-                    .ok_or_else(|| KeltaError::invalid(format!("bad gitea project: {p}")))?;
-                format!("{}/repos/{}/{}/issues", self.api, percent_encode(owner), percent_encode(name))
-            }
-            _ => format!("{}/repos/issues/search", self.api),
-        };
-        let mut req = HttpRequest::get(url)
-            .query("type", "issues")
-            .query("state", state_param(view))
-            .query("limit", PER_PAGE.to_string())
-            .query("page", page.to_string());
-        if !all {
-            req = req.query("assigned", "true");
-        }
-        if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
-            req = req.query("labels", l.join(","));
-        }
-        let resp = self.json(req.with_etag()).await?;
-        let items: Vec<Ticket> = resp
-            .body
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|i| self.ticket_from(i))
-                    // shortcut: short pages, page-refill later (project and unassigned filters trim a page)
-                    .filter(|t| view.who != Some(Who::Unassigned) || t.assignee.is_none())
-                    .filter(|t| project.is_none_or(|p| t.project_hint.as_deref() == Some(p)))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(Page { items, next: link_rel(&resp.headers, "next").map(|_| Cursor::Page(page + 1)) })
+        self.issues(view, cursor, None).await
+    }
+
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        Ok(self.issues(view, None, Some(text)).await?.items)
     }
 
     async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {

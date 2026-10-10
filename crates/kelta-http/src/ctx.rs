@@ -185,7 +185,7 @@ impl HttpCtx {
                 }
                 Attempt::Status { status, headers, body } => {
                     if let Some(wait) = self.classify_wait(req.method, status, &headers, &body, attempt) {
-                        if wait.rate_limit {
+                        if wait.rate_limit && !own_quota(&headers) {
                             self.block_for(wait.dur);
                         }
                         if attempt < MAX_RETRIES && wait.dur <= INLINE_WAIT_MAX {
@@ -334,11 +334,17 @@ impl HttpCtx {
     fn note_rate_limit(&self, headers: &BTreeMap<String, String>) {
         let remaining = header_u64(headers, &["x-ratelimit-remaining", "ratelimit-remaining"]);
         if remaining == Some(0)
+            && !own_quota(headers)
             && let Some(reset) = reset_wait(headers)
         {
             self.block_for(reset.min(self.policy.max_backoff));
         }
     }
+}
+
+/// GitHub's search API has its own 30/min quota: draining it must not block the account's other calls.
+fn own_quota(headers: &BTreeMap<String, String>) -> bool {
+    headers.get("x-ratelimit-resource").is_some_and(|r| r == "search")
 }
 
 struct Wait {

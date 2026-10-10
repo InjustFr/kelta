@@ -300,3 +300,18 @@ async fn planning_fields_map_priority_cycle_estimate_due_and_start() {
             .all(|f| q.as_str().unwrap().contains(f))
     );
 }
+
+#[tokio::test]
+async fn search_ors_title_and_description_into_the_view_filter() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("linear/issues_p1.json")))
+        .mount(&server)
+        .await;
+    assert_eq!(lin(&server).search(&view("mine"), "login").await.unwrap().len(), 2);
+    let f = &gql_bodies(&server, "issues(filter").await[0]["variables"]["filter"];
+    assert_eq!(f["assignee"], json!({"isMe": {"eq": true}}));
+    let m = |k: &str| json!({k: {"containsIgnoreCase": "login"}});
+    assert_eq!(f["or"], json!([m("title"), m("description")]));
+}

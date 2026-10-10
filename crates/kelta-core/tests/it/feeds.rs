@@ -619,6 +619,62 @@ async fn union_of_views_dedups_across_views_and_accounts() {
 }
 
 #[tokio::test]
+async fn all_scope_pages_each_query_and_search_reaches_past_the_first_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env_full(tmp.path(), ListHost::new(vec![]), FakeTracker::new().with_page_size(1));
+    let shop = Scope::Project { id: "shop".into() };
+    let keys = |p: &kelta_proto::tracker::TicketPage| -> Vec<String> {
+        p.items.iter().map(|i| i.ticket.r#ref.key.clone()).collect()
+    };
+    // a tracker search that fails falls back to the cached first page
+    e.tracker.fail_next(kelta_proto::error::KeltaError::upstream("down"));
+    let hits = e.h.core.tracker_search(shop.clone(), "LOGIN").await.unwrap();
+    assert_eq!(hits.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), ["SHOP-141"]);
+    let hits = e.h.core.tracker_search(shop.clone(), "login").await.unwrap();
+    assert_eq!(
+        hits.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(),
+        ["SHOP-141", "SHOP-142"]
+    );
+    assert_eq!(hits[0].project_ids, [ProjectId::from("shop")]);
+    assert!(e.tracker.calls().contains(&"search:mine:login".to_owned()));
+    {
+        let mut ps = e.h.cfg.projects.write();
+        let mut p = (*ps[0]).clone();
+        let b = p.tracker.as_mut().unwrap();
+        let sprint = TrackerView {
+            id: "sprint".into(),
+            jql: Some("sprint in openSprints()".into()),
+            ..b.views[0].clone()
+        };
+        b.views.push(sprint);
+        ps[0] = Arc::new(p);
+    }
+    // two queries (mine, sprint): the cursor carries one provider cursor per query
+    let mut seen = Vec::new();
+    let mut page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
+    loop {
+        assert!(page.items.iter().all(|i| i.view_ids == ["mine", "sprint"]), "{:?}", page.items);
+        seen.extend(keys(&page));
+        let Some(next) = page.next.clone() else { break };
+        page = e.h.core.tracker_list(Scope::All, None, None, Some(next), false).await.unwrap();
+    }
+    assert_eq!(seen, ["SHOP-141", "SHOP-142", "SHOP-143"]);
+    let bad =
+        e.h.core.tracker_list(Scope::All, None, None, Some(kelta_proto::tracker::Cursor::Offset(1)), false);
+    assert_eq!(bad.await.unwrap_err().code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn search_by_key_prefix_still_reads_the_cached_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // FakeTracker::search matches titles only, like Jira `text ~`: the key hits come from the cache
+    let hits = e.h.core.tracker_search(Scope::Project { id: "shop".into() }, "SHOP-14").await.unwrap();
+    let keys: Vec<_> = hits.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
+    assert!(keys.contains(&"SHOP-141") && keys.contains(&"SHOP-142"), "{keys:?}");
+}
+
+#[tokio::test]
 async fn visible_list_refreshes_after_a_saga_transition() {
     use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, TicketsMode};
     let tmp = tempfile::tempdir().unwrap();

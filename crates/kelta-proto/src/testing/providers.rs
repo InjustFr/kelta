@@ -128,6 +128,22 @@ impl FakeTracker {
         }
     }
 
+    /// The view's tickets, every page.
+    fn of_view(&self, view: &TrackerView) -> Vec<Ticket> {
+        let closed = view.status.as_deref() == Some("closed");
+        self.tickets
+            .lock()
+            .iter()
+            .map(|d| d.ticket.clone())
+            .filter(|t| !closed || t.status.category == StatusCategory::Done)
+            .filter(|t| match view.who {
+                Some(Who::Mine) => t.assignee.as_ref().is_some_and(|a| a.id == self.me.id),
+                Some(Who::Unassigned) => t.assignee.is_none(),
+                Some(Who::Anyone) | None => true,
+            })
+            .collect()
+    }
+
     fn find(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.ticket(&t.key).ok_or_else(|| KeltaError::not_found(format!("ticket {}", t.key)))
     }
@@ -173,22 +189,18 @@ impl Tracker for FakeTracker {
             None => 0,
             Some(other) => return Err(KeltaError::invalid(format!("unexpected cursor {other:?}"))),
         };
-        let all: Vec<Ticket> = self
-            .tickets
-            .lock()
-            .iter()
-            .map(|d| d.ticket.clone())
-            .filter(|t| !closed || t.status.category == StatusCategory::Done)
-            .filter(|t| match view.who {
-                Some(Who::Mine) => t.assignee.as_ref().is_some_and(|a| a.id == self.me.id),
-                Some(Who::Unassigned) => t.assignee.is_none(),
-                Some(Who::Anyone) | None => true,
-            })
-            .collect();
+        let all = self.of_view(view);
         let items: Vec<Ticket> = all.iter().skip(start).take(self.page_size).cloned().collect();
         let end = start + items.len();
         let next = (end < all.len()).then_some(Cursor::Offset(end as u32));
         Ok(Page { items, next })
+    }
+
+    /// Every page of the view, by title (case-insensitive).
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        self.enter(&format!("search:{}:{text}", view.id))?;
+        let needle = text.to_lowercase();
+        Ok(self.of_view(view).into_iter().filter(|t| t.title.to_lowercase().contains(&needle)).collect())
     }
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
