@@ -489,6 +489,9 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_move` | `{ticket, column_id, project_id?}` (no `project_id`: the project whose binding or view account is the ticket's) | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
 | `tracker_comment` | `{ticket, markdown}` | `()` | |
 | `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
+| `tracker_assignable_users` | `{ticket, query}` | `Vec<User>` (assignee picker; `Unsupported` if the provider cannot list) | |
+| `tracker_priorities` | `{ticket}` | `Vec<String>` (priority names, highest first; `Unsupported` where priorities cannot be set) | |
+| `tracker_set_priority` | `{ticket, priority}` | `Ticket` | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette; searched by each tracker) | |
 | **reviews** | | | `commands/review.rs` (L3) |
@@ -676,6 +679,9 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
   async fn assign(&self, t: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError>;
   fn browser_url(&self, t: &TicketRef) -> String;
   fn branch_key(&self, t: &TicketRef) -> String;       // "SHOP-123" | "4567" | "gh-12" | "gl-12"
+  async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError>;  // assignee picker; default Unsupported (plugins)
+  async fn priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError>;  // highest first: jira editmeta, redmine enumeration, linear fixed, github Projects v2 `Priority` field, gitlab `priority::` labels; default Unsupported (gitea, plugins)
+  async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError>;  // one of `priorities` by name; gitlab swaps the `priority::` label
   async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError>;  // new ticket where the view points (jira jql project, redmine project_id, github repo, gitlab/gitea project, linear team); default Unsupported
 }
 pub struct TicketRef { account: AccountId, key: String, id: String }

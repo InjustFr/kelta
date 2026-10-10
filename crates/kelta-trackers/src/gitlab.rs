@@ -332,6 +332,22 @@ impl GitlabIssues {
         self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))
     }
 
+    /// The project's `priority::<name>` labels (project and group ones) as names, highest first.
+    async fn priority_labels(&self, project: &str) -> Result<Vec<String>, KeltaError> {
+        let url = format!("{}/projects/{}/labels", self.api, percent_encode(project));
+        let req = HttpRequest::get(url).query("search", "priority::").query("per_page", "100");
+        let v = self.json(req).await?.body;
+        let mut names: Vec<String> = v
+            .as_array()
+            .map(|a| {
+                a.iter().filter_map(|l| s(l, "name")?.strip_prefix("priority::")).map(str::to_owned).collect()
+            })
+            .unwrap_or_default();
+        // Unranked names (`priority::someday`) last, in the server's order.
+        names.sort_by_key(|n| priority_rank(&[format!("priority::{n}")]).unwrap_or(u8::MAX));
+        Ok(names)
+    }
+
     /// `list`, narrowed to the tickets matching `text` when set.
     async fn issues(
         &self,
@@ -659,6 +675,37 @@ impl Tracker for GitlabIssues {
             Assignee::None => vec![],
         };
         self.put(&project, iid, json!({"assignee_ids": ids})).await
+    }
+
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        let (project, _) = Self::split(t)?;
+        let url = format!("{}/projects/{}/users", self.api, percent_encode(&project));
+        let v = self
+            .json(HttpRequest::get(url).query("search", query.trim()).query("per_page", "20"))
+            .await?
+            .body;
+        Ok(v.as_array().map(|a| a.iter().filter_map(Self::user_from).collect()).unwrap_or_default())
+    }
+
+    async fn priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        self.priority_labels(&Self::split(t)?.0).await
+    }
+
+    /// Adds `priority::<priority>` and removes the other priority labels (scoped labels only do it
+    /// themselves on paid tiers).
+    async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
+        let (project, iid) = Self::split(t)?;
+        let (chosen, others): (Vec<String>, Vec<String>) = self
+            .priority_labels(&project)
+            .await?
+            .into_iter()
+            .partition(|n| n.eq_ignore_ascii_case(priority.trim()));
+        let chosen = chosen
+            .first()
+            .ok_or_else(|| KeltaError::not_found(format!("no `priority::{priority}` label in {project}")))?;
+        let others: Vec<String> = others.iter().map(|n| format!("priority::{n}")).collect();
+        let body = json!({"add_labels": format!("priority::{chosen}"), "remove_labels": others.join(",")});
+        self.put(&project, iid, body).await
     }
 
     async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {

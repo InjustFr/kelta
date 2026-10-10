@@ -168,6 +168,33 @@ async fn assign_and_comment() {
 }
 
 #[tokio::test]
+async fn reassign_picker_and_priority_change() {
+    let server = MockServer::start().await;
+    linear_mocks(&server).await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("members(first"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data": {"issue": {"team": {"members": {
+                "nodes": [{"id": "user-2", "name": "Dave Lee", "displayName": "dave"}]
+            }}}}}),
+        ))
+        .mount(&server)
+        .await;
+    let t = lin(&server);
+    let users = t.assignable_users(&r(), "dav").await.unwrap();
+    assert_eq!((users[0].id.as_str(), users[0].name.as_str()), ("user-2", "dave"));
+    assert_eq!(gql_bodies(&server, "members(first").await[0]["variables"]["q"], "dav");
+    assert_eq!(t.priorities(&r()).await.unwrap(), ["Urgent", "High", "Medium", "Low", "No priority"]);
+    t.set_priority(&r(), "high").await.unwrap();
+    t.set_priority(&r(), "No priority").await.unwrap();
+    let ups = gql_bodies(&server, "issueUpdate").await;
+    assert_eq!(ups[0]["variables"]["input"], json!({"priority": 2}));
+    assert_eq!(ups[1]["variables"]["input"], json!({"priority": 0}));
+    assert_eq!(t.set_priority(&r(), "Whenever").await.unwrap_err().code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
 async fn bearer_auth_is_for_oauth_tokens() {
     let server = MockServer::start().await;
     Mock::given(header("authorization", format!("Bearer {TOKEN}").as_str()))

@@ -389,6 +389,15 @@ impl Tracker for GiteaIssues {
         self.patch(t, json!({"assignees": logins})).await
     }
 
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        // The repo URL is the validated issue URL without its `/issues/<n>` tail.
+        let issue = self.issue_url(t, "")?;
+        let repo = issue.rsplit_once("/issues/").map_or(issue.as_str(), |(r, _)| r);
+        let v = self.json(HttpRequest::get(format!("{repo}/assignees"))).await?.body;
+        let users = v.as_array().map(|a| a.iter().filter_map(Self::user_from).collect::<Vec<_>>());
+        Ok(common::users_matching(users.unwrap_or_default(), query))
+    }
+
     fn browser_url(&self, t: &TicketRef) -> String {
         match split_repo_number(&t.key) {
             Ok((repo, n)) => format!("{}/{repo}/issues/{n}", self.web),

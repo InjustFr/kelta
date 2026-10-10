@@ -65,6 +65,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 | `p` | open the ticket's pull request in Kelta's review detail (the browser when the code host is not bound) |
 | `P` | open the pull request in the browser |
 | `a` `A` | assign to me, unassign |
+| `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
