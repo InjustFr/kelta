@@ -640,6 +640,11 @@ export function createMockTransport(options: MockOptions = {}): {
       const s = session(id);
       return Array.from({ length: Math.min(max_lines, 5) }, (_, i) => `${s.name} line ${i + 1}`).join('\n');
     },
+    session_history_search: ({ project_id, session_id, query, limit }) =>
+      state.sessions
+        .filter((s) => s.project_id === project_id && (!session_id || s.id === session_id))
+        .map((s) => ({ session_id: s.id, line: `${s.name}: ${query}` }))
+        .slice(0, limit),
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope, view_id, cursor }) => {

@@ -18,7 +18,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode};
 use kelta_proto::store::SessionRow;
-use kelta_proto::term::{ClipboardKind, KillSignal, PtySpawnSpec, TerminalEvent};
+use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
 
 use crate::Core;
@@ -322,6 +322,7 @@ impl Core {
     }
 
     fn delete_row(&self, id: &SessionId) {
+        self.terminal.history_delete(id);
         let id = id.clone();
         self.store.exec("session_delete", move |c| q::session_delete(c, &id));
     }
@@ -1028,12 +1029,40 @@ impl Core {
             (e.info.lifecycle, e.text_tail.clone())
         };
         if lifecycle == Lifecycle::Dormant {
+            // The on-disk history log is newer than the tail stored at quit (and survives a crash).
+            let disk = self.terminal.history_tail(id, max_lines).unwrap_or_default();
+            if !disk.is_empty() {
+                return Ok(disk);
+            }
             return Ok(tail_lines(&stored.unwrap_or_default(), max_lines));
         }
         match self.terminal.text_tail(id, max_lines) {
             Ok(t) => Ok(t),
             Err(e) => stored.map(|t| tail_lines(&t, max_lines)).ok_or(e),
         }
+    }
+
+    /// Search the on-disk history of one session, or of every session of `project_id`.
+    pub fn session_history_search(
+        &self,
+        project_id: &ProjectId,
+        session_id: Option<&SessionId>,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError> {
+        let ids: Vec<SessionId> = {
+            let s = self.sessions.lock();
+            if let Some(id) = session_id
+                && !s.get(id).is_some_and(|e| &e.info.project_id == project_id)
+            {
+                return Err(KeltaError::not_found(format!("session {id} in project {project_id}")));
+            }
+            s.values()
+                .filter(|e| &e.info.project_id == project_id && session_id.is_none_or(|id| &e.info.id == id))
+                .map(|e| e.info.id.clone())
+                .collect()
+        };
+        self.terminal.history_search(&ids, query, limit.clamp(1, 1000))
     }
 
     // =========================================================================================
@@ -1550,6 +1579,15 @@ impl Core {
                 if live {
                     let _ = self.terminal.kill(id, KillSignal::Kill);
                 }
+            }
+        }
+        // Sessions that do not survive the quit lose their history log; their readers wrote the
+        // screen at exit (after `delete_row` above), so delete again now.
+        // shortcut: a reader still exiting after the SIGKILL fallback can leave an orphan log (the
+        // global cap removes it eventually); sweep logs without a session row at startup if they pile up.
+        for (id, keep) in &live {
+            if !keep {
+                self.terminal.history_delete(id);
             }
         }
         self.store.flush().await

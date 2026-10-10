@@ -60,6 +60,7 @@
     "allow-session-mark-seen",
     "allow-session-link",
     "allow-session-text-tail",
+    "allow-session-history-search",
     "allow-terminal-set-palette",
     "allow-tracker-list",
     "allow-tracker-get",

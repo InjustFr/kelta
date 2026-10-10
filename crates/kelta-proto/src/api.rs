@@ -28,7 +28,9 @@ use crate::model::{
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
 use crate::settings::{ProjectConfig, Settings, TrackerBinding};
-use crate::term::{KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats};
+use crate::term::{
+    HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
+};
 use crate::tracker::{
     Assignee, Column, Cursor, Page, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition,
     User,
@@ -62,6 +64,17 @@ pub trait TerminalHost: Send + Sync {
     fn set_limits(&self, limits: TerminalLimits);
     /// Plain text (search, persistence).
     fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>;
+    /// Last lines of the on-disk history log (§9.6); works for sessions the host no longer runs.
+    fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>;
+    /// Case-insensitive substring search over the history logs of `ids`, newest `limit` hits.
+    fn history_search(
+        &self,
+        ids: &[SessionId],
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError>;
+    /// Delete a session's history log (the session row is gone).
+    fn history_delete(&self, id: &SessionId);
     /// Per-session bytes, lines, inflight.
     fn stats(&self) -> TerminalStats;
 }
