@@ -39,7 +39,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 ## 3. Core flows
 
 ### 3.1 Start work on a ticket
-Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
+Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
 
 1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required):
    ```
@@ -78,10 +78,31 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 - New review requests detected via `seen_reviews` (never on the first poll after start) → desktop notification (toggle) + rail/Inbox badge.
 
 ### 3.4 Move ticket status
+- **Status picker:** one component (`StatusPicker`) for every place a status changes: list `m`, the status chip on any row, the detail header, the work bar and the palette. Fed by `tracker_transitions` (cached per ticket and current status for the focused polling interval, dropped when the ticket is written): the ticket's own workflow as a line of native status names, then its legal transitions numbered `1`-`9` (`m` `2` moves), fuzzy filter, a needs-fields form, and on a conflict or tracker error the tracker's message with Open in browser.
+- **Several tickets:** `x` marks the current ticket, `Shift+j` / `Shift+k` extend, `m` moves them all. The picker offers the transitions every marked ticket can take, matched by target status name (transition ids differ between workflows); a ticket already in that status is skipped.
 - **Board:** columns from `tracker_columns` (project `tracker.columns` override; default by status category: To do / In progress / In review / Done). Drag a card (or select + `m`) → `tracker_move`: resolves column → transition by category or names; several candidates → small picker; none → toast "No transition to <column> — Open in browser"; `NeedsFields` → field form or browser. Optimistic move with rollback on error.
-- **Detail:** "Move to…" menu filled from `tracker_transitions`; assign (Me / none), comment box (Markdown).
+- **Detail:** the status chip opens the picker; assign (Me / none), comment box (Markdown). Layout and actions in §3.4b.
 - **Palette:** "Move SHOP-142 to…".
 - Provider semantics: Jira transitions; Redmine `allowed_statuses`; GitHub Projects v2 Status (or open/closed); GitLab scoped labels + close/reopen; Linear workflow states of the ticket's team; Gitea open/closed.
+
+### 3.4a Choose ticket sources and who
+- A **source** is a tracker view: a Jira board or filter, a Redmine project or query, a GitHub repo or Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A project binds any number of them, each optionally from another account (`views[].account`; none = the binding account), so one project can mix Jira and GitHub tickets. Board mode and `tracker_columns` stay tied to the binding account.
+- **Add a source** from the Tickets toolbar (source menu, `v`, then "Add source…") or Settings > Projects > Tracker: pick an account, search, press `Enter` on a hit (`tracker_sources` lists boards, projects, filters, teams, repos). A provider without discovery says so and offers the TOML.
+- The Tickets pane, Now and the palette with no source chosen show **every source of the project**, one first page each, deduped by account and ticket key. The source menu narrows the pane to one.
+- **Who** tabs: *Mine*, *Unassigned*, *Anyone* (keys `1` `2` `3`). The choice is saved with the pane. "Team" is Anyone grouped by assignee.
+- **Current iteration** (per source toggle) keeps the open sprint (Jira), active cycle (Linear), current iteration (GitHub Projects v2), started milestone (GitLab) or the project's next open version (Redmine). Gitea has none.
+- Statuses show the tracker's own names. The category (To do, In progress, In review, Done) only orders and colours them, so Backlog, Triage, QA or Blocked appear as they are. Group by Status, Assignee, Source or None (`g`); Done starts collapsed.
+- The **person** control narrows the list to one assignee (client-side, from the assignees of the loaded first page per source; choosing one implies Anyone). Saved with the pane (`PaneContent::Tickets.person`).
+- Group by (saved with the pane): **Flow** (default), Status, Priority, Sprint, Assignee, Source, None. Flow: *Doing* (work item active or in-progress status), *Waiting* (Claude needs input, review requested or required, CI red, or a status named blocked / on hold / waiting), *Ready* (to do, not started), *Backlog* (backlog / triage / icebox or an unknown status), *Done* (last 7 days only: a source with no status filter also fetches the first page of its closed tickets and keeps those done in the last 7 days). Sort within groups (saved): Priority, Updated, Age in status, Key.
+- Each ticket carries `priority_rank` (0 = highest), `status_since` (RFC 3339; Jira `statuscategorychangedate`, Linear `startedAt`, other providers fall back to `updated_at`), `sprint`, `estimate` and `due`. A ticket not done shows an age badge from 7 days in its status, in place of the updated time (text tint only, `--k-warn` from 14, `--k-danger` from 21). The Doing header turns `--k-warn` above `tickets.wip_limit` (default 3); nothing is blocked.
+- Sprint: a chip on every row unless grouped by sprint, quick filter `f` `s` (the active sprint, client-side), and the per-source `current_iteration` stays as the server-side limit.
+- A row shows the linked pull request and its CI state: the work item's PR first, then any polled review whose `linked_tickets` name the ticket (`TicketItem.prs`). `p` opens it in Kelta's review detail when the repo is bound to a code host account, else the browser; `P` always the browser; several PRs open a small picker.
+
+### 3.4b Ticket detail and split view
+- In the Tickets pane (list, 720px or wider) the selected ticket's detail shows in a column on the right. `Space` toggles it, `Enter` focuses it, `Esc` returns to the list, `Shift+Enter` opens the standalone detail pane (also what `Enter` does in a narrow pane). Both use the same `TicketDetail` body.
+- Top to bottom: key, title, status chip (status picker), action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated), pull requests (title, state, CI, review, branch), description (task-list checkboxes read-only), comments (last 20, compose box, `Mod+Enter` posts).
+- Action bar: Move `m`, Start / Resume work `s`, Open PR `p`, Assign `a`, Comment `c`, Copy branch `y`, Open in browser `o`. Each carries its key; an action that cannot run stays visible and dimmed with its reason as the tooltip and as the toast when its key is pressed: the tracker lacks the capability (`TrackerCaps.assign`, `comment`, carried on `TicketItem.caps` / `TicketDetail.caps`), no PR is linked, no branch yet. The selected or hovered row (and a row with focus inside) shows a compact Move / PR / Start.
+- Not in the detail yet: sub-tasks, refine, lifecycle lamp, assigning someone else, editing priority.
 
 ### 3.5 Open a tool
 Tools are opened from the palette ("Open tool: lazydocker"), the `+` menu of the TabBar, a tool's keybinding, or a trigger. `tool_open` → PTY tools become sessions (`kind = Tool`, cwd per tool template, exit banner with **Relaunch**, `close_on_exit` option); web tools start their server (if any), wait for readiness from stdout (no polling), then open a Web pane. Embed `auto`: iframe; if a HEAD probe sees `X-Frame-Options`/`frame-ancestors` → local proxy that strips them (WebSocket passthrough); failure → **Open in browser** button. Web tool processes stop when the pane/tab closes (`lifecycle`), or with the project. Missing binary → empty state with `install_hint` and "Check again".

@@ -43,8 +43,7 @@ test.describe('tickets board', () => {
     await card(page, 'SHOP-151').click();
     await page.keyboard.press('m');
     await expect(page.getByRole('menu')).toBeVisible();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter'); // the first move (In progress) is lit
     await expect(lane(page, 'in_progress').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
 
     await page.keyboard.press('Shift+R'); // refresh from the backend

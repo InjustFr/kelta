@@ -1,0 +1,132 @@
+[
+  {
+    "id": 9021,
+    "iid": 21,
+    "project_id": 77,
+    "title": "Issue 21",
+    "state": "opened",
+    "labels": [
+      "P1",
+      "bug"
+    ],
+    "updated_at": "2026-10-03T09:00:00.000Z",
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/21",
+    "references": {
+      "full": "grp/sub/proj#21"
+    },
+    "due_date": "2026-10-14",
+    "weight": 8,
+    "time_stats": {
+      "time_estimate": 5400
+    },
+    "iteration": {
+      "id": 5,
+      "title": "Sprint 7",
+      "state": 2,
+      "start_date": "2026-10-05",
+      "due_date": "2026-10-19"
+    },
+    "milestone": {
+      "id": 3,
+      "title": "v2",
+      "state": "active",
+      "start_date": "2000-01-01",
+      "due_date": "2999-12-31"
+    }
+  },
+  {
+    "id": 9022,
+    "iid": 22,
+    "project_id": 77,
+    "title": "Issue 22",
+    "state": "opened",
+    "labels": [
+      "priority::low"
+    ],
+    "updated_at": "2026-10-03T09:00:00.000Z",
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/22",
+    "references": {
+      "full": "grp/sub/proj#22"
+    },
+    "weight": 5,
+    "time_stats": {
+      "time_estimate": 0
+    },
+    "milestone": {
+      "id": 3,
+      "title": "v1",
+      "state": "active",
+      "start_date": "2000-01-01",
+      "due_date": "2999-12-31"
+    }
+  },
+  {
+    "id": 9023,
+    "iid": 23,
+    "project_id": 77,
+    "title": "Issue 23",
+    "state": "closed",
+    "labels": [
+      "priority::0"
+    ],
+    "updated_at": "2026-10-03T09:00:00.000Z",
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/23",
+    "references": {
+      "full": "grp/sub/proj#23"
+    },
+    "closed_at": "2026-10-02T10:00:00.000Z",
+    "time_stats": {
+      "time_estimate": 7200
+    },
+    "milestone": {
+      "id": 2,
+      "title": "v0",
+      "state": "active",
+      "start_date": "2000-01-01",
+      "due_date": "2000-01-02"
+    },
+    "iteration": null
+  },
+  {
+    "id": 9024,
+    "iid": 24,
+    "project_id": 77,
+    "title": "Issue 24",
+    "state": "opened",
+    "labels": [
+      "high",
+      "priority::urgent"
+    ],
+    "updated_at": "2026-10-03T09:00:00.000Z",
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/24",
+    "references": {
+      "full": "grp/sub/proj#24"
+    },
+    "iteration": {
+      "id": 4,
+      "title": null,
+      "state": 3,
+      "start_date": "2026-09-01",
+      "due_date": "2026-09-14"
+    }
+  },
+  {
+    "id": 9025,
+    "iid": 25,
+    "project_id": 77,
+    "title": "Issue 25",
+    "state": "opened",
+    "labels": [
+      "bug"
+    ],
+    "updated_at": "2026-10-03T09:00:00.000Z",
+    "web_url": "https://gitlab.acme.test/grp/sub/proj/-/issues/25",
+    "references": {
+      "full": "grp/sub/proj#25"
+    },
+    "iteration": null,
+    "milestone": { "id": 13, "title": "v3", "state": "active", "start_date": null, "due_date": null },
+    "due_date": null,
+    "weight": null
+  }
+]

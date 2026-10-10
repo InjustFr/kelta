@@ -87,6 +87,16 @@ pub fn ticket() -> Ticket {
         priority: Some("High".into()),
         updated_at: TS.into(),
         project_hint: Some("SHOP".into()),
+        priority_rank: Some(1),
+        status_since: Some(TS.into()),
+        sprint: Some(Sprint {
+            id: "42".into(),
+            name: "SHOP Sprint 12".into(),
+            active: true,
+            ends_at: Some("2026-10-16".into()),
+        }),
+        estimate: Some("3".into()),
+        due: Some("2026-10-15".into()),
     }
 }
 
@@ -248,6 +258,10 @@ pub fn layout() -> Layout {
                         scope: Scope::Project { id: ProjectId::new("shop") },
                         view_id: Some("mine".into()),
                         mode: TicketsMode::Board,
+                        who: Some(Who::Mine),
+                        group: Some(TicketGroupBy::Sprint),
+                        sort: Some(TicketSort::Age),
+                        person: Some("5b10ac8d82e05b22cc7d4ef5".into()),
                     },
                 },
                 focused_pane: None,
@@ -791,6 +805,27 @@ pub fn all() -> Vec<Fixture> {
                     ticket: ticket(),
                     project_ids: vec![ProjectId::new("shop")],
                     work_item_id: Some(WorkItemId::new(WID)),
+                    view_ids: vec!["mine".into()],
+                    prs: vec![PrLink {
+                        url: "https://github.com/acme/shop-api/pull/90".into(),
+                        account: Some(AccountId::new("github-acme")),
+                        repo: "acme/shop-api".into(),
+                        number: 90,
+                        title: "SHOP-142: Rate-limit login".into(),
+                        branch: "feat/SHOP-142-rate-limit-login".into(),
+                        state: PrState::Open,
+                        draft: false,
+                        ci: CiState::Pending,
+                        review: Some(ReviewDecision::ReviewRequired),
+                        source: PrSource::WorkItem,
+                    }],
+                    caps: TrackerCaps {
+                        board_columns: true,
+                        assign: true,
+                        comment: true,
+                        transitions_need_fetch: true,
+                        projects_v2: false,
+                    },
                 }],
                 next: Some(Cursor::Token("eyJuZXh0IjoyfQ".into())),
                 stale: false,
@@ -801,6 +836,25 @@ pub fn all() -> Vec<Fixture> {
             }
         ),
         fx!("ticket", Ticket, ticket()),
+        fx!(
+            "source_hit",
+            SourceHit,
+            SourceHit {
+                kind: "board".into(),
+                label: "SHOP board".into(),
+                detail: Some("Scrum".into()),
+                view: TrackerView {
+                    id: "board-12".into(),
+                    label: "SHOP board".into(),
+                    jql: Some("project = SHOP".into()),
+                    board_id: Some(12),
+                    who: Some(Who::Mine),
+                    current_iteration: true,
+                    account: Some(AccountId::new("jira-acme")),
+                    ..TrackerView::default()
+                },
+            }
+        ),
         fx!(
             "ticket_detail",
             TicketDetail,
@@ -815,6 +869,8 @@ pub fn all() -> Vec<Fixture> {
                     body_html: "<p>On it.</p>".into(),
                 }],
                 parent: None,
+                prs: Vec::new(),
+                caps: Default::default(),
             }
         ),
         fx!(

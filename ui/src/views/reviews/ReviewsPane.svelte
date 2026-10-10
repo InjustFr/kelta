@@ -23,6 +23,7 @@
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openContent } from '../work/nav';
+  import LinkedTicket from './LinkedTicket.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -308,7 +309,12 @@
                   {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
                   {#if rv.draft}<Badge>draft</Badge>{/if}
                   {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
-                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
+                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
+                      ticketKey={t}
+                      {projectId}
+                      repo={rv.ref.repo}
+                      tabindex={-1}
+                    />{/each}
                   {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
                   {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
                   {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}

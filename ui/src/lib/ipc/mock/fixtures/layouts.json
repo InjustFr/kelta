@@ -78,7 +78,8 @@
               "id": "shop"
             },
             "view_id": "mine",
-            "mode": "board"
+            "mode": "board",
+            "who": null
           }
         },
         "focused_pane": "shop-p5",

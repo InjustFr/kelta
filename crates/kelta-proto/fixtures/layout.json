@@ -41,13 +41,17 @@
       "id": "tab-2",
       "root": {
         "content": {
+          "group": "sprint",
           "kind": "tickets",
           "mode": "board",
+          "person": "5b10ac8d82e05b22cc7d4ef5",
           "scope": {
             "id": "shop",
             "kind": "project"
           },
-          "view_id": "mine"
+          "sort": "age",
+          "view_id": "mine",
+          "who": "mine"
         },
         "id": "pane-3",
         "type": "pane"

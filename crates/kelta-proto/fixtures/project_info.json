@@ -67,8 +67,10 @@
     },
     "views": [
       {
+        "account": null,
         "assigned_to": null,
         "board_id": null,
+        "current_iteration": false,
         "id": "mine",
         "jql": "project = SHOP AND assignee = currentUser()",
         "label": "My open",
@@ -82,6 +84,7 @@
         "search": null,
         "status": null,
         "team": null,
+        "who": null,
         "workflow_scope": null
       }
     ]

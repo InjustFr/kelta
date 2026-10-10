@@ -13,7 +13,7 @@ registerAction('tickets.open', async (args) => {
   }
   await openContent(
     projectId,
-    { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode: 'list' },
+    { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode: 'list', who: null },
     {
       placement: 'new_tab',
       title: 'Tickets',

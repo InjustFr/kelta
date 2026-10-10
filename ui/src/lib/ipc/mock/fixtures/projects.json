@@ -64,7 +64,10 @@
           "scope": null,
           "labels": null,
           "team": null,
-          "workflow_scope": null
+          "workflow_scope": null,
+          "who": null,
+          "current_iteration": false,
+          "account": null
         },
         {
           "id": "sprint",
@@ -82,7 +85,10 @@
           "scope": null,
           "labels": null,
           "team": null,
-          "workflow_scope": null
+          "workflow_scope": null,
+          "who": null,
+          "current_iteration": false,
+          "account": null
         }
       ],
       "columns": [],
@@ -145,7 +151,10 @@
           "scope": null,
           "labels": null,
           "team": null,
-          "workflow_scope": null
+          "workflow_scope": null,
+          "who": null,
+          "current_iteration": false,
+          "account": null
         }
       ],
       "columns": [],
@@ -212,7 +221,10 @@
           "scope": null,
           "labels": null,
           "team": null,
-          "workflow_scope": null
+          "workflow_scope": null,
+          "who": null,
+          "current_iteration": false,
+          "account": null
         }
       ],
       "columns": [],

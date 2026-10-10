@@ -17,6 +17,41 @@
                     "field": {
                       "name": "Status"
                     }
+                  },
+                  {
+                    "name": "High",
+                    "field": {
+                      "name": "Priority",
+                      "options": [
+                        {
+                          "name": "Urgent"
+                        },
+                        {
+                          "name": "High"
+                        },
+                        {
+                          "name": "Low"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "iterationId": "it_now",
+                    "title": "Sprint 9",
+                    "startDate": "2020-01-01",
+                    "duration": 36500
+                  },
+                  {
+                    "number": 5,
+                    "field": {
+                      "name": "Estimate"
+                    }
+                  },
+                  {
+                    "number": 8,
+                    "field": {
+                      "name": "Budget"
+                    }
                   }
                 ]
               },
@@ -49,6 +84,10 @@
                 },
                 "issueType": {
                   "name": "Bug"
+                },
+                "closedAt": null,
+                "milestone": {
+                  "dueOn": "2026-10-31T07:00:00Z"
                 }
               }
             },
@@ -59,6 +98,18 @@
                     "name": "Done",
                     "field": {
                       "name": "Status"
+                    }
+                  },
+                  {
+                    "iterationId": "it_old",
+                    "title": "Sprint 1",
+                    "startDate": "2020-01-01",
+                    "duration": 14
+                  },
+                  {
+                    "number": 2.5,
+                    "field": {
+                      "name": "Points"
                     }
                   }
                 ]
@@ -80,7 +131,8 @@
                 "labels": {
                   "nodes": []
                 },
-                "issueType": null
+                "issueType": null,
+                "closedAt": "2026-08-02T10:00:00Z"
               }
             },
             {

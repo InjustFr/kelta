@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "data": [
+    {"full_name": "acme/shop", "description": "The storefront"},
+    {"full_name": "acme/api", "description": ""}
+  ]
+}

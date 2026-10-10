@@ -34,8 +34,8 @@ use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::{
-    Assignee, Column, Cursor, Page, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition,
-    User,
+    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind,
+    Transition, User,
 };
 
 // ---- terminal (impl: kelta-term) ---------------------------------------------------------------
@@ -127,6 +127,10 @@ pub trait Tracker: Send + Sync {
     fn browser_url(&self, t: &TicketRef) -> String;
     /// `"SHOP-123"` | `"4567"` | `"gh-12"` | `"gl-12"`.
     fn branch_key(&self, t: &TicketRef) -> String;
+    /// Ticket sources (boards, projects, filters...) matching `query`, as ready views.
+    async fn sources(&self, _query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot list sources"))
+    }
 }
 
 #[async_trait]

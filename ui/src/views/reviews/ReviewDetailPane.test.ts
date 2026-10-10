@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ReviewRef } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { reviews, toasts } from '$lib/stores';
+import { findContent } from '$lib/layout';
+import { layout, reviews, toasts } from '$lib/stores';
 
 import ReviewDetailPane from './ReviewDetailPane.svelte';
 
@@ -16,6 +17,7 @@ beforeEach(() => {
   mock = created.controls;
   setTransport(created.transport);
   reviews.details = {};
+  layout.byProject = {};
   toasts.clear();
 });
 
@@ -35,6 +37,16 @@ function mountDetail() {
 const approveCalls = () => mock.calls.filter((c) => c.cmd === 'review_approve');
 
 describe('ReviewDetailPane', () => {
+  it('opens a linked ticket from its badge', async () => {
+    mock.state.reviews.find((r) => r.review.ref.number === 311)!.review.linked_tickets = ['SHOP-120'];
+    mountDetail();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Open SHOP-120' }));
+    await waitFor(() => {
+      const l = layout.get('shop');
+      expect(l && findContent(l, (c) => c.kind === 'ticket_detail')).toBeTruthy();
+    });
+  });
+
   it('approves with the head_sha that is displayed', async () => {
     mountDetail();
     const sha = await screen.findByTestId('head-sha');

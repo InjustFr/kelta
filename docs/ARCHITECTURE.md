@@ -401,7 +401,7 @@ pub enum LayoutNode { Split{ dir: SplitDir /*Row|Column*/, ratios: Vec<f32> /*su
 pub enum PaneContent {                       // serde tag = "kind"
   Terminal{ session_id: SessionId }, Web{ tool_instance_id: ToolInstanceId },
   PluginScreen{ plugin_id: PluginId, screen_id: String, instance_id: ScreenInstanceId, params: serde_json::Value },
-  Tickets{ scope: Scope, view_id: Option<String>, mode: TicketsMode /*List|Board*/ }, TicketDetail{ ticket: TicketRef },
+  Tickets{ scope: Scope, view_id: Option<String>, mode: TicketsMode /*List|Board*/, who: Option<Who>, group: Option<TicketGroupBy> /*Flow|Status|Priority|Sprint|Assignee|Source|None; None = Flow*/, sort: Option<TicketSort> /*Priority|Updated|Age|Key; None = Priority*/, person: Option<String> /*assignee id, client-side*/ }, TicketDetail{ ticket: TicketRef },
   Reviews{ scope: Scope }, ReviewDetail{ review: ReviewRef }, Inbox, WorkItem{ id: WorkItemId },
   Settings{ section: Option<String> }, Diagnostics, Welcome, Empty }
 pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: bool, tab_title: Option<String>, work_item_id: Option<WorkItemId> }
@@ -481,14 +481,15 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `session_history_search` | `{project_id, session_id?, query, limit}` | `Vec<HistoryHit{session_id, line}>` | on-disk history log (§9.6) of one session or every session of the project; case-insensitive substring |
 | `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
 | **tickets** | | | `commands/tracker.rs` (L3) |
-| `tracker_list` | `{scope, view_id?, cursor?: Cursor, refresh: bool}` | `TicketPage{items: Vec<TicketItem{ticket, project_ids, work_item_id?}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
-| `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` | |
+| `tracker_list` | `{scope, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?, prs: Vec<PrLink>, caps: TrackerCaps}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
+| `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` (with `prs` and the account's `caps`) | |
 | `tracker_columns` | `{project_id}` | `Vec<Column>` | |
-| `tracker_transitions` | `{ticket}` | `Vec<Transition>` | |
+| `tracker_transitions` | `{ticket}` | `Vec<Transition>` | one call per ticket; the UI's StatusPicker matches several tickets by target status name |
 | `tracker_transition` | `{ticket, transition_id, fields?: Value}` | `Ticket` (`NeedsFields` error carries `detail.fields`) | |
-| `tracker_move` | `{ticket, column_id}` | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
+| `tracker_move` | `{ticket, column_id, project_id?}` (no `project_id`: the project whose binding or view account is the ticket's) | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
 | `tracker_comment` | `{ticket, markdown}` | `()` | |
 | `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
+| `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette) | |
 | **reviews** | | | `commands/review.rs` (L3) |
 | `review_list` | `{scope, kind: ReviewKind, refresh: bool}` | `ReviewPage{items: Vec<ReviewItem{review, project_ids}>, stale, errors}` | |
@@ -660,9 +661,10 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 ```rust
 #[async_trait] pub trait Tracker: Send + Sync {
   fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | GiteaIssues | Linear
-  fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
+  fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2; core copies the ticket account's caps onto every TicketItem / TicketDetail so the UI dims actions the tracker cannot do
   async fn me(&self) -> Result<User, KeltaError>;
-  async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
+  async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;  // honours view.who and view.current_iteration
+  async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError>;  // boards/projects/filters/teams/repos as ready TrackerViews; default Unsupported (no account status change)
   async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError>;  // body_md + body_html (sanitized), last 20 comments
   async fn columns(&self, b: &TrackerBinding) -> Result<Vec<Column>, KeltaError>;
   async fn transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError>;
@@ -674,12 +676,21 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 }
 pub struct TicketRef { account: AccountId, key: String, id: String }
 pub struct Ticket { r#ref: TicketRef, title, url, status: Status, kind: Option<String>, assignee: Option<User>,
-  labels: Vec<String>, priority: Option<String>, updated_at: String, project_hint: Option<String> }
+  labels: Vec<String>, priority: Option<String>, updated_at: String, project_hint: Option<String>,
+  priority_rank: Option<u8> /*0 = highest*/, status_since: Option<String> /*RFC 3339; falls back to updated_at*/,
+  sprint: Option<Sprint{id, name, active, ends_at: Option<String>}> /*Jira sprint, Linear cycle, GitHub Projects iteration, GitLab iteration|milestone, Redmine version*/,
+  estimate: Option<String>, due: Option<String> }
 pub struct TicketDetail { ticket: Ticket, body_md: String, body_html: String, body_format: BodyFormat /*Adf|JiraWiki|Textile|Markdown*/,
-  comments: Vec<Comment{author, created_at, body_html}>, parent: Option<TicketRef> }
+  comments: Vec<Comment{author, created_at, body_html}>, parent: Option<TicketRef>,
+  prs: Vec<PrLink>, caps: TrackerCaps /*both filled by kelta-core, providers leave them empty*/ }
+pub struct PrLink { url, account: Option<AccountId> /*code-host account when the repo is bound: opens the review detail, else browser only*/, repo, number: u64,
+  title, branch, state: PrState, draft: bool, ci: CiState, review: Option<ReviewDecision>, source: PrSource /*WorkItem|KeyMatch*/ }
 pub struct Status { id, name, category: StatusCategory /*Todo|InProgress|InReview|Done|Unknown*/ }
 pub struct Transition { id, name, to: Status, needs_fields: bool }
 pub struct Column { id, name, category: StatusCategory, order: u32, match_names: Vec<String> }
+pub struct SourceHit { kind: String, label, detail: Option<String>, view: TrackerView /* core sets view.account */ }
+pub enum Who { Mine, Unassigned, Anyone }          // snake_case; TrackerView.who None = legacy provider fields
+// TrackerView gains who: Option<Who>, current_iteration: bool (default false), account: Option<AccountId> (None = binding.account)
 pub enum Cursor { Offset(u32), Token(String), Page(u32), After(String) }
 pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
 ```
@@ -742,6 +753,7 @@ pub struct Feedback { threads: Vec<FeedbackThread{id, author, path?, line?, body
 - Gitea/Forgejo: `GET /api/v1/repos/issues/search?type=pulls&state=open&review_requested=true` (or `created=true`) returns issue-shaped rows, each expanded with `GET …/pulls/{n}` (branches, head sha); pagination follows `Link: rel="next"`. Approve / request changes = `POST …/pulls/{n}/reviews {event, commit_id}`; comment = issue comment; draft = `draft` or a `WIP:` title. Bearer token auth, `base_url` required. No change gate (always `true`).
 - Bitbucket Cloud: the cross-workspace endpoints were retired in April 2026, so lists walk `GET /user/workspaces`: my PRs from `/workspaces/{ws}/pullrequests/{me}`, review requests from `reviewers.uuid` queries over the workspace's 50 most recently updated member repositories; `next` URLs are followed. Auth is `Basic <email>:<API token>` (app passwords were retired in 2026) or Bearer for access tokens. Request changes = comment + `POST …/request-changes`; approve compares the PR's current head with the reviewed sha first (`Conflict` if moved); no PR refs exist, so "review locally" fetches the source branch (no forks). List rows carry no CI (detail rolls up `/statuses`). No change gate.
 - `linked_tickets`: regex `reviews.ticket_key_regex` over branch + title.
+- Ticket to PR join (`feeds::ticket_prs`, no extra request): core fills `TicketItem.prs` and `TicketDetail.prs` from data already polled. The work item's `pr_url` comes first (`PrSource::WorkItem`; its state follows the work item when merged or closed), then every polled review whose `linked_tickets` name the ticket (`PrSource::KeyMatch`, matched with the same key rules as the Reviews pane; a bare Redmine number only matches in the code-host repos of the ticket's projects). `PrLink.account` is set when the repo is bound to a code-host account: the UI then opens Kelta's review detail (`p`), else the browser. `P` is always the browser.
 - Feedback (FLOW §4.2). GitHub: one GraphQL query (`reviewThreads(first:100)` filtered on `isResolved` client side, since the connection has no such argument; `latestReviews` with a body; `viewer`), check runs of the head (REST) and, for failed GitHub Actions runs (5 max), the job log tail. Re-request = `POST …/requested_reviewers` with the latest reviewers; resolve = `resolveReviewThread` per id. GitLab: unresolved resolvable discussions (system notes skipped), failed jobs of the head pipeline + `/jobs/:id/trace` tail; re-request = `/request_review @…` quick action note (GitLab 17); resolve = `PUT …/discussions/:id?resolved=true`. A 403 / offline read maps to the FLOW §6 wording ("GitHub refused the review threads (403: token lacks `pull_requests:read`).", GitLab: `read_api`).
 - GitLab `decision = ChangesRequested` (and `decision_head = sha`) when `blocking_discussions_resolved = false`, `detailed_merge_status = discussions_not_resolved`, or a reviewer is in `requested_changes` state (`GET …/reviewers`, GitLab 17+). GitHub `decision_head` = commit of the latest APPROVED / CHANGES_REQUESTED review.
 

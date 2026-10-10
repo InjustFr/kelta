@@ -16,7 +16,7 @@ use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
 use crate::secret::SecretRef;
-use crate::tracker::StatusCategory;
+use crate::tracker::{StatusCategory, Who};
 
 /// Configuration layer (low → high precedence).
 #[derive(
@@ -76,6 +76,8 @@ pub struct Settings {
     pub ports: PortsSettings,
     #[schemars(extend("x-kelta-category" = "Reviews", "x-kelta-order" = 10))]
     pub reviews: ReviewsSettings,
+    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
+    pub tickets: TicketsSettings,
     #[schemars(extend("x-kelta-category" = "Tools", "x-kelta-order" = 13))]
     pub web: WebSettings,
     #[schemars(extend("x-kelta-category" = "Performance", "x-kelta-order" = 16))]
@@ -1105,6 +1107,19 @@ impl Default for PortsSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct TicketsSettings {
+    /// Soft WIP limit: the Doing group header warns above it; blocks nothing.
+    pub wip_limit: u32,
+}
+
+impl Default for TicketsSettings {
+    fn default() -> Self {
+        Self { wip_limit: 3 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct WebSettings {
@@ -1382,6 +1397,7 @@ impl Default for Settings {
             work: WorkSettings::default(),
             ports: PortsSettings::default(),
             reviews: ReviewsSettings::default(),
+            tickets: TicketsSettings::default(),
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),
@@ -1487,6 +1503,12 @@ pub struct TrackerView {
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,
+    /// Whose tickets; `None` = the provider fields above decide.
+    pub who: Option<Who>,
+    /// Only the current sprint / cycle / iteration (providers that support it).
+    pub current_iteration: bool,
+    /// Account of this view; `None` = the binding's account.
+    pub account: Option<AccountId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]

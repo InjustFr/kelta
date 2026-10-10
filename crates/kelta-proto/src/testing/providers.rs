@@ -16,8 +16,8 @@ use crate::ids::AccountId;
 use crate::samples;
 use crate::settings::{TrackerBinding, TrackerView};
 use crate::tracker::{
-    Assignee, Column, Comment, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
+    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 
 /// The four statuses of the fake workflow.
@@ -61,6 +61,8 @@ impl FakeTracker {
                 body_format: crate::tracker::BodyFormat::Markdown,
                 comments: vec![],
                 parent: None,
+                prs: Vec::new(),
+                caps: Default::default(),
             }
         };
         let wf = workflow();
@@ -163,18 +165,50 @@ impl Tracker for FakeTracker {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        self.enter(&format!("list:{}", view.id))?;
+        // The core's recently-done fetch (`status: closed`) is logged apart so `list:` counts stay per view.
+        let closed = view.status.as_deref() == Some("closed");
+        self.enter(&format!("{}:{}", if closed { "list-closed" } else { "list" }, view.id))?;
         let start = match cursor {
             Some(Cursor::Offset(n)) => n as usize,
             None => 0,
             Some(other) => return Err(KeltaError::invalid(format!("unexpected cursor {other:?}"))),
         };
-        let all = self.tickets.lock();
-        let items: Vec<Ticket> =
-            all.iter().skip(start).take(self.page_size).map(|d| d.ticket.clone()).collect();
+        let all: Vec<Ticket> = self
+            .tickets
+            .lock()
+            .iter()
+            .map(|d| d.ticket.clone())
+            .filter(|t| !closed || t.status.category == StatusCategory::Done)
+            .filter(|t| match view.who {
+                Some(Who::Mine) => t.assignee.as_ref().is_some_and(|a| a.id == self.me.id),
+                Some(Who::Unassigned) => t.assignee.is_none(),
+                Some(Who::Anyone) | None => true,
+            })
+            .collect();
+        let items: Vec<Ticket> = all.iter().skip(start).take(self.page_size).cloned().collect();
         let end = start + items.len();
         let next = (end < all.len()).then_some(Cursor::Offset(end as u32));
         Ok(Page { items, next })
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        self.enter(&format!("sources:{query}"))?;
+        let hit = |kind: &str, id: &str, label: &str, jql: &str| SourceHit {
+            kind: kind.into(),
+            label: label.into(),
+            detail: None,
+            view: TrackerView {
+                id: id.into(),
+                label: label.into(),
+                jql: Some(jql.into()),
+                who: Some(Who::Mine),
+                ..TrackerView::default()
+            },
+        };
+        Ok(vec![
+            hit("project", "shop", "SHOP", "project = SHOP"),
+            hit("filter", "filter-10", "Hot bugs", "filter = 10"),
+        ])
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {

@@ -11,7 +11,7 @@ use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
 use crate::settings::{ClaudeEffort, CodeHostBinding, PermissionMode, TrackerBinding, TransitionTarget};
-use crate::tracker::TicketRef;
+use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 
 // ---------------------------------------------------------------------------------------------
 // Projects
@@ -450,6 +450,20 @@ pub enum PaneContent {
         scope: Scope,
         view_id: Option<String>,
         mode: TicketsMode,
+        #[serde(default)]
+        who: Option<Who>,
+        /// `None` = flow.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        group: Option<TicketGroupBy>,
+        /// `None` = priority.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        sort: Option<TicketSort>,
+        /// Assignee user id narrowing the list client-side; `None` = everyone of the who.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        person: Option<String>,
     },
     TicketDetail {
         ticket: TicketRef,

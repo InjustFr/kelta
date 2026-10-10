@@ -179,6 +179,9 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
 | `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return strip (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
 
+### [tickets]
+| `wip_limit` | int | `3` | soft WIP limit: the tickets pane's Doing group header warns above it; blocks nothing |
+
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
 | `include_drafts` | bool | `false` | review requests only: my own (authored) PRs always include drafts |
@@ -322,7 +325,11 @@ id = "lazydocker"
 enabled = true
 ```
 
-Tracker view schema per kind (`views[]` entries; `id`, `label` always):
+Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys valid for every kind:
+- `who = "mine"|"unassigned"|"anyone"` (optional). When set it replaces the provider's assignee fields (`assigned_to`, `scope`, an assignee clause you wrote yourself in `jql` is kept as is). Absent keeps the per-kind keys below. The Tickets pane's Who tab overrides it.
+- `current_iteration = true|false` (default `false`): only the current sprint (Jira), cycle (Linear), iteration (GitHub Projects v2), started milestone (GitLab) or next open version (Redmine). Ignored on gitea.
+- `account = "<id>"` (optional): take this source from another account; absent uses `[project.tracker].account`. Board mode and columns stay on the binding account.
+
 - jira: `jql` (required), `board_id?` (columns from board config when set).
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
 - github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`, plus the shared `status` and (per-repo views) `assigned_to` keys below.
@@ -330,6 +337,8 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always):
 - gitea: `project?` (`owner/name`), `scope = "assigned_to_me"|"all"` (a `project` with `scope = "all"` lists that repository; with `assigned_to_me` the search results are filtered to it), `labels?`, plus the shared `status` key. Columns are Open and Closed; moves are Close / Reopen. Bitbucket Cloud has no tracker (its issues were removed in August 2026): bind a Jira account for tickets and use Bitbucket as the code host.
 - linear: `team?` (team key, e.g. `ENG`), `project?` (project name), `scope = "assigned_to_me"|"all"` (default `assigned_to_me`), `labels?` (label names), plus the shared `status` key. Columns are the team's workflow states; moves resolve state ids by name at runtime.
 - Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab, gitea and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
+
+The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Anyone without editing. Settings > Projects > Tracker lists the sources (label, account, who, current iteration, Remove) and **Add source** opens the picker.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 

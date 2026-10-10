@@ -1,7 +1,7 @@
 // Ticket moves (SPEC §3.4): optimistic board move with rollback, ambiguous-transition picker,
 // NeedsFields form and the "no transition" toast.
 
-import type { Column, JsonValue, Ticket, Transition } from '$lib/gen';
+import type { Column, JsonValue, ProjectId, Ticket, Transition } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { tickets, toasts } from '$lib/stores';
@@ -27,12 +27,12 @@ export class MoveController {
     this.dialog = null;
   }
 
-  /** Board/list move to a column: optimistic, rolled back by the store on any error. */
-  async moveToColumn(ticket: Ticket, column: Column): Promise<boolean> {
+  /** Board/list move to a column of `projectId`'s board: optimistic, rolled back by the store on any error. */
+  async moveToColumn(ticket: Ticket, column: Column, projectId: ProjectId | null = null): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     try {
-      await tickets.move(ticket, column);
+      await tickets.move(ticket, column, projectId);
       return true;
     } catch (err) {
       await this.#handle(err, ticket, column.name, column.category, null);
@@ -43,7 +43,12 @@ export class MoveController {
   }
 
   /** "Move to…" from the detail: applies one transition (shows the form when fields are needed). */
-  async moveViaTransition(ticket: Ticket, transition: Transition, fields?: JsonValue): Promise<boolean> {
+  async moveViaTransition(
+    ticket: Ticket,
+    transition: Transition,
+    fields?: JsonValue,
+    quiet = false,
+  ): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     try {
@@ -53,7 +58,9 @@ export class MoveController {
         fields: fields ?? null,
       });
       tickets.patch(updated);
+      void tickets.loadTransitions(ticket.ref); // the legal moves changed with the status
       this.dialog = null;
+      if (!quiet) toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
       return true;
     } catch (err) {
       await this.#handle(err, ticket, transition.to.name, transition.to.category, transition);
@@ -61,6 +68,25 @@ export class MoveController {
     } finally {
       this.busy = false;
     }
+  }
+
+  /**
+   * Status picker move, one ticket or a selection, in order.
+   * shortcut: stops at the first ticket that fails or asks for fields (its dialog opens), the rest
+   * stay where they are and a toast says how many moved; a bulk fields form would lift this.
+   */
+  async moveAll(moves: { ticket: Ticket; transition: Transition }[]): Promise<void> {
+    let done = 0;
+    // A bulk move toasts once at the end, not per ticket.
+    const quiet = moves.length > 1;
+    for (const m of moves) {
+      if (!(await this.moveViaTransition(m.ticket, m.transition, undefined, quiet))) break;
+      done++;
+    }
+    const to = moves[0]?.transition.to.name;
+    if (moves.length < 2 || !to) return;
+    if (done === moves.length) toasts.info(`Moved ${done} tickets to ${to}`);
+    else toasts.warn(`Moved ${done} of ${moves.length} tickets to ${to}`);
   }
 
   async choose(transition: Transition): Promise<void> {
@@ -82,7 +108,9 @@ export class MoveController {
         fields: values,
       });
       tickets.patch(updated);
+      void tickets.loadTransitions(d.ticket.ref);
       this.dialog = null;
+      toasts.info(`Moved ${d.ticket.ref.key} to ${d.target}`);
     } catch (err) {
       const e = toIpcError('tracker_transition', err);
       if (e.code === 'needs_fields') {
@@ -146,6 +174,11 @@ export class MoveController {
       });
       return;
     }
-    toasts.error(err, `Moving ${ticket.ref.key} failed`);
+    // The tracker's own words (workflow validator, 422...) and the way out: its web UI.
+    toasts.push({
+      level: 'error',
+      text: `Moving ${ticket.ref.key} failed: ${e.message}`,
+      action: { label: 'Open in browser', command: 'tickets.open_in_browser', args: { url: ticket.url } },
+    });
   }
 }

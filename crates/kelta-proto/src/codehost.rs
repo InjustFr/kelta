@@ -193,6 +193,34 @@ pub struct PrDraft {
     pub draft: Option<bool>,
 }
 
+/// Where a ticket's PR link came from (TICKETS.md T1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PrSource {
+    /// The `pr_url` of the ticket's work item.
+    WorkItem,
+    /// A polled review feed whose `linked_tickets` name the ticket.
+    KeyMatch,
+}
+
+/// A PR linked to a ticket (`TicketItem.prs`, `TicketDetail.prs`), built from data already polled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PrLink {
+    pub url: String,
+    /// Code-host account when the repo is bound (opens Kelta's review detail); `None` → browser only.
+    pub account: Option<AccountId>,
+    pub repo: String,
+    pub number: u64,
+    /// Empty when the PR is not in a polled feed.
+    pub title: String,
+    pub branch: String,
+    pub state: PrState,
+    pub draft: bool,
+    pub ci: CiState,
+    pub review: Option<ReviewDecision>,
+    pub source: PrSource,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReviewItem {
     pub review: Review,
