@@ -202,13 +202,15 @@ impl GitlabHost {
         })
     }
 
-    /// Review requests: when I was asked (`/reviewers`) and whether mine is the last approval
-    /// missing (`/approvals`: one left and I am an approver). Best effort, like the detail.
+    /// Review requests: when I was asked (`/reviewers`), whether mine is the last approval
+    /// missing (`/approvals`: one left and I am an approver) and the diff size (`/changes`, the
+    /// list has none). Best effort, like the detail.
     async fn request_state(&self, review: &mut Review, me: &User) {
         let url = self.mr_url(&review.r#ref.repo, &format!("/{}", review.r#ref.number));
-        let (reviewers, approvals) = tokio::join!(
+        let (reviewers, approvals, changes) = tokio::join!(
             self.json(HttpRequest::get(format!("{url}/reviewers"))),
             self.json(HttpRequest::get(format!("{url}/approvals"))),
+            self.json(HttpRequest::get(format!("{url}/changes"))),
         );
         // `approvers` / `approved_by` / `/reviewers` wrap the user, `suggested_approvers` does not.
         let is_me = |x: &Value| {
@@ -230,6 +232,16 @@ impl GitlabHost {
                 && !list(&a, "approved_by").iter().any(is_me)
                 && (list(&a, "approvers").iter().any(is_me)
                     || list(&a, "suggested_approvers").iter().any(is_me));
+        }
+        // shortcut: GitLab truncates huge diffs (`overflow`), so a very large MR reads smaller; upgrade via `/diffs` paging if it matters.
+        if let Some(files) =
+            changes.ok().and_then(|c| c.body.get("changes").and_then(Value::as_array).cloned())
+        {
+            let (a, d) = files
+                .iter()
+                .map(|c| diff_counts(s(c, "diff").unwrap_or("")))
+                .fold((0, 0), |x, y| (x.0 + y.0, x.1 + y.1));
+            (review.additions, review.deletions) = (Some(a), Some(d));
         }
     }
 

@@ -51,8 +51,16 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
         })))
         .mount(&server)
         .await;
+    Mock::given(path(format!("{mr8}/changes")))
+        .respond_with(reply(
+            json!({ "changes": [{ "new_path": "a.rs", "diff": "@@ -1 +1,2 @@\n-x\n+y\n+z\n" }] }),
+        ))
+        .mount(&server)
+        .await;
     let h = gl(&server);
     let list = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!((list[0].additions, list[0].deletions), (Some(2), Some(1)), "size from /changes");
+    assert_eq!(list[1].additions, None, "no /changes: no size");
     assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-29T10:00:00Z"));
     assert!(list[0].blocking, "one approval left and I am an approver");
     assert!(list[1].requested_at.is_none() && !list[1].blocking);
