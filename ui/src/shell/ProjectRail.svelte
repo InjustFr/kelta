@@ -4,6 +4,7 @@
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
   import { attention, projects, reviews, sessions, tickets, toasts, ui, type GlobalView } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { readyByProject } from '../views/inbox/groups';
@@ -258,7 +259,7 @@
           class="row"
           class:active
           class:over={overId === p.id && dragId !== p.id}
-          style:--project-color={p.color ?? 'var(--k-border-strong)'}
+          style:--project-color={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border-strong)'}
         >
           <button
             type="button"
@@ -308,7 +309,11 @@
     {#if home}
       {@const lvl = projectAttention(home.id)}
       {@const active = home.active && !ui.view}
-      <div class="row" class:active style:--project-color={home.color ?? 'var(--k-border-strong)'}>
+      <div
+        class="row"
+        class:active
+        style:--project-color={resolveProjectColor(home.color, ui.theme) ?? 'var(--k-border-strong)'}
+      >
         <button
           type="button"
           class="item project home"

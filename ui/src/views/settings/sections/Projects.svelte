@@ -5,6 +5,7 @@
   import type { ProjectInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { projects, toasts, ui } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import Button from '$lib/ui/Button.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -109,7 +110,8 @@
                 </div>
               </form>
             {:else}
-              <span class="dot" style:background={p.color ?? 'var(--k-border)'}></span>
+              <span class="dot" style:background={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border)'}
+              ></span>
               <div class="info">
                 <strong>{p.name}</strong>
                 <span class="muted"

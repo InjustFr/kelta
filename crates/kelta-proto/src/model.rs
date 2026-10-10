@@ -21,6 +21,7 @@ use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 pub struct ProjectInfo {
     pub id: ProjectId,
     pub name: String,
+    /// As stored: `theme:<slot>` (resolved against the active theme by the UI only) or a `#rrggbb` hex.
     pub color: Option<String>,
     pub icon: Option<String>,
     pub repos: Vec<RepoInfo>,

@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { PALETTE } from './draft';
+  import { ui } from '$lib/stores';
+  import { parseProjectColor, slotLabel, SLOTS, type Slot } from '$lib/theme';
 
-  // Ten default chips plus a custom hex field; the value is stored in ProjectInfo.color as before.
+  // The active theme's 12 slot colours, stored as `theme:<slot>` so they follow the theme, plus a
+  // custom hex kept as typed (DESIGN §2.1).
   interface Props {
     value: string | null;
     onchange: (color: string | null) => void;
@@ -10,22 +12,31 @@
   let { value, onchange }: Props = $props();
 
   const HEX = /^#[0-9a-f]{6}$/i;
-  const custom = $derived(value && !PALETTE.some((c) => c.hex === value) ? value : '');
+  const slots = Object.keys(SLOTS) as Slot[];
+  const parsed = $derived(parseProjectColor(value));
+  const slot = $derived(parsed && 'slot' in parsed ? parsed.slot : null);
+  const custom = $derived(parsed && 'hex' in parsed ? parsed.hex : '');
 </script>
 
 <div class="colors" role="group" aria-label="Colour">
-  {#each PALETTE as c (c.name)}
+  {#each slots as s (s)}
     <button
       type="button"
       class="swatch"
-      class:on={value === c.hex}
-      style:background="var(--k-swatch-{c.name})"
-      aria-label={c.name}
-      title={c.name}
-      aria-pressed={value === c.hex}
-      onclick={() => onchange(value === c.hex ? null : c.hex)}
+      class:on={slot === s}
+      style:background={ui.theme.terminal.ansi[SLOTS[s]]}
+      aria-label={slotLabel(s)}
+      title={slotLabel(s)}
+      aria-pressed={slot === s}
+      data-slot={s}
+      onclick={() => onchange(slot === s ? null : `theme:${s}`)}
     ></button>
   {/each}
+  {#if custom}
+    <span class="custom" title="Custom {custom}" data-testid="custom-color">
+      <span class="swatch on" style:background={custom}></span>Custom
+    </span>
+  {/if}
   <input
     class="hex k-mono"
     aria-label="Custom colour (hex)"
@@ -62,6 +73,18 @@
     box-shadow:
       0 0 0 2px var(--k-bg-float),
       0 0 0 3px var(--k-fg);
+  }
+
+  .custom {
+    display: inline-flex;
+    gap: var(--k-space-2);
+    align-items: center;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .custom .swatch {
+    cursor: default;
   }
 
   .hex {

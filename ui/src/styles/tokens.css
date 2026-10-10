@@ -97,18 +97,6 @@
   --k-term-cursor: #1b2026;
   --k-term-selection: #c9daea;
 
-  /* project colour picker defaults (custom hex still allowed) */
-  --k-swatch-harbor: #3e7cb1;
-  --k-swatch-moss: #5e8c4a;
-  --k-swatch-ochre: #b88a2e;
-  --k-swatch-brick: #b5533c;
-  --k-swatch-plum: #8a5a9e;
-  --k-swatch-teal: #2f8c86;
-  --k-swatch-rose: #b85278;
-  --k-swatch-slate: #5f6b7a;
-  --k-swatch-olive: #85863a;
-  --k-swatch-cobalt: #4b5fc4;
-
   color-scheme: light;
 }
 
@@ -163,16 +151,6 @@
     --k-term-fg: #d3d9df;
     --k-term-cursor: #d3d9df;
     --k-term-selection: #2c3f52;
-    --k-swatch-harbor: #6fa6d6;
-    --k-swatch-moss: #8bb874;
-    --k-swatch-ochre: #d6ac55;
-    --k-swatch-brick: #dd7d64;
-    --k-swatch-plum: #b48ac7;
-    --k-swatch-teal: #5bb7b0;
-    --k-swatch-rose: #de7fa2;
-    --k-swatch-slate: #8a95a5;
-    --k-swatch-olive: #b2b360;
-    --k-swatch-cobalt: #8395ef;
     color-scheme: dark;
   }
   @supports (color: oklch(from red l c h)) {
@@ -220,16 +198,6 @@
   --k-term-fg: #d3d9df;
   --k-term-cursor: #d3d9df;
   --k-term-selection: #2c3f52;
-  --k-swatch-harbor: #6fa6d6;
-  --k-swatch-moss: #8bb874;
-  --k-swatch-ochre: #d6ac55;
-  --k-swatch-brick: #dd7d64;
-  --k-swatch-plum: #b48ac7;
-  --k-swatch-teal: #5bb7b0;
-  --k-swatch-rose: #de7fa2;
-  --k-swatch-slate: #8a95a5;
-  --k-swatch-olive: #b2b360;
-  --k-swatch-cobalt: #8395ef;
   color-scheme: dark;
 }
 @supports (color: oklch(from red l c h)) {
