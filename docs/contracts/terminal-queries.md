@@ -5,7 +5,7 @@ single responder to terminal queries, so background sessions answer correctly an
 answered twice. xterm.js swallows exactly the queries the model answers
 (`kelta_proto::term::SWALLOWED_QUERIES` → `ui/src/lib/gen/terminal_queries.ts`).
 
-The table below is the contract **and** test data: `crates/kelta-term/tests/queries.rs` parses
+The table below is the contract **and** test data: `crates/kelta-term/tests/it/queries.rs` parses
 the rows between the markers, feeds every query to a fresh 80×24 model (cursor at 1;1, default
 `TerminalPalette`, no output yet) and asserts the exact reply; it then sends all of them through
 a real PTY and asserts that the child reads back each reply exactly once, in order. It also

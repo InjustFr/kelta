@@ -1,0 +1,68 @@
+---
+source: crates/kelta-config/tests/it/layers.rs
+expression: out
+---
+{
+  "global:app.theme": {
+    "source": "runtime",
+    "value": "dark"
+  },
+  "global:claude.append_system_prompt": {
+    "source": "global",
+    "value": "global"
+  },
+  "global:terminal.cursor_style": {
+    "source": "runtime",
+    "value": "bar"
+  },
+  "global:terminal.font_size": {
+    "source": "global",
+    "value": 14
+  },
+  "global:terminal.renderer": {
+    "source": "default",
+    "value": "auto"
+  },
+  "global:worktree.branch_template": {
+    "source": "global",
+    "value": "g/{key}"
+  },
+  "global:worktree.include": {
+    "source": "default",
+    "value": [
+      ".env",
+      ".env.*"
+    ]
+  },
+  "shop:app.theme": {
+    "source": "runtime",
+    "value": "dark"
+  },
+  "shop:claude.append_system_prompt": {
+    "source": "repo",
+    "value": "repo"
+  },
+  "shop:terminal.cursor_style": {
+    "source": "runtime",
+    "value": "bar"
+  },
+  "shop:terminal.font_size": {
+    "source": "project",
+    "value": 15
+  },
+  "shop:terminal.renderer": {
+    "source": "default",
+    "value": "auto"
+  },
+  "shop:worktree.branch_template": {
+    "source": "repo",
+    "value": "r/{key}"
+  },
+  "shop:worktree.include": {
+    "source": "repo",
+    "value": [
+      ".env",
+      ".npmrc"
+    ]
+  }
+}

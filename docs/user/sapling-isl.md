@@ -30,7 +30,7 @@ primary repo; use `{worktree|repo.path}` to follow the current worktree instead.
 
 `embed = "auto"` shows ISL in a plain iframe (it sends no frame-blocking headers). `embed = "proxy"` also works:
 Kelta's per-tool loopback proxy serves the page and passes ISL's WebSocket through. Both are covered by the
-`gate_w1_*` tests in `crates/kelta-plugins/tests/tools.rs` against a real `sl web`.
+`gate_w1_*` tests in `crates/kelta-plugins/tests/it/tools.rs` against a real `sl web`.
 
 If the pane shows "exited before it was ready", the log under the error usually says `node` was not found
 (fix your login shell's `PATH`) or that the folder is not a repository.

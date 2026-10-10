@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+autotests = false
 
 [features]
 default = []
@@ -46,3 +47,14 @@ harness = false
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+# Measure whole-process RSS/threads: they must run alone, not beside the other tests.
+[[test]]
+name = "history"
+
+[[test]]
+name = "resources"

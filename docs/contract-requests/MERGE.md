@@ -15,6 +15,6 @@
 - Still red in Docker, both unrelated to L3 and present on main before this merge (requests to the owners):
   - L1 `crates/kelta-term/tests/resources.rs` `memory_and_leaks`: 10 idle sessions add ~21060 KiB
     RSS under glibc, against the 20 MB budget (macOS is within budget). The budget was not relaxed.
-  - L6 `crates/kelta-work/tests/nvim_rpc.rs:99` `edit_checktime_selection_mksession`: selection
+  - L6 `crates/kelta-work/tests/it/nvim_rpc.rs:99` `edit_checktime_selection_mksession`: selection
     text assertion fails with the nvim in the CI image.
   - `kelta-core` (L3) tests all pass in Docker.
