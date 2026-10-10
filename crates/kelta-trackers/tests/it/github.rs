@@ -252,6 +252,8 @@ async fn project_moves_resolve_field_and_option_ids_by_name_and_cache_them() {
     let moved = t.transition(&r(), "status:In Review", None).await.unwrap();
     assert_eq!(moved.status.name, "In Review");
     assert_eq!(moved.status.category, StatusCategory::InReview);
+    assert_eq!(moved.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
+    assert_eq!(moved.priority_rank, Some(1));
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     let field_queries =
         gql_bodies.iter().filter(|b| b["query"].as_str().unwrap_or("").contains("node(id")).count();

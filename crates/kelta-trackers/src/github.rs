@@ -43,6 +43,13 @@ impl FieldMeta {
     }
 }
 
+/// Field-value selections shared by the list and per-issue project queries.
+macro_rules! field_value_fragments {
+    () => {
+        "... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name options{ name } } } } ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration } ... on ProjectV2ItemFieldNumberValue { number field{ ... on ProjectV2Field{ name } } }"
+    };
+}
+
 /// One Projects v2 item of an issue.
 #[derive(Debug, Clone)]
 struct ItemInfo {
@@ -51,6 +58,7 @@ struct ItemInfo {
     owner: String,
     number: u32,
     current: Option<String>,
+    vals: Vec<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -317,7 +325,11 @@ impl GithubIssues {
         after: Option<String>,
         filter: Option<String>,
     ) -> Result<Page<Ticket>, KeltaError> {
-        const Q: &str = "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name options{ name } } } } ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration } ... on ProjectV2ItemFieldNumberValue { number field{ ... on ProjectV2Field{ name } } } } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }";
+        const Q: &str = concat!(
+            "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ",
+            field_value_fragments!(),
+            " } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }"
+        );
         let data = self
             .gql(Q, json!({"owner": p.owner, "number": p.number, "after": after, "query": filter}))
             .await?;
@@ -387,7 +399,11 @@ impl GithubIssues {
 
     /// Projects v2 items of an issue (ids and current Status value; no field metadata).
     async fn issue_projects(&self, repo: &str, number: u64) -> Result<IssueProjects, KeltaError> {
-        const Q: &str = "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state projectItems(first:20){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:20){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } }";
+        const Q: &str = concat!(
+            "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state projectItems(first:20){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:30){ nodes{ ",
+            field_value_fragments!(),
+            " } } } } } } }"
+        );
         let (owner, name) =
             repo.split_once('/').ok_or_else(|| KeltaError::invalid(format!("bad repo: {repo}")))?;
         let data = self.gql(Q, json!({"owner": owner, "name": name, "number": number})).await?;
@@ -422,6 +438,11 @@ impl GithubIssues {
                     owner,
                     number: pnum,
                     current,
+                    vals: n
+                        .pointer("/fieldValues/nodes")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default(),
                 })
             })
             .collect();
@@ -484,9 +505,12 @@ impl GithubIssues {
                 {
                     Ok(_) => {
                         let issue = self.fetch_issue(repo, number).await?;
-                        return self
+                        let mut t = self
                             .ticket_from_rest(&issue, Some(&opt_name))
-                            .ok_or_else(|| KeltaError::upstream("issue response without repository"));
+                            .ok_or_else(|| KeltaError::upstream("issue response without repository"))?;
+                        // a move changes Status only; keep the board fields read before it
+                        apply_project_fields(&mut t, &item.vals, &today());
+                        return Ok(t);
                     }
                     Err(e) => {
                         last_err = Some(e);
