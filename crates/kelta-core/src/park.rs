@@ -17,12 +17,13 @@ use kelta_proto::term::KillSignal;
 use crate::Core;
 use crate::sessions::SessionTimers;
 
-/// Auto-park candidate: a live work item Claude that is done, seen and asks for nothing.
+/// Auto-park candidate: a live work item Claude that is done (or idle), seen and asks for nothing.
 pub(crate) fn parkable(i: &SessionInfo) -> bool {
     i.kind == SessionKind::Claude
         && i.work_item_id.is_some()
         && i.lifecycle == Lifecycle::Live
-        && i.status == SessionStatus::Done
+        // idle_prompt turns a finished Claude WaitingUser ~60 s after Stop; unseen it carries NeedsInput.
+        && matches!(i.status, SessionStatus::Done | SessionStatus::WaitingUser)
         && i.seen
         && i.attention == Attention::None
 }
@@ -61,11 +62,13 @@ impl Core {
         if park.is_empty() {
             return Err(KeltaError::conflict("nothing to park"));
         }
+        // Stop first, then tear down: a slow teardown must not widen the Working / unsaved-buffer checks' window.
+        self.park_sessions(&park).await;
+        let parked = self.work.set_parked(id, Some(kept)).await?;
         if let Err(e) = self.work.park_teardown(&item).await {
             self.emit(UiEvent::Toast { toast: Toast::warn(format!("Parked anyway: {}", e.message)) });
         }
-        self.park_sessions(&park).await;
-        self.work.set_parked(id, Some(kept)).await
+        Ok(parked)
     }
 
     /// Stop live sessions and keep them Dormant (SIGHUP → `QUIT_GRACE` → SIGKILL); `on_exited`

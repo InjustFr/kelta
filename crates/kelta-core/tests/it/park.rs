@@ -153,6 +153,8 @@ async fn auto_park_only_after_done_and_seen_and_input_cancels_it() {
     h.core.session_mark_seen(&sid).unwrap();
     // Showing the pane sends a focus report: not input.
     h.core.session_write(&sid, b"\x1b[I").await.unwrap();
+    // idle_prompt ~60 s after Stop: still parkable.
+    h.core.session_apply_hook(&sid, ch(S::WaitingUser)).await.unwrap();
     wait().await;
     for _ in 0..50 {
         settle().await;
