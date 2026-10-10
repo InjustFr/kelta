@@ -462,7 +462,7 @@ A line that is not JSON or exceeds 8 MiB is a protocol violation: Kelta kills th
 
 - One process per plugin, spawned on the **first call** (nothing runs at startup or for unused accounts), in its own process group, with the plugin dir as cwd and a minimal environment (`PATH` of the login shell, `HOME`, `USER`, `LANG`, `TMPDIR`; nothing else is inherited).
 - Every call requires the plugin to be installed, enabled and granted `provider`; otherwise `permission_denied` / `not_found` / `invalid_argument`, and no process is started.
-- Per-call timeout (`timeout_ms`) → `timeout`; the process is kept (one slow call does not kill the others).
+- Per-call timeout (`timeout_ms`) → `timeout`; the process is kept if it sent any line during the call (one slow call does not kill the others). A process silent for the whole call is hung: it is killed and handled like a crash.
 - Crash (stdout closed) → the in-flight calls fail with `upstream`; the next call respawns it, at once after a first crash, then after 0.5 s, 1 s, 2 s … ≤ 30 s while it keeps crashing (calls in that window fail with `retry_after_ms`); one successful call resets the backoff. No timer is armed: the restart is driven by the next call.
 - Killed (process group, SIGKILL) on disable, uninstall, grant change, manifest update (the next call starts the new version) and quit.
 - No idle exit: an idle provider costs its own memory only, and an idle timer would break the "no timers" rule (ARCHITECTURE D11). Keep providers small. A provider may exit by itself when idle: the next call respawns it at once (only exits with no successful call in between back off).

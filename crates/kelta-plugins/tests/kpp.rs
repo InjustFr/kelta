@@ -8,13 +8,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kelta_http::{HttpClient, HttpCtx, HttpPolicy, ProviderFactory};
-use kelta_plugins::kpp::{KppFactory, KppProcess, KppTracker, Source};
+use kelta_plugins::kpp::{KppCodeHost, KppFactory, KppProcess, KppTracker, Source};
 use kelta_proto::api::{CodeHost, SecretResolver, Tracker};
+use kelta_proto::codehost::CodeHostKind;
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ext::ProviderDef;
 use kelta_proto::ids::{AccountId, PluginId};
 use kelta_proto::settings::{AccountConfig, TrackerView};
 use kelta_proto::testing::FakeSecrets;
+use kelta_proto::testing::conformance::{CodeHostCase, code_host_contract};
 
 fn node() -> bool {
     let ok = std::process::Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success());
@@ -92,7 +94,26 @@ async fn crash_restarts_with_backoff_and_keeps_stderr() {
 }
 
 #[tokio::test]
-async fn timeout_fails_the_call_but_keeps_the_process() {
+async fn timeout_fails_the_call_but_keeps_a_process_that_answers_others() {
+    if !node() {
+        return;
+    }
+    let s = FakeSecrets::with(&[("env:TOK", "t")]);
+    let p = process(500);
+    let pid = tracker(&p, "ok", &s).me().await.unwrap().id;
+    let hang = tracker(&p, "hang", &s);
+    let ok = tracker(&p, "ok", &s);
+    let (e, other) = tokio::join!(hang.me(), async {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        ok.me().await
+    });
+    assert_eq!(e.unwrap_err().code, ErrorCode::Timeout);
+    assert_eq!(other.unwrap().id, pid, "answered during the slow call");
+    assert_eq!(tracker(&p, "ok", &s).me().await.unwrap().id, pid, "slow, not hung: kept");
+}
+
+#[tokio::test]
+async fn a_silent_timeout_kills_the_hung_process() {
     if !node() {
         return;
     }
@@ -101,7 +122,29 @@ async fn timeout_fails_the_call_but_keeps_the_process() {
     let pid = tracker(&p, "ok", &s).me().await.unwrap().id;
     let e = tracker(&p, "hang", &s).me().await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Timeout);
-    assert_eq!(tracker(&p, "ok", &s).me().await.unwrap().id, pid);
+    assert!(common::wait_for(|| !alive(pid.parse().unwrap())).await, "hung process killed");
+    assert_ne!(tracker(&p, "ok", &s).me().await.unwrap().id, pid, "respawned");
+}
+
+#[tokio::test]
+async fn the_code_host_adapter_passes_the_contract() {
+    if !node() {
+        return;
+    }
+    let def: ProviderDef =
+        toml::from_str("kind = \"codehost\"\ncommand = \"node\"\nargs = [\"fake.cjs\"]").unwrap();
+    let p = Arc::new(KppProcess::new(&def, &fixtures(), "sha", None));
+    let secrets: Arc<dyn SecretResolver> = FakeSecrets::with(&[("env:TOK", "t")]);
+    let h = KppCodeHost::new(Source::Direct(p), def, AccountId::new("acc"), account("ok"), secrets);
+    // the fake claims another account and sends a <script>: the adapter owns refs and sanitizes
+    let case = CodeHostCase {
+        kind: CodeHostKind::Plugin,
+        account_id: "acc".into(),
+        repo: None,
+        refspec: Some("pull/{n}/head".into()),
+    };
+    code_host_contract(&h, &case).await.unwrap();
+    assert!(h.changed_since_last().await.unwrap(), "unsupported = assume a change");
 }
 
 #[tokio::test]

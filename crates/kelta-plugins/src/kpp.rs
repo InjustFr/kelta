@@ -6,6 +6,7 @@
 //! provider costs its own RSS only. A crash fails the in-flight calls; the next call respawns it,
 //! immediately after the first crash, then after 0.5, 1, 2 … 30 s (reset by a successful call).
 //! A malformed or oversized message is a protocol violation: the process is killed like a crash.
+//! So is a timeout during which the process sent nothing at all (hung); a slow call is just failed.
 //! stderr goes to a 64 KiB ring (its tail is attached to crash errors).
 
 use std::collections::{BTreeMap, HashMap};
@@ -54,6 +55,8 @@ struct Conn {
     pending: Mutex<HashMap<u64, Reply>>,
     /// Set (before the pending calls are failed) when stdout closed or the protocol broke.
     exited_at: Mutex<Option<Instant>>,
+    /// When stdout last delivered a line: tells a hung process from a slow call.
+    last_reply: Mutex<Option<Instant>>,
 }
 
 #[derive(Default)]
@@ -200,6 +203,7 @@ impl KppProcess {
             stdin: tokio::sync::Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
             exited_at: Mutex::new(None),
+            last_reply: Mutex::new(None),
         });
         tokio::spawn(read_loop(stdout, conn.clone(), self.log.clone()));
         Ok(conn)
@@ -218,6 +222,7 @@ impl KppProcess {
         let mut line =
             serde_json::to_vec(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }))?;
         line.push(b'\n');
+        let start = Instant::now();
         let exchange = async {
             let mut w = conn.stdin.lock().await;
             if let Err(e) = async {
@@ -234,10 +239,18 @@ impl KppProcess {
         // one-shot: per-call deadline armed by this call
         let out = match tokio::time::timeout(self.timeout, exchange).await {
             Ok(r) => r,
-            Err(_) => Err(KeltaError::timeout(format!(
-                "provider did not answer `{method}` within {} ms",
-                self.timeout.as_millis()
-            ))),
+            Err(_) => {
+                // silent for the whole call: hung, not slow. Kill it so the next call respawns
+                // (crash backoff) instead of timing out forever.
+                if conn.last_reply.lock().is_none_or(|t| t < start) {
+                    signal_group(conn.pid, rustix::process::Signal::KILL);
+                    conn.exited_at.lock().get_or_insert_with(Instant::now);
+                }
+                Err(KeltaError::timeout(format!(
+                    "provider did not answer `{method}` within {} ms",
+                    self.timeout.as_millis()
+                )))
+            }
         };
         conn.pending.lock().remove(&id);
         if out.is_ok() {
@@ -263,6 +276,7 @@ async fn read_loop(out: ChildStdout, conn: Arc<Conn>, log: Arc<Mutex<ByteRing>>)
             Err(e) => break format!("stdout failed: {e}"),
             Ok(_) => {}
         }
+        *conn.last_reply.lock() = Some(Instant::now());
         if buf.len() > MAX_MESSAGE {
             break format!("sent a message over {MAX_MESSAGE} bytes");
         }
