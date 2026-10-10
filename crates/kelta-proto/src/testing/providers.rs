@@ -223,6 +223,29 @@ impl Tracker for FakeTracker {
         ])
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        self.enter(&format!("create:{}", project.id))?;
+        let mut all = self.tickets.lock();
+        let mut t = samples::ticket();
+        t.r#ref.account = self.account.clone();
+        t.r#ref.key = format!("SHOP-{}", 900 + all.len());
+        t.r#ref.id = t.r#ref.key.clone();
+        t.title = title.to_owned();
+        t.status = workflow()[0].clone();
+        t.assignee = None;
+        all.push(TicketDetail {
+            ticket: t.clone(),
+            body_md: body_md.to_owned(),
+            body_html: format!("<p>{body_md}</p>"),
+            body_format: crate::tracker::BodyFormat::Markdown,
+            comments: vec![],
+            parent: None,
+            prs: Vec::new(),
+            caps: Default::default(),
+        });
+        Ok(t)
+    }
+
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.enter(&format!("get:{}", t.key))?;
         self.find(t)

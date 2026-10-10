@@ -719,6 +719,26 @@ impl Tracker for JiraTracker {
         Ok(self.list(&view, None).await?.items)
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let key = project.jql.as_deref().and_then(project_key_from_jql);
+        let key = common::create_in(project, "jql project", key.as_deref())?;
+        let api = self.api().await?;
+        let description = match api.flavor {
+            Flavor::Cloud => adf::markdown_to_adf(body_md),
+            Flavor::Dc => json!(body_md),
+        };
+        // shortcut: always a `Task` (the default type of Jira Software projects), add a type picker if a project lacks it.
+        let fields = json!({
+            "project": {"key": key},
+            "summary": title,
+            "description": description,
+            "issuetype": {"name": "Task"},
+        });
+        let v = api.json(HttpRequest::post(api.url("/issue")).json(json!({ "fields": fields }))).await?;
+        let created = s(&v, "key").ok_or_else(|| KeltaError::upstream("jira create response without key"))?;
+        self.fetch_ticket(&api, created).await
+    }
+
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let api = self.api().await?;
         let acct = self.account().to_string();

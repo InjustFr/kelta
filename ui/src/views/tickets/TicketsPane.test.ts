@@ -730,9 +730,26 @@ describe('TicketsPane split view', () => {
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
     await press(' ');
     expect(detail()).toBeNull();
+    expect(container.querySelector('.hints')?.textContent).toContain('Review changes'); // named before Enter
+    vi.mocked(runPrimary).mockClear();
+    await press('Enter', { metaKey: true }); // #141's batch start, not the phase action
+    expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
     await press('Enter');
     expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
     await press('g');
     await waitFor(() => expect(document.activeElement).toBe(detail()));
+  });
+
+  it('board: Enter on a card with work opens the detail, never runs the next step', async () => {
+    await work.load();
+    const w = work.forTicket({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })!;
+    work.upsert({ ...w, review_due: true });
+    vi.mocked(runPrimary).mockClear();
+    const { container } = mountBoard();
+    await ready(container, 'SHOP-142');
+    await press('l'); // SHOP-142 sits in the next lane
+    await press('Enter');
+    expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
+    expect(container.querySelector('.hints')?.textContent).not.toContain('Review changes');
   });
 });

@@ -135,6 +135,16 @@ pub trait Tracker: Send + Sync {
     async fn search(&self, _view: &TrackerView, _text: &str) -> Result<Vec<Ticket>, KeltaError> {
         Err(KeltaError::unsupported("this tracker cannot search"))
     }
+
+    /// Files a new ticket in the project (repo, team...) that `project` lists (Tickets T11).
+    async fn create(
+        &self,
+        _project: &TrackerView,
+        _title: &str,
+        _body_md: &str,
+    ) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot create tickets"))
+    }
 }
 
 #[async_trait]

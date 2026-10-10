@@ -146,6 +146,8 @@ describe('mock transport', () => {
     const session = s.sessions[0]!;
     const work = s.work[0]!;
     const withPr = s.work[2]!; // PR open, Claude idle with hook status
+    const queued = { ...structuredClone(work), id: 'queued-1', state: { kind: 'queued' as const, pos: 0 } };
+    s.work.push(queued);
     const ctx = {
       repo_id: null,
       cwd: null,
@@ -256,6 +258,8 @@ describe('mock transport', () => {
       work_mark_reviewed: { id: work.id },
       work_set_note: { id: work.id, note: 'next: tests' },
       work_left: { id: work.id },
+      work_queue_front: { id: queued.id },
+      work_start_now: { id: queued.id },
       work_notes: { id: work.id },
       work_notes_send: { id: work.id },
       work_note_resolve: { id: work.id, note: 1 },
@@ -293,6 +297,7 @@ describe('mock transport', () => {
       'session_write',
       'work_start',
       'work_link',
+      'work_create_ticket',
       'layout_save',
       'project_create',
       'plugin_call',
@@ -329,6 +334,20 @@ describe('mock transport', () => {
       apply_side_effects: true,
     });
     expect(linked).toMatchObject({ kind: 'ticket', branch: 'wip/speed-up-search' });
+    const other = await call('work_start', {
+      plan: await call('work_plan', { project_id: 'shop', source: { ...task, task: 'Cache tickets' } }),
+    });
+    const created = await call('work_create_ticket', {
+      id: other.id,
+      view_id: s.projects.find((p) => p.id === 'shop')!.tracker!.views[0]!.id,
+      title: 'Cache tickets',
+      body_md: 'Cache tickets',
+      apply_side_effects: false,
+    });
+    expect(created.kind).toBe('ticket');
+    await expect(call('tracker_get', { ticket: created.ticket! })).resolves.toMatchObject({
+      ticket: { title: 'Cache tickets' },
+    });
     const layout = await call('layout_get', { project_id: 'shop' });
     await expect(call('layout_save', { layout })).resolves.toEqual({ rev: layout.rev + 1 });
     await expect(call('layout_save', { layout })).rejects.toMatchObject({ code: 'conflict' });

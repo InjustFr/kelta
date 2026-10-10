@@ -357,6 +357,27 @@ async fn comment_and_assign() {
 }
 
 #[tokio::test]
+async fn create_files_an_issue_in_the_view_repo() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/acme/shop/issues"))
+        .respond_with(ResponseTemplate::new(201).set_body_string(fixture_text("github/issue.json")))
+        .mount(&server)
+        .await;
+    let mut v = view("mine");
+    v.repo = Some("acme/shop".into());
+    let t = gh(&server).create(&v, "Cart total wrong", "Task\n\n3 files").await.unwrap();
+    assert_eq!(t.r#ref.key, "acme/shop#12");
+    assert_eq!(
+        bodies(&server, "POST", "/repos/acme/shop/issues").await[0],
+        json!({"title": "Cart total wrong", "body": "Task\n\n3 files"})
+    );
+    // A search-only view names no repo: refused before any request.
+    let e = gh(&server).create(&view("search"), "x", "").await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
 async fn assign_keeps_the_board_fields_of_a_project_item() {
     let server = MockServer::start().await;
     gql(&server, "projectItems", "github/gql_issue_projects.json").await;

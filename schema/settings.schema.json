@@ -894,6 +894,7 @@
         "extra_hooks": {},
         "hook_transport": "command",
         "ide_bridge": false,
+        "max_live": 4,
         "mcp": true,
         "min_version": "2.1.200",
         "profiles": {
@@ -919,7 +920,8 @@
           "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
           "standalone": "{task}",
           "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
-        }
+        },
+        "queue_hold_pct": null
       },
       "properties": {
         "allowed_tools": {
@@ -986,6 +988,13 @@
           "default": false,
           "description": "Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).",
           "type": "boolean"
+        },
+        "max_live": {
+          "default": 4,
+          "description": "Live Claude processes start work may run at once; past it items wait `Queued` (0 = no cap).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         },
         "mcp": {
           "default": true,
@@ -1062,6 +1071,15 @@
             "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
           },
           "type": "object"
+        },
+        "queue_hold_pct": {
+          "default": null,
+          "description": "Hold the queue while the 5h rate-limit usage (%) is at or above this; none = never hold.",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
         }
       },
       "type": "object",

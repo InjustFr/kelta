@@ -4,8 +4,10 @@ import type { CtlCommand, UiEvent } from '$lib/gen';
 
 export type SheetKey =
   | 'start_work'
+  | 'start_batch'
   | 'work_new'
   | 'link_ticket'
+  | 'create_ticket'
   | 'onboarding'
   | 'project_new'
   | 'plugin_install'

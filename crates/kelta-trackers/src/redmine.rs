@@ -566,6 +566,18 @@ impl Tracker for RedmineTracker {
         self.refetch(&t.id).await
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let p = common::create_in(project, "project_id", project.project_id.as_deref())?;
+        let issue = json!({"project_id": p, "subject": title, "description": body_md});
+        let req = HttpRequest::post(format!("{}/issues.json", self.base)).json(json!({ "issue": issue }));
+        let v = self.json(req).await.map_err(surface_422)?;
+        let id = v
+            .pointer("/issue/id")
+            .and_then(idstr)
+            .ok_or_else(|| KeltaError::upstream("redmine response without `issue`"))?;
+        self.refetch(&id).await
+    }
+
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let q = query.trim().to_lowercase();
         let acct = self.account().to_string();

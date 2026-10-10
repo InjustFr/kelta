@@ -122,6 +122,18 @@ pub async fn work_link(
     core.work().link(&id, ticket, apply_side_effects).await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_create_ticket(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    view_id: String,
+    title: String,
+    body_md: String,
+    apply_side_effects: bool,
+) -> Res<WorkItem> {
+    core.work().create_ticket(&id, &view_id, &title, &body_md, apply_side_effects).await
+}
+
 /// Every unfinished item, keyed by id (one fetch per repo, 5 min floor).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_status_all(core: State<'_, Arc<Core>>) -> Res<BTreeMap<WorkItemId, GitStatus>> {
@@ -191,4 +203,16 @@ pub async fn work_notes_send(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_left(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
     core.work().left(&id).await
+}
+
+/// Start a queued item now, over `claude.max_live` (#141).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_start_now(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().start_now(&id).await
+}
+
+/// The queued item starts next.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_queue_front(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().queue_front(&id).await
 }

@@ -247,6 +247,17 @@ impl Tracker for GiteaIssues {
         Ok(self.issues(view, None, Some(text)).await?.items)
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let p = common::create_in(project, "project", project.project.as_deref())?;
+        let (owner, name) = p
+            .split_once('/')
+            .filter(|(_, n)| !n.contains('/'))
+            .ok_or_else(|| KeltaError::invalid(format!("bad gitea project: {p}")))?;
+        let url = format!("{}/repos/{}/{}/issues", self.api, percent_encode(owner), percent_encode(name));
+        let v = self.json(HttpRequest::post(url).json(json!({"title": title, "body": body_md}))).await?.body;
+        self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitea issue response without repository"))
+    }
+
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let body = self
             .json(
