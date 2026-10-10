@@ -8,11 +8,12 @@ import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '
 
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
+import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import InboxPane from './InboxPane.svelte';
 import { focusedSessionId } from '../../shell/nav';
 import { hud } from '../../shell/hud.svelte';
 import { jumpQueue, rowKey, type NowRow } from './groups';
-import { currentSections, nextWaiting, nowSummary } from './now';
+import { currentSections, nextWaiting, nowSummary, refreshNow } from './now';
 
 let mock: MockControls;
 
@@ -55,6 +56,8 @@ describe('Now', () => {
     expect(sectionIds(container)).toEqual([
       'needs_you',
       'to_review',
+      // The mock's one unseen ticket (#145).
+      'new',
       'fix',
       'requests',
       'ship',
@@ -166,18 +169,22 @@ describe('Now', () => {
   it('loads my tickets across every source, and Show all opens the Tickets list for them', async () => {
     const mine = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
     if (!mine) throw new Error('fixture missing');
-    for (let i = 0; i < 12; i += 1)
+    for (let i = 0; i < 12; i += 1) {
       mock.state.tickets.push({
         ...mine,
         ticket: { ...mine.ticket, ref: { ...mine.ticket.ref, key: `MINE-${i}`, id: `m${i}` } },
       });
+      // Seen: unseen ones would list under New for you, not Up next.
+      mock.state.nextUp.seen.push(`${mine.ticket.ref.account}:MINE-${i}`);
+    }
     mountNow();
     await screen.findByText('MINE-0');
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
     const more = await screen.findByRole('button', { name: /more, show all$/ });
     const lists = mock.calls.filter((c) => c.cmd === 'tracker_list');
     expect(lists.length).toBeGreaterThan(0);
-    expect(lists.every((c) => (c.args as { who: string }).who === 'mine')).toBe(true);
+    // Mine for Up next; unassigned only to resolve Next up items (#145).
+    expect(lists.every((c) => ['mine', 'unassigned'].includes((c.args as { who: string }).who))).toBe(true);
     await fireEvent.click(more);
     await waitFor(() => {
       const l = layout.get(projects.activeId!)!;
@@ -194,6 +201,45 @@ describe('Now', () => {
     mountNow();
     expect(await screen.findByText('Could not load Now')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeTruthy();
+  });
+});
+
+describe('Next up (#145)', () => {
+  it('lists my order beside Ready for review; J/K reorder, S starts the top ones by free slots', async () => {
+    const keys = ['SHOP-151', 'SHOP-160', '4610'];
+    mock.state.nextUp.items = keys.map((key, rank) => {
+      const t = mock.state.tickets.find((x) => x.ticket.ref.key === key)!;
+      return { project_id: t.project_ids[0]!, ticket: t.ticket.ref, rank, snoozed_until: null };
+    });
+    const { container } = mountNow();
+    const order = () =>
+      [...container.querySelectorAll('.row[data-row^="n:"]')].map(
+        (e) => e.getAttribute('data-row')!.split(':')[2],
+      );
+    await waitFor(() => expect(order()).toEqual(keys));
+    expect(sectionIds(container).slice(1, 3)).toEqual(['to_review', 'next_up']);
+    // Listed tickets leave Up next.
+    expect(container.querySelector('[data-row="t:jira-acme:SHOP-151"]')).toBeNull();
+
+    await nextWaitingTo(container, 'n:');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'J' });
+    await waitFor(() => expect(order()).toEqual(['SHOP-160', 'SHOP-151', '4610']));
+    await fireEvent.keyDown(pane, { key: 'K' });
+    await waitFor(() => expect(order()).toEqual(keys));
+
+    await fireEvent.keyDown(pane, { key: 'S' });
+    expect(ui.sheet?.key).toBe('start_batch');
+    const { live, max } = claudeSlots();
+    expect(batch.list.map((m) => m.ref.key)).toEqual(keys.slice(0, startsNow(3, live, max)));
+    batch.clear();
+    ui.closeSheet();
+
+    // Closed in the tracker: gone from the list on the next refresh, and from the store.
+    mock.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-160')!.ticket.status.category = 'done';
+    await refreshNow(true);
+    await waitFor(() => expect(order()).toEqual(['SHOP-151', '4610']));
+    expect(mock.state.nextUp.items.map((i) => i.ticket.key).sort()).toEqual(['4610', 'SHOP-151']);
   });
 });
 

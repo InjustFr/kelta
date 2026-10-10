@@ -16,7 +16,9 @@ use kelta_proto::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
 use kelta_proto::codehost::ReviewRef;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId, SessionId, TabId, WorkItemId};
-use kelta_proto::model::{ReviewNote, StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus};
+use kelta_proto::model::{
+    NextUp, NextUpItem, ReviewNote, StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus,
+};
 use kelta_proto::store::{
     LayoutRow, ProjectOpenRow, ProviderCacheRow, SeenReviewRow, SessionRow, TRIGGER_LOG_CAP, TriggerLogRow,
 };
@@ -374,6 +376,76 @@ pub mod q {
         )
         .map(|_| ())
         .map_err(db_err)
+    }
+
+    // ---- next_up, seen_tickets (#145) ---------------------------------------------------------
+
+    fn ticket_key(t: &TicketRef) -> String {
+        format!("{}:{}", t.account.as_str(), t.key)
+    }
+
+    /// The list and snoozes, lowest rank first (snoozed-only rows last).
+    pub fn next_up(c: &Connection) -> R<NextUp> {
+        let mut st = c
+            .prepare(
+                "SELECT project, ticket_json, rank, snoozed_until FROM next_up
+                 ORDER BY rank IS NULL, rank, ticket_key",
+            )
+            .map_err(db_err)?;
+        let rows = st
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get(2)?, r.get(3)?)))
+            .map_err(db_err)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db_err)?;
+        let items = rows
+            .into_iter()
+            .map(|(project, json, rank, snoozed_until)| {
+                Ok(NextUpItem {
+                    project_id: ProjectId::from(project),
+                    ticket: serde_json::from_str(&json)
+                        .map_err(|e| KeltaError::internal(format!("next_up: {e}")))?,
+                    rank,
+                    snoozed_until,
+                })
+            })
+            .collect::<R<Vec<_>>>()?;
+        let mut st = c.prepare("SELECT ticket_key FROM seen_tickets ORDER BY ticket_key").map_err(db_err)?;
+        let seen = st
+            .query_map([], |r| r.get(0))
+            .map_err(db_err)?
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .map_err(db_err)?;
+        Ok(NextUp { items, seen })
+    }
+
+    pub fn next_up_put(c: &Connection, it: &NextUpItem) -> R<()> {
+        let json =
+            serde_json::to_string(&it.ticket).map_err(|e| KeltaError::internal(format!("next_up: {e}")))?;
+        c.execute(
+            "INSERT INTO next_up (ticket_key, project, ticket_json, rank, snoozed_until) VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(ticket_key) DO UPDATE SET project = excluded.project, ticket_json = excluded.ticket_json,
+             rank = excluded.rank, snoozed_until = excluded.snoozed_until",
+            params![ticket_key(&it.ticket), it.project_id.as_str(), json, it.rank, it.snoozed_until],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
+    pub fn next_up_remove(c: &Connection, t: &TicketRef) -> R<()> {
+        c.execute("DELETE FROM next_up WHERE ticket_key = ?1", [ticket_key(t)]).map(|_| ()).map_err(db_err)
+    }
+
+    pub fn ticket_seen(c: &mut Connection, ts: &[TicketRef]) -> R<()> {
+        let tx = c.transaction().map_err(db_err)?;
+        let at = kelta_proto::now_rfc3339();
+        for t in ts {
+            tx.execute(
+                "INSERT OR IGNORE INTO seen_tickets (ticket_key, at) VALUES (?1, ?2)",
+                params![ticket_key(t), at],
+            )
+            .map_err(db_err)?;
+        }
+        tx.commit().map_err(db_err)
     }
 
     pub fn seen_review_key(r: &ReviewRef) -> (String, String, u64) {
