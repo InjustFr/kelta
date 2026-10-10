@@ -393,6 +393,27 @@ fn migration_moves_trackers_to_sources_once() {
 }
 
 #[test]
+fn migration_leaves_an_account_less_block_in_place() {
+    let e = env();
+    e.global(GLOBAL);
+    e.project("web", &board(""));
+    let columns =
+        "[project.tracker]\ncolumns = [{ id = \"todo\", label = \"To do\", categories = [\"todo\"] }]\n";
+    e.project("old", columns);
+    let before = read(&e.dirs.projects_dir().join("old.toml"));
+    let svc = e.load();
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 1);
+    assert_eq!(svc.effective(None).sources.len(), 1);
+    assert_eq!(read(&e.dirs.projects_dir().join("old.toml")), before);
+    assert!(svc.project(&ProjectId::new("old")).unwrap().tracker.is_some());
+    assert_eq!(trashed(&e).len(), 1, "{:?}", trashed(&e));
+    // next launch: nothing left to move, no new copies
+    let svc = e.load();
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 0);
+    assert_eq!(trashed(&e).len(), 1);
+}
+
+#[test]
 fn migration_after_a_crash_between_writes_only_strips() {
     let e = env();
     e.project("web", &board(""));

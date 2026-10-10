@@ -152,7 +152,7 @@ async fn project_info_tracker_is_the_first_source_binding() {
 
 // ---- startup migration on a real config dir -----------------------------------------------
 
-fn boot(root: &std::path::Path) -> Arc<FakeUiBridge> {
+fn boot(root: &std::path::Path) -> (Arc<Core>, Arc<FakeUiBridge>) {
     let ui = FakeUiBridge::new();
     let mut deps = kelta_core::CoreDeps::new(Dirs::under(root), CliArgs::default(), ui.clone());
     deps.terminal = Some(FakeTerminalHost::new());
@@ -161,8 +161,7 @@ fn boot(root: &std::path::Path) -> Arc<FakeUiBridge> {
     deps.in_memory_store = true;
     deps.install_ctl = false;
     deps.start_services = false;
-    drop(Core::start_with(deps).unwrap());
-    ui
+    (Core::start_with(deps).unwrap(), ui)
 }
 
 fn toasts(ui: &FakeUiBridge) -> Vec<String> {
@@ -191,7 +190,10 @@ fn startup_moves_project_trackers_to_sources_once() {
         let text = format!("[project]\nid = \"{id}\"\nname = \"{id}\"\n\n{}", board(jql));
         std::fs::write(dirs.projects_dir().join(format!("{id}.toml")), text).unwrap();
     }
-    let ui = boot(tmp.path());
+    let (core, ui) = boot(tmp.path());
+    // the window does not exist yet: the toast waits for `app_ready`
+    assert!(toasts(&ui).is_empty());
+    tokio::runtime::Runtime::new().unwrap().block_on(core.app_ready(0.0)).unwrap();
     assert_eq!(toasts(&ui), ["Ticket sources moved out of your projects"]);
     let global = std::fs::read_to_string(dirs.global_config()).unwrap();
     assert_eq!(global.matches("[[sources]]").count(), 2, "{global}");
@@ -202,7 +204,8 @@ fn startup_moves_project_trackers_to_sources_once() {
         assert!(!text.contains("tracker"), "{text}");
     }
     // the next launch has nothing to move
-    let ui = boot(tmp.path());
+    let (core, ui) = boot(tmp.path());
+    tokio::runtime::Runtime::new().unwrap().block_on(core.app_ready(0.0)).unwrap();
     assert!(toasts(&ui).is_empty());
     assert_eq!(std::fs::read_to_string(dirs.global_config()).unwrap(), global);
 }
