@@ -78,8 +78,13 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** The tool a pane shows: a live tool session's or web instance's tool id; null otherwise. */
+/** The tool a pane shows: a live tool session's or web instance's tool id; null otherwise (a tool the config no longer knows included). */
 export function paneTool(p: PaneNode): string | null {
+  const id = livePaneTool(p);
+  return id && tools.find(id) ? id : null;
+}
+
+function livePaneTool(p: PaneNode): string | null {
   if (p.content.kind === 'web') {
     // webTools is in-memory: after a restart a persisted web tab has no instance, so it is a closable row.
     const w = webTools[p.content.tool_instance_id];
@@ -94,7 +99,15 @@ export function paneTool(p: PaneNode): string | null {
 /** A tab made only of tool panes: the rail lists it under Tools, not in its project's band. */
 export function isToolTab(tab: Tab): boolean {
   const panes = allPanes(tab.root);
-  return panes.length > 0 && panes.every((p) => paneTool(p) !== null);
+  // A `user` tool has no rail sub-line, so outside Home its tab stays a closable row in its band.
+  const inHome = layout.get(projects.home?.id ?? '')?.tabs.some((t) => t.id === tab.id) ?? false;
+  return (
+    panes.length > 0 &&
+    panes.every((p) => {
+      const id = paneTool(p);
+      return id !== null && (inHome || tools.find(id)?.scope !== 'user');
+    })
+  );
 }
 
 /** Live sessions of a project that no pane shows (tools aside): the dim rows at the end of its band. */

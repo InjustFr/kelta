@@ -337,6 +337,16 @@ describe('tool scope', () => {
     expect(opens()).toHaveLength(2);
   });
 
+  it('a tool the config no longer knows leaves its tab a closable row in its band', async () => {
+    const { c, open } = await scoped('project');
+    await open();
+    const tab = currentTab()!;
+    expect(isToolTab(tab)).toBe(true);
+    c.state.tools = [];
+    await tools.load('shop');
+    expect(isToolTab(tab)).toBe(false);
+  });
+
   it('project: from Home or a global view it asks which project', async () => {
     const { open, opens } = await scoped('project');
     ui.view = 'reviews';
