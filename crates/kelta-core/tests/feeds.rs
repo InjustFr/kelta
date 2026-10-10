@@ -380,6 +380,8 @@ async fn merge_while_kelta_was_closed_lands_as_merged_on_next_launch() {
     host.ended.lock().push((pr.clone(), PrState::Merged));
     let e = env_with(tmp.path(), host);
     let mut rx = e.h.core.subscribe();
+    // What start_async runs at launch (start_services is off in tests, like work.startup).
+    e.h.core.check_work_prs().await.unwrap();
     let got = wait_work(&e, |w| w.id == item.id && w.state != WorkState::PrOpen).await;
     assert_eq!(got.state, WorkState::Merged { detail: None });
     // The next check (Now open) publishes nothing new: once per PR.

@@ -335,15 +335,6 @@ impl Core {
         self.plugins.start();
         self.scheduler.run(&self.rt);
         self.resubscribe();
-        // Merges and closes that happened while Kelta was closed (FLOW §3.6).
-        let weak = self.me.clone();
-        self.rt.spawn(async move {
-            if let Some(core) = weak.upgrade()
-                && let Err(e) = core.check_work_prs().await
-            {
-                tracing::warn!(error = %e.message, "work PR check failed");
-            }
-        });
         if self.start_services {
             if let Err(e) = self.server.start_ctl().await {
                 tracing::warn!(error = %e, "ctl socket not started");
@@ -351,6 +342,15 @@ impl Core {
             if let Err(e) = self.work.startup().await {
                 tracing::warn!(error = %e, "work startup hook failed");
             }
+            // Merges and closes that happened while Kelta was closed (FLOW §3.6).
+            let weak = self.me.clone();
+            self.rt.spawn(async move {
+                if let Some(core) = weak.upgrade()
+                    && let Err(e) = core.check_work_prs().await
+                {
+                    tracing::warn!(error = %e.message, "work PR check failed");
+                }
+            });
             let probe =
                 ctl::probe_claude(self.login_env.clone(), self.cfg.effective(None).claude.clone()).await;
             *self.claude_ver.lock() = probe;
