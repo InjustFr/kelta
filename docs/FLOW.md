@@ -24,6 +24,7 @@ And the two questions behind them, asked many times a day with many things in fl
 - **Automatic when reversible, confirmed when destructive.** Reading state, fetching, moving a ticket after merge: automatic. Force push, removing a worktree: confirmed in one keystroke, never batched.
 - **No new polling.** State refreshes on events (hooks, `work.updated`, the review polls that already exist), on window focus, on startup and when Now opens.
 - **Every flow is keyboard-complete**, including sheets, dialogs, toasts and stopped rebases (§7.1).
+- **No ticket source is an onboarding step, not an empty list.** With no `[[sources]]` board, Tickets (every scope, Home included) shows "Add a ticket source: pick a board" and **Pick a board**; Now shows "No ticket source yet · Pick a board" above its list, or as its empty state. The picker creates a source labelled after the board (feeding the project it was opened from, else none) and its toast "… added · Choose its projects" opens Settings → Sources on it.
 
 ---
 
@@ -114,7 +115,7 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
 | Work bar (tab header, above all panes, survives pane zoom) | key, title, ticket status chip (opens the status picker), phase lamp + label + detail, branch, `↑a ↓b`, `+ins −del` (and a `dirty` tag), primary button, **Work ⌘.** menu. Mockup `f2-work-tab.png`. Clicking the phase label opens the existing `WorkItemPane` (saga steps, sessions) as a split down: this is the missing UI path to it. |
-| Rail tile | aggregate lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
+| Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
@@ -178,7 +179,7 @@ The header answers "review LLM work or grab a new feature?" in the order of that
 
 `Claude: 1 asks · 3 LLM diffs · 2 PRs waiting · Fix 2 · 1 working · 4 up next`
 
-"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. Project rows on the rail carry their Ready for review count. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
+"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
 
 ### 3.2 Row grammar
 
@@ -213,7 +214,7 @@ In the Tickets list (not Now; the same in the rail's Tickets view, where the sou
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
 
 ### 3.4 Next waiting, without opening Now
 
@@ -244,7 +245,7 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 ### 4.1 Flow 1: ticket, Claude, review
 
 1. `⌘0`, `j`×N to the ticket in Up next (or Board, or `⌘K` + key). `s`.
-2. Start sheet (existing `StartWorkSheet`) with **Start focused**: `⌘↵`. Its first field is **Project** when several open projects have a repository: the default is the ticket's usual project (SPEC §3.1); when it is only the active project, the sheet always shows, focus starts on Project and a hint says Kelta will remember the pick. Assign me, move to In Progress and the comment run after the sessions are up (existing saga). The new work tab opens and takes focus (mock must do this too, bug B5).
+2. Start sheet (existing `StartWorkSheet`) with **Start focused**: `⌘↵`. Its first field is **Project** when several open projects have a repository: the default follows the six ticket rules of SPEC §3.1 (unfinished work item, explicit pick, source route, last pick for the source, the source's projects, the active project); when it is only a guess, the sheet always shows, focus starts on Project and a hint says Kelta will remember the pick. Assign me, move to In Progress and the comment run after the sessions are up (existing saga). The new work tab opens and takes focus (mock must do this too, bug B5).
 3. Claude works with the ticket file and the `ticket` prompt. The tab, tile and Now row show the working ring. Louis goes elsewhere.
 4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible. The item moves to **To review** in Now, with Claude's last message on the expanded row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
 5. Review, either way:

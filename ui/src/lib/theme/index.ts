@@ -59,3 +59,5 @@ export function resolveTheme(settings: Settings | null | undefined, mode: ThemeM
 
   return { id, def, vars, accent: hex(def.ui?.accent), terminal };
 }
+
+export * from './projectColor';

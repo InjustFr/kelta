@@ -270,6 +270,7 @@ pub fn layout() -> Layout {
                     content: PaneContent::Tickets {
                         scope: Scope::Project { id: ProjectId::new("shop") },
                         view_id: Some("mine".into()),
+                        source_id: None,
                         mode: TicketsMode::Board,
                         who: Some(Who::Mine),
                         group: Some(TicketGroupBy::Sprint),
@@ -330,6 +331,7 @@ pub fn work_item() -> WorkItem {
         parked_at: None,
         nvim_kept: 0,
         run: None,
+        ticket_source: None,
     }
 }
 
@@ -366,6 +368,7 @@ pub fn start_work_plan() -> StartWorkPlan {
         repo_choices: vec!["api".into(), "web".into()],
         project_choices: vec![ProjectId::new("shop")],
         project_guessed: false,
+        ticket_source: None,
         base: "main".into(),
         branch: "feat/SHOP-142-rate-limit-login".into(),
         branch_exists: None,
@@ -829,6 +832,7 @@ pub fn all() -> Vec<Fixture> {
                     project_ids: vec![ProjectId::new("shop")],
                     work_item_id: Some(WorkItemId::new(WID)),
                     view_ids: vec!["mine".into()],
+                    source_ids: vec!["product".into()],
                     prs: vec![PrLink {
                         url: "https://github.com/acme/shop-api/pull/90".into(),
                         account: Some(AccountId::new("github-acme")),
@@ -1061,6 +1065,7 @@ pub fn all() -> Vec<Fixture> {
                     description: None,
                     placement: Placement::SplitRight,
                     needs_project: false,
+                    scope: ToolScope::User,
                 },
                 ToolInfo {
                     id: ToolId::new("tools-pack/k9s"),
@@ -1073,6 +1078,7 @@ pub fn all() -> Vec<Fixture> {
                     description: None,
                     placement: Placement::SplitRight,
                     needs_project: false,
+                    scope: ToolScope::Work,
                 },
             ]
         ),

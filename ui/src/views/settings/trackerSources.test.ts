@@ -1,9 +1,11 @@
-// Settings → Projects → Tracker block, and the Edit TOML hand-off of settings.open.
+// Settings → Sources (each source's Board block, label, projects, routes), Settings → Projects'
+// "Fed by", and the hand-offs of settings.open.
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { tick } from 'svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
-import type { ProjectPatch, TrackerView } from '$lib/gen';
+import type { SourceRoute, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -12,6 +14,8 @@ import { projects, settings, ui } from '$lib/stores';
 import { confirms } from '../../shell/confirm.svelte';
 import { takeTomlRequest } from './actions';
 import { iterationWord } from './lib/sources.svelte';
+import Projects from './sections/Projects.svelte';
+import Sources from './sections/Sources.svelte';
 import TrackerSources from './TrackerSources.svelte';
 
 let mock: MockControls;
@@ -25,65 +29,148 @@ beforeEach(async () => {
   ui.sheets = [];
 });
 
-const sources = () => screen.getAllByTestId('tracker-source');
-const lastPatch = () =>
-  (mock.calls.filter((c) => c.cmd === 'project_update').at(-1)?.args as { patch: ProjectPatch } | undefined)
-    ?.patch;
+const views = () => screen.getAllByTestId('tracker-source');
+type SourceList = {
+  id: string;
+  label: string;
+  projects: string[];
+  routes: SourceRoute[];
+  tracker: TrackerBinding;
+}[];
+/** The last `sources` list written to the global settings. */
+const lastSources = () =>
+  (
+    mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as
+      { layer: string; path: string; value: SourceList } | undefined
+  )?.value;
+const shop = () => lastSources()?.find((s) => s.id === 'shop');
 
-describe('Tracker block', () => {
-  it("lists the project's sources with account, who and the current sprint toggle", async () => {
-    render(TrackerSources, { projectId: 'shop' });
-    const views = projects.byId('shop')!.tracker!.views;
-    expect(sources().map((r) => r.dataset.viewId)).toEqual(views.map((v) => v.id));
-    const first = within(sources()[0]!);
+describe('Board block of a source', () => {
+  it("lists the source's views with account, who and the current sprint toggle", async () => {
+    render(TrackerSources, { sourceId: 'shop' });
+    const ids = settings
+      .value()!
+      .sources.find((s) => s.id === 'shop')!
+      .tracker.views.map((v) => v.id);
+    expect(views().map((r) => r.dataset.viewId)).toEqual(ids);
+    const first = within(views()[0]!);
     expect(first.getByText('jira-acme')).toBeTruthy();
     expect(first.getByRole('switch', { name: 'Current sprint only' })).toBeTruthy();
   });
 
-  it('saves who, current iteration and removal through project_update', async () => {
-    render(TrackerSources, { projectId: 'shop' });
-    const id = sources()[0]!.dataset.viewId!;
-    await fireEvent.change(within(sources()[0]!).getByRole('combobox'), { target: { value: 'unassigned' } });
-    await waitFor(() => expect(lastPatch()?.tracker?.views.find((v) => v.id === id)?.who).toBe('unassigned'));
+  it('saves who, current iteration and removal to the global sources', async () => {
+    render(TrackerSources, { sourceId: 'shop' });
+    const id = views()[0]!.dataset.viewId!;
+    await fireEvent.change(within(views()[0]!).getByRole('combobox'), { target: { value: 'unassigned' } });
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.who).toBe('unassigned'));
+    expect(mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args).toMatchObject({
+      layer: 'global',
+      path: 'sources',
+    });
     // a view with a query can go back to letting the query decide
-    await fireEvent.change(within(sources()[0]!).getByRole('combobox'), { target: { value: '' } });
-    await waitFor(() => expect(lastPatch()?.tracker?.views.find((v) => v.id === id)?.who).toBeNull());
+    await fireEvent.change(within(views()[0]!).getByRole('combobox'), { target: { value: '' } });
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.who).toBeNull());
 
-    await fireEvent.click(within(sources()[0]!).getByRole('switch'));
-    await waitFor(() =>
-      expect(lastPatch()?.tracker?.views.find((v) => v.id === id)?.current_iteration).toBe(true),
-    );
+    await fireEvent.click(within(views()[0]!).getByRole('switch'));
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.current_iteration).toBe(true));
 
-    const n = sources().length;
-    await fireEvent.click(within(sources()[0]!).getByRole('button', { name: /^Remove / }));
+    const n = views().length;
+    await fireEvent.click(within(views()[0]!).getByRole('button', { name: /^Remove / }));
     await waitFor(() => expect(confirms.current?.title).toMatch(/^Remove /));
     confirms.answer('remove');
-    await waitFor(() => expect(lastPatch()?.tracker?.views.map((v) => v.id)).not.toContain(id));
-    await waitFor(() => expect(sources()).toHaveLength(n - 1));
+    await waitFor(() => expect(shop()?.tracker.views.map((v) => v.id)).not.toContain(id));
+    await waitFor(() => expect(views()).toHaveLength(n - 1));
+    expect(mock.calls.some((c) => c.cmd === 'project_update')).toBe(false);
   });
 
-  it('opens the source picker for the shown project', async () => {
-    render(TrackerSources, { projectId: 'billing' });
+  it('Add view… opens the source picker on that source', async () => {
+    render(TrackerSources, { sourceId: 'billing' });
     await fireEvent.click(screen.getByTestId('add-source'));
-    expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: { projectId: 'billing' } });
+    expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: { sourceId: 'billing' } });
+  });
+});
+
+describe('Settings → Sources', () => {
+  const mountSources = () => render(Sources, { layer: 'global', projectId: null, repoId: null });
+  const card = (id: string) =>
+    within(document.querySelector<HTMLElement>(`[data-source-card="${id}"]`) as HTMLElement);
+
+  it('edits label, projects and routes of a source, and removes it after a confirmation', async () => {
+    mountSources();
+    await waitFor(() => expect(screen.getAllByTestId('source-card')).toHaveLength(4));
+    const label = card('shop').getByLabelText('Label');
+    await fireEvent.input(label, { target: { value: 'Product board' } });
+    await fireEvent.change(label);
+    await waitFor(() => expect(shop()?.label).toBe('Product board'));
+
+    await fireEvent.click(card('shop').getByRole('button', { name: 'Billing' }));
+    await waitFor(() => expect(shop()?.projects).toEqual(['shop', 'billing']));
+
+    await fireEvent.click(card('shop').getByRole('button', { name: 'Add route' }));
+    await waitFor(() => expect(shop()?.routes).toHaveLength(1));
+    expect(shop()!.routes[0]).toMatchObject({ project: 'shop', match: { component: '' } });
+    await fireEvent.change(card('shop').getByLabelText('Match of route 1'), { target: { value: 'label' } });
+    await waitFor(() => expect(shop()!.routes[0]!.match).toEqual({ component: null, label: '', type: null }));
+    const value = card('shop').getByLabelText('Value of route 1');
+    await fireEvent.input(value, { target: { value: 'web' } });
+    await fireEvent.change(value);
+    await waitFor(() => expect(shop()!.routes[0]!.match.label).toBe('web'));
+    await fireEvent.change(card('shop').getByLabelText('Project of route 1'), {
+      target: { value: 'billing' },
+    });
+    await waitFor(() => expect(shop()!.routes[0]).toMatchObject({ project: 'billing' }));
+    await fireEvent.click(card('shop').getByRole('button', { name: 'Add route' }));
+    await waitFor(() => expect(shop()?.routes).toHaveLength(2));
+    await fireEvent.click(card('shop').getByRole('button', { name: 'Move route 2 up' }));
+    await waitFor(() => expect(shop()!.routes[1]!.match.label).toBe('web'));
+    // unticking a project drops its routes
+    await fireEvent.click(card('shop').getByRole('button', { name: 'Billing' }));
+    await waitFor(() => expect(shop()?.routes.map((r) => r.project)).toEqual(['shop']));
+
+    // columns and status map render from the schema
+    const columns = await card('shop').findByLabelText('Columns of Product board');
+    const todo = [{ id: 'todo', label: 'To do', categories: ['todo'], names: [] }];
+    await fireEvent.input(columns, { target: { value: JSON.stringify(todo) } });
+    await fireEvent.change(columns);
+    await waitFor(() => expect(shop()?.tracker.columns).toEqual(todo));
+    const done = card('shop').getByText('Done', { selector: 'span' }).parentElement!;
+    await fireEvent.change(within(done).getAllByRole('combobox')[1]!, { target: { value: 'in_review' } });
+    await waitFor(() => expect(shop()?.tracker.status_map.done).toEqual({ category: 'in_review' }));
+
+    await fireEvent.click(card('ops').getByRole('button', { name: 'Remove Ops board' }));
+    await waitFor(() => expect(confirms.current?.title).toBe('Remove Ops board?'));
+    confirms.answer('remove');
+    await waitFor(() => expect(lastSources()?.map((s) => s.id)).toEqual(['shop', 'billing', 'kelta-tools']));
   });
 
-  it('says so when the project has no source', async () => {
-    await ipc.projectUpdate({
-      id: 'billing',
-      patch: {
-        name: null,
-        color: null,
-        icon: null,
-        default_template: null,
-        repos: null,
-        tracker: null,
-        remove_tracker: true,
-      },
+  it('brings the source asked by settings.open into view, and adds a source with the picker', async () => {
+    const seen = vi.fn();
+    Element.prototype.scrollIntoView = seen;
+    await import('./actions');
+    await dispatch('settings.open', { section: 'sources', source_id: 'billing' });
+    mountSources();
+    await waitFor(() => expect(seen).toHaveBeenCalled());
+    expect((seen.mock.contexts[0] as HTMLElement).dataset.sourceCard).toBe('billing');
+    // a save replaces the sources list: it must not scroll back to the card
+    const label = card('shop').getByLabelText('Label');
+    await fireEvent.input(label, { target: { value: 'Renamed' } });
+    await fireEvent.change(label);
+    await waitFor(() => expect(shop()?.label).toBe('Renamed'));
+    await tick();
+    expect(seen).toHaveBeenCalledTimes(1);
+    await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: {} });
+  });
+
+  it('Settings → Projects shows which sources feed a project, and no Tracker block', async () => {
+    render(Projects, { layer: 'global', projectId: null, repoId: null });
+    const row = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('[data-project-id="shop"]');
+      expect(el).not.toBeNull();
+      return el!;
     });
-    await projects.load();
-    render(TrackerSources, { projectId: 'billing' });
-    expect(screen.getByText('No ticket source for Billing.')).toBeTruthy();
+    expect(within(row).getByTestId('fed-by').textContent).toBe('Fed by Shop board');
+    expect(screen.queryByTestId('tracker-block')).toBeNull();
   });
 
   it('names the iteration per provider and hides it for gitea', () => {

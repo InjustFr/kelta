@@ -21,6 +21,7 @@ use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 pub struct ProjectInfo {
     pub id: ProjectId,
     pub name: String,
+    /// As stored: `theme:<slot>` (resolved against the active theme by the UI only) or a `#rrggbb` hex.
     pub color: Option<String>,
     pub icon: Option<String>,
     pub repos: Vec<RepoInfo>,
@@ -455,6 +456,11 @@ pub enum PaneContent {
     Tickets {
         scope: Scope,
         view_id: Option<String>,
+        /// `[[sources]]` id the list narrows to (`view_id` then narrows inside it); `None` = every
+        /// source of the scope.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        source_id: Option<String>,
         mode: TicketsMode,
         #[serde(default)]
         who: Option<Who>,
@@ -684,6 +690,10 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub run: Option<RunClaim>,
+    /// `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
 }
 
 /// A background run's claim on a ticket and how far it got (MCP `claim_ticket` / `report_progress`).
@@ -951,6 +961,10 @@ pub struct StartWorkPlan {
     /// `project_id` is only the active project: the sheet always shows so the user confirms it.
     #[serde(default)]
     pub project_guessed: bool,
+    /// `[[sources]]` id of the ticket, set by `Core::work_plan`; copied to the work item at start.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
     pub base: String,
     pub branch: String,
     pub branch_exists: Option<BranchExists>,

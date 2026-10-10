@@ -4,7 +4,11 @@ import type { ProjectId } from "./ProjectId";
 import type { RepoInfo } from "./RepoInfo";
 import type { TrackerBinding } from "./TrackerBinding";
 
-export type ProjectInfo = { id: ProjectId, name: string, color: string | null, icon: string | null, repos: Array<RepoInfo>, tracker: TrackerBinding | null, open: boolean, active: boolean, attention: AttentionSummary, 
+export type ProjectInfo = { id: ProjectId, name: string, 
+/**
+ * As stored: `theme:<slot>` (resolved against the active theme by the UI only) or a `#rrggbb` hex.
+ */
+color: string | null, icon: string | null, repos: Array<RepoInfo>, tracker: TrackerBinding | null, open: boolean, active: boolean, attention: AttentionSummary, 
 /**
  * `true` for the built-in Home project.
  */

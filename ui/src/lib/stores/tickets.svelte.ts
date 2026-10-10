@@ -4,7 +4,6 @@
 import type {
   Column,
   Person,
-  ProjectId,
   Scope,
   Ticket,
   TicketDetail,
@@ -52,7 +51,8 @@ export function patchTicketInPage(page: TicketPage, ticket: Ticket): TicketPage 
 export class TicketsStore {
   lists = $state<Record<string, TicketList>>({});
   details = $state<Record<string, Loadable<TicketDetail>>>({});
-  columns = $state<Record<ProjectId, Loadable<Column[]>>>({});
+  /** Board columns per source id. */
+  columns = $state<Record<string, Loadable<Column[]>>>({});
   transitions = $state<Record<string, Loadable<Transition[]>>>({});
   /** Team people per scope (`team_people`: cache only, so reload after the lists load). */
   team = $state<Record<string, Loadable<Person[]>>>({});
@@ -149,11 +149,11 @@ export class TicketsStore {
     return next;
   }
 
-  async loadColumns(projectId: ProjectId): Promise<Loadable<Column[]>> {
-    const prev = this.columns[projectId] ?? idle<Column[]>();
-    this.columns = { ...this.columns, [projectId]: { ...prev, loading: true } };
-    const next = await settle(prev, () => ipc.trackerColumns({ project_id: projectId }));
-    this.columns = { ...this.columns, [projectId]: next };
+  async loadColumns(sourceId: string): Promise<Loadable<Column[]>> {
+    const prev = this.columns[sourceId] ?? idle<Column[]>();
+    this.columns = { ...this.columns, [sourceId]: { ...prev, loading: true } };
+    const next = await settle(prev, () => ipc.trackerColumns({ source_id: sourceId }));
+    this.columns = { ...this.columns, [sourceId]: next };
     return next;
   }
 
@@ -181,9 +181,9 @@ export class TicketsStore {
   /**
    * Optimistic board move: patches the status locally, calls `tracker_move`, applies the result
    * or rolls back (rethrowing the error, e.g. `Conflict` with candidates or `NeedsFields`).
-   * `projectId` picks whose columns resolve the move (default: the backend's guess by account).
+   * `sourceId` picks whose columns resolve the move (default: the backend's guess by account).
    */
-  async move(ticket: Ticket, column: Column, projectId: ProjectId | null = null): Promise<Ticket> {
+  async move(ticket: Ticket, column: Column, sourceId: string | null = null): Promise<Ticket> {
     this.patch({
       ...ticket,
       status: { id: `column:${column.id}`, name: column.name, category: column.category },
@@ -192,7 +192,7 @@ export class TicketsStore {
       const updated = await ipc.trackerMove({
         ticket: ticket.ref,
         column_id: column.id,
-        project_id: projectId,
+        source_id: sourceId,
       });
       this.patch(updated);
       return updated;

@@ -55,8 +55,6 @@
   const slot = $derived(tickets.details[key]);
   const detail = $derived(slot?.data ?? null);
   const project = $derived(projectId ?? item.project_ids[0] ?? projects.activeId);
-  // Start work never falls back to the active project: the backend picks the default (SPEC §3.1).
-  const ownProject = $derived(item.project_ids[0] ?? null);
   const workItem = $derived(work.forTicket(ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null));
   const runPhase = $derived(workItem?.run && workItem.state.kind !== 'finished' ? phaseNow(workItem) : null);
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
@@ -223,7 +221,8 @@
     if (reason) return void toasts.info(reason);
     switch (action) {
       case 'start':
-        void startWorkOnTicket(ref, ownProject, browser ? { preview: false } : {});
+        // The backend picks the project (SPEC §3.1): the account's project is no pick.
+        void startWorkOnTicket(ref, null, browser ? { preview: false } : {});
         break;
       case 'move':
         picker = statusBtn ?? null;
@@ -277,7 +276,8 @@
     if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== 's' && e.key !== 'S')) return;
     e.preventDefault();
     const opts = e.key === 'S' ? { preview: false } : {};
-    void startWorkOnTicket(child.ticket.ref, child.project_ids[0] ?? ownProject, opts);
+    // A sub-task starts where its parent is worked on (#198), else the backend picks.
+    void startWorkOnTicket(child.ticket.ref, workItem?.project_id ?? null, opts);
   }
 
   function commentKeys(e: KeyboardEvent): void {

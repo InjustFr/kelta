@@ -29,16 +29,27 @@ beforeEach(async () => {
   await projects.load();
   await settings.load();
   batch.clear();
-  batch.toggle(a, 'billing');
-  batch.toggle(b, null);
+  batch.toggle(a, 'shop');
+  batch.toggle(b, 'billing');
 });
 
 describe('BatchStartSheet project', () => {
-  it('usual mode starts each ticket in its project and skips a guess', async () => {
+  it("usual mode starts a routed ticket in its route's project and skips a guess", async () => {
+    // jira-acme feeds shop and kelta-tools and routes stories to kelta-tools; redmine-corp feeds two
+    const p = (id: string) => mock.state.projects.find((x) => x.id === id)!;
+    const story = { match: { component: null, label: null, type: 'Story' }, repo: 'tools' };
+    p('kelta-tools').tracker = { ...p('shop').tracker!, repo_rules: [story] };
+    mock.state.projects.push({ ...p('billing'), id: 'ops', active: false });
+    mock.state.work = []; // no last pick
     render(BatchStartSheet, { props: { onclose: vi.fn() } });
     await fireEvent.click(screen.getByRole('button', { name: /Start 2/ }));
     await waitFor(() => expect(toasts.list.some((t) => t.toast.text.startsWith('Started'))).toBe(true));
-    expect(started()).toEqual([['SHOP-151', 'billing']]);
+    expect(started()).toEqual([['SHOP-151', 'kelta-tools']]);
+    expect(
+      mock.calls
+        .filter((c) => c.cmd === 'work_plan')
+        .map((c) => (c.args as { project_id: string | null }).project_id),
+    ).toEqual([null, null]);
     expect(toasts.list.some((t) => t.toast.text === '4602 has no usual project: start it with s')).toBe(true);
   });
 

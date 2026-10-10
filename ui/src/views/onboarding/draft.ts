@@ -132,17 +132,3 @@ export function bindTracker(
 ): TrackerBinding {
   return { ...emptyBinding(account), views: [defaultView(kind, hint)] };
 }
-
-/** Default project colours (DESIGN §6.12): stored hex = light value; the chip shows `--k-swatch-<name>`. */
-export const PALETTE = [
-  { name: 'harbor', hex: '#3e7cb1' },
-  { name: 'moss', hex: '#5e8c4a' },
-  { name: 'ochre', hex: '#b88a2e' },
-  { name: 'brick', hex: '#b5533c' },
-  { name: 'plum', hex: '#8a5a9e' },
-  { name: 'teal', hex: '#2f8c86' },
-  { name: 'rose', hex: '#b85278' },
-  { name: 'slate', hex: '#5f6b7a' },
-  { name: 'olive', hex: '#85863a' },
-  { name: 'cobalt', hex: '#4b5fc4' },
-] as const;

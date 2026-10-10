@@ -231,7 +231,7 @@ A theme is a named, **partial** set of colour overrides on top of a Bezel base: 
 |---|---|---|
 | `name` | str | required, display name |
 | `base` | enum(dark\|light) | required; the slot of the other mode ignores the theme |
-| `ui.<token>` | `#rrggbb` | `bezel`, `bezel_raised`, `well`, `bg_float`, `fg`, `fg_muted`, `fg_subtle`, `fg_chrome`, `border`, `border_strong`, `danger`, `warn`, `ok`, `info` → `--k-<token>` (`_` → `-`). Not themable: lamps, swatches, hover/active/overlay/shadow, `*_fg` |
+| `ui.<token>` | `#rrggbb` | `bezel`, `bezel_raised`, `well`, `bg_float`, `fg`, `fg_muted`, `fg_subtle`, `fg_chrome`, `border`, `border_strong`, `danger`, `warn`, `ok`, `info` → `--k-<token>` (`_` → `-`). Not themable: lamps, hover/active/overlay/shadow, `*_fg` |
 | `ui.accent` | `#rrggbb` | never writes `--k-accent`: the `--k-project` hue when the active project has no colour (red and grey are still dropped, DESIGN §9) |
 | `terminal.background` / `terminal.foreground` | `#rrggbb` | fallback `ui.well` / `ui.fg`, then the Bezel palette; also sets `--k-term-bg` / `--k-term-fg` |
 | `terminal.cursor` / `terminal.selection` | `#rrggbb` | fallback the Bezel palette; also sets `--k-term-cursor` / `--k-term-selection` |
@@ -294,21 +294,24 @@ repo = "web"
 
 Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account.
 
-A project's Tracker section (Settings > Projects) and `ProjectInfo.tracker` show the first source listing the project, with its routes for that project as `repo_rules`. Saving it replaces that source's tracker and the project's routes; removing it takes the project out of the source, which stays.
+`ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
+
+**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
 
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.
 
-The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global layer; the Project layer shows the merged list and **Go to Global**). A tool opens where you are: the shown project and its focused work item, else Home (from Tickets, Now or Reviews). A tool whose template fields (`command`, `args`, `cwd`, `env`, `url`, `start.*`) use a `{project.*}` or `{repo.*}` placeholder, even in a fallback like `{worktree|project.root}`, needs a project: with no project in context a project picker asks which one, and the palette adds "Open <label> for project…", which always asks.
+Enabled tools are rows in the rail's Tools section (config order, icon and `label`, a lamp while a terminal tool runs, `⌥⌘N` for the first nine; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global layer; the Project layer shows the merged list and **Go to Global**). A tool opens where you are: the shown project and its focused work item, else Home (from Tickets, Now or Reviews). `scope` sets how many instances a tool has and where they open (Settings → Tools: **One instance**): `work` (default) one per work item, else per project, at the tool's `placement` (default `split_right`); `project` one per project, as its own tab in that project (a project picker asks from Home or a global view); `user` one for the whole app, as its own tab in Home, wherever it is opened from (lazydocker). Opening a tool whose instance exists focuses it. Pressing its key again while it is in front goes back (`nav.back`, to Now, Tickets or Reviews included) for a tool with no project argument (`user`, or no `{project.*}`/`{repo.*}` placeholder); a tool that takes a project asks for another project instead. Running instances show as sub-lines under the tool in the rail's Tools section (not for `user`); a tab made only of tools is listed there, not in its project's band. A tool whose template fields (`command`, `args`, `cwd`, `env`, `url`, `start.*`) use a `{project.*}` or `{repo.*}` placeholder, even in a fallback like `{worktree|project.root}`, needs a project: with no project in context a project picker asks which one, and the palette adds "Open <label> for project…", which always asks.
 
 Migration (once, on load): each `projects/<id>.toml` that has `[[tools]]` is copied to `projects/.trash/`, then its entries move to `config.toml`. A new id is appended unchanged (placeholders kept), an identical entry or an `id`/`enabled`-only override is dropped, and a different definition under a taken id becomes `<id>-<project id>` labelled "<label> (<project name>)". A toast "Tools moved to your global settings" offers **Review** (Settings → Tools). Repo files are never rewritten. No tool is built in or auto-detected.
 
 ```toml
-[[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),
-                             # cwd = worktree of the active work item, else project root; focused if already open in that work item
+[[tools]]                    # one for the whole app, as its own tab in Home (scope "user"); focused if already open
 id = "lazydocker"
 label = "Docker"
 command = "lazydocker"       # kind defaults to "pty"
+scope = "user"               # "work" (default): a pane next to the current one (placement defaults to "split_right"),
+                             # one per work item, cwd = its worktree, else project root; "project": one tab per project
 keybinding = "mod+shift+d"
 
 [[tools]]                    # external: launched detached, cwd = worktree of the active work item, else project root, never killed by Kelta
@@ -331,7 +334,7 @@ check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the ap
 [project]
 id = "shop"                  # must equal the file stem
 name = "Shop"
-color = "#e07a5f"
+color = "theme:green"         # a theme slot (follows the theme) or a custom "#rrggbb" (kept as typed)
 icon = "S"                   # 1-2 chars or sprite icon name
 default_template = "claude+editor"
 
@@ -387,7 +390,7 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys val
 - linear: `team?` (team key, e.g. `ENG`), `project?` (project name), `scope = "assigned_to_me"|"all"` (default `assigned_to_me`), `labels?` (label names), plus the shared `status` key. Columns are the team's workflow states; moves resolve state ids by name at runtime.
 - Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab, gitea and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
 
-The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Anyone without editing. Settings > Projects > Tracker lists the sources (label, account, who, current iteration, Remove) and **Add source** opens the picker.
+The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Team without editing. Settings > Sources lists each source's views (label, account, who, current iteration, Remove) and **Add view…** opens the picker.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 
@@ -397,7 +400,7 @@ The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with n
 - same views with other columns or status_map stay separate sources labelled `<label> · <project name>`; a source is labelled after its only view, else its account; its id is the label's slug, made unique with `-2`, `-3`, …;
 - a block equal to an existing source only adds the project to it, so a second run changes nothing.
 
-A block still on disk (hand-written, restored from `.trash`, or a failed move) is read the same way in memory until the next launch moves it. After a move, the toast "Ticket sources moved out of your projects" offers **Review** (Settings > Projects).
+A block still on disk (hand-written, restored from `.trash`, or a failed move) is read the same way in memory until the next launch moves it. After a move, the toast "Ticket sources moved out of your projects" offers **Review** (Settings > Sources).
 
 ## 4. Repo-local `.kelta/config.toml`
 

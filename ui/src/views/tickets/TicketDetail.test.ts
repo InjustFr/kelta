@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { StartWorkPlan, TicketItem } from '$lib/gen';
+import * as samples from '$lib/gen/fixtures';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
@@ -179,9 +180,19 @@ describe('TicketDetail', () => {
     await fireEvent.keyDown(row, { key: 's' });
     await waitFor(() =>
       expect(mock.calls.filter((c) => c.cmd === 'work_plan').map((c) => c.args)).toEqual([
-        { project_id: 'shop', source: { kind: 'ticket', ticket: itemOf('SHOP-160').ticket.ref } },
+        // the parent has no work item: no pick, the backend picks (not the account's project)
+        { project_id: null, source: { kind: 'ticket', ticket: itemOf('SHOP-160').ticket.ref } },
       ]),
     );
+  });
+
+  it("s on a sub-task picks its parent's work item project (#198)", async () => {
+    work.upsert({ ...samples.workItem, project_id: 'billing', ticket: itemOf('SHOP-142').ticket.ref });
+    mount('SHOP-142');
+    const sub = await screen.findByRole('region', { name: 'Sub-tasks' });
+    await fireEvent.keyDown(within(sub).getByRole('button', { name: /SHOP-160/ }), { key: 's' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(true));
+    expect(mock.calls.find((c) => c.cmd === 'work_plan')!.args).toMatchObject({ project_id: 'billing' });
   });
 
   it('s on a project-less ticket does not pass the pane project as the caller', async () => {

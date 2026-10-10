@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings > Tools quick form: appends a plain `[[tools]]` entry (Terminal = pty, App = external
   // `open -a`) to the global layer (tools are personal). Everything else stays in the full editor below.
-  import type { JsonValue, ToolInfo } from '$lib/gen';
+  import type { JsonValue, ToolInfo, ToolScope } from '$lib/gen';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
@@ -34,6 +34,7 @@
   let openFolder = $state(true);
   let key = $state('');
   let icon = $state('');
+  let scope = $state<ToolScope>('work');
 
   const argv = $derived(splitArgv(commandLine));
   // tool_list drops disabled stubs, so the edited layer's own ids count too (kelta-config rejects duplicates).
@@ -60,6 +61,11 @@
     { id: 'terminal' as const, label: 'Terminal' },
     ...(platform === 'macos' ? [{ id: 'app' as const, label: 'App' }] : []),
   ];
+  const scopes: { value: ToolScope; label: string }[] = [
+    { value: 'work', label: 'Per work item' },
+    { value: 'project', label: 'Per project' },
+    { value: 'user', label: 'For me (one, in Home)' },
+  ];
   const icons = [{ value: '', label: 'None' }, ...ICON_NAMES.map((n) => ({ value: n, label: n }))];
 
   function record(e: KeyboardEvent): void {
@@ -82,11 +88,13 @@
     } else {
       entry.command = argv![0]!;
       if (argv!.length > 1) entry.args = argv!.slice(1);
+      if (scope !== 'work') entry.scope = scope;
     }
     if (key) entry.keybinding = key;
     if (icon) entry.icon = icon;
     if (await editor.set('tools', [...own, entry])) {
       name = commandLine = app = key = icon = '';
+      scope = 'work';
       open = false;
     }
   }
@@ -115,6 +123,7 @@
         placeholder="lazygit"
         error={argv === null ? 'A quote is not closed' : null}
       />
+      <Select label="One instance" options={scopes} bind:value={scope} />
     {:else}
       <TextInput label="Application" bind:value={app} placeholder="Fork" />
       <Toggle label="Open the current folder in it" bind:checked={openFolder} />

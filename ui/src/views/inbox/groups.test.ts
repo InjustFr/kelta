@@ -4,15 +4,7 @@ import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
-import {
-  headerParts,
-  jumpQueue,
-  nowSections,
-  readyByProject,
-  rowKey,
-  waitingCount,
-  type NowInput,
-} from './groups';
+import { headerParts, jumpQueue, nowSections, rowKey, waitingCount, type NowInput } from './groups';
 
 let n = 0;
 function entry(id: PhaseId, section: NowSection, patch: Partial<WorkItem> = {}) {
@@ -57,6 +49,7 @@ const ticket = (key: string, category: TicketItem['ticket']['status']['category'
   project_ids: ['shop'],
   work_item_id: null,
   view_ids: [],
+  source_ids: [],
   prs: [],
   caps: samples.ticketPage.items[0]!.caps,
   waiting: [],
@@ -248,7 +241,6 @@ describe('header and badge', () => {
       '1 up next',
     ]);
     expect(waitingCount(sections)).toBe(6);
-    expect(readyByProject(sections)).toEqual(new Map([['shop', 2]]));
     expect(headerParts(nowSections(empty), 0)).toEqual([]);
   });
 });

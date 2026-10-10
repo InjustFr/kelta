@@ -3,7 +3,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
+  import type { Column, PrLink, Scope, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
   import { GLOBAL, layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
@@ -83,24 +83,39 @@
   // ---- scope, source, who and mode ----------------------------------------------------------
   const scope = $derived(content.scope);
   const project = $derived(scope.kind === 'project' ? projects.byId(scope.id) : null);
-  const views = $derived(project?.tracker?.views ?? []);
-  const accountOf = (v: (typeof views)[number]): string => v.account ?? project?.tracker?.account ?? '';
-  const multiAccount = $derived(new Set(views.map(accountOf)).size > 1);
+  /** The `[[sources]]` of the scope: all of them, or those feeding the project. */
+  const sources = $derived(
+    (settings.value()?.sources ?? []).filter(
+      (s) =>
+        s.tracker.views.length > 0 &&
+        (scope.kind === 'all' ||
+          (scope.kind === 'project' ? s.projects.includes(scope.id) : s.id === scope.id)),
+    ),
+  );
+  let sourceOverride = $state<string | null | undefined>(undefined);
+  /** The source the list narrows to; a removed one falls back to all sources. */
+  const source = $derived.by(() => {
+    const id = sourceOverride !== undefined ? sourceOverride : (content.source_id ?? null);
+    return sources.find((s) => s.id === id) ?? null;
+  });
   let viewOverride = $state<string | null | undefined>(undefined);
-  /** `null` = all sources (the union of the project's views). */
+  /** `null` = all views of the source (or of every source). */
   const viewId = $derived.by(() => {
     const v = viewOverride !== undefined ? viewOverride : content.view_id;
-    // A removed or renamed source falls back to all sources instead of another one.
-    return v && project?.tracker && !views.some((x) => x.id === v) ? null : v;
+    // A removed or renamed view falls back to the whole source instead of another one.
+    return v && source?.tracker.views.some((x) => x.id === v) ? v : null;
   });
+  /** What the list loads: the narrowed source, else the pane's scope. */
+  const listScope = $derived<Scope>(source ? { kind: 'source', id: source.id } : scope);
+  /** The one source in effect (board mode and its columns need one). */
+  const single = $derived(source ?? (sources.length === 1 ? sources[0]! : null));
+  const views = $derived(sources.flatMap((s) => s.tracker.views));
   const sourceLabel = $derived(
-    viewId ? (views.find((v) => v.id === viewId)?.label ?? 'this source') : (project?.name ?? 'all projects'),
+    source?.label ?? (project ? `${project.name}'s ticket sources` : 'your ticket sources'),
   );
-  const noSource = $derived(
-    scope.kind === 'all'
-      ? !projects.openProjects.some((p) => p.tracker?.views.length)
-      : project !== null && views.length === 0,
-  );
+  /** The source button and `v` only when the menu offers more than one choice. */
+  const menuChoices = $derived(sources.length > 1 || (sources[0]?.tracker.views.length ?? 0) > 1);
+  const noSource = $derived(settings.hasSources() !== null && sources.length === 0);
 
   let whoOverride = $state<Who | null | undefined>(undefined);
   /** The persisted who the list loads with (`null` = each view decides). */
@@ -108,13 +123,14 @@
   /** The tab shown: the pane's who, else the who every queried view agrees on. */
   const whoTab = $derived.by<Who | null>(() => {
     if (who) return who;
-    const ws = new Set((viewId ? views.filter((v) => v.id === viewId) : views).map((v) => v.who));
+    const shown = source ? source.tracker.views.filter((v) => !viewId || v.id === viewId) : views;
+    const ws = new Set(shown.map((v) => v.who));
     return ws.size === 1 ? ([...ws][0] ?? null) : null;
   });
 
   let modeOverride = $state<TicketsMode | undefined>(undefined);
   const wantedMode = $derived(modeOverride ?? content.mode);
-  const mode = $derived<TicketsMode>(wantedMode === 'board' && project?.tracker ? 'board' : 'list');
+  const mode = $derived<TicketsMode>(wantedMode === 'board' && single ? 'board' : 'list');
   let groupOverride = $state<GroupBy | undefined>(undefined);
   let sortOverride = $state<TicketSort | undefined>(undefined);
   const sort = $derived<TicketSort>(sortOverride ?? content.sort ?? 'priority');
@@ -139,9 +155,10 @@
     }));
   }
 
-  function setView(id: string | null): void {
-    viewOverride = id;
-    persist({ view_id: id });
+  function setSource(id: string | null, view: string | null = null): void {
+    sourceOverride = id;
+    viewOverride = view;
+    persist({ source_id: id, view_id: view });
   }
 
   function setWho(w: Who): void {
@@ -172,14 +189,15 @@
     persist({ mode: m });
   }
 
-  /** The source picker of this project, or of the active one from the Tickets view (not Home). */
-  const sourceProject = $derived(project ?? (home ? projects.byId(home) : projects.active));
+  /** The source picker in source mode: a new source, feeding this project when the pane has one. */
   function addSource(): void {
-    if (sourceProject) ui.openSheet('tracker.source_picker', { projectId: sourceProject.id });
+    ui.openSheet('tracker.source_picker', {
+      projectId: project && !project.builtin ? project.id : undefined,
+    });
   }
 
   // ---- data ---------------------------------------------------------------------------------
-  const list = $derived(tickets.list(scope, viewId, who));
+  const list = $derived(tickets.list(listScope, viewId, who));
   const items = $derived(list.data?.items ?? []);
   let filter = $state('');
   const shown = $derived.by(() => {
@@ -199,7 +217,7 @@
 
   // Team people with a tracker identity (the core merges them across trackers and code hosts).
   const people = $derived(
-    (tickets.team[scopeKey(scope)]?.data ?? [])
+    (tickets.team[scopeKey(listScope)]?.data ?? [])
       .filter((p) => p.ids.some((i) => !i.code_host))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
@@ -219,13 +237,13 @@
 
   // `team_people` reads the core's cache: ask again once the lists it reads have loaded.
   $effect(() => {
-    const s = scope;
+    const s = listScope;
     void [list.fetchedAt, tickets.list(s, viewId, 'anyone').fetchedAt];
     if (!noSource) untrack(() => void tickets.loadTeam(s));
   });
 
   $effect(() => {
-    const [s, v, w, tab] = [scope, viewId, who, whoTab];
+    const [s, v, w, tab] = [listScope, viewId, who, whoTab];
     if (noSource) return;
     untrack(() => {
       void tickets.load(s, v, false, w);
@@ -240,15 +258,15 @@
   });
 
   const countOf = (w: Who): number | undefined =>
-    (w === whoTab ? list : tickets.list(scope, viewId, w)).data?.items.length;
+    (w === whoTab ? list : tickets.list(listScope, viewId, w)).data?.items.length;
 
-  const projectIdForColumns = $derived(project?.tracker ? project.id : null);
+  const columnsSource = $derived(single?.id ?? null);
   $effect(() => {
-    const pid = projectIdForColumns;
-    if (pid && (mode === 'board' || groupBy === 'status')) untrack(() => void tickets.loadColumns(pid));
+    const id = columnsSource;
+    if (id && (mode === 'board' || groupBy === 'status')) untrack(() => void tickets.loadColumns(id));
   });
 
-  const columnsState = $derived(project ? tickets.columns[project.id] : undefined);
+  const columnsState = $derived(columnsSource ? tickets.columns[columnsSource] : undefined);
   const columns = $derived([...(columnsState?.data ?? [])].sort((a, b) => a.order - b.order));
   const lanes = $derived.by(() => {
     const out = columns.map((column) => ({
@@ -274,8 +292,7 @@
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
-  // shortcut: no Source grouping across all projects (views are per project), add project groups if asked.
-  const groupBys = $derived(scope.kind === 'all' ? GROUP_BYS.filter((g) => g !== 'source') : GROUP_BYS);
+  const groupBys = GROUP_BYS;
   const groupBy = $derived.by<GroupBy>(() => {
     const g = groupOverride ?? content.group ?? 'flow';
     return groupBys.includes(g) ? g : 'flow';
@@ -286,7 +303,7 @@
     groupTickets(
       sorted,
       groupBy,
-      views,
+      sources,
       (item) => {
         const w = workOf(item);
         // Durable Claude state (FLOW §2.3): a reply waiting on me counts, not only a live prompt.
@@ -311,13 +328,9 @@
     toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
   }
 
-  const showSource = $derived(
-    groupBy !== 'source' && (scope.kind === 'all' || (views.length > 1 && viewId === null)),
-  );
+  const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
   const sourceOf = (item: TicketItem): string =>
-    scope.kind === 'all'
-      ? (projects.byId(item.project_ids[0] ?? '')?.name ?? 'Other')
-      : (views.find((v) => v.id === item.view_ids[0])?.label ?? 'Other');
+    sources.find((s) => s.id === item.source_ids[0])?.label ?? 'Other';
 
   const workOf = (item: TicketItem) =>
     work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
@@ -455,9 +468,8 @@
   }
 
   function refresh(): void {
-    void tickets.load(scope, viewId, true, who);
-    if (projectIdForColumns && (mode === 'board' || groupBy === 'status'))
-      void tickets.loadColumns(projectIdForColumns);
+    void tickets.load(listScope, viewId, true, who);
+    if (columnsSource && (mode === 'board' || groupBy === 'status')) void tickets.loadColumns(columnsSource);
   }
 
   function openDetail(item: TicketItem): void {
@@ -479,7 +491,7 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, item.project_ids[0], { preview });
+    void startWorkOnTicket(item.ticket.ref, null, { preview });
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -549,21 +561,38 @@
   }
 
   const sourceItems = $derived<MenuItem[]>([
-    { id: '', label: 'All sources', icon: viewId === null ? 'check' : undefined },
-    ...views.map((v) => ({
-      id: v.id,
-      label: multiAccount ? `${v.label} (${accountOf(v)})` : v.label,
-      icon: v.id === viewId ? 'check' : undefined,
-    })),
+    { id: '', label: 'All sources', icon: source === null ? 'check' : undefined },
+    ...sources.flatMap((s) => {
+      const vs = s.tracker.views;
+      const multiAccount = new Set(vs.map((v) => v.account ?? s.tracker.account)).size > 1;
+      return [
+        { id: `s:${s.id}`, label: s.label, icon: source?.id === s.id && !viewId ? 'check' : undefined },
+        // a source's views, indented under it, when there is a choice
+        ...(vs.length > 1
+          ? vs.map((v) => ({
+              id: `v:${s.id}:${v.id}`,
+              label: `\u2003${multiAccount ? `${v.label} (${v.account ?? s.tracker.account})` : v.label}`,
+              icon: source?.id === s.id && v.id === viewId ? 'check' : undefined,
+            }))
+          : []),
+      ];
+    }),
     { id: '+', label: 'Add source…', icon: 'plus', separator: true },
   ]);
+
+  function pickSource(id: string): void {
+    if (id === '+') return addSource();
+    if (id === '') return setSource(null);
+    const [kind, sid = '', ...rest] = id.split(':');
+    setSource(sid, kind === 'v' ? rest.join(':') : null);
+  }
 
   function shiftLane(delta: number): void {
     if (!cur || mode !== 'board') return;
     const at = columns.findIndex((c) => c.id === columnFor(columns, cur.ticket.status)?.id);
     if (at < 0) return;
     const target = columns[at + delta];
-    if (target) void move.moveToColumn(cur.ticket, target, projectIdForColumns);
+    if (target) void move.moveToColumn(cur.ticket, target, columnsSource);
   }
 
   function onkeydown(e: KeyboardEvent): void {
@@ -670,7 +699,7 @@
         setWho(WHOS[Number(e.key) - 1] ?? 'mine');
         break;
       case 'v':
-        if (project?.tracker) openSourceMenu();
+        if (menuChoices) openSourceMenu();
         break;
       case 'g':
         if (item) void focusDetail(item);
@@ -743,7 +772,7 @@
     const item = items.find((i) => keyOf(i) === key);
     if (!item || !column) return;
     if (columnFor(columns, item.ticket.status)?.id === column.id) return;
-    void move.moveToColumn(item.ticket, column, projectIdForColumns);
+    void move.moveToColumn(item.ticket, column, columnsSource);
   }
 
   const hasWork = (item: TicketItem): boolean => item.work_item_id !== null || workOf(item) !== null;
@@ -810,7 +839,7 @@
       >
     {/if}
     <span class="spacer"></span>
-    {#if project?.tracker}
+    {#if menuChoices}
       <button
         type="button"
         class="source"
@@ -820,7 +849,11 @@
         title="Source (v)"
         onclick={openSourceMenu}
       >
-        {viewId ? sourceLabel : 'All sources'}
+        {source
+          ? [source.label, source.tracker.views.find((v) => v.id === viewId)?.label]
+              .filter(Boolean)
+              .join(' · ')
+          : 'All sources'}
         <Icon name="chevron-down" size={12} />
       </button>
     {/if}
@@ -838,7 +871,7 @@
         onchange={setSort}
       />
     {/if}
-    {#if project?.tracker}
+    {#if single}
       <Tabs
         label="Display mode"
         items={[
@@ -853,15 +886,8 @@
   </header>
 
   {#if noSource}
-    <EmptyState
-      icon="ticket"
-      title={scope.kind === 'all' ? 'No ticket source yet.' : 'No ticket source for this project.'}
-    >
-      {#snippet actions()}
-        {#if project || (sourceProject && !sourceProject.builtin)}
-          <Button variant="primary" onclick={addSource}>Add source</Button>
-        {/if}
-      {/snippet}
+    <EmptyState icon="ticket" title="Add a ticket source: pick a board">
+      {#snippet actions()}<Button variant="primary" onclick={addSource}>Pick a board</Button>{/snippet}
     </EmptyState>
   {:else if list.loading && !list.data}
     <Loading label="Loading tickets" />
@@ -885,15 +911,17 @@
       {#if list.data?.errors.length}
         <!-- the banner above says what failed; "no tickets" would be a false claim -->
       {:else if whoTab === 'mine'}
-        <EmptyState icon="ticket" title={`Nothing assigned to you in ${sourceLabel}.`}>
-          {#snippet actions()}<Button onclick={() => setWho('unassigned')}>Show unassigned</Button>{/snippet}
+        <EmptyState icon="ticket" title={`Nothing assigned to you on ${sourceLabel}.`}>
+          {#snippet actions()}<Button onclick={() => setWho('unassigned')}>Show unassigned</Button><Button
+              onclick={() => setWho('anyone')}>Show team</Button
+            >{/snippet}
         </EmptyState>
       {:else if whoTab === 'unassigned'}
-        <EmptyState icon="ticket" title={`Every ticket in ${sourceLabel} has an owner.`}>
-          {#snippet actions()}<Button onclick={() => setWho('anyone')}>Show anyone</Button>{/snippet}
+        <EmptyState icon="ticket" title={`Every ticket on ${sourceLabel} has an owner.`}>
+          {#snippet actions()}<Button onclick={() => setWho('anyone')}>Show team</Button>{/snippet}
         </EmptyState>
       {:else}
-        <EmptyState icon="ticket" title={`No tickets in ${sourceLabel}.`}>
+        <EmptyState icon="ticket" title={`No open tickets on ${sourceLabel}.`}>
           {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
         </EmptyState>
       {/if}
@@ -915,7 +943,9 @@
             key={(r) => r.key}
             label="Tickets"
             onend={() =>
-              void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
+              void tickets
+                .loadMore(listScope, viewId, who)
+                .catch((e) => toasts.error(e, 'Loading more tickets'))}
           >
             {#snippet row(r)}
               {#if r.kind === 'group'}
@@ -1132,7 +1162,9 @@
             size="sm"
             loading={list.loadingMore}
             onclick={() =>
-              void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
+              void tickets
+                .loadMore(listScope, viewId, who)
+                .catch((e) => toasts.error(e, 'Loading more tickets'))}
           >
             <Icon name="plus" size={12} /> More
           </Button>
@@ -1192,7 +1224,7 @@
     x={sourceMenu.x}
     y={sourceMenu.y}
     label="Source"
-    onselect={(id) => (id === '+' ? addSource() : setView(id === '' ? null : id))}
+    onselect={pickSource}
     onclose={() => {
       sourceMenu = null;
       root?.focus();

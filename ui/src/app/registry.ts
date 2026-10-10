@@ -106,6 +106,7 @@ export type SettingsSectionId =
   | 'terminal'
   | 'linux-graphics'
   | 'projects'
+  | 'sources'
   | 'accounts'
   | 'claude'
   | 'editors'
@@ -180,6 +181,13 @@ export const settingsSections: readonly SettingsSection[] = [
     icon: 'folder',
     owner: 'L4',
     load: () => import('../views/settings/sections/Projects.svelte'),
+  },
+  {
+    id: 'sources',
+    label: 'Sources',
+    icon: 'list-tree',
+    owner: 'L4',
+    load: () => import('../views/settings/sections/Sources.svelte'),
   },
   {
     id: 'accounts',

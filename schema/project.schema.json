@@ -2554,6 +2554,8 @@
       "properties": {
         "color": {
           "default": null,
+          "description": "`theme:<slot>` follows the active theme's ANSI colour (`red`..`cyan`, `bright-red`..`bright-cyan`);\na `#rrggbb` hex stays as typed.",
+          "pattern": "^(#[0-9a-fA-F]{6}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$",
           "type": [
             "string",
             "null"
@@ -4587,6 +4589,16 @@
                 "type": "string"
               }
             ]
+          },
+          "scope": {
+            "default": "work",
+            "description": "How many instances the tool has; sets where it opens and what a second open focuses.",
+            "enum": [
+              "work",
+              "project",
+              "user"
+            ],
+            "type": "string"
           },
           "scrollback": {
             "default": null,

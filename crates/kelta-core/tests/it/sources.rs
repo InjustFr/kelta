@@ -11,10 +11,12 @@ use kelta_proto::api::Tracker;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::events::UiEvent;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::Scope;
+use kelta_proto::model::{Scope, WorkSource};
+use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, RepoMatch, Settings, Source, SourceRoute, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
+use kelta_proto::tracker::Who;
 
 fn view(id: &str, jql: &str) -> TrackerView {
     TrackerView { id: id.into(), label: id.into(), jql: Some(jql.into()), ..TrackerView::default() }
@@ -138,6 +140,47 @@ async fn a_fetch_emits_tickets_changed_for_the_source_scope() {
 }
 
 #[tokio::test]
+async fn now_lists_my_tickets_of_a_source_feeding_no_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    // Now's Up next reads `tracker_list(All, None, Mine)`
+    let all = h.core.tracker_list(Scope::All, None, Some(Who::Mine), None, true).await.unwrap();
+    assert!(all.items.iter().any(|i| i.source_ids.contains(&"team".to_owned())));
+    let team =
+        h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, true).await.unwrap();
+    assert!(!team.items.is_empty());
+    assert!(team.items.iter().all(|i| i.source_ids == ["team"] && i.project_ids.is_empty()));
+}
+
+#[tokio::test]
+async fn a_tickets_pane_narrowed_to_a_source_polls_only_that_source() {
+    use kelta_proto::model::{PaneContent, TicketsMode};
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    h.cfg.update(|s| s.notifications.enabled = false);
+    let pane = |source_id: Option<&str>| PaneContent::Tickets {
+        scope: Scope::All,
+        view_id: None,
+        source_id: source_id.map(Into::into),
+        mode: TicketsMode::List,
+        who: None,
+        group: None,
+        sort: None,
+        person: None,
+    };
+    h.core.ui_set_global_view(Some(pane(None)));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 4);
+    h.core.ui_set_global_view(Some(pane(Some("team"))));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 1);
+    // a source that no longer exists falls back to the pane's own scope
+    h.core.ui_set_global_view(Some(pane(Some("gone"))));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 4);
+}
+
+#[tokio::test]
 async fn project_info_tracker_is_the_first_source_binding() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, _) = env(tmp.path());
@@ -148,6 +191,41 @@ async fn project_info_tracker_is_the_first_source_binding() {
     assert_eq!(shop.repo_rules[0].repo, "main");
     let blog = h.core.project_info(&ProjectId::new("blog")).unwrap().tracker.unwrap();
     assert!(blog.repo_rules.is_empty(), "routes of another project stay out");
+}
+
+#[tokio::test]
+async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::defaults();
+    s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    // blog listed first (the source's projects lead the choices) and the route sends Stories there.
+    let mut product = source("product", &["blog", "shop"], vec![view("mine", "assignee = currentUser()")]);
+    product.routes = vec![SourceRoute {
+        r#match: RepoMatch { kind: Some("Story".into()), ..RepoMatch::default() },
+        project: "blog".into(),
+        repo: "main".into(),
+    }];
+    s.sources = vec![product];
+    let factory = Arc::new(Factory::default());
+    factory
+        .trackers
+        .lock()
+        .insert(AccountId::new("jira-acme"), Arc::new(FakeTracker::new()) as Arc<dyn Tracker>);
+    let cfg = MemConfig::new(s, vec![project("shop", tmp.path()), project("blog", tmp.path())]);
+    let h = start_in(tmp.path(), cfg, FakeTerminalHost::new(), factory);
+    for p in ["shop", "blog"] {
+        h.core.project_open(&ProjectId::new(p)).unwrap();
+    }
+    // Uncached ticket: the route comes from the tracker.
+    let ticket = kelta_proto::tracker::TicketRef {
+        key: "SHOP-141".into(),
+        id: "10141".into(),
+        ..samples::ticket_ref()
+    };
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }).await.unwrap();
+    assert_eq!(plan.ticket_source.as_deref(), Some("product"));
+    assert_eq!(plan.project_id, ProjectId::new("blog"));
+    assert_eq!(plan.project_choices, [ProjectId::new("blog"), ProjectId::new("shop")]);
 }
 
 // ---- startup migration on a real config dir -----------------------------------------------

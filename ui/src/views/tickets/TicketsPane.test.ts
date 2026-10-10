@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sheetRegistry } from '$app/registry';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import type { PaneContent } from '$lib/gen';
+import type { PaneContent, Settings } from '$lib/gen';
 import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
@@ -38,8 +38,10 @@ beforeEach(async () => {
   work.byId = {};
   layout.byProject = {};
   settings.effective = {};
-  await projects.load();
+  await Promise.all([projects.load(), settings.load()]);
 });
+
+const mockSources = () => (mock.state.settings.value as unknown as Settings).sources;
 
 function mountBoard(
   mode: 'board' | 'list' = 'board',
@@ -93,7 +95,7 @@ describe('TicketsPane board', () => {
     expect(laneOf(container, 'SHOP-151')).toBe('todo');
     expect(laneOf(container, 'SHOP-142')).toBe('in_progress');
     expect(laneOf(container, 'SHOP-120')).toBe('in_review');
-    expect(mock.calls.some((c) => c.cmd === 'tracker_columns')).toBe(true);
+    expect(mock.calls.find((c) => c.cmd === 'tracker_columns')?.args).toEqual({ source_id: 'shop' });
   });
 
   it('moves optimistically and keeps the move once the backend confirms', async () => {
@@ -109,7 +111,7 @@ describe('TicketsPane board', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_move').at(-1)?.args).toMatchObject({
       column_id: 'in_progress',
       ticket: { key: 'SHOP-151' },
-      project_id: 'shop',
+      source_id: 'shop',
     });
   });
 
@@ -256,7 +258,7 @@ describe('TicketsPane states', () => {
     expect(selection.ticket).toBeNull();
   });
 
-  it('shows "No ticket source" with Add source for a project without a tracker', async () => {
+  it('Home, with no source feeding it, offers to pick a board for a new source', async () => {
     render(TicketsPane, {
       props: {
         projectId: 'home',
@@ -273,9 +275,9 @@ describe('TicketsPane states', () => {
         focused: true,
       },
     });
-    expect(await screen.findByText('No ticket source for this project.')).toBeTruthy();
-    await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
-    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: 'home' } });
+    expect(await screen.findByText('Add a ticket source: pick a board')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pick a board' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: undefined } });
   });
 
   it('"Add source…" in the source menu opens the source picker sheet for the project', async () => {
@@ -288,15 +290,50 @@ describe('TicketsPane states', () => {
     expect(await screen.findByText('Add a ticket source')).toBeTruthy();
   });
 
-  it('says why an empty Unassigned list is empty and offers Anyone', async () => {
+  it('says why an empty Unassigned list is empty and offers Team', async () => {
     mountBoard('list', 'billing');
     await screen.findByRole('tab', { name: /^Mine/ });
     await fireEvent.keyDown(screen.getByTestId('tickets-pane'), { key: '2' });
-    expect(await screen.findByText('Every ticket in Billing has an owner.')).toBeTruthy();
-    await fireEvent.click(screen.getByRole('button', { name: 'Show anyone' }));
+    expect(await screen.findByText("Every ticket on Billing's ticket sources has an owner.")).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show team' }));
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /^Team/ }).getAttribute('aria-selected')).toBe('true'),
     );
+  });
+
+  it('one source with one view: no source button, and v does nothing', async () => {
+    const { container } = mountBoard('list', 'billing');
+    await waitFor(() => expect(row(container, '4567', 'redmine-corp')).not.toBeNull());
+    expect(screen.queryByRole('button', { name: /All sources/ })).toBeNull();
+    await press('v');
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('names the narrowed source in the empty states, with their buttons', async () => {
+    for (const t of mock.state.tickets) t.ticket.assignee = null;
+    mountBoard('list', 'shop', { source_id: 'shop', who: 'mine' });
+    expect(await screen.findByText('Nothing assigned to you on Shop board.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show unassigned' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show team' }));
+    mock.state.tickets = [];
+    await press('R', { shiftKey: true });
+    expect(await screen.findByText('No open tickets on Shop board.')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Refresh' })).toHaveLength(2);
+  });
+
+  it('says "your ticket sources" across all sources', async () => {
+    mock.state.tickets = [];
+    render(TicketsPane, {
+      props: {
+        projectId: GLOBAL,
+        tabId: 't',
+        paneId: 'p',
+        content: { kind: 'tickets', scope: { kind: 'all' }, view_id: null, mode: 'list', who: 'mine' },
+        visible: true,
+        focused: true,
+      },
+    });
+    expect(await screen.findByText('Nothing assigned to you on your ticket sources.')).toBeTruthy();
   });
 });
 
@@ -322,6 +359,7 @@ describe('TicketsPane workbench', () => {
       }),
     );
     await waitFor(() => expect(card(container, 'SHOP-120')).not.toBeNull());
+    expect(screen.getByRole('tab', { name: /^Team/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('groups by flow by default, cycles the grouping with Shift+g, and keeps Done collapsed', async () => {
@@ -329,7 +367,10 @@ describe('TicketsPane workbench', () => {
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
     expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
     await press('G');
-    expect(groupNames(container)).toEqual(['Blocked 1', 'In Progress 1', 'In Review 1', 'To Do 2']);
+    // in the order of the source's board columns once they load
+    await waitFor(() =>
+      expect(groupNames(container)).toEqual(['To Do 2', 'In Progress 1', 'In Review 1', 'Blocked 1']),
+    );
     await press('G');
     expect(groupNames(container)).toEqual(['High 2', 'Medium 2', 'Low 1']);
     await press('G');
@@ -823,11 +864,62 @@ describe('TicketsPane in the rail Tickets view', () => {
     expect(JSON.stringify(layout.get(GLOBAL))).not.toContain('ticket_detail');
   });
 
-  it('with no source in any open project: the empty state adds one to the active project', async () => {
-    projects.list = projects.list.map((p) => ({ ...p, tracker: null }));
+  it('with no source at all: the empty state picks a board for a source feeding no project', async () => {
+    mockSources().length = 0;
+    await settings.load();
     mountGlobal();
-    expect(await screen.findByText('No ticket source yet.')).toBeTruthy();
-    await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
-    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: projects.activeId } });
+    expect(await screen.findByText('Add a ticket source: pick a board')).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /^Mine/ })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pick a board' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: undefined } });
+  });
+
+  it('lists every source, groups by source and narrows with v to one source or one of its views', async () => {
+    inLayout();
+    const { container } = render(TicketsPane, {
+      props: {
+        projectId: 'shop',
+        tabId: 'tab-1',
+        paneId: 'pane-1',
+        content: { kind: 'tickets', scope: { kind: 'all' }, view_id: null, mode: 'list', who: 'anyone' },
+        visible: true,
+        focused: true,
+      },
+    });
+    // the source feeding no project is listed too
+    await waitFor(() => expect(row(container, '#88', 'gitlab-corp')).not.toBeNull());
+    expect(screen.queryByRole('tab', { name: 'Display mode' })).toBeNull(); // several sources: no board
+    expect(screen.getByRole('tab', { name: /^Team/ })).toBeTruthy();
+    await fireEvent.change(screen.getByLabelText('Group (g)'), { target: { value: 'source' } });
+    await waitFor(() => expect(groupNames(container).some((g) => g?.startsWith('Ops board'))).toBe(true));
+    expect(groupNames(container)).toContain('Billing board 4');
+
+    await press('v');
+    const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent?.trim());
+    expect(items).toEqual([
+      'All sources',
+      'Shop board',
+      'My open', // indented under its source
+      'Current sprint',
+      'Billing board',
+      'Kelta tools board',
+      'Ops board',
+      'Add source…',
+    ]);
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Ops board' }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_list').at(-1)?.args).toMatchObject({
+        scope: { kind: 'source', id: 'ops' },
+        view_id: null,
+      }),
+    );
+    expect(savedContent()).toMatchObject({ source_id: 'ops', view_id: null });
+    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
+    // one source in effect: the board is offered, on that source's columns
+    expect(screen.getByRole('tab', { name: /Board/ })).toBeTruthy();
+    await press('v');
+    await fireEvent.click(await screen.findByRole('menuitem', { name: /Current sprint/ }));
+    expect(savedContent()).toMatchObject({ source_id: 'shop', view_id: 'sprint' });
+    expect(screen.getByRole('button', { name: /Shop board · Current sprint/ })).toBeTruthy();
   });
 });

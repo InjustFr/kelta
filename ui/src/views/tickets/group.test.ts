@@ -9,7 +9,7 @@ const item = (
   key: string,
   status: [string, StatusCategory],
   assignee: string | null = null,
-  view_ids: string[] = [],
+  source_ids: string[] = [],
   extra: Partial<Ticket> = {},
   prs: PrLink[] = [],
 ): TicketItem => ({
@@ -22,7 +22,8 @@ const item = (
   },
   project_ids: [],
   work_item_id: null,
-  view_ids,
+  view_ids: [],
+  source_ids,
   prs,
   caps: samples.ticketPage.items[0]!.caps,
   waiting: [],
@@ -87,7 +88,7 @@ describe('groupTickets', () => {
     ]);
   });
 
-  it('groups by source in view order, unknown views last', () => {
+  it('groups by source in source order, unknown sources last', () => {
     const sources = [
       { id: 'v1', label: 'Mine' },
       { id: 'v2', label: 'Sprint' },

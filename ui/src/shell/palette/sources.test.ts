@@ -281,6 +281,7 @@ describe('palette sources', () => {
         project_ids: ['shop'],
         work_item_id: null,
         view_ids: [],
+        source_ids: [],
         prs: [],
         caps: {
           board_columns: false,

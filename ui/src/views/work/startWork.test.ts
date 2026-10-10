@@ -1,3 +1,4 @@
+import { waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { dispatch } from '$lib/actions';
@@ -5,6 +6,8 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, settings, toasts, ui } from '$lib/stores';
 
+import { ticketItems } from '../../shell/palette/sources';
+import { enterRow } from '../inbox/now';
 import './actions';
 import { selectTicket } from './selection.svelte';
 import { reviewLocally, startWorkOnTicket } from './startWork';
@@ -44,7 +47,26 @@ describe('start entry points', () => {
     selectTicket(null, null);
   });
 
+  it("no ticket entry point passes the account's project: only an explicit pick", async () => {
+    const hit = mock.state.tickets.find((t) => t.ticket.ref.key === ticket.key)!;
+    expect(hit.project_ids).toEqual(['shop']);
+    selectTicket(ticket, 'shop');
+    await dispatch('work.start');
+    await enterRow({ type: 'ticket', id: 'r', ticket: hit });
+    await ticketItems([hit])
+      .find((i) => i.id.endsWith(':start'))!
+      .run();
+    await waitFor(() => expect(planArgs()).toHaveLength(3));
+    await dispatch('work.start', { project_id: 'billing' });
+    expect(planArgs()).toEqual([null, null, null, 'billing']);
+    selectTicket(null, null);
+  });
+
   it('a guessed project shows the sheet even with no preview (S)', async () => {
+    // jira-acme feeds two projects: no usual one
+    const billing = mock.state.projects.find((p) => p.id === 'billing')!;
+    billing.tracker = { ...billing.tracker!, account: 'jira-acme' };
+    mock.state.work = [];
     await startWorkOnTicket(ticket, null, { preview: false });
     expect(ui.sheets.at(-1)?.key).toBe('start_work');
     expect(mock.calls.some((c) => c.cmd === 'work_start')).toBe(false);

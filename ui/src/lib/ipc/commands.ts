@@ -207,14 +207,14 @@ export interface Commands {
     result: TicketPage;
   };
   tracker_get: { args: { ticket: TicketRef }; result: TicketDetail };
-  tracker_columns: { args: { project_id: ProjectId }; result: Column[] };
+  tracker_columns: { args: { source_id: string }; result: Column[] };
   tracker_transitions: { args: { ticket: TicketRef }; result: Transition[] };
   tracker_transition: {
     args: { ticket: TicketRef; transition_id: string; fields?: JsonValue | null };
     result: Ticket;
   };
   tracker_move: {
-    args: { ticket: TicketRef; column_id: string; project_id?: ProjectId | null };
+    args: { ticket: TicketRef; column_id: string; source_id?: string | null };
     result: Ticket;
   };
   tracker_comment: { args: { ticket: TicketRef; markdown: string }; result: null };

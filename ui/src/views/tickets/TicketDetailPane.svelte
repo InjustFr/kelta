@@ -27,6 +27,7 @@
       project_ids: [],
       work_item_id: null,
       view_ids: [],
+      source_ids: [],
       prs: detail.prs,
       caps: detail.caps,
       waiting: [],

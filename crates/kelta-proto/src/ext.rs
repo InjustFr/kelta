@@ -144,9 +144,22 @@ pub struct ToolDef {
     pub check: Option<Vec<String>>,
     pub install_hint: Option<String>,
     pub placement: Placement,
+    /// How many instances the tool has; sets where it opens and what a second open focuses.
+    pub scope: ToolScope,
     pub keybinding: Option<Chord>,
     pub autostart: bool,
     pub enabled: bool,
+}
+
+/// `work` (default): one per work item, else per project, at `placement`. `project`: one per
+/// project, as its own tab. `user`: one for the whole app, as its own tab in Home.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolScope {
+    #[default]
+    Work,
+    Project,
+    User,
 }
 
 impl Default for ToolDef {
@@ -172,6 +185,7 @@ impl Default for ToolDef {
             check: None,
             install_hint: None,
             placement: Placement::SplitRight,
+            scope: ToolScope::Work,
             keybinding: None,
             autostart: false,
             enabled: true,
@@ -201,6 +215,7 @@ pub struct ToolInfo {
     pub placement: Placement,
     /// A template uses `{project.*}` or `{repo.*}`: opening it needs a real project (not Home).
     pub needs_project: bool,
+    pub scope: ToolScope,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

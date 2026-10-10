@@ -5,6 +5,7 @@ import schemaJson from '../../../../schema/settings.schema.json';
 import Control from './fields/Control.svelte';
 import SourceBadge from './fields/SourceBadge.svelte';
 import { fieldKind, leafFields, nodeAt, type FieldKind, type SchemaNode } from './lib/schema';
+import { FOREIGN_ROOTS, SECTION_ROOTS } from './lib/sections';
 
 const schema = schemaJson as unknown as SchemaNode;
 
@@ -28,6 +29,12 @@ describe('schema -> field kinds', () => {
     const roots = Object.keys(schema.properties ?? {});
     expect(roots.length).toBeGreaterThan(10);
     for (const r of roots) expect(leafFields(schema, [r]).length, r).toBeGreaterThan(0);
+  });
+
+  it('the ticket sources have their own section', () => {
+    expect(Object.keys(schema.properties ?? {})).toContain('sources');
+    expect(SECTION_ROOTS.sources).toEqual(['sources']);
+    expect(FOREIGN_ROOTS).not.toContain('sources');
   });
 });
 

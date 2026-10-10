@@ -80,6 +80,7 @@ impl WorkService {
             auto_finish: false,
             parked_at: None,
             nvim_kept: 0,
+            ticket_source: None,
             run: Some(RunClaim { state: RunState::Running, ..run }),
         };
         // `start_lock`: no interactive start of the same ticket between the check and the insert.

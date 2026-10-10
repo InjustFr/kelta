@@ -4069,6 +4069,16 @@
               }
             ]
           },
+          "scope": {
+            "default": "work",
+            "description": "How many instances the tool has; sets where it opens and what a second open focuses.",
+            "enum": [
+              "work",
+              "project",
+              "user"
+            ],
+            "type": "string"
+          },
           "scrollback": {
             "default": null,
             "format": "uint32",

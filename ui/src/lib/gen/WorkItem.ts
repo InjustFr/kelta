@@ -83,4 +83,8 @@ nvim_kept: number,
  * Claimed by a background run (MCP `claim_ticket`, #235): the item adopts the run's worktree and
  * branch, which Finish never removes.
  */
-run?: RunClaim | null, };
+run?: RunClaim | null, 
+/**
+ * `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
+ */
+ticket_source?: string | null, };

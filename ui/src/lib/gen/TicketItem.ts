@@ -16,6 +16,10 @@ project_ids: Array<ProjectId>, work_item_id: WorkItemId | null,
  */
 view_ids: Array<string>, 
 /**
+ * Ids of the `[[sources]]` whose queries returned this ticket.
+ */
+source_ids: Array<string>, 
+/**
  * Linked PRs: the work item's first, then key matches from the polled review feeds.
  */
 prs: Array<PrLink>, 
