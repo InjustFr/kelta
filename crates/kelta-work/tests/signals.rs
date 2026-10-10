@@ -12,7 +12,7 @@ use kelta_proto::api::{CoreApi, WorkStore};
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::SessionId;
-use kelta_proto::model::{FinishOpts, SessionKind, WorkItem, WorkSource};
+use kelta_proto::model::{FinishOpts, SessionKind, SessionStatus, WorkItem, WorkSource};
 use kelta_proto::samples;
 use kelta_work::WorkService;
 use serde_json::json;
@@ -257,4 +257,25 @@ async fn status_all_fast_forwards_a_clean_review_checkout_only() {
     fx.service().status_all().await.unwrap();
     assert!(!item.worktree.join("third.txt").exists());
     assert_eq!(std::fs::read_to_string(item.worktree.join("feature.txt")).unwrap(), "my notes\n");
+}
+
+#[tokio::test]
+async fn status_all_leaves_a_review_checkout_alone_while_claude_works() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Review { review: samples::review_ref() }).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    let mut s = fx
+        .core
+        .sessions()
+        .into_iter()
+        .find(|s| item.session_ids.contains(&s.id) && s.kind == SessionKind::Claude)
+        .expect("claude session");
+    s.status = SessionStatus::Working;
+    fx.core.insert_session(s);
+    let head = git(&item.worktree, &["rev-parse", "HEAD"]);
+    move_pr_head(&fx, "second.txt");
+    w.status_all().await.unwrap();
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head, "HEAD stays while Claude reads it");
 }

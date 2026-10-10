@@ -10,6 +10,7 @@ use kelta_proto::model::{
     CloseOnExit, GitStatus, RestorePolicy, SessionInfo, SessionKind, SpawnRequest, WorkItem, WorkState,
 };
 
+use crate::fixloop::refuse_if_busy;
 use crate::saga::{COLS, Env, ROWS};
 use crate::template::{Mode, render, shell_quote};
 use crate::{WorkService, editor, git, rebase};
@@ -91,6 +92,10 @@ impl WorkService {
         let Some(r) = &item.review else { return Ok(()) };
         let lock = self.item_lock(&item.id);
         let Ok(_guard) = lock.try_lock() else { return Ok(()) };
+        // A reviewing Claude reads files without locking: moving them mid-turn skews its line comments.
+        if refuse_if_busy(env, item, &self.load_journal(&item.id), "").is_err() {
+            return Ok(());
+        }
         if !item.worktree.is_dir() || !git::dirty_files(&item.worktree).await?.is_empty() {
             return Ok(());
         }
