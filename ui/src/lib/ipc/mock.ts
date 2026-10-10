@@ -1182,6 +1182,8 @@ export function createMockTransport(options: MockOptions = {}): {
       session(claude_session);
       return null;
     },
+    editor_quickfix: () => null,
+    fs_exists: ({ paths }) => paths.map((p) => p.startsWith('/')),
     // ---- tools / plugins / triggers --------------------------------------------------------
     tool_list: ({ project_id }) => {
       project(project_id);

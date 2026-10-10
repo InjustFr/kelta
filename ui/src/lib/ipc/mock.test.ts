@@ -225,6 +225,8 @@ describe('mock transport', () => {
       work_mark_reviewed: { id: work.id },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },
       editor_send_selection: { editor_session: s.sessions[1]!.id, claude_session: session.id },
+      editor_quickfix: { target: { kind: 'session', id: session.id }, files: ['src/a.rs'] },
+      fs_exists: { paths: ['/x', 'y'] },
       tool_list: { project_id: 'shop' },
       tool_check: { tool_id: 'sl-web' },
       tool_open: { project_id: 'shop', tool_id: 'lazygit', ctx, placement: 'split_right' },

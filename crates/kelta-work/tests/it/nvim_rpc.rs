@@ -196,3 +196,31 @@ async fn service_editor_open_send_selection_follow_and_quit() {
     let saved = dirs.data.join("sessions").join("ed.vim");
     assert!(saved.exists(), "mksession on quit");
 }
+
+#[tokio::test]
+async fn service_editor_quickfix_lists_the_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("w");
+    std::fs::create_dir_all(&dir).unwrap();
+    let Some(nvim) = start_nvim(&dir).await else { return };
+    let core = FakeCore::new();
+    core.add_project(samples::project_info());
+    let editor = session("ed", SessionKind::Editor { adapter: "nvim".into() }, &dir, Some(&nvim.sock));
+    core.insert_session(editor.clone());
+    let weak: Weak<dyn CoreApi> = Arc::downgrade(&(core.clone() as Arc<dyn CoreApi>));
+    let w = WorkService::new(weak, Arc::new(MemWorkStore::new()), Dirs::under(&tmp.path().join("k")));
+
+    let files = [PathBuf::from("src/a.rs"), dir.join("b.rs")];
+    w.editor_quickfix(EditorTarget::Session { id: editor.id.clone() }, &files).await.unwrap();
+    let mut c = NvimClient::connect(&nvim.sock).await.unwrap();
+    let names = c
+        .exec_lua(
+            "return vim.tbl_map(function(i) return vim.api.nvim_buf_get_name(i.bufnr) end, vim.fn.getqflist())",
+            vec![],
+        )
+        .await
+        .unwrap();
+    let names: Vec<&str> = names.as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(names.len(), 2);
+    assert!(names[0].ends_with("w/src/a.rs") && names[1].ends_with("w/b.rs"), "{names:?}");
+}

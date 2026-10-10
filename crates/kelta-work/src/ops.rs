@@ -973,6 +973,28 @@ impl WorkService {
             .map(|_| ())
     }
 
+    pub(crate) async fn editor_quickfix_impl(
+        &self,
+        target: EditorTarget,
+        files: &[PathBuf],
+    ) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        let info = self.editor_session(&core, &target).await?;
+        let sock = self
+            .editor_socket(&info)
+            .await
+            .ok_or_else(|| KeltaError::unsupported("the quickfix list needs an nvim (RPC) editor session"))?;
+        let files: Vec<rmpv::Value> =
+            files.iter().map(|f| rmpv::Value::from(info.cwd.join(f).to_string_lossy().as_ref())).collect();
+        let mut c = NvimClient::connect(&sock).await?;
+        c.exec_lua(
+            crate::nvim::LUA_QUICKFIX,
+            vec![rmpv::Value::from("Files Claude touched"), rmpv::Value::Array(files)],
+        )
+        .await
+        .map(|_| ())
+    }
+
     pub(crate) async fn send_selection_impl(
         &self,
         editor_session: &SessionId,

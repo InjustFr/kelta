@@ -518,6 +518,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_push` | `{id, force}` | `WorkItem` (`rebase` cleared) | plain `git push -u` or, only when `diverged`, `git push --force-with-lease=<branch>:<remote_sha> --force-if-includes`, in a visible transient pane; refused while Claude works. Failures are diagnosed by a fetch: `Conflict{reason: non_fast_forward}` / `Conflict{reason: lease_rejected}`, never retried, never a plain `--force` |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
+| `editor_quickfix` | `{target: EditorTarget, files}` | `()`; nvim (RPC) only, `setqflist` with the files (relative to the editor cwd) at line 1 | `commands/editor.rs` (L6) |
+| `fs_exists` | `{paths}` | `Vec<bool>` per absolute path (relative = `false`); terminal file links | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
 | `tool_list` | `{project_id}` | `Vec<ToolInfo{id, label, icon, kind: Pty|Web, installed: Option<bool>, source: Layer|Plugin}>` | |
 | `tool_check` | `{tool_id}` | `ToolCheck{installed, version?, install_hint?}` | |
