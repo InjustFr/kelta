@@ -941,7 +941,7 @@
         },
         "ide_bridge": {
           "default": false,
-          "description": "v0.2; ignored in v0.1.",
+          "description": "Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).",
           "type": "boolean"
         },
         "mcp": {

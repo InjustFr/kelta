@@ -243,6 +243,17 @@ impl WorkService {
         self.editor_open_impl(target, path, line).await
     }
 
+    /// `editor_diff` (Claude IDE bridge `openDiff`).
+    pub async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.editor_diff_impl(target, old, proposed, close).await
+    }
+
     /// `editor_send_selection`: `@path#Lx-y` into the Claude session.
     pub async fn send_selection(
         &self,
