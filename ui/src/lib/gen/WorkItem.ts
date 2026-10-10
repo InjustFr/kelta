@@ -69,4 +69,12 @@ port_base?: number | null,
 /**
  * Merge when ready armed (`work_arm_merge`): the host merges the PR, then Kelta runs Finish once.
  */
-auto_finish: boolean, };
+auto_finish: boolean, 
+/**
+ * When Park (`work_park`, #142) stopped the item's Claude; cleared when that Claude spawns again.
+ */
+parked_at?: string | null, 
+/**
+ * Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
+ */
+nvim_kept: number, };

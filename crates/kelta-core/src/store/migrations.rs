@@ -183,8 +183,14 @@ CREATE TABLE IF NOT EXISTS nudges (
 );
 "#;
 
+/// v12: parked work items (#142, `WorkItem.parked_at`, `WorkItem.nvim_kept`).
+const V12: &str = r#"
+ALTER TABLE work_items ADD COLUMN parked_at TEXT;
+ALTER TABLE work_items ADD COLUMN nvim_kept INTEGER NOT NULL DEFAULT 0;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

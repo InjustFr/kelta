@@ -107,6 +107,7 @@ pub const COMMANDS: &[&str] = &[
     "work_left",
     "work_start_now",
     "work_queue_front",
+    "work_park",
     "work_notes",
     "work_note_resolve",
     "work_notes_send",

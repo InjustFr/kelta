@@ -43,12 +43,15 @@ pub const TEXT_TAIL_LINES: u32 = 200;
 pub struct SessionTimers {
     pub hooks: OneShot,
     pub quiet: OneShot,
+    /// Auto-park (#142, `crate::park`).
+    pub park: OneShot,
 }
 
 impl SessionTimers {
     fn cancel(&self) {
         self.hooks.cancel();
         self.quiet.cancel();
+        self.park.cancel();
     }
 }
 
@@ -67,6 +70,8 @@ pub struct SessionEntry {
     pub resume_attempt: bool,
     pub kill_requested: bool,
     pub restarting: bool,
+    /// Park (#142) killed it: its exit makes it Dormant instead of Exited.
+    pub parking: bool,
     /// Live-claimed by `restore_session` but the PTY may not exist yet; attach waits on `exits`.
     pub restoring: bool,
     pub http_ref: bool,
@@ -311,6 +316,7 @@ impl Core {
                 resume_attempt: false,
                 kill_requested: false,
                 restarting: false,
+                parking: false,
                 restoring: false,
                 http_ref: false,
                 heuristic: false,
@@ -746,6 +752,7 @@ impl Core {
                 resume_attempt: launch.resume_attempt,
                 kill_requested: false,
                 restarting: false,
+                parking: false,
                 restoring: s.get(&id).is_some_and(|e| e.restoring),
                 http_ref,
                 heuristic: false,
@@ -781,6 +788,15 @@ impl Core {
         );
         if is_claude {
             self.arm_hooks_timer(&id);
+            // A parked item (#142) is back once its Claude runs again (resume, restart, send).
+            if let Some(w) = info.work_item_id.clone() {
+                let work = self.work.clone();
+                self.rt.spawn(async move {
+                    if let Err(e) = work.set_parked(&w, None).await {
+                        tracing::debug!(work_item = %w, error = %e.message, "parked flag not cleared");
+                    }
+                });
+            }
         }
         self.refresh_attention();
         Ok(info)
@@ -907,7 +923,15 @@ impl Core {
     }
 
     pub(crate) fn write_session(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
-        let lifecycle = self.get_info(id)?.lifecycle;
+        let (lifecycle, timers) = {
+            let s = self.sessions.lock();
+            let e = s.get(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
+            (e.info.lifecycle, e.timers.clone())
+        };
+        // Any input cancels auto-park (#142); focus reports are the view, not Louis typing.
+        if bytes != b"\x1b[I" && bytes != b"\x1b[O" {
+            timers.park.cancel();
+        }
         if lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
         }
@@ -981,7 +1005,7 @@ impl Core {
     }
 
     /// Wait (≤ `QUIT_GRACE`) until the session left `Live`.
-    async fn wait_exit(&self, ids: &[SessionId]) -> bool {
+    pub(crate) async fn wait_exit(&self, ids: &[SessionId]) -> bool {
         let deadline = tokio::time::Instant::now() + QUIT_GRACE;
         loop {
             let notified = self.exits.notified();
@@ -1151,6 +1175,7 @@ impl Core {
             let mut s = self.sessions.lock();
             let Some(e) = s.get_mut(id) else { return };
             let prev = e.info.status;
+            let was_parkable = crate::park::parkable(&e.info);
             let mut changed =
                 e.info.status != d.status || e.info.attention != d.attention || e.info.seen != d.seen;
             e.info.status = d.status;
@@ -1172,9 +1197,10 @@ impl Core {
                 c.preview = Some(p);
                 changed = true;
             }
-            (prev, e.info.clone(), changed)
+            (prev, e.info.clone(), changed, was_parkable, e.timers.clone())
         };
-        let (prev, info, changed) = out;
+        let (prev, info, changed, was_parkable, timers) = out;
+        self.auto_park_status(&info, was_parkable, &timers);
         if changed {
             self.emit(UiEvent::SessionUpdated { session: info.clone() });
         }
@@ -1606,6 +1632,15 @@ impl Core {
             } else if e.restarting {
                 e.restarting = false;
                 Next::Nothing
+            } else if e.parking {
+                // Parked (#142): Dormant as after a restart, the next attach resumes it.
+                e.parking = false;
+                e.info.lifecycle = Lifecycle::Dormant;
+                e.info.status = SessionStatus::Unknown;
+                e.info.attention = Attention::None;
+                e.info.seen = true;
+                e.info.exit_code = None;
+                Next::Keep
             } else if e.resume_attempt
                 && !e.kill_requested
                 && code != Some(0)

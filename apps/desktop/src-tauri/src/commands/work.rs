@@ -204,3 +204,9 @@ pub async fn work_start_now(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<W
 pub async fn work_queue_front(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
     core.work().queue_front(&id).await
 }
+
+/// Park (#142): stop the item's Claude (and nvim without unsaved buffers); showing it resumes them.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_park(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work_park(&id, false).await
+}

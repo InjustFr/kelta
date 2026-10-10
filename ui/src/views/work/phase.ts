@@ -3,8 +3,8 @@
 
 import type { GitStatus, Review, ReviewDelta, SessionInfo, WorkItem } from '$lib/gen';
 
-/** Lamp shapes (DESIGN §6.1). `working` is derived, not an Attention level. */
-export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'none';
+/** Lamp shapes (DESIGN §6.1). `working` and `parked` are derived, not Attention levels. */
+export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'parked' | 'none';
 
 export type NowSection = 'needs_you' | 'to_review' | 'fix' | 'requests' | 'ship' | 'in_flight' | 'up_next';
 
@@ -32,6 +32,7 @@ export type WorkActionId =
   | 'merge'
   | 'start_now'
   | 'queue_front'
+  | 'park'
   | 'finish';
 
 export type PhaseId =
@@ -131,8 +132,20 @@ const STEP_DOING: Record<string, string> = {
 };
 const doing = (step: string): string => STEP_DOING[step] ?? step.replace(/_/g, ' ');
 
-/** The first matching row of FLOW §2.2 wins. `claude` is the item's Claude session (its `status`). */
+/** The first matching row of FLOW §2.2 wins. `claude` is the item's Claude session (its `status`).
+ *  A parked item (#142) keeps its phase; its quiet lamp (none, activity, done) turns `parked`. */
 export function phaseOf(
+  item: PhaseItem,
+  claude: SessionInfo | null,
+  pr: PhasePr | null,
+  git: PhaseGit | null,
+): Phase {
+  const ph = phaseRow(item, claude, pr, git);
+  const parked = item.parked_at && claude?.lifecycle !== 'live' && LAMP_RANK[ph.lamp] <= LAMP_RANK.done;
+  return parked ? { ...ph, lamp: 'parked' } : ph;
+}
+
+function phaseRow(
   item: PhaseItem,
   claude: SessionInfo | null,
   pr: PhasePr | null,
@@ -290,6 +303,7 @@ export function phaseOf(
 
 const LAMP_RANK: Record<Lamp, number> = {
   none: 0,
+  parked: 0.5,
   activity: 1,
   done: 2,
   working: 3,

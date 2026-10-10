@@ -127,6 +127,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `budget_usd` | float? | none | Claude spend per work item (USD) past which its cost chip turns red; set it per project |
 | `max_live` | int | `4` | live Claude processes start work runs at once; past it new items wait `Queued` with their worktree ready and start, oldest first, when a Claude exits (0 = no cap). Global |
 | `queue_hold_pct` | float? | none | hold the queue while the 5h rate-limit usage is at or above this percentage. Global |
+| `auto_park_after_mins` | int | `45` | park a work item's Claude (and its nvim, unless it has unsaved buffers) once it has been done and seen with no input for this many minutes; showing the item resumes the same conversation. Never a working or waiting Claude (0 = off) |
 
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |

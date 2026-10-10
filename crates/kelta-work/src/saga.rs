@@ -474,6 +474,8 @@ impl WorkService {
             port_base,
             cost_usd: 0.0,
             auto_finish: false,
+            parked_at: None,
+            nvim_kept: 0,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;

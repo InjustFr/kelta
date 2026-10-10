@@ -1166,33 +1166,68 @@ impl WorkService {
         Ok(())
     }
 
+    /// RPC socket and `mksession` file of a live nvim (presets with mksession restore over RPC).
+    fn nvim_target(
+        &self,
+        core: &Arc<dyn CoreApi>,
+        s: &SessionInfo,
+        items: &[WorkItem],
+    ) -> Option<(PathBuf, PathBuf)> {
+        let SessionKind::Editor { adapter } = &s.kind else { return None };
+        if s.lifecycle != Lifecycle::Live {
+            return None;
+        }
+        let settings = core.settings(Some(&s.project_id));
+        let preset = editor::preset(&settings.editor, Some(adapter))?;
+        if preset.restore != EditorRestore::Mksession || preset.open != EditorOpenMode::Rpc {
+            return None;
+        }
+        let item = items.iter().find(|w| w.session_ids.contains(&s.id));
+        let sock = s
+            .editor
+            .as_ref()
+            .and_then(|e| e.socket.clone())
+            .or_else(|| item.and_then(|w| w.nvim_socket.clone()))?;
+        let file = item
+            .and_then(|w| self.load_journal(&w.id).editor_session_file)
+            .unwrap_or_else(|| self.dirs.data.join("sessions").join(format!("{}.vim", s.id.as_str())));
+        Some((sock, file))
+    }
+
+    /// Park (#142): an nvim without unsaved buffers saves its session (resumed with `-S`) → 0;
+    /// otherwise its unsaved buffer count, and it keeps running. An error means it cannot be
+    /// checked (not nvim over RPC, no answer): keep it too.
+    pub(crate) async fn park_editor_impl(&self, item: &WorkItem, s: &SessionInfo) -> Result<u32, KeltaError> {
+        let core = self.api()?;
+        let (sock, file) = self
+            .nvim_target(&core, s, std::slice::from_ref(item))
+            .ok_or_else(|| KeltaError::conflict("this editor cannot be checked for unsaved buffers"))?;
+        let mut c = NvimClient::connect(&sock).await?;
+        let n = c.unsaved().await?;
+        if n == 0 {
+            if let Some(dir) = file.parent() {
+                files::private_dir(dir)?;
+            }
+            c.mksession(&file).await?;
+        }
+        Ok(n)
+    }
+
+    /// Park (#142): `worktree.teardown` when configured, as Finish runs it.
+    pub(crate) async fn park_teardown_impl(&self, item: &WorkItem) -> Result<(), KeltaError> {
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        if env.settings.worktree.teardown.trim().is_empty() || !item.worktree.is_dir() {
+            return Ok(());
+        }
+        self.teardown(&env, item).await
+    }
+
     pub(crate) async fn quit_hook_impl(&self) -> Result<(), KeltaError> {
         let core = self.api()?;
-        let mut targets: Vec<(PathBuf, PathBuf)> = Vec::new();
         let items = self.store.list_items(None).await.unwrap_or_default();
         let sessions_dir = self.dirs.data.join("sessions");
-        for s in core.session_list(None) {
-            let SessionKind::Editor { adapter } = &s.kind else { continue };
-            if s.lifecycle != Lifecycle::Live {
-                continue;
-            }
-            let settings = core.settings(Some(&s.project_id));
-            let Some(preset) = editor::preset(&settings.editor, Some(adapter)) else { continue };
-            if preset.restore != EditorRestore::Mksession || preset.open != EditorOpenMode::Rpc {
-                continue;
-            }
-            let item = items.iter().find(|w| w.session_ids.contains(&s.id));
-            let sock = s
-                .editor
-                .as_ref()
-                .and_then(|e| e.socket.clone())
-                .or_else(|| item.and_then(|w| w.nvim_socket.clone()));
-            let Some(sock) = sock else { continue };
-            let file = item
-                .and_then(|w| self.load_journal(&w.id).editor_session_file)
-                .unwrap_or_else(|| sessions_dir.join(format!("{}.vim", s.id.as_str())));
-            targets.push((sock, file));
-        }
+        let targets: Vec<(PathBuf, PathBuf)> =
+            core.session_list(None).iter().filter_map(|s| self.nvim_target(&core, s, &items)).collect();
         if targets.is_empty() {
             return Ok(());
         }

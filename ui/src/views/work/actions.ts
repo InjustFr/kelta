@@ -10,6 +10,7 @@ import {
   workDiff,
   workDisarmMerge,
   workMarkReviewed,
+  workPark,
   workQueueFront,
   workRetryStep,
   workSetNote,
@@ -222,6 +223,21 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
       if (item.auto_finish) work.upsert(await workDisarmMerge({ id: item.id }));
       else ui.openSheet('merge', { item });
     },
+  },
+  {
+    id: 'park',
+    key: 'P',
+    label: () => 'Park',
+    blocked: (c) => {
+      const claude = claudeOf(c.item);
+      if (claude?.status === 'working') return 'Claude is working';
+      const live = c.item.session_ids.some((id) => {
+        const s = sessions.get(id);
+        return s?.lifecycle === 'live' && (s.kind.type === 'claude' || s.kind.type === 'editor');
+      });
+      return live ? null : 'Nothing running to park';
+    },
+    run: async ({ item }) => void work.upsert(await workPark({ id: item.id })),
   },
   {
     id: 'finish',

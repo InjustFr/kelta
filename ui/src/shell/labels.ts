@@ -88,6 +88,7 @@ const ATTENTION_LABELS: Record<LampLevel, string> = {
   activity: 'New output',
   done: 'Ready to review',
   working: 'Working',
+  parked: 'Parked',
   error: 'Error',
   needs_input: 'Needs input',
 };
