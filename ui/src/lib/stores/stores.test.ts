@@ -278,6 +278,18 @@ describe('WorkStore', () => {
     store.apply({ type: 'work.updated', work: { ...w, state: { kind: 'finished' } } });
     expect(store.forTicket(w.ticket!)).toBeNull();
   });
+
+  it('re-reads git status when a signal changes, not on other updates', async () => {
+    const store = new WorkStore();
+    await store.load();
+    const w = store.all.find((x) => x.state.kind !== 'finished')!;
+    const reads = (): number => mock.calls.filter((c) => c.cmd === 'work_status_all').length;
+    store.apply({ type: 'work.updated', work: { ...w, pr_url: 'https://example.test/pr/1' } });
+    expect(reads()).toBe(0);
+    store.apply({ type: 'work.updated', work: { ...w, review_due: !w.review_due } });
+    await flush();
+    expect(reads()).toBe(1);
+  });
 });
 
 describe('SettingsStore', () => {

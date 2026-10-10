@@ -56,7 +56,7 @@ export class WorkStore {
   }
 
   /**
-   * `work_status_all` (startup, window focus, Now open, a Claude stop). A request made while one is
+   * `work_status_all` (startup, window focus, Now open, a signal or state change in `apply`). A request made while one is
    * in flight runs once more after it, so the result is never older than the request.
    */
   refreshStatus(): Promise<void> {
@@ -85,8 +85,21 @@ export class WorkStore {
   }
 
   apply(ev: UiEvent): void {
+    const prev = ev.type === 'work.updated' ? this.byId[ev.work.id] : undefined;
     const next = reduceWork(this.byId, ev);
     if (next !== this.byId) this.byId = next;
+    // A Claude stop/prompt or a state change moves git (commits, diffstat): re-read it for Now and
+    // the work bar even when no header of that item is mounted.
+    if (ev.type === 'work.updated' && ev.work.state.kind !== 'finished') {
+      const w = ev.work;
+      if (
+        !prev ||
+        prev.review_due !== w.review_due ||
+        prev.claude_replied !== w.claude_replied ||
+        prev.state.kind !== w.state.kind
+      )
+        void this.refreshStatus();
+    }
   }
 
   upsert(item: WorkItem): WorkItem {

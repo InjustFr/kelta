@@ -39,17 +39,6 @@
   let statusBtn = $state<HTMLElement>();
   let workBtn = $state<HTMLElement>();
 
-  // Git status is read for every item at once (startup, window focus, Now); a header without one
-  // asks, and so does a Claude stop or a state change of this item.
-  $effect(() => {
-    void item?.state.kind;
-    void item?.review_due;
-    void item?.claude_replied;
-    untrack(() => {
-      if (item && item.state.kind !== 'finished') void work.refreshStatus();
-    });
-  });
-
   $effect(() => {
     const ref = ticketRef;
     if (ref) {

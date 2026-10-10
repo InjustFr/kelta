@@ -24,7 +24,8 @@ beforeEach(async () => {
   work.git = {};
   layout.byProject = {};
   Object.assign(workUi, { menu: null, ship: null, finish: null });
-  await Promise.all([work.load(), sessions.load(), projects.load()]);
+  // ProjectRail reads git status at startup; the header itself never asks.
+  await Promise.all([work.load(), sessions.load(), projects.load(), work.refreshStatus()]);
 });
 
 function mountHeader(item: WorkItem) {
@@ -53,7 +54,7 @@ describe('work bar', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /In progress/i })).toBeTruthy());
   });
 
-  it('re-reads git status when Claude stops', async () => {
+  it('re-reads git status when Claude stops (from the store)', async () => {
     const w = item(0);
     mountHeader(w);
     await waitFor(() => expect(screen.getByTestId('ahead')).toBeTruthy());
