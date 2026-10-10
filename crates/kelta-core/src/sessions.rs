@@ -16,7 +16,7 @@ use kelta_proto::model::{
     AttachInfo, Attention, ClaudeMeta, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy, SessionInfo,
     SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
 };
-use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode};
+use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
 use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
@@ -321,6 +321,49 @@ impl Core {
         Ok(())
     }
 
+    /// keltad: sessions that kept running while the app was closed come back Live (same process,
+    /// same hook token) instead of respawning from Dormant; what keltad holds that core does not
+    /// know any more is killed.
+    pub(crate) fn adopt_live_sessions(&self) {
+        if !self.terminal.persistent() {
+            return;
+        }
+        let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
+        let mut adopted = HashSet::new();
+        let mut failed = false;
+        for id in ids {
+            let env = match self.terminal.adopt(&id, Arc::new(EventSink { core: self.me.clone() })) {
+                Ok(Some(env)) => env,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::warn!(error = %e, session = %id, "keltad adopt failed");
+                    failed = true;
+                    continue;
+                }
+            };
+            let hook = env.get("KELTA_HOOK_TOKEN").cloned().unwrap_or_default();
+            // shortcut: KELTA_MCP_URL keeps the previous run's port, so MCP / http hooks of an adopted Claude fail until it restarts; pin the port to fix.
+            let mcp = env.get("KELTA_MCP_TOKEN").cloned();
+            if let Some(e) = self.sessions.lock().get_mut(&id) {
+                e.info.lifecycle = Lifecycle::Live;
+                e.hook_token = hook.clone();
+                e.mcp_token = mcp.clone();
+            }
+            self.server.register_session(&id, &hook, mcp.as_deref());
+            self.persist_session(&id);
+            adopted.insert(id);
+        }
+        // A failed adopt may be a slow reply for a session core keeps: never kill on a guess.
+        if failed {
+            return;
+        }
+        for s in self.terminal.stats().sessions {
+            if !adopted.contains(&s.id) {
+                let _ = self.terminal.kill(&s.id, KillSignal::Kill);
+            }
+        }
+    }
+
     fn delete_row(&self, id: &SessionId) {
         self.terminal.history_delete(id);
         let id = id.clone();
@@ -402,9 +445,13 @@ impl Core {
 
     /// Any Claude session Working/NeedsInput (quit confirmation, `app.confirm_quit_with_running`).
     pub fn quit_needs_confirm(&self) -> bool {
-        self.cfg.effective(None).app.confirm_quit_with_running
+        let cfg = self.cfg.effective(None);
+        // Same rule as quit_flow: keltad keeps restorable sessions running, the rest are killed.
+        let survives = self.quit_persistent() && cfg.app.restore_mode != RestoreMode::None;
+        cfg.app.confirm_quit_with_running
             && self.sessions.lock().values().any(|e| {
-                matches!(e.info.kind, SessionKind::Claude)
+                !(survives && e.restore != RestorePolicy::None)
+                    && matches!(e.info.kind, SessionKind::Claude)
                     && e.info.lifecycle == Lifecycle::Live
                     && matches!(e.info.status, SessionStatus::Working | SessionStatus::NeedsInput)
             })
@@ -1549,18 +1596,28 @@ impl Core {
     // Quit
     // =========================================================================================
 
+    /// The next run adopts keltad's sessions: the host is keltad and the (restart-only)
+    /// `terminal.session_host` still says so, else kept sessions would run twice.
+    fn quit_persistent(&self) -> bool {
+        self.terminal.persistent() && self.cfg.effective(None).terminal.session_host == SessionHost::Daemon
+    }
+
     pub(crate) async fn quit_flow(&self) -> Result<(), KeltaError> {
         self.quitting.store(true, std::sync::atomic::Ordering::SeqCst);
         if let Err(e) = self.work.quit_hook().await {
             tracing::warn!(error = %e, "work quit hook failed");
         }
+        // keltad: kept sessions stay running and are adopted on the next start.
+        let persistent = self.quit_persistent();
+        let restoring = self.cfg.effective(None).app.restore_mode != RestoreMode::None;
         let live: Vec<(SessionId, bool)> = self
             .sessions
             .lock()
             .values()
             .filter(|e| e.info.lifecycle != Lifecycle::Dormant)
             .map(|e| {
-                (e.info.id.clone(), e.info.lifecycle == Lifecycle::Live && e.restore != RestorePolicy::None)
+                let keep = e.info.lifecycle == Lifecycle::Live && e.restore != RestorePolicy::None;
+                (e.info.id.clone(), keep && (restoring || !persistent))
             })
             .collect();
         let mut to_kill = Vec::new();
@@ -1583,7 +1640,7 @@ impl Core {
                 self.delete_row(id);
             }
             let is_live = self.sessions.lock().get(id).is_some_and(|e| e.info.lifecycle == Lifecycle::Live);
-            if is_live {
+            if is_live && !(persistent && *keep) {
                 to_kill.push(id.clone());
             }
         }
@@ -1595,6 +1652,15 @@ impl Core {
                 let live = self.sessions.lock().get(id).is_some_and(|e| e.info.lifecycle == Lifecycle::Live);
                 if live {
                     let _ = self.terminal.kill(id, KillSignal::Kill);
+                }
+            }
+        }
+        if persistent {
+            // close what keltad would otherwise hold for nobody (exited and killed sessions)
+            let kept: HashSet<&SessionId> = live.iter().filter(|(_, k)| *k).map(|(id, _)| id).collect();
+            for s in self.terminal.stats().sessions {
+                if !kept.contains(&s.id) {
+                    let _ = self.terminal.kill(&s.id, KillSignal::Kill);
                 }
             }
         }
