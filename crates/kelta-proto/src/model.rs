@@ -796,6 +796,23 @@ pub struct NextUpItem {
     pub snoozed_until: Option<String>,
 }
 
+/// A saved Claude Code workflow (#233): a `*.js` file whose `export const meta` names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct WorkflowInfo {
+    pub name: String,
+    pub description: String,
+    pub path: PathBuf,
+    pub source: WorkflowSource,
+}
+
+/// Where a workflow lives: the project's primary repo (`.claude/workflows/`) or `~/.claude/workflows/`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowSource {
+    Repo,
+    Home,
+}
+
 /// `next_up_list`: the list and snoozes, plus the tickets I have seen (`account:key`, the `New` badge).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct NextUp {

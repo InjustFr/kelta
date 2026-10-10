@@ -86,6 +86,8 @@
     "allow-tracker-priorities",
     "allow-tracker-set-priority",
     "allow-tracker-refine",
+    "allow-workflows-list",
+    "allow-workflow-run",
     "allow-tracker-search",
     "allow-tracker-sources",
     "allow-team-people",

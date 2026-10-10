@@ -385,6 +385,16 @@ describe('TicketsPane workbench', () => {
     expect(card(container, 'SHOP-151')).not.toBeNull();
   });
 
+  it('w opens the workflow picker for the focused row', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
+    await press('w');
+    await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
+    const listed = mock.calls.find((c) => c.cmd === 'workflows_list')?.args as { ticket: unknown };
+    expect(ui.sheet?.props.ticket).toEqual(listed.ticket);
+    expect(ui.sheet?.props.workflows).toEqual(mock.state.workflows);
+  });
+
   it('opens a collapsed Done group with Enter', async () => {
     const { container } = mountBoard('list', 'billing');
     const key = (k: string) => container.querySelector(`[data-key="redmine-corp:${k}"]`);
