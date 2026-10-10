@@ -306,6 +306,11 @@
         : null
       : (shown.find((i) => keyOf(i) === selKey) ?? null),
   );
+  /** What Enter will do on the selected row, named before it is pressed (mirrors the Enter key below). */
+  const enterLabel = $derived.by(() => {
+    const ph = cur && mode === 'list' && !splitShown ? phaseFor(cur) : null;
+    return ph ? (ph.primary ? ph.primaryLabel : 'Go to work tab') : 'Open';
+  });
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
   let lastIndex: number | null = null;
@@ -586,8 +591,8 @@
         } else if (selRow?.kind === 'group') toggleGroup(selRow);
         else if (item) {
           const w = liveWork(item);
-          // Detail closed and work under way: the phase's next step, as in Now.
-          if (w && !splitShown) void runPrimary(w);
+          // List, detail closed, work under way: the phase's next step, as in Now. Board: Enter opens.
+          if (w && !splitShown && mode === 'list') void runPrimary(w);
           else void focusDetail(item);
         }
         break;
@@ -1058,7 +1063,7 @@
     hints={[
       ['j k', 'Move'],
       ['space', 'Split'],
-      ['enter', 'Next step, else open'],
+      ['enter', enterLabel],
       ['g', 'Open detail'],
       ['shift+enter', 'Own pane'],
       ['1 2 3', 'Who'],
