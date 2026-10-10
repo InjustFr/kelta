@@ -1702,8 +1702,15 @@ impl Core {
         for c in &contents {
             match c {
                 PaneContent::Tickets { scope, view_id, who, source_id, .. } => {
-                    // a pane narrowed to one source lists that source's queries (as the UI loads it)
-                    let scope = source_id.clone().map_or_else(|| scope.clone(), |id| Scope::Source { id });
+                    // a pane narrowed to one source lists that source's queries (as the UI loads it);
+                    // a removed source, or one no longer feeding the pane's project, is ignored (UI shows all)
+                    let narrowed = source_id.as_ref().filter(|id| {
+                        self.sources().iter().any(|s| {
+                            s.id == **id
+                                && !matches!(scope, Scope::Project { id: p } if !s.projects.contains(p))
+                        })
+                    });
+                    let scope = narrowed.map_or_else(|| scope.clone(), |id| Scope::Source { id: id.clone() });
                     tickets(&scope, view_id.as_deref(), *who, &mut want)
                 }
                 PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),

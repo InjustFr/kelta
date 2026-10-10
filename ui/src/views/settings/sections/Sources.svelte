@@ -7,6 +7,7 @@
   import type { JsonValue, RepoMatch, Source, SourceRoute } from '$lib/gen';
   import { projects, settings, toasts, ui } from '$lib/stores';
   import { Button, IconButton, Select, TextInput } from '$lib/ui';
+  import Icon from '$lib/ui/Icon.svelte';
 
   import { confirms } from '../../../shell/confirm.svelte';
   import { takeSourceRequest } from '../actions';
@@ -20,6 +21,7 @@
   let props: SettingsSectionProps = $props();
 
   const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
+  const globalOnly = $derived(editor.layer !== 'global');
   const all = $derived(settings.value()?.sources ?? []);
   const editable = $derived(projects.list.filter((p) => !p.builtin));
   const tracker = $derived.by((): SchemaNode | null => {
@@ -112,154 +114,182 @@
 
 <SectionForm sectionId="sources" {...props} skip={['sources']}>
   {#snippet after()}
-    {#if all.length === 0}
-      <p class="muted">No ticket source yet.</p>
+    {#if globalOnly}
+      <div class="notice" role="status" data-testid="sources-global-only">
+        <Icon name="info" size={16} />
+        <span>Ticket sources are global settings.</span>
+        <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
+          >Switch to Global</Button
+        >
+      </div>
     {/if}
-    {#each all as s (s.id)}
-      <section class="card" data-testid="source-card" data-source-card={s.id}>
-        <div class="head">
-          <TextInput
-            label="Label"
-            value={s.label}
-            onchange={(e) => {
-              const label = (e.currentTarget as HTMLInputElement).value.trim();
-              if (label && label !== s.label) void edit(s.id, (x) => ({ ...x, label }));
-            }}
-          />
-          <IconButton icon="trash-2" label="Remove {s.label}" size="sm" onclick={() => void remove(s)} />
-        </div>
-
-        <TrackerSources sourceId={s.id} />
-
-        {#if tracker}
-          {@const columns = nodeAt(tracker, ['columns'])}
-          {@const statusMap = nodeAt(tracker, ['status_map'])}
-          {#if columns}
-            <h4>Columns</h4>
-            <Control
-              node={columns}
-              value={s.tracker.columns as unknown as JsonValue}
-              label="Columns of {s.label}"
-              onchange={(v) => void setTracker(s, 'columns', v)}
+    <fieldset class="layer" disabled={globalOnly}>
+      {#if all.length === 0}
+        <p class="muted">No ticket source yet.</p>
+      {/if}
+      {#each all as s (s.id)}
+        <section class="card" data-testid="source-card" data-source-card={s.id}>
+          <div class="head">
+            <TextInput
+              label="Label"
+              value={s.label}
+              onchange={(e) => {
+                const label = (e.currentTarget as HTMLInputElement).value.trim();
+                if (label && label !== s.label) void edit(s.id, (x) => ({ ...x, label }));
+              }}
             />
-          {/if}
-          {#if statusMap}
-            <h4>Status map</h4>
-            <Control
-              node={statusMap}
-              value={s.tracker.status_map as unknown as JsonValue}
-              label="Status map of {s.label}"
-              onchange={(v) => void setTracker(s, 'status_map', v)}
-            />
-          {/if}
-        {/if}
+            <IconButton icon="trash-2" label="Remove {s.label}" size="sm" onclick={() => void remove(s)} />
+          </div>
 
-        <h4>Projects</h4>
-        <div class="chips" role="group" aria-label="Projects {s.label} feeds">
-          {#each editable as p (p.id)}
-            <Button
-              size="sm"
-              variant={s.projects.includes(p.id) ? 'primary' : 'secondary'}
-              aria-pressed={s.projects.includes(p.id)}
-              onclick={() => void toggleProject(s, p.id)}>{p.name}</Button
+          <TrackerSources sourceId={s.id} />
+
+          {#if tracker}
+            {@const columns = nodeAt(tracker, ['columns'])}
+            {@const statusMap = nodeAt(tracker, ['status_map'])}
+            {#if columns}
+              <h4>Columns</h4>
+              <Control
+                node={columns}
+                value={s.tracker.columns as unknown as JsonValue}
+                label="Columns of {s.label}"
+                onchange={(v) => void setTracker(s, 'columns', v)}
+              />
+            {/if}
+            {#if statusMap}
+              <h4>Status map</h4>
+              <Control
+                node={statusMap}
+                value={s.tracker.status_map as unknown as JsonValue}
+                label="Status map of {s.label}"
+                onchange={(v) => void setTracker(s, 'status_map', v)}
+              />
+            {/if}
+          {/if}
+
+          <h4>Projects</h4>
+          <div class="chips" role="group" aria-label="Projects {s.label} feeds">
+            {#each editable as p (p.id)}
+              <Button
+                size="sm"
+                variant={s.projects.includes(p.id) ? 'primary' : 'secondary'}
+                aria-pressed={s.projects.includes(p.id)}
+                onclick={() => void toggleProject(s, p.id)}>{p.name}</Button
+              >
+            {:else}
+              <span class="muted">No project yet.</span>
+            {/each}
+          </div>
+
+          <h4>Routes</h4>
+          <p class="muted">The first route that matches a ticket picks the repository its work starts in.</p>
+          {#if s.routes.length > 0}
+            <table class="routes" data-testid="source-routes">
+              <thead>
+                <tr><th>Match</th><th>Value</th><th>Project</th><th>Repository</th><th></th></tr>
+              </thead>
+              <tbody>
+                {#each s.routes as r, i (i)}
+                  {@const key = matchOf(r)}
+                  <tr data-testid="source-route">
+                    <td>
+                      <Select
+                        label="Match of route {i + 1}"
+                        value={key}
+                        options={MATCH}
+                        onchange={(k) => void setMatch(s, i, k, r.match[key] ?? '')}
+                      />
+                    </td>
+                    <td>
+                      <TextInput
+                        label="Value of route {i + 1}"
+                        value={r.match[key] ?? ''}
+                        onchange={(e) =>
+                          void setMatch(s, i, key, (e.currentTarget as HTMLInputElement).value)}
+                      />
+                    </td>
+                    <td>
+                      <Select
+                        label="Project of route {i + 1}"
+                        value={r.project}
+                        options={s.projects.map((p) => ({ value: p, label: projects.byId(p)?.name ?? p }))}
+                        onchange={(p) => void patchRoute(s, i, { project: p, repo: firstRepo(p) })}
+                      />
+                    </td>
+                    <td>
+                      <Select
+                        label="Repository of route {i + 1}"
+                        value={r.repo}
+                        options={(projects.byId(r.project)?.repos ?? []).map((x) => ({
+                          value: x.id,
+                          label: x.id,
+                        }))}
+                        onchange={(repo) => void patchRoute(s, i, { repo })}
+                      />
+                    </td>
+                    <td class="actions">
+                      <IconButton
+                        icon="arrow-up"
+                        label="Move route {i + 1} up"
+                        size="sm"
+                        disabled={i === 0}
+                        onclick={() => moveRoute(s, i, -1)}
+                      />
+                      <IconButton
+                        icon="arrow-down"
+                        label="Move route {i + 1} down"
+                        size="sm"
+                        disabled={i === s.routes.length - 1}
+                        onclick={() => moveRoute(s, i, 1)}
+                      />
+                      <IconButton
+                        icon="trash-2"
+                        label="Remove route {i + 1}"
+                        size="sm"
+                        onclick={() =>
+                          void setRoutes(
+                            s,
+                            s.routes.filter((_, j) => j !== i),
+                          )}
+                      />
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+          <div>
+            <Button size="sm" icon="plus" disabled={s.projects.length === 0} onclick={() => addRoute(s)}
+              >Add route</Button
             >
-          {:else}
-            <span class="muted">No project yet.</span>
-          {/each}
-        </div>
-
-        <h4>Routes</h4>
-        <p class="muted">The first route that matches a ticket picks the repository its work starts in.</p>
-        {#if s.routes.length > 0}
-          <table class="routes" data-testid="source-routes">
-            <thead>
-              <tr><th>Match</th><th>Value</th><th>Project</th><th>Repository</th><th></th></tr>
-            </thead>
-            <tbody>
-              {#each s.routes as r, i (i)}
-                {@const key = matchOf(r)}
-                <tr data-testid="source-route">
-                  <td>
-                    <Select
-                      label="Match of route {i + 1}"
-                      value={key}
-                      options={MATCH}
-                      onchange={(k) => void setMatch(s, i, k, r.match[key] ?? '')}
-                    />
-                  </td>
-                  <td>
-                    <TextInput
-                      label="Value of route {i + 1}"
-                      value={r.match[key] ?? ''}
-                      onchange={(e) => void setMatch(s, i, key, (e.currentTarget as HTMLInputElement).value)}
-                    />
-                  </td>
-                  <td>
-                    <Select
-                      label="Project of route {i + 1}"
-                      value={r.project}
-                      options={s.projects.map((p) => ({ value: p, label: projects.byId(p)?.name ?? p }))}
-                      onchange={(p) => void patchRoute(s, i, { project: p, repo: firstRepo(p) })}
-                    />
-                  </td>
-                  <td>
-                    <Select
-                      label="Repository of route {i + 1}"
-                      value={r.repo}
-                      options={(projects.byId(r.project)?.repos ?? []).map((x) => ({
-                        value: x.id,
-                        label: x.id,
-                      }))}
-                      onchange={(repo) => void patchRoute(s, i, { repo })}
-                    />
-                  </td>
-                  <td class="actions">
-                    <IconButton
-                      icon="arrow-up"
-                      label="Move route {i + 1} up"
-                      size="sm"
-                      disabled={i === 0}
-                      onclick={() => moveRoute(s, i, -1)}
-                    />
-                    <IconButton
-                      icon="arrow-down"
-                      label="Move route {i + 1} down"
-                      size="sm"
-                      disabled={i === s.routes.length - 1}
-                      onclick={() => moveRoute(s, i, 1)}
-                    />
-                    <IconButton
-                      icon="trash-2"
-                      label="Remove route {i + 1}"
-                      size="sm"
-                      onclick={() =>
-                        void setRoutes(
-                          s,
-                          s.routes.filter((_, j) => j !== i),
-                        )}
-                    />
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-        <div>
-          <Button size="sm" icon="plus" disabled={s.projects.length === 0} onclick={() => addRoute(s)}
-            >Add route</Button
-          >
-        </div>
-      </section>
-    {/each}
-    <div class="add">
-      <Button variant="primary" icon="plus" onclick={() => ui.openSheet('tracker.source_picker', {})}
-        >Add source</Button
-      >
-    </div>
+          </div>
+        </section>
+      {/each}
+      <div class="add">
+        <Button variant="primary" icon="plus" onclick={() => ui.openSheet('tracker.source_picker', {})}
+          >Add source</Button
+        >
+      </div>
+    </fieldset>
   {/snippet}
 </SectionForm>
 
 <style>
+  .layer {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-3);
+    padding: var(--k-space-3) var(--k-space-4);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius);
+  }
+
   .card {
     display: flex;
     flex-direction: column;

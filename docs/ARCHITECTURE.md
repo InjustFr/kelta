@@ -492,10 +492,10 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | **tickets** | | | `commands/tracker.rs` (L3) |
 | `tracker_list` | `{scope, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?, prs: Vec<PrLink>, caps: TrackerCaps}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
 | `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` (with `prs` and the account's `caps`) | |
-| `tracker_columns` | `{project_id}` | `Vec<Column>` | |
+| `tracker_columns` | `{source_id}` | `Vec<Column>` | |
 | `tracker_transitions` | `{ticket}` | `Vec<Transition>` | one call per ticket; the UI's StatusPicker matches several tickets by target status name |
 | `tracker_transition` | `{ticket, transition_id, fields?: Value}` | `Ticket` (`NeedsFields` error carries `detail.fields`) | |
-| `tracker_move` | `{ticket, column_id, project_id?}` (no `project_id`: the project whose binding or view account is the ticket's) | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
+| `tracker_move` | `{ticket, column_id, source_id?}` (no `source_id`: the board of the project bound to the ticket's account) | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
 | `tracker_comment` | `{ticket, markdown}` | `()` | |
 | `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
 | `tracker_assignable_users` | `{ticket, query}` | `Vec<User>` (assignee picker; `Unsupported` if the provider cannot list) | |

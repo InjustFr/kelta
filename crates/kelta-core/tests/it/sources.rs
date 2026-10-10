@@ -173,6 +173,10 @@ async fn a_tickets_pane_narrowed_to_a_source_polls_only_that_source() {
     h.core.ui_set_global_view(Some(pane(Some("team"))));
     settle().await;
     assert_eq!(h.core.scheduler_snapshot().subscriptions, 1);
+    // a source that no longer exists falls back to the pane's own scope
+    h.core.ui_set_global_view(Some(pane(Some("gone"))));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 4);
 }
 
 #[tokio::test]
