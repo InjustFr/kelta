@@ -119,6 +119,8 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `min_version` | str (semver) | `"2.1.200"` | older → warning, hooks still attempted |
 | `hook_transport` | enum(command\|http) | `command` | SessionStart always command |
 | `mcp` | bool | `true` | Kelta MCP server for Claude sessions |
+| `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
+| `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |
 | `append_system_prompt` | str | `""` | appended to generated `context.md` |
 | `extra_args` | list<str> | `[]` | appended before the prompt |
@@ -272,7 +274,7 @@ layout = { session = "shell" }
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
 
-Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
 
 ```toml
 [[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),

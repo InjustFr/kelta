@@ -256,7 +256,7 @@ impl PluginHost {
                     Some(id) => Scope::Project { id },
                     None => Scope::All,
                 };
-                to_value(core.ticket_list(scope, q.view_id, q.cursor).await?)
+                to_value(core.ticket_list(scope, q.view_id, q.cursor, false).await?)
             }
             PluginMethod::TicketsGet => {
                 let q: TicketParam = p(method, params)?;
@@ -630,6 +630,7 @@ impl PluginHost {
                     level: q.level.unwrap_or_default(),
                     text: crate::util::truncate(&q.text, 500),
                     action: None,
+                    secondary: None,
                 });
                 Ok(Value::Null)
             }

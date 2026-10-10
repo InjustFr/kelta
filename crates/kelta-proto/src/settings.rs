@@ -740,6 +740,11 @@ pub struct ClaudeSettings {
     pub hook_transport: HookTransport,
     /// Kelta MCP server for Claude sessions.
     pub mcp: bool,
+    /// Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.
+    pub mcp_board_writes: bool,
+    /// At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub mcp_offer: bool,
     /// Passed via `--allowedTools`.
     pub allowed_tools: Vec<String>,
     /// Appended to the generated `context.md`.
@@ -777,6 +782,8 @@ impl Default for ClaudeSettings {
             min_version: "2.1.200".into(),
             hook_transport: HookTransport::Command,
             mcp: true,
+            mcp_board_writes: true,
+            mcp_offer: true,
             allowed_tools: vec!["mcp__kelta__*".into()],
             append_system_prompt: String::new(),
             extra_args: Vec::new(),

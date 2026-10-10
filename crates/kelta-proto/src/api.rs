@@ -151,6 +151,16 @@ pub trait Tracker: Send + Sync {
         Err(KeltaError::unsupported("this tracker cannot set priorities"))
     }
 
+    /// Replaces `t`'s description (MCP `update_ticket_body`).
+    async fn set_body(&self, _t: &TicketRef, _body_md: &str) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot edit ticket descriptions"))
+    }
+
+    /// Closes `t`, on trackers where closing is apart from the board status (MCP `close_ticket`).
+    async fn close(&self, _t: &TicketRef) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("this tracker has no close apart from its statuses"))
+    }
+
     /// Files a new ticket in the project (repo, team...) that `project` lists (Tickets T11).
     async fn create(
         &self,
@@ -286,19 +296,26 @@ pub trait CoreApi: Send + Sync {
         markdown: &str,
         session: Option<&SessionId>,
     ) -> Result<(), KeltaError>;
-    /// `ticket.assigned` + cache invalidation, like `ticket_transition`.
-    async fn ticket_assign(&self, _ticket: &TicketRef, _who: Assignee) -> Result<Ticket, KeltaError> {
-        Err(KeltaError::unsupported("ticket_assign"))
-    }
     /// Kelta's Tickets list (cached, merged views, with `work_item_id`, `prs`, `caps`); `view_id`
-    /// narrows to one view.
+    /// narrows to one view, `refresh` skips the cache (MCP `list_tickets`).
     async fn ticket_list(
         &self,
         _scope: Scope,
         _view_id: Option<String>,
         _cursor: Option<Cursor>,
+        _refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         Ok(TicketPage::default())
+    }
+    async fn ticket_set_body(&self, ticket: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
+        self.tracker_for(&ticket.account).await?.set_body(ticket, body_md).await
+    }
+    async fn ticket_close(&self, ticket: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.tracker_for(&ticket.account).await?.close(ticket).await
+    }
+    /// `ticket.assigned` + cache invalidation, like `ticket_transition`.
+    async fn ticket_assign(&self, _ticket: &TicketRef, _who: Assignee) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("ticket_assign"))
     }
     /// A ticket with its `prs` and `caps`, like Kelta's detail view.
     async fn ticket_get(&self, _ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {

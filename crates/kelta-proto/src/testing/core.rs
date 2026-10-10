@@ -451,10 +451,11 @@ impl CoreApi for FakeCore {
         scope: Scope,
         view_id: Option<String>,
         cursor: Option<Cursor>,
+        refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         self.record(
             "ticket_list",
-            serde_json::json!({ "scope": Self::arg(&scope), "view_id": view_id, "cursor": Self::arg(&cursor) }),
+            serde_json::json!({ "scope": Self::arg(&scope), "view_id": view_id, "cursor": Self::arg(&cursor), "refresh": refresh }),
         );
         self.overridden("ticket_list").unwrap_or_else(|| Ok(TicketPage::default()))
     }
