@@ -149,7 +149,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `transition_ticket` | `to_category?` \| `to_name?` | via provider transitions | `tickets.write` |
 | `comment_ticket` | `body` | Markdown comment | `tickets.write` |
 | `assign_ticket` | `to = "me"\|"none"` | | `tickets.write` |
-| `http` | `url`, `method? = POST`, `headers?`, `body? (Template; default event JSON)`, `secret_headers? = {Header = SecretRef}`, `timeout_ms? = 10000` | outbound request | `net:<host>` |
+| `http` | `url`, `method? = POST`, `headers?`, `body? (Template; default event JSON)`, `secret_headers? = {Header = <secret>}` (§5.1), `timeout_ms? = 10000` | outbound request | `net:<host>` |
 | `focus` | `project?`, `session?` | focuses window/project/session | `ui.open` |
 | `set_attention` | `session`, `level` | | `sessions.write` |
 | `prompt` | `text`, `yes = [ActionDef]`, `no? = [ActionDef]` | in-app confirm toast with buttons | — |
@@ -199,6 +199,12 @@ do = [
   { action = "transition_ticket", to_category = "done" },
   { action = "prompt", text = "Remove worktree for {ticket.key}?", yes = [ { action = "command", id = "kelta.work.finish" } ] },
 ]
+
+# Deploy hook with a token from Settings (plugin trigger; `qa_token` is an `x-kelta-secret` setting, §5.1)
+[[contributes.triggers]]
+id = "deploy-qa"
+on = "custom.deploy_finished"
+do = [ { action = "http", url = "https://qa.example.com/run", secret_headers = { Authorization = { setting = "qa_token", format = "Bearer {secret}" } } } ]
 ```
 
 External events: `kelta-ctl emit custom.deploy_finished --json '{"env":"staging"}'` publishes `custom.deploy_finished` (only `custom.*` names accepted from the CLI).
@@ -338,6 +344,16 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 
 Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
 
+### 5.1 Secret settings (`secret_headers`)
+
+A plugin that calls a token-protected API marks a property of its settings schema `"x-kelta-secret": true`. The user fills it in Settings → Plugins with the SecretRef picker (`keyring:`, `env:`, `command:`, …); config files only ever hold the SecretRef (a raw token there is a settings issue). The `http` action and `net.fetch` name that setting in `secret_headers`; Kelta resolves it host-side and injects the header, so the plugin never receives the value:
+
+- `{ Authorization = { setting = "qa_token", format = "Bearer {secret}" } }`, or the shorthand `{ "X-Token" = "qa_token" }` (format `{secret}`).
+- The setting must be an `x-kelta-secret` property of the plugin's own schema; anything else (another setting, a raw ref such as `gh-cli`) is `invalid_argument`. Unset: the call fails with `needs_auth` and the toast `<plugin>: set "<title>" in Settings → Plugins`.
+- `settings.set` refuses secret keys; `settings.get` returns `"***"` for a set one and omits an unset one.
+- `net:<host>` still governs the destination. A 401 drops the cached secret.
+- In user-config triggers (no plugin) a `secret_headers` string is a SecretRef (`{ Authorization = "env:CI_TOKEN" }`); the `{setting, …}` form is rejected.
+
 ## 6. Events catalogue (BusEvent names; payload JSON)
 
 Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload, chain}`. Matcher roots: `event.*` (the envelope), `payload.*`, plus resolved context `project.{id,name}`, `session.{id,name,kind,cwd,visible,status}`, `ticket.{key,title,url,provider}`, `pr.{url,number,repo,head,base}`, `app.{focused}`.
@@ -392,7 +408,7 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `events.subscribe` / `events.unsubscribe` | `{names: [glob]}` | `events:<glob>` covering each |
 | `settings.get` | `{}` → own namespace values (+ effective non-secret settings with `settings.read`) | — / `settings.read` |
 | `settings.set` | `{key, value}` (own namespace, Global layer) | — |
-| `net.fetch` | `{url, method?, headers?, body?}` → `{status, headers, body (text or base64)}`; 5 MB cap | `net:<host>` |
+| `net.fetch` | `{url, method?, headers?, body?, secret_headers?}` (§5.1) → `{status, headers, body (text or base64)}`; 5 MB cap | `net:<host>` |
 | `ui.toast` / `ui.open_screen` / `ui.focus` | | — / `ui.open` / `ui.open` |
 | `notify.send` | `{title, body}` | `notify` |
 | `clipboard.write` | `{text}` | `clipboard.write` |

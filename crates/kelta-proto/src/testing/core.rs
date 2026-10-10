@@ -535,7 +535,10 @@ impl CoreApi for FakeCore {
     }
 
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
-        self.record("http_fetch", serde_json::json!({ "url": req.url, "method": req.method }));
+        self.record(
+            "http_fetch",
+            serde_json::json!({ "url": req.url, "method": req.method, "headers": req.headers }),
+        );
         self.overridden("http_fetch").unwrap_or_else(|| Err(KeltaError::network("FakeCore: no network")))
     }
 

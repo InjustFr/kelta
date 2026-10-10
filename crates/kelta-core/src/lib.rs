@@ -363,6 +363,7 @@ impl Core {
             settings_writer: Some(Arc::new(move |id: &kelta_proto::ids::PluginId, key: &str, value| {
                 config.layer_set(Layer::Global, None, None, &format!("plugins.{id}.{key}"), value).map(|_| ())
             })),
+            secrets: Some(self.resolver.clone()),
         });
         self.sync_plugin_schemas();
         apply_ticket_key_regex(&self.cfg.effective(None));
