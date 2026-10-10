@@ -359,6 +359,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             Ok(format!("Comment added to {}.", t.key))
         }
         "update_ticket_body" => update_ticket_body(core, args).await,
+        "list_review_requests" => list_review_requests(core).await,
         "close_ticket" => {
             let (_, t) = by_key(core, args).await?;
             if let Some(md) = args.get("comment").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
@@ -387,7 +388,6 @@ async fn call_session_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str,
         }
         "open_in_editor" => open_in_editor(core, sid, args).await,
         "create_pr" => create_pr(core, sid, args).await,
-        "list_review_requests" => list_review_requests(core).await,
         "get_review_feedback" => {
             let w = work(core, sid).await.ok_or_else(|| "no work item linked to this session".to_owned())?;
             Ok(core.work_feedback(&w.id).await.map_err(|e| e.message)?.to_markdown())

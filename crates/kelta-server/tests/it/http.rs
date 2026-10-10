@@ -458,6 +458,8 @@ async fn global_mcp_serves_the_board_tools() {
     )
     .await;
     assert_eq!(v["error"]["code"], -32602);
+    let (text, err) = global_call(port, "list_review_requests", json!({})).await;
+    assert!(!err, "{text}");
 
     // A stale revision writes nothing.
     let (text, err) =
