@@ -8,7 +8,7 @@ use kelta_config::ConfigService;
 use kelta_proto::api::SettingsSource;
 use kelta_proto::dirs::CliArgs;
 use kelta_proto::ids::{PluginId, ProjectId};
-use kelta_proto::settings::{Layer, RuntimeOverrides};
+use kelta_proto::settings::{Layer, RuntimeOverrides, Severity};
 use kelta_proto::testing::MemTrustStore;
 use serde_json::json;
 
@@ -504,4 +504,5 @@ fn a_bad_project_colour_is_a_warning() {
     assert_eq!(issues[0].issue.path, "project.color");
     assert_eq!(issues[0].issue.line, Some(4));
     assert!(issues[0].issue.message.contains("theme colour or #rrggbb"), "{issues:?}");
+    assert_eq!(issues[0].issue.severity, Severity::Warning);
 }

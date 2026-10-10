@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use kelta_proto::error::KeltaError;
-use kelta_proto::settings::ValidationIssue;
+use kelta_proto::settings::{Severity, ValidationIssue};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use toml_edit::{Document, Item, Table};
@@ -90,7 +90,13 @@ pub fn parse(text: &str) -> Result<Parsed, ValidationIssue> {
                 }
                 None => (None, None),
             };
-            Err(ValidationIssue { path: String::new(), message: e.message().to_owned(), line, col })
+            Err(ValidationIssue {
+                path: String::new(),
+                message: e.message().to_owned(),
+                line,
+                col,
+                severity: Severity::Error,
+            })
         }
     }
 }
@@ -167,7 +173,7 @@ pub fn issue_at(
         .and_then(|d| span_of(d, path))
         .map(|r| line_col(text, r.start))
         .map_or((None, None), |(l, c)| (Some(l), Some(c)));
-    ValidationIssue { path: join_path(path), message, line, col }
+    ValidationIssue { path: join_path(path), message, line, col, severity: Severity::Error }
 }
 
 /// SHA-256 hex digest.

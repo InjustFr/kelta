@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use kelta_proto::settings::{Layer, REPO_ALLOWED_KEYS, ValidationIssue};
+use kelta_proto::settings::{Layer, REPO_ALLOWED_KEYS, Severity, ValidationIssue};
 use serde_json::Value;
 
 use crate::path::{get, join_path, leaves, pointer_segments};
@@ -156,9 +156,36 @@ pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (globa
 
 pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
 
+/// Load-time reading of a global, project or repo document: `tools` outside the global file and a bad
+/// project colour are dropped from `value` and returned as warnings (the rest of the file still applies).
+/// Returns `(errors, warnings)`.
+pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (Vec<RawIssue>, Vec<RawIssue>) {
+    let mut warnings = Vec::new();
+    if layer != Layer::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some() {
+        warnings.push(RawIssue::new(
+            &["tools".to_owned()],
+            if layer == Layer::Repo { REPO_TOOLS_PERSONAL } else { PROJECT_TOOLS_GLOBAL },
+        ));
+    }
+    let errors = if layer == Layer::Project {
+        lenient_project_color(value, stem, &mut warnings)
+    } else {
+        layer_issues(layer, value, stem)
+    };
+    (errors, warnings)
+}
+
+/// [`position`] for non-blocking issues.
+pub fn position_warnings(text: &str, parsed: Option<&Parsed>, issues: Vec<RawIssue>) -> Vec<ValidationIssue> {
+    position(text, parsed, issues)
+        .into_iter()
+        .map(|i| ValidationIssue { severity: Severity::Warning, ..i })
+        .collect()
+}
+
 /// A project colour is cosmetic: `#rgb` reads as `#rrggbb`, and a bad one is reported in `warnings` and
 /// dropped so the project still loads. Returns the file's other issues.
-pub fn lenient_project_color(
+fn lenient_project_color(
     value: &mut Value,
     stem: Option<&str>,
     warnings: &mut Vec<RawIssue>,

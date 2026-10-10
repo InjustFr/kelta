@@ -95,7 +95,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         Layer, Settings, ProjectConfig, RepoConfig, CodeHostBinding, TrackerBinding, TrackerView,
         ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig, OAuthSettings,
         SessionTemplate, TemplateNode, EditorPreset, ClaudeProfile, LinuxGraphics,
-        EffectiveSettings, LayerDoc, ValidationIssue, TrustInfo, SettingsDiff,
+        EffectiveSettings, LayerDoc, ValidationIssue, Severity, TrustInfo, SettingsDiff,
         // secrets
         SecretRef, SecretBackendStatus, OAuthDevicePrompt,
         // events

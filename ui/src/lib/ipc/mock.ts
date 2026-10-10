@@ -585,7 +585,7 @@ export function createMockTransport(options: MockOptions = {}): {
     settings_validate: ({ text }) =>
       text.includes('=') || text.trim() === ''
         ? []
-        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1 }],
+        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1, severity: 'error' as const }],
     settings_write_raw: () => clone(state.settings),
     settings_open_file: ({ project_id }) =>
       spawn(
