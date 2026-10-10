@@ -26,6 +26,8 @@
   let gone = false;
   $effect(() => () => {
     gone = true;
+    // the wizard closed mid sign-in: stop the backend polling until the code expires
+    if (prompt) void ipc.oauthDeviceCancel({ user_code: prompt.user_code }).catch(() => {});
   });
 
   async function signIn(): Promise<void> {

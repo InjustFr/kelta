@@ -13,7 +13,7 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MyReviewState,
-    PrCreate, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -448,9 +448,15 @@ impl CodeHost for GitlabHost {
                 url: s(j, "web_url").map(str::to_owned),
             })
             .collect();
+        let state = match s(&mr, "state") {
+            Some("merged") => PrState::Merged,
+            Some("closed") => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
             body_html: markdown::to_html(s(&mr, "description").unwrap_or("")),
             review,
+            state,
             reviewers,
             checks,
             files,
@@ -521,6 +527,11 @@ impl CodeHost for GitlabHost {
         let v = self.json(HttpRequest::post(self.mr_url(&d.repo, "")).json(body)).await?.body;
         self.review_from(&v, Some(&d.repo), ReviewKind::Authored)
             .ok_or_else(|| KeltaError::upstream("create merge request response without iid"))
+    }
+
+    async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}", r.number));
+        self.auth.send_text(HttpRequest::put(url).json(json!({ "title": title }))).await.map(|_| ())
     }
 
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {

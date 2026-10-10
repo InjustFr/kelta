@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   import type { WorkItem } from '$lib/gen';
   import { workFinish } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
-  import { projects, sessions, toasts, work } from '$lib/stores';
-  import { Button, Dialog, Icon, Toggle } from '$lib/ui';
+  import { projects, sessions, tickets, toasts, work } from '$lib/stores';
+  import { ticketKey } from '$lib/stores/tickets.svelte';
+  import { Button, Dialog, Icon, Select, Toggle } from '$lib/ui';
 
   import { parseDirtyFiles } from './common';
 
@@ -16,9 +19,30 @@
   let { item, onclose, ondone }: Props = $props();
 
   const doneTarget = $derived(projects.byId(item.project_id)?.tracker?.status_map.done ?? null);
+  // Merged / closed on the host: prefilled cleanup (FLOW §4.6). The ticket was already moved on
+  // merge when unambiguous; otherwise the Done status is chosen here, never guessed.
+  const ended = $derived(item.state.kind === 'merged' || item.state.kind === 'pr_closed');
+  const endDetail = $derived(item.state.kind === 'merged' ? item.state.detail : null);
+  const choose = $derived(!!item.ticket && (item.state.kind === 'pr_closed' || endDetail !== null));
+  const doneChoices = $derived(
+    item.ticket
+      ? (tickets.transitions[ticketKey(item.ticket)]?.data ?? []).filter((t) => t.to.category === 'done')
+      : [],
+  );
   let removeWorktree = $state(true);
-  let deleteBranch = $state(false);
+  let deleteBranch = $state(untrack(() => ended));
   let moveDone = $state(true);
+  /** Chosen Done status name; '' leaves the ticket as is. */
+  let doneName = $state('');
+
+  $effect(() => {
+    const ref = item.ticket;
+    if (choose && ref) untrack(() => void tickets.loadTransitions(ref));
+  });
+
+  const transitionTo = $derived(
+    ended ? (doneName ? { name: doneName } : null) : moveDone ? doneTarget : null,
+  );
   let busy = $state(false);
   let dirty = $state<{ files: string[]; message: string } | null>(null);
 
@@ -35,7 +59,7 @@
           remove_worktree: removeWorktree,
           delete_branch: deleteBranch,
           force,
-          transition_to: moveDone ? doneTarget : null,
+          transition_to: transitionTo,
         },
       });
       work.upsert(updated);
@@ -84,9 +108,21 @@
             : `${working.length} sessions`}. Finishing stops it.
         </p>
       {/if}
+      {#if endDetail}
+        <p class="msg" data-testid="finish-detail"><Icon name="info" size={14} /> {endDetail}</p>
+      {/if}
       <Toggle label="Remove the worktree" bind:checked={removeWorktree} />
       <Toggle label="Delete the local branch" bind:checked={deleteBranch} />
-      {#if doneTarget && item.ticket}
+      {#if choose}
+        <Select
+          label="Done status"
+          bind:value={doneName}
+          options={[
+            { value: '', label: 'Leave the ticket as is' },
+            ...doneChoices.map((t) => ({ value: t.to.name, label: t.to.name })),
+          ]}
+        />
+      {:else if doneTarget && item.ticket && !ended}
         <Toggle label="Move the ticket to Done" bind:checked={moveDone} />
       {/if}
     </div>

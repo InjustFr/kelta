@@ -15,7 +15,7 @@ import type {
   Tab,
   TabId,
 } from '$lib/gen';
-import { sessionSpawn } from '$lib/ipc/commands';
+import { sessionSpawn, workCheckPrs } from '$lib/ipc/commands';
 import {
   activateTab,
   activeTab,
@@ -109,6 +109,8 @@ export function cycleProject(delta: 1 | -1): void {
 
 export function openInbox(): void {
   ui.inboxActive = true;
+  // Merges / closes missed while Kelta was closed or the poll was off (FLOW §3.6).
+  workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));
 }
 
 // ---- focus helpers --------------------------------------------------------------------------

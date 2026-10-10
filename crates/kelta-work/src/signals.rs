@@ -25,8 +25,15 @@ impl WorkService {
     /// inactive) never get here and never set a flag.
     pub(crate) async fn on_claude_hook(&self, sid: &SessionId, hook: HookPayload) -> Result<(), KeltaError> {
         let event = hook.hook_event_name.as_str();
+        // Claude asks: the hooks kelta-server maps to NeedsInput.
+        let asks = event == names::PERMISSION_REQUEST
+            || (event == names::NOTIFICATION
+                && matches!(
+                    hook.notification_type.as_deref(),
+                    Some("permission_prompt" | "elicitation_dialog" | "agent_needs_input")
+                ));
         // A new session id comes with SessionStart (/clear, in-Claude /resume); tool hooks are noise.
-        if ![names::SESSION_START, names::USER_PROMPT_SUBMIT, names::STOP].contains(&event) {
+        if !asks && ![names::SESSION_START, names::USER_PROMPT_SUBMIT, names::STOP].contains(&event) {
             return Ok(());
         }
         let core = self.api()?;
@@ -69,13 +76,17 @@ impl WorkService {
                 if uuid.is_some() {
                     w.claude_uuid.clone_from(&uuid);
                 }
+                if asks || event == names::STOP {
+                    w.claude_at = Some(kelta_proto::now_rfc3339());
+                }
                 match (event, changes) {
                     (names::USER_PROMPT_SUBMIT, _) => (w.review_due, w.claude_replied) = (false, false),
                     (names::STOP, Some(true)) => (w.review_due, w.claude_replied) = (true, false),
                     (names::STOP, Some(false)) => w.claude_replied = true,
                     _ => {}
                 }
-                before != (w.review_due, w.claude_replied, w.claude_uuid.clone())
+                asks || event == names::STOP
+                    || before != (w.review_due, w.claude_replied, w.claude_uuid.clone())
             })
             .await?;
         // Core leaves the "finished" notification of a work item's Claude to us.

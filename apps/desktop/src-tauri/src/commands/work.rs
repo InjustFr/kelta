@@ -41,11 +41,28 @@ pub async fn work_retry_step(core: State<'_, Arc<Core>>, id: WorkItemId, step: S
     core.work().retry_step(&id, &step).await
 }
 
-/// A UI Ship counts as review (FLOW §2.3); Claude's own MCP `create_pr` does not.
+/// Ship from the UI (`origin: ui`, counts as review, FLOW §2.3; the MCP `create_pr` tool is the `mcp` caller).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_create_pr(core: State<'_, Arc<Core>>, id: WorkItemId, draft: PrDraft) -> Res<WorkItem> {
-    core.work().create_pr(&id, draft).await?;
+    core.work().create_pr(&id, draft, ShipOrigin::Ui).await?;
     core.work().mark_reviewed(&id).await
+}
+
+/// Title, body and draft flag Ship would use (prefills the Ship dialog).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_pr_draft(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<PrDraft> {
+    core.work().pr_draft(&id).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_finish_merged(core: State<'_, Arc<Core>>, ids: Vec<WorkItemId>) -> Res<FinishMergedReport> {
+    core.work().finish_merged(&ids).await
+}
+
+/// Missed merges / closes of work-item PRs (Now open; also run on startup).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_check_prs(core: State<'_, Arc<Core>>) -> Res<()> {
+    core.check_work_prs().await
 }
 
 #[tauri::command(rename_all = "snake_case")]

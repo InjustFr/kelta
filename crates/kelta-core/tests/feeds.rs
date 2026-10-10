@@ -11,11 +11,11 @@ use common::*;
 use kelta_core::store::q;
 use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
-use kelta_proto::codehost::{CiState, Review, ReviewKind, ReviewRef};
-use kelta_proto::events::{BusEvent, UiEvent};
+use kelta_proto::codehost::{CiState, PrState, Review, ReviewKind, ReviewRef};
+use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::ipc::WindowState;
-use kelta_proto::model::Scope;
+use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
 use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
@@ -54,8 +54,11 @@ struct Env {
 }
 
 fn env(root: &std::path::Path, reviews: Vec<Review>) -> Env {
+    env_with(root, ListHost::new(reviews))
+}
+
+fn env_with(root: &std::path::Path, host: Arc<ListHost>) -> Env {
     let tracker = Arc::new(FakeTracker::new());
-    let host = ListHost::new(reviews);
     let factory = Arc::new(Factory::default());
     factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker.clone() as Arc<dyn Tracker>);
     factory.hosts.lock().insert(AccountId::new("github-work"), host.clone() as Arc<dyn CodeHost>);
@@ -303,4 +306,125 @@ async fn unchanged_gate_skips_requested_but_authored_still_polls() {
     assert_eq!(*e.host.calls.lock(), 0, "gate says unchanged");
     e.h.core.refresh(&sub(ReviewKind::Authored)).await.unwrap();
     assert_eq!(*e.host.calls.lock(), 1, "authored never consumes the gate");
+}
+
+/// A ticket-less work item on shop's bound repo.
+fn work_item(branch: &str, pr_url: Option<&str>) -> WorkItem {
+    WorkItem {
+        repo_id: "main".into(),
+        kind: WorkKind::Branch,
+        ticket: None,
+        branch: branch.into(),
+        pr_url: pr_url.map(str::to_owned),
+        state: if pr_url.is_some() { WorkState::PrOpen } else { WorkState::Active },
+        session_ids: vec![],
+        ..kelta_proto::samples::work_item()
+    }
+}
+
+async fn wait_work(e: &Env, pred: impl Fn(&WorkItem) -> bool) -> WorkItem {
+    for _ in 0..200 {
+        if let Some(w) = e.h.core.work().list(None).await.unwrap().into_iter().find(|w| pred(w)) {
+            return w;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("work item never reached the expected state");
+}
+
+#[tokio::test]
+async fn authored_always_includes_drafts_requested_follows_the_setting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut mine = review("acme/shop-api", 90, ReviewKind::Authored);
+    mine.draft = true;
+    let mut asked = review("acme/shop-api", 91, ReviewKind::ReviewRequested);
+    asked.draft = true;
+    let e = env(tmp.path(), vec![mine, asked]);
+    assert!(!settings().reviews.include_drafts);
+    let authored = e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(authored.items.len(), 1, "a draft PR is how Louis reviews on GitHub (B6)");
+    let requested = e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
+    assert!(requested.items.is_empty());
+}
+
+#[tokio::test]
+async fn work_item_prs_keep_authored_subscribed_without_panes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    e.h.cfg.update(|s| s.notifications.enabled = false);
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0);
+    let mut w = work_item("feat/x", Some("https://github.com/acme/shop-api/pull/90"));
+    e.h.core.publish(BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": w })));
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 1, "authored for github-work (B7)");
+    w.state = WorkState::Finished;
+    e.h.core.publish(BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": w })));
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0);
+}
+
+#[tokio::test]
+async fn merge_while_kelta_was_closed_lands_as_merged_on_next_launch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut pr = review("acme/shop-api", 90, ReviewKind::Authored);
+    pr.url = "https://github.com/acme/shop-api/pull/90".into();
+    let item = work_item("feat/x", Some(&pr.url));
+    {
+        let e = env(tmp.path(), vec![pr.clone()]);
+        let it = item.clone();
+        e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+        e.h.core.shutdown().await.unwrap();
+    }
+    // Merged on the host while Kelta was closed: no longer in the authored open list.
+    let host = ListHost::new(vec![]);
+    host.ended.lock().push((pr.clone(), PrState::Merged));
+    let e = env_with(tmp.path(), host);
+    let mut rx = e.h.core.subscribe();
+    // What start_async runs at launch (start_services is off in tests, like work.startup).
+    e.h.core.check_work_prs().await.unwrap();
+    let got = wait_work(&e, |w| w.id == item.id && w.state != WorkState::PrOpen).await;
+    assert_eq!(got.state, WorkState::Merged { detail: None });
+    // The next check (Now open) publishes nothing new: once per PR.
+    e.h.core.check_work_prs().await.unwrap();
+    let merged = bus_names(&mut rx).into_iter().filter(|ev| ev.name == bus::PR_MERGED).count();
+    assert_eq!(merged, 1);
+}
+
+#[tokio::test]
+async fn closed_pr_leaving_the_authored_list_is_pr_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let pr = review("acme/shop-api", 91, ReviewKind::Authored);
+    let e = env(tmp.path(), vec![pr.clone()]);
+    let item = work_item("feat/y", Some(&pr.url));
+    let it = item.clone();
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    e.h.core.check_work_prs().await.unwrap(); // listed: open, nothing to do
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    e.host.reviews.lock().clear();
+    e.host.ended.lock().push((pr, PrState::Closed));
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap(); // live diff
+    let got = wait_work(&e, |w| w.id == item.id && w.state != WorkState::PrOpen).await;
+    assert_eq!(got.state, WorkState::PrClosed);
+}
+
+#[tokio::test]
+async fn authored_pr_on_an_item_branch_is_joined_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut pr = review("acme/shop-api", 92, ReviewKind::Authored);
+    pr.source_branch = "feat/SHOP-142-rate-limit-login".into();
+    let e = env(tmp.path(), vec![pr.clone()]);
+    let mut item = work_item(&pr.source_branch, None);
+    item.kind = WorkKind::Ticket;
+    item.ticket = Some(kelta_proto::samples::ticket_ref());
+    let it = item.clone();
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    for _ in 0..2 {
+        e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    }
+    let got = wait_work(&e, |w| w.id == item.id && w.pr_url.is_some()).await;
+    assert_eq!((got.pr_url.as_deref(), got.state), (Some(pr.url.as_str()), WorkState::PrOpen));
+    // on_pr ran once: one move to In Review.
+    let moves = e.tracker.calls().iter().filter(|c| c.starts_with("transition:SHOP-142")).count();
+    assert_eq!(moves, 1, "{:?}", e.tracker.calls());
 }

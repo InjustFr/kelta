@@ -56,7 +56,8 @@ describe('Now', () => {
     ]);
     const header = screen.getByTestId('now-header');
     expect(header.textContent).toContain('Claude: 1 asks, 1 ready');
-    expect(header.textContent).toMatch(/Teammates: 3 PRs/);
+    // #311, #98, #7 and #101 (updated since my review).
+    expect(header.textContent).toMatch(/Teammates: 4 PRs/);
     expect(header.title).toBe(nowSummary().header);
     // A work item shows once; its sessions are not listed as plain sessions.
     expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(

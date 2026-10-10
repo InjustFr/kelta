@@ -4,7 +4,7 @@ mod support;
 
 use std::time::Duration;
 
-use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind};
+use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind};
 use kelta_proto::error::ErrorCode;
 use serde_json::{Value, json};
 use support::*;
@@ -201,6 +201,7 @@ async fn detail_combines_reviews_checks_and_files() {
     mount_detail(&server, "github/pull.json", "github/reviews.json", "github/check_runs.json").await;
     let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
     assert_eq!(d.review.kind, ReviewKind::ReviewRequested);
+    assert_eq!(d.state, PrState::Open);
     assert_eq!(d.review.head_sha, "abc123");
     assert_eq!(d.review.ci, CiState::Pending, "one run still in progress");
     assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested));
@@ -249,6 +250,7 @@ async fn detail_of_my_approved_and_failing_pull_requests() {
     let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
     assert_eq!(d.review.kind, ReviewKind::Authored);
     assert_eq!(d.review.my_state, None);
+    assert_eq!(d.state, PrState::Merged, "merged_at set");
 }
 
 #[tokio::test]
@@ -401,8 +403,15 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     )
     .await;
     let log: String = (1..=60).map(|i| format!("line {i}\n")).collect();
+    // GitHub answers a 302 to a signed blob URL on another host ("localhost" vs "127.0.0.1").
+    let blob = server.uri().replace("127.0.0.1", "localhost") + "/blob/9";
     Mock::given(method("GET"))
         .and(path("/repos/acme/shop/actions/jobs/9/logs"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", blob.as_str()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/blob/9"))
         .respond_with(ResponseTemplate::new(200).set_body_string(log))
         .mount(&server)
         .await;
@@ -424,6 +433,9 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     let tail = c.log_tail.as_deref().unwrap();
     assert_eq!(tail.lines().count(), 40);
     assert!(tail.starts_with("line 21") && tail.ends_with("line 60"));
+    let blob_req =
+        server.received_requests().await.unwrap().into_iter().find(|r| r.url.path() == "/blob/9").unwrap();
+    assert!(!blob_req.headers.contains_key("authorization"), "the token never goes to the blob host");
 }
 
 #[tokio::test]
@@ -437,6 +449,19 @@ async fn feedback_refused_names_the_missing_scope() {
     let e = gh(&server).feedback(&rref("github-work", "acme/shop", 101)).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::PermissionDenied);
     assert_eq!(e.message, "GitHub refused the review threads (403: token lacks `pull_requests:read`).");
+}
+
+#[tokio::test]
+async fn update_title_patches_the_pull_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("PATCH"))
+        .and(path("/repos/acme/shop/pulls/101"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .mount(&server)
+        .await;
+    gh(&server).update_title(&rref("github-work", "acme/shop", 101), "SHOP-7: Speed up").await.unwrap();
+    let body = &bodies(&server, "PATCH", "/repos/acme/shop/pulls/101").await[0];
+    assert_eq!(body["title"], "SHOP-7: Speed up");
 }
 
 #[tokio::test]

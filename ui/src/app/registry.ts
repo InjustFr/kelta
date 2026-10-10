@@ -64,6 +64,9 @@ export type RegisteredSheetKey =
   | 'project_new'
   | 'plugin_install'
   | 'tool_picker'
+  | 'ship'
+  | 'finish'
+  | 'finish_merged'
   | 'fix'
   | 'work_dialog';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
@@ -74,6 +77,9 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   project_new: () => import('../views/onboarding/ProjectNewSheet.svelte'),
   plugin_install: () => import('../views/plugins/InstallSheet.svelte'),
   tool_picker: () => import('../views/tools/ToolPicker.svelte'),
+  ship: () => import('../views/work/ShipDialog.svelte'),
+  finish: () => import('../views/work/FinishDialog.svelte'),
+  finish_merged: () => import('../views/work/FinishMergedDialog.svelte'),
   fix: () => import('../views/work/FixSheet.svelte'),
   work_dialog: () => import('../views/work/WorkDialog.svelte'),
 };

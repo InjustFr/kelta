@@ -15,8 +15,8 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackReview, FeedbackThread, FileChange,
-    MyReviewState, PrCreate, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
-    Reviewer,
+    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
+    ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -228,9 +228,16 @@ impl GithubHost {
             return None;
         }
         let id = run.get("id").and_then(Value::as_u64)?;
-        // 302 to a signed blob URL; reqwest follows it and drops the Authorization header.
+        // 302 to a signed blob URL on another host: the client stops cross-host redirects, so
+        // fetch the `location` ourselves without credentials.
         let url = self.repo_url(repo, &format!("/actions/jobs/{id}/logs"));
-        let text = self.auth.send_text(HttpRequest::get(url)).await.ok()?.body;
+        let text = match self.auth.send_text(HttpRequest::get(url)).await {
+            Ok(r) => r.body,
+            Err(e) => {
+                let loc = e.detail.as_ref()?.get("location")?.as_str()?;
+                self.auth.http().send_text(HttpRequest::get(loc)).await.ok()?.body
+            }
+        };
         Some(log_tail(&text))
     }
 
@@ -597,9 +604,15 @@ impl CodeHost for GithubHost {
                 deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
             })
             .collect();
+        let state = match (pull.get("merged_at").is_some_and(|m| !m.is_null()), s(&pull, "state")) {
+            (true, _) => PrState::Merged,
+            (false, Some("closed")) => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
+            state,
             reviewers,
             checks,
             files,
@@ -693,6 +706,11 @@ impl CodeHost for GithubHost {
         })?;
         self.rest_pr(&v.body, &d.repo, ReviewKind::Authored)
             .ok_or_else(|| KeltaError::upstream("create pull request response without number"))
+    }
+
+    async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        self.auth.send_text(HttpRequest::patch(url).json(json!({ "title": title }))).await.map(|_| ())
     }
 
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {

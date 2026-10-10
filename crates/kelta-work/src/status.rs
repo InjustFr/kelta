@@ -10,6 +10,7 @@ use kelta_proto::model::{
     CloseOnExit, GitStatus, RestorePolicy, SessionInfo, SessionKind, SpawnRequest, WorkItem, WorkState,
 };
 
+use crate::fixloop::refuse_if_busy;
 use crate::saga::{COLS, Env, ROWS};
 use crate::template::{Mode, render, shell_quote};
 use crate::{WorkService, editor, git, rebase};
@@ -67,6 +68,11 @@ impl WorkService {
                 if let Err(e) = git::fetch(&env.repo.path, &env.repo.remote, &[], timeout).await {
                     tracing::debug!(repo = %env.repo.path.display(), error = %e.message, "status fetch failed");
                 }
+                for item in items.iter().filter(|w| w.review.is_some()) {
+                    if let Err(e) = self.follow_pr_head(&env, item, timeout).await {
+                        tracing::debug!(work_item = %item.id, error = %e.message, "review checkout not updated");
+                    }
+                }
             }
             let mut out = Vec::new();
             for item in items {
@@ -78,6 +84,29 @@ impl WorkService {
             out
         });
         Ok(futures::future::join_all(jobs).await.into_iter().flatten().collect())
+    }
+
+    /// A review checkout follows the PR head (FLOW §4.7): fetch, then fast-forward only on a clean
+    /// worktree. Dirty or busy items stay put; Now still shows "Updated since your review".
+    async fn follow_pr_head(&self, env: &Env, item: &WorkItem, timeout: Duration) -> Result<(), KeltaError> {
+        let Some(r) = &item.review else { return Ok(()) };
+        let lock = self.item_lock(&item.id);
+        let Ok(_guard) = lock.try_lock() else { return Ok(()) };
+        // A reviewing Claude reads files without locking: moving them mid-turn skews its line comments.
+        if refuse_if_busy(env, item, &self.load_journal(&item.id), "").is_err() {
+            return Ok(());
+        }
+        if !item.worktree.is_dir() || !git::dirty_files(&item.worktree).await?.is_empty() {
+            return Ok(());
+        }
+        let spec = env.core.code_host_for(&r.account).await?.fetch_refspec(r, &item.branch);
+        let head = spec.split(':').next().unwrap_or(&spec);
+        // FETCH_HEAD is per worktree, so the fetch runs in the checkout itself.
+        git::fetch(&item.worktree, &env.repo.remote, &[head], timeout).await?;
+        // shortcut: a force-pushed PR head does not fast-forward and stays put; Start review again to follow it.
+        git::run_ok(&item.worktree, &["merge", "--ff-only", "--quiet", "FETCH_HEAD"], timeout)
+            .await
+            .map(|_| ())
     }
 
     /// Claims the fetch slot of `repo` when the floor has passed.

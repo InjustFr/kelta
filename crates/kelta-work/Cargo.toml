@@ -19,15 +19,12 @@ regex = { workspace = true }
 which = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
-sha2 = { workspace = true }
 globset = { workspace = true }
 semver = { workspace = true }
 rustix = { workspace = true }
 parking_lot = { workspace = true }
 futures = { workspace = true }
-bytes = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 kelta-proto = { workspace = true, features = ["testing"] }

@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use common::*;
 use kelta_proto::api::TerminalHost;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{FRAME_DATA, LoginEnv, TerminalLimits};
+use kelta_proto::term::{FRAME_DATA, TerminalLimits};
 use kelta_term::PtyTerminalHost;
 
 fn write(name: &str, cols: u16, rows: u16, bytes: &[u8]) {
@@ -137,7 +137,7 @@ fn capture(
     inputs: &[(u64, &[u8])],
     max: Duration,
 ) -> Vec<u8> {
-    let host = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let host = PtyTerminalHost::new(TerminalLimits::default());
     let events = Arc::new(Events::default());
     let mut sp = spec("rec", program, args, cols, rows, events.clone());
     sp.env.insert("FAKE_CLAUDE_STEP_MS".into(), "50".into());

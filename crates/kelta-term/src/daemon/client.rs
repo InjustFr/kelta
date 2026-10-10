@@ -144,7 +144,8 @@ impl DaemonTerminalHost {
         Ok(Arc::new(h))
     }
 
-    /// Connect, starting `exe --socket <sock>` (stderr appended to `log`) when none answers.
+    /// Connect, starting `exe --socket <sock> --history <history>` (stderr appended to `log`) when
+    /// none answers.
     pub fn connect_or_launch(
         sock: &Path,
         exe: &Path,

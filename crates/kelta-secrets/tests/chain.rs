@@ -8,13 +8,19 @@ use std::time::{Duration, Instant};
 
 use kelta_proto::api::{SecretResolver, SettingsSource};
 use kelta_proto::error::ErrorCode;
+use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{SecretCtx, SecretRef};
 use kelta_proto::settings::Settings;
 use kelta_proto::testing::FakeSettings;
-use kelta_secrets::{Secrets, SecretsOptions, secret_ctx};
+use kelta_secrets::{Secrets, SecretsOptions};
 
 #[path = "support/capture.rs"]
 mod capture;
+
+/// Built the way production builds it (`Authed`, KPP providers).
+fn secret_ctx(account: Option<AccountId>, base_url: Option<&str>) -> SecretCtx {
+    SecretCtx { account, host: base_url.and_then(kelta_http::util::url_host) }
+}
 
 fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
     let p = dir.join(name);

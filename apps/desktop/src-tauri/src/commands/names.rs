@@ -31,6 +31,7 @@ pub const COMMANDS: &[&str] = &[
     "secret_unlock",
     "oauth_device_start",
     "oauth_device_finish",
+    "oauth_device_cancel",
     "account_test",
     // projects
     "project_list",
@@ -87,6 +88,9 @@ pub const COMMANDS: &[&str] = &[
     "work_create_pr",
     "work_finish",
     "work_status",
+    "work_pr_draft",
+    "work_finish_merged",
+    "work_check_prs",
     "work_send",
     "work_feedback",
     "work_rerequest_review",

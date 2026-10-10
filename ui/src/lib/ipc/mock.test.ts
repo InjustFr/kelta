@@ -144,6 +144,7 @@ describe('mock transport', () => {
       secret_unlock: { passphrase: 'p', create: false },
       oauth_device_start: { kind: 'github', base_url: 'https://api.github.com', secret_ref: 'keyring:x' },
       oauth_device_finish: { user_code: 'WDJB-MJHT' },
+      oauth_device_cancel: { user_code: 'WDJB-MJHT' },
       account_test: { account_id: 'jira-acme' },
       project_detect: { path: '/Users/ada/code/new-thing' },
       project_update: {
@@ -211,6 +212,8 @@ describe('mock transport', () => {
       work_retry_step: { id: work.id, step: 'persist' },
       work_create_pr: { id: work.id, draft: { title: null, body: null, draft: null } },
       work_status: { id: work.id },
+      work_pr_draft: { id: work.id },
+      work_finish_merged: { ids: [] },
       work_feedback: { id: withPr.id },
       work_rerequest_review: { id: withPr.id },
       work_rebase: { id: withPr.id, op: { kind: 'start', onto: 'base', no_fetch: false } },

@@ -19,8 +19,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Fallback for the agent sandbox, where cargo-deny is not on PATH.
-deny_fallback=/private/tmp/claude-501/-Users-louis-Sites/10873210-1cff-4909-b4c8-033e000be9b3/scratchpad/tools/bin/cargo-deny
+if ! command -v cargo-deny >/dev/null 2>&1; then
+  echo "ci-local: cargo-deny is not on PATH; install it with \`brew install cargo-deny\` or \`cargo install cargo-deny\`" >&2
+  exit 1
+fi
 
 names=() results=() secs=()
 failed=0
@@ -54,14 +56,7 @@ linux_relevant() {
 run qa bash scripts/qa.sh
 run e2e e2e
 
-if cargo deny --version >/dev/null 2>&1; then
-  run cargo-deny cargo deny check licenses bans sources
-elif [ -x "$deny_fallback" ]; then
-  run cargo-deny "$deny_fallback" check licenses bans sources
-else
-  echo "ci-local: WARNING cargo-deny not found (cargo install cargo-deny), skipping licenses/bans/sources" >&2
-  skip cargo-deny "not installed"
-fi
+run cargo-deny cargo deny check licenses bans sources
 
 if [ "$(uname -s)" = Linux ]; then
   skip linux-check "host is Linux"
