@@ -214,6 +214,7 @@ impl PluginHost {
                     level: level.unwrap_or_default(),
                     text: truncate(&cx.x(text)?, 500),
                     action: None,
+                    secondary: None,
                 });
                 Ok(String::new())
             }
@@ -508,6 +509,7 @@ impl PluginHost {
                         command: PROMPT_UI_ACTION.into(),
                         args: Some(json!({ "command_id": format!("{PROMPT_COMMAND_PREFIX}{token}") })),
                     }),
+                    secondary: None,
                 });
                 Ok(String::new())
             }

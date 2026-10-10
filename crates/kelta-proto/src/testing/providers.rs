@@ -331,6 +331,16 @@ impl Tracker for FakeTracker {
         })
     }
 
+    async fn set_body(&self, t: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
+        self.enter(&format!("set_body:{}", t.key))?;
+        self.update(t, |d| d.body_md = body_md.to_owned()).map(|_| ())
+    }
+
+    async fn close(&self, t: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.enter(&format!("close:{}", t.key))?;
+        self.update(t, |d| d.ticket.status = workflow()[3].clone())
+    }
+
     fn browser_url(&self, t: &TicketRef) -> String {
         format!("https://acme.atlassian.net/browse/{}", t.key)
     }

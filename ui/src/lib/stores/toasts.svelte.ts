@@ -54,9 +54,10 @@ export class ToastsStore {
     return this.list.findLast((t) => t.toast.action) ?? null;
   }
 
-  /** Dismisses a toast and runs its action. */
-  async run(id: number): Promise<void> {
-    const action = this.list.find((t) => t.id === id)?.toast.action;
+  /** Dismisses a toast and runs its action (or its `secondary` one). */
+  async run(id: number, secondary = false): Promise<void> {
+    const toast = this.list.find((t) => t.id === id)?.toast;
+    const action = secondary ? toast?.secondary : toast?.action;
     this.dismiss(id);
     if (!action) return;
     const args =
@@ -84,6 +85,7 @@ export class ToastsStore {
   }
 
   apply(ev: UiEvent): void {
-    if (ev.type === 'toast') this.push(ev.toast);
+    // A toast asking a choice stays until answered.
+    if (ev.type === 'toast') this.push(ev.toast, ev.toast.secondary ? { timeoutMs: 0 } : {});
   }
 }

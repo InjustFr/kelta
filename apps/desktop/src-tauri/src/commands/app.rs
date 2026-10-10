@@ -59,3 +59,19 @@ pub async fn perf_snapshot(core: State<'_, Arc<Core>>) -> Res<PerfSnapshot> {
 pub async fn notify_test(core: State<'_, Arc<Core>>) -> Res<()> {
     core.notify_test().await
 }
+
+/// Kelta's MCP in Claude Code (Settings → Claude): `None` = Claude Code not found.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_mcp_status(core: State<'_, Arc<Core>>) -> Res<Option<bool>> {
+    Ok(core.claude_mcp_status().await)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_mcp_install(core: State<'_, Arc<Core>>) -> Res<()> {
+    core.claude_mcp_install().await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_mcp_remove(core: State<'_, Arc<Core>>) -> Res<()> {
+    core.claude_mcp_remove().await
+}

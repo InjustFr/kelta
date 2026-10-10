@@ -2,7 +2,8 @@
 //!
 //! Local surfaces (ARCHITECTURE §2, §7.6, §11.1, PLUGINS §8): ctl socket server (line JSON,
 //! peer-uid + per-session hook token checks), hook ingestion → `hooks::map`, lazy loopback axum
-//! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`), Claude IDE bridges (`ide`).
+//! server (MCP at `/mcp/<sid>` and the global `/mcp`, http hooks at `/hook/<sid>`), Claude IDE
+//! bridges (`ide`).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -74,7 +75,18 @@ impl Server {
 
     /// Start the loopback HTTP server if needed and take a consumer reference; returns the port.
     pub async fn ensure_http(&self) -> Result<u16, KeltaError> {
-        http::ensure(&self.http, self.core.clone(), self.tokens.clone())
+        http::ensure(&self.http, self.core.clone(), self.tokens.clone(), None)
+    }
+
+    /// [`Self::ensure_http`] on `preferred` when the server is not running yet and the port is free
+    /// (a registered URL survives a restart).
+    pub async fn ensure_http_at(&self, preferred: Option<u16>) -> Result<u16, KeltaError> {
+        http::ensure(&self.http, self.core.clone(), self.tokens.clone(), preferred)
+    }
+
+    /// Opens the global `/mcp` with this install token (`None` closes it).
+    pub fn set_install_token(&self, token: Option<&str>) {
+        self.tokens.set_global(token);
     }
 
     /// Release a consumer reference; the server stops at 0 (no idle timer).
