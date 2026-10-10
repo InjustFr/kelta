@@ -74,6 +74,7 @@ jobs:
     # runs on the macOS host.
     container:
       image: ${{ startsWith(matrix.os, 'ubuntu') && 'ghcr.io/injustfr/kelta-ci:latest' || '' }}
+      options: --init # PID 1 reaps orphans: the process-group kill tests wait for their grandchildren to go
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
