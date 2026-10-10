@@ -710,7 +710,10 @@ impl WorkService {
             } else {
                 let remote_base = format!("{}/{}", env.repo.remote, item.base);
                 let remote_branch = format!("{}/{}", env.repo.remote, item.branch);
-                let start = if git::ref_exists(repo, &format!("refs/remotes/{remote_branch}")).await? {
+                // Only an adopted PR or a review starts from its remote branch: a stale same-named
+                // branch (merged and not deleted, a teammate's) must not seed a new item.
+                let from_remote = item.pr_url.is_some() || item.review.is_some();
+                let start = if from_remote && git::ref_exists(repo, &format!("refs/remotes/{remote_branch}")).await? {
                     remote_branch
                 } else if git::ref_exists(repo, &remote_base).await? {
                     remote_base

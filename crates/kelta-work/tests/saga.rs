@@ -555,3 +555,21 @@ async fn concurrent_starts_for_one_ticket_make_one_item() {
     assert!(ids.iter().all(|i| *i == ids[0]));
     assert_eq!(fx.store_items().await.len(), 1);
 }
+
+#[tokio::test]
+async fn a_stale_remote_branch_of_the_same_name_does_not_seed_a_new_item() {
+    need_git!();
+    let fx = Fx::new();
+    // An earlier item's branch was merged and deleted locally; origin kept it.
+    let b = "feat/SHOP-141-add-login-form";
+    git(&fx.repo, &["checkout", "-q", "-b", b]);
+    git(&fx.repo, &["commit", "-q", "--allow-empty", "-m", "old merged work"]);
+    git(&fx.repo, &["push", "-q", "origin", b]);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    git(&fx.repo, &["branch", "-q", "-D", b]);
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.branch, b);
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), git(&fx.repo, &["rev-parse", "origin/main"]));
+}
