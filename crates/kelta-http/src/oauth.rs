@@ -202,8 +202,10 @@ pub async fn device_finish(
         ];
         let r: Resp = match post_form(http, &auth.grant.token_url, &form).await {
             Ok(r) => r,
-            // RFC 8628 §3.5: keep polling through transient network failures
-            Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout) => continue,
+            // RFC 8628 §3.5: keep polling through transient failures; Upstream = a non-JSON body (a 5xx page)
+            Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout | ErrorCode::Upstream) => {
+                continue;
+            }
             Err(e) => return Err(e),
         };
         match r.error.as_deref() {
@@ -274,15 +276,8 @@ pub async fn refreshed(
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh_token),
     ];
-    let r: Resp = match post_form(http, &grant.token_url, &form).await {
-        Ok(r) => r,
-        // offline: the refresh token is still good, the next request retries
-        Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout) => return Err(e),
-        Err(e) => {
-            tracing::warn!(code = %e.code, "oauth refresh failed");
-            return Err(sign_in_again("the OAuth token could not be refreshed"));
-        }
-    };
+    // offline or a 5xx page: the refresh token is still good, the next request retries
+    let r: Resp = post_form(http, &grant.token_url, &form).await?;
     if let Some(code) = &r.error {
         tracing::warn!(error = %code, "oauth refresh refused");
         return Err(sign_in_again("the OAuth token could not be refreshed"));

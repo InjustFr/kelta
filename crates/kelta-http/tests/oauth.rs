@@ -105,6 +105,13 @@ async fn gitlab_device_flow_stores_refresh_token_and_expiry() {
     let server = MockServer::start().await;
     mount_device(&server, "/oauth/authorize_device").await;
     answer(&server, "/oauth/token", 400, json!({"error": "authorization_pending"})).await;
+    // a deploy's 502 page mid-poll does not end the sign-in
+    Mock::given(path("/oauth/token"))
+        .respond_with(ResponseTemplate::new(502).set_body_string("<html>502 Bad Gateway</html>"))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&server)
+        .await;
     answer(
         &server,
         "/oauth/token",
@@ -234,6 +241,21 @@ async fn failed_refresh_is_needs_auth() {
     assert_eq!(e.code, ErrorCode::NeedsAuth);
     assert!(e.message.contains("sign in again"), "{}", e.message);
     assert_no_secret(&log.contents());
+}
+
+#[tokio::test]
+async fn refresh_5xx_keeps_the_account_signed_in() {
+    let server = MockServer::start().await;
+    Mock::given(path("/oauth/token"))
+        .respond_with(ResponseTemplate::new(502).set_body_string("<html>502 Bad Gateway</html>"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let secrets =
+        FakeSecrets::with(&[("keyring:gl", "glpat_OLD"), ("keyring:gl.oauth", &grant(&server, -10))]);
+    let e = oauth_authed(&server, secrets.clone()).prepare(HttpRequest::get("http://h/")).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Upstream);
+    assert!(stored(&secrets, "keyring:gl.oauth").await.contains("REFRESH_OLD"));
 }
 
 #[tokio::test]
