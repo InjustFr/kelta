@@ -199,3 +199,24 @@ describe('ReviewsPane cross links (rail views)', () => {
     expect(ui.select).toBeNull();
   });
 });
+
+describe('ReviewsPane waiting chips (#240)', () => {
+  it('chips every row; amber past the SLA on my PRs only; the nudge menu opens on mine only', async () => {
+    const asked = { why: 'review', since: '2020-01-01T00:00:00Z', matched: true } as const;
+    const authored = mock.state.reviews.find((r) => r.review.kind === 'authored' && r.waiting.length > 0)!;
+    authored.waiting = [{ ...asked, person: 'gh:anna', name: 'Anna' }];
+    const request = mock.state.reviews.find((r) => r.review.kind === 'review_requested')!;
+    request.waiting = [{ ...asked, person: 'gh:bob', name: 'Bob', why: 'author', since: null }];
+    mountReviews();
+    const mine = await screen.findByText(/waiting on Anna/);
+    expect(mine.className).toMatch(/warn/);
+    const theirs = screen.getByText('waiting on Bob (author)');
+    expect(theirs.className).not.toMatch(/warn/);
+    await fireEvent.click(theirs.closest('.k-row')!);
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
+    expect(screen.queryByRole('menu', { name: 'Nudge reviewers' })).toBeNull();
+    await fireEvent.click(mine.closest('.k-row')!);
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
+    expect(await screen.findByRole('menu', { name: 'Nudge reviewers' })).toBeTruthy();
+  });
+});

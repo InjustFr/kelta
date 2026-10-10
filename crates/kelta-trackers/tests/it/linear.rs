@@ -41,6 +41,7 @@ async fn list_sends_the_raw_key_filters_to_me_and_maps_fields() {
     assert_eq!(t.priority.as_deref(), Some("High"));
     assert_eq!(t.labels, vec!["bug"]);
     assert_eq!(t.assignee.as_ref().unwrap().login.as_deref(), Some("louis"));
+    assert_eq!(t.reporter.as_ref().unwrap().login.as_deref(), Some("anna"));
     assert_eq!(t.project_hint.as_deref(), Some("ENG"));
     assert_eq!(page.items[1].status.category, StatusCategory::Todo);
     assert!(page.items[1].priority.is_none() && page.items[1].assignee.is_none());

@@ -3,6 +3,7 @@
 
 import type {
   Column,
+  Person,
   Scope,
   Ticket,
   TicketDetail,
@@ -53,6 +54,8 @@ export class TicketsStore {
   /** Board columns per source id. */
   columns = $state<Record<string, Loadable<Column[]>>>({});
   transitions = $state<Record<string, Loadable<Transition[]>>>({});
+  /** Team people per scope (`team_people`: cache only, so reload after the lists load). */
+  team = $state<Record<string, Loadable<Person[]>>>({});
 
   list(scope: Scope, viewId: string | null = null, who: Who | null = null): TicketList {
     return (
@@ -134,6 +137,15 @@ export class TicketsStore {
     this.details = { ...this.details, [key]: { ...prev, loading: true } };
     const next = await settle(prev, () => ipc.trackerGet({ ticket: ref }));
     this.details = { ...this.details, [key]: next };
+    return next;
+  }
+
+  async loadTeam(scope: Scope): Promise<Loadable<Person[]>> {
+    const key = scopeKey(scope);
+    const prev = this.team[key] ?? idle<Person[]>();
+    this.team = { ...this.team, [key]: { ...prev, loading: true } };
+    const next = await settle(prev, () => ipc.teamPeople({ scope }));
+    this.team = { ...this.team, [key]: next };
     return next;
   }
 

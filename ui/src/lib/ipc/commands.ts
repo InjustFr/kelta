@@ -41,6 +41,7 @@ import type {
   PrDraft,
   NextUp,
   NextUpItem,
+  Person,
   ProjectDraft,
   ProjectId,
   ProjectInfo,
@@ -230,6 +231,8 @@ export interface Commands {
   tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
+  /** The scope's team: people in its cached tickets and PRs, identities merged (cache only, #240). */
+  team_people: { args: { scope: Scope }; result: Person[] };
   /** My Next up list, snoozes and seen tickets (#145): Kelta-local. */
   next_up_list: { args: NoArgs; result: NextUp };
   next_up_put: { args: { item: NextUpItem }; result: null };
@@ -414,6 +417,7 @@ export const COMMAND_NAMES = [
   'tracker_refine',
   'tracker_search',
   'tracker_sources',
+  'team_people',
   'next_up_list',
   'next_up_put',
   'next_up_remove',
@@ -638,6 +642,7 @@ export const trackerSetPriority = wrap('tracker_set_priority');
 export const trackerRefine = wrap('tracker_refine');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
+export const teamPeople = wrap('team_people');
 export const nextUpList = wrap('next_up_list');
 export const nextUpPut = wrap('next_up_put');
 export const nextUpRemove = wrap('next_up_remove');

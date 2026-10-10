@@ -146,6 +146,7 @@ pub fn user(login: &str, name: Option<&str>, avatar: Option<&str>) -> User {
         name: name.filter(|n| !n.is_empty()).unwrap_or(login).to_owned(),
         login: Some(login.to_owned()),
         avatar_url: avatar.map(str::to_owned),
+        email: None,
     }
 }
 

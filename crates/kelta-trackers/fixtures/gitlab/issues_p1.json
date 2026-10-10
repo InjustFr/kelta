@@ -18,6 +18,11 @@
       "relative": "#12",
       "full": "grp/sub/proj#12"
     },
+    "author": {
+      "id": 43,
+      "username": "anna",
+      "name": "Anna Reporter"
+    },
     "assignee": {
       "id": 42,
       "username": "louis",

@@ -25,8 +25,8 @@ use kelta_proto::settings::{
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
-    AccountError, Assignee, Column, Cursor, Page, SourceHit, StatusCategory, Ticket, TicketDetail,
-    TicketItem, TicketPage, TicketRef, Transition, Who,
+    AccountError, Assignee, Column, Cursor, Page, Person, SourceHit, StatusCategory, Ticket, TicketDetail,
+    TicketItem, TicketPage, TicketRef, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -35,6 +35,7 @@ use crate::Core;
 use crate::scheduler::{IntervalPolicy, Refresher, SubKey};
 use crate::status::NotifyKind;
 use crate::store::q;
+use crate::team::{self, Ident};
 
 /// `tracker_transitions` of one ticket: (status id when fetched, fetched at, transitions).
 type CachedTransitions = (Option<String>, Instant, Vec<Transition>);
@@ -55,6 +56,8 @@ pub struct Feeds {
     /// PRs whose merge / close was published in this process (live diff and check publish once).
     ended: Mutex<HashSet<ReviewRef>>,
     transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
+    /// Each account's own user per side (`false` tracker, `true` code host), asked once per process.
+    mes: Mutex<HashMap<(AccountId, bool), User>>,
     /// Cold-cache list fetches by cache key: concurrent misses share one provider call.
     fetches: Mutex<HashMap<String, Arc<FetchGate>>>,
     /// The pane a global view on the rail shows outside any layout (`ui_set_global_view`).
@@ -258,7 +261,7 @@ pub fn merge_reviews(reviews: Vec<Review>, bindings: &[(AccountId, String, Proje
             .map(|(_, _, p)| p.clone())
             .collect();
         project_ids.dedup();
-        out.push(ReviewItem { review: r, project_ids });
+        out.push(ReviewItem { review: r, project_ids, waiting: Vec::new() });
     }
     out
 }
@@ -623,11 +626,92 @@ impl Core {
     }
 
     /// Core-filled ticket fields: linked PRs and the tracker's caps.
-    fn enrich(&self, i: &mut TicketItem, work: &HashMap<TicketRef, WorkItem>, reviews: &[Review]) {
+    fn enrich(
+        &self,
+        i: &mut TicketItem,
+        work: &HashMap<TicketRef, WorkItem>,
+        reviews: &[Review],
+        people: &[Person],
+    ) {
         let w = work.get(&i.ticket.r#ref);
         let repos = self.code_repos(&i.project_ids);
         i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews, &repos);
         i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
+        i.waiting = team::ticket_waiting(i, reviews, people);
+    }
+
+    /// Every account's own user (`me()`, once per process) and base URL: the identity merge's inputs.
+    async fn team_context(&self) -> (Vec<Ident>, HashMap<AccountId, String>) {
+        let accounts = self.accounts_settings().accounts.clone();
+        let hosts = accounts
+            .iter()
+            .filter_map(|(id, a)| {
+                Some((id.clone(), a.effective_base_url()?.trim_end_matches('/').to_ascii_lowercase()))
+            })
+            .collect();
+        let mut todo = Vec::new();
+        for (id, a) in &accounts {
+            let tracker = !matches!(a.kind, AccountKind::Bitbucket | AccountKind::PluginCodehost);
+            for (side, on) in [(false, tracker), (true, a.kind.is_code_host())] {
+                if on && !self.feeds.mes.lock().contains_key(&(id.clone(), side)) {
+                    todo.push((id.clone(), side));
+                }
+            }
+        }
+        let got = futures::future::join_all(todo.iter().map(|(a, host)| async move {
+            if *host { self.code_host_of(a)?.me().await } else { self.tracker_of(a)?.me().await }
+        }))
+        .await;
+        // a failing account is asked again next time; its lists fail the same way
+        for (key, me) in todo.into_iter().zip(got) {
+            if let Ok(me) = me {
+                self.feeds.mes.lock().insert(key, me);
+            }
+        }
+        let mes = self.feeds.mes.lock();
+        let mes = mes
+            .iter()
+            .filter(|((a, _), _)| accounts.contains_key(a))
+            .map(|((a, host), u)| Ident::of(a, u, *host))
+            .collect();
+        (mes, hosts)
+    }
+
+    async fn people_of<'a>(
+        &self,
+        tickets: impl IntoIterator<Item = &'a Ticket>,
+        reviews: &[Review],
+    ) -> Vec<Person> {
+        let (mes, hosts) = self.team_context().await;
+        team::people(team::seen(tickets, reviews), mes, &hosts)
+    }
+
+    /// The scope's cached Team ticket lists; no list is fetched.
+    async fn cached_tickets(&self, scope: &Scope) -> Vec<Ticket> {
+        let mut tickets = Vec::new();
+        for q in self.ticket_queries(scope, None, Some(Who::Anyone)) {
+            if let Some((p, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
+                tickets.extend(p.items);
+            }
+        }
+        tickets
+    }
+
+    /// `team_people`: who the scope's cached tickets (the Team list) and review lists mention. Reads
+    /// the provider cache only: no list is fetched.
+    pub async fn team_people(&self, scope: Scope) -> Result<Vec<Person>, KeltaError> {
+        self.rt.capture();
+        self.check_scope(&scope)?;
+        let tickets = self.cached_tickets(&scope).await;
+        let mut reviews = Vec::new();
+        for a in self.review_accounts(&scope) {
+            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
+                    reviews.extend(list);
+                }
+            }
+        }
+        Ok(self.people_of(&tickets, &reviews).await)
     }
 
     /// `tracker_list`.
@@ -693,8 +777,9 @@ impl Core {
         let work = self.work_by_ticket().await;
         let reviews = self.cached_reviews().await;
         let mut items = merge_tickets(pages, &work);
+        let people = self.people_of(items.iter().map(|i| &i.ticket), &reviews).await;
         for i in &mut items {
-            self.enrich(i, &work, &reviews);
+            self.enrich(i, &work, &reviews, &people);
         }
         Ok(TicketPage { items, next, stale, errors })
     }
@@ -729,8 +814,9 @@ impl Core {
         let reviews = self.cached_reviews().await;
         let mut hits = merge_tickets(pages.collect(), &work);
         hits.truncate(50);
+        let people = self.people_of(hits.iter().map(|i| &i.ticket), &reviews).await;
         for i in &mut hits {
-            self.enrich(i, &work, &reviews);
+            self.enrich(i, &work, &reviews, &people);
         }
         // a key outside every list (someone else's or nobody's ticket): resolve it by GET on each account
         if hits.iter().any(|h| h.ticket.r#ref.key.eq_ignore_ascii_case(key))
@@ -803,6 +889,7 @@ impl Core {
         d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &reviews, &repos);
         d.caps = self.tracker_of(&t.account)?.caps();
         // Sub-tasks: the provider gives each ticket, the rest is ours (like a list row).
+        let people = self.people_of(d.children.iter().map(|c| &c.ticket), &reviews).await;
         for c in &mut d.children {
             *c = TicketItem {
                 work_item_id: work.get(&c.ticket.r#ref).map(|w| w.id.clone()),
@@ -810,7 +897,7 @@ impl Core {
                 project_ids: projects.clone(),
                 ..TicketItem::default()
             };
-            self.enrich(c, &work, &reviews);
+            self.enrich(c, &work, &reviews, &people);
         }
         Ok(d)
     }
@@ -1553,7 +1640,13 @@ impl Core {
             all.iter_mut()
                 .for_each(|r| r.nudged_at = nudges.get(&(r.r#ref.repo.clone(), r.r#ref.number)).cloned());
         }
-        Ok(ReviewPage { items: merge_reviews(all, &bindings), stale, errors })
+        let tickets = self.cached_tickets(&scope).await;
+        let people = self.people_of(&tickets, &all).await;
+        let mut items = merge_reviews(all, &bindings);
+        for i in &mut items {
+            i.waiting = team::review_row_waiting(&i.review, &tickets, &people);
+        }
+        Ok(ReviewPage { items, stale, errors })
     }
 
     pub async fn review_get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {

@@ -26,6 +26,7 @@ const item = (
   source_ids,
   prs,
   caps: samples.ticketPage.items[0]!.caps,
+  waiting: [],
 });
 
 const summary = (g: ReturnType<typeof groupTickets>) =>
