@@ -5,11 +5,7 @@ import * as samples from '$lib/gen/fixtures';
 
 import { ciLamp, prForTicket, prLabel } from './prLink';
 
-const ticket = (key: string, project_hint: string | null = null): Ticket => ({
-  ...samples.ticket,
-  ref: { ...samples.ticket.ref, key },
-  project_hint,
-});
+const ticket = (key: string): Ticket => ({ ...samples.ticket, ref: { ...samples.ticket.ref, key } });
 
 const review = (number: number, linked: string[], patch: Partial<Review> = {}): Review => ({
   ...samples.reviewDetail.review,
@@ -31,10 +27,11 @@ describe('prForTicket', () => {
     expect(prForTicket(ticket('SHOP-9'), null, reviews)).toBeNull();
   });
 
-  it('matches #N keys only in the same repo', () => {
-    expect(prForTicket(ticket('#12', 'acme/shop'), null, reviews)?.ref.number).toBe(3);
-    expect(prForTicket(ticket('#12', 'other/repo'), null, reviews)).toBeNull();
-    expect(prForTicket(ticket('#12'), null, reviews)).toBeNull();
+  it('matches forge and Redmine keys against #N links in the PR repo, ignoring case', () => {
+    expect(prForTicket(ticket('acme/shop#12'), null, reviews)?.ref.number).toBe(3);
+    expect(prForTicket(ticket('other/repo#12'), null, reviews)).toBeNull();
+    expect(prForTicket(ticket('12'), null, reviews)?.ref.number).toBe(3);
+    expect(prForTicket(ticket('shop-2'), null, reviews)?.ref.number).toBe(2);
   });
 });
 

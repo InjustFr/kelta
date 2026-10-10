@@ -8,7 +8,8 @@
   // transitions numbered 1-9 (a digit moves at once).
   interface Props {
     ticket: Ticket;
-    transitions: readonly Transition[];
+    /** null while loading. */
+    transitions: readonly Transition[] | null;
     x: number;
     y: number;
     onselect: (t: Transition) => void;
@@ -18,10 +19,17 @@
   let { ticket, transitions, x, y, onselect, onclose }: Props = $props();
 
   let el = $state<HTMLDivElement>();
+  const flowId = $props.id();
   let active = $state(-1);
+  /** A move picked (digit or Enter) before the transitions arrived. */
+  let pending = $state(-1);
 
-  const moves = $derived(transitions.filter((t) => t.to.name !== ticket.status.name));
-  const flow = $derived(flowOrder([ticket.status, ...transitions.map((t) => t.to)]));
+  const moves = $derived((transitions ?? []).filter((t) => t.to.name !== ticket.status.name));
+  const flow = $derived(flowOrder([ticket.status, ...(transitions ?? []).map((t) => t.to)]));
+
+  $effect(() => {
+    if (transitions && pending >= 0) choose(pending);
+  });
 
   const pos = $derived.by(() => {
     const w = el?.offsetWidth ?? 240;
@@ -37,6 +45,7 @@
   });
 
   function choose(i: number): void {
+    if (!transitions && i >= 0) pending = i; // still loading: keep the key for when the moves arrive
     const t = moves[i];
     if (!t) return;
     onselect(t);
@@ -47,7 +56,7 @@
     const n = moves.length;
     if (e.key === 'ArrowDown' || e.key === 'j') active = n === 0 ? -1 : (active + 1) % n;
     else if (e.key === 'ArrowUp' || e.key === 'k') active = n === 0 ? -1 : (active - 1 + n) % n;
-    else if (e.key === 'Enter' || e.key === ' ') choose(Math.max(0, active));
+    else if (e.key === 'Enter' || e.key === ' ') choose(active >= 0 ? active : e.key === 'Enter' ? 0 : -1);
     else if (e.key === 'Escape') onclose();
     else if (/^[1-9]$/.test(e.key)) choose(Number(e.key) - 1);
     else return;
@@ -63,12 +72,13 @@
   class="k-move"
   role="menu"
   aria-label={`Move ${ticket.ref.key}`}
+  aria-describedby={flowId}
   tabindex="-1"
   style:left="{pos.left}px"
   style:top="{pos.top}px"
   {onkeydown}
 >
-  <p class="flow" aria-label={`Workflow, now ${ticket.status.name}`}>
+  <p class="flow" id={flowId}>
     {#each flow as s (s.name)}
       <span
         class:current={s.name === ticket.status.name}
@@ -92,7 +102,7 @@
       {#if i < 9}<Kbd chord={String(i + 1)} />{/if}
     </button>
   {:else}
-    <p class="none">No move available from {ticket.status.name}.</p>
+    <p class="none">{transitions ? `No move available from ${ticket.status.name}.` : 'Loading…'}</p>
   {/each}
 </div>
 

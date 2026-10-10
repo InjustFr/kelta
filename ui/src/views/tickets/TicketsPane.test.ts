@@ -179,6 +179,7 @@ describe('TicketsPane board', () => {
     await waitFor(() => expect(container.querySelectorAll('[data-column]').length).toBe(4));
     await fireEvent.keyDown(screen.getByTestId('tickets-pane'), { key: 'm' });
     const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
+    await screen.findAllByRole('menuitem'); // the menu opens before its moves load
     await fireEvent.keyDown(menu, { key: 'ArrowDown' });
     await fireEvent.keyDown(menu, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
@@ -306,6 +307,7 @@ describe('TicketsPane workbench', () => {
     await ready(container);
     await press('m');
     const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
+    await screen.findAllByRole('menuitem');
     const current = menu.querySelector('[aria-current="step"]');
     expect(current?.textContent).toBe('To Do');
     expect([...menu.querySelectorAll('[role="menuitem"] .label')].map((l) => l.textContent)).toEqual([
@@ -322,6 +324,20 @@ describe('TicketsPane workbench', () => {
     expect(screen.queryByRole('menu')).toBeNull();
     await waitFor(() =>
       expect(toasts.list.some((t) => t.toast.text === 'Moved SHOP-151 to In review')).toBe(true),
+    );
+  });
+
+  it('a digit typed while the moves load is applied once they arrive', async () => {
+    const { container } = mountBoard('list');
+    await ready(container);
+    await press('m');
+    const menu = screen.getByRole('menu', { name: 'Move SHOP-151' });
+    expect(menu.textContent).toContain('Loading…');
+    await fireEvent.keyDown(menu, { key: '2' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
+        transition_id: 'to-in_review',
+      }),
     );
   });
 

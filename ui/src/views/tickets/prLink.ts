@@ -5,6 +5,8 @@ import type { CiState, Review, ReviewKind, Ticket } from '$lib/gen';
 import { reviews } from '$lib/stores';
 import type { LampLevel } from '$lib/stores/reducers';
 
+import { sameKey } from '../reviews/linkedTicket';
+
 const ALL = { kind: 'all' } as const;
 const KINDS: ReviewKind[] = ['authored', 'review_requested'];
 
@@ -21,7 +23,7 @@ export function ensureReviews(): void {
   }
 }
 
-/** `prUrl` = the ticket's work item PR. `#N` keys also need the PR in the ticket's repo. */
+/** `prUrl` = the ticket's work item PR. Keys match as review badges do (`#12` = `repo#12`). */
 export function prForTicket(
   ticket: Ticket,
   prUrl: string | null,
@@ -29,14 +31,7 @@ export function prForTicket(
 ): Review | null {
   const byUrl = prUrl ? candidates.find((r) => r.url === prUrl) : undefined;
   if (byUrl) return byUrl;
-  const key = ticket.ref.key;
-  return (
-    candidates.find(
-      (r) =>
-        r.linked_tickets.includes(key) &&
-        (!key.startsWith('#') || (ticket.project_hint !== null && r.ref.repo === ticket.project_hint)),
-    ) ?? null
-  );
+  return candidates.find((r) => r.linked_tickets.some((k) => sameKey(ticket.ref.key, k, r.ref.repo))) ?? null;
 }
 
 /** `!42` for a GitLab MR, `#42` otherwise. */

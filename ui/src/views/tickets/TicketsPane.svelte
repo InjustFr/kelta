@@ -177,6 +177,8 @@
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
+  // shortcut: no Source grouping across all projects (views are per project), add project groups if asked.
+  const groupBys = $derived(scope.kind === 'all' ? GROUP_BYS.filter((g) => g !== 'source') : GROUP_BYS);
   const groups = $derived(groupTickets(shown, groupBy, views));
   const rows = $derived.by<Row[]>(() => {
     if (groupBy === 'none') return shown.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
@@ -218,12 +220,16 @@
       : (shown.find((i) => keyOf(i) === selKey) ?? null),
   );
 
+  /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
+  let lastIndex: number | null = null;
   $effect(() => {
     if ((mode === 'list' ? selRow : cur) || shown.length === 0) return;
     const first =
       mode === 'board'
         ? lanes.find((l) => l.cards.length > 0)?.cards[0]
-        : (rows.find((r) => r.kind === 'ticket') ?? rows[0]);
+        : lastIndex !== null
+          ? rows[Math.min(lastIndex, rows.length - 1)]
+          : (rows.find((r) => r.kind === 'ticket') ?? rows[0]);
     if (first) selKey = 'key' in first ? first.key : keyOf(first);
   });
 
@@ -236,7 +242,7 @@
   let vlist = $state<{ scrollToIndex(i: number): void }>();
   $effect(() => {
     if (mode === 'list') {
-      if (selRow) vlist?.scrollToIndex(rows.indexOf(selRow));
+      if (selRow) vlist?.scrollToIndex((lastIndex = rows.indexOf(selRow)));
     } else if (cur) rowEl(keyOf(cur))?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
 
@@ -282,7 +288,9 @@
   let root = $state<HTMLDivElement>();
   let filterInput = $state<HTMLInputElement>();
   let sourceBtn = $state<HTMLElement>();
-  let moveMenu = $state<{ x: number; y: number; item: TicketItem; transitions: Transition[] } | null>(null);
+  let moveMenu = $state<{ x: number; y: number; item: TicketItem; transitions: Transition[] | null } | null>(
+    null,
+  );
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
 
@@ -313,14 +321,18 @@
     void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId, { preview });
   }
 
+  /** Opens at once (loading) so the menu, not the pane, gets a digit typed while transitions load. */
   async function openMoveMenu(item: TicketItem): Promise<void> {
-    const slot = await tickets.loadTransitions(item.ticket.ref);
-    if (!slot.data) {
-      toasts.error(slot.error ?? 'No transitions', `Moving ${item.ticket.ref.key}`);
-      return;
-    }
     const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
-    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, transitions: slot.data };
+    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, transitions: null };
+    const slot = await tickets.loadTransitions(item.ticket.ref);
+    if (moveMenu?.item !== item) return;
+    if (slot.data) moveMenu.transitions = slot.data;
+    else {
+      moveMenu = null;
+      root?.focus();
+      toasts.error(slot.error ?? 'No transitions', `Moving ${item.ticket.ref.key}`);
+    }
   }
 
   function openSourceMenu(): void {
@@ -397,7 +409,7 @@
         if (project?.tracker) openSourceMenu();
         break;
       case 'g':
-        groupBy = GROUP_BYS[(GROUP_BYS.indexOf(groupBy) + 1) % GROUP_BYS.length] ?? 'status';
+        groupBy = groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'status';
         break;
       case 'R':
         refresh();
@@ -510,6 +522,7 @@
         class="source"
         bind:this={sourceBtn}
         aria-haspopup="menu"
+        aria-expanded={sourceMenu !== null}
         title="Source (v)"
         onclick={openSourceMenu}
       >
@@ -521,7 +534,7 @@
       <Select
         label="Group (g)"
         value={groupBy}
-        options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
+        options={groupBys.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
         onchange={(g) => (groupBy = g)}
       />
     {/if}

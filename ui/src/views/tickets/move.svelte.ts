@@ -53,6 +53,7 @@ export class MoveController {
         fields: fields ?? null,
       });
       tickets.patch(updated);
+      void tickets.loadTransitions(ticket.ref); // the legal moves changed with the status
       this.dialog = null;
       toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
       return true;
@@ -83,6 +84,7 @@ export class MoveController {
         fields: values,
       });
       tickets.patch(updated);
+      void tickets.loadTransitions(d.ticket.ref);
       this.dialog = null;
       toasts.info(`Moved ${d.ticket.ref.key} to ${d.target}`);
     } catch (err) {
