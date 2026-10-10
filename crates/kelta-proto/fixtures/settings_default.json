@@ -355,7 +355,7 @@
     "keyboard_protocol": "legacy",
     "letter_spacing": 0.0,
     "line_height": 1.15,
-    "max_live_views": 4,
+    "max_live_views": 2,
     "memory_cap_mb": 160,
     "minimum_contrast_ratio": 1.0,
     "option_as_meta": "both",

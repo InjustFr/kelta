@@ -2,14 +2,12 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use kelta_proto::dirs::{Dirs, DirsOverrides};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tokio::process::{Child, Command};
 
 use crate::Opts;
 use crate::budget::Metrics;
@@ -17,19 +15,26 @@ use crate::sample::{Probe, median};
 
 /// How long the app gets to write its first marks.
 const READY_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long background mode waits for the WebKit helpers to exit before sampling anyway.
+const HELPERS_EXIT: Duration = Duration::from_secs(180);
 
 struct App {
-    child: Child,
+    pid: i32,
     tmp: PathBuf,
     marks: PathBuf,
     ctl: PathBuf,
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sampler reads it
-    before: std::collections::HashSet<i32>,
 }
 
 impl Drop for App {
     fn drop(&mut self) {
-        let _ = self.child.start_kill();
+        // SAFETY: our own child; waitpid reaps it so the next launch does not forward to it.
+        unsafe {
+            libc::kill(self.pid, libc::SIGKILL);
+            libc::waitpid(self.pid, std::ptr::null_mut(), 0);
+        }
+        // Session children that outlive a killed app (`nvim --embed --listen <tmp>/…` ignores SIGTERM).
+        // shortcut: matches on the temp path in argv only; upgrade to a process group if one escapes.
+        let _ = std::process::Command::new("pkill").args(["-9", "-f"]).arg(&self.tmp).status();
         let _ = std::fs::remove_dir_all(&self.tmp);
     }
 }
@@ -50,13 +55,25 @@ async fn launch(o: &Opts) -> Result<App> {
     std::fs::create_dir_all(&config)?;
     let cfg = std::fs::read_to_string(o.fixtures.join("3p10s/config/config.toml"))?;
     std::fs::write(config.join("config.toml"), fill(&cfg, o))?;
+    // Kelta opens git repositories only: copy the fixture projects out of the source tree and init each.
+    for p in ["a", "b", "c"] {
+        let dir = tmp.join("projects").join(p);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::copy(o.fixtures.join("3p10s/projects").join(p).join("README.md"), dir.join("README.md"))?;
+        let git = |args: &[&str]| std::process::Command::new("git").current_dir(&dir).args(args).output();
+        git(&["init", "-q"])?;
+        git(&["add", "."])?;
+        git(&["-c", "user.name=bench", "-c", "user.email=bench@localhost", "commit", "-qm", "fixture"])?;
+    }
     let marks = tmp.join("marks.json");
     let home = tmp.join("home");
     std::fs::create_dir_all(&home)?;
 
     let env: BTreeMap<String, String> = [
         ("HOME".to_owned(), home.to_string_lossy().into_owned()),
-        ("XDG_RUNTIME_DIR".to_owned(), tmp.join("run").to_string_lossy().into_owned()),
+        // macOS: CF/WebKit read the home from CFFIXED_USER_HOME, not HOME.
+        ("CFFIXED_USER_HOME".to_owned(), home.to_string_lossy().into_owned()),
+        ("KELTA_RUNTIME_DIR".to_owned(), tmp.join("run").to_string_lossy().into_owned()),
     ]
     .into();
     std::fs::create_dir_all(tmp.join("run"))?;
@@ -65,25 +82,64 @@ async fn launch(o: &Opts) -> Result<App> {
     // tui-sim sits next to the bench binary.
     let bin_dir = std::env::current_exe()?.parent().map(Path::to_path_buf).unwrap_or_default();
     let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
-    #[cfg(target_os = "macos")]
-    let before = crate::sample::webkit_pids();
-    #[cfg(not(target_os = "macos"))]
-    let before = Default::default();
 
-    let child = Command::new(&o.app)
-        .arg("--config-dir")
-        .arg(&config)
-        .envs(&env)
-        .env("PATH", path)
-        .env("KELTA_BENCH", "1")
-        .env("KELTA_BENCH_MARKS", &marks)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        .with_context(|| format!("cannot start {}", o.app.display()))?;
-    Ok(App { child, tmp, marks, ctl: dirs.ctl_socket(), before })
+    // Drop inherited KELTA_*/XDG_* (the bench may run inside a Kelta session): they point at the user's instance.
+    let mut full: BTreeMap<String, String> =
+        std::env::vars().filter(|(k, _)| !k.starts_with("KELTA_") && !k.starts_with("XDG_")).collect();
+    full.extend(env);
+    full.insert("PATH".into(), path);
+    full.insert("KELTA_BENCH".into(), "1".into());
+    full.insert("KELTA_BENCH_MARKS".into(), marks.to_string_lossy().into_owned());
+    let argv =
+        [o.app.to_string_lossy().into_owned(), "--config-dir".into(), config.to_string_lossy().into_owned()];
+    let pid = spawn(&argv, &full).with_context(|| format!("cannot start {}", o.app.display()))?;
+    Ok(App { pid, tmp, marks, ctl: dirs.ctl_socket() })
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    // libsystem, private but stable (Terminal and Xcode use it).
+    fn responsibility_spawnattrs_setdisclaim(
+        attr: *mut libc::posix_spawnattr_t,
+        disclaim: libc::c_int,
+    ) -> libc::c_int;
+}
+
+/// posix_spawn with stdio on /dev/null. On macOS the app disclaims responsibility, so the WebKit
+/// helpers it starts are attributed to it (the sampler's filter) and not to whatever app the bench runs in.
+fn spawn(argv: &[String], env: &BTreeMap<String, String>) -> Result<i32> {
+    use std::ffi::CString;
+    let cs = |s: String| CString::new(s).context("NUL in argv/env");
+    let argv: Vec<CString> = argv.iter().cloned().map(cs).collect::<Result<_>>()?;
+    let envp: Vec<CString> = env.iter().map(|(k, v)| cs(format!("{k}={v}"))).collect::<Result<_>>()?;
+    let ptrs = |v: &[CString]| {
+        v.iter().map(|c| c.as_ptr().cast_mut()).chain([std::ptr::null_mut()]).collect::<Vec<_>>()
+    };
+    let (argp, envpp) = (ptrs(&argv), ptrs(&envp));
+    let null = CString::new("/dev/null")?;
+    let mut pid = 0;
+    // SAFETY: attr/actions are initialised before use and destroyed after; argv/envp are NULL-terminated
+    // arrays of live CStrings.
+    let rc = unsafe {
+        let mut attr: libc::posix_spawnattr_t = std::mem::zeroed();
+        let mut fa: libc::posix_spawn_file_actions_t = std::mem::zeroed();
+        libc::posix_spawnattr_init(&mut attr);
+        libc::posix_spawn_file_actions_init(&mut fa);
+        for fd in 0..3 {
+            let flags = if fd == 0 { libc::O_RDONLY } else { libc::O_WRONLY };
+            libc::posix_spawn_file_actions_addopen(&mut fa, fd, null.as_ptr(), flags, 0);
+        }
+        #[cfg(target_os = "macos")]
+        responsibility_spawnattrs_setdisclaim(&mut attr, 1);
+        let rc = libc::posix_spawn(&mut pid, argv[0].as_ptr(), &fa, &attr, argp.as_ptr(), envpp.as_ptr());
+        libc::posix_spawn_file_actions_destroy(&mut fa);
+        libc::posix_spawnattr_destroy(&mut attr);
+        rc
+    };
+    if rc != 0 {
+        return Err(std::io::Error::from_raw_os_error(rc).into());
+    }
+    Ok(pid)
 }
 
 fn read_marks(path: &Path) -> Metrics {
@@ -106,10 +162,27 @@ async fn wait_mark(app: &App, key: &str) -> Result<Metrics> {
     }
 }
 
+/// Connects to the app's control socket, waiting until core has bound it.
+async fn connect_ctl(app: &App) -> Result<UnixStream> {
+    let start = Instant::now();
+    loop {
+        match UnixStream::connect(&app.ctl).await {
+            Ok(s) => return Ok(s),
+            Err(e) if start.elapsed() > READY_TIMEOUT => {
+                return Err(e).with_context(|| app.ctl.display().to_string());
+            }
+            // one-shot: bench harness poll, outside the app
+            Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+        }
+    }
+}
+
 /// Sends the fixture setup (3 projects, 10 sessions) over the control socket.
 async fn setup(app: &App, o: &Opts) -> Result<()> {
-    let lines = fill(&std::fs::read_to_string(o.fixtures.join("3p10s/setup.jsonl"))?, o);
-    let stream = UnixStream::connect(&app.ctl).await.with_context(|| app.ctl.display().to_string())?;
+    let text = std::fs::read_to_string(o.fixtures.join("3p10s/setup.jsonl"))?;
+    let lines =
+        fill(&text.replace("@FIXTURES@/3p10s/projects", &app.tmp.join("projects").to_string_lossy()), o);
+    let stream = connect_ctl(app).await?;
     let (rd, mut wr) = stream.into_split();
     let mut rd = BufReader::new(rd).lines();
     for line in lines.lines().filter(|l| !l.trim().is_empty()) {
@@ -124,9 +197,9 @@ async fn setup(app: &App, o: &Opts) -> Result<()> {
 }
 
 fn probe(app: &App) -> Result<Box<dyn Probe>> {
-    let pid = app.child.id().context("app already exited")?;
+    let pid = u32::try_from(app.pid)?;
     #[cfg(target_os = "macos")]
-    return Ok(Box::new(crate::sample::Mach { pid, before: app.before.clone() }));
+    return Ok(Box::new(crate::sample::Mach { pid }));
     #[cfg(not(target_os = "macos"))]
     Ok(Box::new(crate::sample::ProcFs { root: "/proc".into(), pid, hz: crate::sample::clock_ticks() }))
 }
@@ -140,7 +213,6 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
     match o.scenario.as_str() {
         "idle-3p10s" => {
             let app = launch(o).await?;
-            wait_mark(&app, "app_ready_ms").await?;
             setup(&app, o).await?;
             settle(o).await;
             let m = probe(&app)?.memory()?;
@@ -148,7 +220,6 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
         }
         "background" => {
             let app = launch(o).await?;
-            wait_mark(&app, "app_ready_ms").await?;
             setup(&app, o).await?;
             settle(o).await;
             // Bench hook (window::bridge): closes the window as the user would; sessions stay alive.
@@ -160,12 +231,19 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
             .await?;
             wait_mark(&app, "window_closed").await?;
             settle(o).await;
-            let m = probe(&app)?.memory()?;
+            // ARCH §13: background mode is measured once the webview's WebKit processes are gone; the
+            // GPU process idles out a minute or two after its last page.
+            let (p, start) = (probe(&app)?, Instant::now());
+            let mut m = p.memory()?;
+            while m.total_mb > m.core_mb && start.elapsed() < HELPERS_EXIT {
+                // one-shot: bench harness poll, outside the app
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                m = p.memory()?;
+            }
             Ok([("background_mb".to_owned(), m.total_mb)].into())
         }
         "idle-cpu" => {
             let app = launch(o).await?;
-            wait_mark(&app, "app_ready_ms").await?;
             setup(&app, o).await?;
             settle(o).await;
             let p = probe(&app)?;
@@ -182,12 +260,12 @@ pub async fn measure(o: &Opts) -> Result<Metrics> {
         "cold-start" => {
             let mut runs: BTreeMap<String, Vec<f64>> = BTreeMap::new();
             for _ in 0..5 {
-                let mut app = launch(o).await?;
+                let app = launch(o).await?;
                 for (k, v) in wait_mark(&app, "app_ready_ms").await? {
                     runs.entry(k).or_default().push(v);
                 }
                 // Wait for the exit: the next launch would otherwise forward to this instance.
-                app.child.kill().await?;
+                drop(app);
             }
             let ready = runs.remove("app_ready_ms").unwrap_or_default();
             Ok([("cold_start_ms".to_owned(), median(&mut ready.clone()))].into())

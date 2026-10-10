@@ -411,7 +411,7 @@ impl Default for TerminalSettings {
             cursor_blink: false,
             scrollback: ScrollbackSettings::default(),
             view_scrollback: 1000,
-            max_live_views: 4,
+            max_live_views: 2,
             memory_cap_mb: 160,
             history_log: true,
             history_log_mb: 16,
@@ -1559,7 +1559,7 @@ mod tests {
         let v = serde_json::to_value(&d).unwrap();
         let back: Settings = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
-        assert_eq!(d.terminal.max_live_views, 4);
+        assert_eq!(d.terminal.max_live_views, 2);
         assert_eq!(d.editor.presets.len(), 6);
         assert_eq!(d.session_templates.len(), 5);
     }

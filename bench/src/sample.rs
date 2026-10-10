@@ -130,18 +130,21 @@ pub fn clock_ticks() -> f64 {
 }
 
 #[cfg(target_os = "macos")]
-pub use mac::{Mach, webkit_pids};
+pub use mac::Mach;
 
 #[cfg(target_os = "macos")]
 mod mac {
-    use std::collections::HashSet;
-
     use super::*;
 
-    /// `phys_footprint` of kelta + the `com.apple.WebKit.*` processes that did not exist before launch.
+    unsafe extern "C" {
+        // libsystem (what Activity Monitor uses): WebKit XPC helpers are parented to launchd but
+        // "responsible" to the app that started them.
+        fn responsibility_get_pid_responsible_for_pid(pid: i32) -> i32;
+    }
+
+    /// `phys_footprint` of kelta + the `com.apple.WebKit.*` processes it is responsible for.
     pub struct Mach {
         pub pid: u32,
-        pub before: HashSet<i32>,
     }
 
     fn usage(pid: i32) -> Result<libc::rusage_info_v4> {
@@ -171,17 +174,22 @@ mod mac {
         pids
     }
 
-    /// Process ids of WebKit helpers currently running.
-    pub fn webkit_pids() -> HashSet<i32> {
-        all_pids().into_iter().filter(|p| name(*p).contains("WebKit")).collect()
+    /// WebKit helpers of `app` (other WebKit apps, the user's own Kelta included, are excluded).
+    fn webkit_pids(app: i32) -> Vec<i32> {
+        all_pids()
+            .into_iter()
+            // SAFETY: plain pid query, no pointers.
+            .filter(|p| unsafe { responsibility_get_pid_responsible_for_pid(*p) } == app)
+            .filter(|p| name(*p).contains("WebKit"))
+            .collect()
     }
 
     impl Probe for Mach {
         fn memory(&self) -> Result<Mem> {
             let mb = |ri: libc::rusage_info_v4| ri.ri_phys_footprint as f64 / 1_048_576.0;
-            let core_mb = mb(usage(i32::try_from(self.pid)?)?);
-            let helpers: f64 =
-                webkit_pids().difference(&self.before).filter_map(|p| usage(*p).ok()).map(mb).sum();
+            let pid = i32::try_from(self.pid)?;
+            let core_mb = mb(usage(pid)?);
+            let helpers: f64 = webkit_pids(pid).into_iter().filter_map(|p| usage(p).ok()).map(mb).sum();
             Ok(Mem { core_mb, total_mb: core_mb + helpers })
         }
 

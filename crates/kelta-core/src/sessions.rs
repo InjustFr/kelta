@@ -830,6 +830,14 @@ impl Core {
         self.terminal.detach(id, generation);
     }
 
+    /// The window is gone: drop every view so sessions release their view-side memory (background mode).
+    pub fn detach_all_views(&self) {
+        let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
+        for id in &ids {
+            self.terminal.detach(id, kelta_proto::api::ANY_VIEW);
+        }
+    }
+
     pub(crate) fn write_session(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
         let lifecycle = self.get_info(id)?.lifecycle;
         if lifecycle != Lifecycle::Live {

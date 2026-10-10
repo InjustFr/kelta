@@ -12,7 +12,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 | # | Decision | Rationale | Revisit if |
 |---|---|---|---|
 | D1 | **Tauri v2 + Svelte 5 + xterm.js 6.0.0**, Rust core | Electron misses the memory budget (Chromium multi-process baseline 250-350 MB). Native egui/GPUI cannot embed sl web in-window on native Wayland and is too risky for a one-pass parallel build. Tauri reuses the system webview (WKWebView / WebKitGTK). | Gate G1 or G2 fails after tuning (BUILD_PLAN §6) → replace only `apps/desktop` + `ui/` with a native front end over the Tauri-free crates. |
-| D2 | **Rust is the terminal source of truth.** One headless `alacritty_terminal::Term` per session; xterm.js instances exist only for visible panes plus a small LRU (`terminal.max_live_views`, default 4) | Hidden sessions cost only a Rust grid (no JS heap/DOM). Re-attach = compact ANSI snapshot. Background sessions still answer terminal queries correctly. | — |
+| D2 | **Rust is the terminal source of truth.** One headless `alacritty_terminal::Term` per session; xterm.js instances exist only for visible panes plus a small LRU (`terminal.max_live_views`, default 2) | Hidden sessions cost only a Rust grid (no JS heap/DOM). Re-attach = compact ANSI snapshot. Background sessions still answer terminal queries correctly. | — |
 | D3 | **No session daemon in v0.1**; PTYs live in the app process behind the `TerminalHost` trait | Delivery risk; a `keltad` mux daemon is v0.2 and swaps in behind the same trait without UI changes. Closing the window ("background mode") keeps sessions alive and drops WebKit. | Users demand sessions surviving quit → v0.2 `keltad`. |
 | D4 | Blocking reader **thread per PTY** (256 KiB stack) + `poll(2)` with timeout for DEC 2026 sync deadlines | Simplest correct design; ~10-20 threads is cheap with `M_ARENA_MAX=2`. | Profiling shows thread overhead > 1 MB/session. |
 | D5 | **Typed IPC**: one Tauri command per operation, DTOs in `kelta-proto`, TS generated with `ts-rs`, CI drift check | Compile-time agreement between 10 parallel agents. | — |
@@ -143,6 +143,8 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 | stable CLI copy | `<data>/bin/<version>/kelta-ctl` + `<data>/bin/current` symlink | same |
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
 | per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
+
+`KELTA_RUNTIME_DIR` (both OSes) replaces the runtime dir and makes the instance skip the single-instance handshake, so a bench or test instance never talks to the user's running Kelta.
 
 `<sid8>` = last 8 hex chars of the session uuid (the random tail of the v7 uuid; its first 32 bits are the millisecond clock), reserved by core under one lock (collision-checked). kelta-work names the runtime dirs of the sessions it spawns (Claude, editor) itself — `<runtime>/s/<key8>/`, recorded in its saga journal and `WorkItem.nvim_socket` — so core never assumes `<runtime>/s/<sid8>/` for work-item sessions. All socket paths are asserted < 100 bytes at startup.
 
@@ -711,7 +713,7 @@ One shared `reqwest::Client` (20 s timeout, pool idle 30 s, UA `kelta/<ver>`). P
 ## 9. Terminal frontend contract (L2)
 
 ### 9.1 View pool
-- `TerminalView` = one xterm instance bound to one session. Pool keyed by session id; capacity `terminal.max_live_views` (default 4, min 1, max 12) **plus** currently visible panes. Hidden views beyond capacity: `dispose()` + `session_detach` (LRU).
+- `TerminalView` = one xterm instance bound to one session. Pool keyed by session id; capacity `terminal.max_live_views` (default 2, min 1, max 12; 4 → 2 for gate G1) **plus** currently visible panes. Hidden views beyond capacity: `dispose()` + `session_detach` (LRU).
 - Re-show of a pooled view: no snapshot needed (still attached). Re-show of a disposed view: new xterm + `session_attach` → Snapshot.
 
 ### 9.2 Rendering

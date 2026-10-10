@@ -167,7 +167,7 @@ impl TerminalHost for FakeTerminalHost {
 
     fn detach(&self, id: &SessionId, generation: u32) {
         if let Some(sess) = self.sessions.lock().get_mut(id)
-            && sess.generation == generation
+            && (sess.generation == generation || generation == crate::api::ANY_VIEW)
         {
             sess.sink = None;
             sess.attached = false;

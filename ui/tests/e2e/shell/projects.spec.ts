@@ -29,7 +29,9 @@ test.describe('project switching', () => {
     await waitForAttached(page, 2);
 
     expect((await callLog(page)).filter((c) => c.cmd === 'session_kill')).toEqual([]);
-    expect((await callLog(page)).filter((c) => c.cmd === 'session_detach')).toEqual([]);
+    // Hiding billing's three views may evict one beyond `max_live_views` (2); the shop views were never detached.
+    const detached = (await callsOf(page, 'session_detach')).map((c) => c.args?.id);
+    for (const id of shopSessions) expect(detached).not.toContain(id);
     for (const id of shopSessions) expect(await attachesOf(id)).toBe(1);
     // The views are visible again and still hold their content (no snapshot repaint needed).
     await expect(page.locator('[data-project-id="shop"] .xterm')).toHaveCount(2);
