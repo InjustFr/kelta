@@ -341,6 +341,14 @@
     if (first) selKey = 'key' in first ? first.key : keyOf(first);
   });
 
+  // A PR's linked ticket from Reviews (`ui.select`) lands on that ticket here.
+  $effect(() => {
+    const want = ui.select;
+    if (want?.view !== 'tickets' || projectId !== GLOBAL) return;
+    selKey = want.key;
+    ui.select = null;
+  });
+
   $effect(() => {
     if (!focused || !cur) return;
     selectTicket(cur.ticket.ref, cur.project_ids[0] ?? home);

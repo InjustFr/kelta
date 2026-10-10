@@ -42,6 +42,8 @@ export class UiStore {
   focused = $state(true);
   /** Global view shown instead of the active project (`null` = the project). */
   view = $state<GlobalView | null>(null);
+  /** A cross link's target in a global view (row key), read once by that view's pane on mount, then cleared. */
+  select = $state<{ view: GlobalView; key: string } | null>(null);
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive listener list
   #ctlListeners = new Set<(cmd: CtlCommand) => void>();
