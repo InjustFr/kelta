@@ -139,7 +139,7 @@ impl Core {
                         }
                     })
                     .collect(),
-                tracker: c.tracker.clone(),
+                tracker: self.project_binding(&c.id),
                 open: st.open.contains(id),
                 active: st.active.as_ref() == Some(id),
                 attention,

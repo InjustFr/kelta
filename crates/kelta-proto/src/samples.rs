@@ -550,6 +550,10 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
         ),
         ("ui_event_tickets_changed", UiEvent::TicketsChanged { scope: Scope::All }),
         (
+            "ui_event_tickets_changed_source",
+            UiEvent::TicketsChanged { scope: Scope::Source { id: "product".into() } },
+        ),
+        (
             "ui_event_reviews_changed",
             UiEvent::ReviewsChanged {
                 scope: Scope::Project { id: ProjectId::new("shop") },

@@ -290,7 +290,7 @@ impl Core {
                     }
                 };
                 let mut accounts = Vec::new();
-                for b in configs.iter().filter_map(|p| p.tracker.as_ref()) {
+                for b in configs.iter().filter_map(|p| self.project_binding(&p.id)) {
                     for a in
                         std::iter::once(&b.account).chain(b.views.iter().filter_map(|v| v.account.as_ref()))
                     {

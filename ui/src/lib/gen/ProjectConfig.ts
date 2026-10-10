@@ -14,4 +14,9 @@ id: ProjectId, name: string, color: string | null,
 /**
  * 1-2 chars or sprite icon name.
  */
-icon: string | null, default_template: string | null, repos: Array<RepoConfig>, tracker: TrackerBinding | null, };
+icon: string | null, default_template: string | null, repos: Array<RepoConfig>, 
+/**
+ * Deprecated: boards live in the global `[[sources]]`. Still read for one release, and moved
+ * there at startup (SETTINGS §3).
+ */
+tracker: TrackerBinding | null, };

@@ -11,6 +11,7 @@ mod projects;
 mod real_claude;
 mod restore;
 mod scheduler;
+mod sources;
 mod spawn;
 mod status;
 mod store;

@@ -6,6 +6,10 @@ import type { StatusMap } from "./StatusMap";
 import type { TrackerView } from "./TrackerView";
 
 /**
- * `[project.tracker]`.
+ * `[sources.tracker]`, and the deprecated `[project.tracker]`.
  */
-export type TrackerBinding = { account: AccountId, views: Array<TrackerView>, columns: Array<ColumnSpec>, status_map: StatusMap, repo_rules: Array<RepoRule>, };
+export type TrackerBinding = { account: AccountId, views: Array<TrackerView>, columns: Array<ColumnSpec>, status_map: StatusMap, 
+/**
+ * `[project.tracker]` only; a source uses `routes`.
+ */
+repo_rules: Array<RepoRule>, };

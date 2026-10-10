@@ -54,6 +54,8 @@ describe('helpers', () => {
     expect(scopeAffects({ kind: 'project', id: 'a' }, { kind: 'all' })).toBe(true);
     expect(scopeAffects({ kind: 'all' }, { kind: 'project', id: 'a' })).toBe(true);
     expect(scopeAffects({ kind: 'project', id: 'a' }, { kind: 'project', id: 'b' })).toBe(false);
+    expect(scopeKey({ kind: 'source', id: 'shop' })).toBe('source:shop');
+    expect(scopeAffects({ kind: 'source', id: 'a' }, { kind: 'project', id: 'a' })).toBe(false);
   });
 
   it('review keys', () => {

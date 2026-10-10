@@ -16,6 +16,11 @@ A source is a place tickets come from: a Jira board or filter, a Redmine project
 Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A project can have several, from different
 accounts, so one project can show Jira and GitHub tickets together.
 
+- Boards live in your global settings, not in each project: one `[[sources]]` entry holds the account, the
+  sources (views), the columns and the status mapping, and lists the projects it feeds (none is fine). A board
+  shared by several projects is set up once. The project's Tracker settings edit the board that feeds it. Boards
+  from older versions moved out of the project files on first launch (a copy of each project file is kept in
+  `projects/.trash/`). The All tickets view shows every board, also those feeding no open project.
 - The pane shows every source of the project by default (first page of each, duplicates removed); **Load more**
   pages every source that has more.
 - The palette and the ticket pickers search the trackers themselves (Jira `text ~`, Linear title and description,
