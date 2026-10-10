@@ -39,4 +39,8 @@ extra_hooks: { [key in string]: JsonValue }, profiles: { [key in string]: Claude
 /**
  * Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
  */
-ide_bridge: boolean, };
+ide_bridge: boolean, 
+/**
+ * Spend per work item (USD) past which its cost chip turns red; set it per project.
+ */
+budget_usd: number | null, };

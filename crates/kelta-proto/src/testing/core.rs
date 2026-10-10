@@ -440,6 +440,10 @@ impl CoreApi for FakeCore {
         self.work_items.lock().iter().find(|w| w.session_ids.contains(id)).cloned()
     }
 
+    async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
+        self.work_items.lock().iter().find(|w| &w.id == id).cloned()
+    }
+
     async fn work_create_pr(
         &self,
         id: &WorkItemId,

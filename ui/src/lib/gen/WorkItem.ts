@@ -43,6 +43,10 @@ sent_threads?: Array<string>,
  */
 rebase?: RebaseState | null, 
 /**
+ * Claude spend of the item's ended sessions (USD), summed across sessions and resumes.
+ */
+cost_usd: number, 
+/**
  * Claude's full final message of its last `Stop` (the session preview keeps 200 chars).
  */
 claude_message?: string | null, 
@@ -57,4 +61,8 @@ next_note?: string | null,
 /**
  * When Louis last left the item's tab (RFC 3339, `work_left`); drives the return strip.
  */
-left_at?: string | null, };
+left_at?: string | null, 
+/**
+ * First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
+ */
+port_base?: number | null, };

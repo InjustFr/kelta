@@ -19,10 +19,12 @@ use kelta_work::template::{Ctx, Mode, render, render_shell};
 use crate::Core;
 use crate::layout;
 
-/// The hooks Kelta registers for a Claude session (PLUGINS §8) + `claude.extra_hooks`.
+/// The hooks Kelta registers for a Claude session (PLUGINS §8) + `claude.extra_hooks`, and the
+/// statusline relay (`kelta-ctl statusline`).
 pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Value>) -> serde_json::Value {
     use kelta_proto::hooks::names;
-    let cmd = format!("'{}' hook", ctl.display().to_string().replace('\'', r"'\''"));
+    let ctl = format!("'{}'", ctl.display().to_string().replace('\'', r"'\''"));
+    let cmd = format!("{ctl} hook");
     let hook = |async_: bool| {
         let mut h = serde_json::json!({ "type": "command", "command": cmd, "timeout": 5 });
         if async_ {
@@ -48,7 +50,7 @@ pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Va
             _ => {}
         }
     }
-    serde_json::json!({ "hooks": hooks })
+    serde_json::json!({ "hooks": hooks, "statusLine": { "type": "command", "command": format!("{ctl} statusline") } })
 }
 
 /// Claude argv for a standalone/template session.
@@ -383,6 +385,7 @@ mod tests {
         assert_eq!(h["SessionEnd"][0]["hooks"][0].get("async"), None);
         assert_eq!(h["Stop"][0]["hooks"][0]["async"], true);
         assert_eq!(h["Stop"][0]["hooks"][0]["command"], "'/d/bin/current/kelta-ctl' hook");
+        assert_eq!(v["statusLine"]["command"], "'/d/bin/current/kelta-ctl' statusline");
         let q = claude_hooks_settings(Path::new("/Users/o'brien/kelta-ctl"), &BTreeMap::new());
         assert_eq!(q["hooks"]["Stop"][0]["hooks"][0]["command"], r"'/Users/o'\''brien/kelta-ctl' hook");
     }

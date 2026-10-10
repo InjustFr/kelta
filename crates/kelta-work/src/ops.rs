@@ -11,9 +11,9 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
-    CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement,
-    RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest, StepStatus, WorkItem,
-    WorkKind, WorkSource, WorkState,
+    CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, OpenPaneRequest,
+    PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
+    StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore};
 use kelta_proto::tracker::TicketRef;
@@ -711,6 +711,16 @@ impl WorkService {
             verified_clean = report.files.is_empty() && report.unpushed == 0;
         }
 
+        if !env.settings.worktree.teardown.trim().is_empty()
+            && item.worktree.is_dir()
+            && let Err(e) = self.teardown(&env, &item).await
+        {
+            if !opts.force {
+                return Err(e);
+            }
+            env.core.toast(Toast::warn(e.message));
+        }
+
         for sid in &item.session_ids {
             if env.core.session_get(sid).is_some_and(|s| s.lifecycle != Lifecycle::Exited)
                 && let Err(e) = env.core.session_kill(sid, opts.force).await
@@ -788,6 +798,7 @@ impl WorkService {
         let item = self
             .update(id, |w| {
                 w.state = WorkState::Finished;
+                w.port_base = None;
                 w.review_due = false;
                 w.claude_replied = false;
                 true
@@ -799,6 +810,31 @@ impl WorkService {
                 .with_work_item(item.id.clone()),
         );
         Ok(item)
+    }
+
+    /// `worktree.teardown` in a pane below (kept open when it fails), before sessions are killed.
+    async fn teardown(&self, env: &Env, item: &WorkItem) -> Result<(), KeltaError> {
+        let cmd = &env.settings.worktree.teardown;
+        let mut rx = env.core.subscribe();
+        let info = self
+            .spawn_script(env, item, "teardown", std::slice::from_ref(cmd), CloseOnExit::OnSuccess)
+            .await?;
+        let pane = OpenPaneRequest {
+            content: PaneContent::Terminal { session_id: info.id.clone() },
+            placement: Placement::SplitDown,
+            focus: false,
+            tab_title: None,
+            work_item_id: Some(item.id.clone()),
+        };
+        if let Err(e) = env.core.layout_open(&item.project_id, pane).await {
+            tracing::warn!(error = %e.message, "teardown pane");
+        }
+        match await_exit(&env.core, &mut rx, &info.id, Duration::from_secs(600)).await? {
+            0 => Ok(()),
+            code => Err(KeltaError::upstream(format!(
+                "teardown `{cmd}` failed (exit {code}); fix it, or Finish with force to skip it"
+            ))),
+        }
     }
 
     pub(crate) async fn finish_merged_impl(

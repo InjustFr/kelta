@@ -923,6 +923,7 @@ export function createMockTransport(options: MockOptions = {}): {
                 ?.slice(0, 72) ?? null)
             : null,
         pr_title_needs_key: false,
+        cost_usd: 0,
         review_due: false,
         claude_replied: false,
       };

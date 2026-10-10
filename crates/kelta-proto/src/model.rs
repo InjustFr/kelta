@@ -297,7 +297,7 @@ pub struct SessionInfo {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct ClaudeMeta {
     pub session_uuid: String,
     pub model: Option<String>,
@@ -305,6 +305,34 @@ pub struct ClaudeMeta {
     pub preview: Option<String>,
     pub files_touched: Vec<PathBuf>,
     pub hooks_active: bool,
+    /// Last statusline snapshot (in memory only); `None` until Claude first refreshes it.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub usage: Option<ClaudeUsage>,
+}
+
+/// What Claude Code's statusline reports (`HookPayload::usage`), plus Kelta's cost bookkeeping.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClaudeUsage {
+    /// `context_window.used_percentage`; `None` before the first answer.
+    pub context_pct: Option<f64>,
+    /// `cost.total_cost_usd` of this Claude process (a resumed one starts from the restored cost).
+    pub cost_usd: f64,
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    /// `rate_limits.*`; absent for API-key accounts.
+    pub five_hour: Option<RateWindow>,
+    pub seven_day: Option<RateWindow>,
+    /// Spend not yet added to `WorkItem.cost_usd` (core moves it there on SessionEnd and quit).
+    #[serde(default)]
+    pub unsaved_usd: f64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+pub struct RateWindow {
+    pub used_percentage: f64,
+    /// Unix seconds.
+    pub resets_at: i64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -549,7 +577,7 @@ pub struct WorkStepStatus {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct WorkItem {
     pub id: WorkItemId,
     pub project_id: ProjectId,
@@ -594,6 +622,9 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub rebase: Option<Box<RebaseState>>,
+    /// Claude spend of the item's ended sessions (USD), summed across sessions and resumes.
+    #[serde(default)]
+    pub cost_usd: f64,
     /// Claude's full final message of its last `Stop` (the session preview keeps 200 chars).
     #[serde(default)]
     #[ts(optional = nullable)]
@@ -610,6 +641,10 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub left_at: Option<String>,
+    /// First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub port_base: Option<u16>,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files
@@ -626,6 +661,36 @@ pub struct ReviewDelta {
     /// Every file, for `+N/−M since you reviewed`.
     pub insertions: u32,
     pub deletions: u32,
+}
+
+/// Ports per work item: `KELTA_PORT` plus `KELTA_PORT_1..9`.
+pub const PORT_BLOCK: u16 = 10;
+
+impl WorkItem {
+    /// Env of every process of the item: `KELTA_PORT`, `KELTA_PORT_1..9` (when it has a block) and
+    /// `COMPOSE_PROJECT_NAME=kelta-<key-slug>` so parallel worktrees get their own containers.
+    pub fn env(&self) -> BTreeMap<String, String> {
+        let key = self.ticket.as_ref().map_or(self.branch.as_str(), |t| t.key.as_str());
+        let mut slug = String::new();
+        for c in key.chars().map(|c| c.to_ascii_lowercase()) {
+            if c.is_ascii_alphanumeric() {
+                slug.push(c);
+            } else if !slug.is_empty() && !slug.ends_with('-') {
+                slug.push('-');
+            }
+        }
+        let mut env = BTreeMap::from([(
+            "COMPOSE_PROJECT_NAME".to_owned(),
+            format!("kelta-{}", slug.trim_end_matches('-')),
+        )]);
+        if let Some(base) = self.port_base {
+            env.insert("KELTA_PORT".into(), base.to_string());
+            for i in 1..PORT_BLOCK {
+                env.insert(format!("KELTA_PORT_{i}"), (base + i).to_string());
+            }
+        }
+        env
+    }
 }
 
 /// `work_rebase` bookkeeping (FLOW §4.4). `pre_head` is the last HEAD that contained the remote
@@ -771,7 +836,7 @@ pub enum ShipOrigin {
 }
 
 /// `work_finish_merged` result.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct FinishMergedReport {
     pub finished: Vec<WorkItem>,
     /// Merged items left for a single Finish (dirty worktree, Done status to choose, busy).

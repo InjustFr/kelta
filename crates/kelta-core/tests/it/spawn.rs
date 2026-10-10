@@ -64,6 +64,24 @@ fn req(kind: SessionKind, program: Option<&str>, args: &[&str]) -> SpawnRequest 
 }
 
 #[tokio::test]
+async fn work_item_sessions_get_the_port_block_and_compose_namespace() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let item = kelta_proto::samples::work_item();
+    let it = item.clone();
+    h.core.store().call(move |c| kelta_core::store::q::work_put(c, &it)).await.unwrap();
+    let mut r = req(SessionKind::Shell, None, &[]);
+    r.work_item_id = Some(item.id.clone());
+    let s = h.core.session_spawn(r).await.unwrap();
+    let env = h.term.with_session(&s.id, |s| s.spec.env.clone()).unwrap();
+    assert_eq!(env["KELTA_PORT"], "20140");
+    assert_eq!(env["KELTA_PORT_1"], "20141");
+    assert_eq!(env["KELTA_PORT_9"], "20149");
+    assert_eq!(env["COMPOSE_PROJECT_NAME"], "kelta-shop-142");
+    assert_eq!(env["KELTA_TICKET"], "SHOP-142");
+}
+
+#[tokio::test]
 async fn spawn_builds_the_pty_spec() {
     let tmp = tempfile::tempdir().unwrap();
     let mut settings = Settings::defaults();

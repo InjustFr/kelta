@@ -75,6 +75,20 @@ pub fn claude_config_dir(env: &BTreeMap<String, String>) -> Option<PathBuf> {
     }
 }
 
+/// The user's own `statusLine.command`, which Kelta's `--settings` overrides: Claude's user settings,
+/// then the project's `.claude/settings.json` and `.claude/settings.local.json` (last wins).
+pub fn user_statusline(env: &BTreeMap<String, String>, cwd: &Path) -> Option<String> {
+    let files = [
+        claude_config_dir(env)?.join("settings.json"),
+        cwd.join(".claude/settings.json"),
+        cwd.join(".claude/settings.local.json"),
+    ];
+    files.iter().rev().find_map(|f| {
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(f).ok()?).ok()?;
+        Some(v.get("statusLine")?.get("command")?.as_str()?.to_owned()).filter(|c| !c.trim().is_empty())
+    })
+}
+
 /// `terminal.shell`, else the login `$SHELL`, else the platform default.
 pub fn default_shell(terminal_shell: &str, login: &BTreeMap<String, String>) -> PathBuf {
     if !terminal_shell.trim().is_empty() {
@@ -309,6 +323,23 @@ mod tests {
             Some(PathBuf::from("/h/c"))
         );
         assert_eq!(claude_config_dir(&env(&[])), None);
+    }
+
+    #[test]
+    fn user_statusline_takes_the_last_layer() {
+        let d = tempfile::tempdir().unwrap();
+        let home = d.path().join("h");
+        let cwd = d.path().join("w");
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        std::fs::create_dir_all(cwd.join(".claude")).unwrap();
+        let e = BTreeMap::from([("HOME".to_owned(), home.display().to_string())]);
+        assert_eq!(user_statusline(&e, &cwd), None);
+        let line = |c: &str| format!(r#"{{"statusLine": {{"type": "command", "command": "{c}"}}}}"#);
+        std::fs::write(home.join(".claude/settings.json"), line("~/.claude/line.sh")).unwrap();
+        assert_eq!(user_statusline(&e, &cwd).as_deref(), Some("~/.claude/line.sh"));
+        std::fs::write(cwd.join(".claude/settings.local.json"), line("echo local")).unwrap();
+        std::fs::write(cwd.join(".claude/settings.json"), "{not json").unwrap();
+        assert_eq!(user_statusline(&e, &cwd).as_deref(), Some("echo local"));
     }
 
     #[test]

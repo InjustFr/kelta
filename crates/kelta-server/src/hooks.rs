@@ -99,6 +99,13 @@ pub async fn ingest(
     sid: &SessionId,
     payload: HookPayload,
 ) -> Result<(), KeltaError> {
+    // Statusline refreshes are frequent: they only update the session's usage, no bus event.
+    if payload.hook_event_name == names::STATUS {
+        return match payload.usage() {
+            Some(u) => core.session_set_usage(sid, u).await,
+            None => Ok(()),
+        };
+    }
     let change = map(&payload);
     let project = core.session_get(sid).map(|s| s.project_id);
     let with_ctx = |ev: BusEvent| {

@@ -350,3 +350,60 @@ async fn osc52_policy() {
     settle().await;
     assert_eq!(h.core.clipboard_read(ClipboardKind::Clipboard).await.unwrap(), "copied");
 }
+
+/// Ticket #135: statusline spend lands on the work item at SessionEnd and quit, summed across
+/// sessions, `/clear` resets and restarts; a resumed process's restored cost is not counted twice.
+#[tokio::test]
+async fn claude_cost_rolls_up_to_the_work_item() {
+    use kelta_core::store::q;
+    use kelta_proto::model::ClaudeUsage;
+    let tmp = tempfile::tempdir().unwrap();
+    let item = kelta_proto::model::WorkItem { cost_usd: 0.0, ..kelta_proto::samples::work_item() };
+    let id = item.id.clone();
+    let usage = |cost_usd| ClaudeUsage { cost_usd, ..ClaudeUsage::default() };
+    let end = StatusChange { raw_event: "SessionEnd".into(), ..ch(S::Exited) };
+    let linked = || SpawnRequest { work_item_id: Some(id.clone()), ..claude_req() };
+    let cost = |h: &H| {
+        let id = id.clone();
+        let store = h.core.store().clone();
+        async move { store.call(move |c| q::work_get(c, &id)).await.unwrap().unwrap().cost_usd }
+    };
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+        let it = item.clone();
+        h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+        let s = h.core.session_spawn(linked()).await.unwrap();
+        for c in [0.0, 1.0, 1.5] {
+            h.core.session_set_usage(&s.id, usage(c)).await.unwrap();
+        }
+        let unsaved = |h: &H| h.core.session_get(&s.id).unwrap().claude.unwrap().usage.unwrap().unsaved_usd;
+        assert_eq!(unsaved(&h), 1.5);
+        h.core.session_apply_hook(&s.id, end.clone()).await.unwrap();
+        assert_eq!((cost(&h).await, unsaved(&h)), (1.5, 0.0));
+        // A second SessionEnd adds nothing; `/clear` restarts Claude's counter.
+        h.core.session_apply_hook(&s.id, end.clone()).await.unwrap();
+        h.core.session_set_usage(&s.id, usage(0.2)).await.unwrap();
+        assert_eq!(unsaved(&h), 0.2);
+        // Quit saves what SessionEnd did not.
+        h.core.shutdown().await.unwrap();
+        assert_eq!(cost(&h).await, 1.7);
+    }
+    // Restart: the resumed Claude reports its restored 0.2 first (baseline), then spends 0.5.
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(linked()).await.unwrap();
+    for c in [0.2, 0.7] {
+        h.core.session_set_usage(&s.id, usage(c)).await.unwrap();
+    }
+    h.core.session_apply_hook(&s.id, end).await.unwrap();
+    assert!((cost(&h).await - 2.2).abs() < 1e-9);
+    // SIGKILL with no SessionEnd: the exit saves the 0.3 spent since.
+    h.core.session_set_usage(&s.id, usage(1.0)).await.unwrap();
+    h.core.session_kill(&s.id, true).await.unwrap();
+    for _ in 0..100 {
+        if (cost(&h).await - 2.5).abs() < 1e-9 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("killed session's cost not saved: {}", cost(&h).await);
+}

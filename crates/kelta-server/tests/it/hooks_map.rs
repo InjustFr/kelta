@@ -20,7 +20,14 @@ fn table_over_fixtures() {
         ("hook_session_end", SessionStatus::Exited, "SessionEnd"),
         ("hook_post_tool_use_edit", SessionStatus::Unknown, "PostToolUse"),
     ];
-    let all: Vec<String> = fixtures::names().into_iter().filter(|n| n.starts_with("hook_")).collect();
+    // Statusline frames are not hooks: `ingest` routes them to the session usage, `map` ignores them.
+    for name in ["hook_statusline", "hook_statusline_api_key"] {
+        assert!(map(&fixtures::load::<HookPayload>(name).unwrap()).is_none(), "{name}");
+    }
+    let all: Vec<String> = fixtures::names()
+        .into_iter()
+        .filter(|n| n.starts_with("hook_") && !n.starts_with("hook_statusline"))
+        .collect();
     assert_eq!(all.len(), rows.len(), "every hook fixture has a row: {all:?}");
     for (name, status, raw) in rows {
         let p: HookPayload = fixtures::load(name).unwrap();

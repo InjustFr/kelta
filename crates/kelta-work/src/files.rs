@@ -3,12 +3,14 @@
 
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::tracker::TicketDetail;
+
+use crate::template::{Ctx, Mode, render};
 
 fn io_err(path: &Path, e: std::io::Error) -> KeltaError {
     KeltaError::internal(format!("{}: {e}", path.display()))
@@ -187,6 +189,41 @@ fn copy_tree(src: &Path, dst: &Path, copied: &mut Vec<String>, rel: &str) -> Res
     Ok(())
 }
 
+/// Render `worktree.env_template` (`x.kelta`, read from the worktree, else the main checkout) to `x`
+/// in the worktree. An existing `x` that differs is never overwritten. Returns (detail, kept).
+pub fn render_env_template(
+    repo: &Path,
+    wt: &Path,
+    tmpl: &str,
+    ctx: &Ctx,
+) -> Result<(String, bool), KeltaError> {
+    let rel = Path::new(tmpl);
+    let target = tmpl.strip_suffix(".kelta").filter(|t| !t.is_empty() && !t.ends_with('/'));
+    let Some(target) = target.filter(|_| rel.components().all(|c| matches!(c, Component::Normal(_)))) else {
+        return Err(KeltaError::invalid(format!(
+            "worktree.env_template `{tmpl}` must be a relative path ending in .kelta"
+        )));
+    };
+    let Some(src) = [wt, repo].iter().map(|d| d.join(rel)).find(|p| p.is_file()) else {
+        return Ok((format!("no {tmpl}"), false));
+    };
+    let raw = std::fs::read_to_string(&src).map_err(|e| io_err(&src, e))?;
+    let out = render(&raw, ctx, Mode::Lenient)?;
+    let dst = wt.join(target);
+    if dst.symlink_metadata().is_ok() {
+        return Ok(if std::fs::read(&dst).is_ok_and(|cur| cur == out.as_bytes()) {
+            (format!("{target} up to date"), false)
+        } else {
+            (format!("{target} differs from {tmpl}, kept"), true)
+        });
+    }
+    if let Some(parent) = dst.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
+    }
+    std::fs::write(&dst, out).map_err(|e| io_err(&dst, e))?;
+    Ok((format!("rendered {target}"), false))
+}
+
 /// Very small HTML → text for comment bodies (tags dropped, common entities decoded).
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
@@ -268,6 +305,31 @@ pub fn lazygit_config(ctl: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn env_template_renders_once_and_never_clobbers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, wt) = (tmp.path().join("repo"), tmp.path().join("wt"));
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        let ctx = Ctx::new().with("port", "20140").with("port.1", "20141");
+        assert_eq!(
+            render_env_template(&repo, &wt, ".env.kelta", &ctx).unwrap(),
+            ("no .env.kelta".into(), false)
+        );
+        // Untracked template in the main checkout; `${X}` survives.
+        std::fs::write(repo.join(".env.kelta"), "PORT={port}\nDB={port.1}\nH=${HOME}\n").unwrap();
+        let (d, kept) = render_env_template(&repo, &wt, ".env.kelta", &ctx).unwrap();
+        assert_eq!((d.as_str(), kept), ("rendered .env", false));
+        assert_eq!(std::fs::read_to_string(wt.join(".env")).unwrap(), "PORT=20140\nDB=20141\nH=${HOME}\n");
+        assert!(!render_env_template(&repo, &wt, ".env.kelta", &ctx).unwrap().1, "same content: no warning");
+        std::fs::write(wt.join(".env"), "PORT=3000\n").unwrap();
+        assert!(render_env_template(&repo, &wt, ".env.kelta", &ctx).unwrap().1);
+        assert_eq!(std::fs::read_to_string(wt.join(".env")).unwrap(), "PORT=3000\n", "user edit kept");
+        for bad in [".env", "../.env.kelta", "/tmp/x.kelta", ".kelta"] {
+            assert!(render_env_template(&repo, &wt, bad, &ctx).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn includes_copy_and_match() {

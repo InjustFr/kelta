@@ -178,3 +178,91 @@ fn version_works_offline() {
     let o = run(&["--version"], &[], &[], b"");
     assert!(String::from_utf8_lossy(&o.stdout).starts_with("kelta-ctl "));
 }
+
+const STATUS_JSON: &[u8] =
+    br#"{"session_id":"u","cost":{"total_cost_usd":1.84},"context_window":{"used_percentage":72}}"#;
+
+#[test]
+fn statusline_relays_and_keeps_the_user_output() {
+    let d = tmp();
+    let sock = d.path().join("c.sock");
+    let listener = UnixListener::bind(&sock).unwrap();
+    // statusline does not wait for an answer: only read the frame.
+    let srv = std::thread::spawn(move || {
+        let mut line = String::new();
+        BufReader::new(listener.accept().unwrap().0).read_line(&mut line).unwrap();
+        line
+    });
+    // The user's statusline sees Claude's JSON on stdin and its stdout is passed through unchanged.
+    let user = r#"printf '\033[2mOpus\033[0m %s\n' "$(wc -c | tr -d ' ')""#;
+    let ids = [("KELTA_SESSION_ID", "sid-1"), ("KELTA_HOOK_TOKEN", "tok"), ("KELTA_USER_STATUSLINE", user)];
+    let o = run(&["statusline"], &[("KELTA_SOCK", sock.as_path())], &ids, STATUS_JSON);
+    assert!(o.status.success());
+    let direct = Command::new("/bin/sh")
+        .args(["-c", user])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .and_then(|mut c| {
+            c.stdin.take().unwrap().write_all(STATUS_JSON)?;
+            c.wait_with_output()
+        })
+        .unwrap();
+    assert_eq!(o.stdout, direct.stdout);
+    let line: serde_json::Value = serde_json::from_str(&srv.join().unwrap()).unwrap();
+    assert_eq!(line["cmd"], "hook");
+    assert_eq!(line["session"], "sid-1");
+    assert_eq!(line["token"], "tok");
+    assert_eq!(line["payload"]["hook_event_name"], "Status");
+    assert_eq!(line["payload"]["cost"]["total_cost_usd"], 1.84);
+}
+
+#[test]
+fn statusline_without_kelta_or_user_command_prints_nothing() {
+    let d = tmp();
+    let missing = d.path().join("nope.sock");
+    let o = run(&["statusline"], &[("KELTA_SOCK", missing.as_path())], &[], STATUS_JSON);
+    assert!(o.status.success());
+    assert!(o.stdout.is_empty());
+    let o = run(&["statusline"], &[], &[("KELTA_USER_STATUSLINE", "echo mine")], b"not json");
+    assert_eq!(o.stdout, b"mine\n");
+}
+
+/// Ticket #135: the relay adds < 50 ms to the user's statusline, even when Kelta never answers.
+#[test]
+fn statusline_round_trip_adds_under_50ms() {
+    let d = tmp();
+    let sock = d.path().join("c.sock");
+    let listener = UnixListener::bind(&sock).unwrap();
+    let srv = std::thread::spawn(move || {
+        // Accept and hold every connection without answering.
+        listener.incoming().take(5).map(|s| s.unwrap()).collect::<Vec<_>>()
+    });
+    let ids =
+        [("KELTA_SESSION_ID", "s"), ("KELTA_HOOK_TOKEN", "t"), ("KELTA_USER_STATUSLINE", "cat >/dev/null")];
+    let time = |f: &dyn Fn()| {
+        let t = std::time::Instant::now();
+        f();
+        t.elapsed()
+    };
+    let mut via = Vec::new();
+    let mut direct = Vec::new();
+    for _ in 0..5 {
+        via.push(time(&|| {
+            assert!(
+                run(&["statusline"], &[("KELTA_SOCK", sock.as_path())], &ids, STATUS_JSON).status.success()
+            );
+        }));
+        direct.push(time(&|| {
+            let mut c =
+                Command::new("/bin/sh").args(["-c", "cat >/dev/null"]).stdin(Stdio::piped()).spawn().unwrap();
+            c.stdin.take().unwrap().write_all(STATUS_JSON).unwrap();
+            c.wait().unwrap();
+        }));
+    }
+    srv.join().unwrap();
+    let (via, direct) = (via.iter().min().unwrap(), direct.iter().min().unwrap());
+    let added = via.saturating_sub(*direct);
+    eprintln!("statusline: {via:?} via kelta-ctl, {direct:?} direct, {added:?} added");
+    assert!(added < std::time::Duration::from_millis(50), "statusline relay added {added:?}");
+}

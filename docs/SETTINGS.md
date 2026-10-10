@@ -124,6 +124,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `profiles` | map<str, ClaudeProfile> | `default = {model="opus", effort="high", permission_mode="acceptEdits"}`, `review = {model="opus", effort="high", permission_mode="plan"}`, `plan = {model="opus", effort="high", permission_mode="plan"}` | ClaudeProfile = {model: str, effort: enum(low\|medium\|high\|xhigh\|max), permission_mode: enum(default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions)} |
 | `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = "{task}"`, `feedback = "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push."`, `conflicts = "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push."` | `feedback` is the editable prompt of the Fix with Claude sheet, `conflicts` the one of Ask Claude to resolve. Both are rendered by `work_send` with the work item's placeholders plus `{file}` (absolute path of the brief written to the private run dir: `feedback.md` / `conflicts.md`), `{pr.url}`, and during a rebase `{onto}`, `{step}`, `{total}`. `standalone`'s `{task}` is the task of a New work item or `kelta-ctl start --task`. |
 | `ide_bridge` | bool | `false` | Claude sessions see Kelta as their IDE (loopback WebSocket + `~/.claude/ide/<port>.lock`, `openFile`/`openDiff` in the editor pane); ARCHITECTURE §8.5 |
+| `budget_usd` | float? | none | Claude spend per work item (USD) past which its cost chip turns red; set it per project |
 
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
@@ -158,6 +159,11 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `setup_blocking` | bool | `true` | Claude waits for setup exit 0 |
 | `fetch_timeout_secs` | int | `20` | |
 | `cleanup` | enum(ask\|auto\|never) | `ask` | on PR merged / ticket done |
+| `env_template` | str | `""` | worktree path ending in `.kelta` (e.g. `.env.kelta`, read from the worktree, else the main checkout), rendered at start work (`include_files` step, before the copies) to the same path without `.kelta`. Placeholders `{port}`, `{port.1}`…`{port.9}`; other braces stay verbatim. An existing target that differs is kept, with a warning |
+| `teardown` | str (x-kelta-exec) | `""` | run on Finish in a pane below, in the worktree, with the item's env (e.g. `docker compose down`); failure stops the Finish unless forced |
+
+### [ports]
+| `range` | str | `"20000-29999"` | `first-last`. Each new work item takes the next free block of 10 (no other item's block, first port bindable), freed on Finish; `""` = no ports. Every session, setup/teardown and tool process of the item gets `KELTA_PORT`, `KELTA_PORT_1..9` and `COMPOSE_PROJECT_NAME=kelta-<key-slug>` (ticket key, else branch). The WorkItem header shows the block |
 
 ### [work]
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
@@ -353,7 +359,7 @@ Config holds only `SecretRef` strings, never tokens:
 
 Simple `{path}` substitution (no expressions). Filters: `{x|slug}`, `{x|shell}` (POSIX single-quote), `{x|json}`, `{a|b}` = first non-empty of `a` or `b` (e.g. `{worktree|project.root}`). Unknown placeholder → validation error at load time. In commands typed into a shell (a session template's `command`), every value is POSIX-quoted by default (`|shell` is implied; writing it does not quote twice), so a ticket title cannot run as shell code.
 
-Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `config_dir`, `data_dir`, `home`, `user`.
+Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`.
 
 ## 7. Hot reload
 

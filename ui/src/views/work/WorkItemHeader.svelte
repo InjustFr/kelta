@@ -4,12 +4,13 @@
   import type { TabHeaderProps } from '$app/registry';
   import { workLeft } from '$lib/ipc/commands';
   import { effectiveChords } from '$lib/keys/manager';
-  import { settings, tickets, work } from '$lib/stores';
+  import { sessions, settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
   import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
+  import { itemCost, overBudget, usd } from '../../shell/usage';
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
   import { MoveController } from '../tickets/move.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
@@ -27,6 +28,8 @@
   const transitions = $derived(ticketRef ? (tickets.transitions[ticketKey(ticketRef)]?.data ?? []) : []);
   const phase = $derived(item ? phaseNow(item) : null);
   const git = $derived(work.git[workItemId] ?? null);
+  const spent = $derived(item ? itemCost(item, sessions.all) : 0);
+  const over = $derived(overBudget(spent, settings.value(projectId)?.claude.budget_usd));
   const primaryBlocked = $derived(item && phase?.primary ? blockedReason(phase.primary, item, phase) : null);
   const menuChord = $derived(
     effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
@@ -194,6 +197,11 @@
       <Icon name="git-branch" size={14} />
       <code>{item.branch}</code>
     </span>
+    {#if item.port_base != null}
+      <span class="group ports" title="KELTA_PORT … KELTA_PORT_9" data-testid="work-ports"
+        >ports {item.port_base}–{item.port_base + 9}</span
+      >
+    {/if}
     {#if git && !git.missing}
       <span class="group git" title="{git.ahead} commits to push, {git.behind} behind {item.base}">
         <span class="num">
@@ -212,6 +220,11 @@
     {:else if work.gitError}
       <button type="button" class="link" onclick={() => void work.refreshStatus()}
         >status unavailable, retry</button
+      >
+    {/if}
+    {#if spent > 0}
+      <span class="group cost" class:over title={over ? 'Over budget' : 'Claude spend on this item'}
+        >{usd(spent)}</span
       >
     {/if}
     <span class="spacer"></span>
@@ -432,9 +445,20 @@
     text-overflow: ellipsis;
   }
 
-  .git {
+  .git,
+  .ports {
     flex: none;
     color: var(--k-fg-muted);
+  }
+
+  .cost {
+    flex: none;
+    color: var(--k-fg-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cost.over {
+    color: var(--k-danger);
   }
 
   .num {
@@ -505,7 +529,8 @@
   }
 
   @container (max-width: 1000px) {
-    .git {
+    .git,
+    .ports {
       display: none;
     }
   }

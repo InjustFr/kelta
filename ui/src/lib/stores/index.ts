@@ -79,7 +79,14 @@ export function bootstrap(): Promise<BootstrapResult> {
     onAnyUiEvent(applyUiEvent);
     const tasks: [string, Promise<unknown>][] = [
       ['events_subscribe', connectUiEvents()],
-      ['project_list', projects.load().then(() => attention.seed(projects.list))],
+      [
+        'project_list',
+        projects.load().then(() => {
+          attention.seed(projects.list);
+          // Per-project overrides (e.g. claude.budget_usd) are read via settings.value(projectId).
+          for (const p of projects.list) void settings.load(p.id);
+        }),
+      ],
       ['session_list', sessions.load()],
       ['work_list', work.load()],
       ['settings_effective', settings.load().then((r) => (r.error ? Promise.reject(r.error) : r))],

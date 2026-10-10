@@ -888,6 +888,7 @@
         ],
         "append_system_prompt": "",
         "binary": "claude",
+        "budget_usd": null,
         "extra_args": [],
         "extra_hooks": {},
         "hook_transport": "command",
@@ -945,6 +946,15 @@
           "description": "Resolved in the login PATH.",
           "type": "string",
           "x-kelta-exec": true
+        },
+        "budget_usd": {
+          "default": null,
+          "description": "Spend per work item (USD) past which its cost chip turns red; set it per project.",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "extra_args": {
           "default": [],
@@ -2411,6 +2421,22 @@
       "type": "object",
       "x-kelta-category": "Polling",
       "x-kelta-order": 11
+    },
+    "ports": {
+      "additionalProperties": false,
+      "default": {
+        "range": "20000-29999"
+      },
+      "properties": {
+        "range": {
+          "default": "20000-29999",
+          "description": "`first-last`: each work item gets the next free block of 10 (`KELTA_PORT`, `KELTA_PORT_1..9`);\nempty = no ports.",
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-order": 9
     },
     "project": {
       "additionalProperties": false,
@@ -4829,6 +4855,7 @@
       "default": {
         "branch_template": "{type}/{key}-{slug}",
         "cleanup": "ask",
+        "env_template": "",
         "fetch_timeout_secs": 20,
         "include": [
           ".env",
@@ -4838,6 +4865,7 @@
         "setup": [],
         "setup_blocking": true,
         "slug_max": 40,
+        "teardown": "",
         "type_map": {
           "bug": "fix",
           "default": "chore",
@@ -4859,6 +4887,11 @@
             "auto",
             "never"
           ],
+          "type": "string"
+        },
+        "env_template": {
+          "default": "",
+          "description": "Worktree file ending in `.kelta` (e.g. `.env.kelta`), rendered at start work to the same path\nwithout `.kelta` (`{port}`, `{port.1}`…`{port.9}`); an existing different file is kept.",
           "type": "string"
         },
         "fetch_timeout_secs": {
@@ -4902,6 +4935,12 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "teardown": {
+          "default": "",
+          "description": "Run in a visible pane on Finish, in the worktree; failure stops the Finish.",
+          "type": "string",
+          "x-kelta-exec": true
         },
         "type_map": {
           "additionalProperties": {

@@ -18,9 +18,9 @@ use kelta_proto::events::{BusEvent, Toast, ToastAction, ToastLevel, bus};
 use kelta_proto::ext::{BlockingOutcome, ToolHandle};
 use kelta_proto::ids::{ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::model::{
-    BranchChoice, CloseOnExit, Lifecycle, OpenPaneRequest, PaneContent, Placement, ProjectInfo, RepoInfo,
-    RestorePolicy, SessionKind, SpawnRequest, StartWorkPlan, StepStatus, TemplateCtx, WORK_STEPS, WorkItem,
-    WorkKind, WorkSource, WorkState,
+    BranchChoice, CloseOnExit, Lifecycle, OpenPaneRequest, PORT_BLOCK, PaneContent, Placement, ProjectInfo,
+    RepoInfo, RestorePolicy, SessionInfo, SessionKind, SpawnRequest, StartWorkPlan, StepStatus, TemplateCtx,
+    WORK_STEPS, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, SessionTemplate, Settings, TransitionTarget};
 use kelta_proto::tracker::{Assignee, Status, TicketRef, Transition};
@@ -431,6 +431,9 @@ impl WorkService {
                 (WorkKind::Branch, None, None, task.as_deref().map(plan::task_title))
             }
         };
+        // Under `start_lock`: no two new items can pick the same free block.
+        let taken: Vec<u16> = self.store.list_items(None).await?.iter().filter_map(|w| w.port_base).collect();
+        let port_base = plan::alloc_ports(&env.settings.ports.range, &taken, plan::port_free)?;
         let mut item = WorkItem {
             id: WorkItemId::generate(),
             project_id: plan.project_id.clone(),
@@ -460,6 +463,8 @@ impl WorkService {
             delta: None,
             next_note: None,
             left_at: None,
+            port_base,
+            cost_usd: 0.0,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -797,9 +802,30 @@ impl WorkService {
         item: &mut WorkItem,
         j: &mut Journal,
     ) -> Result<Option<String>, KeltaError> {
-        let patterns = files::include_patterns(&env.repo.path, &env.settings.worktree.include);
-        if patterns.is_empty() || git::same_path(&env.repo.path, &item.worktree) {
+        if git::same_path(&env.repo.path, &item.worktree) {
             return Ok(Some("nothing to copy".into()));
+        }
+        // Before the copies, so the main checkout's `.env` does not take the rendered file's place.
+        let tmpl = env.settings.worktree.env_template.trim();
+        let rendered = if tmpl.is_empty() {
+            None
+        } else {
+            let mut ctx = Ctx::new();
+            if let Some(base) = item.port_base {
+                ctx.set("port", base.to_string());
+                for i in 1..PORT_BLOCK {
+                    ctx.set(&format!("port.{i}"), (base + i).to_string());
+                }
+            }
+            let (detail, kept) = files::render_env_template(&env.repo.path, &item.worktree, tmpl, &ctx)?;
+            if kept {
+                env.core.toast(Toast::warn(format!("{}: {detail}", item.branch)));
+            }
+            Some(detail)
+        };
+        let patterns = files::include_patterns(&env.repo.path, &env.settings.worktree.include);
+        if patterns.is_empty() {
+            return Ok(Some(rendered.unwrap_or_else(|| "nothing to copy".into())));
         }
         let candidates = git::untracked_candidates(&env.repo.path).await?;
         let (repo, wt) = (env.repo.path.clone(), item.worktree.clone());
@@ -808,10 +834,14 @@ impl WorkService {
                 .await
                 .map_err(|e| KeltaError::internal(e.to_string()))??;
         j.include_copies.extend(copied.iter().cloned());
-        Ok(Some(if copied.is_empty() {
+        let copied = if copied.is_empty() {
             "nothing to copy".into()
         } else {
             format!("copied {}", copied.join(", "))
+        };
+        Ok(Some(match rendered {
+            Some(r) => format!("{r}; {copied}"),
+            None => copied,
         }))
     }
 
@@ -962,34 +992,7 @@ impl WorkService {
         let sid = match j.setup_session.clone().filter(|s| env.core.session_get(s).is_some()) {
             Some(sid) => sid,
             None => {
-                let mut script = String::from("set -e\n");
-                for c in cmds {
-                    let words = shell_words(c)?;
-                    if words.is_empty() {
-                        continue;
-                    }
-                    script.push_str(&words.iter().map(|w| shell_quote(w)).collect::<Vec<_>>().join(" "));
-                    script.push('\n');
-                }
-                let info = env
-                    .core
-                    .session_spawn(SpawnRequest {
-                        id: None,
-                        project_id: item.project_id.clone(),
-                        kind: SessionKind::Setup,
-                        name: Some("setup".into()),
-                        program: Some("/bin/sh".into()),
-                        args: vec!["-c".into(), script],
-                        cwd: Some(item.worktree.clone()),
-                        env: BTreeMap::new(),
-                        cols: COLS,
-                        rows: ROWS,
-                        work_item_id: Some(item.id.clone()),
-                        restore: RestorePolicy::None,
-                        close_on_exit: CloseOnExit::Never,
-                        template_id: None,
-                    })
-                    .await?;
+                let info = self.spawn_script(env, item, "setup", cmds, CloseOnExit::Never).await?;
                 j.setup_session = Some(info.id.clone());
                 if !item.session_ids.contains(&info.id) {
                     item.session_ids.push(info.id.clone());
@@ -1032,6 +1035,44 @@ impl WorkService {
                 "setup failed (exit {code}) — Retry, or Skip to continue anyway"
             )))
         }
+    }
+
+    /// The setup-pane runner: `cmds` as one `set -e` script in the item's worktree.
+    pub(crate) async fn spawn_script(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        name: &str,
+        cmds: &[String],
+        close_on_exit: CloseOnExit,
+    ) -> Result<SessionInfo, KeltaError> {
+        let mut script = String::from("set -e\n");
+        for c in cmds {
+            let words = shell_words(c)?;
+            if words.is_empty() {
+                continue;
+            }
+            script.push_str(&words.iter().map(|w| shell_quote(w)).collect::<Vec<_>>().join(" "));
+            script.push('\n');
+        }
+        env.core
+            .session_spawn(SpawnRequest {
+                id: None,
+                project_id: item.project_id.clone(),
+                kind: SessionKind::Setup,
+                name: Some(name.into()),
+                program: Some("/bin/sh".into()),
+                args: vec!["-c".into(), script],
+                cwd: Some(item.worktree.clone()),
+                env: BTreeMap::new(),
+                cols: COLS,
+                rows: ROWS,
+                work_item_id: Some(item.id.clone()),
+                restore: RestorePolicy::None,
+                close_on_exit,
+                template_id: None,
+            })
+            .await
     }
 
     /// Spawn one editor/shell leaf.

@@ -204,6 +204,7 @@ pub fn session_info() -> SessionInfo {
             preview: Some("I need permission to run `cargo test`.".into()),
             files_touched: vec![PathBuf::from("src/login.rs")],
             hooks_active: true,
+            usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
         }),
         editor: None,
         cols: 120,
@@ -296,6 +297,8 @@ pub fn work_item() -> WorkItem {
         delta: None,
         next_note: None,
         left_at: None,
+        port_base: Some(20140),
+        cost_usd: 3.5,
     }
 }
 
@@ -480,6 +483,29 @@ fn hook(event: &str, extra: Value) -> HookPayload {
         b.extend(e);
     }
     serde_json::from_value(base).unwrap_or_default()
+}
+
+/// The statusline JSON of Claude Code 2.1.296 as `kelta-ctl statusline` relays it; `rate_limits`
+/// is absent for API-key accounts.
+pub fn statusline(subscription: bool) -> HookPayload {
+    let mut extra = json!({
+        "model": {"id": "claude-opus-4-1", "display_name": "Opus"},
+        "workspace": {"current_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login", "project_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login", "added_dirs": []},
+        "version": "2.1.296",
+        "output_style": {"name": "default"},
+        "cost": {"total_cost_usd": 1.8412, "total_duration_ms": 512000, "total_api_duration_ms": 98000, "total_lines_added": 210, "total_lines_removed": 40},
+        "context_window": {"total_input_tokens": 144000, "total_output_tokens": 9100, "context_window_size": 200000, "current_usage": {"input_tokens": 12, "output_tokens": 410, "cache_creation_input_tokens": 2100, "cache_read_input_tokens": 141888}, "used_percentage": 72, "remaining_percentage": 28},
+        "exceeds_200k_tokens": false,
+        "fast_mode": false,
+        "thinking": {"enabled": true},
+    });
+    if subscription {
+        extra["rate_limits"] = json!({
+            "five_hour": {"used_percentage": 64.2, "resets_at": 1_791_637_800},
+            "seven_day": {"used_percentage": 31, "resets_at": 1_792_051_200},
+        });
+    }
+    hook("Status", extra)
 }
 
 pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
@@ -1193,6 +1219,8 @@ pub fn all() -> Vec<Fixture> {
         ),
         fx!("hook_stop_failure", HookPayload, hook("StopFailure", json!({"error": "rate_limit"}))),
         fx!("hook_session_end", HookPayload, hook("SessionEnd", json!({"reason": "prompt_input_exit"}))),
+        fx!("hook_statusline", HookPayload, statusline(true)),
+        fx!("hook_statusline_api_key", HookPayload, statusline(false)),
         fx!(
             "notification",
             Notification,
