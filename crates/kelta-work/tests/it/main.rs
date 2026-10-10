@@ -5,6 +5,7 @@ mod common;
 mod fix_loop;
 mod git_ops;
 mod nvim_rpc;
+mod queue;
 mod saga;
 mod ship;
 mod signals;

@@ -175,3 +175,15 @@ pub async fn work_set_note(
 pub async fn work_left(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
     core.work().left(&id).await
 }
+
+/// Start a queued item now, over `claude.max_live` (#141).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_start_now(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().start_now(&id).await
+}
+
+/// The queued item starts next.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_queue_front(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().queue_front(&id).await
+}

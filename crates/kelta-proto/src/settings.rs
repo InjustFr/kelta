@@ -666,6 +666,10 @@ pub struct ClaudeSettings {
     pub ide_bridge: bool,
     /// Spend per work item (USD) past which its cost chip turns red; set it per project.
     pub budget_usd: Option<f64>,
+    /// Live Claude processes start work may run at once; past it items wait `Queued` (0 = no cap).
+    pub max_live: u32,
+    /// Hold the queue while the 5h rate-limit usage (%) is at or above this; none = never hold.
+    pub queue_hold_pct: Option<f64>,
 }
 
 impl Default for ClaudeSettings {
@@ -710,6 +714,8 @@ impl Default for ClaudeSettings {
             ]),
             ide_bridge: false,
             budget_usd: None,
+            max_live: 4,
+            queue_hold_pct: None,
         }
     }
 }

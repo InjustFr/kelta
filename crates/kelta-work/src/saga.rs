@@ -478,6 +478,16 @@ impl WorkService {
     }
 
     pub(crate) async fn run_saga_locked(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        let r = self.run_saga(id).await;
+        self.release_slot(id);
+        // A slot may have freed while this saga ran: re-check now that the item is in the queue.
+        if r.as_ref().is_ok_and(|w| matches!(w.state, WorkState::Queued { .. })) {
+            self.kick_queue();
+        }
+        r
+    }
+
+    async fn run_saga(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
         let mut item = self.load(id).await?;
         let mut j = self.load_journal(id);
         if j.plan.is_none() {
@@ -491,6 +501,17 @@ impl WorkService {
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
             if matches!(status, StepStatus::Done | StepStatus::Skipped) {
                 continue;
+            }
+            // Worktree ready: the Claude half waits for a slot (#141).
+            if *step == "claude_files"
+                && layout::slots(&self.template_of(&env, &j).layout)
+                    .iter()
+                    .any(|s| matches!(s.kind, SlotKind::Claude { .. }))
+                && !self.admit(&env.core, id)
+            {
+                item.state = WorkState::Queued { pos: self.next_queue_pos().await? };
+                self.save(&mut item).await?;
+                return Ok(item);
             }
             self.set_step(&mut item, step, StepStatus::Running, None).await?;
             let res = self.exec_step(step, &env, &mut item, &mut j).await;

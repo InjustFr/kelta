@@ -2,7 +2,7 @@
 //! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
 //! `pr.merged` / `pr.closed` → Merged / PrClosed work items (FLOW §4.6).
 //! (`editor.follow_claude_edits`), `claude.hook` → work item signals (FLOW §2.3),
-//! `session.exited` → release the HTTP consumer of a Claude session.
+//! `session.exited` → release the HTTP consumer of a Claude session and start queued work (#141).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -89,6 +89,8 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     last_hook.remove(sid);
                     svc.on_session_exited(sid);
                 }
+                // A Claude slot may have freed.
+                svc.kick_queue();
             }
             _ => {}
         }

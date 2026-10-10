@@ -103,6 +103,8 @@ pub const COMMANDS: &[&str] = &[
     "work_mark_reviewed",
     "work_set_note",
     "work_left",
+    "work_start_now",
+    "work_queue_front",
     "work_arm_merge",
     "work_disarm_merge",
     "editor_open",

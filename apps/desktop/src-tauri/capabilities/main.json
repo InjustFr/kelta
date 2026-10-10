@@ -105,6 +105,8 @@
     "allow-work-mark-reviewed",
     "allow-work-set-note",
     "allow-work-left",
+    "allow-work-start-now",
+    "allow-work-queue-front",
     "allow-work-arm-merge",
     "allow-work-disarm-merge",
     "allow-editor-open",
