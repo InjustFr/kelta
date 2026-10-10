@@ -75,6 +75,28 @@ async fn claim_adopts_the_worktree_and_conflicts_name_the_holder() {
 }
 
 #[tokio::test]
+async fn lanes_of_one_session_conflict_but_a_lane_re_claims_its_own() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let (t, p) = (samples::ticket_ref(), project());
+    let lane = |id: &str| RunClaim { run_id: Some(id.into()), ..run("orch-a") };
+
+    // Same session, different lanes: the second pick loses.
+    let a = w.claim(&p, t.clone(), Some(wt.clone()), None, lane("lane-1")).await.unwrap();
+    let b = w.claim(&p, t.clone(), Some(wt.clone()), None, lane("lane-2")).await.unwrap_err();
+    assert_eq!(b.code, ErrorCode::Conflict);
+    // Same lane (Pick then Implement): same item.
+    let again = w.claim(&p, t, Some(wt), None, lane("lane-1")).await.unwrap();
+    assert_eq!(again.id, a.id);
+    assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn claim_refuses_a_path_that_is_not_a_project_worktree() {
     if !has_git() {
         return;
