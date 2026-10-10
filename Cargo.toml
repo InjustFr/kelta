@@ -121,9 +121,10 @@ todo = "deny"
 unimplemented = "deny"
 disallowed_methods = "deny"
 
+# No `codegen-units = 1` (#245): it bought no speed (kelta-term criterion parse 18.5 ms with it, 17.0 ms without)
+# and made the app build 44 % longer; the price is a ~25 % bigger binary (compressed).
 [profile.release]
 lto = "thin"
-codegen-units = 1
 strip = "debuginfo"
 panic = "unwind"
 
@@ -131,6 +132,7 @@ panic = "unwind"
 inherits = "release"
 opt-level = "z"
 lto = "fat"
+codegen-units = 1
 strip = "symbols"
 panic = "abort"
 
