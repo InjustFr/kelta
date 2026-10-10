@@ -30,6 +30,7 @@ fi
 # Scans both TypeScript and Rust sources; cheap, so it runs in every part.
 section "bash scripts/check-no-timers.sh"
 bash scripts/check-no-timers.sh
+bash scripts/check-no-timers.test.sh
 
 if want rust; then
   section "cargo fmt --all -- --check"

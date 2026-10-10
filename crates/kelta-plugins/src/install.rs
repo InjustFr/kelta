@@ -321,7 +321,10 @@ pub(crate) async fn install(
     let old = plugins.join(format!(".old-{id}-{}", uuid::Uuid::new_v4().simple()));
     let final_clone = final_dir.clone();
     tokio::task::spawn_blocking(move || -> Result<(), KeltaError> {
-        copy_tree(&src_root, &tmp).map_err(|e| io_err(tmp.display(), e))?;
+        if let Err(e) = copy_tree(&src_root, &tmp) {
+            let _ = std::fs::remove_dir_all(&tmp);
+            return Err(io_err(tmp.display(), e));
+        }
         if final_clone.exists() {
             std::fs::rename(&final_clone, &old).map_err(|e| io_err(final_clone.display(), e))?;
         }

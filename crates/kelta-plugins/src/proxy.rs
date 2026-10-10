@@ -4,9 +4,8 @@
 //! CSP `frame-ancestors` directive, passes WebSocket upgrades through (raw byte copy after the 101),
 //! rewrites `Location` to the proxy prefix and only ever talks to loopback upstreams.
 //!
-//! [`router`] can be mounted by kelta-server (at `/proxy` or `/proxy/`); kelta-plugins also serves
-//! each proxied instance from its own loopback listener ([`ensure_listener`]), so web tools work
-//! without knowing kelta-server's port and every tool gets a distinct origin (its iframe keeps
+//! Each proxied instance is served from its own loopback listener ([`ensure_listener`]), so web
+//! tools work without knowing kelta-server's port and every tool gets a distinct origin (its iframe keeps
 //! `allow-same-origin`, so a shared origin would let one tool read another's frames and storage).
 
 use std::collections::HashMap;
@@ -114,7 +113,7 @@ pub async fn ensure_listener(instance: &str) -> Result<u16, KeltaError> {
         .map_err(|e| KeltaError::internal(format!("proxy listener: {e}")))?;
     let port =
         listener.local_addr().map_err(|e| KeltaError::internal(format!("proxy listener: {e}")))?.port();
-    let app = router_with(Cfg { port: Some(port), instance: Some(instance.into()) });
+    let app = router_with(Cfg { port, instance: instance.into() });
     let task = tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, app).await {
             tracing::warn!(error = %e, "web proxy listener stopped");
@@ -132,15 +131,10 @@ pub async fn ensure_listener(instance: &str) -> Result<u16, KeltaError> {
 
 #[derive(Debug, Clone)]
 struct Cfg {
-    /// Own listener: the `Host` header must be `127.0.0.1:<port>`/`localhost:<port>` (DNS rebinding).
-    port: Option<u16>,
-    /// Own listener: the only instance it serves.
-    instance: Option<Arc<str>>,
-}
-
-/// The proxy router (mountable by kelta-server; requests are `/<instance>/…` or `/proxy/<instance>/…`).
-pub fn router() -> Router {
-    router_with(Cfg { port: None, instance: None })
+    /// The `Host` header must be `127.0.0.1:<port>`/`localhost:<port>` (DNS rebinding).
+    port: u16,
+    /// The only instance this listener serves.
+    instance: Arc<str>,
 }
 
 fn router_with(cfg: Cfg) -> Router {
@@ -167,13 +161,13 @@ fn error(status: StatusCode, msg: &str) -> Response {
 }
 
 /// Resolve which instance a request targets. Falls back to the `Referer` (path-absolute subresource
-/// URLs of the proxied page) and, when exactly one instance is proxied, to that one.
+/// URLs of the proxied page) or a same-origin request: one origin per instance.
 fn resolve(cfg: &Cfg, req: &Request) -> Option<(String, Upstream, String)> {
     let path = req.uri().path();
     let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
     let reg = REGISTRY.read();
     if let Some((id, rest)) = split_instance(path)
-        && cfg.instance.as_deref().is_none_or(|i| i == id)
+        && *cfg.instance == *id
         && let Some(up) = reg.get(&id)
     {
         return Some((id, up.clone(), format!("{rest}{query}")));
@@ -185,26 +179,16 @@ fn resolve(cfg: &Cfg, req: &Request) -> Option<(String, Upstream, String)> {
     let same_origin = matches!((host, origin), (Some(h), Some(o)) if o == format!("http://{h}"));
     let referer =
         req.headers().get(header::REFERER).and_then(|v| v.to_str().ok()).and_then(|r| r.parse::<Uri>().ok());
-    let fallback = match cfg.instance.as_deref() {
-        // Own listener = one origin per instance: any same-origin request is that tool's page.
-        Some(id) => {
-            let same_referer = referer.as_ref().is_some_and(|u| u.authority().map(|a| a.as_str()) == host);
-            (same_origin || same_referer).then(|| reg.get(id).map(|up| (id.to_owned(), up.clone()))).flatten()
-        }
-        None => referer
-            .and_then(|u| split_instance(u.path()))
-            .and_then(|(id, _)| reg.get(&id).map(|up| (id, up.clone())))
-            .or_else(|| {
-                (same_origin && reg.len() == 1)
-                    .then(|| reg.iter().next().map(|(k, v)| (k.clone(), v.clone())))
-                    .flatten()
-            }),
-    }?;
-    Some((fallback.0, fallback.1, format!("{path}{query}")))
+    let same_referer = referer.as_ref().is_some_and(|u| u.authority().map(|a| a.as_str()) == host);
+    if !(same_origin || same_referer) {
+        return None;
+    }
+    let up = reg.get(&*cfg.instance)?.clone();
+    Some((cfg.instance.to_string(), up, format!("{path}{query}")))
 }
 
 fn host_ok(cfg: &Cfg, headers: &HeaderMap) -> bool {
-    let Some(port) = cfg.port else { return true };
+    let port = cfg.port;
     let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else { return false };
     host == format!("127.0.0.1:{port}") || host == format!("localhost:{port}")
 }

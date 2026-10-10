@@ -69,8 +69,7 @@ const INST: &str = "0123456789abcdef0123456789abcdef";
 async fn setup(inst: &str) -> (u16, u16) {
     let up = serve(upstream()).await;
     proxy::register(inst, &format!("http://127.0.0.1:{up}/")).unwrap();
-    // kelta-server mounts the router under `/proxy`; here it is served as is (paths keep the prefix).
-    let px = serve(proxy::router()).await;
+    let px = proxy::ensure_listener(inst).await.unwrap();
     (up, px)
 }
 
@@ -109,13 +108,7 @@ async fn strips_frame_blocking_headers_and_rewrites_location() {
     let (_, resp) = raw_get(px, &format!("/proxy/{inst}/echo-headers"), &host).await;
     assert!(resp.contains(&format!("host=Some(\"127.0.0.1:{up}\")")), "{resp}");
     assert!(resp.contains(&format!("origin=Some(\"http://127.0.0.1:{up}\")")), "{resp}");
-
-    // Nested mount (`/<instance>/…` after `nest("/proxy", …)`) works too.
-    let (status, _) = raw_get(px, &format!("/{inst}/page"), &host).await;
-    assert_eq!(status, 200);
     proxy::unregister(inst);
-    let (status, _) = raw_get(px, &format!("/proxy/{inst}/page"), &host).await;
-    assert_eq!(status, 404);
 }
 
 #[tokio::test]
