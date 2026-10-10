@@ -91,6 +91,7 @@
       "macos",
       "linux"
     ],
+    "provider": null,
     "version": "0.2.0"
   },
   "permissions": [

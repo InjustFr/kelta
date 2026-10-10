@@ -303,6 +303,7 @@ pub fn account(kind: AccountKind) -> AccountConfig {
         text_format: Default::default(),
         poll_secs: None,
         web_url: None,
+        plugin: None,
     }
 }
 

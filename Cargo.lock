@@ -3179,6 +3179,7 @@ dependencies = [
  "hyper-util",
  "insta",
  "jsonschema",
+ "kelta-http",
  "kelta-proto",
  "mime_guess",
  "parking_lot",
@@ -7962,9 +7963,12 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "kelta-plugins",
  "kelta-proto",
  "serde",
  "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -232,6 +232,10 @@ fn warnings_for(
             Some(Permission::PrsWrite) => {
                 w.push("This plugin can approve and comment on pull requests".into())
             }
+            Some(Permission::Provider) => w.push(format!(
+                "This plugin can run `{}` on your computer with the secrets of the accounts you point at it",
+                m.provider.as_ref().map_or("its provider program", |d| d.command.as_str())
+            )),
             _ => {}
         }
     }

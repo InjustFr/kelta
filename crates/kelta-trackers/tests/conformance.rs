@@ -5,12 +5,12 @@
 
 mod support;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use kelta_proto::api::Tracker;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::{TrackerBinding, TrackerView};
+use kelta_proto::testing::conformance::{TrackerCase, tracker_contract};
 use kelta_proto::tracker::{Assignee, TicketRef, TrackerKind};
 use serde_json::json;
 use support::*;
@@ -216,84 +216,17 @@ async fn every_tracker_honours_the_contract() {
         let server = MockServer::start().await;
         (case.mock_ok)(&server).await;
         let t = (case.build)(&server.uri());
+        let contract = TrackerCase {
+            kind: case.kind,
+            account_id: case.account_id.into(),
+            view: case.view.clone(),
+            binding: case.binding.clone(),
+            ticket: Some(case.ticket.clone()),
+            branch_key: Some(case.branch_key.into()),
+        };
         let n = case.name;
-
-        assert_eq!(t.kind(), case.kind, "{n}: kind");
+        tracker_contract(&*t, &contract).await.unwrap_or_else(|e| panic!("{n}: {e}"));
         let caps = t.caps();
-
-        // identity
-        let me = t.me().await.unwrap_or_else(|e| panic!("{n}: me: {e}"));
-        assert!(!me.id.is_empty() && !me.name.is_empty(), "{n}: me");
-
-        // list
-        let page = t.list(&case.view, None).await.unwrap_or_else(|e| panic!("{n}: list: {e}"));
-        assert!(!page.items.is_empty(), "{n}: list is empty");
-        let mut keys = HashSet::new();
-        for it in &page.items {
-            assert_eq!(it.r#ref.account.as_str(), case.account_id, "{n}: account on ticket");
-            assert!(!it.r#ref.key.is_empty() && !it.r#ref.id.is_empty(), "{n}: ids");
-            assert!(!it.title.is_empty() && !it.url.is_empty() && !it.updated_at.is_empty(), "{n}: {it:?}");
-            assert!(!it.status.name.is_empty(), "{n}: status");
-            assert!(keys.insert(it.r#ref.key.clone()), "{n}: duplicate key {}", it.r#ref.key);
-            assert!(!t.browser_url(&it.r#ref).is_empty(), "{n}: browser_url");
-            let bk = t.branch_key(&it.r#ref);
-            assert!(!bk.is_empty() && !bk.contains(char::is_whitespace), "{n}: branch_key {bk:?}");
-        }
-
-        // key shapes
-        assert_eq!(t.branch_key(&case.ticket), case.branch_key, "{n}: branch_key");
-        assert!(
-            t.browser_url(&case.ticket).contains(case.ticket.key.split('#').next().unwrap_or("")),
-            "{n}: browser_url"
-        );
-
-        // detail
-        let d = t.get(&case.ticket).await.unwrap_or_else(|e| panic!("{n}: get: {e}"));
-        assert_eq!(d.ticket.r#ref.key, case.ticket.key, "{n}: detail key");
-        assert!(!d.body_html.to_ascii_lowercase().contains("<script"), "{n}: html must be sanitized");
-        assert!(d.comments.len() <= 20, "{n}: at most 20 comments");
-        assert!(!d.body_md.is_empty(), "{n}: body");
-        for c in &d.comments {
-            assert!(!c.body_html.to_ascii_lowercase().contains("<script"), "{n}: comment html");
-        }
-
-        // moves are discovered, never assumed
-        let ts = t.transitions(&case.ticket).await.unwrap_or_else(|e| panic!("{n}: transitions: {e}"));
-        assert!(!ts.is_empty(), "{n}: no transitions");
-        let ids: HashSet<_> = ts.iter().map(|t| t.id.clone()).collect();
-        assert_eq!(ids.len(), ts.len(), "{n}: duplicate transition ids");
-        assert!(ts.iter().all(|t| !t.id.is_empty() && !t.name.is_empty()), "{n}: transition fields");
-        let moved = t
-            .transition(&case.ticket, &ts[0].id, None)
-            .await
-            .unwrap_or_else(|e| panic!("{n}: transition: {e}"));
-        assert_eq!(moved.r#ref.key, case.ticket.key, "{n}: transition returns the ticket");
-
-        // columns
-        let cols = t.columns(&case.binding).await.unwrap_or_else(|e| panic!("{n}: columns: {e}"));
-        assert!(!cols.is_empty(), "{n}: columns");
-        assert_eq!(
-            cols.iter().map(|c| c.order).collect::<Vec<_>>(),
-            (0..cols.len() as u32).collect::<Vec<_>>(),
-            "{n}: column order"
-        );
-
-        // writes, as advertised by caps
-        if caps.comment {
-            t.comment(&case.ticket, "hello\nworld").await.unwrap_or_else(|e| panic!("{n}: comment: {e}"));
-        } else {
-            assert_eq!(t.comment(&case.ticket, "x").await.unwrap_err().code, ErrorCode::Unsupported, "{n}");
-        }
-        if caps.assign {
-            let a = t.assign(&case.ticket, Assignee::Me).await.unwrap_or_else(|e| panic!("{n}: assign: {e}"));
-            assert_eq!(a.r#ref.key, case.ticket.key, "{n}: assign returns the ticket");
-        } else {
-            assert_eq!(
-                t.assign(&case.ticket, Assignee::Me).await.unwrap_err().code,
-                ErrorCode::Unsupported,
-                "{n}"
-            );
-        }
         assert!(caps.comment && caps.assign, "{n}: every v0.1 provider supports comment and assign");
     }
 }

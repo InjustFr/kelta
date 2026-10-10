@@ -48,7 +48,7 @@ fn invalid_corpus_fails_with_reason() {
 
 #[test]
 fn example_plugins_are_valid() {
-    for name in ["hello-screen", "tools-pack"] {
+    for name in ["hello-screen", "tools-pack", "json-tracker"] {
         let parsed = manifest::load_dir(&common::example(name)).unwrap();
         assert_eq!(parsed.manifest.id.as_str(), name);
         assert!(parsed.problems.is_empty(), "{name}: {:?}", parsed.problems);

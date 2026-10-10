@@ -4,12 +4,12 @@
 
 mod support;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use kelta_proto::api::CodeHost;
-use kelta_proto::codehost::{CodeHostKind, PrCreate, ReviewKind};
+use kelta_proto::codehost::{CodeHostKind, ReviewKind};
 use kelta_proto::error::{ErrorCode, KeltaError};
+use kelta_proto::testing::conformance::{CodeHostCase, code_host_contract, pr_create};
 use support::*;
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -180,106 +180,19 @@ fn err_code<T: std::fmt::Debug>(r: Result<T, KeltaError>) -> ErrorCode {
     r.unwrap_err().code
 }
 
-fn create_req(repo: &str) -> PrCreate {
-    PrCreate {
-        repo: repo.into(),
-        head: "feature/x".into(),
-        base: "main".into(),
-        title: "SHOP-1 x".into(),
-        body: "b".into(),
-        draft: false,
-    }
-}
-
 #[tokio::test]
 async fn every_code_host_honours_the_contract() {
     for case in cases() {
-        let n = case.name;
         let server = MockServer::start().await;
         (case.mock_ok)(&server).await;
         let h = build(&case, &server.uri());
-        assert_eq!(h.kind(), case.kind, "{n}: kind");
-
-        let me = h.me().await.unwrap_or_else(|e| panic!("{n}: me: {e}"));
-        assert!(!me.id.is_empty() && me.login.is_some(), "{n}: me");
-        h.changed_since_last().await.unwrap_or_else(|e| panic!("{n}: gate: {e}"));
-
-        let mut first = None;
-        for kind in [ReviewKind::ReviewRequested, ReviewKind::Authored] {
-            let list = h
-                .list_reviews(&query(kind, true, false))
-                .await
-                .unwrap_or_else(|e| panic!("{n}: list {kind:?}: {e}"));
-            assert!(!list.is_empty(), "{n}: {kind:?} list is empty");
-            let mut seen = HashSet::new();
-            for r in &list {
-                assert_eq!(r.kind, kind, "{n}: kind of {}", r.r#ref.number);
-                assert_eq!(r.r#ref.account.as_str(), case.account_id, "{n}: account");
-                assert!(r.r#ref.number > 0 && !r.r#ref.repo.is_empty(), "{n}: ref");
-                assert!(!r.title.is_empty() && !r.url.is_empty() && !r.head_sha.is_empty(), "{n}: {r:?}");
-                assert!(
-                    !r.source_branch.is_empty() && !r.target_branch.is_empty() && !r.updated_at.is_empty(),
-                    "{n}: {r:?}"
-                );
-                assert!(!r.draft, "{n}: drafts are excluded when include_drafts is false");
-                assert!(r.author.login.is_some(), "{n}: author");
-                assert!(seen.insert(r.r#ref.clone()), "{n}: duplicate ref");
-            }
-            if kind == ReviewKind::ReviewRequested {
-                first = list.into_iter().next();
-            }
-        }
-        let first = first.unwrap_or_else(|| panic!("{n}: no review"));
-
-        let d = h.get(&first.r#ref).await.unwrap_or_else(|e| panic!("{n}: get: {e}"));
-        assert_eq!(d.review.r#ref, first.r#ref, "{n}: detail ref");
-        assert!(!d.body_html.to_ascii_lowercase().contains("<script"), "{n}: sanitized");
-
-        h.approve(&first.r#ref, &first.head_sha).await.unwrap_or_else(|e| panic!("{n}: approve: {e}"));
-        h.comment(&first.r#ref, "hello").await.unwrap_or_else(|e| panic!("{n}: comment: {e}"));
-        h.request_changes(&first.r#ref, "please fix")
-            .await
-            .unwrap_or_else(|e| panic!("{n}: request_changes: {e}"));
-        let created = h.create(&create_req(case.repo)).await.unwrap_or_else(|e| panic!("{n}: create: {e}"));
-        assert!(created.r#ref.number > 0 && created.kind == ReviewKind::Authored, "{n}: created");
-        let found =
-            h.find_for_branch(case.repo, "feature/mine").await.unwrap_or_else(|e| panic!("{n}: find: {e}"));
-        assert!(found.is_some(), "{n}: find_for_branch");
-
-        let spec = h.fetch_refspec(&first.r#ref, "kelta/review-1");
-        let want = case.refspec.replace("{n}", &first.r#ref.number.to_string());
-        assert!(spec.starts_with(&want) && spec.ends_with(":kelta/review-1"), "{n}: {spec}");
-    }
-}
-
-#[test]
-fn every_code_host_resolves_remotes_of_its_own_host_only() {
-    let github = host("github-work", "github", "https://api.github.com");
-    let gitlab = host("gitlab-acme", "gitlab", "https://gitlab.acme.example");
-    let gitea = host("gitea-main", "gitea", "https://git.acme.example");
-    let bitbucket = host("bitbucket-acme", "bitbucket", "https://api.bitbucket.org/2.0");
-    assert_eq!(github.repo_from_remote("git@github.com:acme/shop.git").as_deref(), Some("acme/shop"));
-    assert_eq!(
-        gitlab.repo_from_remote("git@GITLAB.acme.example:grp/sub/proj.git").as_deref(),
-        Some("grp/sub/proj")
-    );
-    assert_eq!(
-        gitea.repo_from_remote("ssh://git@git.acme.example:2222/acme/shop.git").as_deref(),
-        Some("acme/shop")
-    );
-    assert_eq!(gitea.repo_from_remote("https://git.acme.example/acme/shop/").as_deref(), Some("acme/shop"));
-    assert_eq!(gitea.repo_from_remote("https://git.acme.example/acme"), None);
-    assert_eq!(bitbucket.repo_from_remote("git@bitbucket.org:acme/shop.git").as_deref(), Some("acme/shop"));
-    assert_eq!(
-        bitbucket.repo_from_remote("https://louis@bitbucket.org/acme/shop.git").as_deref(),
-        Some("acme/shop")
-    );
-    assert_eq!(bitbucket.repo_from_remote("git@github.com:acme/shop.git"), None);
-    assert_eq!(github.repo_from_remote("git@gitlab.acme.example:grp/proj.git"), None);
-    assert_eq!(gitlab.repo_from_remote("git@github.com:acme/shop.git"), None);
-    for h in [&github, &gitlab, &gitea, &bitbucket] {
-        assert_eq!(h.repo_from_remote("/local/path"), None);
-        assert_eq!(h.repo_from_remote(""), None);
+        let contract = CodeHostCase {
+            kind: case.kind,
+            account_id: case.account_id.into(),
+            repo: Some(case.repo.into()),
+            refspec: Some(case.refspec.into()),
+        };
+        code_host_contract(&*h, &contract).await.unwrap_or_else(|e| panic!("{}: {e}", case.name));
     }
 }
 
@@ -304,7 +217,7 @@ async fn every_code_host_maps_401_to_needs_auth() {
         assert_eq!(err_code(h.approve(&r, "sha").await), ErrorCode::NeedsAuth, "{n}: approve");
         assert_eq!(err_code(h.comment(&r, "x").await), ErrorCode::NeedsAuth, "{n}: comment");
         assert_eq!(err_code(h.request_changes(&r, "x").await), ErrorCode::NeedsAuth, "{n}: request_changes");
-        assert_eq!(err_code(h.create(&create_req(case.repo)).await), ErrorCode::NeedsAuth, "{n}: create");
+        assert_eq!(err_code(h.create(&pr_create(case.repo)).await), ErrorCode::NeedsAuth, "{n}: create");
         assert_eq!(err_code(h.find_for_branch(case.repo, "b").await), ErrorCode::NeedsAuth, "{n}: find");
         if case.gate {
             assert_eq!(err_code(h.changed_since_last().await), ErrorCode::NeedsAuth, "{n}: gate");

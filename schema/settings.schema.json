@@ -752,7 +752,25 @@
                 "const": "gitea",
                 "description": "Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.",
                 "type": "string"
+              },
+              {
+                "const": "plugin_tracker",
+                "description": "Tracker served by a process (KPP) plugin; `plugin` names it (PLUGINS §9).",
+                "type": "string"
+              },
+              {
+                "const": "plugin_codehost",
+                "description": "Code host served by a process (KPP) plugin; `plugin` names it (PLUGINS §9).",
+                "type": "string"
               }
+            ]
+          },
+          "plugin": {
+            "default": null,
+            "description": "`plugin_tracker` / `plugin_codehost`: id of the plugin whose `[provider]` serves this account.",
+            "type": [
+              "string",
+              "null"
             ]
           },
           "poll_secs": {
