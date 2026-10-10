@@ -3,6 +3,7 @@
 //! triggers/commands are permission-checked against the plugin's effective grants; config-defined
 //! ones are not (repo-local exec keys are already inert until trusted, SETTINGS §4).
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::process::Stdio;
@@ -12,10 +13,13 @@ use std::time::Duration;
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Notification, Toast, ToastAction, ToastLevel, TriggerChain, bus};
 use kelta_proto::ext::{
-    ActionDef, CommandDef, CommandWhen, Permission, ProxiedRequest, RunShow, RunStdin, Urgency,
+    ActionDef, CommandDef, CommandWhen, Permission, ProxiedRequest, ProxiedResponse, RunShow, RunStdin,
+    SecretHeader, Urgency,
 };
 use kelta_proto::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId};
 use kelta_proto::model::{Attention, SessionKind, SessionStatus, StatusChange, TemplateCtx};
+use kelta_proto::secret::{SecretCtx, SecretRef};
+use kelta_proto::settings::Settings;
 use kelta_proto::tracker::{Assignee, StatusCategory, TicketRef};
 use serde_json::{Map, Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
@@ -24,7 +28,7 @@ use crate::PluginHost;
 use crate::context::CtxSpec;
 use crate::perms::Granted;
 use crate::registry::Entry;
-use crate::screens::{SpawnParams, keys_bytes};
+use crate::screens::{SpawnParams, is_secret_prop, keys_bytes};
 use crate::template::Vars;
 use crate::util::{signal_group, truncate};
 
@@ -410,11 +414,6 @@ impl PluginHost {
                 if let Some(g) = &cx.granted {
                     g.require_net(&url)?;
                 }
-                if !secret_headers.is_empty() {
-                    return Err(KeltaError::unsupported(
-                        "`secret_headers` need secret resolution, which the plugin host cannot do yet",
-                    ));
-                }
                 let body = match body {
                     Some(b) => cx.x(b)?,
                     None => cx
@@ -432,16 +431,23 @@ impl PluginHost {
                 {
                     hdrs.insert("Content-Type".into(), "application/json".into());
                 }
-                let resp = core
-                    .http_fetch(ProxiedRequest {
-                        url,
-                        method: method.clone().unwrap_or_else(|| "POST".into()).to_ascii_uppercase(),
-                        headers: hdrs,
-                        body: Some(body),
-                        body_base64: false,
-                        timeout_ms: Some(timeout_ms.unwrap_or(10_000)),
-                    })
-                    .await?;
+                let req = ProxiedRequest {
+                    url,
+                    method: method.clone().unwrap_or_else(|| "POST".into()).to_ascii_uppercase(),
+                    headers: hdrs,
+                    body: Some(body),
+                    body_base64: false,
+                    timeout_ms: Some(timeout_ms.unwrap_or(10_000)),
+                };
+                let resp = self
+                    .fetch_with_secrets(cx.plugin.as_deref(), cx.project.as_ref(), req, secret_headers)
+                    .await
+                    .inspect_err(|e| {
+                        // missing plugin secret: tell the user where to set it (PLUGINS §5)
+                        if e.code == ErrorCode::NeedsAuth {
+                            core.toast(Toast::error(truncate(&e.message, 300)));
+                        }
+                    })?;
                 if resp.status >= 400 {
                     return Err(KeltaError::upstream(format!("HTTP {}", resp.status)));
                 }
@@ -675,6 +681,91 @@ impl PluginHost {
             Err(KeltaError::new(code, msg))
         }
     }
+}
+
+impl PluginHost {
+    /// `http` action / `net.fetch` with `secret_headers` resolved host-side (PLUGINS §5): a plugin
+    /// names one of its own `x-kelta-secret` settings and never sees the value; user config
+    /// (`plugin = None`) gives a SecretRef. A 401 invalidates the refs used.
+    pub(crate) async fn fetch_with_secrets(
+        &self,
+        plugin: Option<&Entry>,
+        project: Option<&ProjectId>,
+        mut req: ProxiedRequest,
+        secret_headers: &BTreeMap<String, SecretHeader>,
+    ) -> Result<ProxiedResponse, KeltaError> {
+        let core = self.core_or_err()?;
+        if secret_headers.is_empty() {
+            return core.http_fetch(req).await;
+        }
+        let resolver = self
+            .wiring()
+            .secrets
+            .ok_or_else(|| KeltaError::unsupported("`secret_headers` need a secret resolver"))?;
+        let ctx = SecretCtx {
+            host: req.url.parse::<axum::http::Uri>().ok().and_then(|u| u.host().map(str::to_owned)),
+            ..Default::default()
+        };
+        let settings = self.settings(project);
+        let mut refs = Vec::new();
+        for (header, spec) in secret_headers {
+            let (r, format) = secret_ref(plugin, &settings, spec)?;
+            let secret = resolver.resolve(&r, &ctx).await?;
+            req.headers.insert(header.clone(), format.replace("{secret}", secret.expose()));
+            refs.push(r);
+        }
+        let resp = core.http_fetch(req).await?;
+        if resp.status == 401 {
+            refs.iter().for_each(|r| resolver.invalidate(r));
+        }
+        Ok(resp)
+    }
+}
+
+/// SecretRef and header format of one `secret_headers` entry. A plugin may only name its own
+/// `x-kelta-secret` settings: a raw ref (`gh-cli`) would let it send any user secret to its host.
+fn secret_ref(
+    plugin: Option<&Entry>,
+    settings: &Settings,
+    spec: &SecretHeader,
+) -> Result<(SecretRef, String), KeltaError> {
+    let (name, format) = match spec {
+        SecretHeader::Name(n) => (n, None),
+        SecretHeader::Setting { setting, format } => (setting, format.as_deref()),
+    };
+    let format = format.unwrap_or("{secret}").to_owned();
+    let Some(entry) = plugin else {
+        return match spec {
+            SecretHeader::Name(r) => Ok((SecretRef::new(r.as_str()), format)),
+            SecretHeader::Setting { .. } => Err(KeltaError::invalid(
+                "`secret_headers`: `{ setting = … }` is for plugins; user config gives a SecretRef",
+            )),
+        };
+    };
+    let prop = entry
+        .settings_schema
+        .as_ref()
+        .and_then(|s| s.get("properties")?.get(name))
+        .filter(|p| is_secret_prop(p))
+        .ok_or_else(|| {
+            KeltaError::invalid(format!(
+                "`secret_headers`: `{name}` is not an `x-kelta-secret` setting of {}",
+                entry.id
+            ))
+        })?;
+    let r = settings
+        .plugins
+        .settings
+        .get(entry.id.as_str())
+        .and_then(|v| v.get(name))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            let title = prop.get("title").and_then(Value::as_str).unwrap_or(name);
+            let plugin = entry.manifest().map_or(entry.id.as_str(), |m| m.name.as_str());
+            KeltaError::needs_auth(format!("{plugin}: set \"{title}\" in Settings → Plugins"))
+        })?;
+    Ok((SecretRef::new(r), format))
 }
 
 fn with_ids(mut ev: BusEvent, cx: &ActionCx) -> BusEvent {

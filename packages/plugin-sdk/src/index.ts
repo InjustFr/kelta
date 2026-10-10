@@ -42,6 +42,8 @@ export interface FetchInit {
   method?: string;
   headers?: Record<string, string>;
   body?: string;
+  /** Header → own `x-kelta-secret` setting, injected host-side (PLUGINS §5.1). */
+  secret_headers?: Record<string, string | { setting: string; format?: string }>;
 }
 
 export interface FetchResult {

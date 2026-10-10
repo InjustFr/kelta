@@ -182,6 +182,7 @@ export type * from './ScreenPlacement';
 export type * from './ScreenScope';
 export type * from './ScrollbackSettings';
 export type * from './SecretBackendStatus';
+export type * from './SecretHeader';
 export type * from './SecretRef';
 export type * from './SendFile';
 export type * from './SessionHost';

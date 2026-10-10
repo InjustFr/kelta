@@ -111,24 +111,20 @@ pub fn secret_issues(value: &Value) -> Vec<RawIssue> {
     leaves(value)
         .into_iter()
         .filter(|p| idx.info(p).secret)
-        .filter(|p| {
-            let bad = |s: &Value| {
-                matches!(s, Value::String(s) if !s.is_empty()
-                    && kelta_proto::secret::SecretRef::new(s.as_str()).parse().is_none())
-            };
-            match get(value, p) {
-                Some(Value::Array(a)) => a.iter().any(bad),
-                Some(v) => bad(v),
-                None => false,
-            }
+        .filter(|p| match get(value, p) {
+            Some(Value::Array(a)) => a.iter().any(raw_token),
+            Some(v) => raw_token(v),
+            None => false,
         })
-        .map(|p| {
-            RawIssue::new(
-                &p,
-                "expected keyring:<name>, file:<name>, gh-cli, glab-cli, command:<argv> or env:<VAR> (secret values never go in config files)",
-            )
-        })
+        .map(|p| RawIssue::new(&p, SECRET_REF_EXPECTED))
         .collect()
+}
+
+const SECRET_REF_EXPECTED: &str = "expected keyring:<name>, file:<name>, gh-cli, glab-cli, command:<argv> or env:<VAR> (secret values never go in config files)";
+
+/// A non-empty string that is not a `SecretRef`.
+fn raw_token(v: &Value) -> bool {
+    matches!(v, Value::String(s) if !s.is_empty() && kelta_proto::secret::SecretRef::new(s.as_str()).parse().is_none())
 }
 
 /// Repo-local files accept only [`REPO_ALLOWED_KEYS`] (SETTINGS §4).
@@ -535,6 +531,15 @@ pub fn plugin_issues(merged: &Value, fragments: &[(kelta_proto::ids::PluginId, V
     let mut out = Vec::new();
     for (id, schema) in fragments {
         let Some(table) = get(merged, &["plugins".to_owned(), id.as_str().to_owned()]) else { continue };
+        // `x-kelta-secret` keys of the fragment, as `secret_issues` does for the static schema.
+        for (k, prop) in schema.get("properties").and_then(Value::as_object).into_iter().flatten() {
+            if prop.get("x-kelta-secret").and_then(Value::as_bool) == Some(true)
+                && table.get(k).is_some_and(raw_token)
+            {
+                let path = ["plugins".to_owned(), id.as_str().to_owned(), k.clone()];
+                out.push(RawIssue::new(&path, SECRET_REF_EXPECTED));
+            }
+        }
         let Ok(v) = jsonschema::validator_for(schema) else { continue };
         for err in v.iter_errors(table) {
             let mut path = vec!["plugins".to_owned(), id.as_str().to_owned()];
@@ -584,6 +589,20 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert!(!issues[0].message.contains("ghp_abc"));
         assert!(secret_issues(&ok).is_empty());
+    }
+
+    #[test]
+    fn raw_token_in_plugin_secret_setting_is_rejected() {
+        let frag = json!({"type": "object", "properties": {
+            "qa_token": {"type": "string", "x-kelta-secret": true}, "url": {"type": "string"}}});
+        let frags = [(kelta_proto::ids::PluginId::new("qa"), frag)];
+        let bad = json!({"plugins": {"qa": {"qa_token": "s3cr3t-tok", "url": "plain"}}});
+        let issues = plugin_issues(&bad, &frags);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(join_path(&issues[0].path), "plugins.qa.qa_token");
+        assert!(!issues[0].message.contains("s3cr3t-tok"));
+        let ok = json!({"plugins": {"qa": {"qa_token": "env:QA_TOKEN", "url": "plain"}}});
+        assert!(plugin_issues(&ok, &frags).is_empty());
     }
 
     #[test]

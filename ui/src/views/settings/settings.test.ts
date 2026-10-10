@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import schemaJson from '../../../../schema/settings.schema.json';
 import Control from './fields/Control.svelte';
 import SourceBadge from './fields/SourceBadge.svelte';
-import { fieldKind, leafFields, type FieldKind, type SchemaNode } from './lib/schema';
+import { fieldKind, leafFields, nodeAt, type FieldKind, type SchemaNode } from './lib/schema';
 
 const schema = schemaJson as unknown as SchemaNode;
 
@@ -69,6 +69,25 @@ describe('Control', () => {
     await fireEvent.input(input, { target: { value: 'y' } });
     await fireEvent.keyDown(input, { key: 'Enter' });
     expect(onchange).toHaveBeenCalledWith(['x', 'y']);
+  });
+
+  it('plugin secret setting renders the SecretRef picker', () => {
+    // `schema_full` inserts each `plugins.<id>` fragment verbatim.
+    const full: SchemaNode = {
+      type: 'object',
+      properties: {
+        plugins: {
+          type: 'object',
+          properties: {
+            qa: { type: 'object', properties: { qa_token: { type: 'string', 'x-kelta-secret': true } } },
+          },
+        },
+      },
+    };
+    const node = nodeAt(full, ['plugins', 'qa', 'qa_token'])!;
+    mount(node, 'keyring:qa');
+    expect(screen.getByTestId('secret-control')).toBeTruthy();
+    expect(screen.getByText('Set token…')).toBeTruthy();
   });
 
   it('string map adds an entry', async () => {
