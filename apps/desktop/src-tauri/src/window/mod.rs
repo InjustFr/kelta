@@ -10,10 +10,10 @@ use std::sync::Arc;
 
 use kelta_core::Core;
 use kelta_proto::api::CoreApi;
-use kelta_proto::api::{SettingsSource, UiBridge};
+use kelta_proto::api::SettingsSource;
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::CliArgs;
-use kelta_proto::events::{BusEvent, UiEvent, bus};
+use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::settings::Decorations;
 use tauri::webview::PageLoadEvent;
 use tauri::{
@@ -277,11 +277,19 @@ pub fn on_second_instance(app: &AppHandle, argv: Vec<String>, cwd: String) {
     // The second process wrote the crash guard in pre_init and exits without a page load: drop it.
     crate::platform::launch_succeeded();
     raise(app);
-    if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
-        for path in second_instance_paths(&argv, &cwd) {
-            b.emit(UiEvent::CtlCommand { cmd: CtlCommand::Open { path } });
-        }
+    let Some(c) = core(app) else { return };
+    let paths = second_instance_paths(&argv, &cwd);
+    if paths.is_empty() {
+        return;
     }
+    // Core's ctl `open` detects/creates/activates the project, then tells the UI to focus it.
+    tauri::async_runtime::spawn(async move {
+        for path in paths {
+            if let Err(e) = c.ctl(CtlCommand::Open { path }).await {
+                c.toast(Toast::error(format!("Opening the folder failed: {}", e.message)));
+            }
+        }
+    });
 }
 
 /// macOS app menu replacing Tauri's default (Cmd+W/H/M/Q are intentional).

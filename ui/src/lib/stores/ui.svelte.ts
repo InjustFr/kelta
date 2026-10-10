@@ -74,6 +74,7 @@ export class UiStore {
   apply(ev: UiEvent): void {
     if (ev.type !== 'ctl.command') return;
     if (ev.cmd.cmd === 'palette') this.openOverlay('palette');
+    else if (ev.cmd.cmd === 'plugin_install') this.openSheet('plugin_install', { source: ev.cmd.source });
     for (const l of [...this.#ctlListeners]) l(ev.cmd);
   }
 }

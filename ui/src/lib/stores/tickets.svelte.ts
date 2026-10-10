@@ -86,7 +86,13 @@ export class TicketsStore {
     try {
       const page = await ipc.trackerList({ scope, view_id: viewId, cursor: prev.data.next, refresh: false });
       const cur = this.lists[key] ?? prev;
-      const items = [...(cur.data?.items ?? []), ...page.items];
+      // Offset paging can repeat a ticket across pages (order shifted between fetches).
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, not state
+      const have = new Set((cur.data?.items ?? []).map((i) => ticketKey(i.ticket.ref)));
+      const items = [
+        ...(cur.data?.items ?? []),
+        ...page.items.filter((i) => !have.has(ticketKey(i.ticket.ref))),
+      ];
       this.lists = {
         ...this.lists,
         [key]: {

@@ -12,7 +12,7 @@ import { ProjectsStore } from './projects.svelte';
 import { ReviewsStore } from './reviews.svelte';
 import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
-import { TicketsStore } from './tickets.svelte';
+import { TicketsStore, ticketListKey } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
@@ -113,6 +113,15 @@ describe('LayoutStore', () => {
     await flush();
     expect(mock.calls.filter((c) => c.cmd === 'layout_save')).toHaveLength(1);
     expect(store.get('shop')?.rev).toBe(loaded.rev + 1);
+    expect(store.isDirty('shop')).toBe(false);
+  });
+
+  it('flushForClose saves pending edits without waiting for the debounce', async () => {
+    const store = new LayoutStore();
+    await store.load('shop');
+    store.update('shop', (l) => ({ ...l, active_tab: l.tabs[1]!.id }));
+    await store.flushForClose();
+    expect(mock.calls.filter((c) => c.cmd === 'layout_save')).toHaveLength(1);
     expect(store.isDirty('shop')).toBe(false);
   });
 
@@ -223,6 +232,23 @@ describe('TicketsStore', () => {
     await flush();
     await flush();
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
+  });
+
+  it('loadMore skips tickets already in the list', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'all' as const };
+    const first = await store.load(scope);
+    const count = first.data!.items.length;
+    // A page that repeats page 1 (offset paging after the order shifted).
+    store.lists = {
+      ...store.lists,
+      [ticketListKey(scope, null)]: {
+        ...first,
+        data: { ...first.data!, next: { kind: 'offset', value: 0 } },
+      },
+    };
+    await store.loadMore(scope);
+    expect(store.items(scope).length).toBe(count);
   });
 
   it('keeps stale data when a refresh fails', async () => {
@@ -370,6 +396,13 @@ describe('UiStore', () => {
     expect(store.sheet).toBeNull();
     store.toggleOverlay('palette');
     expect(store.overlay).toBeNull();
+  });
+
+  it('opens the install sheet for a ctl plugin_install', () => {
+    const store = new UiStore();
+    store.apply({ type: 'ctl.command', cmd: { cmd: 'plugin_install', source: 'gh:acme/x' } });
+    expect(store.sheet?.key).toBe('plugin_install');
+    expect(store.sheet?.props).toEqual({ source: 'gh:acme/x' });
   });
 });
 
