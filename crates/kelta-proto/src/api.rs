@@ -171,8 +171,9 @@ pub trait CodeHost: Send + Sync {
     async fn feedback(&self, _r: &ReviewRef) -> Result<Feedback, KeltaError> {
         Err(KeltaError::unsupported("this code host cannot read review feedback"))
     }
-    /// Ask everyone who reviewed to review again; returns their logins.
-    async fn rerequest_review(&self, _r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+    /// Ask `who` (`Review::waiting_on` entries) to review again, or everyone who reviewed when
+    /// `who` is empty; returns the logins asked.
+    async fn rerequest_review(&self, _r: &ReviewRef, _who: &[String]) -> Result<Vec<String>, KeltaError> {
         Err(KeltaError::unsupported("this code host cannot re-request reviews"))
     }
     /// Resolve review threads by id (`FeedbackThread::id`).

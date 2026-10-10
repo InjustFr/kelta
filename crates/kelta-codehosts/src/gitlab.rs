@@ -752,17 +752,20 @@ impl CodeHost for GitlabHost {
         Ok(Feedback { threads, reviews: Vec::new(), failed_checks, reviewers })
     }
 
-    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
-        let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
-        let me = self.me().await?;
-        let logins: Vec<String> = mr
-            .get("reviewers")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|u| s(u, "username").map(str::to_owned))
-            .filter(|u| Some(u) != me.login.as_ref())
-            .collect();
+    async fn rerequest_review(&self, r: &ReviewRef, who: &[String]) -> Result<Vec<String>, KeltaError> {
+        let logins: Vec<String> = if !who.is_empty() {
+            who.to_vec()
+        } else {
+            let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+            let me = self.me().await?;
+            mr.get("reviewers")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|u| s(u, "username").map(str::to_owned))
+                .filter(|u| Some(u) != me.login.as_ref())
+                .collect()
+        };
         if logins.is_empty() {
             return Err(KeltaError::invalid("this merge request has no reviewers"));
         }

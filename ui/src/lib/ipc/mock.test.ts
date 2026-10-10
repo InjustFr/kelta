@@ -236,7 +236,7 @@ describe('mock transport', () => {
       review_approve: { review: review.ref, head_sha: review.head_sha },
       review_comment: { review: review.ref, body: 'lgtm' },
       review_request_changes: { review: review.ref, body: 'nope' },
-      review_nudge: { review: review.ref, comment: null },
+      review_nudge: { review: review.ref, who: ['anna'], comment: null },
       work_plan: { project_id: 'shop', source: { kind: 'ticket', ticket: s.tickets[1]!.ticket.ref } },
       work_list: {},
       work_resume: { id: work.id },

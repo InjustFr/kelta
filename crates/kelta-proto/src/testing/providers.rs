@@ -561,7 +561,7 @@ impl CodeHost for FakeCodeHost {
         Ok(samples::feedback())
     }
 
-    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+    async fn rerequest_review(&self, r: &ReviewRef, _who: &[String]) -> Result<Vec<String>, KeltaError> {
         self.enter(&format!("rerequest_review:{}", r.number))?;
         Ok(samples::feedback().reviewers)
     }

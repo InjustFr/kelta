@@ -445,7 +445,7 @@ async fn rerequest_posts_the_quick_action_and_resolve_puts_each_discussion() {
     mount(&server, "GET", MR, 200, "gitlab/mr.json").await;
     mount(&server, "POST", &format!("{MR}/notes"), 201, "gitlab/note.json").await;
     let h = gl(&server);
-    let who = h.rerequest_review(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    let who = h.rerequest_review(&rref("gitlab-acme", "grp/other", 8), &[]).await.unwrap();
     assert_eq!(who, vec!["zed"]);
     assert_eq!(bodies(&server, "POST", &format!("{MR}/notes")).await[0]["body"], "/request_review @zed");
 

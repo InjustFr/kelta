@@ -1415,9 +1415,14 @@ impl Core {
         Ok(())
     }
 
-    /// Nudges the reviewers of my PR: re-requests their review (`comment` `None`) or posts
-    /// `comment`. One nudge per PR per 24 h, kept in `nudges` across restarts.
-    pub async fn review_nudge(&self, r: &ReviewRef, comment: Option<&str>) -> Result<(), KeltaError> {
+    /// Nudges the reviewers of my PR: re-requests `who` (its `waiting_on`; `comment` `None`) or
+    /// posts `comment`. One nudge per PR per 24 h, kept in `nudges` across restarts.
+    pub async fn review_nudge(
+        &self,
+        r: &ReviewRef,
+        who: &[String],
+        comment: Option<&str>,
+    ) -> Result<(), KeltaError> {
         self.rt.capture();
         let key = (r.repo.clone(), r.number);
         let last = self.store.call(|c| q::nudges(c)).await?.remove(&key);
@@ -1427,7 +1432,8 @@ impl Core {
         let host = self.code_host_of(&r.account)?;
         match comment {
             Some(body) => host.comment(r, body).await?,
-            None => drop(host.rerequest_review(r).await?),
+            None if who.is_empty() => return Err(KeltaError::invalid("this pull request waits on nobody")),
+            None => drop(host.rerequest_review(r, who).await?),
         }
         let rr = r.clone();
         self.store.call(move |c| q::nudge_put(c, &rr, &kelta_proto::now_rfc3339())).await?;

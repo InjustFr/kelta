@@ -468,6 +468,31 @@ async fn update_title_patches_the_pull_request() {
 }
 
 #[tokio::test]
+async fn a_nudge_re_requests_who_the_pr_waits_on_even_before_any_review() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/pulls/101/reviews"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .mount(&server)
+        .await;
+    for m in ["DELETE", "POST"] {
+        Mock::given(method(m))
+            .and(path("/repos/acme/shop/pulls/101/requested_reviewers"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    }
+    let who = ["anna".to_owned(), "acme/backend".to_owned()];
+    let asked = gh(&server).rerequest_review(&rref("github-work", "acme/shop", 101), &who).await.unwrap();
+    assert_eq!(asked, who);
+    let want = json!({ "reviewers": ["anna"], "team_reviewers": ["backend"] });
+    let url = "/repos/acme/shop/pulls/101/requested_reviewers";
+    assert_eq!(bodies(&server, "DELETE", url).await, vec![want.clone()], "pending: dropped first");
+    assert_eq!(bodies(&server, "POST", url).await, vec![want]);
+}
+
+#[tokio::test]
 async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thread() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/user", 200, "github/user.json").await;
@@ -478,7 +503,7 @@ async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thr
         .mount(&server)
         .await;
     let h = gh(&server);
-    let who = h.rerequest_review(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    let who = h.rerequest_review(&rref("github-work", "acme/shop", 101), &[]).await.unwrap();
     assert_eq!(who, vec!["zed", "erin"], "me (louis) never re-requested");
     let body = &bodies(&server, "POST", "/repos/acme/shop/pulls/101/requested_reviewers").await[0];
     assert_eq!(body["reviewers"], json!(["zed", "erin"]));

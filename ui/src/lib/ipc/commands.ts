@@ -216,8 +216,8 @@ export interface Commands {
   review_approve: { args: { review: ReviewRef; head_sha: string }; result: null };
   review_comment: { args: { review: ReviewRef; body: string }; result: null };
   review_request_changes: { args: { review: ReviewRef; body: string }; result: null };
-  /** My PR: re-request its reviewers (`comment` null) or post `comment`; refused for 24 h after a nudge. */
-  review_nudge: { args: { review: ReviewRef; comment: string | null }; result: null };
+  /** My PR: re-request `who` (its `waiting_on`; `comment` null) or post `comment`; refused for 24 h after a nudge. */
+  review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
   // ---- work --------------------------------------------------------------------------------
   work_plan: { args: { project_id: ProjectId; source: WorkSource }; result: StartWorkPlan };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };

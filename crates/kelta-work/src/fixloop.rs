@@ -178,7 +178,7 @@ impl WorkService {
             return Err(KeltaError::conflict("Review checkout: read-only"));
         }
         let (host, r) = self.pr_of(&item).await?;
-        host.rerequest_review(&r).await
+        host.rerequest_review(&r, &[]).await
     }
 
     /// `work_arm_merge` (`Some(method)`) / `work_disarm_merge` (`None`): the host's native auto-merge;

@@ -769,16 +769,16 @@ async fn a_nudge_is_refused_for_24_hours_even_after_a_restart() {
     let r = pr.r#ref.clone();
     {
         let e = env(tmp.path(), vec![pr.clone()]);
-        e.h.core.review_nudge(&r, Some("@anna ping")).await.unwrap();
+        e.h.core.review_nudge(&r, &[], Some("@anna ping")).await.unwrap();
         let page = e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
         assert!(page.items[0].review.nudged_at.is_some());
         e.h.core.shutdown().await.unwrap();
     }
     let e = env(tmp.path(), vec![pr]);
-    let err = e.h.core.review_nudge(&r, None).await.unwrap_err();
+    let err = e.h.core.review_nudge(&r, &["anna".into()], None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::InvalidArgument, "{err:?}");
     // An older nudge no longer counts.
     let rr = r.clone();
     e.h.core.store().call(move |c| q::nudge_put(c, &rr, "2026-01-01T00:00:00Z")).await.unwrap();
-    e.h.core.review_nudge(&r, Some("ping")).await.unwrap();
+    e.h.core.review_nudge(&r, &[], Some("ping")).await.unwrap();
 }

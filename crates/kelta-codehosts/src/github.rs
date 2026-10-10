@@ -35,7 +35,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state } } } } \
-reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ slug } } } } \
+reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ combinedSlug } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
 latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
 timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
@@ -353,7 +353,7 @@ fn waiting_state(n: &Value, head: &str) -> (Vec<String>, Option<String>) {
     let mut waiting: Vec<(String, Option<String>)> = nodes("/reviewRequests/nodes")
         .iter()
         .filter_map(|rq| {
-            str_at(rq, "/requestedReviewer/login").or_else(|| str_at(rq, "/requestedReviewer/slug"))
+            str_at(rq, "/requestedReviewer/login").or_else(|| str_at(rq, "/requestedReviewer/combinedSlug"))
         })
         .map(|who| {
             let asked = events
@@ -905,8 +905,19 @@ impl CodeHost for GithubHost {
         Ok(Feedback { threads, reviews, failed_checks, reviewers })
     }
 
-    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+    async fn rerequest_review(&self, r: &ReviewRef, who: &[String]) -> Result<Vec<String>, KeltaError> {
         let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        if !who.is_empty() {
+            // `waiting_on` names teams `org/slug`; logins never hold a `/`.
+            let (teams, users): (Vec<&String>, Vec<&String>) = who.iter().partition(|w| w.contains('/'));
+            let teams: Vec<&str> = teams.iter().filter_map(|t| t.split_once('/').map(|(_, s)| s)).collect();
+            let body = json!({ "reviewers": users, "team_reviewers": teams });
+            let url = format!("{pull_url}/requested_reviewers");
+            // A still-pending request is not notified again: drop it first. Best effort, the POST re-adds it.
+            let _ = self.auth.send_text(HttpRequest::delete(url.clone()).json(body.clone())).await;
+            self.auth.send_text(HttpRequest::post(url).json(body)).await?;
+            return Ok(who.to_vec());
+        }
         let me = self.me().await?;
         let reviews =
             self.rest(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")).await?;
@@ -1023,7 +1034,7 @@ mod tests {
         let n = json!({
             "reviewRequests": { "nodes": [
                 { "requestedReviewer": { "login": "anna" } },
-                { "requestedReviewer": { "slug": "backend" } },
+                { "requestedReviewer": { "combinedSlug": "acme/backend" } },
             ] },
             "timelineItems": { "nodes": [
                 { "createdAt": "2026-09-28T08:00:00Z", "requestedReviewer": { "login": "anna" } },
@@ -1037,7 +1048,7 @@ mod tests {
             ] },
         });
         let (who, since) = waiting_state(&n, "head");
-        assert_eq!(who, ["anna", "backend", "bob"]);
+        assert_eq!(who, ["anna", "acme/backend", "bob"]);
         assert_eq!(
             since.as_deref(),
             Some("2026-09-29T08:00:00Z"),

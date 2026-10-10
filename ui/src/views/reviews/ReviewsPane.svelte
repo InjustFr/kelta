@@ -171,7 +171,14 @@
         ? `Nudged ${relativeTime(Date.parse(rv.nudged_at))}; again 24 h after`
         : undefined;
     return [
-      { id: 'rerequest', label: 'Re-request review', key: 'r', kbd: 'r', disabled: !!why, title: why },
+      {
+        id: 'rerequest',
+        label: 'Re-request review',
+        key: 'r',
+        kbd: 'r',
+        disabled: !!why || !rv?.waiting_on.length,
+        title: why,
+      },
       { id: 'ping', label: 'Comment ping', key: 'c', kbd: 'c', disabled: !!why, title: why },
     ];
   });
@@ -182,7 +189,7 @@
     const template = settings.value()?.reviews.nudge_template ?? '{reviewers}';
     const comment = id === 'ping' ? pingBody(template, item.review) : null;
     try {
-      await reviewNudge({ review: item.review.ref, comment });
+      await reviewNudge({ review: item.review.ref, who: item.review.waiting_on, comment });
       toasts.info(id === 'ping' ? 'Ping posted' : 'Review re-requested');
     } catch (err) {
       toasts.error(err, 'Nudge');
