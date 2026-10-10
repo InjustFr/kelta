@@ -16,8 +16,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
+    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -66,11 +66,18 @@ fn user_from(v: &Value) -> Option<User> {
     }))
 }
 
-/// Linear's `IssueFilter` for a view (`scope = "all"` drops the assignee filter).
+/// Linear's `IssueFilter` for a view. `who` wins over the legacy `scope` (`all` drops the assignee filter).
 fn filter_of(view: &TrackerView) -> Value {
     let mut f = json!({});
-    if view.scope.as_deref() != Some("all") {
-        f["assignee"] = json!({"isMe": {"eq": true}});
+    match view.who {
+        Some(Who::Mine) => f["assignee"] = json!({"isMe": {"eq": true}}),
+        Some(Who::Unassigned) => f["assignee"] = json!({"null": true}),
+        Some(Who::Anyone) => {}
+        None if view.scope.as_deref() == Some("all") => {}
+        None => f["assignee"] = json!({"isMe": {"eq": true}}),
+    }
+    if view.current_iteration {
+        f["cycle"] = json!({"isActive": {"eq": true}});
     }
     match view.status.as_deref() {
         Some("*") => {}
@@ -222,6 +229,54 @@ impl Tracker for LinearTracker {
             .filter(|_| issues["pageInfo"]["hasNextPage"].as_bool() == Some(true) && pages + 1 < MAX_PAGES)
             .map(|c| Cursor::After(format!("{}:{c}", pages + 1)));
         Ok(Page { items, next })
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let (teams, projects) = if query.is_empty() {
+            (json!({}), json!({}))
+        } else {
+            let m = |f: &str| json!({f: {"containsIgnoreCase": query}});
+            (json!({"or": [m("name"), m("key")]}), m("name"))
+        };
+        let d = self
+            .gql(
+                "query($teams: TeamFilter, $projects: ProjectFilter) { \
+                 teams(filter: $teams, first: 50) { nodes { key name cyclesEnabled } } \
+                 projects(filter: $projects, first: 50) { nodes { id name } } }",
+                json!({"teams": teams, "projects": projects}),
+            )
+            .await?;
+        let nodes = |k: &str| d[k]["nodes"].as_array().cloned().unwrap_or_default();
+        let hit =
+            |kind: &str, id: String, label: String, detail: Option<String>, view: TrackerView| SourceHit {
+                kind: kind.into(),
+                label: label.clone(),
+                detail,
+                view: TrackerView { id, label, who: Some(Who::Mine), ..view },
+            };
+        let mut out = Vec::new();
+        for t in nodes("teams") {
+            let Some(key) = s(&t, "key") else { continue };
+            let name = s(&t, "name").unwrap_or(key);
+            let team = TrackerView { team: Some(key.to_owned()), ..TrackerView::default() };
+            out.push(hit("team", format!("team-{key}"), name.to_owned(), Some(key.to_owned()), team.clone()));
+            if t["cyclesEnabled"].as_bool() == Some(true) {
+                let view = TrackerView { current_iteration: true, ..team };
+                out.push(hit(
+                    "cycle",
+                    format!("team-{key}-cycle"),
+                    format!("{name} current cycle"),
+                    Some(key.to_owned()),
+                    view,
+                ));
+            }
+        }
+        for p in nodes("projects") {
+            let (Some(id), Some(name)) = (s(&p, "id"), s(&p, "name")) else { continue };
+            let view = TrackerView { project: Some(name.to_owned()), ..TrackerView::default() };
+            out.push(hit("project", format!("project-{id}"), name.to_owned(), None, view));
+        }
+        Ok(out)
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {

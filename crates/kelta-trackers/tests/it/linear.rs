@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::TrackerBinding;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -206,4 +206,57 @@ async fn auth_errors_and_rate_limits() {
     let e = lin(&limited).me().await.unwrap_err();
     assert_eq!(e.code, ErrorCode::RateLimited);
     assert!(e.retry_after_ms.unwrap() > 3_000_000);
+}
+
+#[tokio::test]
+async fn who_and_current_cycle_shape_the_filter() {
+    let server = MockServer::start().await;
+    linear_mocks(&server).await;
+    let t = lin(&server);
+    for (who, legacy) in
+        [(Who::Mine, "all"), (Who::Unassigned, "assigned_to_me"), (Who::Anyone, "assigned_to_me")]
+    {
+        let mut v = view("v");
+        v.who = Some(who);
+        v.scope = Some(legacy.into());
+        v.current_iteration = who == Who::Anyone;
+        t.list(&v, None).await.unwrap();
+    }
+    let f: Vec<_> = gql_bodies(&server, "issues(filter")
+        .await
+        .into_iter()
+        .map(|b| b["variables"]["filter"].clone())
+        .collect();
+    assert_eq!(f[0]["assignee"], json!({"isMe": {"eq": true}}));
+    assert_eq!(f[1]["assignee"], json!({"null": true}));
+    assert!(f[0].get("cycle").is_none() && f[1].get("cycle").is_none());
+    assert!(f[2].get("assignee").is_none());
+    assert_eq!(f[2]["cycle"], json!({"isActive": {"eq": true}}));
+}
+
+#[tokio::test]
+async fn sources_offer_teams_cycles_and_projects() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("teams(filter"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("linear/sources.json")))
+        .mount(&server)
+        .await;
+    let hits = lin(&server).sources("e").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        [
+            ("team", "team-ENG", "Engineering"),
+            ("cycle", "team-ENG-cycle", "Engineering current cycle"),
+            ("team", "team-OPS", "Operations"),
+            ("project", "project-prj-1", "Website"),
+        ],
+        "no cycle variant for a team without cycles"
+    );
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+    assert_eq!((hits[1].view.team.as_deref(), hits[1].view.current_iteration), (Some("ENG"), true));
+    assert_eq!((hits[0].view.current_iteration, hits[3].view.project.as_deref()), (false, Some("Website")));
+    let v = &gql_bodies(&server, "teams(filter").await[0]["variables"];
+    assert_eq!(v["projects"], json!({"name": {"containsIgnoreCase": "e"}}));
 }

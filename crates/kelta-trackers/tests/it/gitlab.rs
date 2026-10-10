@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::TrackerBinding;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -295,4 +295,83 @@ async fn unauthorized_and_keys() {
     // a base_url that already ends in /api/v4 works too
     let t2 = tracker("gitlab-acme", "gitlab", &format!("{}/api/v4", server.uri()), json!({}));
     assert_eq!(t2.me().await.unwrap_err().code, ErrorCode::NeedsAuth);
+}
+
+async fn issue_queries(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.url.path().ends_with("/issues"))
+        .map(|r| r.url.query().unwrap_or("").to_owned())
+        .collect()
+}
+
+#[tokio::test]
+async fn who_picks_the_scope_and_the_unassigned_filter_and_overrides_legacy_scope() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/issues", 200, "gitlab/issues_p1.json").await;
+    let t = gl(&server);
+    for (who, legacy) in
+        [(Who::Mine, "all"), (Who::Unassigned, "assigned_to_me"), (Who::Anyone, "assigned_to_me")]
+    {
+        let mut v = view("v");
+        v.who = Some(who);
+        v.scope = Some(legacy.into());
+        t.list(&v, None).await.unwrap();
+    }
+    let q = issue_queries(&server).await;
+    assert!(q[0].contains("scope=assigned_to_me") && !q[0].contains("assignee_id"), "{}", q[0]);
+    assert!(q[1].contains("scope=all") && q[1].contains("assignee_id=None"), "{}", q[1]);
+    assert!(q[2].contains("scope=all") && !q[2].contains("assignee_id"), "{}", q[2]);
+}
+
+#[tokio::test]
+async fn current_iteration_filters_on_the_started_milestone() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
+        .and(query_param("scope", "all"))
+        .and(query_param("milestone_id", "Started"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issues_p2.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut v = view("proj");
+    v.project = Some("grp/sub/proj".into());
+    v.who = Some(Who::Anyone);
+    v.current_iteration = true;
+    gl(&server).list(&v, None).await.unwrap();
+    // and without the flag no milestone filter is sent
+    v.current_iteration = false;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .mount(&server)
+        .await;
+    gl(&server).list(&v, None).await.unwrap();
+    assert!(!issue_queries(&server).await[1].contains("milestone_id"));
+}
+
+#[tokio::test]
+async fn sources_lists_member_projects_as_mine_views() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v4/projects"))
+        .and(query_param("membership", "true"))
+        .and(query_param("search", "pro"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/projects.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let hits = gl(&server).sources("pro").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    let h = &hits[0];
+    assert_eq!(
+        (h.kind.as_str(), h.label.as_str(), h.detail.as_deref()),
+        ("project", "grp/sub/proj", Some("The shop"))
+    );
+    assert_eq!(h.view.id, "project-grp/sub/proj");
+    assert_eq!(h.view.project.as_deref(), Some("grp/sub/proj"));
+    assert_eq!(h.view.who, Some(Who::Mine));
+    assert_ne!(hits[0].view.id, hits[1].view.id);
+    assert!(hits[1].detail.is_none(), "empty description is no detail");
 }

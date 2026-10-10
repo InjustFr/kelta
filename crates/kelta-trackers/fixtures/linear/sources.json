@@ -1,0 +1,7 @@
+{"data": {
+  "teams": {"nodes": [
+    {"key": "ENG", "name": "Engineering", "cyclesEnabled": true},
+    {"key": "OPS", "name": "Operations", "cyclesEnabled": false}
+  ]},
+  "projects": {"nodes": [{"id": "prj-1", "name": "Website"}]}
+}}

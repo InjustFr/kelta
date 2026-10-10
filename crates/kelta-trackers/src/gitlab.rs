@@ -15,8 +15,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
+    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -257,7 +257,14 @@ impl Tracker for GitlabIssues {
             Some(p) => format!("{}/projects/{}/issues", self.api, percent_encode(p)),
             None => format!("{}/issues", self.api),
         };
-        let scope = if view.scope.as_deref() == Some("all") { "all" } else { "assigned_to_me" };
+        // `who` wins over the legacy `scope`.
+        let (scope, unassigned) = match view.who {
+            Some(Who::Mine) => ("assigned_to_me", false),
+            Some(Who::Unassigned) => ("all", true),
+            Some(Who::Anyone) => ("all", false),
+            None if view.scope.as_deref() == Some("all") => ("all", false),
+            None => ("assigned_to_me", false),
+        };
         let mut req = HttpRequest::get(url)
             .query("scope", scope)
             .query("state", state_param(view))
@@ -265,6 +272,13 @@ impl Tracker for GitlabIssues {
             .query("sort", "desc")
             .query("per_page", PER_PAGE.to_string())
             .query("page", page.to_string());
+        if unassigned {
+            req = req.query("assignee_id", "None");
+        }
+        if view.current_iteration {
+            // Free tier has no iterations: the started milestone is the timebox.
+            req = req.query("milestone_id", "Started");
+        }
         if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
             req = req.query("labels", l.join(","));
         }
@@ -491,6 +505,39 @@ impl Tracker for GitlabIssues {
             Assignee::None => vec![],
         };
         self.put(&project, iid, json!({"assignee_ids": ids})).await
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let mut req = HttpRequest::get(format!("{}/projects", self.api))
+            .query("membership", "true")
+            .query("order_by", "last_activity_at")
+            .query("per_page", "20");
+        if !query.is_empty() {
+            req = req.query("search", query);
+        }
+        let projects = self.json(req).await?.body;
+        Ok(projects
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|p| {
+                        let path = s(p, "path_with_namespace").filter(|p| !p.is_empty())?;
+                        Some(SourceHit {
+                            kind: "project".into(),
+                            label: path.to_owned(),
+                            detail: s(p, "description").filter(|d| !d.is_empty()).map(str::to_owned),
+                            view: TrackerView {
+                                id: format!("project-{path}"),
+                                label: path.to_owned(),
+                                project: Some(path.to_owned()),
+                                who: Some(Who::Mine),
+                                ..TrackerView::default()
+                            },
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     fn browser_url(&self, t: &TicketRef) -> String {
