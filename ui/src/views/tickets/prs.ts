@@ -3,10 +3,11 @@
 
 import type { CiState, PrLink, ProjectId, ReviewKind } from '$lib/gen';
 import { openExternal } from '$lib/ipc/commands';
-import { reviews, toasts } from '$lib/stores';
-import type { LampLevel } from '$lib/stores/reducers';
+import { reviews, toasts, ui } from '$lib/stores';
+import { reviewKey, type LampLevel } from '$lib/stores/reducers';
 import type { MenuItem } from '$lib/ui';
 
+import { openView } from '../../shell/nav';
 import { openContent } from '../work/nav';
 
 const ALL = { kind: 'all' } as const;
@@ -54,13 +55,20 @@ export function reviewWord(pr: PrLink): string {
   return 'Review required';
 }
 
-/** `p`: Kelta's review detail when the code host is bound; `P` (browser) or unbound: the browser. */
+/** `p`: Kelta's review detail when the code host is bound; `P` (browser) or unbound: the browser. From a
+ * global view, a PR in a Reviews list lands on it in the Reviews view instead of opening a project. */
 export function openPr(pr: PrLink, projectId: ProjectId, browser = false): void {
   if (!browser && pr.account) {
-    void openContent(projectId, {
-      kind: 'review_detail',
-      review: { account: pr.account, repo: pr.repo, number: pr.number },
-    });
+    const review = { account: pr.account, repo: pr.repo, number: pr.number };
+    const key = reviewKey(review);
+    if (
+      ui.view !== null &&
+      KINDS.some((k) => reviews.items(ALL, k).some((i) => reviewKey(i.review.ref) === key))
+    ) {
+      openView('reviews', key);
+      return;
+    }
+    void openContent(projectId, { kind: 'review_detail', review });
     return;
   }
   openExternal({ url: pr.url }).catch((err) => toasts.error(err, 'Open in browser'));

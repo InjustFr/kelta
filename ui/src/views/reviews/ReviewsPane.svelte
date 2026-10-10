@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { GLOBAL, projects, reviews, settings, toasts, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, settings, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -26,6 +26,7 @@
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openFrom } from '../work/nav';
   import LinkedTicket from './LinkedTicket.svelte';
+  import ReviewDetailPane from './ReviewDetailPane.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -33,7 +34,7 @@
 
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
 
-  let { projectId, content, focused }: PaneProps<'reviews'> = $props();
+  let { projectId, tabId, paneId, content, focused }: PaneProps<'reviews'> = $props();
   /** The pane's project; `null` in the rail's Reviews view, where each PR uses its own project. */
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
@@ -120,6 +121,32 @@
     if (cur) vlist?.scrollToIndex(rows.indexOf(cur));
   });
 
+  // `p` on a ticket in the Tickets view (`ui.select`) lands on its PR here, in whichever list holds it.
+  $effect(() => {
+    const want = ui.select;
+    if (want?.view !== 'reviews' || home !== null) return;
+    const hit = itemRows.find((r) => reviewKey(r.item.review.ref) === want.key);
+    if (hit) selId = hit.id;
+    ui.select = null;
+  });
+
+  // ---- split view: the selected PR's detail in a column on the right (as Tickets, T3) ----------
+  // shortcut: on/off is per mount, not persisted, as in Tickets.
+  let split = $state(true);
+  let paneWidth = $state(0);
+  let side = $state<HTMLElement>();
+  /** Below ~720px the list would be too narrow: the detail opens as its own pane instead. */
+  const wide = $derived(paneWidth >= 720);
+  const splitShown = $derived(split && wide);
+
+  /** Enter: the detail column takes the keyboard (narrow pane: the standalone pane). */
+  async function focusDetail(item: ReviewItem): Promise<void> {
+    if (!wide) return openDetail(item);
+    split = true;
+    await tick();
+    side?.querySelector<HTMLElement>('[data-testid="review-detail"]')?.focus();
+  }
+
   $effect(() => {
     if (focused && root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
   });
@@ -199,8 +226,17 @@
   }
 
   function onkeydown(e: KeyboardEvent): void {
-    if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // The detail column runs its own keys; Esc hands the keyboard back to the list.
+    if (side?.contains(target)) {
+      if (e.key === 'Escape') {
+        root?.focus();
+        e.preventDefault();
+      }
+      return;
+    }
     const item = cur?.item;
     switch (e.key) {
       case 'j':
@@ -218,7 +254,12 @@
         if (itemRows.at(-1)) selId = itemRows.at(-1)!.id;
         break;
       case 'Enter':
-        if (item) openDetail(item);
+        if (item && e.shiftKey) openDetail(item);
+        else if (item) void focusDetail(item);
+        break;
+      case ' ':
+        if (wide) split = !split;
+        else if (item) openDetail(item);
         break;
       case '/':
         filterInput?.focus();
@@ -233,7 +274,7 @@
         if (item) mergeWhenReady(item);
         break;
       case 's':
-        if (item) void reviewLocally(item.review.ref, item.project_ids[0]);
+        if (item) void reviewLocally(item.review.ref, home ?? item.project_ids[0]);
         break;
       case 'n':
         if (item) openNudge(item);
@@ -269,6 +310,7 @@
   class="k-listpane"
   data-testid="reviews-pane"
   bind:this={root}
+  bind:clientWidth={paneWidth}
   tabindex="0"
   role="group"
   aria-label="Reviews"
@@ -324,67 +366,92 @@
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}
-      <div class="list">
-        <VirtualList
-          bind:this={vlist}
-          items={rows}
-          itemHeight={ROW_HEIGHT}
-          key={(r) => r.id}
-          label="Pull requests"
-        >
-          {#snippet row(r)}
-            {#if r.type === 'header'}
-              <div class="k-group" role="heading" aria-level="2">
-                {r.label}
-                <span class="count k-num">{r.count}</span>
-              </div>
+      <div class="split">
+        <div class="list">
+          <VirtualList
+            bind:this={vlist}
+            items={rows}
+            itemHeight={ROW_HEIGHT}
+            key={(r) => r.id}
+            label="Pull requests"
+          >
+            {#snippet row(r)}
+              {#if r.type === 'header'}
+                <div class="k-group" role="heading" aria-level="2">
+                  {r.label}
+                  <span class="count k-num">{r.count}</span>
+                </div>
+              {:else}
+                {@const rv = r.item.review}
+                {@const ci = ciGlyph(rv.ci)}
+                {@const dec = decisionInfo(rv.decision)}
+                {@const mine = myStateInfo(rv.my_state)}
+                {@const wait = waitingChip(rv, slaHours)}
+                <button
+                  type="button"
+                  tabindex="-1"
+                  class="k-row"
+                  class:selected={cur === r}
+                  aria-current={cur === r ? 'true' : undefined}
+                  data-key={reviewKey(rv.ref)}
+                  onclick={() => (selId = r.id)}
+                  ondblclick={() => openDetail(r.item)}
+                >
+                  <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
+                  <span class="k-row-key">#{rv.ref.number}</span>
+                  <span class="k-row-title">{rv.title}</span>
+                  <span class="k-row-tail">
+                    {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
+                    {#if rv.draft}<Badge>draft</Badge>{/if}
+                    {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
+                    {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
+                        ticketKey={t}
+                        projectId={home}
+                        repo={rv.ref.repo}
+                        tabindex={-1}
+                      />{/each}
+                    {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
+                    {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge
+                      >{/if}
+                    {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
+                    {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'}>{wait.label}</Badge>{/if}
+                    <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
+                    <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
+                    {#if rv.additions !== null || rv.deletions !== null}
+                      <span class="k-row-meta k-mono"
+                        ><span class="add">+{rv.additions ?? 0}</span>
+                        <span class="del">−{rv.deletions ?? 0}</span></span
+                      >
+                    {/if}
+                    <span class="k-row-meta">{relativeTime(Date.parse(rv.updated_at))}</span>
+                  </span>
+                </button>
+              {/if}
+            {/snippet}
+          </VirtualList>
+        </div>
+        {#if splitShown}
+          <aside class="side" bind:this={side} aria-label="Review detail">
+            {#if cur}
+              <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
+              {@const pid = home ?? cur.item.project_ids[0] ?? projects.activeId}
+              {#if pid}
+                <!-- Keyed: the "PR changed" banner and an open dialog belong to one PR. -->
+                {#key cur.id}<ReviewDetailPane
+                    projectId={pid}
+                    {tabId}
+                    {paneId}
+                    content={{ kind: 'review_detail', review: cur.item.review.ref }}
+                    visible
+                    focused={false}
+                    embedded
+                  />{/key}
+              {/if}
             {:else}
-              {@const rv = r.item.review}
-              {@const ci = ciGlyph(rv.ci)}
-              {@const dec = decisionInfo(rv.decision)}
-              {@const mine = myStateInfo(rv.my_state)}
-              {@const wait = waitingChip(rv, slaHours)}
-              <button
-                type="button"
-                tabindex="-1"
-                class="k-row"
-                class:selected={cur === r}
-                aria-current={cur === r ? 'true' : undefined}
-                data-key={reviewKey(rv.ref)}
-                onclick={() => (selId = r.id)}
-                ondblclick={() => openDetail(r.item)}
-              >
-                <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
-                <span class="k-row-key">#{rv.ref.number}</span>
-                <span class="k-row-title">{rv.title}</span>
-                <span class="k-row-tail">
-                  {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
-                  {#if rv.draft}<Badge>draft</Badge>{/if}
-                  {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
-                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
-                      ticketKey={t}
-                      projectId={home}
-                      repo={rv.ref.repo}
-                      tabindex={-1}
-                    />{/each}
-                  {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-                  {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
-                  {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-                  {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'}>{wait.label}</Badge>{/if}
-                  <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
-                  <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
-                  {#if rv.additions !== null || rv.deletions !== null}
-                    <span class="k-row-meta k-mono"
-                      ><span class="add">+{rv.additions ?? 0}</span>
-                      <span class="del">−{rv.deletions ?? 0}</span></span
-                    >
-                  {/if}
-                  <span class="k-row-meta">{relativeTime(Date.parse(rv.updated_at))}</span>
-                </span>
-              </button>
+              <p class="side-empty">Select a pull request to see it here.</p>
             {/if}
-          {/snippet}
-        </VirtualList>
+          </aside>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -392,7 +459,9 @@
   <KeyHints
     hints={[
       ['j k', 'Move'],
+      ['space', 'Split'],
       ['enter', 'Open'],
+      ['shift+enter', 'Own pane'],
       ['/', 'Filter'],
       ['s', 'Review locally'],
       ['n', 'Nudge (my PRs)'],
@@ -418,6 +487,33 @@
 {/if}
 
 <style>
+  /* Split view: list left, the selected PR's detail right, the 1px splitter gap between. */
+  .split {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 1px;
+    background: var(--k-border);
+  }
+
+  .split .list {
+    min-width: 0;
+    container-type: inline-size;
+    background: var(--k-well);
+  }
+
+  .side {
+    flex: 0 0 clamp(320px, 44%, 640px);
+    min-width: 0;
+    background: var(--k-well);
+  }
+
+  .side-empty {
+    margin: 0;
+    padding: var(--k-space-5) var(--k-space-4);
+    color: var(--k-fg-subtle);
+  }
+
   .add {
     color: var(--k-ok);
   }
