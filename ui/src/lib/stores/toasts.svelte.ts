@@ -1,6 +1,7 @@
 // Toast queue (ARCH §12.2). Fed by `toast` UiEvents and by UI code (`toasts.error(err)`).
 // Auto-dismiss uses one one-shot timer per toast, armed when the toast is pushed.
 
+import { dispatch } from '$lib/actions';
 import type { Toast, UiEvent } from '$lib/gen';
 import { toIpcError } from '$lib/ipc/transport';
 
@@ -46,6 +47,27 @@ export class ToastsStore {
   error(err: unknown, context?: string): number {
     const message = typeof err === 'string' ? err : toIpcError(context ?? 'ui', err).message;
     return this.push({ level: 'error', text: context ? `${context}: ${message}` : message, action: null });
+  }
+
+  /** The most recent toast still shown that has an action (`toast.run_last`, ⇧⌘O). */
+  get lastActionable(): ToastEntry | null {
+    return this.list.findLast((t) => t.toast.action) ?? null;
+  }
+
+  /** Dismisses a toast and runs its action. */
+  async run(id: number): Promise<void> {
+    const action = this.list.find((t) => t.id === id)?.toast.action;
+    this.dismiss(id);
+    if (!action) return;
+    const args =
+      action.args && typeof action.args === 'object' && !Array.isArray(action.args)
+        ? (action.args as Record<string, unknown>)
+        : undefined;
+    try {
+      if (!(await dispatch(action.command, args))) this.warn(`No handler for “${action.label}”`);
+    } catch (err) {
+      this.error(err, action.label);
+    }
   }
 
   dismiss(id: number): void {

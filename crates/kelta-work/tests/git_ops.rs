@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use common::{Fx, git, has_git, project};
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::model::{FinishOpts, SessionKind, WorkItem, WorkSource, WorkState};
+use kelta_proto::model::{FinishOpts, SessionKind, ShipOrigin, WorkItem, WorkSource, WorkState};
 use kelta_proto::samples;
 use kelta_work::WorkService;
 
@@ -29,6 +29,13 @@ async fn started(fx: &Fx, key: &str) -> (std::sync::Arc<WorkService>, WorkItem) 
     let item = w.start(plan).await.unwrap();
     assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
     (w, item)
+}
+
+/// One commit ahead of the base (something to ship).
+fn commit(item: &WorkItem, file: &str) {
+    std::fs::write(item.worktree.join(file), "x\n").unwrap();
+    git(&item.worktree, &["add", file]);
+    git(&item.worktree, &["commit", "-q", "-m", file]);
 }
 
 fn opts(force: bool) -> FinishOpts {
@@ -130,9 +137,10 @@ async fn create_pr_pushes_in_a_pane_creates_and_applies_on_pr() {
     need_git!();
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.kind == SessionKind::Custom && s.name == "git push").await;
     let call = fx
@@ -168,9 +176,10 @@ async fn create_pr_links_existing_and_reports_push_failure() {
     // SHOP-142's branch already has PR #90 (Claude used `gh`).
     let (w, item) = started(&fx, "SHOP-142").await;
     assert_eq!(item.branch, "feat/SHOP-142-rate-limit-login");
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.exit_session(&push, 0);
@@ -180,9 +189,10 @@ async fn create_pr_links_existing_and_reports_push_failure() {
 
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
+    commit(&item, "a.txt");
     let task = tokio::spawn({
         let (w, id) = (w.clone(), item.id.clone());
-        async move { w.create_pr(&id, PrDraft::default()).await }
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
     });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.exit_session(&push, 128);
@@ -286,4 +296,32 @@ async fn finish_after_squash_merge_with_pruned_branch() {
     let done = w.finish(&item.id, opts(false)).await.unwrap();
     assert_eq!(done.state, WorkState::Finished);
     assert!(!item.worktree.exists());
+}
+
+#[tokio::test]
+async fn scratch_pr_uses_the_item_title_and_task() {
+    need_git!();
+    use kelta_proto::api::CodeHost;
+    let fx = Fx::new();
+    let w = fx.service();
+    let task = "Speed up search\nKeep the ranking the same.";
+    let source = WorkSource::Branch { name: String::new(), task: Some(task.into()), repo: None };
+    let item = w.start(w.plan(&project(), source).await.unwrap()).await.unwrap();
+    std::fs::write(item.worktree.join("a.txt"), "x\n").unwrap();
+    git(&item.worktree, &["add", "a.txt"]);
+    git(&item.worktree, &["commit", "-q", "-m", "a"]);
+    let pr = tokio::spawn({
+        let (w, id) = (w.clone(), item.id.clone());
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
+    });
+    let push = fx.wait_session(|s| s.name == "git push").await;
+    fx.core.exit_session(&push, 0);
+    let out = pr.await.unwrap().unwrap();
+    let binding = samples::project_info().repos[0].code_host.clone().unwrap();
+    let review = fx.host.find_for_branch(&binding.repo, &item.branch).await.unwrap().unwrap();
+    assert_eq!(review.title, "Speed up search");
+    assert_eq!(out.pr_url.as_deref(), Some(review.url.as_str()));
+    let detail = fx.host.get(&review.r#ref).await.unwrap();
+    assert!(detail.body_html.contains("Keep the ranking the same."), "{}", detail.body_html);
+    assert!(fx.tracker.calls().is_empty(), "no tracker side effects");
 }

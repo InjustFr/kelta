@@ -161,8 +161,9 @@ pub async fn repo_trust(
     project_id: ProjectId,
     repo_id: String,
     trust: bool,
+    sha256: Option<String>,
 ) -> Res<TrustInfo> {
-    core.config().repo_trust(&project_id, &repo_id, trust).await
+    core.config().repo_trust(&project_id, &repo_id, trust, sha256.as_deref()).await
 }
 
 /// Resolve the account's provider through the core (so the cached provider / secret chain is

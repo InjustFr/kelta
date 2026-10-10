@@ -46,7 +46,7 @@ rustix = { version = "=1.1.5", features = ["std", "pty", "process", "event", "ne
 libc = { version = "=0.2.190" }
 
 # ---- network ---------------------------------------------------------------
-reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "json", "gzip", "http2", "query", "system-proxy"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "json", "gzip", "http2", "query", "form", "system-proxy"] }
 axum = { version = "=0.8.9", features = ["ws"] }
 hyper = { version = "=1.12.0", features = ["client", "server", "http1"] }
 hyper-util = { version = "=0.1.21", features = ["client-legacy", "tokio", "http1"] }
@@ -67,6 +67,9 @@ notify-debouncer-full = { version = "=0.7.0" }
 
 # ---- secrets / platform ----------------------------------------------------
 keyring-core = { version = "=1.0.0" }
+chacha20poly1305 = { version = "=0.11.0", features = ["zeroize"] }
+argon2 = { version = "=0.6.0", default-features = false, features = ["alloc", "zeroize"] }
+zeroize = { version = "=1.9.1" }
 apple-native-keyring-store = { version = "=1.0.2", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["rt-tokio-crypto-rust"] }
 zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }

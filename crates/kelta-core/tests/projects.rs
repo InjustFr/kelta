@@ -6,7 +6,7 @@ mod common;
 
 use common::*;
 use kelta_core::Core;
-use kelta_proto::api::CoreApi;
+use kelta_proto::api::{CoreApi, SettingsSource};
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{Lifecycle, SessionKind, SpawnRequest};
 use kelta_proto::settings::{AccountKind, Settings};
@@ -143,4 +143,48 @@ async fn create_opens_and_activates() {
     // ctl open of a path inside the repo focuses the existing project
     let v = h.core.ctl(kelta_proto::ctl::CtlCommand::Open { path: repo.join("src") }).await.unwrap();
     assert_eq!(v["id"], "my-shop");
+}
+
+#[tokio::test]
+async fn kelta_ctl_trust_is_bound_to_the_hash_and_persisted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repos").join("api");
+    std::fs::create_dir_all(repo.join(".kelta")).unwrap();
+    let text = "[worktree]\nsetup = [\"make\"]\n";
+    std::fs::write(repo.join(".kelta/config.toml"), text).unwrap();
+    let projects = tmp.path().join("config").join("projects");
+    std::fs::create_dir_all(&projects).unwrap();
+    std::fs::write(
+        projects.join("shop.toml"),
+        format!(
+            "[project]\nid = \"shop\"\nname = \"Shop\"\n\n[[project.repos]]\nid = \"api\"\npath = \"{}\"\nprimary = true\n",
+            repo.display()
+        ),
+    )
+    .unwrap();
+    let p = ProjectId::new("shop");
+    let setup = |core: &Core| core.config().effective(Some(&p)).worktree.setup.clone();
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![]);
+        assert!(setup(&h.core).is_empty(), "untrusted: exec keys inert");
+        let sock = h.core.server().start_ctl().await.unwrap();
+        // a non-canonical path (`..`) must land on the key the project TOML uses
+        let trust = |sha: &str| serde_json::json!({ "v": 1, "cmd": "trust", "repo": repo.join("../api"), "sha256": sha });
+        let elsewhere =
+            serde_json::json!({ "v": 1, "cmd": "trust", "repo": tmp.path(), "sha256": "0".repeat(64) });
+        assert_eq!(ctl_send(&sock, elsewhere).await["error"]["code"], "not_found");
+        let stale = ctl_send(&sock, trust(&"0".repeat(64))).await;
+        assert_eq!(stale["error"]["code"], "conflict", "{stale}");
+        assert!(setup(&h.core).is_empty());
+        let sha: String = {
+            use sha2::Digest;
+            sha2::Sha256::digest(text).iter().map(|b| format!("{b:02x}")).collect()
+        };
+        let ok = ctl_send(&sock, trust(&sha)).await;
+        assert_eq!(ok["result"]["trusted"], true, "{ok}");
+        assert_eq!(setup(&h.core), ["make"]);
+    }
+    // a restart loads the trust from SQLite
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    assert_eq!(setup(&h.core), ["make"]);
 }

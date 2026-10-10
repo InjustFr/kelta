@@ -79,6 +79,8 @@ export class TerminalView implements PoolView {
   confirmPaste: ((text: string) => Promise<boolean>) | null = null;
   /** Receives restart/close requests from the exit banner keys. */
   onRequest: ((request: ViewRequest) => void) | null = null;
+  /** Bytes received and not acked yet (kelta-bench flood scenario). */
+  inflight = 0;
 
   #deps: TerminalViewDeps;
   #fit = new FitAddon();
@@ -112,6 +114,7 @@ export class TerminalView implements PoolView {
     this.#deps = deps;
     this.#cfg = deps.config();
     this.#acks = new AckBatcher((generation, bytes) => {
+      this.inflight = Math.max(0, this.inflight - bytes); // snapshots are acked but not counted
       void sessionAck({ id: this.id, generation, bytes }).catch(() => {});
     });
 
@@ -241,7 +244,9 @@ export class TerminalView implements PoolView {
       onKeyboard: (flags) => {
         this.#kittyFlags = flags;
       },
+      onData: (n) => (this.inflight += n),
     });
+    this.inflight = 0;
     this.#handler = handler;
     try {
       const info = await sessionAttach({ id: this.id, cols, rows }, (frame) => {

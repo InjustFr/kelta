@@ -9,6 +9,7 @@
 
 import type {
   AccountId,
+  AccountKind,
   AccountTestResult,
   AppInfo,
   Assignee,
@@ -19,8 +20,11 @@ import type {
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
+  FinishMergedReport,
+  Feedback,
   FinishOpts,
   GitStatus,
+  HistoryHit,
   JsonValue,
   Layer,
   LayerDoc,
@@ -37,6 +41,7 @@ import type {
   ProjectId,
   ProjectInfo,
   ProjectPatch,
+  RebaseOp,
   ReviewDetail,
   ReviewKind,
   ReviewPage,
@@ -44,8 +49,10 @@ import type {
   Scope,
   ScreenInstanceId,
   ScreenOpenResult,
+  OAuthDevicePrompt,
   SecretBackendStatus,
   SessionId,
+  SendFile,
   SessionInfo,
   SpawnRequest,
   StartWorkPlan,
@@ -92,6 +99,7 @@ export interface Commands {
   // ---- app ---------------------------------------------------------------------------------
   app_info: { args: NoArgs; result: AppInfo };
   app_ready: { args: { t_ms: number }; result: null };
+  bench_mark: { args: { key: string; value: number }; result: null };
   events_subscribe: { args: { channel: IpcChannel<UiEvent> }; result: SubscribeResult };
   open_external: { args: { url: string }; result: null };
   perf_snapshot: { args: NoArgs; result: PerfSnapshot };
@@ -108,10 +116,21 @@ export interface Commands {
   settings_validate: { args: { layer: Layer; text: string }; result: ValidationIssue[] };
   settings_write_raw: { args: LayerArgs & { text: string }; result: EffectiveSettings };
   settings_open_file: { args: LayerArgs; result: SessionInfo };
-  repo_trust: { args: { project_id: ProjectId; repo_id: string; trust: boolean }; result: TrustInfo };
+  repo_trust: {
+    // sha256 = hash of the text the user reviewed (required to trust).
+    args: { project_id: ProjectId; repo_id: string; trust: boolean; sha256?: string };
+    result: TrustInfo;
+  };
   secret_set: { args: { secret_ref: string; value: string }; result: null };
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };
+  secret_unlock: { args: { passphrase: string; create: boolean }; result: null };
+  oauth_device_start: {
+    args: { kind: AccountKind; base_url: string; secret_ref: string };
+    result: OAuthDevicePrompt;
+  };
+  oauth_device_finish: { args: { user_code: string }; result: null };
+  oauth_device_cancel: { args: { user_code: string }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -156,6 +175,10 @@ export interface Commands {
     result: SessionInfo;
   };
   session_text_tail: { args: { id: SessionId; max_lines: number }; result: string };
+  session_history_search: {
+    args: { project_id: ProjectId; session_id?: SessionId | null; query: string; limit: number };
+    result: HistoryHit[];
+  };
   terminal_set_palette: { args: { palette: TerminalPalette }; result: null };
   // ---- tickets -----------------------------------------------------------------------------
   tracker_list: {
@@ -189,6 +212,28 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Title, body and draft flag Ship would use (prefills the Ship dialog). */
+  work_pr_draft: { args: { id: WorkItemId }; result: PrDraft };
+  /** Finishes merged items with clean worktrees; the rest come back as skipped. */
+  work_finish_merged: { args: { ids: WorkItemId[] }; result: FinishMergedReport };
+  /** Startup / Now open: one host check per work-item PR missing from the open list. */
+  work_check_prs: { args: NoArgs; result: null };
+  /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids. */
+  work_send: {
+    args: { id: WorkItemId; prompt: string; files: SendFile[]; threads?: string[] | null };
+    result: WorkItem;
+  };
+  work_feedback: { args: { id: WorkItemId }; result: Feedback };
+  work_rerequest_review: { args: { id: WorkItemId }; result: string[] };
+  work_resolve_sent_threads: { args: { id: WorkItemId }; result: WorkItem };
+  work_rebase: { args: { id: WorkItemId; op: RebaseOp }; result: WorkItem };
+  work_push: { args: { id: WorkItemId; force: boolean }; result: WorkItem };
+  work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
+  /** Every unfinished item (one fetch per repo, 5 min floor). */
+  work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
+  /** Spawns the review diff session; the UI places it zoomed in the work tab. */
+  work_diff: { args: { id: WorkItemId }; result: SessionInfo };
+  work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -228,6 +273,7 @@ export type CommandResult<K extends CommandName> = Commands[K]['result'];
 export const COMMAND_NAMES = [
   'app_info',
   'app_ready',
+  'bench_mark',
   'events_subscribe',
   'open_external',
   'perf_snapshot',
@@ -247,6 +293,10 @@ export const COMMAND_NAMES = [
   'secret_set',
   'secret_delete',
   'secret_backends_status',
+  'secret_unlock',
+  'oauth_device_start',
+  'oauth_device_finish',
+  'oauth_device_cancel',
   'account_test',
   'project_list',
   'project_detect',
@@ -273,6 +323,7 @@ export const COMMAND_NAMES = [
   'session_mark_seen',
   'session_link',
   'session_text_tail',
+  'session_history_search',
   'terminal_set_palette',
   'tracker_list',
   'tracker_get',
@@ -296,6 +347,19 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_pr_draft',
+  'work_finish_merged',
+  'work_check_prs',
+  'work_send',
+  'work_feedback',
+  'work_rerequest_review',
+  'work_resolve_sent_threads',
+  'work_rebase',
+  'work_push',
+  'work_link',
+  'work_status_all',
+  'work_diff',
+  'work_mark_reviewed',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -357,6 +421,7 @@ function wrap<K extends CommandName>(cmd: K): Wrapper<K> {
 // ---- app ------------------------------------------------------------------------------------
 export const appInfo = wrap('app_info');
 export const appReady = wrap('app_ready');
+export const benchMark = wrap('bench_mark');
 export const openExternal = wrap('open_external');
 export const perfSnapshot = wrap('perf_snapshot');
 export const diagnosticsRun = wrap('diagnostics_run');
@@ -383,6 +448,10 @@ export const repoTrust = wrap('repo_trust');
 export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
 export const secretBackendsStatus = wrap('secret_backends_status');
+export const secretUnlock = wrap('secret_unlock');
+export const oauthDeviceStart = wrap('oauth_device_start');
+export const oauthDeviceFinish = wrap('oauth_device_finish');
+export const oauthDeviceCancel = wrap('oauth_device_cancel');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------
@@ -413,6 +482,7 @@ export const sessionList = wrap('session_list');
 export const sessionMarkSeen = wrap('session_mark_seen');
 export const sessionLink = wrap('session_link');
 export const sessionTextTail = wrap('session_text_tail');
+export const sessionHistorySearch = wrap('session_history_search');
 export const terminalSetPalette = wrap('terminal_set_palette');
 
 /** Normalizes what a Tauri raw channel delivers into bytes. */
@@ -475,6 +545,19 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workPrDraft = wrap('work_pr_draft');
+export const workFinishMerged = wrap('work_finish_merged');
+export const workCheckPrs = wrap('work_check_prs');
+export const workSend = wrap('work_send');
+export const workFeedback = wrap('work_feedback');
+export const workRerequestReview = wrap('work_rerequest_review');
+export const workResolveSentThreads = wrap('work_resolve_sent_threads');
+export const workRebase = wrap('work_rebase');
+export const workPush = wrap('work_push');
+export const workLink = wrap('work_link');
+export const workStatusAll = wrap('work_status_all');
+export const workDiff = wrap('work_diff');
+export const workMarkReviewed = wrap('work_mark_reviewed');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

@@ -29,6 +29,8 @@ pub enum ToolKind {
     #[default]
     Pty,
     Web,
+    /// Launched detached beside Kelta (GUI apps, `open -a Fork .`); never tracked or killed.
+    External,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -122,7 +124,7 @@ pub struct ToolDef {
     pub icon: Option<String>,
     pub description: Option<String>,
     pub kind: ToolKind,
-    // pty
+    // pty and external
     pub command: Option<String>,
     pub args: Vec<String>,
     pub cwd: Option<String>,
@@ -206,12 +208,13 @@ pub struct ToolCheck {
     pub install_hint: Option<String>,
 }
 
-/// `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}`.
+/// `{"kind":"pty","session_id":..}` | `{"kind":"web","instance_id":..,"url":..,"embed":..}` | `{"kind":"external"}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolHandle {
     Pty { session_id: SessionId },
     Web { instance_id: ToolInstanceId, url: String, embed: EmbedMode },
+    External,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -597,6 +600,44 @@ pub struct PluginManifest {
     pub activation: Vec<String>,
     #[serde(default)]
     pub contributes: Contributes,
+    /// A process (KPP) provider: tracker or code-host accounts served over JSON-RPC on stdio.
+    #[serde(default)]
+    pub provider: Option<ProviderDef>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderKind {
+    Tracker,
+    Codehost,
+}
+
+/// `[provider]` (PLUGINS §9). The sync trait methods are answered from these templates, without a
+/// round trip: `{base_url}`, `{web_url}` (falls back to `base_url`), `{key}`, `{id}` (tickets),
+/// `{repo}`, `{number}`, `{branch}` (reviews).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderDef {
+    pub kind: ProviderKind,
+    /// Program to run; a path with `/` is relative to the plugin dir. Runs in the plugin dir.
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Per-call timeout (default 30000).
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    /// Tracker capabilities.
+    #[serde(default)]
+    pub caps: crate::tracker::TrackerCaps,
+    /// Tracker `browser_url` (default `{web_url}/{key}`).
+    #[serde(default)]
+    pub browser_url: Option<String>,
+    /// Tracker `branch_key` (default `{key}`).
+    #[serde(default)]
+    pub branch_key: Option<String>,
+    /// Code host `fetch_refspec` (default `pull/{number}/head:{branch}`).
+    #[serde(default)]
+    pub fetch_refspec: Option<String>,
 }
 
 /// Host plugin API version.
@@ -626,10 +667,14 @@ pub enum Permission {
     UiOpen,
     Notify,
     ClipboardWrite,
+    /// Own key-value store (`kv.*`).
+    Storage,
     /// `exec:<command>` (argv[0] basename)
     Exec(String),
     /// `net:<host>` (exact or `*.domain`)
     Net(String),
+    /// Serve tracker / code-host accounts through `[provider]` (KPP).
+    Provider,
 }
 
 impl Permission {
@@ -648,6 +693,8 @@ impl Permission {
             "ui.open" => Self::UiOpen,
             "notify" => Self::Notify,
             "clipboard.write" => Self::ClipboardWrite,
+            "storage" => Self::Storage,
+            "provider" => Self::Provider,
             other => {
                 let (kind, arg) = other.split_once(':')?;
                 if arg.is_empty() {
@@ -680,6 +727,10 @@ impl Permission {
             Self::UiOpen => "Open panes and screens, change focus".into(),
             Self::Notify => "Show desktop notifications".into(),
             Self::ClipboardWrite => "Write to the clipboard".into(),
+            Self::Storage => "Store its own data in Kelta (up to 1 MiB)".into(),
+            Self::Provider => {
+                "Run its provider program for the tracker / code-host accounts you point at it, with their settings and secrets".into()
+            }
             Self::Exec(c) => format!("Run the program `{c}`"),
             Self::Net(h) => format!("Make network requests to {h}"),
         }
@@ -703,6 +754,8 @@ impl std::fmt::Display for Permission {
             Self::UiOpen => f.write_str("ui.open"),
             Self::Notify => f.write_str("notify"),
             Self::ClipboardWrite => f.write_str("clipboard.write"),
+            Self::Storage => f.write_str("storage"),
+            Self::Provider => f.write_str("provider"),
             Self::Exec(c) => write!(f, "exec:{c}"),
             Self::Net(h) => write!(f, "net:{h}"),
         }
@@ -787,6 +840,14 @@ pub enum PluginMethod {
     NotifySend,
     #[serde(rename = "clipboard.write")]
     ClipboardWrite,
+    #[serde(rename = "kv.get")]
+    KvGet,
+    #[serde(rename = "kv.set")]
+    KvSet,
+    #[serde(rename = "kv.delete")]
+    KvDelete,
+    #[serde(rename = "kv.list")]
+    KvList,
 }
 
 /// Permission requirement of a [`PluginMethod`].
@@ -832,6 +893,10 @@ impl PluginMethod {
         Self::UiFocus,
         Self::NotifySend,
         Self::ClipboardWrite,
+        Self::KvGet,
+        Self::KvSet,
+        Self::KvDelete,
+        Self::KvList,
     ];
 
     pub fn required_permission(self) -> MethodPermission {
@@ -857,6 +922,7 @@ impl PluginMethod {
             Self::UiOpenScreen | Self::UiFocus => Static(Permission::UiOpen),
             Self::NotifySend => Static(Permission::Notify),
             Self::ClipboardWrite => Static(Permission::ClipboardWrite),
+            Self::KvGet | Self::KvSet | Self::KvDelete | Self::KvList => Static(Permission::Storage),
         }
     }
 }
@@ -946,6 +1012,8 @@ mod tests {
             "exec:kubectl",
             "net:*.acme.com",
             "clipboard.write",
+            "storage",
+            "provider",
         ] {
             let p = Permission::parse(s).unwrap();
             assert_eq!(p.to_string(), s);
@@ -957,6 +1025,6 @@ mod tests {
     #[test]
     fn method_names() {
         assert_eq!(serde_json::to_string(&PluginMethod::TicketsList).unwrap(), "\"tickets.list\"");
-        assert_eq!(PluginMethod::ALL.len(), 29);
+        assert_eq!(PluginMethod::ALL.len(), 33);
     }
 }

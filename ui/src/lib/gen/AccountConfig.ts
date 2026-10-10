@@ -10,11 +10,11 @@ import type { TextFormat } from "./TextFormat";
  */
 export type AccountConfig = { kind: AccountKind, 
 /**
- * github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.
+ * github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0`; required for jira/redmine/gitea.
  */
 base_url: string | null, flavor: JiraFlavor, 
 /**
- * Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).
+ * Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth).
  */
 auth: AuthKind | null, email: string | null, user: string | null, 
 /**
@@ -24,4 +24,8 @@ secret: SecretRef | null, text_format: TextFormat, poll_secs: number | null,
 /**
  * Browser links (GHE/GitLab); derived when absent.
  */
-web_url: string | null, };
+web_url: string | null, 
+/**
+ * `plugin_tracker` / `plugin_codehost`: id of the plugin whose `[provider]` serves this account.
+ */
+plugin: string | null, };

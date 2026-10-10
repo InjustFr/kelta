@@ -232,6 +232,10 @@ fn warnings_for(
             Some(Permission::PrsWrite) => {
                 w.push("This plugin can approve and comment on pull requests".into())
             }
+            Some(Permission::Provider) => w.push(format!(
+                "This plugin can run `{}` on your computer with the secrets of the accounts you point at it",
+                m.provider.as_ref().map_or("its provider program", |d| d.command.as_str())
+            )),
             _ => {}
         }
     }
@@ -317,7 +321,10 @@ pub(crate) async fn install(
     let old = plugins.join(format!(".old-{id}-{}", uuid::Uuid::new_v4().simple()));
     let final_clone = final_dir.clone();
     tokio::task::spawn_blocking(move || -> Result<(), KeltaError> {
-        copy_tree(&src_root, &tmp).map_err(|e| io_err(tmp.display(), e))?;
+        if let Err(e) = copy_tree(&src_root, &tmp) {
+            let _ = std::fs::remove_dir_all(&tmp);
+            return Err(io_err(tmp.display(), e));
+        }
         if final_clone.exists() {
             std::fs::rename(&final_clone, &old).map_err(|e| io_err(final_clone.display(), e))?;
         }
@@ -369,6 +376,7 @@ pub(crate) async fn uninstall(host: &PluginHost, id: &PluginId) -> Result<(), Ke
         .await
         .map_err(|e| KeltaError::internal(e.to_string()))??;
     host.grant_store().revoke_all(id).await?;
+    host.grant_store().kv_clear(id).await?;
     let pdir = host.dirs().plugins_dir();
     let mut state = registry::load_state(&pdir);
     if state.disabled.remove(id.as_str()) {

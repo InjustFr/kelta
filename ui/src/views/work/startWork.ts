@@ -4,6 +4,8 @@ import type { ProjectId, ReviewRef, StartWorkPlan, TicketRef, WorkItem, WorkSour
 import * as ipc from '$lib/ipc/commands';
 import { projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
+import { activateProject } from '../../shell/nav';
+
 /** Kelta project a ticket belongs to: first matching project of any loaded list, else the active one. */
 export function projectForTicket(ref: TicketRef): ProjectId | null {
   for (const list of Object.values(tickets.lists)) {
@@ -32,6 +34,7 @@ export async function beginStartWork(projectId: ProjectId, source: WorkSource): 
     const item = plan.existing ? await ipc.workResume({ id: plan.existing }) : await ipc.workStart({ plan });
     work.upsert(item);
     toasts.info(plan.existing ? `Resumed ${item.branch}` : `Started ${item.branch}`);
+    void activateProject(item.project_id);
     return item;
   } catch (err) {
     toasts.error(err, 'Start work');

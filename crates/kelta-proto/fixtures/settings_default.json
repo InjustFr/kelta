@@ -36,8 +36,10 @@
       }
     },
     "prompt_templates": {
+      "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
+      "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-      "standalone": "",
+      "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
     }
   },
@@ -191,6 +193,9 @@
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "toast.run_last": "o",
+      "work.menu": ".",
+      "work.new": "w",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000
@@ -216,6 +221,9 @@
     "pr_changes_requested": true,
     "quiet_hours": "",
     "review_requested": true
+  },
+  "oauth": {
+    "client_ids": {}
   },
   "performance": {
     "hud": false
@@ -348,10 +356,13 @@
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
+    "history_log": true,
+    "history_log_mb": 16,
+    "history_log_total_mb": 512,
     "keyboard_protocol": "kitty",
     "letter_spacing": 0.0,
     "line_height": 1.15,
-    "max_live_views": 4,
+    "max_live_views": 2,
     "memory_cap_mb": 160,
     "minimum_contrast_ratio": 1.0,
     "option_as_meta": "both",
@@ -366,6 +377,7 @@
       "shell": 3000,
       "tool": 500
     },
+    "session_host": "daemon",
     "shell": "",
     "shift_enter": {
       "claude": "esc-cr",
@@ -411,7 +423,8 @@
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
-    "review_template": "review"
+    "review_template": "review",
+    "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",

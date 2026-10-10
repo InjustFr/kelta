@@ -371,7 +371,7 @@ fn jitter_unit() -> f64 {
     (RandomState::new().hash_one(0u8) >> 11) as f64 / (1u64 << 53) as f64
 }
 
-fn map_reqwest_error(e: reqwest::Error) -> KeltaError {
+pub(crate) fn map_reqwest_error(e: reqwest::Error) -> KeltaError {
     if e.is_timeout() {
         KeltaError::timeout(format!("request timed out: {}", short(&e)))
     } else if e.is_connect() || e.is_request() {
@@ -482,8 +482,9 @@ pub fn status_error(status: u16, headers: &BTreeMap<String, String>, body: &str)
     while !body.is_char_boundary(cut) {
         cut -= 1;
     }
-    let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}"))
-        .with_detail(serde_json::json!({ "status": status, "body": &body[..cut] }));
+    let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}")).with_detail(
+        serde_json::json!({ "status": status, "body": &body[..cut], "location": headers.get("location") }),
+    );
     if code == ErrorCode::RateLimited {
         e.retry_after_ms =
             wait_hint(headers).or_else(|| linear_reset(status, headers, body)).map(|d| d.as_millis() as u64);

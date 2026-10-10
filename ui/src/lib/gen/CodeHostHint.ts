@@ -3,7 +3,7 @@ import type { AccountId } from "./AccountId";
 
 export type CodeHostHint = { repo_id: string, 
 /**
- * `"github"` | `"gitlab"`.
+ * `"github"` | `"gitlab"` | `"bitbucket"` | `"gitea"`.
  */
 kind: string, 
 /**

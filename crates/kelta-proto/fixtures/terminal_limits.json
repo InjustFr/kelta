@@ -1,4 +1,7 @@
 {
+  "history_log": true,
+  "history_log_mb": 16,
+  "history_log_total_mb": 512,
   "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
   "scrollback": {

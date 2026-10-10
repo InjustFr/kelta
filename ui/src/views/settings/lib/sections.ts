@@ -18,10 +18,11 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   polling: ['polling'],
   notifications: ['notifications'],
   performance: ['performance', 'web'],
+  tools: ['tools'],
 };
 
 /** Top-level keys edited by the plugin/tool lane's sections (not rendered here). */
-export const FOREIGN_ROOTS: readonly string[] = ['tools', 'triggers', 'commands', 'plugins'];
+export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins'];
 
 export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   general: 'Theme, session restore and quit behaviour.',
@@ -37,5 +38,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
     'How often providers are refreshed. Intervals are owned by the scheduler; nothing polls while idle.',
   notifications: 'Desktop notifications and quiet hours.',
   performance: 'Memory HUD and web view behaviour.',
+  tools:
+    'Buttons in the tool strip. Embedded tools (kind pty) open in a pane next to the current one; external ones launch beside Kelta. Pick Global or a project in the layer selector.',
   projects: 'Environment variables added to every session (project and repo files may add more).',
 };

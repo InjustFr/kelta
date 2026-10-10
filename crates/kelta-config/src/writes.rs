@@ -546,33 +546,55 @@ impl ConfigService {
         let _ = self.reload();
     }
 
-    /// `repo_trust`: trust (or revoke) the current content of a repo's `.kelta/config.toml`.
+    /// `repo_trust`: trust the reviewed content of a repo's `.kelta/config.toml` (`sha256` = hash of
+    /// the text the user was shown), or revoke trust (`trust = false`).
     pub async fn repo_trust(
         &self,
         project: &ProjectId,
         repo_id: &str,
         trust: bool,
+        sha256: Option<&str>,
     ) -> Result<TrustInfo, KeltaError> {
         let target = self.resolve_target(Layer::Repo, Some(project), Some(repo_id))?;
-        let text = read_optional(&target.path)?;
+        let sha256 = match (trust, sha256) {
+            (true, None) => {
+                return Err(KeltaError::invalid("trusting needs the sha256 of the reviewed file"));
+            }
+            (true, s) => s,
+            (false, _) => None,
+        };
+        self.trust_file(&target.path, sha256).await
+    }
+
+    /// Trust `file` if its current content hashes to `sha256` (`None` revokes). Shared by the
+    /// Settings banner and `kelta-ctl trust`; persisted in the trust store when attached.
+    pub async fn trust_file(&self, file: &Path, sha256: Option<&str>) -> Result<TrustInfo, KeltaError> {
+        let text = read_optional(file)?;
         let hash = sha256_hex(text.as_deref().unwrap_or("").as_bytes());
-        if trust && text.is_none() {
-            return Err(KeltaError::not_found(format!("{} does not exist", target.path.display())));
+        if let Some(expected) = sha256 {
+            if text.is_none() {
+                return Err(KeltaError::not_found(format!("{} does not exist", file.display())));
+            }
+            if !expected.eq_ignore_ascii_case(&hash) {
+                return Err(KeltaError::conflict(format!(
+                    "{} changed since it was reviewed; review it again",
+                    file.display()
+                )));
+            }
         }
         let store = self.trust_store.read().clone();
         if let Some(s) = &store {
-            s.set_trust(&target.path, trust.then(|| hash.clone())).await?;
+            s.set_trust(file, sha256.map(|_| hash.clone())).await?;
         }
         {
             let mut t = self.trusted.write();
-            if trust {
-                t.insert(target.path.clone(), hash.clone());
-            } else {
-                t.remove(&target.path);
-            }
+            match sha256 {
+                Some(_) => t.insert(file.to_path_buf(), hash.clone()),
+                None => t.remove(file),
+            };
         }
         let _ = self.reload();
-        Ok(TrustInfo { path: target.path, hash, trusted: trust })
+        Ok(TrustInfo { path: file.to_path_buf(), hash, trusted: sha256.is_some() })
     }
 
     /// `ProjectConfig` repo config path helper for callers (diagnostics, banners).

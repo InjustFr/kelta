@@ -7,6 +7,19 @@ describe('sanitizePaste', () => {
     expect(sanitizePaste('a\x1b[201~rm -rf /\x1b[200~b')).toBe('arm -rf /b');
     expect(sanitizePaste('plain')).toBe('plain');
   });
+
+  it('strips nested and split markers until none remain', () => {
+    expect(sanitizePaste('a\x1b[20\x1b[201~1~\nrm -rf ~\n')).toBe('a\nrm -rf ~\n');
+    expect(sanitizePaste('\x1b[20\x1b[20\x1b[200~1~0~x')).toBe('x');
+  });
+
+  it('strips deeply nested markers in linear time', () => {
+    const depth = 50_000;
+    const nested = '\x1b[2'.repeat(depth) + '00~'.repeat(depth);
+    const start = performance.now();
+    expect(sanitizePaste('a' + nested + 'b')).toBe('ab');
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });
 
 describe('needsPasteConfirmation', () => {

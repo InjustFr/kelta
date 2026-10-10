@@ -1,6 +1,6 @@
 [package]
 name = "kelta-codehosts"
-description = "Code-host providers: GitHub (GraphQL + REST), GitLab (L5)"
+description = "Code-host providers: GitHub (GraphQL + REST), GitLab, Bitbucket Cloud, Gitea/Forgejo (L5)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,14 +12,13 @@ publish.workspace = true
 kelta-proto = { workspace = true }
 kelta-http = { workspace = true }
 async-trait = { workspace = true }
-serde = { workspace = true }
+futures = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 time = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 kelta-proto = { workspace = true, features = ["testing"] }

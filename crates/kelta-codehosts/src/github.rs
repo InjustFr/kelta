@@ -14,8 +14,9 @@ use kelta_http::util::{trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, Review, ReviewDecision,
-    ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackReview, FeedbackThread, FileChange,
+    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
+    ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -25,14 +26,26 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
-use crate::common::{host_matches, linked_tickets, parse_remote, s, user};
+use crate::common::{
+    MAX_LOGS, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s, user,
+};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
-latestOpinionatedReviews(first:20){ nodes{ state author{ login } } } }";
+latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
+latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } }";
+
+/// Unresolved threads (filtered client side: the connection has no `isResolved` argument), the
+/// latest review per reviewer and the head commit (FLOW §4.2).
+const FEEDBACK_QUERY: &str = "query($o:String!,$n:String!,$num:Int!){ viewer{ login } repository(owner:$o,name:$n){ \
+pullRequest(number:$num){ headRefOid url reviewThreads(first:100){ nodes{ id isResolved path line originalLine \
+comments(first:30){ nodes{ author{ login } body url } } } } latestReviews(first:50){ nodes{ state body author{ login } } } } } }";
+
+const RESOLVE_THREAD: &str =
+    "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
 
 #[derive(Default)]
 struct Gate {
@@ -109,11 +122,19 @@ impl GithubHost {
         let repo = n.pointer("/repository/nameWithOwner").and_then(Value::as_str)?.to_owned();
         let title = s(n, "title").unwrap_or("").to_owned();
         let branch = s(n, "headRefName").unwrap_or("").to_owned();
-        let mine = n
+        let mine_node = n
             .pointer("/latestOpinionatedReviews/nodes")
             .and_then(Value::as_array)
+            .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)));
+        let mine = mine_node.and_then(|r| s(r, "state"));
+        // latestReviews also holds COMMENTED reviews, which the opinionated list leaves out.
+        let reviewed_head = n
+            .pointer("/latestReviews/nodes")
+            .and_then(Value::as_array)
             .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)))
-            .and_then(|r| s(r, "state"));
+            .filter(|_| kind != ReviewKind::Authored)
+            .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
+            .map(str::to_owned);
         let my_state = match (kind, mine) {
             (ReviewKind::Authored, _) => None,
             (_, Some("APPROVED")) => Some(MyReviewState::Approved),
@@ -135,6 +156,7 @@ impl GithubHost {
             decision: decision_from(s(n, "reviewDecision")),
             my_state,
             mergeable: mergeable_from(s(n, "mergeable")),
+            reviewed_head,
             labels: n
                 .pointer("/labels/nodes")
                 .and_then(Value::as_array)
@@ -145,6 +167,16 @@ impl GithubHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: n.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: n.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
+            decision_head: n
+                .pointer("/latestOpinionatedReviews/nodes")
+                .and_then(Value::as_array)
+                .and_then(|a| {
+                    a.iter()
+                        .filter(|r| matches!(s(r, "state"), Some("APPROVED" | "CHANGES_REQUESTED")))
+                        .max_by_key(|r| s(r, "submittedAt").unwrap_or(""))
+                })
+                .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
+                .map(str::to_owned),
             title,
         })
     }
@@ -167,6 +199,7 @@ impl GithubHost {
             decision: None,
             my_state: None,
             mergeable: v.get("mergeable").and_then(Value::as_bool),
+            reviewed_head: None,
             labels: v
                 .get("labels")
                 .and_then(Value::as_array)
@@ -177,8 +210,35 @@ impl GithubHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: v.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
+            decision_head: None,
             title,
         })
+    }
+
+    /// Check runs of `sha` (REST), shared by `get` and `feedback`.
+    async fn check_runs(&self, repo: &str, sha: &str) -> Result<Vec<Value>, KeltaError> {
+        let url = self.repo_url(repo, &format!("/commits/{sha}/check-runs"));
+        let body = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
+        Ok(body.get("check_runs").and_then(Value::as_array).cloned().unwrap_or_default())
+    }
+
+    /// Last lines of a GitHub Actions job log (`None` for other apps or when unreadable).
+    async fn job_log_tail(&self, repo: &str, run: &Value) -> Option<String> {
+        if run.pointer("/app/slug").and_then(Value::as_str) != Some("github-actions") {
+            return None;
+        }
+        let id = run.get("id").and_then(Value::as_u64)?;
+        // 302 to a signed blob URL on another host: the client stops cross-host redirects, so
+        // fetch the `location` ourselves without credentials.
+        let url = self.repo_url(repo, &format!("/actions/jobs/{id}/logs"));
+        let text = match self.auth.send_text(HttpRequest::get(url)).await {
+            Ok(r) => r.body,
+            Err(e) => {
+                let loc = e.detail.as_ref()?.get("location")?.as_str()?;
+                self.auth.http().send_text(HttpRequest::get(loc)).await.ok()?.body
+            }
+        };
+        Some(log_tail(&text))
     }
 
     /// Fine-grained / app tokens cannot read `/notifications`.
@@ -293,6 +353,22 @@ fn combine_ci(checks: &[CiCheck]) -> CiState {
     }
 }
 
+/// My pending (draft) review of a pull request; GitHub only shows a pending review to its author.
+struct Pending {
+    id: u64,
+    node_id: String,
+    commit: String,
+}
+
+fn pending_of(reviews: &[Value]) -> Option<Pending> {
+    let v = reviews.iter().find(|r| s(r, "state") == Some("PENDING"))?;
+    Some(Pending {
+        id: v.get("id").and_then(Value::as_u64)?,
+        node_id: s(v, "node_id")?.to_owned(),
+        commit: s(v, "commit_id").unwrap_or("").to_owned(),
+    })
+}
+
 /// 422 answers of the review endpoints that really mean "your view of the PR is stale".
 fn stale_head(e: KeltaError) -> KeltaError {
     if e.code != ErrorCode::InvalidArgument {
@@ -386,19 +462,36 @@ impl CodeHost for GithubHost {
                 ("authored", ReviewKind::Authored, format!("is:pr is:open author:@me archived:false{draft}"))
             }
         };
+        // user-review-requested drops a PR once I submit a review, so a second search in the same
+        // request finds the PRs I reviewed; they only come back when the head moved since (below).
+        let reviewed =
+            format!("is:pr is:open reviewed-by:@me -author:@me archived:false{draft} sort:updated-desc");
+        let (decl, extra, vars) = match kind {
+            ReviewKind::ReviewRequested => (
+                ",$r:String!",
+                " reviewedByMe: search(query:$r, type:ISSUE, first:50){ nodes{ ...Pr } }",
+                json!({ "s": search, "r": reviewed }),
+            ),
+            ReviewKind::Authored => ("", "", json!({ "s": search })),
+        };
         let query = format!(
-            "query($s:String!){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }} }} {PR_FRAGMENT}"
+            "query($s:String!{decl}){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }}{extra} }} {PR_FRAGMENT}"
         );
-        let data = graphql(&self.auth, &self.graphql, &query, json!({ "s": search })).await?;
+        let data = graphql(&self.auth, &self.graphql, &query, vars).await?;
         self.gate.lock().pending = false;
         let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("").to_owned();
-        let nodes =
-            data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
-        Ok(nodes
-            .iter()
-            .filter_map(|n| self.graphql_pr(n, kind, &me))
-            .filter(|r| q.include_drafts || !r.draft)
-            .collect())
+        let nodes = |alias: &str| {
+            data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default()
+        };
+        let requested = nodes(alias).into_iter().filter_map(|n| self.graphql_pr(&n, kind, &me));
+        let updated = nodes("reviewedByMe")
+            .into_iter()
+            .filter_map(|n| self.graphql_pr(&n, kind, &me))
+            .filter(|r| r.reviewed_head.as_deref().is_some_and(|h| h != r.head_sha));
+        let requested: Vec<_> = requested.collect();
+        // A re-requested PR matches both searches.
+        let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();
+        Ok(requested.into_iter().chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -425,21 +518,16 @@ impl CodeHost for GithubHost {
         // CI: check runs + legacy commit statuses of the head commit.
         let sha = review.head_sha.clone();
         let (runs, statuses) = tokio::join!(
-            self.rest(
-                HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/check-runs")))
-                    .query("per_page", "100")
-            ),
+            self.check_runs(&r.repo, &sha),
             self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status")))),
         );
         let mut checks: Vec<CiCheck> = Vec::new();
-        if let Ok(runs) = runs {
-            for run in runs.body.get("check_runs").and_then(Value::as_array).into_iter().flatten() {
-                checks.push(CiCheck {
-                    name: s(run, "name").unwrap_or("").to_owned(),
-                    state: check_state(run),
-                    url: s(run, "html_url").map(str::to_owned),
-                });
-            }
+        for run in runs.unwrap_or_default() {
+            checks.push(CiCheck {
+                name: s(&run, "name").unwrap_or("").to_owned(),
+                state: check_state(&run),
+                url: s(&run, "html_url").map(str::to_owned),
+            });
         }
         if let Ok(st) = statuses {
             for c in st.body.get("statuses").and_then(Value::as_array).into_iter().flatten() {
@@ -461,6 +549,32 @@ impl CodeHost for GithubHost {
 
         let by_reviewer = latest_by_reviewer(&reviews);
         review.decision = Some(decision_from_reviews(&by_reviewer));
+        review.decision_head = reviews
+            .iter()
+            .rev()
+            .find(|x| matches!(s(x, "state"), Some("APPROVED" | "CHANGES_REQUESTED")))
+            .and_then(|x| s(x, "commit_id"))
+            .map(str::to_owned);
+        let is_me = |r: &&Value| r.pointer("/user/login").and_then(Value::as_str) == me.login.as_deref();
+        if kind == ReviewKind::ReviewRequested {
+            review.reviewed_head = reviews
+                .iter()
+                .filter(is_me)
+                .rfind(|r| s(r, "state").and_then(review_state).is_some())
+                .and_then(|r| s(r, "commit_id").map(str::to_owned));
+        }
+        let pending_comments = match pending_of(&reviews) {
+            Some(p) => self
+                .rest(
+                    HttpRequest::get(format!("{pull_url}/reviews/{}/comments", p.id))
+                        .query("per_page", "100"),
+                )
+                .await?
+                .body
+                .as_array()
+                .map_or(0, Vec::len) as u32,
+            None => 0,
+        };
         review.my_state = match kind {
             ReviewKind::Authored => None,
             ReviewKind::ReviewRequested => Some(
@@ -490,16 +604,32 @@ impl CodeHost for GithubHost {
                 deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
             })
             .collect();
+        let state = match (pull.get("merged_at").is_some_and(|m| !m.is_null()), s(&pull, "state")) {
+            (true, _) => PrState::Merged,
+            (false, Some("closed")) => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
+            state,
             reviewers,
             checks,
             files,
+            pending_comments,
         })
     }
 
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            // The events endpoint takes no commit_id: a pending review is fixed to the head it began on.
+            if p.commit != head_sha {
+                return Err(KeltaError::invalid(
+                    "the head moved after your pending comments began; submit them with Comment or Request changes first",
+                ));
+            }
+            return self.publish(r, &p, "APPROVE", "").await;
+        }
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "APPROVE", "commit_id": head_sha})))
@@ -509,6 +639,9 @@ impl CodeHost for GithubHost {
     }
 
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            return self.publish(r, &p, "COMMENT", body).await;
+        }
         // PR conversation comments live on the issue endpoint.
         let url = self.repo_url(&r.repo, &format!("/issues/{}/comments", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
@@ -516,12 +649,46 @@ impl CodeHost for GithubHost {
     }
 
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        if let Some(p) = self.pending_review(r).await? {
+            return self.publish(r, &p, "REQUEST_CHANGES", body).await;
+        }
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "REQUEST_CHANGES", "body": body})))
             .await
             .map(|_| ())
             .map_err(stale_head)
+    }
+
+    async fn add_pending_comment(
+        &self,
+        r: &ReviewRef,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> Result<(), KeltaError> {
+        let p = match self.pending_review(r).await? {
+            Some(p) => p,
+            // No event = a pending review, created on the current head.
+            None => {
+                let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+                let v = self.auth.send_json::<Value>(HttpRequest::post(url).json(json!({}))).await?.body;
+                let (Some(id), Some(node_id)) = (v["id"].as_u64(), s(&v, "node_id")) else {
+                    return Err(KeltaError::upstream("create pending review response without id"));
+                };
+                Pending { id, node_id: node_id.to_owned(), commit: String::new() }
+            }
+        };
+        // REST cannot add to an existing pending review; GraphQL can.
+        let q = "mutation($id:ID!,$path:String!,$line:Int!,$body:String!){ addPullRequestReviewThread(input:{pullRequestReviewId:$id, path:$path, line:$line, side:RIGHT, body:$body}){ thread{ id } } }";
+        graphql(
+            &self.auth,
+            &self.graphql,
+            q,
+            json!({"id": p.node_id, "path": path, "line": line, "body": body}),
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError> {
@@ -539,6 +706,11 @@ impl CodeHost for GithubHost {
         })?;
         self.rest_pr(&v.body, &d.repo, ReviewKind::Authored)
             .ok_or_else(|| KeltaError::upstream("create pull request response without number"))
+    }
+
+    async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        self.auth.send_text(HttpRequest::patch(url).json(json!({ "title": title }))).await.map(|_| ())
     }
 
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {
@@ -565,6 +737,103 @@ impl CodeHost for GithubHost {
         format!("pull/{}/head:{local_branch}", r.number)
     }
 
+    async fn feedback(&self, r: &ReviewRef) -> Result<Feedback, KeltaError> {
+        let refused = feedback_error("GitHub", "review threads", "pull_requests:read");
+        let (owner, name) = r.repo.split_once('/').unwrap_or((r.repo.as_str(), ""));
+        let vars = json!({ "o": owner, "n": name, "num": r.number });
+        let data = graphql(&self.auth, &self.graphql, FEEDBACK_QUERY, vars).await.map_err(&refused)?;
+        let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("");
+        let pr = data
+            .pointer("/repository/pullRequest")
+            .filter(|p| !p.is_null())
+            .ok_or_else(|| KeltaError::not_found(format!("pull request {}#{}", r.repo, r.number)))?;
+        let nodes = |ptr: &str| pr.pointer(ptr).and_then(Value::as_array).cloned().unwrap_or_default();
+        let login =
+            |v: &Value| v.pointer("/author/login").and_then(Value::as_str).unwrap_or("ghost").to_owned();
+
+        let threads = nodes("/reviewThreads/nodes")
+            .iter()
+            .filter(|t| t.get("isResolved").and_then(Value::as_bool) == Some(false))
+            .filter_map(|t| {
+                let comments = t.pointer("/comments/nodes").and_then(Value::as_array)?;
+                let first = comments.first()?;
+                let line = t
+                    .get("line")
+                    .and_then(Value::as_u64)
+                    .or_else(|| t.get("originalLine").and_then(Value::as_u64));
+                Some(FeedbackThread {
+                    id: s(t, "id")?.to_owned(),
+                    author: login(first),
+                    path: s(t, "path").map(str::to_owned),
+                    line: line.map(|l| l as u32),
+                    body_md: comments
+                        .iter()
+                        .map(|c| format!("{}: {}", login(c), s(c, "body").unwrap_or("").trim()))
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                    url: s(first, "url").unwrap_or("").to_owned(),
+                })
+            })
+            .collect();
+        let latest = nodes("/latestReviews/nodes");
+        let mut reviewers: Vec<String> = latest.iter().map(login).filter(|l| l != me).collect();
+        reviewers.dedup();
+        let reviews = latest
+            .iter()
+            .filter(|v| s(v, "body").is_some_and(|b| !b.trim().is_empty()))
+            .map(|v| FeedbackReview {
+                author: login(v),
+                state: s(v, "state").and_then(review_state),
+                body_md: s(v, "body").unwrap_or("").trim().to_owned(),
+            })
+            .collect();
+
+        let sha = s(pr, "headRefOid").unwrap_or("");
+        let runs = self.check_runs(&r.repo, sha).await.map_err(&refused)?;
+        let failed: Vec<&Value> = runs.iter().filter(|run| check_state(run) == CiState::Failure).collect();
+        let mut tails = Vec::new();
+        for run in failed.iter().take(MAX_LOGS) {
+            tails.push(self.job_log_tail(&r.repo, run).await);
+        }
+        let failed_checks = failed
+            .iter()
+            .enumerate()
+            .map(|(i, run)| FailedCheck {
+                name: s(run, "name").unwrap_or("").to_owned(),
+                url: s(run, "html_url").map(str::to_owned),
+                log_tail: tails.get(i).cloned().flatten(),
+            })
+            .collect();
+        Ok(Feedback { threads, reviews, failed_checks, reviewers })
+    }
+
+    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+        let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        let me = self.me().await?;
+        let reviews =
+            self.rest(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")).await?;
+        let logins: Vec<String> =
+            latest_by_reviewer(reviews.body.as_array().map(Vec::as_slice).unwrap_or(&[]))
+                .into_iter()
+                .map(|(l, _)| l)
+                .filter(|l| Some(l.as_str()) != me.login.as_deref())
+                .collect();
+        if logins.is_empty() {
+            return Err(KeltaError::invalid("nobody has reviewed this pull request yet"));
+        }
+        let req =
+            HttpRequest::post(format!("{pull_url}/requested_reviewers")).json(json!({ "reviewers": logins }));
+        self.auth.send_text(req).await?;
+        Ok(logins)
+    }
+
+    async fn resolve_threads(&self, _r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError> {
+        for id in ids {
+            graphql(&self.auth, &self.graphql, RESOLVE_THREAD, json!({ "id": id })).await?;
+        }
+        Ok(())
+    }
+
     fn repo_from_remote(&self, url: &str) -> Option<String> {
         let (host, path) = parse_remote(url)?;
         if !host_matches(&host, &self.web_host) {
@@ -577,6 +846,21 @@ impl CodeHost for GithubHost {
 }
 
 impl GithubHost {
+    async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+        let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
+        Ok(v.as_array().and_then(|a| pending_of(a)))
+    }
+
+    async fn publish(&self, r: &ReviewRef, p: &Pending, event: &str, body: &str) -> Result<(), KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews/{}/events", r.number, p.id));
+        self.auth
+            .send_text(HttpRequest::post(url).json(json!({"event": event, "body": body})))
+            .await
+            .map(|_| ())
+            .map_err(stale_head)
+    }
+
     /// Browser base URL (`https://github.com`, GHE web root).
     pub fn web_url(&self) -> &str {
         &self.web

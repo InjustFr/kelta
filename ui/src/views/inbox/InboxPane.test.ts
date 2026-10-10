@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, reviews, sessions, tickets, toasts } from '$lib/stores';
+import { findContent } from '$lib/layout';
+import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
-import { groupByProject } from './groups';
+import '../work/actions';
 import InboxPane from './InboxPane.svelte';
+import { nextWaiting, nowSummary } from './now';
 
 let mock: MockControls;
 
@@ -16,17 +18,19 @@ beforeEach(async () => {
   setTransport(created.transport);
   tickets.lists = {};
   reviews.lists = {};
+  layout.byProject = {};
+  work.git = {};
   toasts.clear();
-  await projects.load();
-  await sessions.load();
+  await Promise.all([projects.load(), sessions.load(), work.load()]);
+  ui.inboxActive = true;
 });
 
-function mountInbox() {
+function mountNow() {
   return render(InboxPane, {
     props: {
-      projectId: 'shop',
-      tabId: 't',
-      paneId: 'p',
+      projectId: 'inbox',
+      tabId: 'inbox',
+      paneId: 'inbox',
       content: { kind: 'inbox' },
       visible: true,
       focused: true,
@@ -34,63 +38,133 @@ function mountInbox() {
   });
 }
 
-describe('groupByProject', () => {
-  it('orders groups like the projects and puts unmatched items under Other', () => {
-    const order = [
-      { id: 'a', name: 'Alpha' },
-      { id: 'b', name: 'Beta' },
-    ];
-    const items = [
-      { n: 1, p: ['b'] },
-      { n: 2, p: [] },
-      { n: 3, p: ['a'] },
-      { n: 4, p: ['zzz'] },
-    ];
-    const groups = groupByProject(items, (i) => i.p, order);
-    expect(groups.map((g) => [g.name, g.items.map((i) => i.n)])).toEqual([
-      ['Alpha', [3]],
-      ['Beta', [1]],
-      ['Other', [2, 4]],
+const sectionIds = (c: HTMLElement) =>
+  [...c.querySelectorAll('[data-section]')].map((e) => e.getAttribute('data-section'));
+
+describe('Now', () => {
+  it('shows every section in order, with the split header', async () => {
+    const { container } = mountNow();
+    await waitFor(() => expect(sectionIds(container)).toContain('up_next'));
+    expect(sectionIds(container)).toEqual([
+      'needs_you',
+      'to_review',
+      'fix',
+      'requests',
+      'ship',
+      'in_flight',
+      'up_next',
     ]);
+    const header = screen.getByTestId('now-header');
+    expect(header.textContent).toContain('Claude: 1 asks, 1 ready');
+    // #311, #98, #7 and #101 (updated since my review).
+    expect(header.textContent).toMatch(/Teammates: 4 PRs/);
+    expect(header.title).toBe(nowSummary().header);
+    // A work item shows once; its sessions are not listed as plain sessions.
+    expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(
+      1,
+    );
+  });
+
+  it('only the selected row expands, with its actions and keys', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    // First row: Claude needs you (the scratch item that replied).
+    expect(container.querySelector('.row[aria-current="true"]')?.textContent).toContain('wip');
+    await fireEvent.keyDown(pane, { key: 'j' });
+    const details = screen.getAllByTestId('now-detail');
+    expect(details).toHaveLength(1);
+    expect(details[0]!.textContent).toContain('Fixed the race in CartServiceTest');
+    expect(within(details[0]!).getByText('Review diff')).toBeTruthy();
+  });
+
+  it('Enter on To review opens the diff in the work tab and leaves Now (B1)', async () => {
+    mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'j' });
+    await fireEvent.keyDown(pane, { key: 'Enter' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
+    expect(ui.inboxActive).toBe(false);
+    expect(projects.activeId).toBe('shop');
+    await waitFor(() => {
+      const l = layout.get('shop')!;
+      expect(
+        findContent(l, (c) => c.kind === 'terminal' && sessions.get(c.session_id)?.name === 'diff'),
+      ).toBeTruthy();
+    });
+  });
+
+  it('x marks reviewed; a blocked key flashes its reason', async () => {
+    mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'j' });
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(toasts.list.at(-1)?.toast.text).toMatch(/Only while a rebase is stopped/);
+    await fireEvent.keyDown(pane, { key: 'x' });
+    await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
+  });
+
+  it('Enter on a review request opens it in the project Reviews tab, reused (B1)', async () => {
+    const { container } = mountNow();
+    await waitFor(() => expect(sectionIds(container)).toContain('requests'));
+    await nextWaitingTo(container, 'r:');
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'Enter' });
+    await waitFor(() => expect(ui.inboxActive).toBe(false));
+    const tabs = () => layout.get('shop')!.tabs.filter((t) => t.title === 'Reviews');
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+  });
+
+  it('filters on id, title, project and branch', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: '/' });
+    const input = await screen.findByLabelText('Filter');
+    await fireEvent.input(input, { target: { value: 'retry-queue' } });
+    await waitFor(() => expect(container.querySelectorAll('.row[data-row]')).toHaveLength(1));
+  });
+
+  it('shows an error state when nothing loads', async () => {
+    mock.failAlways('tracker_list', { code: 'needs_auth', message: '401' });
+    mock.failAlways('review_list', { code: 'needs_auth', message: '401' });
+    work.byId = {};
+    mountNow();
+    expect(await screen.findByText('Could not load Now')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeTruthy();
   });
 });
 
-describe('InboxPane', () => {
-  it('shows tickets, review requests (with Other), my PRs and needs-input sessions', async () => {
-    const { container } = mountInbox();
-    await waitFor(() => expect(container.querySelector('[data-section="s:requested"]')).not.toBeNull());
-    await screen.findByText('Terraform: add read replica');
-
-    // The review request on a repo bound to no project lands in "Other".
-    const rows = [...container.querySelectorAll('.row, [data-group], [data-section]')];
-    const underOther = rows
-      .map((r, i) => (r.getAttribute('data-group') === 'Other' ? rows[i + 1]?.textContent : null))
-      .filter(Boolean);
-    expect(underOther.some((t) => t?.includes('Terraform: add read replica'))).toBe(true);
-
-    expect(container.querySelector('[data-group="Shop"]')).not.toBeNull();
-    expect(container.querySelector('[data-section="s:authored"]')).not.toBeNull();
-    expect(container.querySelector('[data-section="s:input"]')?.textContent).toMatch(/Needs input/);
-  });
-
-  it('is usable with the keyboard: j/k, Enter on a ticket opens its detail', async () => {
-    const { container } = mountInbox();
-    await screen.findByText('Terraform: add read replica');
-    const pane = screen.getByTestId('inbox-pane');
+/** Moves the selection with j until the selected row id starts with `prefix`. */
+async function nextWaitingTo(container: HTMLElement, prefix: string): Promise<void> {
+  const pane = screen.getByTestId('inbox-pane');
+  for (let i = 0; i < 20; i += 1) {
+    const id = container.querySelector('.row[aria-current="true"]')?.getAttribute('data-row') ?? '';
+    if (id.startsWith(prefix)) return;
     await fireEvent.keyDown(pane, { key: 'j' });
-    await fireEvent.keyDown(pane, { key: 'k' });
-    const selected = container.querySelector('.row[aria-current="true"]') as HTMLElement;
-    expect(selected.textContent).toMatch(/\w+-?\d+|#\d+/);
-    await fireEvent.keyDown(pane, { key: 's' });
-    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(true));
-  });
+  }
+  throw new Error(`no row ${prefix}`);
+}
 
-  it('shows account failures next to the data and an error state when nothing loads', async () => {
-    mock.failAlways('tracker_list', { code: 'needs_auth', message: '401' });
-    mock.failAlways('review_list', { code: 'needs_auth', message: '401' });
-    mountInbox();
-    const alert = await screen.findByText('Could not load the inbox');
-    expect(alert).toBeTruthy();
-    expect(within(document.body).getByRole('button', { name: 'Re-authenticate' })).toBeTruthy();
+describe('Next waiting', () => {
+  it('walks the first four sections in order, cycling', async () => {
+    await Promise.all([
+      tickets.load({ kind: 'all' }, null),
+      reviews.load({ kind: 'all' }, 'review_requested'),
+      reviews.load({ kind: 'all' }, 'authored'),
+    ]);
+    const waiting = nowSummary()
+      .sections.filter((s) => ['needs_you', 'to_review', 'fix', 'requests'].includes(s.id))
+      .flatMap((s) => s.rows);
+    expect(nowSummary().waiting).toBe(waiting.length);
+    await nextWaiting(); // the scratch item that replied (billing)
+    expect(ui.inboxActive).toBe(false);
+    expect(projects.activeId).toBe('billing');
+    await nextWaiting(); // SHOP-155 to review
+    expect(projects.activeId).toBe('shop');
+    for (let i = 2; i < waiting.length; i += 1) await nextWaiting();
+    await nextWaiting(); // cycles back to the first
+    expect(projects.activeId).toBe('billing');
   });
 });

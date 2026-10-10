@@ -14,6 +14,7 @@
       "path": "src/prices.rs"
     }
   ],
+  "pending_comments": 0,
   "review": {
     "additions": 120,
     "author": {
@@ -24,6 +25,7 @@
     },
     "ci": "success",
     "decision": "review_required",
+    "decision_head": null,
     "deletions": 14,
     "draft": false,
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
@@ -39,6 +41,7 @@
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
@@ -55,5 +58,6 @@
         "name": "Ada Lovelace"
       }
     }
-  ]
+  ],
+  "state": "open"
 }

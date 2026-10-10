@@ -8,7 +8,7 @@ Three tiers, none of which keeps a background runtime alive (zero memory when un
 
 Tools, triggers, commands and session templates use the **same schema** in `config.toml`, project files, repo-local `.kelta/config.toml` (trust-gated) and plugin manifests. Types live in `kelta-proto::ext` (`ToolDef`, `TriggerDef`, `ActionDef`, `CommandDef`, `PluginManifest`, `ScreenDef`, `PluginMethod`, `Permission`), JSON Schemas in `schema/tool.schema.json`, `schema/trigger.schema.json`, `schema/plugin-manifest.schema.json` (generated, CI drift-checked).
 
-v0.2 (designed, not built): process plugins speaking JSON-RPC over stdio (KPP) that can contribute **tracker / code-host providers** via the same `Tracker`/`CodeHost` traits; plugin KV storage; WASM logic plugins.
+**Provider plugins (KPP, §9):** a plugin can also ship a process speaking JSON-RPC 2.0 over stdio that serves **tracker or code-host accounts** through the same `Tracker`/`CodeHost` traits as the built-in providers, spawned on first use only. v0.2 (designed, not built): WASM logic plugins.
 
 ---
 
@@ -22,7 +22,7 @@ As in SETTINGS.md §6: `{project.id|name|root}`, `{repo.id|path|name}`, `{worktr
 pub struct ToolDef {
   pub id: String,                      // [a-z0-9-]; plugin tools are namespaced "<plugin>/<id>"
   pub label: String, pub icon: Option<String>, pub description: Option<String>,
-  pub kind: ToolKind,                  // Pty | Web
+  pub kind: ToolKind,                  // Pty | Web | External (detached launch, no pane)
   // pty
   pub command: Option<String>, pub args: Vec<String>, pub cwd: Option<String>, pub env: BTreeMap<String, String>,
   pub close_on_exit: CloseOnExit,      // never | on_success | always (default never → exit banner + Relaunch)
@@ -226,6 +226,7 @@ Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~
 | `[[contributes.screens]]` | ScreenDef | | §4.1 |
 | `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]` | `{id, title, do: [ActionDef]}` | | buttons on detail panes |
 | `[contributes.settings]` | `{schema = "settings.schema.json"}` | | flat JSON Schema mounted at `plugins.<id>`, validated, rendered in Settings |
+| `[provider]` | ProviderDef | | process (KPP) tracker / code-host provider, §9; needs the `provider` permission |
 
 ### 4.1 ScreenDef
 `{ id, title, icon?, entry: "dist/index.html", scope: "project"|"global", placement: ["tab","pane"], keep_alive = false, min_width? }`. Served at `kelta-plugin://<plugin-id>/<entry>`.
@@ -330,10 +331,12 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `ui.open` | open panes/screens, focus |
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
+| `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
 | `exec:<command>` | run that argv[0] (basename match) in `run` actions |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
+| `provider` | run the `[provider]` program for the accounts that name the plugin, handing it their settings and secret (§9); its own network access is its business |
 
-Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no storage, no Tauri IPC.
+Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
 
 ## 6. Events catalogue (BusEvent names; payload JSON)
 
@@ -362,7 +365,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `pr.review_requested` | `{review: Review}` (new key only) |
 | `pr.updated` | `{review, changes: ["ci","decision","head"]}` |
 | `pr.ci_changed` | `{review, state, previous}` |
-| `pr.approved` / `pr.changes_requested` / `pr.merged` | `{review, linked_tickets}` |
+| `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Now-open check; `pr.closed` = closed without merge; once per PR) |
 | `tool.opened` / `tool.exited` | `{tool_id, instance_id, code?}` |
 | `settings.changed` | `{paths, layers}` |
 | `custom.*` | arbitrary (from `kelta-ctl emit`) |
@@ -393,10 +396,13 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `ui.toast` / `ui.open_screen` / `ui.focus` | | — / `ui.open` / `ui.open` |
 | `notify.send` | `{title, body}` | `notify` |
 | `clipboard.write` | `{text}` | `clipboard.write` |
+| `kv.get` / `kv.set` / `kv.delete` / `kv.list` | `{key}` → JSON or `null` / `{key, value}` / `{key}` / `{}` → `[key]` (sorted) | `storage` |
+
+`kv.*` is the plugin's own store in SQLite `plugin_kv`, namespaced by the calling screen's plugin id (a plugin can never name another's), shared by all its screens and projects, kept across updates and deleted on uninstall. Keys are 1–256 bytes; a value is any JSON up to 64 KiB serialized; keys + values of one plugin are capped at 1 MiB. Over a cap → `InvalidArgument` and nothing is written.
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 
-SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
+SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
 
 Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 
@@ -421,5 +427,84 @@ Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600
 - The path is POSIX single-quoted (macOS data dir contains a space). `claude.hook_transport = "http"` replaces every event except SessionStart with `{"type":"http","url":"http://127.0.0.1:<port>/hook/<sid>","headers":{"Authorization":"Bearer ${KELTA_HOOK_TOKEN}"},"allowedEnvVars":["KELTA_HOOK_TOKEN"],"timeout":2}`.
 - `kelta-ctl hook` reads stdin (cap 1 MiB), reads `KELTA_SESSION_ID`, `KELTA_HOOK_TOKEN`, `KELTA_SOCK`, writes one line `{"v":1,"cmd":"hook","session":…,"token":…,"payload":{…}}` to the ctl socket, **always exits 0**, < 5 ms.
 - `claude.extra_hooks` is merged in. A user's `disableAllHooks` disables these too → hooks-inactive heuristics (ARCHITECTURE §7.6).
-- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context).
+- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `get_review_feedback()`, `add_review_comment({path, line, body})`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `add_review_comment` adds a line comment (new-side `line` of `path`) to the pending review of the PR under review in the session's review-kind work item (`CodeHost::add_pending_comment`); nothing is published until the user submits in Kelta (`a` / `c` / `m`); error text "no pull request under review in this session" otherwise. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context).
 - **Gate C1 (verified with `claude` 2.1.295, macOS):** `KELTA_REAL_CLAUDE=1 cargo test -p kelta-core --test real_claude -- --nocapture` runs the launcher through a real `Core` (PTY, ctl socket, installed `kelta-ctl`, loopback MCP) in a Kelta worktree, in print mode via `claude.extra_args = ["-p"]`, haiku/low effort, two model runs: SessionStart → UserPromptSubmit → PermissionRequest (fires in print mode too) → Stop → SessionEnd gives Running → Working → NeedsInput → Done → Exited; `--session-id` is honoured; `mcp__kelta__notify` is callable; `session_restart` on the same session id rebuilds the work item's restore argv (`--resume <uuid>`, files regenerated) and resumes the conversation in the worktree (`source: "resume"`), with `mcp__kelta__notify` still reaching that session; a project `.claude/settings.json` hook still runs next to Kelta's (`--settings` adds) and `~/.claude/settings.json` is untouched. Interactive sessions in a repo Claude does not trust stop at its workspace-trust dialog and hooks start only once it is accepted (a worktree inherits the trust of its main repository); the hooks-inactive fallback covers the gap and the first SessionStart switches back to hooks. Shift+Enter: Claude's own `/terminal-setup` binds it to ESC CR (`\u001b\r`), what Kelta sends for Claude sessions; the live keystroke is checked by hand.
+
+## 9. Provider plugins (KPP)
+
+A plugin with a `[provider]` table serves tracker **or** code-host accounts from its own process. Kelta talks to it through `kelta_plugins::kpp` (`KppTracker` / `KppCodeHost`), which implement the same `Tracker` / `CodeHost` traits as the built-in providers, so the inbox, boards, work saga, MCP tools and reviews work unchanged. Example: `examples/plugins/json-tracker` (a Node script, tickets in a JSON file).
+
+```toml
+permissions = ["provider"]
+
+[provider]
+kind = "tracker"                         # tracker | codehost
+command = "node"                         # program name (login-shell PATH) or a path inside the plugin dir
+args = ["tracker.cjs"]                   # runs with the plugin dir as cwd
+timeout_ms = 30000                       # per call (default)
+caps = { comment = true, assign = true } # TrackerCaps (board_columns, assign, comment, transitions_need_fetch, projects_v2)
+browser_url = "{web_url}/browse/{key}"   # tracker browser_url (default "{web_url}/{key}")
+branch_key = "{key}"                     # tracker branch_key (default "{key}")
+fetch_refspec = "pull/{number}/head:{branch}" # code host (this default)
+```
+
+The synchronous trait methods (`kind`, `caps`, `browser_url`, `branch_key`, `fetch_refspec`) are answered from these fields without a round trip. Placeholders: `{base_url}`, `{web_url}` (falls back to `base_url`), `{key}`, `{id}` (tickets), `{repo}`, `{number}`, `{branch}` (reviews). `kind()` is `plugin` for both. `repo_from_remote` returns nothing in v0.1 (no core caller).
+
+**Accounts** point at the plugin (SETTINGS §2): `[accounts.demo] kind = "plugin_tracker" | "plugin_codehost", plugin = "json-tracker"`, plus any `base_url`, `web_url`, `user`, `email`, `secret`… the plugin wants. `TrackerFactory` / `CodeHostFactory` are wrapped by `KppFactory`, which builds plugin accounts and passes every other kind through.
+
+### 9.1 Transport
+
+JSON-RPC 2.0 over the process's stdin/stdout, **one message per line** (UTF-8 JSON, `\n`-terminated, no embedded newlines; a JSON encoder never emits a raw newline inside a string, so no escaping rule is needed). Chosen over LSP-style `Content-Length` framing because every language reads lines with its standard library (`readline`, `sys.stdin`, `bufio.Scanner`) and a human can drive a provider from a terminal. Kelta sends requests with integer ids and may have several in flight; the plugin answers each with the same id, in any order. Lines without an id (notifications) are ignored. stderr is free-form logging: Kelta keeps the last 64 KiB and attaches its tail to crash errors.
+
+A line that is not JSON or exceeds 8 MiB is a protocol violation: Kelta kills the process and fails the pending calls (`upstream`).
+
+### 9.2 Lifecycle
+
+- One process per plugin, spawned on the **first call** (nothing runs at startup or for unused accounts), in its own process group, with the plugin dir as cwd and a minimal environment (`PATH` of the login shell, `HOME`, `USER`, `LANG`, `TMPDIR`; nothing else is inherited).
+- Every call requires the plugin to be installed, enabled and granted `provider`; otherwise `permission_denied` / `not_found` / `invalid_argument`, and no process is started.
+- Per-call timeout (`timeout_ms`) → `timeout`; the process is kept if it sent any line during the call (one slow call does not kill the others). A process silent for the whole call is hung: it is killed and handled like a crash.
+- Crash (stdout closed) → the in-flight calls fail with `upstream`; the next call respawns it, at once after a first crash, then after 0.5 s, 1 s, 2 s … ≤ 30 s while it keeps crashing (calls in that window fail with `retry_after_ms`); one successful call resets the backoff. No timer is armed: the restart is driven by the next call.
+- Killed (process group, SIGKILL) on disable, uninstall, grant change, manifest update (the next call starts the new version) and quit.
+- No idle exit: an idle provider costs its own memory only, and an idle timer would break the "no timers" rule (ARCHITECTURE D11). Keep providers small. A provider may exit by itself when idle: the next call respawns it at once (only exits with no successful call in between back off).
+
+### 9.3 Methods
+
+Every request's `params` carries, besides the method's own fields:
+
+| Field | Value |
+|---|---|
+| `account_id` | the Kelta account id (`"demo"`) |
+| `account` | the account table (`AccountConfig` JSON: `kind`, `plugin`, `base_url`, `web_url`, `user`, `email`, `auth`, `secret` (the reference, not the value), …) |
+| `secret` | the secret resolved by Kelta's secret chain (keychain, encrypted file, `env:`, `command:`, `gh-cli` …), or `null` when the account has none. The plugin never reads Kelta's secret store. |
+
+Methods mirror the trait methods; shapes are the generated types (`ui/src/lib/gen/*.ts`, fixtures in `crates/kelta-proto/fixtures/*.json`):
+
+| Method | Params | Result |
+|---|---|---|
+| `tracker.me` | `{}` | `User` |
+| `tracker.list` | `{view: TrackerView, cursor: Cursor \| null}` | `{items: [Ticket], next: Cursor \| null}` |
+| `tracker.get` | `{ticket: TicketRef}` | `TicketDetail` (`body_html` may be `""`: Kelta renders `body_md`) |
+| `tracker.columns` | `{binding: TrackerBinding}` | `[Column]` (`order` = 0..n) |
+| `tracker.transitions` | `{ticket}` | `[Transition]` |
+| `tracker.transition` | `{ticket, transition_id, fields: JSON \| null}` | `Ticket` |
+| `tracker.comment` | `{ticket, markdown}` | `null` (not called unless `caps.comment`) |
+| `tracker.assign` | `{ticket, who: Assignee}` | `Ticket` (not called unless `caps.assign`) |
+| `codehost.me` | `{}` | `User` |
+| `codehost.changed_since_last` | `{}` | `bool` (optional: method not found = `true`) |
+| `codehost.list_reviews` | `{query: ReviewQuery}` | `[Review]` |
+| `codehost.get` | `{review: ReviewRef}` | `ReviewDetail` |
+| `codehost.approve` | `{review, head_sha}` | `null` |
+| `codehost.comment` / `codehost.request_changes` | `{review, body}` | `null` |
+| `codehost.add_pending_comment` | `{review, path, line, body}` | `null` (optional) |
+| `codehost.create` | `{pr: PrCreate}` | `Review` |
+| `codehost.find_for_branch` | `{repo, branch}` | `Review \| null` |
+
+Kelta does not trust the results: every `TicketRef` / `ReviewRef` it gets back is rewritten to the calling account, HTML (`body_html`, comments) is sanitized again in Rust (D12), comments are capped at 20, and a result that does not match the type fails the call (`upstream`, "bad result").
+
+### 9.4 Errors
+
+A JSON-RPC `error` maps to `ErrorCode` (ARCHITECTURE §4): `data.code` (an `ErrorCode` string such as `"needs_auth"`, `"not_found"`, `"conflict"`) wins; else `data.status` (the upstream HTTP status) is mapped like the built-in providers (401 → `needs_auth`, 403 → `permission_denied`, 404 → `not_found`, 409 → `conflict`, 422 → `invalid_argument`, 429 → `rate_limited`, …); else `-32601` (method not found) → `unsupported`; anything else → `upstream`. `message` (≤ 300 chars kept) is shown to the user. `needs_auth` also drops Kelta's cached secret, as for built-in providers.
+
+### 9.5 Conformance suite
+
+`cargo run -p xtask -- kpp-check <plugin dir> [--account '<json>'] [--secret <value>]` starts the provider and runs the **same contract** the built-in providers pass in their tests (`kelta_proto::testing::conformance`: identity, list shape and unique keys, account on every ref, sanitized detail, discovered transitions, column order, writes per caps; for code hosts both review lists, detail, approve / comment / request changes, create, find, refspec). The contract writes, so point the provider at test data (`--account '{"base_url":"/tmp/tickets.json"}'`). On failure it prints the broken rule and the provider's stderr tail. `xtask`'s own test runs it on a copy of `examples/plugins/json-tracker`.

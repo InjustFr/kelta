@@ -44,6 +44,12 @@ pub enum CtlCommand {
         #[serde(default)]
         project: Option<ProjectId>,
     },
+    /// Scratch work item from a task (`kelta-ctl start --task`), same saga as New work item.
+    StartTask {
+        task: String,
+        #[serde(default)]
+        project: Option<ProjectId>,
+    },
     New {
         template: String,
         #[serde(default)]
@@ -56,8 +62,10 @@ pub enum CtlCommand {
         name: String,
         payload: serde_json::Value,
     },
+    /// Trust `<repo>/.kelta/config.toml` if it still hashes to `sha256` (the content kelta-ctl showed).
     Trust {
         repo: PathBuf,
+        sha256: String,
     },
     EditorOpen {
         file: PathBuf,

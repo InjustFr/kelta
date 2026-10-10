@@ -2,6 +2,6 @@
 
 /**
  * A reference to a secret, never the secret itself:
- * `keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.
+ * `keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.
  */
 export type SecretRef = string;

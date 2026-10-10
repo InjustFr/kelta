@@ -5,10 +5,13 @@
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
     "src",
@@ -16,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false --outDir dist --declaration",
+    "prepublishOnly": "pnpm build",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

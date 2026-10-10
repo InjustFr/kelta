@@ -1,125 +1,245 @@
 <script lang="ts">
+  // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
+  // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, ReviewItem, SessionInfo, TicketItem } from '$lib/gen';
+  import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { activateTab, findSession, focusPane } from '$lib/layout';
-  import { layout, projects, reviews, sessions, tickets, toasts } from '$lib/stores';
-  import { reviewKey } from '$lib/stores/reducers';
-  import { ticketKey } from '$lib/stores/tickets.svelte';
-  import { Badge, Button, EmptyState, ErrorState, IconButton, VirtualList, relativeTime } from '$lib/ui';
+  import { projects, reviews, tickets, toasts, work } from '$lib/stores';
+  import { Button, EmptyState, ErrorState, IconButton, Kbd, Lamp, VirtualList, relativeTime } from '$lib/ui';
 
-  import { ciGlyph, decisionInfo, isAuthError, statusTone } from '../work/common';
-  import { openContent } from '../work/nav';
+  import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
+  import { isAuthError } from '../work/common';
+  import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
+  import { openFromNow } from '../work/nav';
+  import { workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
-  import { reviewLocally, startWorkOnTicket } from '../work/startWork';
-  import { groupByProject } from './groups';
+  import type { NowRow, Section } from './groups';
+  import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally } from './now';
 
-  let { projectId, focused }: PaneProps<'inbox'> = $props();
+  let { focused }: PaneProps<'inbox'> = $props();
 
-  const ROW_HEIGHT = 32;
+  const ROW_HEIGHT = 26;
   const ALL = { kind: 'all' } as const;
 
-  const myTickets = $derived(tickets.list(ALL, null));
-  const requested = $derived(reviews.list(ALL, 'review_requested'));
-  const authored = $derived(reviews.list(ALL, 'authored'));
-
   $effect(() => {
-    untrack(() => {
-      void tickets.load(ALL, null);
-      void reviews.load(ALL, 'review_requested');
-      void reviews.load(ALL, 'authored');
-    });
+    untrack(() => void refreshNow());
   });
 
   function refresh(): void {
-    void tickets.load(ALL, null, true);
-    void reviews.load(ALL, 'review_requested', true);
-    void reviews.load(ALL, 'authored', true);
+    void refreshNow(true);
   }
 
-  const order = $derived(
-    projects.list.filter((p) => p.open && !p.builtin).map((p) => ({ id: p.id, name: p.name })),
-  );
-  const needing = $derived(sessions.needingInput);
-  const noData = $derived(!myTickets.data && !requested.data && !authored.data);
-  const loading = $derived((myTickets.loading || requested.loading || authored.loading) && noData);
-  const firstError = $derived(myTickets.error ?? requested.error ?? authored.error);
-  const stale = $derived(myTickets.stale || requested.stale || authored.stale);
-  const fetchedAt = $derived(myTickets.fetchedAt ?? requested.fetchedAt ?? authored.fetchedAt);
+  let filter = $state('');
+  let filtering = $state(false);
+  let filterEl = $state<HTMLInputElement>();
+
+  const summary = $derived(nowSummary());
+  const stale = $derived(asOf());
+  const lists = $derived([
+    tickets.list(ALL, null),
+    reviews.list(ALL, 'review_requested'),
+    reviews.list(ALL, 'authored'),
+  ]);
+  const noData = $derived(lists.every((l) => !l.data) && work.all.length === 0);
+  const loading = $derived(lists.some((l) => l.loading) && noData);
+  const firstError = $derived(lists.find((l) => l.error)?.error ?? null);
   const accountErrors = $derived.by(() => {
     const seen: Record<string, AccountError> = {};
-    for (const l of [myTickets, requested, authored])
-      for (const e of l.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
+    for (const l of lists) for (const e of l.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
     return Object.values(seen);
   });
 
-  type Row =
-    | { type: 'section'; id: string; label: string; count: number }
-    | { type: 'group'; id: string; label: string; count: number }
-    | { type: 'empty'; id: string; label: string }
-    | { type: 'ticket'; id: string; item: TicketItem }
-    | { type: 'review'; id: string; item: ReviewItem; mine: boolean }
-    | { type: 'session'; id: string; session: SessionInfo };
+  interface View {
+    lamp: LampKind;
+    id: string;
+    title: string;
+    project: string | null;
+    color: string | null;
+    reason: string;
+    meta: string[];
+    age: string;
+    /** Second line of the selected row. */
+    more: string;
+    /** Ghost buttons: key + label. */
+    actions: { key: string; label: string }[];
+  }
 
-  const rows = $derived.by((): Row[] => {
-    const out: Row[] = [];
-    const tItems = myTickets.data?.items ?? [];
-    out.push({ type: 'section', id: 's:tickets', label: 'My tickets', count: tItems.length });
-    if (tItems.length === 0) out.push({ type: 'empty', id: 'e:tickets', label: 'Nothing assigned to you.' });
-    for (const g of groupByProject(tItems, (i) => i.project_ids, order)) {
-      out.push({ type: 'group', id: `g:tickets:${g.id}`, label: g.name, count: g.items.length });
-      for (const item of g.items) out.push({ type: 'ticket', id: `t:${ticketKey(item.ticket.ref)}`, item });
+  function projectOf(ids: readonly string[]): { name: string | null; color: string | null } {
+    const p = ids[0] ? projects.byId(ids[0]) : null;
+    return { name: p?.name ?? null, color: p?.color ?? null };
+  }
+
+  const age = (iso: string): string => relativeTime(Date.parse(iso));
+
+  // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket.
+  const NOW_KEYS: Partial<Record<string, WorkActionId>> = {
+    p: 'ship',
+    x: 'mark_reviewed',
+    f: 'fix',
+    r: 'rebase',
+    c: 'rebase_continue',
+    a: 'rebase_abort',
+    n: 'conflicts',
+    s: 'skip_step',
+  };
+
+  function view(row: NowRow): View {
+    switch (row.type) {
+      case 'work': {
+        const { item, phase } = row;
+        const git = work.git[item.id];
+        const pr = prOf(item);
+        const meta: string[] = [];
+        if (git && (git.insertions || git.deletions))
+          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' dirty' : ''}`);
+        else if (pr) meta.push(`#${pr.ref.number}`);
+        if (git?.behind) meta.push(`↓${git.behind} ${item.base}`);
+        const p = projectOf([item.project_id]);
+        const actions = [
+          ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
+          ...WORK_ACTIONS.filter(
+            (a) =>
+              a.key && Object.values(NOW_KEYS).includes(a.id) && blockedReason(a.id, item, phase) === null,
+          ).map((a) => ({ key: a.key!, label: a.label({ item, phase }) })),
+          { key: 'g', label: 'Go to work tab' },
+        ];
+        const preview = claudeOf(item)?.claude?.preview ?? '';
+        const more =
+          (phase.section === 'needs_you' || phase.section === 'to_review') && preview
+            ? preview
+            : phase.detail;
+        return {
+          lamp: phase.lamp,
+          id: workKey(item),
+          title: workTitle(item),
+          project: p.name,
+          color: p.color,
+          reason: phase.section === 'needs_you' && phase.detail ? phase.detail : phase.label,
+          meta,
+          age: age(item.created_at),
+          more,
+          actions,
+        };
+      }
+      case 'session': {
+        const s = row.session;
+        const p = projectOf([s.project_id]);
+        const preview = s.claude?.preview ?? '';
+        return {
+          lamp: 'needs_input',
+          id: s.kind.type,
+          title: sessionLabel(s),
+          project: p.name,
+          color: p.color,
+          reason: preview || 'Needs input',
+          meta: [],
+          age: age(s.created_at),
+          more: preview,
+          actions: [{ key: 'enter', label: 'Go to session' }],
+        };
+      }
+      case 'review': {
+        const r = row.review.review;
+        const p = projectOf(row.review.project_ids);
+        const stat = r.additions !== null && r.deletions !== null ? [`+${r.additions} −${r.deletions}`] : [];
+        return {
+          lamp: 'none',
+          id: `#${r.ref.number}`,
+          title: r.title,
+          project: p.name ?? r.ref.repo,
+          color: p.color,
+          // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
+          reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
+          meta: stat,
+          age: age(r.updated_at),
+          more: `${r.source_branch} into ${r.target_branch}${r.ci === 'failure' ? ', checks failed' : ''}`,
+          actions: [
+            { key: 'enter', label: 'Open review' },
+            ...(row.mine ? [] : [{ key: 's', label: 'Review locally' }]),
+            { key: 'o', label: 'Open on host' },
+          ],
+        };
+      }
+      case 'ticket': {
+        const t = row.ticket.ticket;
+        const p = projectOf(row.ticket.project_ids);
+        return {
+          lamp: 'none',
+          id: t.ref.key,
+          title: t.title,
+          project: p.name,
+          color: p.color,
+          reason: t.status.name,
+          meta: t.priority ? [t.priority] : [],
+          age: age(t.updated_at),
+          more: t.assignee?.name ?? '',
+          actions: [
+            { key: 'enter', label: 'Start work' },
+            { key: 'o', label: 'Open in tracker' },
+          ],
+        };
+      }
     }
+  }
 
-    const rItems = requested.data?.items ?? [];
-    out.push({ type: 'section', id: 's:requested', label: 'Review requests', count: rItems.length });
-    if (rItems.length === 0) out.push({ type: 'empty', id: 'e:requested', label: 'No review requests.' });
-    for (const g of groupByProject(rItems, (i) => i.project_ids, order)) {
-      out.push({ type: 'group', id: `g:requested:${g.id}`, label: g.name, count: g.items.length });
-      for (const item of g.items)
-        out.push({ type: 'review', id: `r:${reviewKey(item.review.ref)}`, item, mine: false });
+  function matches(row: NowRow, q: string): boolean {
+    if (!q) return true;
+    const v = view(row);
+    const branch =
+      row.type === 'work' ? row.item.branch : row.type === 'review' ? row.review.review.source_branch : '';
+    return `${v.id} ${v.title} ${v.project ?? ''} ${branch}`.toLowerCase().includes(q.toLowerCase());
+  }
+
+  type Line =
+    | { type: 'section'; id: string; section: Section; count: number }
+    | { type: 'row'; id: string; row: NowRow }
+    | { type: 'detail'; id: string; row: NowRow }
+    | { type: 'more'; id: string; count: number };
+
+  let selId = $state<string | null>(null);
+
+  const visible = $derived(
+    summary.sections
+      .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, filter)) }))
+      .filter((s) => s.rows.length > 0 || s.more > 0),
+  );
+  const selectable = $derived(visible.flatMap((s) => s.rows));
+  const cur = $derived(selectable.find((r) => r.id === selId) ?? selectable[0] ?? null);
+
+  const lines = $derived.by((): Line[] => {
+    const out: Line[] = [];
+    for (const s of visible) {
+      out.push({ type: 'section', id: `s:${s.id}`, section: s, count: s.rows.length + s.more });
+      for (const row of s.rows) {
+        out.push({ type: 'row', id: row.id, row });
+        if (row === cur) out.push({ type: 'detail', id: `d:${row.id}`, row });
+      }
+      if (s.more > 0) out.push({ type: 'more', id: `m:${s.id}`, count: s.more });
     }
-
-    const aItems = authored.data?.items ?? [];
-    out.push({ type: 'section', id: 's:authored', label: 'My PRs', count: aItems.length });
-    if (aItems.length === 0) out.push({ type: 'empty', id: 'e:authored', label: 'No open pull requests.' });
-    for (const g of groupByProject(aItems, (i) => i.project_ids, order)) {
-      out.push({ type: 'group', id: `g:authored:${g.id}`, label: g.name, count: g.items.length });
-      for (const item of g.items)
-        out.push({ type: 'review', id: `p:${reviewKey(item.review.ref)}`, item, mine: true });
-    }
-
-    out.push({ type: 'section', id: 's:input', label: 'Needs input', count: needing.length });
-    if (needing.length === 0) out.push({ type: 'empty', id: 'e:input', label: 'No session needs input.' });
-    for (const session of needing) out.push({ type: 'session', id: `n:${session.id}`, session });
     return out;
   });
 
-  const selectable = $derived(
-    rows.filter((r) => r.type === 'ticket' || r.type === 'review' || r.type === 'session'),
-  );
-  let selId = $state<string | null>(null);
-  const cur = $derived(selectable.find((r) => r.id === selId) ?? selectable[0] ?? null);
   let vlist = $state<{ scrollToIndex(i: number): void }>();
   let root = $state<HTMLDivElement>();
 
   $effect(() => {
-    if (cur) vlist?.scrollToIndex(rows.indexOf(cur));
+    if (cur) vlist?.scrollToIndex(lines.findIndex((l) => l.type === 'row' && l.row === cur));
   });
 
   $effect(() => {
     if (!focused || cur?.type !== 'ticket') return;
-    selectTicket(cur.item.ticket.ref, cur.item.project_ids[0] ?? projectId);
+    selectTicket(cur.ticket.ticket.ref, cur.ticket.project_ids[0] ?? null);
     return () => selectTicket(null, null);
   });
 
   $effect(() => {
-    if (focused && root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
+    if (focused && !filtering && root && !root.contains(document.activeElement))
+      root.focus({ preventScroll: true });
   });
 
   function step(delta: number): void {
@@ -129,50 +249,37 @@
     if (next) selId = next.id;
   }
 
-  async function goToSession(s: SessionInfo): Promise<void> {
-    try {
-      await projects.activate(s.project_id);
-      await layout.ensure(s.project_id);
-      const l = layout.get(s.project_id);
-      const loc = l ? findSession(l, s.id) : null;
-      if (loc)
-        layout.update(s.project_id, (x) => activateTab(focusPane(x, loc.tabId, loc.paneId), loc.tabId));
-      else toasts.info(`${s.name} is not shown in a pane, find it in the palette`);
-    } catch (err) {
-      toasts.error(err, 'Open session');
-    }
-  }
-
-  async function open(r: Row | null): Promise<void> {
-    if (!r) return;
-    if (r.type === 'session') {
-      await goToSession(r.session);
-      return;
-    }
-    if (r.type !== 'ticket' && r.type !== 'review') return;
-    const pid = r.item.project_ids[0] ?? projects.activeId ?? projectId;
-    try {
-      if (pid !== projects.activeId) await projects.activate(pid);
-    } catch (err) {
-      toasts.error(err, 'Switch project');
-      return;
-    }
-    if (r.type === 'ticket') await openContent(pid, { kind: 'ticket_detail', ticket: r.item.ticket.ref });
-    else await openContent(pid, { kind: 'review_detail', review: r.item.review.ref });
-  }
-
-  function browse(r: Row | null): void {
-    const url = r?.type === 'ticket' ? r.item.ticket.url : r?.type === 'review' ? r.item.review.url : null;
+  function browse(row: NowRow): void {
+    const url =
+      row.type === 'ticket'
+        ? row.ticket.ticket.url
+        : row.type === 'review'
+          ? row.review.review.url
+          : row.type === 'work'
+            ? (row.item.pr_url ?? prOf(row.item)?.url ?? null)
+            : null;
     if (url) openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
+    else if (row.type === 'work') void runWorkAction('open_ticket', row.item);
   }
 
-  function start(r: Row | null): void {
-    if (r?.type === 'ticket') void startWorkOnTicket(r.item.ticket.ref, r.item.project_ids[0] ?? null);
-    else if (r?.type === 'review') void reviewLocally(r.item.review.ref, r.item.project_ids[0] ?? null);
+  function letter(row: NowRow, key: string): void {
+    if (key === 'o') return browse(row);
+    if (row.type === 'work') {
+      const id = NOW_KEYS[key];
+      if (id) void runWorkAction(id, row.item);
+      return;
+    }
+    if (key === 's' && row.type === 'ticket') void enterRow(row);
+    else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
+  }
+
+  function showAllOnBoard(): void {
+    const pid = projects.activeId ?? projects.list.find((p) => p.open && !p.builtin)?.id;
+    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'board' });
   }
 
   function onkeydown(e: KeyboardEvent): void {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || filtering) return;
     switch (e.key) {
       case 'j':
       case 'ArrowDown':
@@ -189,31 +296,40 @@
         if (selectable.at(-1)) selId = selectable.at(-1)!.id;
         break;
       case 'Enter':
-        void open(cur);
+        if (cur) void enterRow(cur);
         break;
-      case 'o':
-        browse(cur);
+      case 'g':
+        if (cur) void goToRow(cur);
         break;
-      case 's':
-        start(cur);
+      case '/':
+        filtering = true;
+        queueMicrotask(() => filterEl?.focus());
         break;
       case 'R':
         refresh();
         break;
+      case 'N':
+        toasts.info('New work item: not available yet');
+        break;
       default:
-        return;
+        if (!cur || !'pxfrcanso'.includes(e.key) || e.key.length !== 1) return;
+        letter(cur, e.key);
     }
     e.preventDefault();
   }
 
-  const empty = $derived(
-    !loading &&
-      (myTickets.data?.items.length ?? 0) === 0 &&
-      (requested.data?.items.length ?? 0) === 0 &&
-      (authored.data?.items.length ?? 0) === 0 &&
-      needing.length === 0 &&
-      !noData,
-  );
+  function onFilterKey(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      filter = '';
+      filtering = false;
+      root?.focus();
+    } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      filtering = false;
+      root?.focus();
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -223,19 +339,34 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label="Inbox"
+  aria-label="Now"
   {onkeydown}
 >
   <header class="bar">
-    <span class="title">Inbox</span>
+    <span class="title">Now</span>
+    <span class="split" data-testid="now-header" title={summary.header}>
+      {#each summary.parts as part (part)}<span>{part}</span>{/each}
+    </span>
+    {#if stale}<span class="asof" data-testid="now-asof">as of {stale.at}</span>{/if}
     <span class="spacer"></span>
+    {#if filtering || filter}
+      <input
+        bind:this={filterEl}
+        bind:value={filter}
+        class="filter"
+        placeholder="Filter id, title, project, branch"
+        aria-label="Filter"
+        onkeydown={onFilterKey}
+        onblur={() => (filtering = false)}
+      />
+    {/if}
     <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
   </header>
 
   {#if loading}
-    <Loading label="Loading inbox" />
+    <Loading label="Loading Now" />
   {:else if noData && firstError}
-    <ErrorState error={firstError} title="Could not load the inbox" onretry={refresh}>
+    <ErrorState error={firstError} title="Could not load Now" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
           {isAuthError(firstError) ? 'Re-authenticate' : 'Open settings'}
@@ -243,71 +374,63 @@
       {/snippet}
     </ErrorState>
   {:else}
-    <StateBanner
-      {stale}
-      {fetchedAt}
-      error={noData ? null : firstError}
-      errors={accountErrors}
-      onretry={refresh}
-    />
-    {#if empty && accountErrors.length === 0}
-      <EmptyState icon="inbox" title="Inbox zero" body="No tickets, review requests or sessions need you.">
-        {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
+    <StateBanner error={noData ? null : firstError} errors={accountErrors} onretry={refresh} />
+    {#if lines.length === 0}
+      <EmptyState
+        icon="inbox"
+        title={filter ? `Nothing matches "${filter}".` : 'Nothing waiting and nothing up next.'}
+        body=""
+      >
+        {#snippet actions()}
+          {#if filter}<Button onclick={() => (filter = '')}>Clear filter</Button>{:else}<Button
+              onclick={refresh}>Refresh</Button
+            >{/if}
+        {/snippet}
       </EmptyState>
     {:else}
       <div class="list">
-        <VirtualList
-          bind:this={vlist}
-          items={rows}
-          itemHeight={ROW_HEIGHT}
-          key={(r) => r.id}
-          label="Inbox items"
-        >
-          {#snippet row(r)}
-            {#if r.type === 'section'}
-              <div class="section" role="heading" aria-level="2" data-section={r.id}>
-                {r.label}
-                <Badge>{r.count}</Badge>
+        <VirtualList bind:this={vlist} items={lines} itemHeight={ROW_HEIGHT} key={(l) => l.id} label="Now">
+          {#snippet row(l)}
+            {#if l.type === 'section'}
+              <div class="section" role="heading" aria-level="2" data-section={l.section.id}>
+                <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
+                {l.section.label}
+                <span class="count">{l.count}</span>
               </div>
-            {:else if r.type === 'group'}
-              <div class="group" role="heading" aria-level="3" data-group={r.label}>
-                {r.label} <span class="count">{r.count}</span>
-              </div>
-            {:else if r.type === 'empty'}
-              <div class="empty">{r.label}</div>
-            {:else}
-              <button
-                type="button"
-                tabindex="-1"
-                class="row"
-                class:selected={cur === r}
-                aria-current={cur === r ? 'true' : undefined}
-                onclick={() => (selId = r.id)}
-                ondblclick={() => void open(r)}
-              >
-                {#if r.type === 'ticket'}
-                  <span class="key">{r.item.ticket.ref.key}</span>
-                  <span class="ttl">{r.item.ticket.title}</span>
-                  <Badge tone={statusTone(r.item.ticket.status.category)}>{r.item.ticket.status.name}</Badge>
-                  <span class="meta">{relativeTime(Date.parse(r.item.ticket.updated_at))}</span>
-                {:else if r.type === 'review'}
-                  {@const ci = ciGlyph(r.item.review.ci)}
-                  {@const dec = decisionInfo(r.item.review.decision)}
-                  <span class="ci {ci.tone}" role="img" aria-label={ci.label} title={ci.label}
-                    >{ci.glyph}</span
-                  >
-                  <span class="ttl">{r.item.review.title}</span>
-                  {#if r.item.review.draft}<Badge>draft</Badge>{/if}
-                  {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-                  <span class="meta">{r.mine ? r.item.review.ref.repo : r.item.review.author.name}</span>
-                  <span class="meta">{relativeTime(Date.parse(r.item.review.updated_at))}</span>
-                {:else}
-                  <Badge tone="danger">needs input</Badge>
-                  <span class="ttl">{r.session.name}</span>
-                  <span class="meta">{projects.byId(r.session.project_id)?.name ?? r.session.project_id}</span
-                  >
-                {/if}
+            {:else if l.type === 'more'}
+              <button type="button" tabindex="-1" class="row moreline" onclick={showAllOnBoard}>
+                {l.count} more, show all on Board
               </button>
+            {:else}
+              {@const v = view(l.row)}
+              {#if l.type === 'row'}
+                <button
+                  type="button"
+                  tabindex="-1"
+                  class="row"
+                  class:selected={cur === l.row}
+                  aria-current={cur === l.row ? 'true' : undefined}
+                  data-row={l.row.id}
+                  style:--hue={v.color ?? 'transparent'}
+                  onclick={() => (selId = l.row.id)}
+                  ondblclick={() => void enterRow(l.row)}
+                >
+                  <span class="slot"><Lamp level={v.lamp} /></span>
+                  <span class="id">{v.id}</span>
+                  <span class="ttl">{v.title}</span>
+                  {#if v.project}<span class="proj">{v.project}</span>{/if}
+                  <span class="reason">{v.reason}</span>
+                  {#each v.meta as m (m)}<span class="meta">{m}</span>{/each}
+                  <span class="meta age">{v.age}</span>
+                </button>
+              {:else}
+                <div class="row detail" style:--hue={v.color ?? 'transparent'} data-testid="now-detail">
+                  <span class="msg" title={v.more}>{v.more}</span>
+                  {#each v.actions as a (a.key)}
+                    <span class="ghost"><Kbd chord={a.key} />{a.label}</span>
+                  {/each}
+                </div>
+              {/if}
             {/if}
           {/snippet}
         </VirtualList>
@@ -316,7 +439,7 @@
   {/if}
 
   <footer class="hints" aria-hidden="true">
-    j/k move · Enter open · o browser · s start work / review locally · R refresh
+    j/k move, Enter next action, g go, o open on host, / filter, R refresh
   </footer>
 </div>
 
@@ -338,17 +461,47 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-3);
+    gap: var(--k-space-4);
+    min-height: 30px;
+    padding: 0 var(--k-space-3);
     border-bottom: 1px solid var(--k-border);
+    background: var(--k-bg-elev);
   }
 
   .title {
     font-weight: 600;
   }
 
+  .split {
+    display: inline-flex;
+    gap: var(--k-space-4);
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--k-font-size-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--k-fg-muted);
+    white-space: nowrap;
+  }
+
+  .asof {
+    font-size: var(--k-font-size-xs);
+    color: var(--k-warn);
+  }
+
   .spacer {
     flex: 1;
+  }
+
+  .filter {
+    width: 220px;
+    height: 22px;
+    padding: 0 var(--k-space-2);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg);
+    color: var(--k-fg);
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-sm);
   }
 
   .list {
@@ -356,35 +509,28 @@
     min-height: 0;
   }
 
-  .section,
-  .group,
-  .empty {
+  .section {
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
     height: 100%;
     padding: 0 var(--k-space-3);
-  }
-
-  .section {
-    background: var(--k-bg-sunken);
-    font-weight: 600;
-  }
-
-  .group {
-    padding-left: var(--k-space-4);
     font-size: var(--k-font-size-sm);
+    font-weight: 600;
     color: var(--k-fg-muted);
   }
 
   .count {
-    font-size: var(--k-font-size-xs);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
     color: var(--k-fg-subtle);
   }
 
-  .empty {
-    padding-left: var(--k-space-4);
-    color: var(--k-fg-subtle);
+  .slot {
+    display: inline-flex;
+    justify-content: center;
+    flex: none;
+    width: 10px;
   }
 
   .row {
@@ -393,11 +539,13 @@
     gap: var(--k-space-2);
     width: 100%;
     height: 100%;
-    padding: 0 var(--k-space-3) 0 var(--k-space-5);
+    padding: 0 var(--k-space-3);
     border: 0;
+    box-shadow: inset 3px 0 0 var(--hue);
     background: transparent;
     color: inherit;
     font: inherit;
+    font-size: var(--k-font-size-md, 13px);
     text-align: left;
     cursor: default;
   }
@@ -406,35 +554,20 @@
     background: var(--k-bg-hover);
   }
 
-  .selected {
+  .selected,
+  .detail {
     background: var(--k-bg-selected);
   }
 
-  .key {
+  .id {
     flex: none;
-    min-width: 72px;
+    width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
-  }
-
-  .ci {
-    flex: none;
-    width: 16px;
-    text-align: center;
-    font-weight: 700;
-  }
-
-  .ci.ok {
-    color: var(--k-ok);
-  }
-
-  .ci.danger {
-    color: var(--k-danger);
-  }
-
-  .ci.warn {
-    color: var(--k-warn);
   }
 
   .ttl {
@@ -445,10 +578,62 @@
     white-space: nowrap;
   }
 
+  .proj {
+    flex: none;
+    font-size: 11px;
+    color: var(--k-fg-subtle);
+  }
+
+  .reason {
+    flex: none;
+    max-width: 36ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg);
+  }
+
   .meta {
     flex: none;
     font-size: var(--k-font-size-xs);
+    font-variant-numeric: tabular-nums;
     color: var(--k-fg-subtle);
+  }
+
+  .age {
+    width: 64px;
+    text-align: right;
+  }
+
+  .detail {
+    gap: var(--k-space-3);
+    padding-left: calc(var(--k-space-3) + 10px + 76px + 2 * var(--k-space-2));
+  }
+
+  .msg {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-1);
+    flex: none;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
+  }
+
+  .moreline {
+    padding-left: calc(var(--k-space-3) + 10px + var(--k-space-2));
+    color: var(--k-accent);
+    cursor: pointer;
   }
 
   .hints {

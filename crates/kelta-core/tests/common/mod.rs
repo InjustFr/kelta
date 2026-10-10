@@ -10,7 +10,7 @@ use kelta_core::clipboard::MemClipboard;
 use kelta_core::{ConfigBackend, Core, CoreDeps};
 use kelta_http::{HttpCtx, ProviderFactory};
 use kelta_proto::api::{CodeHost, SecretResolver, SettingsSource, Tracker};
-use kelta_proto::codehost::{CodeHostKind, PrCreate, Review, ReviewDetail, ReviewQuery, ReviewRef};
+use kelta_proto::codehost::{CodeHostKind, PrCreate, PrState, Review, ReviewDetail, ReviewQuery, ReviewRef};
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
@@ -162,11 +162,18 @@ pub struct ListHost {
     pub calls: Mutex<u32>,
     /// `changed_since_last` answer (the notifications-ETag gate).
     pub changed: Mutex<bool>,
+    /// PRs no longer open (`get` answers their state; `list_reviews` omits them).
+    pub ended: Mutex<Vec<(Review, PrState)>>,
 }
 
 impl ListHost {
     pub fn new(reviews: Vec<Review>) -> Arc<Self> {
-        Arc::new(Self { reviews: Mutex::new(reviews), calls: Mutex::new(0), changed: Mutex::new(true) })
+        Arc::new(Self {
+            reviews: Mutex::new(reviews),
+            calls: Mutex::new(0),
+            changed: Mutex::new(true),
+            ended: Mutex::new(Vec::new()),
+        })
     }
 }
 
@@ -183,10 +190,28 @@ impl CodeHost for ListHost {
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
         *self.calls.lock() += 1;
-        Ok(self.reviews.lock().iter().filter(|r| r.kind == q.kind).cloned().collect())
+        Ok(self
+            .reviews
+            .lock()
+            .iter()
+            .filter(|r| r.kind == q.kind && (q.include_drafts || !r.draft))
+            .cloned()
+            .collect())
     }
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
-        Err(KeltaError::not_found(format!("{}", r.number)))
+        let open = self.reviews.lock().iter().find(|x| &x.r#ref == r).map(|x| (x.clone(), PrState::Open));
+        let (review, state) = open
+            .or_else(|| self.ended.lock().iter().find(|(x, _)| &x.r#ref == r).cloned())
+            .ok_or_else(|| KeltaError::not_found(format!("{}", r.number)))?;
+        Ok(ReviewDetail {
+            review,
+            state,
+            body_html: String::new(),
+            reviewers: vec![],
+            pending_comments: 0,
+            checks: vec![],
+            files: vec![],
+        })
     }
     async fn approve(&self, _r: &ReviewRef, _head_sha: &str) -> Result<(), KeltaError> {
         Ok(())
@@ -223,14 +248,19 @@ pub struct H {
 
 /// Executable stubs on the test PATH (`claude`, `nvim`, `lazygit`).
 pub fn bin_dir(root: &Path) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let bin = root.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["claude", "nvim", "lazygit"] {
-        let p = bin.join(name);
-        std::fs::write(&p, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    // Written by a child `sh`: a write fd held here leaks into concurrent forks -> ETXTBSY (Linux).
+    let ok = std::process::Command::new("sh")
+        .args([
+            "-c",
+            "for f; do printf '#!/bin/sh\\nexit 0\\n' > \"$f\" && chmod 755 \"$f\" || exit 1; done",
+            "sh",
+        ])
+        .args(["claude", "nvim", "lazygit"].map(|n| bin.join(n)))
+        .status()
+        .unwrap();
+    assert!(ok.success());
     bin
 }
 
@@ -273,6 +303,7 @@ pub fn account(kind: AccountKind) -> AccountConfig {
         text_format: Default::default(),
         poll_secs: None,
         web_url: None,
+        plugin: None,
     }
 }
 
@@ -303,4 +334,14 @@ pub async fn settle() {
     for _ in 0..20 {
         tokio::task::yield_now().await;
     }
+}
+
+/// One request over the ctl socket (the path `kelta-ctl` takes in production).
+pub async fn ctl_send(sock: &Path, req: serde_json::Value) -> serde_json::Value {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let mut s = tokio::net::UnixStream::connect(sock).await.unwrap();
+    s.write_all(format!("{req}\n").as_bytes()).await.unwrap();
+    let mut line = String::new();
+    tokio::io::BufReader::new(s).read_line(&mut line).await.unwrap();
+    serde_json::from_str(&line).unwrap()
 }

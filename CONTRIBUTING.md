@@ -50,6 +50,9 @@ It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fm
 
 `scripts/linux-check.sh` repeats the checks on Ubuntu 24.04 (`docker/ubuntu-build.Dockerfile`), which is the
 primary Linux target. Run it when you touch `platform/`, `window/`, packaging or anything with `cfg(target_os)`.
+`scripts/linux-gui-check.sh` runs the release app under headless sway in the same image and measures the gate G2
+latency budgets with kelta-bench (slow; run it when you touch the terminal path or Linux graphics). Its timings
+follow the host load, so measure on an idle machine.
 
 ## CI
 
@@ -63,18 +66,21 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    or to branches.
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
-4. Nightly builds run once a day (03:17 UTC), and only when `main` moved since the last one. Tags `v*` build
-   the release.
+4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
+   macOS dmg here and the Linux deb + AppImage (arm64, and amd64 under QEMU) in Docker, moves the `nightly`
+   tag to HEAD and uploads to the prerelease. Tags `v*` build the release.
 
 ## Packaging and benchmarks
 
 - `bash packaging/build.sh` builds the installers with `packaging/tauri.release.json`. It needs the
   `kelta-ctl` sidecar, which the script builds.
 - `cargo run -p kelta-bench -- --scenario idle-3p10s --dry-run` checks the harness against fixtures. Real runs
-  need a release build of the app (`--app target/release/kelta`) and, on macOS, no running Kelta (the runtime
-  socket path is shared).
+  need a release build embedding the UI (`pnpm --filter @kelta/ui run build`, then
+  `cargo build --release -p kelta-desktop --features tauri/custom-protocol` and
+  `cargo build --release -p kelta-bench -p tui-sim`). The harness runs the app in a temp HOME with its own
+  `KELTA_RUNTIME_DIR`, so a Kelta you are using is never touched.
 - `node bench/bundle-size.mjs ui/dist` checks the JavaScript budgets.
 
 ## Commits
 
-Conventional commits (`feat(scope): ...`). The nightly workflow publishes `main` once a day.
+Conventional commits (`feat(scope): ...`).

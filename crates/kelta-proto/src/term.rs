@@ -146,9 +146,9 @@ pub enum ClipboardKind {
     Primary,
 }
 
-/// Events from a terminal session to core (`TerminalEvents::on_event`).
+/// Events from a terminal session to core (`TerminalEvents::on_event`; keltad sends them as JSON).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TerminalEvent {
     Title(String),
     /// OSC 7.
@@ -215,6 +215,12 @@ pub struct TerminalLimits {
     /// History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
     pub view_scrollback: u32,
     pub keyboard_protocol: KeyboardProtocol,
+    /// On-disk history log (`terminal.history_log`; ARCHITECTURE §9.6).
+    pub history_log: bool,
+    /// Per-session log cap in MiB (`terminal.history_log_mb`; 0 = default 16).
+    pub history_log_mb: u32,
+    /// Cap of all logs in MiB (`terminal.history_log_total_mb`; 0 = default 512).
+    pub history_log_total_mb: u32,
 }
 
 impl TerminalLimits {
@@ -224,8 +230,19 @@ impl TerminalLimits {
             memory_cap_mb: t.memory_cap_mb,
             view_scrollback: t.view_scrollback,
             keyboard_protocol: t.keyboard_protocol,
+            history_log: t.history_log,
+            history_log_mb: t.history_log_mb,
+            history_log_total_mb: t.history_log_total_mb,
         }
     }
+}
+
+/// One matching line of the on-disk history log (`session_history_search`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HistoryHit {
+    pub session_id: SessionId,
+    /// Plain text (ANSI stripped, wrapped rows joined).
+    pub line: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

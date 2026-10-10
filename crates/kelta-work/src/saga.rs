@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use kelta_proto::api::{CoreApi, Tracker};
-use kelta_proto::codehost::Review;
+use kelta_proto::codehost::{Review, ReviewKind};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, ToastAction, ToastLevel, bus};
 use kelta_proto::ext::{BlockingOutcome, ToolHandle};
@@ -23,14 +23,14 @@ use kelta_proto::model::{
     WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, SessionTemplate, Settings, TransitionTarget};
-use kelta_proto::tracker::{Assignee, Status, TicketRef};
+use kelta_proto::tracker::{Assignee, Status, TicketRef, Transition};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::claude::{self, ContextInfo, LaunchMode, LaunchSpec};
 use crate::layout::{self, SlotKind};
 use crate::plan::{self, TicketSnap};
-use crate::template::{Ctx, Mode, render, shell_quote, shell_words, slugify};
+use crate::template::{Ctx, Mode, render, render_shell, shell_quote, shell_words, slugify};
 use crate::{WorkService, editor, files, git};
 
 /// Default PTY size for sessions spawned before a view attaches (resized on attach).
@@ -164,6 +164,12 @@ impl WorkService {
         c.set("worktree", item.worktree.to_string_lossy().into_owned());
         c.set("branch", item.branch.clone());
         c.set("base", item.base.clone());
+        if let Some(WorkSource::Branch { task: Some(task), .. }) = j.plan.as_ref().map(|p| &p.source) {
+            c.set("task", task.clone());
+        }
+        // `editor.review_args`: own work diffs merge base to working tree, a review the PR's commits.
+        let range = format!("{}/{}", env.repo.remote, item.base);
+        c.set("range", if item.kind == WorkKind::Review { format!("{range}...HEAD") } else { range });
         if let Some(t) = &j.ticket {
             plan::add_ticket(&mut c, t);
             c.set("key", t.branch_key.clone());
@@ -186,7 +192,7 @@ impl WorkService {
         c
     }
 
-    /// Tab title: `KEY title`, `PR #n title` or the branch.
+    /// Tab title: `KEY title`, `PR #n title`, `wip title` (scratch) or the branch.
     pub(crate) fn tab_title(item: &WorkItem, j: &Journal) -> String {
         if let Some(t) = &j.ticket {
             return format!("{} {}", t.key, t.title);
@@ -200,7 +206,10 @@ impl WorkService {
         if let Some(r) = &item.review {
             return format!("#{}", r.number);
         }
-        item.branch.clone()
+        match &item.title {
+            Some(t) => format!("wip {t}"),
+            None => item.branch.clone(),
+        }
     }
 
     // ---- plan ------------------------------------------------------------------------------
@@ -275,6 +284,16 @@ impl WorkService {
             WorkSource::Review { review } => {
                 let host = core.code_host_for(&review.account).await?;
                 let r = host.get(review).await?.review;
+                // B2: my own PR is the work item on its head branch, never a `kelta/pr-N` checkout.
+                let existing = existing.or_else(|| plan::owner_of_pr(&items, &project, &r).cloned());
+                if existing.is_none() && r.kind == ReviewKind::Authored {
+                    // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
+                    let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
+                    let mut plan = Box::pin(self.build_plan(project_id, source)).await?;
+                    plan.base = r.target_branch.clone();
+                    plan.adopt_pr = Some(r.url.clone());
+                    return Ok(plan);
+                }
                 let repo = project
                     .repos
                     .iter()
@@ -318,13 +337,33 @@ impl WorkService {
                     existing.as_ref(),
                 ))
             }
-            WorkSource::Branch { name } => {
-                let repo_id =
-                    plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
-                        .ok_or_else(|| KeltaError::invalid("no repository"))?;
+            WorkSource::Branch { name, task, repo } => {
+                let repo_id = match repo {
+                    Some(r) => r.clone(),
+                    None => {
+                        plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
+                            .ok_or_else(|| KeltaError::invalid("no repository"))?
+                    }
+                };
                 let repo = repo_of(&project, &repo_id)?;
-                let branch = git::check_branch_name(&repo.path, name.trim()).await?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
+                ctx.set("task", task.clone().unwrap_or_default());
+                let branch = if name.trim().is_empty() {
+                    let title = task.as_deref().map(plan::task_title).unwrap_or_default();
+                    let slug = slugify(&title, slug_max);
+                    if slug.is_empty() {
+                        return Err(KeltaError::invalid("describe the task or name the branch"));
+                    }
+                    ctx.set("slug", slug);
+                    let raw = render(&settings.work.scratch_branch_template, &ctx, Mode::Strict)?;
+                    ctx.set("slug", "");
+                    plan::valid_branch(&repo.path, &raw).await?
+                } else {
+                    git::check_branch_name(&repo.path, name.trim()).await?
+                };
+                // The resolved branch (not the possibly empty name) identifies the item.
+                let by_branch = WorkSource::Branch { name: branch.clone(), task: None, repo: None };
+                let existing = plan::existing_for(&items, &by_branch).cloned();
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
                 ctx.set("branch", branch.clone());
@@ -335,6 +374,13 @@ impl WorkService {
                         plan::branch_exists(&repo.path, &branch).await?,
                     ),
                 };
+                // New work item: never adopt an existing branch or item behind the user's back.
+                if task.is_some() && (existing.is_some() || exists.is_some()) {
+                    let what = if existing.is_some() { "has a work item" } else { "already exists" };
+                    return Err(KeltaError::conflict(format!(
+                        "Branch {branch} {what}. Edit the branch name or the task's first line."
+                    )));
+                }
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "default", "standalone", &ctx);
                 let side = plan::side_effects(&settings, &project, false, &ctx);
@@ -378,10 +424,12 @@ impl WorkService {
         plan.worktree_path = path.clone();
         let has_claude =
             layout::slots(&template.layout).iter().any(|s| matches!(s.kind, SlotKind::Claude { .. }));
-        let (kind, ticket, review) = match &plan.source {
-            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None),
-            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone())),
-            WorkSource::Branch { .. } => (WorkKind::Branch, None, None),
+        let (kind, ticket, review, title) = match &plan.source {
+            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None, None),
+            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone()), None),
+            WorkSource::Branch { task, .. } => {
+                (WorkKind::Branch, None, None, task.as_deref().map(plan::task_title))
+            }
         };
         let mut item = WorkItem {
             id: WorkItemId::generate(),
@@ -397,10 +445,17 @@ impl WorkService {
             nvim_socket: None,
             session_ids: Vec::new(),
             tab_id: None,
-            pr_url: None,
+            pr_url: plan.adopt_pr.clone(),
             state: WorkState::Planned,
             steps: Vec::new(),
             created_at: kelta_proto::now_rfc3339(),
+            sent_threads: Vec::new(),
+            rebase: None,
+            title: title.filter(|t| !t.is_empty()),
+            pr_title_needs_key: false,
+            review_due: false,
+            claude_replied: false,
+            claude_at: None,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -408,7 +463,7 @@ impl WorkService {
             self.store.set_step(&item.id, step, StepStatus::Pending, None).await?;
         }
         item.steps = self.merged_steps(&item.id, &[]).await?;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         Ok(item.id)
     }
 
@@ -420,7 +475,7 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         item.state = WorkState::Starting;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         for step in WORK_STEPS {
             let status =
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
@@ -443,7 +498,7 @@ impl WorkService {
                     tracing::warn!(work_item = %id, step, error = %e.message, "start work step failed");
                     self.set_step(&mut item, step, StepStatus::Failed, Some(e.message.clone())).await?;
                     item.state = WorkState::Failed { step: (*step).to_owned(), message: e.message.clone() };
-                    self.save(&item).await?;
+                    self.save(&mut item).await?;
                     env.core.toast(Toast {
                         level: ToastLevel::Error,
                         text: format!("Start work failed at {step}: {}", e.message),
@@ -462,7 +517,7 @@ impl WorkService {
 
     pub(crate) async fn retry(&self, id: &WorkItemId, step: &str) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let (name, skip) = match step.strip_prefix("skip:") {
             Some(s) => (s, true),
             None => (step, false),
@@ -487,13 +542,16 @@ impl WorkService {
             self.save_journal(id, &j)?;
             self.set_step(&mut item, name, StepStatus::Pending, None).await?;
         }
-        if matches!(item.state, WorkState::Active | WorkState::PrOpen) {
+        if matches!(
+            item.state,
+            WorkState::Active | WorkState::PrOpen | WorkState::Merged { .. } | WorkState::PrClosed
+        ) {
             // Re-running a finished saga step keeps the item's state afterwards.
             let state = item.state.clone();
             let mut out = self.run_saga_locked(id).await?;
             if !matches!(out.state, WorkState::Failed { .. }) {
                 out.state = state;
-                self.save(&out).await?;
+                self.save(&mut out).await?;
             }
             return Ok(out);
         }
@@ -646,7 +704,10 @@ impl WorkService {
                 return Ok(Some(format!("fetched {spec}")));
             }
         }
-        match git::fetch(repo, remote, &[&item.base], timeout).await {
+        // An adopted PR's head branch comes from the remote.
+        let refs: Vec<&str> =
+            if item.pr_url.is_some() { vec![&item.base, &item.branch] } else { vec![&item.base] };
+        match git::fetch(repo, remote, &refs, timeout).await {
             Ok(()) => Ok(Some(format!("fetched {remote}/{}", item.base))),
             Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout) => {
                 Ok(Some(format!("offline: {}", e.message)))
@@ -663,6 +724,10 @@ impl WorkService {
     ) -> Result<Option<String>, KeltaError> {
         let repo = env.repo.path.as_path();
         let detail;
+        if !item.worktree.exists() {
+            // Deleted outside Kelta (Recreate): drop the stale registration first.
+            git::worktree_prune(repo).await?;
+        }
         if let Some(w) = git::worktree_at(repo, &item.worktree).await? {
             if w.branch.as_deref() != Some(item.branch.as_str()) {
                 return Err(KeltaError::conflict(format!(
@@ -694,7 +759,15 @@ impl WorkService {
                 git::worktree_add(repo, &item.worktree, &item.branch, None).await?;
             } else {
                 let remote_base = format!("{}/{}", env.repo.remote, item.base);
-                let start = if git::ref_exists(repo, &remote_base).await? {
+                let remote_branch = format!("{}/{}", env.repo.remote, item.branch);
+                // Only an adopted PR or a review starts from its remote branch: a stale same-named
+                // branch (merged and not deleted, a teammate's) must not seed a new item.
+                let from_remote = item.pr_url.is_some() || item.review.is_some();
+                let start = if from_remote
+                    && git::ref_exists(repo, &format!("refs/remotes/{remote_branch}")).await?
+                {
+                    remote_branch
+                } else if git::ref_exists(repo, &remote_base).await? {
                     remote_base
                 } else if git::ref_exists(repo, &item.base).await? {
                     item.base.clone()
@@ -1053,7 +1126,7 @@ impl WorkService {
                     .session_spawn(base_req(SessionKind::Shell, name.unwrap_or("shell").into()))
                     .await?;
                 if let Some(cmd) = command.as_ref().filter(|c| !c.trim().is_empty()) {
-                    let line = render(cmd, &ctx, Mode::Lenient)?;
+                    let line = render_shell(cmd, &ctx, Mode::Lenient)?;
                     env.core.session_write(&info.id, format!("{line}\r").as_bytes()).await?;
                 }
                 Ok(info.id)
@@ -1345,6 +1418,8 @@ impl WorkService {
                             opened.insert(op.leaf, c.clone());
                             last = Some(c);
                         }
+                        // External tools have no pane; the template leaf just stays empty.
+                        Ok(ToolHandle::External) => {}
                         Err(e) => env.core.toast(Toast::warn(format!("Tool {id}: {}", e.message))),
                     }
                     continue;
@@ -1369,7 +1444,7 @@ impl WorkService {
         Ok(())
     }
 
-    async fn step_effects(
+    pub(crate) async fn step_effects(
         &self,
         env: &Env,
         item: &mut WorkItem,
@@ -1501,20 +1576,39 @@ pub(crate) async fn transition_ticket(
     project: &ProjectId,
     work: &WorkItemId,
 ) -> Result<String, KeltaError> {
-    let current = tracker.get(t).await.ok().map(|d| d.ticket.status);
-    if let Some(cur) = &current
-        && status_matches(cur, target)
-    {
-        return Ok(format!("already {}", cur.name));
-    }
-    let transitions = tracker.transitions(t).await?;
-    let pick = transitions.iter().find(|tr| match target {
+    apply_transition(core, tracker, t, target, project, work, false).await
+}
+
+/// [`transition_ticket`] that never guesses: `Conflict` unless exactly one transition fits and
+/// it needs no fields (automatic Done move on merge, FLOW §4.6).
+pub(crate) async fn transition_ticket_strict(
+    core: &Arc<dyn CoreApi>,
+    tracker: &dyn Tracker,
+    t: &TicketRef,
+    target: &TransitionTarget,
+    project: &ProjectId,
+    work: &WorkItemId,
+) -> Result<String, KeltaError> {
+    apply_transition(core, tracker, t, target, project, work, true).await
+}
+
+/// Transitions leading to `target`; strict = exactly one and it needs no fields, else `Conflict`.
+pub(crate) fn pick_transition<'a>(
+    transitions: &'a [Transition],
+    target: &TransitionTarget,
+    strict: bool,
+) -> Result<&'a Transition, KeltaError> {
+    let mut fits = transitions.iter().filter(|tr| match target {
         TransitionTarget::Category { category } => &tr.to.category == category,
         TransitionTarget::Name { name } => {
             tr.to.name.eq_ignore_ascii_case(name) || tr.name.eq_ignore_ascii_case(name)
         }
     });
-    let Some(tr) = pick else {
+    let first = fits.next();
+    if strict && (fits.next().is_some() || first.is_some_and(|tr| tr.needs_fields)) {
+        return Err(KeltaError::conflict("several statuses fit; choose one"));
+    }
+    first.ok_or_else(|| {
         let label = match target {
             TransitionTarget::Category { category } => serde_json::to_value(category)
                 .ok()
@@ -1522,8 +1616,27 @@ pub(crate) async fn transition_ticket(
                 .unwrap_or_default(),
             TransitionTarget::Name { name } => name.clone(),
         };
-        return Err(KeltaError::not_found(format!("no transition to {label}")));
-    };
+        KeltaError::not_found(format!("no transition to {label}"))
+    })
+}
+
+async fn apply_transition(
+    core: &Arc<dyn CoreApi>,
+    tracker: &dyn Tracker,
+    t: &TicketRef,
+    target: &TransitionTarget,
+    project: &ProjectId,
+    work: &WorkItemId,
+    strict: bool,
+) -> Result<String, KeltaError> {
+    let current = tracker.get(t).await.ok().map(|d| d.ticket.status);
+    if let Some(cur) = &current
+        && status_matches(cur, target)
+    {
+        return Ok(format!("already {}", cur.name));
+    }
+    let transitions = tracker.transitions(t).await?;
+    let tr = pick_transition(&transitions, target, strict)?;
     let ticket = tracker.transition(t, &tr.id, None).await?;
     core.publish(
         BusEvent::new(
@@ -1534,4 +1647,30 @@ pub(crate) async fn transition_ticket(
         .with_work_item(work.clone()),
     );
     Ok(format!("moved to {}", ticket.status.name))
+}
+
+#[cfg(test)]
+mod tests {
+    use kelta_proto::samples::status;
+    use kelta_proto::tracker::StatusCategory;
+
+    use super::*;
+
+    fn tr(id: &str, name: &str, category: StatusCategory, needs_fields: bool) -> Transition {
+        Transition { id: id.into(), name: name.into(), to: status(id, name, category), needs_fields }
+    }
+
+    #[test]
+    fn strict_pick_never_guesses_between_done_statuses() {
+        let done = TransitionTarget::Category { category: StatusCategory::Done };
+        let several =
+            [tr("1", "Done", StatusCategory::Done, false), tr("2", "Won't Do", StatusCategory::Done, false)];
+        assert_eq!(pick_transition(&several, &done, true).unwrap_err().code, ErrorCode::Conflict);
+        assert_eq!(pick_transition(&several, &done, false).unwrap().id, "1", "interactive keeps first");
+        let by_name = TransitionTarget::Name { name: "won't do".into() };
+        assert_eq!(pick_transition(&several, &by_name, true).unwrap().id, "2");
+        let fields = [tr("1", "Done", StatusCategory::Done, true)];
+        assert_eq!(pick_transition(&fields, &done, true).unwrap_err().code, ErrorCode::Conflict);
+        assert_eq!(pick_transition(&[], &done, true).unwrap_err().code, ErrorCode::NotFound);
+    }
 }

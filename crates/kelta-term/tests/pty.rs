@@ -14,7 +14,7 @@ use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::ids::SessionId;
 use kelta_proto::settings::KeyboardProtocol;
 use kelta_proto::term::{
-    ClipboardKind, HIGH_WATERMARK, KillSignal, LoginEnv, TerminalEvent, TerminalLimits, TerminalPalette,
+    ClipboardKind, HIGH_WATERMARK, KillSignal, TerminalEvent, TerminalLimits, TerminalPalette,
 };
 use kelta_term::PtyTerminalHost;
 use kelta_term::backend::{PortablePty, PtyBackend, RustixPty};
@@ -27,8 +27,21 @@ fn backends() -> Vec<Arc<dyn PtyBackend>> {
     vec![Arc::new(PortablePty), Arc::new(RustixPty)]
 }
 
-fn host(b: Arc<dyn PtyBackend>) -> PtyTerminalHost {
-    PtyTerminalHost::with_backend(LoginEnv::inherited(), TerminalLimits::default(), b)
+/// Past every test's own deadlines (the flood allows itself 240 s).
+const WATCHDOG: Duration = Duration::from_secs(300);
+
+/// A host whose test aborts the binary instead of hanging when a call blocks forever.
+struct Host(PtyTerminalHost, #[allow(dead_code)] Watchdog);
+
+impl std::ops::Deref for Host {
+    type Target = PtyTerminalHost;
+    fn deref(&self) -> &PtyTerminalHost {
+        &self.0
+    }
+}
+
+fn host(b: Arc<dyn PtyBackend>) -> Host {
+    Host(PtyTerminalHost::with_backend(TerminalLimits::default(), b), Watchdog::arm(WATCHDOG))
 }
 
 fn sh(host: &PtyTerminalHost, id: &str, script: &str) -> Arc<Events> {
@@ -137,9 +150,13 @@ fn hup_ignored_then_kill() {
 fn resize_delivers_sigwinch() {
     for b in backends() {
         let h = host(b);
-        let ev =
-            sh(&h, "winch", "trap 'echo WINCH $(stty size)' WINCH; echo ready; while :; do sleep 0.05; done");
-        wait_text(&h, "winch", "ready");
+        let ev = sh(
+            &h,
+            "winch",
+            "trap 'echo WINCH $(stty size)' WINCH; echo ready $(stty size); while :; do sleep 0.05; done",
+        );
+        // The spawn size reaches the child (RustixPty: set after the slave is open).
+        wait_text(&h, "winch", "ready 24 80");
         h.resize(&SessionId::new("winch"), 100, 30).unwrap();
         wait_text(&h, "winch", "WINCH 30 100");
         let st = h.stats();
@@ -299,43 +316,38 @@ fn flood_keeps_inflight_bounded_and_ends_with_a_snapshot() {
         unacked: Arc::new(AtomicI64::new(0)),
         max_unacked: Arc::new(AtomicI64::new(0)),
     };
-    h.spawn(spec("flood", sim.to_str().unwrap(), &["--flood", "50"], 120, 40, ev.clone())).unwrap();
+    // 10 MiB = 40× HIGH: a child paced by the view would block long before the end.
+    h.spawn(spec("flood", sim.to_str().unwrap(), &["--flood", "10"], 120, 40, ev.clone())).unwrap();
     let info = h.attach(&id, 120, 40, Box::new(view.clone())).unwrap();
+    // The view acknowledges nothing until the child has exited: the child must run to completion
+    // all the same (never paced by the view) while in-flight bytes stay under HIGH.
     let t0 = Instant::now();
+    while ev.exited().is_none() {
+        assert!(h.stats().sessions[0].inflight <= HIGH_WATERMARK);
+        assert!(t0.elapsed() < Duration::from_secs(240), "flood did not finish");
+        #[allow(clippy::disallowed_methods)] // allowlisted: test pacing
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    // Then the view catches up.
     let mut seen: Vec<Vec<u8>> = Vec::new();
     let mut acked_bytes: u64 = 0;
-    let mut exit_at = None;
-    // Ack at most ~1 MiB/s: far slower than the child writes.
-    loop {
-        let batch: Vec<Vec<u8>> = std::mem::take(&mut *view.frames.lock().unwrap());
+    wait_until(T, || {
+        let batch = std::mem::take(&mut *view.frames.lock().unwrap());
         for f in batch {
             let n = frames::ack_len(&f);
-            #[allow(clippy::disallowed_methods)] // allowlisted: simulated slow renderer
-            std::thread::sleep(Duration::from_micros(u64::from(n) / 2 + 200));
             view.unacked.fetch_sub(i64::from(n), Ordering::SeqCst);
             h.ack(&id, info.generation, n);
             acked_bytes += u64::from(n);
             seen.push(f);
         }
-        let st = h.stats();
-        assert!(st.sessions[0].inflight <= HIGH_WATERMARK);
-        if ev.exited().is_some() && exit_at.is_none() {
-            exit_at = Some(t0.elapsed());
-        }
-        if seen.last().is_some_and(|f| f[0] == kelta_proto::term::FRAME_EXIT) {
-            break;
-        }
-        assert!(t0.elapsed() < Duration::from_secs(240), "flood did not finish");
-        #[allow(clippy::disallowed_methods)] // allowlisted: test pacing
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    let child_time = exit_at.unwrap();
+        seen.last().is_some_and(|f| f[0] == kelta_proto::term::FRAME_EXIT).then_some(())
+    })
+    .expect("no Exit frame after the view caught up");
     let max = view.max_unacked.load(Ordering::SeqCst);
     assert!(max <= i64::from(HIGH_WATERMARK), "in-flight peaked at {max}");
-    // The child was not paced by the view: it wrote 50 MiB while the view acknowledged far less.
-    let stats = h.stats();
-    assert!(stats.sessions[0].bytes_in >= 50 * 1024 * 1024);
-    assert!(acked_bytes < 50 * 1024 * 1024 / 4, "view consumed {acked_bytes} bytes in {child_time:?}");
+    let bytes_in = h.stats().sessions[0].bytes_in;
+    assert!(bytes_in >= 10 * 1024 * 1024);
+    assert!(acked_bytes < bytes_in / 4, "view consumed {acked_bytes} of {bytes_in} bytes");
     // Catch-up snapshots happened, and the stream ends with Snapshot + Exit.
     let snapshots = seen.iter().filter(|f| f[0] == kelta_proto::term::FRAME_SNAPSHOT).count();
     assert!(snapshots >= 2, "only {snapshots} snapshots");
@@ -519,7 +531,7 @@ fn acked_views_never_time_out() {
 fn scrollback_cap_shrinks_least_recently_viewed() {
     // 1 MiB cap; 4 sessions × 3000 lines × 80 cols × 24 B ≈ 5.5 MiB → trimmed to 500 lines.
     let limits = TerminalLimits { memory_cap_mb: 1, ..TerminalLimits::default() };
-    let h = PtyTerminalHost::with_backend(LoginEnv::inherited(), limits, Arc::new(PortablePty));
+    let h = PtyTerminalHost::with_backend(limits, Arc::new(PortablePty));
     let mut evs = Vec::new();
     for i in 0..4 {
         let id = format!("cap{i}");

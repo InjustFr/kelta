@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishMergedReport, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -384,6 +384,7 @@ export const statusChange: StatusChange = {
   "file_edited": null,
   "preview": "All tests pass.",
   "raw_event": "Stop",
+  "session_uuid": null,
   "status": "done"
 };
 
@@ -600,6 +601,7 @@ export const reviewPage: ReviewPage = {
         },
         "ci": "success",
         "decision": "review_required",
+        "decision_head": null,
         "deletions": 14,
         "draft": false,
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
@@ -615,6 +617,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
@@ -642,6 +645,7 @@ export const reviewDetail: ReviewDetail = {
       "path": "src/prices.rs"
     }
   ],
+  "pending_comments": 0,
   "review": {
     "additions": 120,
     "author": {
@@ -652,6 +656,7 @@ export const reviewDetail: ReviewDetail = {
     },
     "ci": "success",
     "decision": "review_required",
+    "decision_head": null,
     "deletions": 14,
     "draft": false,
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
@@ -667,6 +672,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
@@ -683,10 +689,12 @@ export const reviewDetail: ReviewDetail = {
         "name": "Ada Lovelace"
       }
     }
-  ]
+  ],
+  "state": "open"
 };
 
 export const startWorkPlan: StartWorkPlan = {
+  "adopt_pr": null,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "branch_exists": null,
@@ -727,15 +735,21 @@ export const startWorkPlan: StartWorkPlan = {
 export const workItem: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
+  "rebase": null,
   "repo_id": "api",
   "review": null,
+  "review_due": false,
+  "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -823,21 +837,28 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
 export const workItemFailed: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
+  "rebase": null,
   "repo_id": "api",
   "review": null,
+  "review_due": false,
+  "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -927,7 +948,128 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+};
+
+export const workItemMerged: WorkItem = {
+  "base": "main",
+  "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
+  "claude_replied": false,
+  "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "created_at": "2026-10-09T12:00:00Z",
+  "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
+  "kind": "ticket",
+  "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
+  "pr_url": "https://github.com/acme/shop-api/pull/90",
+  "project_id": "shop",
+  "rebase": null,
+  "repo_id": "api",
+  "review": null,
+  "review_due": false,
+  "sent_threads": [],
+  "session_ids": [
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
+  ],
+  "state": {
+    "detail": "choose Done status",
+    "kind": "merged"
+  },
+  "steps": [
+    {
+      "detail": null,
+      "status": "done",
+      "step": "before_start",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_ticket",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_base",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "worktree",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "include_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "layout",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "setup",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "editor",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "tracker_side_effects",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "persist",
+      "updated_at": "2026-10-09T12:00:00Z"
+    }
+  ],
+  "tab_id": "tab-1",
+  "ticket": {
+    "account": "jira-acme",
+    "id": "10142",
+    "key": "SHOP-142"
+  },
+  "title": null,
+  "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+};
+
+export const finishMergedReport: FinishMergedReport = {
+  "finished": [],
+  "skipped": [
+    {
+      "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
+      "reason": "choose Done status"
+    }
+  ]
 };
 
 export const finishOpts: FinishOpts = {
@@ -942,8 +1084,170 @@ export const finishOpts: FinishOpts = {
 export const gitStatus: GitStatus = {
   "ahead": 2,
   "behind": 0,
+  "deletions": 7,
   "dirty": true,
+  "diverged": false,
+  "files": 3,
+  "insertions": 41,
+  "missing": false,
+  "remote_new": 0,
   "unpushed": true
+};
+
+export const workItemRebaseStopped: WorkItem = {
+  "base": "main",
+  "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
+  "claude_replied": false,
+  "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "created_at": "2026-10-09T12:00:00Z",
+  "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
+  "kind": "ticket",
+  "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
+  "pr_url": "https://github.com/acme/shop-api/pull/74",
+  "project_id": "shop",
+  "rebase": {
+    "conflicts": [
+      "src/login.rs"
+    ],
+    "onto": "origin/main",
+    "pre_head": "9c1d8e7b6a5f4e3d2c1b0a998877665544aa3f2a",
+    "remote_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+    "step": 2,
+    "total": 3
+  },
+  "repo_id": "api",
+  "review": null,
+  "review_due": false,
+  "sent_threads": [
+    "PRRT_kwDOA1"
+  ],
+  "session_ids": [
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
+  ],
+  "state": {
+    "kind": "pr_open"
+  },
+  "steps": [
+    {
+      "detail": null,
+      "status": "done",
+      "step": "before_start",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_ticket",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_base",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "worktree",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "include_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "layout",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "setup",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "editor",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "tracker_side_effects",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "persist",
+      "updated_at": "2026-10-09T12:00:00Z"
+    }
+  ],
+  "tab_id": "tab-1",
+  "ticket": {
+    "account": "jira-acme",
+    "id": "10142",
+    "key": "SHOP-142"
+  },
+  "title": null,
+  "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+};
+
+export const rebaseOp: RebaseOp = {
+  "kind": "start",
+  "no_fetch": false,
+  "onto": "base"
+};
+
+export const feedback: Feedback = {
+  "failed_checks": [
+    {
+      "log_tail": "test login::lockout ... FAILED",
+      "name": "ci / test",
+      "url": "https://github.com/acme/shop-api/actions/runs/2"
+    }
+  ],
+  "reviewers": [
+    "bob"
+  ],
+  "reviews": [
+    {
+      "author": "bob",
+      "body_md": "Close, two things to fix.",
+      "state": "changes_requested"
+    }
+  ],
+  "threads": [
+    {
+      "author": "bob",
+      "body_md": "bob: Reset the counter after a successful login.",
+      "id": "PRRT_kwDOA1",
+      "line": 42,
+      "path": "src/login.rs",
+      "url": "https://github.com/acme/shop-api/pull/74#discussion_r1"
+    }
+  ]
 };
 
 export const prDraft: PrDraft = {
@@ -1188,6 +1492,7 @@ export const pluginInstallPreview: PluginInstallPreview = {
       "macos",
       "linux"
     ],
+    "provider": null,
     "version": "0.2.0"
   },
   "permissions": [
@@ -1343,8 +1648,10 @@ export const settingsDefault: Settings = {
       }
     },
     "prompt_templates": {
+      "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
+      "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-      "standalone": "",
+      "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
     }
   },
@@ -1498,6 +1805,9 @@ export const settingsDefault: Settings = {
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "toast.run_last": "o",
+      "work.menu": ".",
+      "work.new": "w",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000
@@ -1523,6 +1833,9 @@ export const settingsDefault: Settings = {
     "pr_changes_requested": true,
     "quiet_hours": "",
     "review_requested": true
+  },
+  "oauth": {
+    "client_ids": {}
   },
   "performance": {
     "hud": false
@@ -1655,10 +1968,13 @@ export const settingsDefault: Settings = {
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
+    "history_log": true,
+    "history_log_mb": 16,
+    "history_log_total_mb": 512,
     "keyboard_protocol": "kitty",
     "letter_spacing": 0.0,
     "line_height": 1.15,
-    "max_live_views": 4,
+    "max_live_views": 2,
     "memory_cap_mb": 160,
     "minimum_contrast_ratio": 1.0,
     "option_as_meta": "both",
@@ -1673,6 +1989,7 @@ export const settingsDefault: Settings = {
       "shell": 3000,
       "tool": 500
     },
+    "session_host": "daemon",
     "shell": "",
     "shift_enter": {
       "claude": "esc-cr",
@@ -1718,7 +2035,8 @@ export const settingsDefault: Settings = {
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
-    "review_template": "review"
+    "review_template": "review",
+    "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
@@ -1834,6 +2152,7 @@ export const pluginManifest: PluginManifest = {
     "macos",
     "linux"
   ],
+  "provider": null,
   "version": "0.2.0"
 };
 
@@ -2200,6 +2519,9 @@ export const terminalStats: TerminalStats = {
 };
 
 export const terminalLimits: TerminalLimits = {
+  "history_log": true,
+  "history_log_mb": 16,
+  "history_log_total_mb": 512,
   "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
   "scrollback": {
@@ -2211,6 +2533,11 @@ export const terminalLimits: TerminalLimits = {
     "tool": 500
   },
   "view_scrollback": 1000
+};
+
+export const historyHit: HistoryHit = {
+  "line": "error[E0308]: mismatched types",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203"
 };
 
 export const loginEnv: LoginEnv = {
@@ -2263,6 +2590,7 @@ export const accountConfig: AccountConfig = {
   "email": "me@acme.com",
   "flavor": "auto",
   "kind": "jira",
+  "plugin": null,
   "poll_secs": null,
   "secret": "keyring:jira-acme",
   "text_format": "textile",
@@ -2765,15 +3093,21 @@ export const uiEventWorkUpdated: UiEvent = {
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_at": null,
+    "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",
+    "rebase": null,
     "repo_id": "api",
     "review": null,
+    "review_due": false,
+    "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
       "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -2861,6 +3195,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }
 };
@@ -2968,8 +3303,13 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "start_work_plan": startWorkPlan,
   "work_item": workItem,
   "work_item_failed": workItemFailed,
+  "work_item_merged": workItemMerged,
+  "finish_merged_report": finishMergedReport,
   "finish_opts": finishOpts,
   "git_status": gitStatus,
+  "work_item_rebase_stopped": workItemRebaseStopped,
+  "rebase_op": rebaseOp,
+  "feedback": feedback,
   "pr_draft": prDraft,
   "editor_target": editorTarget,
   "tool_infos": toolInfos,
@@ -3011,6 +3351,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "notification": notification,
   "terminal_stats": terminalStats,
   "terminal_limits": terminalLimits,
+  "history_hit": historyHit,
   "login_env": loginEnv,
   "proxied_request": proxiedRequest,
   "proxied_response": proxiedResponse,

@@ -15,7 +15,6 @@ import {
   findSession,
   focusPane,
   makeTab,
-  moveSession,
   moveTab,
   neighbor,
   normalizeRatios,
@@ -25,7 +24,6 @@ import {
   paneRects,
   replacePaneContent,
   resizeGutter,
-  setSplitRatios,
   splitPane,
   toggleZoom,
   validateLayout,
@@ -158,15 +156,6 @@ describe('normalizeTree', () => {
 describe('ratios', () => {
   const root = splitPane(p('a'), 'a', 'row', p('b'));
 
-  it('setSplitRatios normalizes', () => {
-    const r = setSplitRatios(root, [], [3, 1]);
-    expect(r.type === 'split' && r.ratios).toEqual([0.75, 0.25]);
-  });
-
-  it('setSplitRatios ignores a wrong arity', () => {
-    expect(setSplitRatios(root, [], [1, 1, 1])).toBe(root);
-  });
-
   it('resizeGutter clamps both sides to the minimum', () => {
     const r = resizeGutter(root, [], 0, 10);
     expect(r.type === 'split' && r.ratios[1]).toBeCloseTo(MIN_RATIO);
@@ -233,13 +222,9 @@ describe('tabs', () => {
 });
 
 describe('sessions in layouts', () => {
-  it('finds and moves a session (a session lives in at most one pane)', () => {
-    let l = layoutOf(splitPane(p('a', '1'), 'a', 'row', pane({ kind: 'empty' }, 'b')));
+  it('finds a session', () => {
+    const l = layoutOf(splitPane(p('a', '1'), 'a', 'row', pane({ kind: 'empty' }, 'b')));
     expect(findSession(l, 's-1')).toEqual({ tabId: 't1', paneId: 'a' });
-    l = moveSession(l, 's-1', { tabId: 't1', paneId: 'b' });
-    expect(findSession(l, 's-1')).toEqual({ tabId: 't1', paneId: 'b' });
-    expect(allPanes(l.tabs[0]!.root)).toHaveLength(1);
-    expect(validateLayout(l)).toEqual([]);
   });
 
   it('replacePaneContent swaps content only', () => {

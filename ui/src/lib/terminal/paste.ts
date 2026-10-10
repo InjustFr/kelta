@@ -2,8 +2,15 @@
 
 /** Removes bracketed-paste markers from pasted text (paste injection). */
 export function sanitizePaste(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[20[01]~/g, '');
+  // One linear pass: drop a marker as soon as the output ends with one, so nested markers
+  // (removal joins the pieces of another) go too, without a quadratic re-scan per level.
+  const out: string[] = [];
+  for (const ch of text) {
+    out.push(ch);
+    const tail = out.slice(-6).join('');
+    if (tail === '\x1b[200~' || tail === '\x1b[201~') out.length -= 6;
+  }
+  return out.join('');
 }
 
 /**

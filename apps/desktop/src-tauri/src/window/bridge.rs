@@ -137,6 +137,12 @@ impl UiBridge for TauriBridge {
                     let _ = w.close();
                 }
             }
+            // The UI runs the in-app scenarios (ui/src/lib/terminal/bench.ts).
+            UiEvent::CtlCommand { cmd: CtlCommand::Emit { name, .. } }
+                if name == "custom.bench.run" && super::bench::enabled() =>
+            {
+                let _ = self.hub.fan_out(&ev, send_ev);
+            }
             // Other bench events are not for the UI (and must not recreate the window).
             UiEvent::CtlCommand { cmd: CtlCommand::Emit { .. } } => {}
             // Toggle is native: it must work when the webview is destroyed or hung.

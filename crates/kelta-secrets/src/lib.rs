@@ -1,11 +1,12 @@
 //! # kelta-secrets (L4)
 //!
 //! `SecretRef` resolution chain (SETTINGS §5): `keyring:` (macOS Keychain / Linux Secret Service
-//! via keyring-core), `gh-cli`, `glab-cli`, `command:`, `env:`. Resolution runs off the caller's
+//! via keyring-core), `file:` (passphrase-encrypted file, unlocked once per run), `gh-cli`, `glab-cli`, `command:`, `env:`. Resolution runs off the caller's
 //! thread with a 5 s timeout, results are cached in memory only (zeroized on drop) and the cache
 //! is dropped whenever the effective settings change, on [`SecretResolver::invalidate`] (401) and
 //! on `set` / `delete`. Secret values are never logged, serialized or put in error messages.
 
+mod file;
 mod glab;
 mod words;
 
@@ -17,7 +18,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kelta_proto::api::{SecretResolver, SettingsSource};
 use kelta_proto::error::{ErrorCode, KeltaError};
-use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{KEYRING_SERVICE, Secret, SecretBackendStatus, SecretCtx, SecretRef, SecretSource};
 use kelta_proto::settings::Settings;
 use keyring_core::CredentialStore;
@@ -42,7 +42,12 @@ pub struct SecretsOptions {
     pub env: Option<BTreeMap<String, String>>,
     /// Lookup timeout (default [`RESOLVE_TIMEOUT`]).
     pub timeout: Option<Duration>,
+    /// Encrypted secrets file for `file:` refs (default: none, `file:` refs are unsupported).
+    pub file: Option<PathBuf>,
 }
+
+/// Name of the encrypted secrets file in the data dir.
+pub const SECRETS_FILE: &str = "secrets.enc";
 
 struct Cache {
     /// The settings snapshot the entries were resolved under; a different `Arc` means the
@@ -57,19 +62,7 @@ pub struct Secrets {
     env: RwLock<Option<BTreeMap<String, String>>>,
     timeout: Duration,
     cache: Mutex<Cache>,
-}
-
-/// `SecretCtx` for an account: the host of its `base_url` (GitHub's API host maps to `github.com`).
-pub fn secret_ctx(account: Option<AccountId>, base_url: Option<&str>) -> SecretCtx {
-    let host = base_url.and_then(host_of);
-    SecretCtx { account, host }
-}
-
-fn host_of(url: &str) -> Option<String> {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let authority = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    (!authority.is_empty()).then(|| authority.to_owned())
+    file: Option<Arc<file::SecretFile>>,
 }
 
 fn wipe(v: &mut [u8]) {
@@ -82,6 +75,7 @@ fn wipe(v: &mut [u8]) {
 fn ref_kind(src: &SecretSource) -> &'static str {
     match src {
         SecretSource::Keyring(_) => "keyring",
+        SecretSource::File(_) => "file",
         SecretSource::GhCli => "gh-cli",
         SecretSource::GlabCli => "glab-cli",
         SecretSource::Command(_) => "command",
@@ -134,6 +128,7 @@ impl Secrets {
             env: RwLock::new(opts.env),
             timeout: opts.timeout.unwrap_or(RESOLVE_TIMEOUT),
             cache: Mutex::new(Cache { generation: None, map: HashMap::new() }),
+            file: opts.file.map(|p| Arc::new(file::SecretFile::new(p))),
         })
     }
 
@@ -330,6 +325,27 @@ impl Secrets {
         }
     }
 
+    // ---- encrypted file --------------------------------------------------------------------
+
+    fn secret_file(&self) -> Result<&Arc<file::SecretFile>, KeltaError> {
+        self.file.as_ref().ok_or_else(|| KeltaError::unsupported("no encrypted secrets file in this process"))
+    }
+
+    /// Unlock the encrypted secrets file for this run (`create`: make it if it does not exist).
+    /// UI-only (Tauri IPC): kelta-ctl has no way to send a passphrase.
+    pub async fn unlock(&self, passphrase: String, create: bool) -> Result<(), KeltaError> {
+        let passphrase = zeroize::Zeroizing::new(passphrase);
+        if passphrase.is_empty() {
+            return Err(KeltaError::invalid("the passphrase is empty"));
+        }
+        let file = self.secret_file()?.clone();
+        tokio::task::spawn_blocking(move || file.unlock(passphrase.as_bytes(), create))
+            .await
+            .map_err(|_| KeltaError::internal("unlock task failed"))??;
+        tracing::info!(kind = "file", "encrypted secrets file unlocked");
+        Ok(())
+    }
+
     // ---- keyring ---------------------------------------------------------------------------
 
     fn credential_store(&self) -> Result<Arc<CredentialStore>, KeltaError> {
@@ -473,6 +489,7 @@ impl SecretResolver for Secrets {
                 wipe_string(v);
                 s
             }
+            SecretSource::File(name) => self.secret_file()?.get(name)?,
             SecretSource::GhCli => self.resolve_gh(ctx).await?,
             SecretSource::GlabCli => self.resolve_glab(ctx).await?,
             SecretSource::Command(argv) => self.resolve_command(argv).await?,
@@ -483,22 +500,35 @@ impl SecretResolver for Secrets {
     }
 
     async fn set(&self, r: &SecretRef, value: &str) -> Result<(), KeltaError> {
-        let Some(SecretSource::Keyring(name)) = r.parse() else {
-            return Err(KeltaError::invalid("only keyring: references can be written"));
-        };
         if value.is_empty() {
             return Err(KeltaError::invalid("refusing to store an empty token"));
         }
-        let value = value.to_owned();
-        self.keyring_op(&name, move |e| e.set_password(&value)).await?;
+        let kind = match r.parse() {
+            Some(SecretSource::Keyring(name)) => {
+                let value = value.to_owned();
+                self.keyring_op(&name, move |e| e.set_password(&value)).await?;
+                "keyring"
+            }
+            Some(SecretSource::File(name)) => {
+                self.secret_file()?.update(&name, Some(value))?;
+                "file"
+            }
+            _ => return Err(KeltaError::invalid("only keyring: and file: references can be written")),
+        };
         self.invalidate(r);
-        tracing::info!(kind = "keyring", "secret stored");
+        tracing::info!(kind, "secret stored");
         Ok(())
     }
 
     async fn delete(&self, r: &SecretRef) -> Result<(), KeltaError> {
-        let Some(SecretSource::Keyring(name)) = r.parse() else {
-            return Err(KeltaError::invalid("only keyring: references can be deleted"));
+        let name = match r.parse() {
+            Some(SecretSource::Keyring(name)) => name,
+            Some(SecretSource::File(name)) => {
+                let res = self.secret_file().and_then(|f| f.update(&name, None));
+                self.invalidate(r);
+                return res;
+            }
+            _ => return Err(KeltaError::invalid("only keyring: and file: references can be deleted")),
         };
         let res = self
             .keyring_op(&name, |e| match e.delete_credential() {
@@ -533,6 +563,9 @@ impl SecretResolver for Secrets {
         {
             let available = self.store.lock().is_some();
             out.push(SecretBackendStatus { backend: "keyring".into(), available, detail: None });
+        }
+        if let Some(f) = &self.file {
+            out.push(f.status());
         }
         for (backend, program, hint) in [
             ("gh-cli", "gh", "install the GitHub CLI and run `gh auth login`"),

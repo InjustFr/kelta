@@ -1,0 +1,7 @@
+{
+  "total_count": 2,
+  "check_runs": [
+    { "id": 7, "name": "build", "status": "completed", "conclusion": "success", "app": { "slug": "github-actions" } },
+    { "id": 9, "name": "tests", "status": "completed", "conclusion": "failure", "html_url": "https://github.com/acme/shop/runs/9", "app": { "slug": "github-actions" } }
+  ]
+}

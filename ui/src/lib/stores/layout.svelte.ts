@@ -81,7 +81,12 @@ export class LayoutStore {
     if (ev.type === 'ui.open') this.#scheduleSave(ev.project_id);
   }
 
-  /** Saves immediately (e.g. before quit or in tests). */
+  /** Window close / unload: saves pending edits but never holds the close longer than `maxMs`. */
+  flushForClose(maxMs = 1000): Promise<void> {
+    return Promise.race([this.flush(), new Promise<void>((r) => setTimeout(r, maxMs))]);
+  }
+
+  /** Saves immediately (window close, tests). */
   async flush(projectId?: ProjectId): Promise<void> {
     const ids = projectId ? [projectId] : [...this.#timers.keys()];
     await Promise.all(

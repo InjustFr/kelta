@@ -4,7 +4,7 @@
   "project_id": 77,
   "title": "Fix #12 flicker",
   "description": "Fixes the **thing**.",
-  "state": "opened",
+  "state": "merged",
   "draft": false,
   "web_url": "https://gitlab.acme.test/grp/other/-/merge_requests/8",
   "source_branch": "fix/flicker",

@@ -10,7 +10,6 @@ import { terminalUi } from '$lib/terminal/ui.svelte';
 import type { TerminalView } from '$lib/terminal/view';
 
 import {
-  attentionNext,
   closeFocusedPane,
   currentTab,
   cycleProject,
@@ -56,6 +55,10 @@ registerAction('palette.open', () => ui.toggleOverlay('palette'));
 registerAction('project.switcher', () => ui.toggleOverlay('switcher'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoProjectIndex(n));
 registerAction('inbox.open', () => openInbox());
+registerAction('toast.run_last', async () => {
+  const last = toasts.lastActionable;
+  if (last) await toasts.run(last.id);
+});
 registerAction('project.next', () => cycleProject(1));
 registerAction('project.prev', () => cycleProject(-1));
 registerAction('tab.next', () => cycleTab(1));
@@ -72,7 +75,8 @@ registerAction('pane.focus_up', () => focusDirection('up'));
 registerAction('pane.focus_right', () => focusDirection('right'));
 registerAction('pane.zoom', () => toggleZoomFocused());
 registerAction('pane.close', () => closeFocusedPane());
-registerAction('attention.next', () => attentionNext());
+// Next waiting walks Now's queue (FLOW §3.4); loaded on first use.
+registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting());
 registerAction('terminal.search', () => {
   const id = focusedSessionId();
   if (id) terminalUi.searchSession = id;

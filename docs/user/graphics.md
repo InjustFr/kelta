@@ -8,6 +8,9 @@ the webview starts; they need a restart to change.
 - NVIDIA proprietary driver detected (`/proc/driver/nvidia/version` or `/sys/module/nvidia_drm`): the DMABUF
   renderer is disabled (`WEBKIT_DISABLE_DMABUF_RENDERER=1`) and explicit sync is turned off
   (`__NV_DISABLE_EXPLICIT_SYNC=1`). Turn this off with `linux.graphics.auto_nvidia = false`.
+- No GPU render node (`/dev/dri/renderD*` missing, as in most VMs and containers): compositing mode is turned
+  off (`WEBKIT_DISABLE_COMPOSITING_MODE=1`), since WebKit's GL compositing would run on the CPU and cost several
+  times more per frame. Only with `profile = "auto"`.
 - A launch that never finished (the guard file `<data>/launch-guard` is still there at the next start) restarts
   once with the safe profile. If the second start fails too, Kelta prints a hint to run `kelta --safe-graphics`.
 - Variables you already set in your environment are never overwritten.

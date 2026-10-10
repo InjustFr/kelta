@@ -13,27 +13,13 @@ use kelta_proto::ext::{ProxiedRequest, ProxiedResponse};
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::ToolVersion;
 use kelta_proto::model::{EditorTarget, Lifecycle, Placement, SessionKind, TemplateCtx, WorkSource};
-use kelta_proto::settings::{ClaudeSettings, TrustInfo};
+use kelta_proto::settings::ClaudeSettings;
 use kelta_proto::term::LoginEnv;
 use kelta_proto::tracker::TicketRef;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::Core;
 use crate::store::q;
-
-/// Constant-time string comparison (hook tokens).
-pub fn ct_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
-}
-
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
-}
 
 /// Ticket key from a key or a browser URL (`…/browse/SHOP-1`, `…/issues/12`).
 pub fn ticket_key(input: &str) -> String {
@@ -49,28 +35,35 @@ pub fn ticket_key(input: &str) -> String {
 /// Copy `kelta-ctl` (sibling of the running binary, or `$APPDIR/usr/bin`) to
 /// `<data>/bin/<version>/kelta-ctl` and point `<data>/bin/current` at that version.
 pub fn install_stable_ctl(dirs: &Dirs) -> Result<PathBuf, KeltaError> {
-    let exe = std::env::current_exe()?;
-    let mut candidates: Vec<PathBuf> = exe.parent().map(|d| vec![d.join("kelta-ctl")]).unwrap_or_default();
-    if let Some(appdir) = std::env::var_os("APPDIR") {
-        candidates.push(PathBuf::from(appdir).join("usr/bin/kelta-ctl"));
-    }
-    let src = candidates
-        .into_iter()
-        .find(|p| p.is_file())
-        .ok_or_else(|| KeltaError::not_found("kelta-ctl not found next to the kelta binary"))?;
-    install_ctl_from(&src, &dirs.bin, kelta_proto::VERSION)
+    install_stable_bin(&bundled("kelta-ctl")?, &dirs.bin, kelta_proto::VERSION)
 }
 
-/// Testable part of [`install_stable_ctl`].
-pub fn install_ctl_from(src: &Path, bin: &Path, version: &str) -> Result<PathBuf, KeltaError> {
+/// A binary shipped next to the kelta executable (Tauri externalBin) or in the AppImage.
+pub fn bundled(name: &str) -> Result<PathBuf, KeltaError> {
+    let exe = std::env::current_exe()?;
+    let mut candidates: Vec<PathBuf> = exe.parent().map(|d| vec![d.join(name)]).unwrap_or_default();
+    if let Some(appdir) = std::env::var_os("APPDIR") {
+        candidates.push(PathBuf::from(appdir).join("usr/bin").join(name));
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.is_file())
+        .ok_or_else(|| KeltaError::not_found(format!("{name} not found next to the kelta binary")))
+}
+
+/// Copy `src` to `<bin>/<version>/<file name>` (kept when identical) and point `<bin>/current`
+/// at that version; returns `<bin>/current/<file name>`. Survives app updates and AppImage unmounts.
+pub fn install_stable_bin(src: &Path, bin: &Path, version: &str) -> Result<PathBuf, KeltaError> {
     use std::os::unix::fs::PermissionsExt;
+    let name =
+        src.file_name().ok_or_else(|| KeltaError::invalid(format!("{} has no file name", src.display())))?;
     let dir = bin.join(version);
     std::fs::create_dir_all(&dir)?;
-    let dest = dir.join("kelta-ctl");
+    let dest = dir.join(name);
     let data = std::fs::read(src)?;
     let same = std::fs::read(&dest).map(|d| d == data).unwrap_or(false);
     if !same {
-        let tmp = dir.join(format!(".kelta-ctl.{}", std::process::id()));
+        let tmp = dir.join(format!(".{}.{}", name.to_string_lossy(), std::process::id()));
         std::fs::write(&tmp, &data)?;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
         std::fs::rename(&tmp, &dest)?;
@@ -83,7 +76,7 @@ pub fn install_ctl_from(src: &Path, bin: &Path, version: &str) -> Result<PathBuf
         std::os::unix::fs::symlink(version, &tmp)?;
         std::fs::rename(&tmp, &current)?;
     }
-    Ok(bin.join("current").join("kelta-ctl"))
+    Ok(current.join(name))
 }
 
 /// `open_external`: http/https/mailto only, opened by the OS handler.
@@ -247,36 +240,8 @@ impl Core {
     /// Dispatch of ctl socket commands.
     pub(crate) async fn dispatch_ctl(&self, cmd: CtlCommand) -> Result<Value, KeltaError> {
         match cmd {
-            CtlCommand::Hook { session, token, payload } => {
-                let expected = self
-                    .sessions
-                    .lock()
-                    .get(&session)
-                    .map(|e| e.hook_token.clone())
-                    .ok_or_else(|| KeltaError::not_found(format!("session {session}")))?;
-                if !ct_eq(&expected, &token) {
-                    return Err(KeltaError::permission_denied("hook token"));
-                }
-                if let Some(u) = payload.session_id.as_deref().filter(|u| !u.is_empty()) {
-                    self.learn_claude_uuid(&session, u);
-                }
-                let project = self.sessions.lock().get(&session).map(|e| e.info.project_id.clone());
-                let matcher = payload.notification_type.clone().or_else(|| payload.tool_name.clone());
-                let mut ev = BusEvent::new(
-                    bus::CLAUDE_HOOK,
-                    json!({ "event": payload.hook_event_name, "matcher_value": matcher, "payload": &*payload }),
-                )
-                .with_session(session.clone());
-                if let Some(p) = project {
-                    ev = ev.with_project(p);
-                }
-                self.publish_ev(ev);
-                let change = kelta_server::hooks::map(&payload);
-                if let Some(c) = change {
-                    self.apply_hook(&session, c)?;
-                }
-                Ok(json!({ "ok": true }))
-            }
+            // kelta-server authenticates and ingests hooks itself (`hooks::ingest`).
+            CtlCommand::Hook { .. } => Err(KeltaError::invalid("hooks go through the ctl server")),
             CtlCommand::Toggle | CtlCommand::Palette | CtlCommand::PluginInstall { .. } => {
                 self.emit(UiEvent::CtlCommand { cmd });
                 Ok(Value::Null)
@@ -331,6 +296,16 @@ impl Core {
                     Ok(serde_json::to_value(w)?)
                 }
             }
+            CtlCommand::StartTask { task, project } => {
+                // Scripted: no sheet, same plan + saga as New work item (FLOW §4.3).
+                let project = project.unwrap_or_else(|| self.active_project());
+                let source = WorkSource::Branch { name: String::new(), task: Some(task), repo: None };
+                let plan = self.work.plan(&project, source).await?;
+                let w = self.work.start(plan).await?;
+                self.project_activate(&project)?;
+                self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
+                Ok(serde_json::to_value(w)?)
+            }
             CtlCommand::New { template, cwd, project } => {
                 let project = project.unwrap_or_else(|| self.active_project());
                 let ctx = TemplateCtx { cwd, ..TemplateCtx::default() };
@@ -354,16 +329,18 @@ impl Core {
                 self.publish_ev(BusEvent::new(name, payload));
                 Ok(Value::Null)
             }
-            CtlCommand::Trust { repo } => {
-                let home = self.home_dir();
-                let repo = crate::projects::repo_path(&repo.to_string_lossy(), &home);
-                let file = repo.join(".kelta").join("config.toml");
-                let data = std::fs::read(&file)
-                    .map_err(|e| KeltaError::not_found(format!("{}: {e}", file.display())))?;
-                let hash = sha256_hex(&data);
-                let (f, h) = (file.clone(), hash.clone());
-                self.store.call(move |c| q::set_trust(c, &f, Some(&h))).await?;
-                Ok(serde_json::to_value(TrustInfo { path: file, hash, trusted: true })?)
+            CtlCommand::Trust { repo, sha256 } => {
+                let repo = crate::projects::repo_path(&repo.to_string_lossy(), &self.home_dir());
+                // Trust is keyed by the project TOML's path: match canonically (`..`, symlinks).
+                let canon = |p: &std::path::Path| std::fs::canonicalize(p).ok();
+                let want = canon(&repo.join(".kelta").join("config.toml"));
+                let file = self
+                    .config
+                    .repo_config_paths()
+                    .into_iter()
+                    .find(|p| want.is_some() && canon(p) == want)
+                    .ok_or_else(|| KeltaError::not_found("not a repo of any project"))?;
+                Ok(serde_json::to_value(self.config.trust_file(&file, Some(&sha256)).await?)?)
             }
             CtlCommand::EditorOpen { file, line } => {
                 let home = self.home_dir();
@@ -418,9 +395,6 @@ mod tests {
 
     #[test]
     fn helpers() {
-        assert!(ct_eq("abc", "abc"));
-        assert!(!ct_eq("abc", "abd"));
-        assert!(!ct_eq("abc", "ab"));
         assert_eq!(ticket_key("SHOP-1"), "SHOP-1");
         assert_eq!(ticket_key("https://acme.atlassian.net/browse/SHOP-142?x=1"), "SHOP-142");
         assert_eq!(b64_decode(&b64_encode(b"hello world!?")).unwrap(), b"hello world!?".to_vec());
@@ -432,12 +406,12 @@ mod tests {
         let src = tmp.path().join("kelta-ctl");
         std::fs::write(&src, b"#!/bin/sh\n").unwrap();
         let bin = tmp.path().join("bin");
-        let p = install_ctl_from(&src, &bin, "0.1.0").unwrap();
+        let p = install_stable_bin(&src, &bin, "0.1.0").unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b"#!/bin/sh\n".to_vec());
         assert_eq!(std::fs::read_link(bin.join("current")).unwrap(), PathBuf::from("0.1.0"));
         // idempotent, then upgrade
-        install_ctl_from(&src, &bin, "0.1.0").unwrap();
-        install_ctl_from(&src, &bin, "0.2.0").unwrap();
+        install_stable_bin(&src, &bin, "0.1.0").unwrap();
+        install_stable_bin(&src, &bin, "0.2.0").unwrap();
         assert_eq!(std::fs::read_link(bin.join("current")).unwrap(), PathBuf::from("0.2.0"));
     }
 

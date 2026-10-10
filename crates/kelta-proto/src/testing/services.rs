@@ -20,6 +20,7 @@ pub struct FakeSecrets {
     values: Mutex<HashMap<String, String>>,
     resolved: Mutex<Vec<String>>,
     invalidated: Mutex<Vec<String>>,
+    failing_sets: Mutex<Vec<String>>,
 }
 
 impl FakeSecrets {
@@ -47,6 +48,11 @@ impl FakeSecrets {
     pub fn invalidated(&self) -> Vec<String> {
         self.invalidated.lock().clone()
     }
+
+    /// Make every later `set` of `r` fail (a locked keychain).
+    pub fn fail_set(&self, r: &str) {
+        self.failing_sets.lock().push(r.to_owned());
+    }
 }
 
 #[async_trait]
@@ -63,6 +69,9 @@ impl SecretResolver for FakeSecrets {
     async fn set(&self, r: &SecretRef, value: &str) -> Result<(), KeltaError> {
         if !r.is_keyring() {
             return Err(KeltaError::invalid("only keyring: refs can be set"));
+        }
+        if self.failing_sets.lock().contains(&r.0) {
+            return Err(KeltaError::internal(format!("cannot write {r}")));
         }
         self.values.lock().insert(r.0.clone(), value.to_owned());
         Ok(())

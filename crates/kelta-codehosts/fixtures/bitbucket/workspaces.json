@@ -1,0 +1,16 @@
+{
+  "pagelen": 50,
+  "page": 1,
+  "size": 1,
+  "values": [
+    {
+      "type": "workspace_access",
+      "administrator": false,
+      "workspace": {
+        "type": "workspace_base",
+        "slug": "acme",
+        "uuid": "{ws-1}"
+      }
+    }
+  ]
+}

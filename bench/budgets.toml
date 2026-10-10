@@ -35,6 +35,10 @@ max = 25.0
 [flood.frame_max_ms]
 max = 50.0
 
+# G2: another pane's echo while one pane floods.
+[flood.echo_max_ms]
+max = 50.0
+
 [flood.webview_delta_mb]
 max = 30.0
 

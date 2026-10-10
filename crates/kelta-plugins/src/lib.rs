@@ -4,11 +4,12 @@
 //! permission gate, `kelta-plugin://` handler, tools registry + web-tool lifecycle + header-stripping
 //! proxy, trigger engine. Nothing here keeps a background runtime alive: the only long-lived task is
 //! the bus subscription of the trigger engine (event-driven), plus per-web-tool readers that exist
-//! only while a web tool runs.
+//! only while a web tool runs, and provider (KPP) processes, spawned on first use (`kpp`).
 
 pub mod actions;
 mod context;
 pub mod install;
+pub mod kpp;
 pub mod manifest;
 pub mod matcher;
 pub mod perms;
@@ -70,6 +71,8 @@ pub struct PluginHost {
     tools: tools::State,
     engine: triggers::Engine,
     bus_task: Mutex<Option<tokio::task::AbortHandle>>,
+    /// Provider (KPP) processes by plugin.
+    kpp: Mutex<HashMap<PluginId, Arc<kpp::KppProcess>>>,
 }
 
 impl PluginHost {
@@ -86,6 +89,7 @@ impl PluginHost {
             tools: tools::State::default(),
             engine: triggers::Engine::default(),
             bus_task: Mutex::new(None),
+            kpp: Mutex::new(HashMap::new()),
         })
     }
 
@@ -382,8 +386,9 @@ impl PluginHost {
         Ok(())
     }
 
-    /// Close screens and stop web tools of a plugin that is disabled or removed.
+    /// Close screens and stop web tools and the provider process of a plugin that is disabled or removed.
     pub(crate) async fn deactivate(&self, id: &PluginId) {
+        self.kpp_stop(id);
         self.screens.lock().retain(|_, s| &s.plugin != id);
         self.activated.lock().remove(id);
         self.close_plugin_tools(id).await;
@@ -403,6 +408,7 @@ impl PluginHost {
             return Err(KeltaError::invalid(format!("`{bad}` is not requested by the plugin manifest")));
         }
         self.grants.revoke_all(id).await?;
+        self.kpp_stop(id);
         if !permissions.is_empty() {
             self.grants.grant(id, &permissions, e.sha256()).await?;
         }
@@ -502,6 +508,9 @@ impl Drop for PluginHost {
             t.abort();
         }
         self.tools.kill_all();
+        for p in self.kpp.lock().values() {
+            p.kill();
+        }
     }
 }
 
@@ -520,6 +529,5 @@ mod tests {
         assert!(host.fragments().is_empty());
         let resp = uri::handle(&host, axum::http::Request::new(Vec::new()));
         assert_eq!(resp.status(), axum::http::StatusCode::NOT_FOUND);
-        let _ = proxy::router();
     }
 }

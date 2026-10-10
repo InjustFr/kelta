@@ -17,6 +17,7 @@ pub mod feeds;
 pub mod layout;
 pub mod layout_store;
 pub mod notifier;
+pub mod oauth;
 pub mod perf;
 pub mod projects;
 pub mod providers;
@@ -51,14 +52,15 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
-    SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
+    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
-use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
+use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::tracker::{Ticket, TicketRef};
-use kelta_secrets::Secrets;
+use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
+use kelta_term::daemon::DaemonTerminalHost;
 use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -174,9 +176,43 @@ pub struct Core {
     pub(crate) http_refs: std::sync::atomic::AtomicU32,
     pub(crate) last_reload: Mutex<Option<std::time::Instant>>,
     pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
+    /// Device-flow sign-ins between start and finish, by user code.
+    pub(crate) oauth: Mutex<std::collections::HashMap<String, oauth::Pending>>,
+    /// Device-flow sign-ins being polled, by user code; `oauth_device_cancel` notifies.
+    pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
+}
+
+/// `terminal.session_host`: keltad (sessions survive quit) or PTYs in this process.
+fn terminal_host(dirs: &Dirs, settings: &Settings) -> Arc<dyn TerminalHost> {
+    let limits = TerminalLimits::from_settings(&settings.terminal);
+    if settings.terminal.session_host == SessionHost::Daemon {
+        // Launched from a stable copy: the AppImage mount (or an updated bundle) goes away on quit.
+        let daemon = ctl::bundled("keltad")
+            .and_then(|src| ctl::install_stable_bin(&src, &dirs.bin, kelta_proto::VERSION))
+            .and_then(|exe| {
+                DaemonTerminalHost::connect_or_launch(
+                    &dirs.keltad_socket(),
+                    &exe,
+                    &dirs.logs.join("keltad.log"),
+                    &dirs.data.join("history"),
+                )
+            });
+        match daemon {
+            Ok(d) => {
+                d.set_limits(limits);
+                return d;
+            }
+            Err(e) => tracing::warn!(error = %e, "keltad unavailable; sessions run in-process"),
+        }
+    }
+    Arc::new(PtyTerminalHost::with_history_dir(
+        limits,
+        kelta_term::backend::default_backend(),
+        dirs.data.join("history"),
+    ))
 }
 
 impl Core {
@@ -209,15 +245,16 @@ impl Core {
             None => config.clone(),
         };
         let settings_source: Arc<dyn SettingsSource> = cfg.clone();
-        let secrets = Secrets::new(settings_source.clone());
+        let secrets = Secrets::with_options(
+            settings_source.clone(),
+            SecretsOptions { file: Some(dirs.data.join(SECRETS_FILE)), ..SecretsOptions::default() },
+        );
         let resolver: Arc<dyn SecretResolver> = resolver.unwrap_or_else(|| secrets.clone());
         let settings = settings_source.effective(None);
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => {
-                PtyTerminalHost::new_arc(login_env.clone(), TerminalLimits::from_settings(&settings.terminal))
-            }
+            None => terminal_host(&dirs, &settings),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?
@@ -230,6 +267,8 @@ impl Core {
                 }
             }
         };
+        // Repo trust lives in SQLite (D10): load it before anything reads the repo layers.
+        futures::executor::block_on(config.set_trust_store(store.clone()));
         let (bus, _) = broadcast::channel(BUS_CAPACITY);
         let http = HttpClient::new(&kelta_http::default_user_agent());
         let trackers: Arc<dyn ProviderFactory> =
@@ -246,17 +285,22 @@ impl Core {
             let work_store: Arc<dyn WorkStore> = store.clone();
             let grant_store: Arc<dyn GrantStore> = store.clone();
             let refresher: Weak<dyn scheduler::Refresher> = weak.clone();
+            let plugins = PluginHost::new(api.clone(), dirs.clone(), grant_store);
+            // plugin_tracker / plugin_codehost accounts are served by provider plugins (KPP)
+            let kpp = |inner: &Arc<dyn ProviderFactory>| -> Arc<dyn ProviderFactory> {
+                Arc::new(kelta_plugins::kpp::KppFactory::new(inner.clone(), Arc::downgrade(&plugins)))
+            };
             Core {
                 me: weak.clone(),
                 work: WorkService::new(api.clone(), work_store, dirs.clone()),
-                server: Server::new(api.clone(), dirs.clone()),
-                plugins: PluginHost::new(api, dirs.clone(), grant_store),
+                server: Server::new(api, dirs.clone()),
                 providers: providers::ProviderRegistry::new(
                     http.clone(),
-                    trackers.clone(),
-                    code_hosts.clone(),
+                    kpp(&trackers),
+                    kpp(&code_hosts),
                     resolver.clone(),
                 ),
+                plugins,
                 scheduler: scheduler::Scheduler::new(refresher, gauge),
                 dirs,
                 cli,
@@ -285,6 +329,8 @@ impl Core {
                 http_refs: std::sync::atomic::AtomicU32::new(0),
                 last_reload: Mutex::new(None),
                 claude_ver: Mutex::new(None),
+                oauth: Mutex::default(),
+                oauth_polling: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -300,6 +346,7 @@ impl Core {
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
+        self.adopt_live_sessions();
         let weak = self.me.clone();
         self.cfg.watch(Box::new(move |diff| {
             if let Some(core) = weak.upgrade() {
@@ -342,6 +389,15 @@ impl Core {
             if let Err(e) = self.work.startup().await {
                 tracing::warn!(error = %e, "work startup hook failed");
             }
+            // Merges and closes that happened while Kelta was closed (FLOW §3.6).
+            let weak = self.me.clone();
+            self.rt.spawn(async move {
+                if let Some(core) = weak.upgrade()
+                    && let Err(e) = core.check_work_prs().await
+                {
+                    tracing::warn!(error = %e.message, "work PR check failed");
+                }
+            });
             let probe =
                 ctl::probe_claude(self.login_env.clone(), self.cfg.effective(None).claude.clone()).await;
             *self.claude_ver.lock() = probe;
@@ -510,6 +566,9 @@ impl Core {
 
 #[async_trait]
 impl CoreApi for Core {
+    fn login_path(&self) -> Option<String> {
+        self.login_env.path().map(str::to_owned)
+    }
     async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         self.spawn_session(req).await
@@ -573,8 +632,16 @@ impl CoreApi for Core {
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
     }
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
-        self.work.create_pr(id, draft).await
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.create_pr(id, draft, origin).await
+    }
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
+        self.work.feedback(id).await
     }
     async fn editor_open(
         &self,
@@ -583,6 +650,15 @@ impl CoreApi for Core {
         line: Option<u32>,
     ) -> Result<(), KeltaError> {
         self.work.editor_open(target, path, line).await
+    }
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.work.editor_diff(target, old, proposed, close).await
     }
     async fn tool_open(
         &self,

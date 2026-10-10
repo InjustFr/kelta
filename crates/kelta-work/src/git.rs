@@ -310,6 +310,20 @@ pub async fn dirty_files(worktree: &Path) -> Result<Vec<String>, KeltaError> {
     Ok(files)
 }
 
+/// Hash of HEAD, the tracked diff to the working tree and the untracked paths: equal hashes mean
+/// nothing changed in between (in-process comparison only).
+/// shortcut: an untracked file edited in place keeps the hash, hash its content if that matters.
+pub async fn fingerprint(worktree: &Path) -> Result<u64, KeltaError> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for args in
+        [&["rev-parse", "HEAD"][..], &["diff", "HEAD"], &["ls-files", "-z", "--others", "--exclude-standard"]]
+    {
+        run_ok(worktree, args, LOCAL_TIMEOUT).await?.stdout.hash(&mut h);
+    }
+    Ok(h.finish())
+}
+
 /// Is `path` tracked in the index of `worktree`?
 pub async fn is_tracked(worktree: &Path, path: &str) -> Result<bool, KeltaError> {
     Ok(run(worktree, &["ls-files", "--error-unmatch", "--", path], LOCAL_TIMEOUT).await?.ok())
@@ -341,6 +355,71 @@ pub async fn ahead_behind(worktree: &Path, upstream: &str) -> Result<(u32, u32),
     let out = run_ok(worktree, &["rev-list", "--left-right", "--count", &range], LOCAL_TIMEOUT).await?;
     let mut it = out.stdout.split_whitespace().map(|n| n.parse::<u32>().unwrap_or(0));
     Ok((it.next().unwrap_or(0), it.next().unwrap_or(0)))
+}
+
+/// `git rev-parse` of a commit-ish (`None` when it does not resolve).
+pub async fn rev(worktree: &Path, r: &str) -> Result<Option<String>, KeltaError> {
+    let spec = format!("{r}^{{commit}}");
+    let out = run(worktree, &["rev-parse", "--verify", "--quiet", &spec], LOCAL_TIMEOUT).await?;
+    Ok(out.ok().then(|| out.stdout.trim().to_owned()))
+}
+
+/// `git merge-base --is-ancestor <a> <b>`.
+pub async fn is_ancestor(worktree: &Path, a: &str, b: &str) -> Result<bool, KeltaError> {
+    let out = run(worktree, &["merge-base", "--is-ancestor", a, b], LOCAL_TIMEOUT).await?;
+    match out.code {
+        0 => Ok(true),
+        1 => Ok(false),
+        _ => Err(KeltaError::upstream(format!("git merge-base {a} {b} failed: {}", out.stderr.trim()))),
+    }
+}
+
+/// `git rev-list --count <args>`.
+pub async fn count(worktree: &Path, args: &[&str]) -> Result<u32, KeltaError> {
+    let mut a = vec!["rev-list", "--count"];
+    a.extend_from_slice(args);
+    Ok(run_ok(worktree, &a, LOCAL_TIMEOUT).await?.stdout.trim().parse().unwrap_or(0))
+}
+
+/// A stopped rebase of `worktree`: `(conflicted files, step, total)`; `None` when no rebase runs.
+pub async fn rebase_progress(worktree: &Path) -> Result<Option<(Vec<PathBuf>, u32, u32)>, KeltaError> {
+    let mut dir = None;
+    for name in ["rebase-merge", "rebase-apply"] {
+        let out = run_ok(worktree, &["rev-parse", "--git-path", name], LOCAL_TIMEOUT).await?;
+        let p = worktree.join(out.stdout.trim());
+        if p.is_dir() {
+            dir = Some((p, name == "rebase-merge"));
+            break;
+        }
+    }
+    let Some((dir, merge)) = dir else { return Ok(None) };
+    let num =
+        |f: &str| std::fs::read_to_string(dir.join(f)).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    let (step, total) = if merge { (num("msgnum"), num("end")) } else { (num("next"), num("last")) };
+    let out = run_ok(worktree, &["diff", "--name-only", "--diff-filter=U", "-z"], LOCAL_TIMEOUT).await?;
+    let files = out.stdout.split('\0').filter(|s| !s.is_empty()).map(PathBuf::from).collect();
+    Ok(Some((files, step, total)))
+}
+
+/// `(files, insertions, deletions)` from the merge base of HEAD and `base` to the working tree, so
+/// uncommitted work counts; untracked files count in `files` only. Zeros when there is no merge base.
+pub async fn diffstat(worktree: &Path, base: &str) -> Result<(u32, u32, u32), KeltaError> {
+    let mb = run(worktree, &["merge-base", base, "HEAD"], LOCAL_TIMEOUT).await?;
+    if !mb.ok() {
+        return Ok((0, 0, 0));
+    }
+    let out = run_ok(worktree, &["diff", "--numstat", mb.stdout.trim()], LOCAL_TIMEOUT).await?;
+    let (mut files, mut ins, mut del) = (0u32, 0u32, 0u32);
+    for line in out.stdout.lines() {
+        let mut it = line.split('\t').map(|n| n.parse::<u32>().unwrap_or(0)); // binary files: "-"
+        files += 1;
+        ins += it.next().unwrap_or(0);
+        del += it.next().unwrap_or(0);
+    }
+    let untracked =
+        run_ok(worktree, &["ls-files", "-z", "--others", "--exclude-standard"], LOCAL_TIMEOUT).await?;
+    files += untracked.stdout.split('\0').filter(|s| !s.is_empty()).count() as u32;
+    Ok((files, ins, del))
 }
 
 /// Upstream of HEAD (`origin/feat/x`) if configured.

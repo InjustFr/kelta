@@ -16,7 +16,7 @@ export { frames, FrameScheduler } from './raf';
 export type { TerminalViewDeps, TerminalView, ViewState, ViewRequest } from './view';
 
 export interface TerminalViewPoolOptions {
-  /** `terminal.max_live_views` (default 4, 1..12): hidden views kept alive beyond the visible ones. */
+  /** `terminal.max_live_views` (default 2, 1..12): hidden views kept alive beyond the visible ones. */
   capacity: number;
   /** View factory (tests inject fakes). The default creates xterm-backed views lazily. */
   createView?: (sessionId: SessionId) => PoolView | Promise<PoolView>;
@@ -104,8 +104,11 @@ export class TerminalViewPool {
         this.#views.set(sessionId, view);
       }
       if (!this.#visible.has(sessionId)) {
-        // Hidden again while the view was being created: keep it pooled, not mounted.
-        this.#pushHidden(sessionId);
+        // Hidden again while being created: hide() pooled the id. Released or evicted meanwhile: drop it.
+        if (!this.#hidden.includes(sessionId)) {
+          this.#views.delete(sessionId);
+          view.dispose();
+        }
         return;
       }
     }
@@ -117,8 +120,7 @@ export class TerminalViewPool {
   hide(sessionId: SessionId): void {
     if (!this.#visible.delete(sessionId)) return;
     const view = this.#views.get(sessionId);
-    if (!view) return; // still being created: show() pools it
-    view.unmount();
+    view?.unmount(); // no view yet: still being created, show() keeps it only if still pooled
     this.#pushHidden(sessionId);
   }
 

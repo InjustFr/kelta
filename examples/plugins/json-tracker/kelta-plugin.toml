@@ -1,0 +1,19 @@
+# Example process (KPP) provider plugin: a tracker backed by a JSON file (PLUGINS.md §9).
+# Account: [accounts.demo] kind = "plugin_tracker", plugin = "json-tracker",
+#          base_url = "/abs/path/tickets.json" (default: tickets.json in this directory).
+id = "json-tracker"
+name = "JSON tracker"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "Tickets from a local JSON file (KPP example)"
+author = "Kelta contributors"
+license = "MIT"
+permissions = ["provider"]
+
+[provider]
+kind = "tracker"
+command = "node"
+args = ["tracker.cjs"]
+caps = { comment = true, assign = true }
+browser_url = "file://{base_url}#{key}"
+branch_key = "{key}"

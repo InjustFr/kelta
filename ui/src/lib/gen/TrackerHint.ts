@@ -3,7 +3,7 @@ import type { AccountId } from "./AccountId";
 
 export type TrackerHint = { 
 /**
- * `"jira"` | `"redmine"` | `"github"` | `"gitlab"`.
+ * `"jira"` | `"redmine"` | `"github"` | `"gitlab"` | `"gitea"`.
  */
 kind: string, 
 /**

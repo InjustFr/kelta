@@ -3,6 +3,7 @@
 //! All fakes record what they receive and expose it through accessor methods; none spawns threads,
 //! touches the network or arms timers.
 
+pub mod conformance;
 mod core;
 mod providers;
 mod services;

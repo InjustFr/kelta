@@ -3,7 +3,19 @@
 import type { CtlCommand, UiEvent } from '$lib/gen';
 
 export type SheetKey =
-  'start_work' | 'onboarding' | 'project_new' | 'plugin_install' | 'tool_picker' | 'session_new';
+  | 'start_work'
+  | 'work_new'
+  | 'link_ticket'
+  | 'onboarding'
+  | 'project_new'
+  | 'plugin_install'
+  | 'tool_picker'
+  | 'session_new'
+  | 'ship'
+  | 'finish'
+  | 'finish_merged'
+  | 'fix'
+  | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {
@@ -65,6 +77,7 @@ export class UiStore {
   apply(ev: UiEvent): void {
     if (ev.type !== 'ctl.command') return;
     if (ev.cmd.cmd === 'palette') this.openOverlay('palette');
+    else if (ev.cmd.cmd === 'plugin_install') this.openSheet('plugin_install', { source: ev.cmd.source });
     for (const l of [...this.#ctlListeners]) l(ev.cmd);
   }
 }

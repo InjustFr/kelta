@@ -14,10 +14,14 @@ pub enum TrackerKind {
     Redmine,
     GithubIssues,
     GitlabIssues,
+    GiteaIssues,
     Linear,
+    /// A process (KPP) plugin provider.
+    Plugin,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
 pub struct TrackerCaps {
     pub board_columns: bool,
     pub assign: bool,

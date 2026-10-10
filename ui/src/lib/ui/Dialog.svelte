@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
 
   import IconButton from './IconButton.svelte';
+  import { focusModal, modalKeydown } from './modal';
 
   interface Props {
     title: string;
@@ -19,40 +20,10 @@
   const uid = $props.id();
   const titleId = `k-dialog-${uid}`;
   let el = $state<HTMLDivElement>();
-  let previous: Element | null = null;
 
-  $effect(() => {
-    previous = document.activeElement;
-    const first = el?.querySelector<HTMLElement>(
-      '[autofocus], input, textarea, select, button.primary, button',
-    );
-    (first ?? el)?.focus();
-    return () => {
-      if (previous instanceof HTMLElement) previous.focus();
-    };
-  });
+  $effect(() => (el ? focusModal(el) : undefined));
 
-  function onkeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      onclose();
-    } else if (e.key === 'Tab' && el) {
-      // Focus trap.
-      const focusables = [
-        ...el.querySelectorAll<HTMLElement>('button, input, textarea, select, [tabindex="0"]'),
-      ].filter((f) => !f.hasAttribute('disabled'));
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (!first || !last) return;
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }
+  const onkeydown = (e: KeyboardEvent): void => modalKeydown(e, el, onclose);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
@@ -92,10 +63,14 @@
     max-height: 70vh;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--k-border);
     border-radius: var(--k-radius-lg);
-    background: var(--k-bg-elev);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
+  }
+
+  .k-dialog:focus-visible {
+    outline: none;
   }
 
   header {
@@ -108,7 +83,7 @@
   h2 {
     margin: 0;
     font-size: var(--k-font-size-lg);
-    font-weight: 600;
+    font-weight: var(--k-weight-strong);
   }
 
   .danger h2 {
@@ -124,7 +99,6 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-5) var(--k-space-4);
-    border-top: 1px solid var(--k-border);
+    padding: var(--k-space-3) var(--k-space-5) var(--k-space-5);
   }
 </style>

@@ -14,6 +14,7 @@
   import Select from '$lib/ui/Select.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
+  import DeviceSignIn from '../fields/DeviceSignIn.svelte';
   import Field from '../fields/Field.svelte';
   import SecretControl from '../fields/SecretControl.svelte';
   import { useEditor } from '../lib/editor.svelte';
@@ -24,6 +25,8 @@
     emptyDraft,
     kindInfo,
     needsEmail,
+    oauthHost,
+    oauthSecretRef,
     suggestId,
     validateDraft,
     type AccountDraft,
@@ -54,6 +57,8 @@
     try {
       backends = await ipc.secretBackendsStatus();
       backendError = null;
+      // No file yet: show the create fields straight away.
+      creating = !!backends.find((b) => b.backend === 'encrypted-file')?.detail?.startsWith('not set up');
     } catch (err) {
       backendError = toIpcError('secret_backends_status', err).message;
     }
@@ -62,6 +67,36 @@
   $effect(() => {
     void loadBackends();
   });
+
+  // The encrypted secrets file: its passphrase goes to the backend once per app run and is
+  // cleared here right away. A `not_found` answer means no file yet: confirm, then create it.
+  let passphrase = $state('');
+  let passphraseAgain = $state('');
+  let creating = $state(false);
+  let unlocking = $state(false);
+  let unlockError = $state<string | null>(null);
+
+  async function unlock(): Promise<void> {
+    if (creating && passphrase !== passphraseAgain) {
+      unlockError = 'The two passphrases differ';
+      return;
+    }
+    unlocking = true;
+    unlockError = null;
+    try {
+      await ipc.secretUnlock({ passphrase, create: creating });
+      creating = false;
+      await loadBackends();
+    } catch (err) {
+      const e = toIpcError('secret_unlock', err);
+      if (e.code === 'not_found') creating = true;
+      unlockError = e.message;
+    } finally {
+      passphrase = '';
+      passphraseAgain = '';
+      unlocking = false;
+    }
+  }
 
   const keyringBackend = $derived(
     backends.find((b) => b.backend === 'keychain' || b.backend === 'secret-service'),
@@ -160,8 +195,32 @@
     }
   }
 
+  // Browser sign-in needs a registered OAuth app per host (`oauth.client_ids`).
+  const clientIds = $derived.by((): Record<string, unknown> => {
+    const v = editor.valueOf('oauth.client_ids');
+    return isRecord(v) ? v : {};
+  });
+
+  function signedIn(ref: string): void {
+    draft.secret = ref;
+    draft.auth = 'oauth';
+    void save(true);
+  }
+
+  // Tokens Kelta stored (keyring:/file:, and the OAuth grant next to them) go with the account,
+  // unless another account still uses the same ref.
   async function remove(id: string): Promise<void> {
-    await editor.reset(joinPath(['accounts', id]));
+    const all = editor.valueOf('accounts');
+    const refs = Object.entries(isRecord(all) ? all : {}).map(([k, a]) => [k, isRecord(a) ? a.secret : null]);
+    const ref = refs.find(([k]) => k === id)?.[1];
+    if (!(await editor.reset(joinPath(['accounts', id])))) return;
+    if (typeof ref !== 'string' || !/^(keyring|file):./.test(ref)) return;
+    if (refs.some(([k, r]) => k !== id && r === ref)) return;
+    for (const r of [ref, `${ref}.oauth`]) {
+      await ipc
+        .secretDelete({ secret_ref: r })
+        .catch((err: unknown) => toasts.error(err, 'Could not delete the stored token'));
+    }
   }
 
   const accountsNode = $derived(editor.schema ? nodeAt(editor.schema, ['accounts']) : null);
@@ -202,6 +261,35 @@
         <Icon name={b.available ? 'circle-check' : 'triangle-alert'} size={14} />
         <strong>{b.backend}</strong>
         <span class="muted">{b.detail ?? (b.available ? 'available' : 'unavailable')}</span>
+        {#if b.backend === 'encrypted-file' && !b.available}
+          <form
+            class="advice unlock"
+            data-testid="secret-file-unlock"
+            onsubmit={(e) => {
+              e.preventDefault();
+              void unlock();
+            }}
+          >
+            <TextInput
+              bind:value={passphrase}
+              type="password"
+              autocomplete="off"
+              label={creating ? 'New passphrase' : 'Passphrase'}
+            />
+            {#if creating}
+              <TextInput
+                bind:value={passphraseAgain}
+                type="password"
+                autocomplete="off"
+                label="Repeat the passphrase"
+              />
+            {/if}
+            <Button size="sm" variant="primary" type="submit" loading={unlocking} disabled={!passphrase}
+              >{creating ? 'Create' : 'Unlock'}</Button
+            >
+            {#if unlockError}<p class="error" role="alert">{unlockError}</p>{/if}
+          </form>
+        {/if}
         {#if advice}
           <div class="advice" data-testid="backend-advice">
             <p>{advice.title}</p>
@@ -216,7 +304,8 @@
   </ul>
   {#if keyringBackend && !keyringBackend.available}
     <p class="hint" data-testid="keyring-fallback">
-      The keyring is unavailable: choose <code>command:</code> or <code>env:</code> when you add an account.
+      The keyring is unavailable: choose the encrypted file, <code>command:</code> or <code>env:</code> when you
+      add an account.
     </p>
   {/if}
 
@@ -313,8 +402,26 @@
           <Button variant="primary" onclick={toSecret}>Next</Button>
         </div>
       {:else if step === 2}
+        {@const host = oauthHost(draft.kind, draft.base_url)}
+        {@const signInReady = !!host && typeof clientIds[host] === 'string' && !!clientIds[host].trim()}
         <div class="form">
-          <p class="muted">Where does Kelta get the token for <strong>{draft.id}</strong>?</p>
+          {#if signInReady}
+            {@const ref = oauthSecretRef(draft)}
+            <DeviceSignIn
+              kind={draft.kind}
+              baseUrl={draft.base_url.trim() || kindInfo(draft.kind).baseUrlDefault!}
+              secretRef={ref}
+              onsigned={() => signedIn(ref)}
+            />
+          {:else if host}
+            <p class="hint" data-testid="oauth-unset">
+              To sign in with the browser instead of a token, register an OAuth app on {host} and add its client
+              id under <code>oauth.client_ids</code> (see docs/user/oauth.md).
+            </p>
+          {/if}
+          <p class="muted">
+            {signInReady ? 'Or choose' : 'Choose'} where Kelta gets the token for <strong>{draft.id}</strong>.
+          </p>
           <SecretControl
             value={draft.secret}
             accountKind={draft.kind}
@@ -459,6 +566,13 @@
     padding: var(--k-space-3) var(--k-space-4);
     background: var(--k-bg-sunken);
     border-radius: var(--k-radius);
+  }
+
+  .unlock {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--k-space-3);
   }
 
   .advice p {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -62,5 +64,23 @@ describe('themes', () => {
       expect(xtermTheme(mode).brightWhite).toBe(p.ansi[15]);
     }
     expect(terminalPalette('dark').background).not.toBe(terminalPalette('light').background);
+  });
+
+  it('tokens.css mirrors theme.ts (light block first, then the two dark blocks)', () => {
+    const tokensCss = readFileSync('src/styles/tokens.css', 'utf8'); // vitest runs from ui/
+    const values = (name: string) =>
+      [...tokensCss.matchAll(new RegExp(`--k-term-${name}: (#[0-9a-f]{6})`, 'g'))].map((m) => m[1]);
+    for (const [name, key] of [
+      ['bg', 'background'],
+      ['fg', 'foreground'],
+      ['cursor', 'cursor'],
+      ['selection', 'selectionBackground'],
+    ] as const) {
+      expect(values(name)).toEqual([
+        xtermTheme('light')[key],
+        xtermTheme('dark')[key],
+        xtermTheme('dark')[key],
+      ]);
+    }
   });
 });

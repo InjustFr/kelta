@@ -63,6 +63,28 @@ export const KINDS: readonly KindInfo[] = [
     codeHost: true,
   },
   {
+    kind: 'bitbucket',
+    label: 'Bitbucket',
+    blurb: 'Bitbucket Cloud pull requests (its issue tracker was removed; use Jira).',
+    baseUrlRequired: false,
+    baseUrlDefault: 'https://api.bitbucket.org/2.0',
+    baseUrlPlaceholder: 'https://api.bitbucket.org/2.0',
+    secretDefault: 'keyring',
+    authOptions: ['basic', 'bearer'],
+    codeHost: true,
+  },
+  {
+    kind: 'gitea',
+    label: 'Gitea / Forgejo',
+    blurb: 'Gitea or Forgejo issues and pull requests (self-hosted, Codeberg).',
+    baseUrlRequired: true,
+    baseUrlDefault: null,
+    baseUrlPlaceholder: 'https://git.example.org',
+    secretDefault: 'keyring',
+    authOptions: ['token'],
+    codeHost: true,
+  },
+  {
     kind: 'linear',
     label: 'Linear',
     blurb: 'Linear issues with a personal API key.',
@@ -84,7 +106,8 @@ export interface AccountDraft {
   kind: AccountKind;
   base_url: string;
   flavor: 'auto' | 'cloud' | 'dc';
-  auth: '' | 'basic' | 'bearer' | 'api_key' | 'token';
+  /** `oauth` is set by "Sign in with GitHub / GitLab", never picked by hand. */
+  auth: '' | 'basic' | 'bearer' | 'api_key' | 'token' | 'oauth';
   email: string;
   user: string;
   secret: string;
@@ -154,13 +177,17 @@ export function validateDraft(
   }
   if (d.kind === 'jira' && needsEmail(d) && !d.email.trim())
     errors.email = 'Jira Cloud needs the account e-mail';
+  if (d.kind === 'bitbucket' && needsEmail(d) && !d.email.trim())
+    errors.email = 'Bitbucket API tokens need the Atlassian account e-mail';
   if (d.poll_secs.trim() && !/^\d+$/.test(d.poll_secs.trim())) errors.poll_secs = 'Whole seconds';
   if (!d.secret.trim()) errors.secret = 'Choose where the token comes from';
   return errors;
 }
 
-/** Jira Cloud (`*.atlassian.net` or flavor=cloud) authenticates with e-mail + token. */
+/** Jira Cloud (`*.atlassian.net` or flavor=cloud) and Bitbucket API tokens authenticate with e-mail + token. */
 export function needsEmail(d: AccountDraft): boolean {
+  // Bitbucket: API token = e-mail + token (Basic); access tokens are Bearer.
+  if (d.kind === 'bitbucket') return d.auth !== 'bearer';
   if (d.kind !== 'jira') return false;
   if (d.flavor === 'cloud') return true;
   return d.flavor === 'auto' && /atlassian\.net/.test(d.base_url);
@@ -183,6 +210,22 @@ export function buildAccount(d: AccountDraft): JsonValue {
   return out;
 }
 
+/** Host `oauth.client_ids` is keyed by, for kinds with browser sign-in (mirrors kelta-http `oauth::client_host`). */
+export function oauthHost(kind: AccountKind, baseUrl: string): string | null {
+  if (kind !== 'github' && kind !== 'gitlab') return null;
+  try {
+    const host = new URL(baseUrl.trim() || kindInfo(kind).baseUrlDefault!).hostname;
+    return host === 'api.github.com' ? 'github.com' : host;
+  } catch {
+    return null;
+  }
+}
+
+/** Where browser sign-in stores the token: the draft's own keyring:/file: ref, else `keyring:<id>`. */
+export function oauthSecretRef(d: AccountDraft): string {
+  return /^(keyring|file):./.test(d.secret) ? d.secret : `keyring:${d.id}`;
+}
+
 export interface SecretAdvice {
   title: string;
   steps: string[];
@@ -198,7 +241,7 @@ export function backendAdvice(backend: string): SecretAdvice | null {
         steps: [
           'On GNOME / KDE the keyring starts with your session. On Sway or Hyprland nothing provides it by default.',
           'Start gnome-keyring for secrets, or enable Secret Service integration in KeePassXC (Settings → Secret Service Integration).',
-          'Or avoid the keyring: use a command: reference (pass, op, secret-tool) or an env: reference.',
+          'Or avoid the keyring: store tokens in the passphrase-encrypted file (file: references), or use a command: reference (pass, op, secret-tool) or an env: reference.',
         ],
         snippets: [
           'gnome-keyring-daemon --start --components=secrets',

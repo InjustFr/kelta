@@ -12,7 +12,7 @@ import { ProjectsStore } from './projects.svelte';
 import { ReviewsStore } from './reviews.svelte';
 import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
-import { TicketsStore } from './tickets.svelte';
+import { TicketsStore, ticketListKey } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
@@ -75,8 +75,8 @@ describe('SessionsStore', () => {
   it('loads all sessions and filters by project', async () => {
     const store = new SessionsStore();
     await store.load();
-    expect(store.all).toHaveLength(10);
-    expect(store.forProject('shop')).toHaveLength(4);
+    expect(store.all).toHaveLength(11);
+    expect(store.forProject('shop')).toHaveLength(5);
     expect(store.needingInput.map((s) => s.project_id)).toEqual(['billing']);
     expect(store.next(['shop', 'billing'], null)?.project_id).toBe('billing');
   });
@@ -113,6 +113,15 @@ describe('LayoutStore', () => {
     await flush();
     expect(mock.calls.filter((c) => c.cmd === 'layout_save')).toHaveLength(1);
     expect(store.get('shop')?.rev).toBe(loaded.rev + 1);
+    expect(store.isDirty('shop')).toBe(false);
+  });
+
+  it('flushForClose saves pending edits without waiting for the debounce', async () => {
+    const store = new LayoutStore();
+    await store.load('shop');
+    store.update('shop', (l) => ({ ...l, active_tab: l.tabs[1]!.id }));
+    await store.flushForClose();
+    expect(mock.calls.filter((c) => c.cmd === 'layout_save')).toHaveLength(1);
     expect(store.isDirty('shop')).toBe(false);
   });
 
@@ -225,6 +234,23 @@ describe('TicketsStore', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
   });
 
+  it('loadMore skips tickets already in the list', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'all' as const };
+    const first = await store.load(scope);
+    const count = first.data!.items.length;
+    // A page that repeats page 1 (offset paging after the order shifted).
+    store.lists = {
+      ...store.lists,
+      [ticketListKey(scope, null)]: {
+        ...first,
+        data: { ...first.data!, next: { kind: 'offset', value: 0 } },
+      },
+    };
+    await store.loadMore(scope);
+    expect(store.items(scope).length).toBe(count);
+  });
+
   it('keeps stale data when a refresh fails', async () => {
     const store = new TicketsStore();
     await store.load({ kind: 'all' });
@@ -271,12 +297,24 @@ describe('WorkStore', () => {
   it('loads work items and finds them by ticket/session', async () => {
     const store = new WorkStore();
     await store.load();
-    expect(store.all).toHaveLength(3);
+    expect(store.all).toHaveLength(8);
     const w = store.all[0]!;
     expect(store.forTicket(w.ticket!)?.id).toBe(w.id);
     expect(store.forSession(w.session_ids[0]!)?.id).toBe(w.id);
     store.apply({ type: 'work.updated', work: { ...w, state: { kind: 'finished' } } });
     expect(store.forTicket(w.ticket!)).toBeNull();
+  });
+
+  it('re-reads git status when a signal changes, not on other updates', async () => {
+    const store = new WorkStore();
+    await store.load();
+    const w = store.all.find((x) => x.state.kind !== 'finished')!;
+    const reads = (): number => mock.calls.filter((c) => c.cmd === 'work_status_all').length;
+    store.apply({ type: 'work.updated', work: { ...w, pr_url: 'https://example.test/pr/1' } });
+    expect(reads()).toBe(0);
+    store.apply({ type: 'work.updated', work: { ...w, review_due: !w.review_due } });
+    await flush();
+    expect(reads()).toBe(1);
   });
 });
 
@@ -358,6 +396,13 @@ describe('UiStore', () => {
     expect(store.sheet).toBeNull();
     store.toggleOverlay('palette');
     expect(store.overlay).toBeNull();
+  });
+
+  it('opens the install sheet for a ctl plugin_install', () => {
+    const store = new UiStore();
+    store.apply({ type: 'ctl.command', cmd: { cmd: 'plugin_install', source: 'gh:acme/x' } });
+    expect(store.sheet?.key).toBe('plugin_install');
+    expect(store.sheet?.props).toEqual({ source: 'gh:acme/x' });
   });
 });
 

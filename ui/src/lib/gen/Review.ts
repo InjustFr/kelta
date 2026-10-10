@@ -6,8 +6,16 @@ import type { ReviewKind } from "./ReviewKind";
 import type { ReviewRef } from "./ReviewRef";
 import type { User } from "./User";
 
-export type Review = { ref: ReviewRef, title: string, url: string, author: User, draft: boolean, head_sha: string, source_branch: string, target_branch: string, ci: CiState, decision: ReviewDecision | null, my_state: MyReviewState | null, mergeable: boolean | null, labels: Array<string>, kind: ReviewKind, updated_at: string, 
+export type Review = { ref: ReviewRef, title: string, url: string, author: User, draft: boolean, head_sha: string, source_branch: string, target_branch: string, ci: CiState, decision: ReviewDecision | null, my_state: MyReviewState | null, mergeable: boolean | null, 
+/**
+ * Commit my last submitted review was left on; with `head_sha` it tells "updated since your review".
+ */
+reviewed_head: string | null, labels: Array<string>, kind: ReviewKind, updated_at: string, 
 /**
  * Ticket keys matched by `reviews.ticket_key_regex` over branch + title.
  */
-linked_tickets: Array<string>, additions: number | null, deletions: number | null, };
+linked_tickets: Array<string>, additions: number | null, deletions: number | null, 
+/**
+ * Head commit the latest decisive review (changes requested / approved) was left on.
+ */
+decision_head?: string | null, };

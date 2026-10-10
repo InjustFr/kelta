@@ -213,12 +213,12 @@
     </div>
   {:else if exited}
     <div class="banner" role="status" data-testid="exit-banner">
+      <span class="mark" aria-hidden="true"></span>
       <span
-        >Exited{exitCode !== null ? ` (${exitCode === -1 ? 'signal' : `code ${exitCode}`})` : ''} —
-        <kbd>Enter</kbd>
-        restart ·
-        <kbd>x</kbd> close</span
+        >Exited{exitCode !== null ? (exitCode === -1 ? ' on a signal' : ` with code ${exitCode}`) : ''}.</span
       >
+      <span class="keys"><kbd>Enter</kbd> restart</span>
+      <span class="keys"><kbd>x</kbd> close</span>
       <span class="spacer"></span>
       <Button size="sm" variant="primary" icon="refresh-cw" onclick={restart}>Restart</Button>
       <Button size="sm" icon="x" onclick={close}>Close</Button>
@@ -259,11 +259,22 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-4);
-    border-top: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
-    color: var(--k-fg-muted);
+    padding: var(--k-space-2) var(--k-space-3);
+    background: var(--k-bezel-raised);
+    color: var(--k-fg);
     z-index: 3;
+  }
+
+  .mark {
+    width: 7px;
+    height: 7px;
+    transform: rotate(45deg);
+    background: var(--k-lamp-error);
+  }
+
+  .keys {
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
   }
 
   .spacer {
@@ -271,16 +282,14 @@
   }
 
   kbd {
-    padding: 0 4px;
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    font-size: var(--k-font-size-xs);
+    border-bottom: 1px solid var(--k-border-strong);
+    color: var(--k-fg-muted);
   }
 
   .overlay {
     position: absolute;
     inset: 0;
     z-index: 3;
-    background: var(--k-bg);
+    background: var(--k-well);
   }
 </style>

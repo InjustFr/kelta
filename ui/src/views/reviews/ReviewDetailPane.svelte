@@ -7,7 +7,7 @@
   import { isIpcError } from '$lib/ipc/transport';
   import { reviews, toasts } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
-  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon } from '$lib/ui';
+  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp } from '$lib/ui';
 
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
   import Loading from '../work/shared/Loading.svelte';
@@ -23,6 +23,9 @@
   const rv = $derived(detail?.review ?? null);
   /** The commit shown on screen: the only value `Approve` ever sends. */
   const shownSha = $derived(rv?.head_sha ?? null);
+
+  /** Line comments waiting in my pending review; a / c / m publish them with the decision. */
+  const pendingCount = $derived(detail?.pending_comments ?? 0);
 
   let changed = $state(false);
   let approving = $state(false);
@@ -79,18 +82,32 @@
     if (rv) openExternal({ url: rv.url }).catch((err) => toasts.error(err, 'Open in browser'));
   }
 
+  /** My own PR: fixed through its work item, never approved here (FLOW §4.2). */
+  const own = $derived(rv?.kind === 'authored');
+
+  function fixWithClaude(): void {
+    void dispatch('work.fix_pr', { review: ref, project_id: projectId });
+  }
+
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (own && (e.key === 'f' || e.key === 'g')) {
+      e.preventDefault();
+      if (e.key === 'f') fixWithClaude();
+      else void reviewLocally(ref, projectId);
+      return;
+    }
+    if (own && ['A', 'c', 'x'].includes(e.key)) return;
     switch (e.key) {
-      case 'A':
+      case 'a':
         void approve();
         break;
       case 'c':
-        dialog = 'comment';
-        break;
-      case 'x':
         dialog = 'changes';
+        break;
+      case 'm':
+        dialog = 'comment';
         break;
       case 'o':
         browse();
@@ -112,9 +129,12 @@
   });
 </script>
 
+<!-- Window focus re-reads the PR: my review state, its head and my pending comments (no polling). -->
+<svelte:window onfocus={() => void reviews.loadDetail(ref)} />
+
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="pane"
+  class="pane k-detail"
   data-testid="review-detail"
   bind:this={root}
   tabindex="0"
@@ -163,33 +183,47 @@
       <div class="line">
         <span class="key">{ref.repo}#{ref.number}</span>
         {#if rv.draft}<Badge>draft</Badge>{/if}
-        <Badge tone={ci.tone}>{ci.glyph} {ci.label}</Badge>
+        <span class="check"><Lamp level={ci.lamp} title={ci.label} />{ci.label}</span>
         {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
         {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
         {#each rv.linked_tickets as t (t)}<Badge tone="info">{t}</Badge>{/each}
       </div>
       <h1>{rv.title}</h1>
-      <div class="line meta">
-        <span>by {rv.author.name}</span>
-        <span><code>{rv.source_branch}</code> → <code>{rv.target_branch}</code></span>
-        <span>head <code data-testid="head-sha" title={rv.head_sha}>{rv.head_sha.slice(0, 7)}</code></span>
-        {#if rv.additions !== null || rv.deletions !== null}
-          <span
-            ><span class="add">+{rv.additions ?? 0}</span> <span class="del">-{rv.deletions ?? 0}</span></span
-          >
-        {/if}
-        {#if rv.mergeable === false}<Badge tone="warn">conflicts</Badge>{/if}
-      </div>
+      <p class="branches"><code>{rv.source_branch}</code> into <code>{rv.target_branch}</code></p>
+      <dl class="k-meta">
+        <dt>Author</dt>
+        <dd>{rv.author.name}</dd>
+        <dt>Head</dt>
+        <dd><code data-testid="head-sha" title={rv.head_sha}>{rv.head_sha.slice(0, 7)}</code></dd>
+        {#if rv.additions !== null || rv.deletions !== null}<dt>Changes</dt>
+          <dd class="k-mono k-num">
+            <span class="add">+{rv.additions ?? 0}</span> <span class="del">−{rv.deletions ?? 0}</span>
+          </dd>{/if}
+        {#if rv.mergeable === false}<dt>Merge</dt>
+          <dd><Badge tone="warn">conflicts</Badge></dd>{/if}
+      </dl>
       <div class="line actions">
-        <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
-          >Approve</Button
-        >
-        <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
-        <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
-        <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
-        <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
-          Review locally
-        </Button>
+        {#if own}
+          <Button variant="primary" icon="bot" onclick={fixWithClaude}>Fix with Claude</Button>
+          <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>Go to work item</Button
+          >
+          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+        {:else}
+          <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
+            >Approve</Button
+          >
+          <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
+          <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
+          {#if detail.pending_comments > 0}
+            <span class="pending" data-testid="pending-comments">
+              {detail.pending_comments} pending {detail.pending_comments === 1 ? 'comment' : 'comments'}
+            </span>
+          {/if}
+          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
+            Review locally
+          </Button>
+        {/if}
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
       </div>
     </header>
@@ -230,7 +264,7 @@
             {#each detail.checks as c (c.name)}
               {@const g = ciGlyph(c.state)}
               <li>
-                <span class="glyph {g.tone}" title={g.label}>{g.glyph}</span>
+                <span class="k-row-lamp"><Lamp level={g.lamp} title={g.label} /></span>
                 {#if c.url}
                   {@const url = c.url}
                   <button
@@ -250,12 +284,14 @@
       </section>
 
       <section aria-label="Files">
-        <h2>Files ({detail.files.length})</h2>
+        <h2>Files <span class="muted k-num">{detail.files.length}</span></h2>
         <ul class="plain files">
           {#each detail.files as f (f.path)}
             <li>
               <code>{f.path}</code>
-              <span><span class="add">+{f.additions}</span> <span class="del">-{f.deletions}</span></span>
+              <span class="k-mono k-num"
+                ><span class="add">+{f.additions}</span> <span class="del">−{f.deletions}</span></span
+              >
             </li>
           {/each}
         </ul>
@@ -271,7 +307,7 @@
     title="Comment"
     label="Comment (Markdown)"
     submitLabel="Comment"
-    required
+    required={!pendingCount}
     onsubmit={(t) => send('comment', t)}
     onclose={() => {
       dialog = null;
@@ -283,7 +319,7 @@
     title="Request changes"
     label="What should change? (Markdown)"
     submitLabel="Request changes"
-    required
+    required={!pendingCount}
     danger
     onsubmit={(t) => send('changes', t)}
     onclose={() => {
@@ -300,20 +336,21 @@
     height: 100%;
     min-height: 0;
     outline: none;
-    background: var(--k-bg);
+    background: var(--k-well);
     color: var(--k-fg);
-  }
-
-  .pane:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--k-focus);
   }
 
   .changed {
     display: flex;
     align-items: center;
-    gap: var(--k-space-2);
-    padding: var(--k-space-2) var(--k-space-4);
-    background: var(--k-bg-sunken);
+    gap: var(--k-space-3);
+    padding: var(--k-space-2) var(--k-space-5);
+    background: var(--k-bezel-raised);
+    color: var(--k-warn);
+  }
+
+  .pending {
+    font-size: var(--k-font-size-sm);
     color: var(--k-warn);
   }
 
@@ -322,30 +359,31 @@
   }
 
   .head {
-    padding: var(--k-space-3) var(--k-space-4);
-    border-bottom: 1px solid var(--k-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-3);
+    padding: var(--k-space-5) var(--k-space-5) var(--k-space-4);
   }
 
   h1 {
-    margin: var(--k-space-1) 0 var(--k-space-2);
-    font-size: var(--k-font-size-lg);
+    margin: 0;
+    max-width: var(--k-measure);
+    font-size: var(--k-font-size-xl);
+    font-weight: var(--k-weight-strong);
+    line-height: 1.28;
   }
 
   h2 {
+    margin: var(--k-space-5) 0 var(--k-space-3);
     font-size: var(--k-font-size);
+    font-weight: var(--k-weight-strong);
   }
 
   .line {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--k-space-2);
-  }
-
-  .meta {
-    margin-bottom: var(--k-space-3);
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
+    gap: var(--k-space-3);
   }
 
   .key {
@@ -353,44 +391,58 @@
     color: var(--k-fg-muted);
   }
 
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
+  .branches {
+    margin: 0;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
   .scroll {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: var(--k-space-3) var(--k-space-4);
+    padding: 0 var(--k-space-5) var(--k-space-5);
   }
 
   .plain {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-1);
+    gap: var(--k-space-2);
+    max-width: var(--k-measure);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .files li {
+  .plain li {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     gap: var(--k-space-3);
   }
 
-  .glyph.ok,
+  .files li {
+    justify-content: space-between;
+  }
+
   .add {
     color: var(--k-ok);
   }
 
-  .glyph.danger,
   .del {
     color: var(--k-danger);
   }
 
-  .glyph.warn {
-    color: var(--k-warn);
-  }
-
   .muted {
     color: var(--k-fg-subtle);
+    font-weight: 400;
   }
 
   .link {
@@ -398,7 +450,6 @@
     border: 0;
     background: transparent;
     color: var(--k-accent);
-    font: inherit;
     cursor: pointer;
   }
 </style>
