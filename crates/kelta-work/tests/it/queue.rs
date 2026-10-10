@@ -166,4 +166,9 @@ async fn reruns_past_claude_files_still_wait_for_a_slot() {
     let retried = w.retry_step(&a.id, "claude").await.unwrap();
     assert!(matches!(retried.state, WorkState::Queued { .. }), "{:?}", retried.state);
     assert_eq!(live_claude(&fx).len(), 1);
+
+    // b's Claude exits: a reruns only its claude step and is Active again, not stuck Starting.
+    let sid = live_claude(&fx).into_iter().find(|s| s.work_item_id.as_ref() == Some(&b.id)).unwrap().id;
+    fx.core.exit_session(&sid, 0);
+    wait_active(&fx, &a.id).await;
 }

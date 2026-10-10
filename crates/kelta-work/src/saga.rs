@@ -90,6 +90,11 @@ fn repo_of(project: &ProjectInfo, id: &str) -> Result<RepoInfo, KeltaError> {
         .ok_or_else(|| KeltaError::not_found(format!("repo {id} in project {}", project.id)))
 }
 
+/// The state a work item settles in once its saga has run.
+fn started_state(item: &WorkItem) -> WorkState {
+    if item.pr_url.is_some() { WorkState::PrOpen } else { WorkState::Active }
+}
+
 /// Await `session.exited` for `sid` (subscribe *before* the session can exit).
 pub(crate) async fn await_exit(
     core: &Arc<dyn CoreApi>,
@@ -557,6 +562,11 @@ impl WorkService {
                     return Ok(item);
                 }
             }
+        }
+        // `persist` already done (a dequeued step retry): nothing else ends `Starting`.
+        if item.state == WorkState::Starting {
+            item.state = started_state(&item);
+            self.save(&mut item).await?;
         }
         Ok(item)
     }
@@ -1615,7 +1625,7 @@ impl WorkService {
         item: &mut WorkItem,
         j: &mut Journal,
     ) -> Result<Option<String>, KeltaError> {
-        item.state = if item.pr_url.is_some() { WorkState::PrOpen } else { WorkState::Active };
+        item.state = started_state(item);
         self.save(item).await?;
         if let Some(t) = &item.ticket {
             env.core.publish(
