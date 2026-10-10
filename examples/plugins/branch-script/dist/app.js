@@ -5,6 +5,7 @@ import { connect } from './kelta-sdk.js';
 const $ = (id) => document.getElementById(id);
 const MAX_RUNS = 10;
 let item = null;
+let running = false;
 
 function text(el, value) {
   el.textContent = value;
@@ -57,7 +58,7 @@ async function load(kelta) {
     item = null;
     text($('status'), `${e.code ?? 'error'}: ${e.message}`);
   }
-  $('run').disabled = !item;
+  $('run').disabled = running || !item;
   if (!item) {
     text($('title'), 'No work item');
     $('work').replaceChildren();
@@ -69,21 +70,26 @@ async function load(kelta) {
 }
 
 async function run(kelta) {
-  const { script = 'echo' } = await kelta.settings.get();
+  // `load()` can replace `item` mid-run: keep the one this run started on.
+  const w = item;
+  if (running || !w) return;
+  running = true;
   $('run').disabled = true;
-  text($('status'), `Running ${script}…`);
   try {
-    const res = await kelta.exec('./run.sh', [script, item.branch, item.worktree], { cwd: item.worktree });
+    const { script = 'echo' } = await kelta.settings.get();
+    text($('status'), `Running ${script}…`);
+    const res = await kelta.exec('./run.sh', [script, w.branch, w.worktree], { cwd: w.worktree });
     text($('status'), `Exit ${res.code}`);
     // Keep the tail only: a kv value is capped at 64 KiB and exec output can reach 64 KiB per stream.
     const output = (res.stdout + res.stderr).slice(-2000);
     const runs = (await kelta.kv.get('runs')) ?? [];
-    runs.unshift({ at: new Date().toLocaleString(), branch: item.branch, code: res.code, output });
+    runs.unshift({ at: new Date().toLocaleString(), branch: w.branch, code: res.code, output });
     await kelta.kv.set('runs', runs.slice(0, MAX_RUNS));
     await renderRuns(kelta);
   } catch (e) {
     text($('status'), `${e.code ?? 'error'}: ${e.message}`);
   } finally {
+    running = false;
     $('run').disabled = !item;
   }
 }
