@@ -294,7 +294,9 @@ repo = "web"
 
 Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account.
 
-A project's Tracker section (Settings > Projects) and `ProjectInfo.tracker` show the first source listing the project, with its routes for that project as `repo_rules`. Saving it replaces that source's tracker and the project's routes; removing it takes the project out of the source, which stays.
+`ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
+
+**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
 
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.
@@ -387,7 +389,7 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys val
 - linear: `team?` (team key, e.g. `ENG`), `project?` (project name), `scope = "assigned_to_me"|"all"` (default `assigned_to_me`), `labels?` (label names), plus the shared `status` key. Columns are the team's workflow states; moves resolve state ids by name at runtime.
 - Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab, gitea and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
 
-The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Anyone without editing. Settings > Projects > Tracker lists the sources (label, account, who, current iteration, Remove) and **Add source** opens the picker.
+The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Team without editing. Settings > Sources lists each source's views (label, account, who, current iteration, Remove) and **Add view…** opens the picker.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 
@@ -397,7 +399,7 @@ The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with n
 - same views with other columns or status_map stay separate sources labelled `<label> · <project name>`; a source is labelled after its only view, else its account; its id is the label's slug, made unique with `-2`, `-3`, …;
 - a block equal to an existing source only adds the project to it, so a second run changes nothing.
 
-A block still on disk (hand-written, restored from `.trash`, or a failed move) is read the same way in memory until the next launch moves it. After a move, the toast "Ticket sources moved out of your projects" offers **Review** (Settings > Projects).
+A block still on disk (hand-written, restored from `.trash`, or a failed move) is read the same way in memory until the next launch moves it. After a move, the toast "Ticket sources moved out of your projects" offers **Review** (Settings > Sources).
 
 ## 4. Repo-local `.kelta/config.toml`
 

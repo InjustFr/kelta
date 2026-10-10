@@ -14,8 +14,8 @@ use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::model::Scope;
 use kelta_proto::settings::{AccountKind, RepoMatch, Settings, Source, SourceRoute, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
-use kelta_proto::tracker::Who;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
+use kelta_proto::tracker::Who;
 
 fn view(id: &str, jql: &str) -> TrackerView {
     TrackerView { id: id.into(), label: id.into(), jql: Some(jql.into()), ..TrackerView::default() }
@@ -145,7 +145,8 @@ async fn now_lists_my_tickets_of_a_source_feeding_no_project() {
     // Now's Up next reads `tracker_list(All, None, Mine)`
     let all = h.core.tracker_list(Scope::All, None, Some(Who::Mine), None, true).await.unwrap();
     assert!(all.items.iter().any(|i| i.source_ids.contains(&"team".to_owned())));
-    let team = h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, true).await.unwrap();
+    let team =
+        h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, true).await.unwrap();
     assert!(!team.items.is_empty());
     assert!(team.items.iter().all(|i| i.source_ids == ["team"] && i.project_ids.is_empty()));
 }

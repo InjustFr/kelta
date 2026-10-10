@@ -1,10 +1,11 @@
 <script lang="ts">
   // Projects: create from a folder, rename / recolour, remove (the config file moves to
-  // projects/.trash/), their ticket sources, plus the environment variables of the layer being edited.
+  // projects/.trash/), the sources feeding each, plus the environment variables of the layer being edited.
   import type { SettingsSectionProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
-  import { projects, toasts, ui } from '$lib/stores';
+  import { projects, settings, toasts, ui } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -14,9 +15,10 @@
 
   import ColorPicker from '../../onboarding/ColorPicker.svelte';
   import SectionForm from '../SectionForm.svelte';
-  import TrackerSources from '../TrackerSources.svelte';
 
   let props: SettingsSectionProps = $props();
+
+  const fedBy = (id: string) => (settings.value()?.sources ?? []).filter((s) => s.projects.includes(id));
 
   const editable = $derived(projects.list.filter((p) => !p.builtin));
   let editing = $state<string | null>(null);
@@ -116,6 +118,17 @@
                   ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
                 >
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
+                {#if fedBy(p.id).length > 0}
+                  <span class="muted" data-testid="fed-by"
+                    >Fed by {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
+                        type="button"
+                        class="link"
+                        onclick={() =>
+                          void dispatch('settings.open', { section: 'sources', source_id: s.id })}
+                        >{s.label}</button
+                      >{/each}</span
+                  >
+                {/if}
               </div>
               <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
               <IconButton icon="trash-2" label="Remove {p.name}" size="sm" onclick={() => (removing = p)} />
@@ -124,7 +137,6 @@
         {/each}
       </ul>
     {/if}
-    <TrackerSources projectId={props.projectId} />
     <h3 class="env">Environment</h3>
   {/snippet}
 </SectionForm>
@@ -217,5 +229,14 @@
 
   .icon {
     width: 56px;
+  }
+
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-accent);
+    font: inherit;
+    cursor: pointer;
   }
 </style>

@@ -1,25 +1,37 @@
 <script lang="ts">
-  // "Add a ticket source" (SPEC Design): search what an account offers (`tracker_sources`) and add
-  // a hit's ready view to the project's tracker binding. Opened as sheet `tracker.source_picker`.
+  // "Add a ticket source" (SPEC Design): search what an account offers (`tracker_sources`). With
+  // `sourceId` the picked view joins that source's board; without, the pick creates a source labelled
+  // after the board, feeding `projectId` when given. Opened as sheet `tracker.source_picker`.
   import type { SheetProps } from '$app/registry';
   import type { SourceHit } from '$lib/gen';
   import { dispatch } from '$lib/actions';
   import { trackerSources } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
-  import { projects, settings, toasts } from '$lib/stores';
+  import { settings, toasts } from '$lib/stores';
   import { Button, Kbd, Select, Sheet, Spinner, TextInput } from '$lib/ui';
 
   import { kindInfo } from '../settings/lib/accounts';
-  import { isAdded, saveTracker, trackerAccountIds, withSource } from '../settings/lib/sources.svelte';
+  import {
+    isAdded,
+    newSource,
+    saveSources,
+    trackerAccountIds,
+    withEdited,
+    withSource,
+  } from '../settings/lib/sources.svelte';
 
   interface Props extends SheetProps {
-    projectId: string;
+    sourceId?: string;
+    projectId?: string;
   }
 
-  let { projectId, onclose }: Props = $props();
+  let { sourceId, projectId, onclose }: Props = $props();
 
-  const project = $derived(projects.byId(projectId));
-  const binding = $derived(project?.tracker ?? null);
+  const all = $derived(settings.value()?.sources ?? []);
+  /** The source created by a first pick: later picks add to it. */
+  let created = $state<string | null>(null);
+  const target = $derived(all.find((s) => s.id === (sourceId ?? created)) ?? null);
+  const binding = $derived(target?.tracker ?? null);
   const accountsCfg = $derived(settings.value()?.accounts ?? {});
   const accountIds = $derived(trackerAccountIds(accountsCfg, binding));
   const kindOf = (id: string) => accountsCfg[id]?.kind;
@@ -82,7 +94,24 @@
     if (!hit || adding || isAdded(binding, hitsAccount, hit)) return;
     adding = true;
     try {
-      await saveTracker(projectId, withSource(binding, hitsAccount, hit));
+      if (target) {
+        await saveSources(
+          withEdited(all, target.id, (s) => ({ ...s, tracker: withSource(s.tracker, hitsAccount, hit) })),
+        );
+      } else {
+        const s = newSource(all, hitsAccount, hit, projectId);
+        await saveSources([...all, s]);
+        created = s.id;
+        toasts.push({
+          level: 'info',
+          text: `${s.label} added · Choose its projects`,
+          action: {
+            label: 'Choose projects',
+            command: 'settings.open',
+            args: { section: 'sources', source_id: s.id },
+          },
+        });
+      }
     } catch (err) {
       toasts.error(err, `Could not add ${hit.label}`);
     } finally {
@@ -92,7 +121,7 @@
 
   function editToml(): void {
     onclose();
-    void dispatch('settings.open', { section: 'projects', toml: projectId });
+    void dispatch('settings.open', { section: 'sources' });
   }
 
   function onkeydown(e: KeyboardEvent): void {

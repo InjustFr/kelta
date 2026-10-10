@@ -195,7 +195,10 @@ pub fn ticket_prs(
 }
 
 /// Merge pages from several queries: de-dup by ref, union of project, source and view ids.
-pub fn merge_tickets(pages: Vec<(Vec<Ticket>, &TicketQuery)>, work: &HashMap<TicketRef, WorkItem>) -> Vec<TicketItem> {
+pub fn merge_tickets(
+    pages: Vec<(Vec<Ticket>, &TicketQuery)>,
+    work: &HashMap<TicketRef, WorkItem>,
+) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
     let union = |into: &mut Vec<String>, from: &[String]| {

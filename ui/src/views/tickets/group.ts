@@ -141,8 +141,8 @@ export function sortTickets(items: readonly TicketItem[], sort: TicketSort): Tic
 // ---- grouping --------------------------------------------------------------------------------
 
 /**
- * Groups in display order, items kept in input order. `sources` maps a view id to its label and gives
- * the source order (a ticket sits under its first view); `flow` classifies for the Flow grouping.
+ * Groups in display order, items kept in input order. `sources` maps a source id to its label and gives
+ * the source order (a ticket sits under its first source); `flow` classifies for the Flow grouping.
  * `columns` (in board order) order the Status groups; statuses matching no column by name follow them.
  */
 export function groupTickets(
@@ -188,8 +188,8 @@ export function groupTickets(
     } else if (by === 'assignee') {
       g = [t.assignee?.id ?? '', t.assignee?.name ?? 'Unassigned', null, t.assignee ? 0 : 1];
     } else {
-      const at = sources.findIndex((s) => s.id === item.view_ids[0]);
-      g = [item.view_ids[0] ?? '', sources[at]?.label ?? 'Other', null, at < 0 ? sources.length : at];
+      const at = sources.findIndex((s) => s.id === item.source_ids[0]);
+      g = [item.source_ids[0] ?? '', sources[at]?.label ?? 'Other', null, at < 0 ? sources.length : at];
     }
     const [id, label, category, order] = g;
     const group = groups.get(id) ?? { id, label, category, order, items: [] };

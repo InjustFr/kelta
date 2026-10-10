@@ -92,6 +92,7 @@ export const ICON_NAMES = [
   'grip-vertical',
   'layers',
   'shield-check',
+  'list-tree',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

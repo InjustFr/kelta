@@ -7,7 +7,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { projects, reviews, sessions, settings, tickets, toasts, work } from '$lib/stores';
+  import { projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
   import {
     Button,
     EmptyState,
@@ -43,6 +43,12 @@
   $effect(() => {
     untrack(() => void refreshNow());
   });
+  // once at mount, not in an $effect: load() writes the state value() reads (a loop while pending)
+  if (settings.value() === null) void settings.load().catch(() => undefined);
+
+  /** No ticket source at all: Now says so and offers the source picker. */
+  const noSource = $derived(settings.hasSources() === false);
+  const pickBoard = () => ui.openSheet('tracker.source_picker', {});
 
   function refresh(): void {
     void refreshNow(true);
@@ -495,7 +501,16 @@
     </ErrorState>
   {:else}
     <StateBanner error={noData ? null : firstError} errors={accountErrors} onretry={refresh} />
-    {#if lines.length === 0}
+    {#if noSource && lines.length > 0}
+      <div class="nosource" data-testid="now-no-source">
+        No ticket source yet · <button type="button" class="link" onclick={pickBoard}>Pick a board</button>
+      </div>
+    {/if}
+    {#if lines.length === 0 && noSource && !filter}
+      <EmptyState icon="ticket" title="Add a ticket source: pick a board">
+        {#snippet actions()}<Button variant="primary" onclick={pickBoard}>Pick a board</Button>{/snippet}
+      </EmptyState>
+    {:else if lines.length === 0}
       <EmptyState
         icon="inbox"
         title={filter ? `Nothing matches "${filter}".` : 'Nothing needs you right now'}
@@ -774,6 +789,22 @@
 
   .meta.warn {
     color: var(--k-warn);
+  }
+
+  .nosource {
+    padding: var(--k-space-2) var(--k-space-4);
+    border-bottom: 1px solid var(--k-border);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-accent);
+    font: inherit;
+    cursor: pointer;
   }
 
   .msgline {

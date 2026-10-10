@@ -66,6 +66,7 @@ describe('registries', { timeout: 30_000 }, () => {
       'terminal',
       'linux-graphics',
       'projects',
+      'sources',
       'accounts',
       'claude',
       'editors',

@@ -1,32 +1,27 @@
 <script lang="ts">
-  // Settings → Projects → Tracker: the ticket sources of one project (`[project.tracker].views`).
-  // Whose tickets, current iteration and removal save at once through `project_update`.
-  import type { TrackerBinding, TrackerView, Who } from '$lib/gen';
-  import { projects, settings, toasts, ui } from '$lib/stores';
-  import { Button, IconButton, Select, Toggle } from '$lib/ui';
+  // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
+  // Whose tickets, current iteration and removal save at once to the global `[[sources]]`.
+  import type { TrackerView, Who } from '$lib/gen';
+  import { settings, toasts, ui } from '$lib/stores';
+  import { Badge, Button, IconButton, Select, Toggle } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
-  import { saveTracker, iterationWord, viewAccount } from './lib/sources.svelte';
+  import { iterationWord, saveSources, viewAccount, withEdited } from './lib/sources.svelte';
 
   interface Props {
-    /** Project shown first (the settings pane's project). */
-    projectId: string | null;
+    sourceId: string;
   }
 
-  let { projectId }: Props = $props();
+  let { sourceId }: Props = $props();
 
-  const editable = $derived(projects.list.filter((p) => !p.builtin));
-  // the block's own pick, dropped once the pane's project changes
-  let chosen = $state<{ id: string; from: string | null } | null>(null);
-  const shownId = $derived(chosen?.from === projectId ? chosen.id : projectId);
-  const project = $derived(editable.find((p) => p.id === shownId) ?? editable[0] ?? null);
-  const binding = $derived(project?.tracker ?? null);
+  const all = $derived(settings.value()?.sources ?? []);
+  const source = $derived(all.find((s) => s.id === sourceId) ?? null);
   const kindOf = (id: string) => settings.value()?.accounts[id]?.kind;
 
   const WHO: { value: Who | ''; label: string }[] = [
     { value: 'mine', label: 'Mine' },
     { value: 'unassigned', label: 'Unassigned' },
-    { value: 'anyone', label: 'Anyone' },
+    { value: 'anyone', label: 'Team' },
   ];
   // A view without `who` keeps its own query (jql, assigned_to, scope): say so rather than guess,
   // and keep the choice for any view with a query so trying a who can be undone.
@@ -35,65 +30,45 @@
   const whoOptions = (v: TrackerView) =>
     v.who && !hasQuery(v) ? WHO : [{ value: '' as const, label: 'Set by query' }, ...WHO];
 
-  $effect(() => {
-    if (settings.value() === null) void settings.load().catch(() => undefined);
-  });
-
-  async function save(b: TrackerBinding, views: TrackerView[]): Promise<void> {
-    if (!project) return;
+  async function save(views: TrackerView[]): Promise<void> {
     try {
-      await saveTracker(project.id, { ...b, views });
+      await saveSources(withEdited(all, sourceId, (s) => ({ ...s, tracker: { ...s.tracker, views } })));
     } catch (err) {
-      toasts.error(err, 'Could not save the ticket sources');
+      toasts.error(err, 'Could not save the ticket source');
     }
   }
 
-  const patch = (b: TrackerBinding, id: string, p: Partial<TrackerView>) =>
-    save(
-      b,
-      b.views.map((v) => (v.id === id ? { ...v, ...p } : v)),
-    );
+  const patch = (views: TrackerView[], id: string, p: Partial<TrackerView>) =>
+    save(views.map((v) => (v.id === id ? { ...v, ...p } : v)));
 
-  /** A source can hold a hand-written query: removal is confirmed (it writes the TOML at once). */
-  async function remove(b: TrackerBinding, v: TrackerView): Promise<void> {
+  /** A view can hold a hand-written query: removal is confirmed (it writes the TOML at once). */
+  async function remove(views: TrackerView[], v: TrackerView): Promise<void> {
     const answer = await confirms.ask({
       title: `Remove ${v.label}?`,
-      body: `${project?.name ?? 'The project'} stops listing tickets from this source. Its query is not kept.`,
+      body: `${source?.label ?? 'The source'} stops listing tickets from this view. Its query is not kept.`,
       tone: 'danger',
-      actions: [{ id: 'remove', label: 'Remove source', variant: 'danger' }],
+      actions: [{ id: 'remove', label: 'Remove view', variant: 'danger' }],
     });
-    if (answer === 'remove')
-      await save(
-        b,
-        b.views.filter((x) => x.id !== v.id),
-      );
+    if (answer === 'remove') await save(views.filter((x) => x.id !== v.id));
   }
 </script>
 
-{#if project}
-  <section class="tracker" data-testid="tracker-block" data-project-id={project.id}>
+{#if source}
+  {@const b = source.tracker}
+  <section class="tracker" data-testid="tracker-block" data-source-id={source.id}>
     <div class="head">
-      <h3>Tracker</h3>
-      {#if editable.length > 1}
-        <label class="k-visually-hidden" for="tracker-project">Project</label>
-        <Select
-          value={project.id}
-          options={editable.map((p) => ({ value: p.id, label: p.name }))}
-          onchange={(id) => (chosen = { id, from: projectId })}
-          id="tracker-project"
-        />
-      {/if}
+      <h4>Board</h4>
+      <Badge tone="neutral">{b.account}</Badge>
       <Button
         size="sm"
         icon="plus"
-        onclick={() => ui.openSheet('tracker.source_picker', { projectId: project.id })}
-        data-testid="add-source">Add source</Button
+        onclick={() => ui.openSheet('tracker.source_picker', { sourceId: source.id })}
+        data-testid="add-source">Add view…</Button
       >
     </div>
-    {#if !binding || binding.views.length === 0}
-      <p class="empty">No ticket source for {project.name}.</p>
+    {#if b.views.length === 0}
+      <p class="empty">No view: {source.label} lists no ticket.</p>
     {:else}
-      {@const b = binding}
       <ul>
         {#each b.views as v (v.id)}
           {@const acc = viewAccount(b, v)}
@@ -102,22 +77,27 @@
             <span class="label">{v.label}</span>
             <span class="account">{acc}</span>
             <span class="who">
-              <label class="k-visually-hidden" for="who-{v.id}">Whose tickets in {v.label}</label>
+              <label class="k-visually-hidden" for="who-{source.id}-{v.id}">Whose tickets in {v.label}</label>
               <Select
                 value={v.who ?? ''}
                 options={whoOptions(v)}
-                onchange={(who) => void patch(b, v.id, { who: who || null })}
-                id="who-{v.id}"
+                onchange={(who) => void patch(b.views, v.id, { who: who || null })}
+                id="who-{source.id}-{v.id}"
               />
             </span>
             {#if word}
               <Toggle
                 label="Current {word} only"
                 checked={v.current_iteration}
-                onchange={(on) => void patch(b, v.id, { current_iteration: on })}
+                onchange={(on) => void patch(b.views, v.id, { current_iteration: on })}
               />
             {/if}
-            <IconButton icon="trash-2" label="Remove {v.label}" size="sm" onclick={() => void remove(b, v)} />
+            <IconButton
+              icon="trash-2"
+              label="Remove {v.label}"
+              size="sm"
+              onclick={() => void remove(b.views, v)}
+            />
           </li>
         {/each}
       </ul>
@@ -127,7 +107,7 @@
 
 <style>
   .tracker {
-    margin-top: var(--k-space-5);
+    margin-top: var(--k-space-3);
   }
 
   .head {
@@ -141,7 +121,7 @@
     margin-left: auto;
   }
 
-  h3 {
+  h4 {
     margin: 0;
   }
 
