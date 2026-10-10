@@ -35,6 +35,7 @@ describe('registries', { timeout: 30_000 }, () => {
         'finish_merged',
         'fix',
         'link_ticket',
+        'merge',
         'onboarding',
         'plugin_install',
         'project_new',
