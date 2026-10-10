@@ -9,9 +9,29 @@ import {
   parseDirtyFiles,
   parseFields,
   planValid,
+  scratchBranch,
+  taskTitle,
+  REVIEW_READONLY,
+  reviewPhase,
+  workActionDisabled,
   validateBranch,
   validatePlan,
 } from './common';
+
+describe('scratch branch preview', () => {
+  it('slugs the first line like the backend', () => {
+    expect(taskTitle('\n  Fix the login flake  \nmore')).toBe('Fix the login flake');
+    expect(scratchBranch('Fix the login flake\nIt fails on CI', 'wip/{slug}', 40)).toBe(
+      'wip/fix-the-login-flake',
+    );
+    expect(scratchBranch('Éviter les doublons', 'wip/{slug}', 40)).toBe('wip/eviter-les-doublons');
+    expect(scratchBranch('The palette fuzzy matcher is slow with 5k cached tickets', 'wip/{slug}', 30)).toBe(
+      'wip/the-palette-fuzzy-matcher-is',
+    );
+    expect(scratchBranch('  \n ', 'wip/{slug}', 40)).toBe('');
+    expect(taskTitle('x'.repeat(80))).toHaveLength(72);
+  });
+});
 
 describe('validateBranch', () => {
   it('accepts normal names', () => {
@@ -130,5 +150,25 @@ describe('banners and columns', () => {
     expect(columnFor(cols, { name: 'in progress', category: 'in_progress' })?.id).toBe('doing');
     expect(columnFor(cols, { name: 'Weird', category: 'in_review' })?.id).toBe('rev');
     expect(columnFor(cols, { name: 'Weird', category: 'done' })).toBeNull();
+  });
+});
+
+describe('review-kind items', () => {
+  const head = 'b'.repeat(40);
+  it('derives the three phases', () => {
+    expect(reviewPhase({ my_state: 'pending', head_sha: head })).toBe('pending');
+    expect(reviewPhase({ my_state: null, head_sha: head })).toBe('pending');
+    expect(reviewPhase({ my_state: 'approved', head_sha: head, reviewed_head: 'a'.repeat(40) })).toBe(
+      'updated',
+    );
+    expect(reviewPhase({ my_state: 'approved', head_sha: head, reviewed_head: head })).toBe('reviewed');
+    expect(reviewPhase({ my_state: 'commented', head_sha: head })).toBe('reviewed');
+  });
+  it('makes p/r/f/l read-only on review items only', () => {
+    for (const k of ['p', 'r', 'f', 'l']) {
+      expect(workActionDisabled({ kind: 'review' }, k)).toBe(REVIEW_READONLY);
+      expect(workActionDisabled({ kind: 'ticket' }, k)).toBeNull();
+    }
+    expect(workActionDisabled({ kind: 'review' }, 'g')).toBeNull();
   });
 });

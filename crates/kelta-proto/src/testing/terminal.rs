@@ -10,7 +10,8 @@ use crate::error::KeltaError;
 use crate::ids::SessionId;
 use crate::model::AttachInfo;
 use crate::term::{
-    KillSignal, PtySpawnSpec, SessionTermStats, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, KillSignal, PtySpawnSpec, SessionTermStats, TerminalEvent, TerminalLimits, TerminalPalette,
+    TerminalStats,
 };
 
 /// What the fake recorded for one spawned session.
@@ -33,6 +34,8 @@ pub struct FakeTerminalHost {
     scripts: Mutex<HashMap<SessionId, Vec<Vec<u8>>>>,
     /// Text returned by `text_tail`.
     tails: Mutex<HashMap<SessionId, String>>,
+    /// On-disk history log contents (`history_*`).
+    history: Mutex<HashMap<SessionId, String>>,
     palette: Mutex<Option<TerminalPalette>>,
     limits: Mutex<Option<TerminalLimits>>,
     spawn_error: Mutex<Option<KeltaError>>,
@@ -50,6 +53,14 @@ impl FakeTerminalHost {
 
     pub fn set_text_tail(&self, id: &SessionId, text: impl Into<String>) {
         self.tails.lock().insert(id.clone(), text.into());
+    }
+
+    pub fn set_history(&self, id: &SessionId, text: impl Into<String>) {
+        self.history.lock().insert(id.clone(), text.into());
+    }
+
+    pub fn has_history(&self, id: &SessionId) -> bool {
+        self.history.lock().contains_key(id)
     }
 
     /// Next `spawn` fails with this error.
@@ -156,7 +167,7 @@ impl TerminalHost for FakeTerminalHost {
 
     fn detach(&self, id: &SessionId, generation: u32) {
         if let Some(sess) = self.sessions.lock().get_mut(id)
-            && sess.generation == generation
+            && (sess.generation == generation || generation == crate::api::ANY_VIEW)
         {
             sess.sink = None;
             sess.attached = false;
@@ -218,6 +229,39 @@ impl TerminalHost for FakeTerminalHost {
         let lines: Vec<&str> = text.lines().collect();
         let start = lines.len().saturating_sub(max_lines as usize);
         Ok(lines[start..].join("\n"))
+    }
+
+    fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError> {
+        let text = self.history.lock().get(id).cloned().unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        let start = lines.len().saturating_sub(max_lines as usize);
+        Ok(lines[start..].join("\n"))
+    }
+
+    fn history_search(
+        &self,
+        ids: &[SessionId],
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError> {
+        let h = self.history.lock();
+        let q = query.to_lowercase();
+        let mut hits: Vec<HistoryHit> = ids
+            .iter()
+            .flat_map(|id| {
+                let text = h.get(id).map(String::as_str).unwrap_or_default();
+                text.lines()
+                    .filter(|l| l.to_lowercase().contains(&q))
+                    .map(|l| HistoryHit { session_id: id.clone(), line: l.to_owned() })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        hits.truncate(limit as usize);
+        Ok(hits)
+    }
+
+    fn history_delete(&self, id: &SessionId) {
+        self.history.lock().remove(id);
     }
 
     fn stats(&self) -> TerminalStats {

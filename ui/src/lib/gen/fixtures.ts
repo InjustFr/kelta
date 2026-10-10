@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -616,6 +616,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
@@ -643,6 +644,7 @@ export const reviewDetail: ReviewDetail = {
       "path": "src/prices.rs"
     }
   ],
+  "pending_comments": 0,
   "review": {
     "additions": 120,
     "author": {
@@ -669,6 +671,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
@@ -730,16 +733,19 @@ export const startWorkPlan: StartWorkPlan = {
 export const workItem: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
   "rebase": null,
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -828,22 +834,26 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
 export const workItemFailed: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
   "rebase": null,
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -934,6 +944,7 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -949,8 +960,12 @@ export const finishOpts: FinishOpts = {
 export const gitStatus: GitStatus = {
   "ahead": 2,
   "behind": 0,
+  "deletions": 7,
   "dirty": true,
   "diverged": false,
+  "files": 3,
+  "insertions": 41,
+  "missing": false,
   "remote_new": 0,
   "unpushed": true
 };
@@ -958,11 +973,13 @@ export const gitStatus: GitStatus = {
 export const workItemRebaseStopped: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/74",
   "project_id": "shop",
   "rebase": {
@@ -977,6 +994,7 @@ export const workItemRebaseStopped: WorkItem = {
   },
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "sent_threads": [
     "PRRT_kwDOA1"
   ],
@@ -1067,6 +1085,7 @@ export const workItemRebaseStopped: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -1506,7 +1525,7 @@ export const settingsDefault: Settings = {
       "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
       "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-      "standalone": "",
+      "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
     }
   },
@@ -1660,6 +1679,8 @@ export const settingsDefault: Settings = {
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "work.menu": ".",
+      "work.new": "w",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000
@@ -1817,10 +1838,13 @@ export const settingsDefault: Settings = {
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
+    "history_log": true,
+    "history_log_mb": 16,
+    "history_log_total_mb": 512,
     "keyboard_protocol": "legacy",
     "letter_spacing": 0.0,
     "line_height": 1.15,
-    "max_live_views": 4,
+    "max_live_views": 2,
     "memory_cap_mb": 160,
     "minimum_contrast_ratio": 1.0,
     "option_as_meta": "both",
@@ -1835,6 +1859,7 @@ export const settingsDefault: Settings = {
       "shell": 3000,
       "tool": 500
     },
+    "session_host": "daemon",
     "shell": "",
     "shift_enter": {
       "claude": "esc-cr",
@@ -1880,7 +1905,8 @@ export const settingsDefault: Settings = {
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
-    "review_template": "review"
+    "review_template": "review",
+    "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
@@ -2362,6 +2388,9 @@ export const terminalStats: TerminalStats = {
 };
 
 export const terminalLimits: TerminalLimits = {
+  "history_log": true,
+  "history_log_mb": 16,
+  "history_log_total_mb": 512,
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,
@@ -2372,6 +2401,11 @@ export const terminalLimits: TerminalLimits = {
     "tool": 500
   },
   "view_scrollback": 1000
+};
+
+export const historyHit: HistoryHit = {
+  "line": "error[E0308]: mismatched types",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203"
 };
 
 export const loginEnv: LoginEnv = {
@@ -2926,16 +2960,19 @@ export const uiEventWorkUpdated: UiEvent = {
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",
     "rebase": null,
     "repo_id": "api",
     "review": null,
+    "review_due": false,
     "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -3024,6 +3061,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }
 };
@@ -3177,6 +3215,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "notification": notification,
   "terminal_stats": terminalStats,
   "terminal_limits": terminalLimits,
+  "history_hit": historyHit,
   "login_env": loginEnv,
   "proxied_request": proxiedRequest,
   "proxied_response": proxiedResponse,

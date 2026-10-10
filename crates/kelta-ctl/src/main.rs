@@ -21,6 +21,7 @@ const USAGE: &str = "usage: kelta-ctl <command>
   open <path>                              open a directory as a project
   focus-project <id>                       focus a project
   start <ticket key|url> [--project <id>]  start work on a ticket
+  start --task <text> [--project <id>]     new work item without a ticket (wip/ branch + Claude)
   new --template <id> [--cwd <dir>] [--project <id>]
   emit <custom.event> [--json '<json>']    publish a custom.* bus event
   trust <repo path>                        trust a repository's .kelta config
@@ -214,7 +215,14 @@ fn build(args: &[String]) -> Result<Value, String> {
             envelope("focus_project", json!({ "id": one(&pos, "project id")? }))
         }
         "start" => {
-            let (pos, opts) = parse_opts(rest, &["project"])?;
+            let (pos, opts) = parse_opts(rest, &["project", "task"])?;
+            if let Some(task) = opts.get("task").and_then(Value::as_str) {
+                none(&pos)?;
+                if task.trim().is_empty() {
+                    return Err("--task is empty".into());
+                }
+                return Ok(envelope("start_task", json!({ "task": task, "project": opts.get("project") })));
+            }
             envelope(
                 "start",
                 json!({ "ticket": one(&pos, "ticket key or URL")?, "project": opts.get("project") }),

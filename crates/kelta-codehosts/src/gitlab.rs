@@ -179,6 +179,8 @@ impl GitlabHost {
                 (merge_status == Some("not_approved")).then_some(ReviewDecision::ReviewRequired)
             },
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
+            // shortcut: GitLab REST keeps no commit per approval, so no "updated since your review"; upgrade via GraphQL reviewer states.
+            reviewed_head: None,
             mergeable: match (merge_status, v.get("has_conflicts").and_then(Value::as_bool)) {
                 (_, Some(true)) | (Some("conflict"), _) => Some(false),
                 (Some("mergeable"), _) => Some(true),
@@ -337,11 +339,12 @@ impl CodeHost for GitlabHost {
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         let me = self.me().await?;
-        let (mr, approvals, changes, states) = tokio::join!(
+        let (mr, approvals, changes, states, drafts) = tokio::join!(
             self.json(HttpRequest::get(&url)),
             self.json(HttpRequest::get(format!("{url}/approvals"))),
             self.json(HttpRequest::get(format!("{url}/changes"))),
             self.json(HttpRequest::get(format!("{url}/reviewers"))),
+            self.draft_count(r),
         );
         let mr = mr?.body;
         // Approvals, changes and reviewer states are best effort (rules / tiers / versions differ).
@@ -451,10 +454,12 @@ impl CodeHost for GitlabHost {
             reviewers,
             checks,
             files,
+            pending_comments: drafts.unwrap_or(0),
         })
     }
 
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        self.publish_drafts(r).await?;
         let url = self.mr_url(&r.repo, &format!("/{}/approve", r.number));
         // 409 (head moved: sha mismatch) maps to `Conflict` in the shared status mapping.
         self.auth.send_text(HttpRequest::post(url).json(json!({"sha": head_sha}))).await?;
@@ -462,6 +467,10 @@ impl CodeHost for GitlabHost {
     }
 
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        let published = self.publish_drafts(r).await?;
+        if published > 0 && body.trim().is_empty() {
+            return Ok(());
+        }
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(())
@@ -477,6 +486,27 @@ impl CodeHost for GitlabHost {
             }
             tracing::debug!(code = %e.code, "unapprove after request-changes note failed (nothing to withdraw?)");
         }
+        Ok(())
+    }
+
+    async fn add_pending_comment(
+        &self,
+        r: &ReviewRef,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> Result<(), KeltaError> {
+        let refs = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+        let refs = refs.get("diff_refs").filter(|d| d.is_object()).ok_or_else(|| {
+            KeltaError::upstream("merge request has no diff_refs yet (still being created?)")
+        })?;
+        // shortcut: old_path = new_path, so a comment on a renamed file is rejected by GitLab; pass the old path when needed.
+        let position = json!({
+            "position_type": "text", "base_sha": refs["base_sha"], "start_sha": refs["start_sha"],
+            "head_sha": refs["head_sha"], "new_path": path, "old_path": path, "new_line": line,
+        });
+        let url = self.mr_url(&r.repo, &format!("/{}/draft_notes", r.number));
+        self.auth.send_text(HttpRequest::post(url).json(json!({"note": body, "position": position}))).await?;
         Ok(())
     }
 
@@ -651,6 +681,22 @@ impl CodeHost for GitlabHost {
 }
 
 impl GitlabHost {
+    async fn draft_count(&self, r: &ReviewRef) -> Result<u32, KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/draft_notes", r.number));
+        let v = self.json(HttpRequest::get(url).query("per_page", PER_PAGE)).await?.body;
+        Ok(v.as_array().map_or(0, Vec::len) as u32)
+    }
+
+    /// Publishes my draft notes (GitLab's pending review); returns how many went out.
+    async fn publish_drafts(&self, r: &ReviewRef) -> Result<u32, KeltaError> {
+        let n = self.draft_count(r).await?;
+        if n > 0 {
+            let url = self.mr_url(&r.repo, &format!("/{}/draft_notes/bulk_publish", r.number));
+            self.auth.send_text(HttpRequest::post(url)).await?;
+        }
+        Ok(n)
+    }
+
     /// Browser base URL.
     pub fn web_url(&self) -> &str {
         &self.web

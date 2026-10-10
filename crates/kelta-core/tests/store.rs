@@ -58,10 +58,14 @@ async fn work_store_round_trip() {
     assert_eq!(steps, vec!["fetch_ticket", "worktree", "zz_custom"]);
     assert_eq!(got.steps[0].detail.as_deref(), Some("boom"));
 
+    assert!(!got.review_due && !got.claude_replied);
+
     let mut w2 = w.clone();
     w2.state = WorkState::Failed { step: "x".into(), message: "y".into() };
+    w2.review_due = true;
     s.put_item(&w2).await.unwrap();
-    assert_eq!(s.get_item(&w.id).await.unwrap().unwrap().state, w2.state);
+    let got = s.get_item(&w.id).await.unwrap().unwrap();
+    assert_eq!((got.state, got.review_due, got.claude_replied), (w2.state.clone(), true, false));
     assert_eq!(s.list_items(Some(&w.project_id)).await.unwrap().len(), 1);
     assert_eq!(s.list_items(Some(&"other".into())).await.unwrap().len(), 0);
     s.delete_item(&w.id).await.unwrap();

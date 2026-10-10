@@ -270,7 +270,7 @@ async fn my_pr_made_outside_kelta_is_adopted_on_its_head_branch() {
 
     let w = fx.service();
     let plan = w.plan(&project(), WorkSource::Review { review: r.r#ref.clone() }).await.unwrap();
-    assert_eq!(plan.source, WorkSource::Branch { name: "feat/outside".into() });
+    assert_eq!(plan.source, WorkSource::Branch { name: "feat/outside".into(), task: None, repo: None });
     assert_eq!(plan.adopt_pr.as_deref(), Some(r.url.as_str()));
     let item = w.start(plan).await.unwrap();
     assert_eq!((item.kind, item.state.clone()), (WorkKind::Branch, WorkState::PrOpen), "{:?}", item.steps);

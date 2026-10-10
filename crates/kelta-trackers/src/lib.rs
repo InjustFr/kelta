@@ -1,7 +1,7 @@
 //! # kelta-trackers (L5)
 //!
 //! Tracker providers (ARCHITECTURE §8.1): Jira Cloud + Data Center (flavor detection, ADF walker),
-//! Redmine, GitHub Issues (+ Projects v2), GitLab Issues, Linear.
+//! Redmine, GitHub Issues (+ Projects v2), GitLab Issues, Gitea/Forgejo Issues, Linear.
 //!
 //! Every provider resolves its secret per request through [`kelta_http::Authed`] (the resolver
 //! caches), talks only through the per-account [`kelta_http::HttpCtx`], and never hard-codes
@@ -16,19 +16,21 @@ use kelta_proto::settings::{AccountConfig, AccountKind};
 
 pub mod adf;
 mod common;
+pub mod gitea;
 pub mod github;
 pub mod gitlab;
 pub mod jira;
 pub mod linear;
 pub mod redmine;
 
+pub use gitea::GiteaIssues;
 pub use github::GithubIssues;
 pub use gitlab::GitlabIssues;
 pub use jira::JiraTracker;
 pub use linear::LinearTracker;
 pub use redmine::RedmineTracker;
 
-/// Builds `Tracker`s for `jira`, `redmine`, `github`, `gitlab`, `linear` accounts.
+/// Builds `Tracker`s for `jira`, `redmine`, `github`, `gitlab`, `gitea`, `linear` accounts.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TrackerFactory;
 
@@ -45,6 +47,10 @@ impl ProviderFactory for TrackerFactory {
             AccountKind::Github => Arc::new(GithubIssues::new(account, http, secrets)?),
             AccountKind::Gitlab => Arc::new(GitlabIssues::new(account, http, secrets)?),
             AccountKind::Linear => Arc::new(LinearTracker::new(account, http, secrets)?),
+            AccountKind::Gitea => Arc::new(GiteaIssues::new(account, http, secrets)?),
+            AccountKind::Bitbucket => {
+                return Err(KeltaError::unsupported("Bitbucket Cloud removed its issue tracker; use Jira"));
+            }
         })
     }
 

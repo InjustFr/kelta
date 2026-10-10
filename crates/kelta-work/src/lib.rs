@@ -23,10 +23,13 @@ mod listener;
 mod ops;
 mod rebase;
 mod saga;
+mod signals;
+mod status;
 
 pub use ops::selection_ref;
+pub use plan::pr_title_with_key;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 
@@ -39,9 +42,10 @@ use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    EditorTarget, FinishOpts, GitStatus, RebaseOp, SendFile, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem,
-    WorkSource, WorkStepStatus,
+    EditorTarget, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo, StartWorkPlan, StepStatus,
+    WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
+use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};
 
 /// Services owned by other lanes that the saga needs (wired by core after construction).
@@ -67,6 +71,12 @@ pub struct WorkService {
     item_locks: Mutex<HashMap<WorkItemId, Arc<tokio::sync::Mutex<()>>>>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,
+    /// Serializes store writes; held only around load-modify-save (`save`, `update`).
+    write_lock: tokio::sync::Mutex<()>,
+    /// Last `git fetch` per repo (`work_status_all` floor).
+    fetched: Mutex<HashMap<PathBuf, std::time::Instant>>,
+    /// Worktree fingerprint at the last `UserPromptSubmit` per item: a `Stop` changed code iff it moved.
+    prompt_marks: Mutex<HashMap<WorkItemId, u64>>,
     /// Bus listener (follow_claude_edits, HTTP consumer release); started on first need.
     listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Claude sessions holding an HTTP server consumer.
@@ -86,6 +96,9 @@ impl WorkService {
             versions: Mutex::new(HashMap::new()),
             item_locks: Mutex::new(HashMap::new()),
             start_lock: tokio::sync::Mutex::new(()),
+            write_lock: tokio::sync::Mutex::new(()),
+            fetched: Mutex::new(HashMap::new()),
+            prompt_marks: Mutex::new(HashMap::new()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
             crash_after: Mutex::new(None),
@@ -126,9 +139,24 @@ impl WorkService {
         let guard = self.start_lock.lock().await;
         // Re-check: another start for this source may have created its item since `plan`.
         let items = self.store.list_items(Some(&plan.project_id)).await?;
-        let existing =
-            plan.existing.clone().or_else(|| plan::existing_for(&items, &plan.source).map(|w| w.id.clone()));
-        if let Some(existing) = existing {
+        // A scratch source's name may be empty: match on the branch the plan resolved.
+        let source = match &plan.source {
+            WorkSource::Branch { task, repo, .. } => {
+                WorkSource::Branch { name: plan.branch.clone(), task: task.clone(), repo: repo.clone() }
+            }
+            other => other.clone(),
+        };
+        let found = plan::existing_for(&items, &source).map(|w| w.id.clone());
+        if plan.existing.is_none()
+            && found.is_some()
+            && matches!(&plan.source, WorkSource::Branch { task: Some(_), .. })
+        {
+            return Err(KeltaError::conflict(format!(
+                "Branch {} has a work item. Edit the branch name or the task's first line.",
+                plan.branch
+            )));
+        }
+        if let Some(existing) = plan.existing.clone().or(found) {
             drop(guard);
             return self.resume(&existing).await;
         }
@@ -165,6 +193,16 @@ impl WorkService {
     /// `work_create_pr`.
     pub async fn create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
         self.create_pr_impl(id, draft).await
+    }
+
+    /// `work_link`: attach a ticket to a scratch item (optionally applying `on_start` / `on_pr`).
+    pub async fn link(
+        &self,
+        id: &WorkItemId,
+        ticket: TicketRef,
+        apply_side_effects: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        self.link_impl(id, ticket, apply_side_effects).await
     }
 
     /// `work_finish`.
@@ -214,6 +252,16 @@ impl WorkService {
     /// `work_status` (on demand).
     pub async fn status(&self, id: &WorkItemId) -> Result<GitStatus, KeltaError> {
         self.status_impl(id).await
+    }
+
+    /// `work_status_all`: fresh git status of every unfinished item (one fetch per repo, 5 min floor).
+    pub async fn status_all(&self) -> Result<BTreeMap<WorkItemId, GitStatus>, KeltaError> {
+        self.status_all_impl().await
+    }
+
+    /// `work_diff`: spawns the review diff session (editor with `editor.review_args`, else a shell).
+    pub async fn diff(&self, id: &WorkItemId) -> Result<SessionInfo, KeltaError> {
+        self.diff_impl(id).await
     }
 
     /// Work item owning a session (for `CoreApi::work_for_session`).
@@ -300,16 +348,49 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`.
-    /// Write only `claude_uuid` (the hook-learned conversation id) on a fresh load.
-    pub(crate) async fn set_claude_uuid(&self, id: &WorkItemId, uuid: String) -> Result<(), KeltaError> {
-        let mut fresh = self.load(id).await?;
-        fresh.claude_uuid = Some(uuid);
-        self.save(&fresh).await
+    /// Persist + publish `work.updated`. The hook-owned flags (`review_due`, `claude_replied`) are
+    /// never written here: `item` takes the stored ones, so a long operation's final save cannot
+    /// undo a hook that arrived while it ran (FLOW §2.3). Only [`Self::update`] writes them.
+    pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
+        {
+            let _w = self.write_lock.lock().await;
+            if let Some(cur) = self.store.get_item(&item.id).await? {
+                item.review_due = cur.review_due;
+                item.claude_replied = cur.claude_replied;
+            }
+            self.store.put_item(item).await?;
+        }
+        self.publish_updated(item);
+        Ok(())
     }
 
-    pub(crate) async fn save(&self, item: &WorkItem) -> Result<(), KeltaError> {
-        self.store.put_item(item).await?;
+    /// Field-level write: re-load under the write lock, apply `f`, save when it returns true, publish.
+    pub(crate) async fn update(
+        &self,
+        id: &WorkItemId,
+        f: impl FnOnce(&mut WorkItem) -> bool,
+    ) -> Result<WorkItem, KeltaError> {
+        let (mut item, changed) = {
+            let _w = self.write_lock.lock().await;
+            let mut item = self
+                .store
+                .get_item(id)
+                .await?
+                .ok_or_else(|| KeltaError::not_found(format!("work item {id}")))?;
+            let changed = f(&mut item);
+            if changed {
+                self.store.put_item(&item).await?;
+            }
+            (item, changed)
+        };
+        item.steps = self.merged_steps(id, &item.steps).await?;
+        if changed {
+            self.publish_updated(&item);
+        }
+        Ok(item)
+    }
+
+    fn publish_updated(&self, item: &WorkItem) {
         if let Ok(core) = self.api() {
             core.publish(
                 BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": item }))
@@ -317,7 +398,6 @@ impl WorkService {
                     .with_work_item(item.id.clone()),
             );
         }
-        Ok(())
     }
 
     pub(crate) async fn set_step(

@@ -72,10 +72,10 @@
     align-items: center;
     gap: var(--k-space-1);
     padding: var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    background: var(--k-bg-elev);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
   }
 
   input {

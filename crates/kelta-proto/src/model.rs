@@ -84,7 +84,7 @@ pub struct RepoDraft {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CodeHostHint {
     pub repo_id: String,
-    /// `"github"` | `"gitlab"`.
+    /// `"github"` | `"gitlab"` | `"bitbucket"` | `"gitea"`.
     pub kind: String,
     /// Host, e.g. `github.com`, `gitlab.acme.example`.
     pub host: String,
@@ -97,7 +97,7 @@ pub struct CodeHostHint {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TrackerHint {
-    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"`.
+    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"` | `"gitea"`.
     pub kind: String,
     /// Human explanation, e.g. "branch names contain SHOP-123".
     pub reason: String,
@@ -547,6 +547,20 @@ pub struct WorkItem {
     pub state: WorkState,
     pub steps: Vec<WorkStepStatus>,
     pub created_at: String,
+    /// Scratch items: first line of the task, 72 chars max (tab, rows, PR title).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Set by `work_link` on an item with a PR: the next Ship/Push prefixes the ticket key to the PR
+    /// title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
+    #[serde(default)]
+    pub pr_title_needs_key: bool,
+    /// Claude stopped with changes Louis has not looked at (FLOW §2.3). Set only from a real `Stop`
+    /// hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
+    #[serde(default)]
+    pub review_due: bool,
+    /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+    #[serde(default)]
+    pub claude_replied: bool,
     /// Review thread ids handed to Claude by the last Fix with Claude (resolved on request).
     #[serde(default)]
     #[ts(as = "Option<Vec<String>>", optional)]
@@ -604,13 +618,26 @@ pub struct SendFile {
     pub content: String,
 }
 
-/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` | `{"kind":"branch","name":".."}`.
+/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` |
+/// `{"kind":"branch","name":"..","task":"..","repo":".."}` (scratch work, FLOW §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WorkSource {
-    Ticket { ticket: TicketRef },
-    Review { review: ReviewRef },
-    Branch { name: String },
+    Ticket {
+        ticket: TicketRef,
+    },
+    Review {
+        review: ReviewRef,
+    },
+    /// Empty `name` → `work.scratch_branch_template` with `{slug}` from the task's first line.
+    /// `task` is the first Claude prompt (`{task}`); `repo` defaults to the project's primary repo.
+    Branch {
+        name: String,
+        #[serde(default)]
+        task: Option<String>,
+        #[serde(default)]
+        repo: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -679,7 +706,9 @@ pub struct FinishOpts {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GitStatus {
+    /// Commits on HEAD not in `<remote>/<base>`.
     pub ahead: u32,
+    /// Commits on `<remote>/<base>` not in HEAD.
     pub behind: u32,
     pub dirty: bool,
     pub unpushed: bool,
@@ -691,6 +720,17 @@ pub struct GitStatus {
     #[serde(default)]
     #[ts(as = "Option<u32>", optional)]
     pub remote_new: u32,
+    /// Diffstat from the merge base with `<remote>/<base>` to the working tree (untracked files
+    /// count in `files` only).
+    #[serde(default)]
+    pub files: u32,
+    #[serde(default)]
+    pub insertions: u32,
+    #[serde(default)]
+    pub deletions: u32,
+    /// The worktree directory is gone (deleted outside Kelta).
+    #[serde(default)]
+    pub missing: bool,
 }
 
 /// `{"kind":"session","id":..}` | `{"kind":"work_item","id":..}`.

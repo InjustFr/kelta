@@ -8,4 +8,16 @@ export type TerminalLimits = { scrollback: ScrollbackSettings, memory_cap_mb: nu
 /**
  * History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
  */
-view_scrollback: number, };
+view_scrollback: number, 
+/**
+ * On-disk history log (`terminal.history_log`; ARCHITECTURE §9.6).
+ */
+history_log: boolean, 
+/**
+ * Per-session log cap in MiB (`terminal.history_log_mb`; 0 = default 16).
+ */
+history_log_mb: number, 
+/**
+ * Cap of all logs in MiB (`terminal.history_log_total_mb`; 0 = default 512).
+ */
+history_log_total_mb: number, };

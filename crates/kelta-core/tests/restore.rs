@@ -115,6 +115,9 @@ async fn dormant_sessions_spawn_on_first_attach() {
     assert!(list.iter().all(|s| s.lifecycle == Lifecycle::Dormant));
     assert!(term.spawned_ids().is_empty(), "lazy: nothing spawned before attach");
     assert_eq!(h.core.session_text_tail(&seeded.shell, 2).unwrap(), "line2\nline3");
+    // The on-disk history log wins over the tail stored at quit.
+    term.set_history(&seeded.shell, "older\nline3\nafter-quit");
+    assert_eq!(h.core.session_text_tail(&seeded.shell, 2).unwrap(), "line3\nafter-quit");
 
     // shell → login shell in the last OSC 7 cwd
     let info = h.core.session_attach(&seeded.shell, 132, 43, Box::new(RecordingSink::new())).await.unwrap();
@@ -249,26 +252,19 @@ async fn kill_during_restore_leaves_no_session() {
     };
     {
         let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
-        // Hold the sqlite thread so the restore's lookup is still pending when the kill runs (a
-        // fast store answered before the first poll and the kill landed after the PTY existed).
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let store = h.core.store().clone();
-        let gate = tokio::spawn(async move {
-            store
-                .call(move |_| {
-                    let _ = held.recv();
-                    Ok(())
-                })
-                .await
+        // park the sqlite thread so the restore's store lookup cannot complete before the kill
+        // (an idle store thread can answer before the attach future is first polled to Pending)
+        let (open_gate, gate) = std::sync::mpsc::channel::<()>();
+        h.core.store().exec("test gate", move |_| {
+            let _ = gate.recv();
+            Ok(())
         });
-        tokio::task::yield_now().await;
         let (attach, kill) =
             tokio::join!(h.core.session_attach(&id, 80, 24, Box::new(RecordingSink::new())), async {
                 let r = h.core.session_kill(&id, false).await;
-                release.send(()).unwrap();
+                drop(open_gate);
                 r
             },);
-        gate.await.unwrap().unwrap();
         assert!(attach.is_err());
         kill.unwrap();
         assert!(h.core.session_list(None).is_empty());
@@ -298,4 +294,36 @@ async fn claude_restart_resumes_instead_of_replaying_argv() {
     h.core.session_restart(&s.id).await.unwrap();
     let args = h.term.with_session(&s.id, |x| x.spec.args.clone()).unwrap();
     assert_eq!(args, vec!["-n", "x", "--resume", "U-1"]);
+}
+
+#[tokio::test]
+async fn history_search_by_project_and_session_and_close_deletes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let seeded = seed(tmp.path()).await;
+    let term = FakeTerminalHost::new();
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(mode(RestoreMode::Lazy), vec![project("shop", tmp.path())]),
+        term.clone(),
+        Arc::new(Factory::default()),
+    );
+    settle().await;
+    term.set_history(&seeded.shell, "cargo build\nerror: E0308");
+    term.set_history(&seeded.tool, "ERROR in tool");
+    let shop = ProjectId::new("shop");
+    let hits = h.core.session_history_search(&shop, None, "error", 10).unwrap();
+    let mut found: Vec<&SessionId> = hits.iter().map(|x| &x.session_id).collect();
+    found.sort();
+    let mut want = vec![&seeded.shell, &seeded.tool];
+    want.sort();
+    assert_eq!(found, want);
+    let hits = h.core.session_history_search(&shop, Some(&seeded.tool), "error", 10).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert!(
+        h.core.session_history_search(&ProjectId::new("other"), Some(&seeded.tool), "error", 10).is_err()
+    );
+    // Closing a session deletes its log.
+    h.core.session_kill(&seeded.tool, false).await.unwrap();
+    assert!(!term.has_history(&seeded.tool));
+    assert!(term.has_history(&seeded.shell));
 }

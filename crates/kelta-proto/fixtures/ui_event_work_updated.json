@@ -3,16 +3,19 @@
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",
     "rebase": null,
     "repo_id": "api",
     "review": null,
+    "review_due": false,
     "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -101,6 +104,7 @@
       "id": "10142",
       "key": "SHOP-142"
     },
+    "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }
 }

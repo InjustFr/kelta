@@ -9,6 +9,6 @@ export type AppSettings = { theme: Theme,
  */
 restore_mode: RestoreMode, 
 /**
- * Confirm quit if a Claude session is Working/NeedsInput.
+ * Ask before quitting while Claude is working or waiting for you.
  */
 confirm_quit_with_running: boolean, log_level: LogLevel, };

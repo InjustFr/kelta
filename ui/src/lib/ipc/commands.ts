@@ -22,6 +22,7 @@ import type {
   Feedback,
   FinishOpts,
   GitStatus,
+  HistoryHit,
   JsonValue,
   Layer,
   LayerDoc,
@@ -115,6 +116,7 @@ export interface Commands {
   secret_set: { args: { secret_ref: string; value: string }; result: null };
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };
+  secret_unlock: { args: { passphrase: string; create: boolean }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -159,6 +161,10 @@ export interface Commands {
     result: SessionInfo;
   };
   session_text_tail: { args: { id: SessionId; max_lines: number }; result: string };
+  session_history_search: {
+    args: { project_id: ProjectId; session_id?: SessionId | null; query: string; limit: number };
+    result: HistoryHit[];
+  };
   terminal_set_palette: { args: { palette: TerminalPalette }; result: null };
   // ---- tickets -----------------------------------------------------------------------------
   tracker_list: {
@@ -202,6 +208,12 @@ export interface Commands {
   work_resolve_sent_threads: { args: { id: WorkItemId }; result: WorkItem };
   work_rebase: { args: { id: WorkItemId; op: RebaseOp }; result: WorkItem };
   work_push: { args: { id: WorkItemId; force: boolean }; result: WorkItem };
+  work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
+  /** Every unfinished item (one fetch per repo, 5 min floor). */
+  work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
+  /** Spawns the review diff session; the UI places it zoomed in the work tab. */
+  work_diff: { args: { id: WorkItemId }; result: SessionInfo };
+  work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   // ---- tools / plugins / triggers ----------------------------------------------------------
@@ -260,6 +272,7 @@ export const COMMAND_NAMES = [
   'secret_set',
   'secret_delete',
   'secret_backends_status',
+  'secret_unlock',
   'account_test',
   'project_list',
   'project_detect',
@@ -286,6 +299,7 @@ export const COMMAND_NAMES = [
   'session_mark_seen',
   'session_link',
   'session_text_tail',
+  'session_history_search',
   'terminal_set_palette',
   'tracker_list',
   'tracker_get',
@@ -315,6 +329,10 @@ export const COMMAND_NAMES = [
   'work_resolve_sent_threads',
   'work_rebase',
   'work_push',
+  'work_link',
+  'work_status_all',
+  'work_diff',
+  'work_mark_reviewed',
   'editor_open',
   'editor_send_selection',
   'tool_list',
@@ -402,6 +420,7 @@ export const repoTrust = wrap('repo_trust');
 export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
 export const secretBackendsStatus = wrap('secret_backends_status');
+export const secretUnlock = wrap('secret_unlock');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------
@@ -432,6 +451,7 @@ export const sessionList = wrap('session_list');
 export const sessionMarkSeen = wrap('session_mark_seen');
 export const sessionLink = wrap('session_link');
 export const sessionTextTail = wrap('session_text_tail');
+export const sessionHistorySearch = wrap('session_history_search');
 export const terminalSetPalette = wrap('terminal_set_palette');
 
 /** Normalizes what a Tauri raw channel delivers into bytes. */
@@ -500,6 +520,10 @@ export const workRerequestReview = wrap('work_rerequest_review');
 export const workResolveSentThreads = wrap('work_resolve_sent_threads');
 export const workRebase = wrap('work_rebase');
 export const workPush = wrap('work_push');
+export const workLink = wrap('work_link');
+export const workStatusAll = wrap('work_status_all');
+export const workDiff = wrap('work_diff');
+export const workMarkReviewed = wrap('work_mark_reviewed');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 

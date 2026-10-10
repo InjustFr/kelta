@@ -1,0 +1,94 @@
+{
+  "pagelen": 1,
+  "page": 1,
+  "next": "__NEXT__",
+  "values": [
+    {
+      "type": "pullrequest",
+      "id": 7,
+      "title": "SHOP-142 Add rate limiter",
+      "description": "Adds the limiter <script>alert(1)</script>",
+      "state": "OPEN",
+      "draft": false,
+      "author": {
+        "type": "user",
+        "uuid": "{11111111-2222-3333-4444-555555555555}",
+        "account_id": "557058:d4v3",
+        "nickname": "dave",
+        "display_name": "Dave R",
+        "links": {
+          "avatar": {
+            "href": "https://secure.gravatar.com/avatar/dave"
+          }
+        }
+      },
+      "created_on": "2026-10-01T08:00:00+00:00",
+      "updated_on": "2026-10-08T09:12:44.123456+00:00",
+      "source": {
+        "branch": {
+          "name": "feature/SHOP-142-limiter"
+        },
+        "commit": {
+          "hash": "abc123def456"
+        },
+        "repository": {
+          "full_name": "acme/shop"
+        }
+      },
+      "destination": {
+        "branch": {
+          "name": "main"
+        },
+        "commit": {
+          "hash": "0a0a0a0a0a0a"
+        },
+        "repository": {
+          "full_name": "acme/shop"
+        }
+      },
+      "participants": [
+        {
+          "type": "participant",
+          "role": "REVIEWER",
+          "approved": false,
+          "state": null,
+          "user": {
+            "type": "user",
+            "uuid": "{470c176d-3574-44ea-bb41-89e8638bcca4}",
+            "account_id": "557058:f1a2",
+            "nickname": "louis",
+            "display_name": "Louis D",
+            "links": {
+              "avatar": {
+                "href": "https://secure.gravatar.com/avatar/louis"
+              }
+            }
+          }
+        },
+        {
+          "type": "participant",
+          "role": "REVIEWER",
+          "approved": true,
+          "state": "approved",
+          "user": {
+            "type": "user",
+            "uuid": "{99999999-0000-0000-0000-000000000000}",
+            "account_id": "557058:d4v3",
+            "nickname": "erin",
+            "display_name": "Erin K",
+            "links": {
+              "avatar": {
+                "href": "https://secure.gravatar.com/avatar/dave"
+              }
+            }
+          }
+        }
+      ],
+      "links": {
+        "html": {
+          "href": "https://bitbucket.org/acme/shop/pull-requests/7"
+        }
+      }
+    }
+  ]
+}

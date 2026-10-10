@@ -2,7 +2,7 @@ name: bench
 
 # PRs labeled "perf": harness dry run + bundle-size budgets. On demand (workflow_dispatch): also the real
 # memory/CPU runs under Xvfb (Linux, Mesa software rendering). Regressions > 10 % over
-# fixtures/baseline.json fail the run.
+# fixtures/baseline-{macos,linux}.json (per OS) fail the run.
 on:
   pull_request:
     types: [labeled, synchronize]

@@ -24,6 +24,12 @@ async function boot(page: Page): Promise<string[]> {
   return errors;
 }
 
+/** Runs an entry of the work menu (⌘.). */
+async function fromMenu(page: Page, name: RegExp | string): Promise<void> {
+  await page.getByTestId('work-menu-button').click();
+  await page.getByRole('menu', { name: 'Work' }).getByRole('menuitem', { name }).click();
+}
+
 const lastCall = (page: Page, cmd: string) =>
   page.evaluate((c) => window.__keltaMock!.calls.filter((x) => x.cmd === c).at(-1)?.args ?? null, cmd);
 
@@ -31,7 +37,7 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
   page,
 }) => {
   const errors = await boot(page);
-  await page.getByTestId('work-header').getByRole('button', { name: 'Fix with Claude' }).click();
+  await fromMenu(page, /Fix with Claude/);
   const sheet = page.getByRole('dialog', { name: 'Fix with Claude' });
   await expect(sheet).toBeVisible();
   const items = sheet.getByTestId('fix-item');
@@ -61,7 +67,7 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
   expect(sent.prompt).toContain('{file}');
 
   // Claude is now working: a second send is refused in the sheet, nothing is typed.
-  await page.getByTestId('work-header').getByRole('button', { name: 'Fix with Claude' }).click();
+  await fromMenu(page, /Fix with Claude/);
   await expect(sheet.getByText('Claude is busy; send when it stops.')).toBeVisible();
   await expect(sheet.getByRole('button', { name: /Send to Claude/ })).toBeDisabled();
   await page.keyboard.press('Escape');
@@ -71,15 +77,15 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
 test('a conflicted rebase stops, aborts, then resolves into a confirmed force push', async ({ page }) => {
   const errors = await boot(page);
   const header = page.getByTestId('work-header');
-  await header.getByRole('button', { name: 'Rebase onto main' }).click();
-  await expect(header).toContainText('Rebase stopped (1 conflicted file)');
+  await fromMenu(page, /Rebase onto main/);
+  await expect(header).toContainText('1 conflicted file');
   await expect(page.getByTestId('toasts')).toContainText('Rebase stopped: 1 conflicted file.');
 
-  await header.getByRole('button', { name: 'Abort rebase' }).click();
+  await fromMenu(page, /Abort rebase/);
   await expect(header).not.toContainText('Rebase stopped');
   expect(await lastCall(page, 'work_rebase')).toMatchObject({ op: { kind: 'abort' } });
 
-  await header.getByRole('button', { name: 'Rebase onto main' }).click();
+  await fromMenu(page, /Rebase onto main/);
   await header.getByRole('button', { name: 'Ask Claude to resolve' }).click();
   const brief = (await lastCall(page, 'work_send')) as { files: { name: string; content: string }[] };
   expect(brief.files[0]!.name).toBe('conflicts.md');
@@ -92,8 +98,8 @@ test('a conflicted rebase stops, aborts, then resolves into a confirmed force pu
     m.emit({ type: 'session.updated', session: structuredClone(s) });
   });
 
-  await header.getByRole('button', { name: 'Continue' }).click();
-  await expect(header).toContainText('Rebased (push rewrites #13)');
+  await fromMenu(page, /Continue rebase/);
+  await expect(header).toContainText('push rewrites #13');
   await header.getByRole('button', { name: 'Force push…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Force push' });
   await expect(dialog).toContainText(/The lease checks origin is still at \w{7}\./);

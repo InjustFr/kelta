@@ -1,4 +1,4 @@
-//! Helpers shared by the GitHub and GitLab code hosts: remote URL parsing, linked ticket keys.
+//! Helpers shared by the code hosts: remote URL parsing, linked ticket keys.
 
 use std::sync::OnceLock;
 
@@ -101,6 +101,19 @@ pub fn feedback_error(host: &str, what: &str, scope: &str) -> impl Fn(KeltaError
             KeltaError::new(e.code, format!("Could not reach {host} for the {what} (offline)."))
         }
         _ => e,
+    }
+}
+
+/// `owner/name` as an encoded URL path (`owner/name`): exactly two plain segments, never `.`/`..`.
+/// Repo strings come from the UI and are put into URLs.
+pub fn repo_path(repo: &str) -> Result<String, KeltaError> {
+    match repo.split_once('/') {
+        Some((a, b))
+            if ![a, b].iter().any(|p| p.is_empty() || *p == "." || *p == ".." || p.contains('/')) =>
+        {
+            Ok(format!("{}/{}", kelta_http::util::percent_encode(a), kelta_http::util::percent_encode(b)))
+        }
+        _ => Err(KeltaError::invalid(format!("bad repo: {repo}"))),
     }
 }
 

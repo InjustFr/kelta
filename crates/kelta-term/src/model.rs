@@ -105,12 +105,37 @@ impl Shadow {
 pub struct Shadowed<'a> {
     pub term: &'a mut Term<Listener>,
     pub shadow: &'a mut Shadow,
+    /// History log buffer (ARCHITECTURE §9.6): rows about to scroll into the primary history.
+    pub log: &'a mut Option<String>,
 }
 
 impl Shadowed<'_> {
     fn reset_region(&mut self) {
         self.shadow.scroll_top = 0;
         self.shadow.scroll_bottom = self.term.screen_lines();
+    }
+
+    /// Whether a scroll of the region would push its top rows into the primary history
+    /// (alacritty only rotates into history when the region starts at the top).
+    fn logs_scroll(&self) -> bool {
+        self.log.is_some() && self.shadow.scroll_top == 0 && !self.term.mode().contains(TermMode::ALT_SCREEN)
+    }
+
+    /// Append screen rows `0..n` to the log.
+    fn log_rows(&mut self, n: usize) {
+        let Some(log) = self.log.as_mut() else { return };
+        let g = self.term.grid();
+        for i in 0..n.min(g.screen_lines()) {
+            push_row(&g[Line(i as i32)], g.columns(), log);
+        }
+    }
+
+    /// A linefeed at the bottom of the region scrolls one row out.
+    fn log_linefeed(&mut self) {
+        if self.logs_scroll() && self.term.grid().cursor.point.line.0 + 1 == self.shadow.scroll_bottom as i32
+        {
+            self.log_rows(1);
+        }
     }
 }
 
@@ -131,6 +156,23 @@ impl Handler for Shadowed<'_> {
     #[inline(always)]
     fn input(&mut self, c: char) {
         self.shadow.last_char = Some(c);
+        let at = self.term.grid().cursor.point;
+        // Auto-wrap at the last column of the region's bottom row scrolls the top row out. Whether
+        // it wraps depends on the char width, so capture first and keep it only if the cursor wrapped.
+        if at.column.0 + 1 >= self.term.columns()
+            && at.line.0 + 1 == self.shadow.scroll_bottom as i32
+            && self.logs_scroll()
+        {
+            let mark = self.log.as_ref().map_or(0, String::len);
+            self.log_rows(1);
+            self.term.input(c);
+            if self.term.grid().cursor.point.column >= at.column
+                && let Some(log) = self.log.as_mut()
+            {
+                log.truncate(mark);
+            }
+            return;
+        }
         self.term.input(c)
     }
     #[inline]
@@ -195,6 +237,7 @@ impl Handler for Shadowed<'_> {
     }
     #[inline]
     fn linefeed(&mut self) {
+        self.log_linefeed();
         self.term.linefeed()
     }
     #[inline]
@@ -207,6 +250,7 @@ impl Handler for Shadowed<'_> {
     }
     #[inline]
     fn newline(&mut self) {
+        self.log_linefeed();
         self.term.newline()
     }
     #[inline]
@@ -215,6 +259,9 @@ impl Handler for Shadowed<'_> {
     }
     #[inline]
     fn scroll_up(&mut self, n: usize) {
+        if self.logs_scroll() {
+            self.log_rows(n.min(self.shadow.scroll_bottom));
+        }
         self.term.scroll_up(n)
     }
     #[inline]
@@ -227,6 +274,10 @@ impl Handler for Shadowed<'_> {
     }
     #[inline]
     fn delete_lines(&mut self, n: usize) {
+        // Deleting from the top row of a top-anchored region scrolls rows into history.
+        if self.term.grid().cursor.point.line.0 == 0 && self.logs_scroll() {
+            self.log_rows(n.min(self.shadow.scroll_bottom));
+        }
         self.term.delete_lines(n)
     }
     #[inline]
@@ -259,6 +310,16 @@ impl Handler for Shadowed<'_> {
     }
     #[inline]
     fn clear_screen(&mut self, mode: ClearMode) {
+        // ED 2 on the primary screen pushes the non-blank rows into history (whole screen,
+        // whatever the scroll region).
+        if matches!(mode, ClearMode::All)
+            && self.log.is_some()
+            && !self.term.mode().contains(TermMode::ALT_SCREEN)
+        {
+            let g = self.term.grid();
+            let n = (0..g.screen_lines()).rev().find(|&i| !row_is_blank(&g[Line(i as i32)], g.columns()));
+            self.log_rows(n.map_or(0, |i| i + 1));
+        }
         self.term.clear_screen(mode)
     }
     #[inline]
@@ -442,6 +503,8 @@ pub struct TermModel {
     osc: OscScanner,
     tail: Tail,
     history_limit: usize,
+    /// Lines for the on-disk history log, drained by the session (None = logging off).
+    log: Option<String>,
 }
 
 /// Model configuration (D7: kitty keyboard off; OSC 52 copy only).
@@ -462,6 +525,7 @@ impl TermModel {
             osc: OscScanner::new(),
             tail: Tail::new(),
             history_limit: history,
+            log: None,
         }
     }
 
@@ -470,7 +534,7 @@ impl TermModel {
         let mut evs = Vec::new();
         self.osc.scan(bytes, &mut evs);
         self.tail.update(bytes);
-        let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow };
+        let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow, log: &mut self.log };
         self.processor.advance(&mut h, bytes);
         out.extend(evs.into_iter().map(Output::Event));
         self.drain(palette, out);
@@ -497,7 +561,7 @@ impl TermModel {
         if self.processor.sync_timeout().sync_timeout().is_none() {
             return;
         }
-        let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow };
+        let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow, log: &mut self.log };
         self.processor.stop_sync(&mut h);
         self.drain(palette, out);
     }
@@ -584,6 +648,33 @@ impl TermModel {
         unsafe {
             libc::malloc_trim(0);
         }
+    }
+
+    /// Turn the history log buffer on (empty) or off (dropping unsent lines).
+    pub fn set_logging(&mut self, on: bool) {
+        if on != self.log.is_some() {
+            self.log = on.then(String::new);
+        }
+    }
+
+    /// Lines scrolled into history since the last drain (logging on).
+    pub fn log_buf(&mut self) -> Option<&mut String> {
+        self.log.as_mut()
+    }
+
+    /// Append the non-blank rows of the primary screen to the log (exit: they never scroll out).
+    pub fn log_screen(&mut self) {
+        let Some(log) = self.log.as_mut() else { return };
+        with_primary(&mut self.term, |g| {
+            let cols = g.columns();
+            let n = (0..g.screen_lines()).rev().find(|&i| !row_is_blank(&g[Line(i as i32)], cols));
+            for i in 0..n.map_or(0, |i| i + 1) {
+                push_row(&g[Line(i as i32)], cols, log);
+            }
+            if !log.is_empty() && !log.ends_with('\n') {
+                log.push('\n');
+            }
+        });
     }
 
     /// Plain text of the last `max_lines` lines of the primary screen (wrapped lines joined,
@@ -680,34 +771,31 @@ pub fn grid_text(g: &Grid<Cell>, max_lines: usize) -> String {
     while last >= top && row_is_blank(&g[Line(last)], cols) {
         last -= 1;
     }
-    let mut lines: Vec<String> = Vec::new();
-    let mut cur = String::new();
+    let mut text = String::new();
     for l in top..=last {
-        let row = &g[Line(l)];
-        let mut s = String::new();
-        for c in 0..cols {
-            let cell = &row[alacritty_terminal::index::Column(c)];
-            if cell.flags.intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER) {
-                continue;
-            }
-            s.push(if cell.c == '\t' { ' ' } else { cell.c });
-            if let Some(zw) = cell.zerowidth() {
-                s.extend(zw.iter());
-            }
-        }
-        let wrapped = row[alacritty_terminal::index::Column(cols - 1)].flags.contains(Flags::WRAPLINE);
-        if wrapped {
-            cur.push_str(&s);
-        } else {
-            cur.push_str(s.trim_end());
-            lines.push(std::mem::take(&mut cur));
-        }
+        push_row(&g[Line(l)], cols, &mut text);
     }
-    if !cur.is_empty() {
-        lines.push(cur.trim_end().to_owned());
-    }
+    let lines: Vec<&str> = text.trim_end().split('\n').collect();
     let start = lines.len().saturating_sub(max_lines);
     lines[start..].join("\n")
+}
+
+/// Append a row's text: wrapped rows continue the line, others end it (trailing blanks trimmed).
+fn push_row(row: &Row<Cell>, cols: usize, out: &mut String) {
+    for c in 0..cols {
+        let cell = &row[alacritty_terminal::index::Column(c)];
+        if cell.flags.intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER) {
+            continue;
+        }
+        out.push(if cell.c == '\t' { ' ' } else { cell.c });
+        if let Some(zw) = cell.zerowidth() {
+            out.extend(zw.iter());
+        }
+    }
+    if !row[alacritty_terminal::index::Column(cols - 1)].flags.contains(Flags::WRAPLINE) {
+        out.truncate(out.trim_end_matches(' ').len());
+        out.push('\n');
+    }
 }
 
 fn row_is_blank(row: &Row<Cell>, cols: usize) -> bool {
@@ -865,5 +953,37 @@ mod tests {
         assert_eq!(m.history_size(), 599);
         m.set_history_limit(500);
         assert_eq!(m.history_size(), 500);
+    }
+
+    #[test]
+    fn history_log_captures_rows_scrolling_out() {
+        let mut m = TermModel::new(10, 3, 100);
+        m.set_logging(true);
+        let log = |m: &mut TermModel| std::mem::take(m.log_buf().unwrap());
+        m.feed(b"a\r\nb\r\nc\r\nd\r\n");
+        assert_eq!(log(&mut m), "a\nb\n");
+        // Auto-wrap at the bottom scrolls rows out; wrapped rows join into one line.
+        m.feed(b"0123456789ABCDEFGHIJKL");
+        assert_eq!(log(&mut m), "c\nd\n");
+        m.feed(b"\r\n\x1b[2J");
+        assert_eq!(log(&mut m), "0123456789ABCDEFGHIJKL\n");
+        // Wide char that does not fit the last column wraps too; one that fits does not.
+        m.feed(b"\x1b[H\x1b[3B12345678\xe4\xb8\xad");
+        assert_eq!(log(&mut m), "");
+        m.feed("\u{4e2d}".as_bytes());
+        assert_eq!(log(&mut m), "\n");
+        // The alternate screen and a scroll region below the top never reach the history.
+        m.feed(b"\x1b[?1049hx\r\ny\r\nz\r\nw\r\n\x1b[?1049l\x1b[2;3rq\r\nr\r\ns\r\n\x1b[r");
+        assert_eq!(log(&mut m), "");
+        // CSI S and delete-lines at the top scroll out; exit logs the remaining screen.
+        m.feed(b"\x1b[2J");
+        log(&mut m);
+        m.feed(b"\x1b[Hone\r\ntwo\r\nthree\x1b[1S\x1b[H\x1b[1M");
+        assert_eq!(log(&mut m), "one\ntwo\n");
+        m.log_screen();
+        assert_eq!(log(&mut m), "three\n");
+        m.set_logging(false);
+        m.feed(b"\x1b[2J1\r\n2\r\n3\r\n4");
+        assert!(m.log_buf().is_none());
     }
 }

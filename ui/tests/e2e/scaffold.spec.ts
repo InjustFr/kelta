@@ -33,9 +33,9 @@ test.describe('scaffold', () => {
       failed: [],
       projects: 4,
       active: 'shop',
-      sessions: 10,
+      sessions: 11,
       layoutTabs: 3,
-      work: 3,
+      work: 5,
       theme: 'system',
       mock: true,
     });

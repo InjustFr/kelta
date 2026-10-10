@@ -9,9 +9,6 @@ import { isIpcError } from '$lib/ipc/transport';
 import { activeTab } from '$lib/layout';
 import { layout, projects, settings, toasts, ui, work } from '$lib/stores';
 
-/** Bumped after an operation that changes git state: work headers re-read `work_status`. */
-export const gitTick = $state({ n: 0 });
-
 /** Reviewers of the last feedback read per item (label of "Re-request review from …"). */
 // eslint-disable-next-line svelte/prefer-svelte-reactivity -- read once when a toast is built
 const reviewersOf = new Map<WorkItemId, string[]>();
@@ -78,7 +75,7 @@ export function reasonOf(err: unknown): string {
 
 function done(w: WorkItem): WorkItem {
   work.upsert(w);
-  gitTick.n++;
+  void work.refreshStatus();
   return w;
 }
 
@@ -168,7 +165,7 @@ export function rememberReviewers(id: WorkItemId, fb: Feedback): void {
   reviewersOf.set(id, fb.reviewers);
 }
 
-async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetch = false): Promise<void> {
+export async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetch = false): Promise<void> {
   try {
     const out = done(await ipc.workRebase({ id: w.id, op: { kind: 'start', onto, no_fetch: noFetch } }));
     const r = out.rebase;
@@ -218,7 +215,7 @@ async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetch = fal
           { label: 'Cancel', variant: 'ghost' },
           {
             label: `Rebase onto last fetched ${w.base}`,
-            command: 'work.rebase',
+            command: 'work.rebase_onto',
             args: { id: w.id, onto, no_fetch: true },
             variant: 'primary',
           },
@@ -250,7 +247,7 @@ async function push(w: WorkItem, force: boolean): Promise<void> {
     if (reason === 'non_fast_forward' && isIpcError(err)) {
       toast('warn', err.message, {
         label: 'Rebase',
-        command: 'work.rebase',
+        command: 'work.rebase_onto',
         args: { id: w.id, onto: 'remote_branch' },
       });
     } else if (reason === 'lease_rejected' && isIpcError(err)) {
@@ -296,26 +293,21 @@ async function itemForReview(review: ReviewRef, projectId: ProjectId): Promise<W
 
 // ---- registry --------------------------------------------------------------------------------
 
-registerAction('work.fix', async (args) => {
+export function fixItem(w: WorkItem): void {
+  if (!w.pr_url) toasts.info('Fix with Claude needs a pull request. Ship first.');
+  else ui.openSheet('fix', { id: w.id });
+}
+
+// Fix with Claude on a PR of the reviews list: adopts a PR made outside Kelta first.
+registerAction('work.fix_pr', async (args) => {
   const review = args?.review as ReviewRef | undefined;
-  const w =
-    review && args?.project_id ? await itemForReview(review, args.project_id as ProjectId) : target(args);
-  if (!w) return;
-  if (!w.pr_url) {
-    toasts.info('Fix with Claude needs a pull request. Ship first.');
-    return;
-  }
-  ui.openSheet('fix', { id: w.id });
+  const w = review ? await itemForReview(review, args?.project_id as ProjectId) : null;
+  if (w) fixItem(w);
 });
 
-registerAction('work.push', async (args) => {
-  const w = target(args);
-  if (w) await push(w, false);
-});
+export const pushItem = (w: WorkItem): Promise<void> => push(w, false);
 
-registerAction('work.force_push', (args) => {
-  const w = target(args);
-  if (!w) return;
+export function forcePushItem(w: WorkItem): void {
   const sha = w.rebase?.remote_sha;
   if (!sha) {
     toast('warn', 'Force push is only offered to rewrite your own rebased commits.');
@@ -331,6 +323,11 @@ registerAction('work.force_push', (args) => {
       { label: 'Force push', command: 'work.force_push.confirmed', args: { id: w.id }, variant: 'danger' },
     ],
   });
+}
+
+registerAction('work.force_push', (args) => {
+  const w = target(args);
+  if (w) forcePushItem(w);
 });
 
 // Reached only from the confirmation dialog above (not in the catalog, never bulk).
@@ -339,34 +336,26 @@ registerAction('work.force_push.confirmed', async (args) => {
   if (w) await push(w, true);
 });
 
-registerAction('work.rebase', async (args) => {
+registerAction('work.rebase_onto', async (args) => {
   const w = target(args);
   if (w) await rebase(w, args?.onto === 'remote_branch' ? 'remote_branch' : 'base', args?.no_fetch === true);
 });
 
-for (const [id, kind, label] of [
-  ['work.rebase_continue', 'continue', 'Continue rebase'],
-  ['work.rebase_abort', 'abort', 'Abort rebase'],
-] as const) {
-  registerAction(id, async (args) => {
-    const w = target(args);
-    if (!w) return;
-    try {
-      const out = done(await ipc.workRebase({ id: w.id, op: { kind } }));
-      if (kind === 'abort') toast('info', 'Rebase aborted.');
-      else if (out.rebase && out.rebase.total > 0)
-        toast('warn', 'Rebase still stopped: resolve the conflicts first.');
-      else toast('info', out.rebase ? 'Rebase done. Force push to update the PR.' : 'Rebase done.');
-    } catch (err) {
-      refused(err, label);
-    }
-  });
+export async function rebaseStep(w: WorkItem, kind: 'continue' | 'abort'): Promise<void> {
+  try {
+    const out = done(await ipc.workRebase({ id: w.id, op: { kind } }));
+    if (kind === 'abort') toast('info', 'Rebase aborted.');
+    else if (out.rebase && out.rebase.total > 0)
+      toast('warn', 'Rebase still stopped: resolve the conflicts first.');
+    else toast('info', out.rebase ? 'Rebase done. Force push to update the PR.' : 'Rebase done.');
+  } catch (err) {
+    refused(err, kind === 'abort' ? 'Abort rebase' : 'Continue rebase');
+  }
 }
 
-registerAction('work.rebase_conflicts', async (args) => {
-  const w = target(args);
-  const files = w?.rebase?.conflicts ?? [];
-  if (!w || files.length === 0) return;
+export async function openConflicts(w: WorkItem): Promise<void> {
+  const files = w.rebase?.conflicts ?? [];
+  if (files.length === 0) return;
   // shortcut: one `:edit` per file (first one shown last) instead of `:args`; add an nvim `:args`
   // RPC if buffer-list navigation is not enough.
   try {
@@ -376,14 +365,18 @@ registerAction('work.rebase_conflicts', async (args) => {
   } catch (err) {
     toasts.error(err, 'Open conflicts in nvim');
   }
-});
+}
 
-registerAction('work.rebase_ask_claude', async (args) => {
-  const w = target(args);
-  if (!w?.rebase) return;
+export async function askClaudeToResolve(w: WorkItem): Promise<void> {
+  if (!w.rebase) return;
   await sendToClaude(w, promptTemplate('conflicts'), [
     { name: 'conflicts.md', content: conflictsMarkdown(w) },
   ]);
+}
+
+registerAction('work.rebase_ask_claude', (args) => {
+  const w = target(args);
+  return w ? askClaudeToResolve(w) : undefined;
 });
 
 registerAction('work.ask_commit', async (args) => {

@@ -164,6 +164,12 @@ impl WorkService {
         c.set("worktree", item.worktree.to_string_lossy().into_owned());
         c.set("branch", item.branch.clone());
         c.set("base", item.base.clone());
+        if let Some(WorkSource::Branch { task: Some(task), .. }) = j.plan.as_ref().map(|p| &p.source) {
+            c.set("task", task.clone());
+        }
+        // `editor.review_args`: own work diffs merge base to working tree, a review the PR's commits.
+        let range = format!("{}/{}", env.repo.remote, item.base);
+        c.set("range", if item.kind == WorkKind::Review { format!("{range}...HEAD") } else { range });
         if let Some(t) = &j.ticket {
             plan::add_ticket(&mut c, t);
             c.set("key", t.branch_key.clone());
@@ -186,7 +192,7 @@ impl WorkService {
         c
     }
 
-    /// Tab title: `KEY title`, `PR #n title` or the branch.
+    /// Tab title: `KEY title`, `PR #n title`, `wip title` (scratch) or the branch.
     pub(crate) fn tab_title(item: &WorkItem, j: &Journal) -> String {
         if let Some(t) = &j.ticket {
             return format!("{} {}", t.key, t.title);
@@ -200,7 +206,10 @@ impl WorkService {
         if let Some(r) = &item.review {
             return format!("#{}", r.number);
         }
-        item.branch.clone()
+        match &item.title {
+            Some(t) => format!("wip {t}"),
+            None => item.branch.clone(),
+        }
     }
 
     // ---- plan ------------------------------------------------------------------------------
@@ -279,7 +288,7 @@ impl WorkService {
                 let existing = existing.or_else(|| plan::owner_of_pr(&items, &project, &r).cloned());
                 if existing.is_none() && r.kind == ReviewKind::Authored {
                     // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
-                    let source = WorkSource::Branch { name: r.source_branch.clone() };
+                    let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
                     let mut plan = Box::pin(self.build_plan(project_id, source)).await?;
                     plan.base = r.target_branch.clone();
                     plan.adopt_pr = Some(r.url.clone());
@@ -328,13 +337,33 @@ impl WorkService {
                     existing.as_ref(),
                 ))
             }
-            WorkSource::Branch { name } => {
-                let repo_id =
-                    plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
-                        .ok_or_else(|| KeltaError::invalid("no repository"))?;
+            WorkSource::Branch { name, task, repo } => {
+                let repo_id = match repo {
+                    Some(r) => r.clone(),
+                    None => {
+                        plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
+                            .ok_or_else(|| KeltaError::invalid("no repository"))?
+                    }
+                };
                 let repo = repo_of(&project, &repo_id)?;
-                let branch = git::check_branch_name(&repo.path, name.trim()).await?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
+                ctx.set("task", task.clone().unwrap_or_default());
+                let branch = if name.trim().is_empty() {
+                    let title = task.as_deref().map(plan::task_title).unwrap_or_default();
+                    let slug = slugify(&title, slug_max);
+                    if slug.is_empty() {
+                        return Err(KeltaError::invalid("describe the task or name the branch"));
+                    }
+                    ctx.set("slug", slug);
+                    let raw = render(&settings.work.scratch_branch_template, &ctx, Mode::Strict)?;
+                    ctx.set("slug", "");
+                    plan::valid_branch(&repo.path, &raw).await?
+                } else {
+                    git::check_branch_name(&repo.path, name.trim()).await?
+                };
+                // The resolved branch (not the possibly empty name) identifies the item.
+                let by_branch = WorkSource::Branch { name: branch.clone(), task: None, repo: None };
+                let existing = plan::existing_for(&items, &by_branch).cloned();
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
                 ctx.set("branch", branch.clone());
@@ -345,6 +374,13 @@ impl WorkService {
                         plan::branch_exists(&repo.path, &branch).await?,
                     ),
                 };
+                // New work item: never adopt an existing branch or item behind the user's back.
+                if task.is_some() && (existing.is_some() || exists.is_some()) {
+                    let what = if existing.is_some() { "has a work item" } else { "already exists" };
+                    return Err(KeltaError::conflict(format!(
+                        "Branch {branch} {what}. Edit the branch name or the task's first line."
+                    )));
+                }
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "default", "standalone", &ctx);
                 let side = plan::side_effects(&settings, &project, false, &ctx);
@@ -388,10 +424,12 @@ impl WorkService {
         plan.worktree_path = path.clone();
         let has_claude =
             layout::slots(&template.layout).iter().any(|s| matches!(s.kind, SlotKind::Claude { .. }));
-        let (kind, ticket, review) = match &plan.source {
-            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None),
-            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone())),
-            WorkSource::Branch { .. } => (WorkKind::Branch, None, None),
+        let (kind, ticket, review, title) = match &plan.source {
+            WorkSource::Ticket { ticket } => (WorkKind::Ticket, Some(ticket.clone()), None, None),
+            WorkSource::Review { review } => (WorkKind::Review, None, Some(review.clone()), None),
+            WorkSource::Branch { task, .. } => {
+                (WorkKind::Branch, None, None, task.as_deref().map(plan::task_title))
+            }
         };
         let mut item = WorkItem {
             id: WorkItemId::generate(),
@@ -413,6 +451,10 @@ impl WorkService {
             created_at: kelta_proto::now_rfc3339(),
             sent_threads: Vec::new(),
             rebase: None,
+            title: title.filter(|t| !t.is_empty()),
+            pr_title_needs_key: false,
+            review_due: false,
+            claude_replied: false,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -420,7 +462,7 @@ impl WorkService {
             self.store.set_step(&item.id, step, StepStatus::Pending, None).await?;
         }
         item.steps = self.merged_steps(&item.id, &[]).await?;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         Ok(item.id)
     }
 
@@ -432,7 +474,7 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         item.state = WorkState::Starting;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         for step in WORK_STEPS {
             let status =
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
@@ -455,7 +497,7 @@ impl WorkService {
                     tracing::warn!(work_item = %id, step, error = %e.message, "start work step failed");
                     self.set_step(&mut item, step, StepStatus::Failed, Some(e.message.clone())).await?;
                     item.state = WorkState::Failed { step: (*step).to_owned(), message: e.message.clone() };
-                    self.save(&item).await?;
+                    self.save(&mut item).await?;
                     env.core.toast(Toast {
                         level: ToastLevel::Error,
                         text: format!("Start work failed at {step}: {}", e.message),
@@ -505,7 +547,7 @@ impl WorkService {
             let mut out = self.run_saga_locked(id).await?;
             if !matches!(out.state, WorkState::Failed { .. }) {
                 out.state = state;
-                self.save(&out).await?;
+                self.save(&mut out).await?;
             }
             return Ok(out);
         }
@@ -678,6 +720,10 @@ impl WorkService {
     ) -> Result<Option<String>, KeltaError> {
         let repo = env.repo.path.as_path();
         let detail;
+        if !item.worktree.exists() {
+            // Deleted outside Kelta (Recreate): drop the stale registration first.
+            git::worktree_prune(repo).await?;
+        }
         if let Some(w) = git::worktree_at(repo, &item.worktree).await? {
             if w.branch.as_deref() != Some(item.branch.as_str()) {
                 return Err(KeltaError::conflict(format!(
@@ -1394,7 +1440,7 @@ impl WorkService {
         Ok(())
     }
 
-    async fn step_effects(
+    pub(crate) async fn step_effects(
         &self,
         env: &Env,
         item: &mut WorkItem,

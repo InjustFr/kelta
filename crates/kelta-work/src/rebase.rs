@@ -71,13 +71,13 @@ impl WorkService {
         let item = self.load(id).await?;
         let Some(st) = item.rebase.clone().filter(|_| item.worktree.is_dir()) else { return Ok(item) };
         let new = reread(&item.worktree, st).await?;
-        if new == item.rebase {
-            return Ok(item);
-        }
-        let mut fresh = self.load(id).await?;
-        fresh.rebase = new;
-        self.save(&fresh).await?;
-        Ok(fresh)
+        self.update(id, |w| {
+            w.rebase != new && {
+                w.rebase = new;
+                true
+            }
+        })
+        .await
     }
 
     pub(crate) async fn rebase_impl(&self, id: &WorkItemId, op: RebaseOp) -> Result<WorkItem, KeltaError> {
@@ -215,10 +215,11 @@ impl WorkService {
             None => None,
         };
         // Write only the field this operation owns (hooks may have updated the item meanwhile).
-        let mut fresh = self.load(id).await?;
-        fresh.rebase = new;
-        self.save(&fresh).await?;
-        Ok(fresh)
+        self.update(id, |w| {
+            w.rebase = new;
+            true
+        })
+        .await
     }
 
     /// `work_push`: plain push, or force push over an own rewrite only (lease on `remote_sha`).
@@ -289,9 +290,10 @@ impl WorkService {
                 _ => KeltaError::upstream(format!("git push failed (exit {code})")),
             });
         }
-        let mut fresh = self.load(id).await?;
-        fresh.rebase = None;
-        self.save(&fresh).await?;
-        Ok(fresh)
+        self.update(id, |w| {
+            w.rebase = None;
+            true
+        })
+        .await
     }
 }

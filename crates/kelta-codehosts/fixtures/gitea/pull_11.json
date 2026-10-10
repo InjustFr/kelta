@@ -1,0 +1,54 @@
+{
+  "id": 9011,
+  "number": 11,
+  "title": "SHOP-150 Cache headers",
+  "body": "Adds the rate limiter. Fixes #12 <script>alert(1)</script>",
+  "state": "open",
+  "draft": false,
+  "mergeable": true,
+  "user": {
+    "id": 2,
+    "login": "dave",
+    "full_name": "Dave R",
+    "avatar_url": "https://git.acme.example/avatars/2"
+  },
+  "html_url": "https://git.acme.example/acme/shop/pulls/11",
+  "labels": [
+    {
+      "id": 3,
+      "name": "bug"
+    }
+  ],
+  "updated_at": "2026-10-08T09:12:44Z",
+  "additions": 14,
+  "deletions": 3,
+  "changed_files": 2,
+  "requested_reviewers": [
+    {
+      "id": 1,
+      "login": "louis",
+      "full_name": "Louis D",
+      "avatar_url": "https://git.acme.example/avatars/1"
+    }
+  ],
+  "head": {
+    "label": "feature/SHOP-150",
+    "ref": "feature/SHOP-150",
+    "sha": "1111110000000000000000000000000000000000",
+    "repo": {
+      "full_name": "acme/shop"
+    }
+  },
+  "base": {
+    "label": "main",
+    "ref": "main",
+    "sha": "0000000000000000000000000000000000000000",
+    "repo": {
+      "full_name": "acme/shop",
+      "name": "shop",
+      "owner": {
+        "login": "acme"
+      }
+    }
+  }
+}

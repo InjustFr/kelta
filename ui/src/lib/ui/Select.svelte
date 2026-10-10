@@ -46,6 +46,6 @@
     padding: 0 var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
-    background: var(--k-bg);
+    background: var(--k-well);
   }
 </style>

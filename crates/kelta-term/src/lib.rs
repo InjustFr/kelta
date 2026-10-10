@@ -10,13 +10,16 @@
 //!   queries, events for core, OSC 7/9/777 pre-scan ([`prescan`]).
 //! - [`snapshot`]: ANSI repaint for (re-)attaching views; [`flow`]: HIGH/LOW watermarks.
 //! - [`login_env`]: login environment resolution (`resolve_login_env`).
+//! - [`daemon`]: keltad (this host in its own process) and the `DaemonTerminalHost` client.
 //!
 //! Sessions stay in the host after their process exits (history trimmed to the 200-line text
 //! tail; re-attach shows the exit banner) until `kill` closes them or a new `spawn` reuses the id.
 
 pub mod backend;
+pub mod daemon;
 pub mod flow;
 pub mod frames;
+mod history;
 pub mod inspect;
 pub mod login_env;
 pub mod model;
@@ -27,6 +30,7 @@ mod session;
 pub mod snapshot;
 
 use std::os::fd::{FromRawFd, OwnedFd};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -36,10 +40,12 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
 use kelta_proto::term::{
-    KillSignal, LoginEnv, PtySpawnSpec, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, KillSignal, LoginEnv, PtySpawnSpec, SessionTermStats, TerminalLimits, TerminalPalette,
+    TerminalStats,
 };
 
 use crate::backend::{PtyBackend, SpawnRequest};
+use crate::history::HistoryLog;
 use crate::model::TermModel;
 use crate::palette::Palette;
 pub use crate::session::{DEFAULT_MEMORY_CAP_MB, SHRINK_FLOOR, VIEW_SCROLLBACK};
@@ -59,7 +65,21 @@ impl PtyTerminalHost {
 
     /// Host with an explicit PTY backend.
     pub fn with_backend(env: LoginEnv, limits: TerminalLimits, backend: Arc<dyn PtyBackend>) -> Self {
-        Self { env, shared: Arc::new(Shared::new(limits)), backend }
+        Self { env, shared: Arc::new(Shared::new(limits, None)), backend }
+    }
+
+    /// Host with the on-disk history log (ARCHITECTURE §9.6) in `dir`. Without a usable dir the
+    /// host runs without it.
+    pub fn with_history_dir(
+        env: LoginEnv,
+        limits: TerminalLimits,
+        backend: Arc<dyn PtyBackend>,
+        dir: PathBuf,
+    ) -> Self {
+        let history = HistoryLog::start(dir, &limits)
+            .inspect_err(|e| tracing::warn!("terminal history log disabled: {e}"))
+            .ok();
+        Self { env, shared: Arc::new(Shared::new(limits, history)), backend }
     }
 
     /// Convenience for composition.
@@ -84,6 +104,13 @@ impl PtyTerminalHost {
             .get(id)
             .cloned()
             .ok_or_else(|| KeltaError::not_found(format!("terminal session {id}")))
+    }
+
+    fn view_scrollback(&self) -> usize {
+        match self.shared.limits.lock().view_scrollback {
+            0 => VIEW_SCROLLBACK,
+            n => n as usize,
+        }
     }
 
     fn history_for(&self, spec: &PtySpawnSpec) -> usize {
@@ -172,7 +199,16 @@ impl TerminalHost for PtyTerminalHost {
             }
         };
         let master = Arc::new(child.master);
-        let model = TermModel::new(cols, rows, self.history_for(&spec));
+        let mut model = TermModel::new(cols, rows, self.history_for(&spec));
+        if let Some(h) = self.shared.history_on() {
+            // Same id again (restore, restart): earlier output goes back into the scrollback,
+            // above a cleared screen, before logging starts so it is not logged twice.
+            let tail = h.tail(&spec.id, self.view_scrollback());
+            if !tail.is_empty() {
+                model.feed(format!("{}\r\n\x1b[2J\x1b[H", tail.replace('\n', "\r\n")).as_bytes());
+            }
+            model.set_logging(true);
+        }
         let session = Arc::new(Session::new(
             spec.id.clone(),
             spec.kind.clone(),
@@ -317,11 +353,16 @@ impl TerminalHost for PtyTerminalHost {
 
     fn set_limits(&self, limits: TerminalLimits) {
         *self.shared.limits.lock() = limits;
+        if let Some(h) = &self.shared.history {
+            h.set_caps(&limits);
+        }
+        let log = self.shared.history_on().is_some();
         let sessions: Vec<Arc<Session>> = self.shared.sessions.read().values().cloned().collect();
         for s in sessions {
             let lines = limits.scrollback.for_kind(s.kind.name()) as usize;
             let mut st = s.state.lock();
             st.model.set_history_limit(lines);
+            st.model.set_logging(log && !s.exited.load(Ordering::SeqCst));
             st.refresh_memory(&self.shared);
         }
         self.shared.enforce_budget();
@@ -331,6 +372,35 @@ impl TerminalHost for PtyTerminalHost {
         let s = self.session(id)?;
         let mut st = s.state.lock();
         Ok(st.model.text_tail(max_lines as usize))
+    }
+
+    fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError> {
+        Ok(self.shared.history.as_ref().map(|h| h.tail(id, max_lines as usize)).unwrap_or_default())
+    }
+
+    fn history_search(
+        &self,
+        ids: &[SessionId],
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError> {
+        let Some(h) = &self.shared.history else { return Ok(Vec::new()) };
+        if query.is_empty() {
+            return Err(KeltaError::invalid("empty history search"));
+        }
+        // Lines still buffered by a reader go to the writer first (the queue keeps the order).
+        for id in ids {
+            if let Ok(s) = self.session(id) {
+                s.state.lock().flush_log(id, &self.shared, 0);
+            }
+        }
+        Ok(h.search(ids, query, limit as usize))
+    }
+
+    fn history_delete(&self, id: &SessionId) {
+        if let Some(h) = &self.shared.history {
+            h.delete(id);
+        }
     }
 
     fn stats(&self) -> TerminalStats {

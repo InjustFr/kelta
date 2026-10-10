@@ -464,14 +464,16 @@ pub mod q {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
-             sent_threads_json, rebase_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
              claude_uuid = excluded.claude_uuid, nvim_socket = excluded.nvim_socket, tab_id = excluded.tab_id,
              pr_url = excluded.pr_url, state_json = excluded.state_json, updated_at = excluded.updated_at,
-             session_ids_json = excluded.session_ids_json, sent_threads_json = excluded.sent_threads_json,
+             session_ids_json = excluded.session_ids_json, review_due = excluded.review_due,
+             claude_replied = excluded.claude_replied, title = excluded.title,
+             pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
              rebase_json = excluded.rebase_json",
             params![
                 w.id.as_str(),
@@ -491,6 +493,10 @@ pub mod q {
                 w.created_at,
                 kelta_proto::now_rfc3339(),
                 serde_json::to_string(&w.session_ids)?,
+                w.review_due,
+                w.claude_replied,
+                w.title,
+                w.pr_title_needs_key,
                 serde_json::to_string(&w.sent_threads)?,
                 json_opt(&w.rebase)?,
             ],
@@ -509,8 +515,8 @@ pub mod q {
     }
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
-        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, sent_threads_json,
-        rebase_json";
+        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
+        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -519,8 +525,8 @@ pub mod q {
         let review: Option<String> = r.get(4)?;
         let state: String = r.get(13)?;
         let sessions: String = r.get(15)?;
-        let threads: String = r.get(16)?;
-        let rebase: Option<String> = r.get(17)?;
+        let threads: String = r.get(20)?;
+        let rebase: Option<String> = r.get(21)?;
         let item = WorkItem {
             id: WorkItemId::new(r.get::<_, String>(0)?),
             project_id: ProjectId::new(r.get::<_, String>(1)?),
@@ -539,6 +545,10 @@ pub mod q {
             state: WorkState::Planned,
             steps: Vec::new(),
             created_at: r.get(14)?,
+            review_due: r.get(16)?,
+            claude_replied: r.get(17)?,
+            title: r.get(18)?,
+            pr_title_needs_key: r.get(19)?,
             sent_threads: Vec::new(),
             rebase: None,
         };

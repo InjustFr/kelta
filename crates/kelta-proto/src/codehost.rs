@@ -11,6 +11,8 @@ use crate::tracker::{AccountError, User};
 pub enum CodeHostKind {
     Github,
     Gitlab,
+    Bitbucket,
+    Gitea,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -75,6 +77,9 @@ pub struct Review {
     pub my_state: Option<MyReviewState>,
     #[serde(default)]
     pub mergeable: Option<bool>,
+    /// Commit my last submitted review was left on; with `head_sha` it tells "updated since your review".
+    #[serde(default)]
+    pub reviewed_head: Option<String>,
     #[serde(default)]
     pub labels: Vec<String>,
     pub kind: ReviewKind,
@@ -129,6 +134,9 @@ pub struct ReviewDetail {
     pub reviewers: Vec<Reviewer>,
     pub checks: Vec<CiCheck>,
     pub files: Vec<FileChange>,
+    /// Line comments waiting in my pending (draft) review; published by approve / comment / request changes.
+    #[serde(default)]
+    pub pending_comments: u32,
 }
 
 /// Create-PR request sent to a `CodeHost`.

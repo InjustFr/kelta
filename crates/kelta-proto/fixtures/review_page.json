@@ -31,6 +31,7 @@
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",

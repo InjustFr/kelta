@@ -15,7 +15,6 @@
   import {
     feedbackEntries,
     feedbackMarkdown,
-    gitTick,
     prLabel,
     promptTemplate,
     rememberReviewers,
@@ -87,7 +86,7 @@
       const files = feedback ? [{ name: 'feedback.md', content: feedbackMarkdown(chosen) }] : [];
       const threads = chosen.flatMap((e) => (e.threadId ? [e.threadId] : []));
       work.upsert(await ipc.workSend({ id, prompt, files, threads }));
-      gitTick.n++;
+      void work.refreshStatus();
       toasts.info(`Sent ${chosen.length} feedback item${chosen.length === 1 ? '' : 's'} to Claude.`);
       onclose();
     } catch (err) {

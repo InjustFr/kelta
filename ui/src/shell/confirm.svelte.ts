@@ -47,6 +47,8 @@ export interface PromptRequest {
   label: string;
   value?: string;
   confirmLabel?: string;
+  /** `password` masks the input (passphrases). */
+  type?: 'text' | 'password';
 }
 
 interface PendingPrompt extends PromptRequest {

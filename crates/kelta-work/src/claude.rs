@@ -76,8 +76,9 @@ pub fn context_md(c: &ContextInfo) -> String {
     if c.mcp {
         s.push_str(
             "\nKelta MCP tools (server `kelta`): get_ticket, transition_ticket, add_ticket_comment, \
-             open_in_editor, create_pr, list_review_requests, get_review_feedback, notify. Prefer `create_pr` over pushing \
-             and opening pull requests by hand.\n",
+             open_in_editor, create_pr, list_review_requests, get_review_feedback, add_review_comment, notify. Prefer `create_pr` \
+             over pushing and opening pull requests by hand; when reviewing a pull request, leave findings \
+             with `add_review_comment` (pending until the user submits).\n",
         );
     }
     if !c.append.trim().is_empty() {

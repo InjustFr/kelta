@@ -46,10 +46,13 @@ export function themeTokens(scheme: 'dark' | 'light'): Record<string, string> {
   return out;
 }
 
-/** Calls `cb` when the theme may have changed (`data-theme` on <html> or the OS preference). */
+/** Calls `cb` when the theme may have changed (`data-theme`, the project accent on <html>, or the OS preference). */
 export function onThemeChange(cb: () => void): () => void {
   const mo = new MutationObserver(cb);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  mo.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'class', 'style'],
+  });
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   mq?.addEventListener('change', cb);
   return () => {

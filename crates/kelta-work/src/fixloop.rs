@@ -138,9 +138,12 @@ impl WorkService {
         let text = render(prompt, &ctx, Mode::Lenient)?;
         let mut item = self.resume_item(id, Some(text)).await?;
         if let Some(t) = threads {
-            item = self.load(id).await?;
-            item.sent_threads = t;
-            self.save(&item).await?;
+            item = self
+                .update(id, |w| {
+                    w.sent_threads = t;
+                    true
+                })
+                .await?;
         }
         Ok(item)
     }
@@ -185,10 +188,11 @@ impl WorkService {
         }
         let (host, r) = self.pr_of(&item).await?;
         host.resolve_threads(&r, &item.sent_threads).await?;
-        let mut item = self.load(id).await?;
-        item.sent_threads.clear();
-        self.save(&item).await?;
-        Ok(item)
+        self.update(id, |w| {
+            w.sent_threads.clear();
+            true
+        })
+        .await
     }
 }
 

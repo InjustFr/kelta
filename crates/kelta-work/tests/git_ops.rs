@@ -287,3 +287,28 @@ async fn finish_after_squash_merge_with_pruned_branch() {
     assert_eq!(done.state, WorkState::Finished);
     assert!(!item.worktree.exists());
 }
+
+#[tokio::test]
+async fn scratch_pr_uses_the_item_title_and_task() {
+    need_git!();
+    use kelta_proto::api::CodeHost;
+    let fx = Fx::new();
+    let w = fx.service();
+    let task = "Speed up search\nKeep the ranking the same.";
+    let source = WorkSource::Branch { name: String::new(), task: Some(task.into()), repo: None };
+    let item = w.start(w.plan(&project(), source).await.unwrap()).await.unwrap();
+    let pr = tokio::spawn({
+        let (w, id) = (w.clone(), item.id.clone());
+        async move { w.create_pr(&id, PrDraft::default()).await }
+    });
+    let push = fx.wait_session(|s| s.name == "git push").await;
+    fx.core.exit_session(&push, 0);
+    let out = pr.await.unwrap().unwrap();
+    let binding = samples::project_info().repos[0].code_host.clone().unwrap();
+    let review = fx.host.find_for_branch(&binding.repo, &item.branch).await.unwrap().unwrap();
+    assert_eq!(review.title, "Speed up search");
+    assert_eq!(out.pr_url.as_deref(), Some(review.url.as_str()));
+    let detail = fx.host.get(&review.r#ref).await.unwrap();
+    assert!(detail.body_html.contains("Keep the ranking the same."), "{}", detail.body_html);
+    assert!(fx.tracker.calls().is_empty(), "no tracker side effects");
+}

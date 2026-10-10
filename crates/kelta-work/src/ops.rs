@@ -12,9 +12,10 @@ use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
     CloseOnExit, EditorTarget, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement, RestorePolicy,
-    SessionInfo, SessionKind, SpawnRequest, StepStatus, WorkItem, WorkState,
+    SessionInfo, SessionKind, SpawnRequest, StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore};
+use kelta_proto::tracker::TicketRef;
 
 use crate::claude::LaunchMode;
 use crate::layout::{self, SlotKind};
@@ -22,7 +23,7 @@ use crate::nvim::NvimClient;
 use crate::plan;
 use crate::saga::{self, COLS, Env, Journal, ROWS, await_exit};
 use crate::template::{Mode, render};
-use crate::{WorkService, editor, files, git, rebase};
+use crate::{WorkService, editor, files, git};
 
 /// Push sessions wait for credentials typed by the user; bounded anyway.
 const PUSH_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -226,7 +227,7 @@ impl WorkService {
                         .await;
                     item.session_ids.retain(|s| s != &sid);
                     let _ = svc.save_journal(&id, &j);
-                    let _ = svc.save(&item).await;
+                    let _ = svc.save(&mut item).await;
                 }
                 Err(e) => core.toast(Toast::error(format!("Could not restart Claude: {}", e.message))),
             }
@@ -314,15 +315,24 @@ impl WorkService {
                     None if j.ticket.is_some() || item.ticket.is_some() => {
                         render(&pr.title_template, &ctx, Mode::Lenient)?
                     }
-                    None => git::last_subject(&item.worktree)
-                        .await
-                        .ok()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or(item.branch.clone()),
+                    None => match item.title.clone() {
+                        Some(t) => t,
+                        None => git::last_subject(&item.worktree)
+                            .await
+                            .ok()
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or(item.branch.clone()),
+                    },
                 };
                 let body = match draft.body.clone() {
                     Some(b) => b,
-                    None => render(&pr.body_template, &ctx, Mode::Lenient)?.trim().to_owned(),
+                    None => {
+                        let body = render(&pr.body_template, &ctx, Mode::Lenient)?;
+                        // Scratch items: the task is the PR's description (FLOW §4.3 step 3).
+                        let task =
+                            if item.ticket.is_none() { ctx.get("task").unwrap_or_default() } else { "" };
+                        format!("{}\n\n{task}", body.trim()).trim().to_owned()
+                    }
                 };
                 host.create(&PrCreate {
                     repo: binding.repo.clone(),
@@ -335,9 +345,14 @@ impl WorkService {
                 .await?
             }
         };
-        item.pr_url = Some(review.url.clone());
-        item.state = WorkState::PrOpen;
-        self.save(&item).await?;
+        // Re-load: the push took a while and hooks may have written the item meanwhile.
+        let item = self
+            .update(id, |w| {
+                w.pr_url = Some(review.url.clone());
+                w.state = WorkState::PrOpen;
+                true
+            })
+            .await?;
         env.core.publish(
             BusEvent::new(bus::PR_CREATED, serde_json::json!({ "review": review }))
                 .with_project(item.project_id.clone())
@@ -394,7 +409,7 @@ impl WorkService {
     }
 
     /// `work.on_pr`: transition (status_map.review overrides) + comment; non-fatal.
-    async fn on_pr(&self, env: &Env, item: &WorkItem, j: &Journal, review: &Review) {
+    pub(crate) async fn on_pr(&self, env: &Env, item: &WorkItem, j: &Journal, review: &Review) {
         let Some(t) = &item.ticket else { return };
         let Ok(tracker) = env.core.tracker_for(&t.account).await else { return };
         let on = &env.settings.work.on_pr;
@@ -434,6 +449,71 @@ impl WorkService {
         }
     }
 
+    // ---- link ------------------------------------------------------------------------------
+
+    /// `work_link` (FLOW §4.3 step 4): a scratch item becomes ticket-kind; the branch never changes.
+    pub(crate) async fn link_impl(
+        &self,
+        id: &WorkItemId,
+        ticket: TicketRef,
+        apply_side_effects: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        let lock = self.item_lock(id);
+        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let mut item = self.load(id).await?;
+        match item.kind {
+            WorkKind::Branch => {}
+            WorkKind::Review => return Err(KeltaError::conflict("Review checkout: read-only")),
+            WorkKind::Ticket => return Err(KeltaError::conflict("work item already has a ticket")),
+        }
+        if item.state == WorkState::Finished {
+            return Err(KeltaError::conflict("work item is finished"));
+        }
+        let items = self.store.list_items(Some(&item.project_id)).await?;
+        if plan::existing_for(&items, &WorkSource::Ticket { ticket: ticket.clone() })
+            .is_some_and(|w| w.id != item.id)
+        {
+            return Err(KeltaError::conflict(format!("{} already has a work item", ticket.key)));
+        }
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let tracker = env.core.tracker_for(&ticket.account).await?;
+        let detail = tracker.get(&ticket).await?;
+        let mut j = self.load_journal(id);
+        // Same file the ticket saga writes, so the next resume's CONTEXT.md points at a real ticket.md.
+        // shortcut: the open tab keeps its `wip` title until the next start (no tab-rename API), add one if it confuses.
+        let run = self.ensure_claude_run(&item, &mut j)?;
+        files::write_private(
+            &run.join(crate::claude::TICKET_FILE),
+            files::ticket_markdown(&detail).as_bytes(),
+        )?;
+        j.ticket =
+            Some(plan::TicketSnap::from_ticket(&detail.ticket, tracker.branch_key(&ticket), tracker.kind()));
+        item.kind = WorkKind::Ticket;
+        item.ticket = Some(detail.ticket.r#ref.clone());
+        item.pr_title_needs_key = item.pr_url.is_some();
+        self.save_journal(id, &j)?;
+        self.save(&mut item).await?;
+        if apply_side_effects {
+            let ctx = self.item_ctx(&env, &item, &j);
+            if let Some(p) = j.plan.as_mut() {
+                p.side_effects = plan::side_effects(&env.settings, &env.project, true, &ctx);
+            }
+            j.effects_done.clear();
+            // Failures are toasted inside, like the saga step (non-fatal).
+            self.step_effects(&env, &mut item, &mut j).await?;
+            self.save_journal(id, &j)?;
+            if item.pr_url.is_some()
+                && let Some(binding) = env.repo.code_host.clone()
+            {
+                let host = env.core.code_host_for(&binding.account).await?;
+                if let Some(review) = host.find_for_branch(&binding.repo, &item.branch).await? {
+                    self.on_pr(&env, &item, &j, &review).await;
+                }
+            }
+        }
+        Ok(item)
+    }
+
     // ---- finish ------------------------------------------------------------------------------
 
     pub(crate) async fn finish_impl(
@@ -443,7 +523,7 @@ impl WorkService {
     ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
         let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
-        let mut item = self.load(id).await?;
+        let item = self.load(id).await?;
         if item.state == WorkState::Finished {
             return Ok(item);
         }
@@ -555,8 +635,14 @@ impl WorkService {
             let _ = std::fs::remove_dir_all(dir);
         }
         let _ = std::fs::remove_file(self.journal_path(id));
-        item.state = WorkState::Finished;
-        self.save(&item).await?;
+        let item = self
+            .update(id, |w| {
+                w.state = WorkState::Finished;
+                w.review_due = false;
+                w.claude_replied = false;
+                true
+            })
+            .await?;
         env.core.publish(
             BusEvent::new(bus::WORK_FINISHED, serde_json::json!({ "work_item_id": item.id, "opts": opts }))
                 .with_project(item.project_id.clone())
@@ -599,30 +685,7 @@ impl WorkService {
         // Re-read a recorded rebase on every status read (window focus, FLOW §4.4).
         let item = self.refresh_rebase(id).await?;
         let env = self.env(&item.project_id, &item.repo_id)?;
-        if !item.worktree.is_dir() {
-            return Err(KeltaError::not_found(format!("worktree {} is gone", item.worktree.display())));
-        }
-        let upstream = match git::upstream(&item.worktree).await? {
-            Some(u) => Some(u),
-            None => {
-                let rb = format!("{}/{}", env.repo.remote, item.base);
-                git::ref_exists(&item.worktree, &rb).await?.then_some(rb)
-            }
-        };
-        let (ahead, behind) = match upstream {
-            Some(u) => git::ahead_behind(&item.worktree, &u).await?,
-            None => (0, 0),
-        };
-        let report = self.dirty_report(&env, &item, &self.load_journal(id)).await?;
-        let remote_ref = format!("refs/remotes/{}/{}", env.repo.remote, item.branch);
-        Ok(GitStatus {
-            ahead,
-            behind,
-            dirty: !report.files.is_empty(),
-            unpushed: report.unpushed > 0,
-            diverged: rebase::diverged(&item.worktree, &remote_ref, item.rebase.as_deref()).await?,
-            remote_new: rebase::remote_new(&item.worktree, &remote_ref, item.rebase.as_deref()).await?,
-        })
+        self.git_status(&env, &item).await
     }
 
     // ---- editors -----------------------------------------------------------------------------
@@ -853,7 +916,7 @@ impl WorkService {
             let msg = "interrupted (Kelta quit during start)".to_owned();
             self.set_step(&mut item, &step, StepStatus::Failed, Some(msg.clone())).await?;
             item.state = WorkState::Failed { step, message: msg };
-            self.save(&item).await?;
+            self.save(&mut item).await?;
         }
         Ok(())
     }
@@ -871,8 +934,8 @@ impl WorkService {
 pub(crate) struct DirtyReport {
     pub files: Vec<String>,
     /// Untracked `worktree.include` copies (ours, removed with the worktree).
-    copies: Vec<String>,
-    unpushed: u32,
+    pub copies: Vec<String>,
+    pub unpushed: u32,
 }
 
 /// `@path#Lx-y ` (path relative to the Claude session's cwd when inside it).

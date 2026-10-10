@@ -1,16 +1,22 @@
 //! Bus listener (one task, event-driven): `claude.file_edited` → editor reload/open
-//! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
-//! Claude hooks → the item's `claude_uuid` follows the conversation, `Stop` re-reads the rebase state.
+//! (`editor.follow_claude_edits`), `claude.hook` → work item signals (FLOW §2.3),
+//! `session.exited` → release the HTTP consumer of a Claude session.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Weak;
 
 use kelta_proto::events::{BusEvent, bus};
+use kelta_proto::hooks::HookPayload;
+use kelta_proto::ids::SessionId;
 use tokio::sync::broadcast;
 
 use crate::WorkService;
 
 pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEvent>) {
+    // Last hook task per session: the next one waits for it, so a prompt never lands before an
+    // earlier Stop's slow git read.
+    let mut last_hook: HashMap<SessionId, tokio::task::JoinHandle<()>> = HashMap::new();
     loop {
         let ev = match rx.recv().await {
             Ok(ev) => ev,
@@ -34,30 +40,37 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                 });
             }
             bus::CLAUDE_HOOK => {
-                let Some(sid) = ev.session_id.clone() else { continue };
+                let (Some(sid), Some(Ok(hook))) = (
+                    ev.session_id.clone(),
+                    ev.payload.get("payload").cloned().map(serde_json::from_value::<HookPayload>),
+                ) else {
+                    continue;
+                };
                 let stop = ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop");
-                let uuid =
-                    ev.payload.pointer("/payload/session_id").and_then(|u| u.as_str()).map(str::to_owned);
-                tokio::spawn(async move {
-                    let Some(item) = svc.for_session(&sid).await else { return };
-                    // B3: `/clear` or an in-Claude `/resume` changes the conversation; Fix with
-                    // Claude must resume the one the user was really in.
-                    if let Some(u) = uuid.filter(|u| !u.is_empty() && item.claude_uuid.as_deref() != Some(u))
-                        && let Err(e) = svc.set_claude_uuid(&item.id, u).await
-                    {
-                        tracing::debug!(error = %e.message, "claude_uuid update failed");
+                // Hooks read git status: off the listener task, in order per session.
+                let prev = last_hook.remove(&sid);
+                let key = sid.clone();
+                let task = tokio::spawn(async move {
+                    if let Some(prev) = prev {
+                        let _ = prev.await;
+                    }
+                    if let Err(e) = svc.on_claude_hook(&sid, hook).await {
+                        tracing::debug!(error = %e.message, "work item hook signal failed");
                     }
                     // Claude may have finished (or aborted) a rebase it was asked to resolve.
                     if stop
+                        && let Some(item) = svc.for_session(&sid).await
                         && item.rebase.is_some()
                         && let Err(e) = svc.refresh_rebase(&item.id).await
                     {
                         tracing::debug!(error = %e.message, "rebase re-read on Stop failed");
                     }
                 });
+                last_hook.insert(key, task);
             }
             bus::SESSION_EXITED => {
                 if let Some(sid) = &ev.session_id {
+                    last_hook.remove(sid);
                     svc.on_session_exited(sid);
                 }
             }
