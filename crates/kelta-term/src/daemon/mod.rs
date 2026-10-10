@@ -195,6 +195,34 @@ pub fn peer_uid(fd: impl AsFd) -> io::Result<u32> {
     }
 }
 
+/// Pid of the process on the other end of a unix socket.
+pub fn peer_pid(fd: impl AsFd) -> io::Result<i32> {
+    #[cfg(target_os = "linux")]
+    {
+        Ok(rustix::net::sockopt::socket_peercred(fd)?.pid.as_raw_nonzero().get())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        use std::os::fd::AsRawFd;
+        let mut pid: libc::pid_t = 0;
+        let mut len = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
+        // SAFETY: valid socket fd for the duration of the call, out-params point to locals of the right size.
+        let rc = unsafe {
+            libc::getsockopt(
+                fd.as_fd().as_raw_fd(),
+                libc::SOL_LOCAL,
+                libc::LOCAL_PEERPID,
+                (&raw mut pid).cast(),
+                &mut len,
+            )
+        };
+        if rc != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(pid)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

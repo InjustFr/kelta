@@ -130,3 +130,52 @@ fn launches_the_keltad_binary() {
     assert!(std::fs::read_to_string(&log).unwrap().contains("keltad started"));
     // keltad exits on its own 30 s after both clients and the exited session are gone.
 }
+
+const FAKE_SOCK_ENV: &str = "KELTA_TEST_FAKE_KELTAD_SOCK";
+
+/// Not a test: the keltad of another protocol `refused_hello_replaces_the_old_keltad` runs in a
+/// child process (it gets SIGTERM). Refuses every Hello and keeps the connection open.
+#[test]
+#[ignore = "child process of refused_hello_replaces_the_old_keltad"]
+fn fake_old_keltad() {
+    use kelta_proto::error::KeltaError;
+    use kelta_term::daemon::{Call, Out, decode, encode, read_msg};
+    use std::io::Write;
+    let Some(sock) = std::env::var_os(FAKE_SOCK_ENV) else { return };
+    let l = daemon::bind(Path::new(&sock)).unwrap();
+    let mut open = Vec::new();
+    for mut s in l.incoming().map_while(Result::ok) {
+        // The test's readiness probe connects and leaves without a message.
+        let Ok(Some(body)) = read_msg(&mut s) else { continue };
+        let (call, _) = decode::<Call>(&body).unwrap();
+        let reply =
+            Out::Reply { seq: call.seq, result: Err(KeltaError::unsupported("keltad speaks protocol 0")) };
+        s.write_all(&encode(&reply, &[]).unwrap()).unwrap();
+        open.push(s);
+    }
+}
+
+#[test]
+fn refused_hello_replaces_the_old_keltad() {
+    use std::os::unix::process::ExitStatusExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let sock = tmp.path().join("run/keltad.sock");
+    let log = tmp.path().join("logs/keltad.log");
+    let mut old = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["daemon::fake_old_keltad", "--exact", "--ignored", "--nocapture"])
+        .env(FAKE_SOCK_ENV, &sock)
+        .spawn()
+        .unwrap();
+    wait_until(T, || std::os::unix::net::UnixStream::connect(&sock).ok()).expect("fake keltad listening");
+
+    let exe = Path::new(env!("CARGO_BIN_EXE_keltad"));
+    let h = DaemonTerminalHost::connect_or_launch(&sock, exe, &log, &log.with_extension("history")).unwrap();
+    // The old keltad was stopped, not left running beside the new one.
+    let status = old.wait().unwrap();
+    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    // The new keltad answers.
+    let ev = Arc::new(Events::default());
+    h.spawn(spec("s5", "/bin/sh", &["-c", "exit 3"], 80, 24, ev.clone())).unwrap();
+    assert_eq!(ev.wait_exit(T), (Some(3), None));
+    assert!(std::fs::read_to_string(&log).unwrap().contains("keltad started"));
+}

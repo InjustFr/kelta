@@ -2,7 +2,7 @@
 //! memory stays in keltad), only the routing of frames to views and events to core.
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::{BufReader, Write};
+use std::io::{BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender, SyncSender};
 use std::time::Duration;
 
 use kelta_proto::api::{FrameSink, TerminalEvents, TerminalHost};
-use kelta_proto::error::KeltaError;
+use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
 use kelta_proto::term::{
@@ -22,9 +22,11 @@ use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_uid, read_msg};
+use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_pid, peer_uid, read_msg};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a replaced keltad gets to close its socket after SIGTERM.
+const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const THREAD_STACK: usize = 256 * 1024;
 
 type Reply = Result<Value, KeltaError>;
@@ -128,6 +130,30 @@ impl Conn {
     }
 }
 
+/// Protocol handshake on a fresh connection, before any reader thread owns the stream.
+fn hello(s: &UnixStream) -> Result<(), KeltaError> {
+    s.set_read_timeout(Some(CALL_TIMEOUT))?;
+    (&*s).write_all(&encode(&Call { seq: 1, req: Req::Hello { v: PROTOCOL_VERSION } }, &[])?)?;
+    let body = read_msg(&mut &*s)?.ok_or_else(|| KeltaError::internal("keltad closed the connection"))?;
+    s.set_read_timeout(None)?;
+    match decode::<Out>(&body) {
+        Some((Out::Reply { result, .. }, _)) => result.map(drop),
+        _ => Err(KeltaError::internal("keltad sent a malformed hello reply")),
+    }
+}
+
+/// SIGTERM the keltad on the other end of `s`, then wait (bounded) until it closes the socket.
+fn stop_peer(s: &UnixStream) -> Result<(), KeltaError> {
+    let pid = rustix::process::Pid::from_raw(peer_pid(s)?)
+        .ok_or_else(|| KeltaError::internal("keltad peer pid unknown"))?;
+    rustix::process::kill_process(pid, rustix::process::Signal::TERM).map_err(std::io::Error::from)?;
+    s.set_read_timeout(Some(STOP_TIMEOUT))?;
+    let mut buf = [0u8; 256];
+    // EOF once it is gone; a timeout or error ends the wait too (the redial then tells).
+    while matches!((&*s).read(&mut buf), Ok(n) if n > 0) {}
+    Ok(())
+}
+
 /// `TerminalHost` backed by keltad.
 pub struct DaemonTerminalHost {
     sock: PathBuf,
@@ -210,7 +236,19 @@ impl DaemonTerminalHost {
         if let Some(c) = slot.as_ref().filter(|c| !c.dead.load(Ordering::SeqCst)) {
             return Ok(c.clone());
         }
-        let s = self.dial()?;
+        let mut s = self.dial()?;
+        if let Err(e) = hello(&s) {
+            // A keltad of another protocol (left by a previous Kelta) refuses us. Stop it rather
+            // than run kept sessions in-process beside it: its PTYs get SIGHUP, core restores them.
+            if e.code != ErrorCode::Unsupported || self.launch.is_none() {
+                return Err(e);
+            }
+            tracing::warn!(error = %e, "replacing a keltad of another protocol");
+            stop_peer(&s)?;
+            let _ = std::fs::remove_file(&self.sock);
+            s = self.dial()?;
+            hello(&s)?;
+        }
         let reader = s.try_clone()?;
         let c = Arc::new(Conn {
             w: Mutex::new(s),
@@ -236,13 +274,6 @@ impl DaemonTerminalHost {
             .name("keltad-client".into())
             .stack_size(THREAD_STACK)
             .spawn(move || rc.read_loop(reader, &ev_tx))?;
-        let seq = c.next_seq();
-        if let Err(e) = c.call_seq(seq, &Req::Hello { v: PROTOCOL_VERSION }, &[]) {
-            // shortcut: an older keltad left running by a previous version keeps its sessions unreachable until they exit, and core respawns the kept ones from Dormant beside them (duplicate Claude --resume); kill the stale keltad's sessions here if that bites.
-            c.closing.store(true, Ordering::SeqCst);
-            let _ = c.w.lock().shutdown(std::net::Shutdown::Both);
-            return Err(e);
-        }
         *slot = Some(c.clone());
         Ok(c)
     }
