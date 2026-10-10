@@ -12,19 +12,13 @@ test.describe('project switching', () => {
     for (const id of shopSessions) expect(await attachesOf(id)).toBe(1);
 
     // shop → billing (three panes: Claude, nvim, an exited shell)
-    await page
-      .getByTestId('rail-project')
-      .filter({ has: page.locator('.glyph', { hasText: 'B' }) })
-      .click();
+    await page.locator('[data-testid="rail-row"][data-tab-id="billing-t1"]').click();
     await expect.poll(() => activeProject(page)).toBe('billing');
     await expect(page.locator('[data-testid="workspace"][data-project-id="billing"]')).toBeVisible();
     await waitForAttached(page, 3);
 
     // billing → shop: the two shop views come back from the pool.
-    await page
-      .getByTestId('rail-project')
-      .filter({ has: page.locator('.glyph', { hasText: 'S' }) })
-      .click();
+    await page.locator('[data-testid="rail-project"][data-project-id="shop"]').click();
     await expect.poll(() => activeProject(page)).toBe('shop');
     await waitForAttached(page, 2);
 
@@ -89,16 +83,15 @@ test.describe('project switching', () => {
     for (const ms of measures.slice(-4)) expect(ms).toBeLessThanOrEqual(50);
   });
 
-  test('rail: lamps, Now badge and context menu reorder', async ({ page }) => {
+  test('rail: row lamps, Now badge and caption menu reorder', async ({ page }) => {
     await boot(page);
+    const row = (tab: string) => page.locator(`[data-testid="rail-row"][data-tab-id="${tab}"]`);
     const billing = page.locator('[data-testid="rail-project"][data-project-id="billing"]');
-    const tools = page.locator('[data-testid="rail-project"][data-project-id="kelta-tools"]');
-    await expect(billing).toHaveAttribute('data-attention', 'needs_input');
-    await expect(page.locator('[data-testid="rail-project"][data-project-id="shop"]')).toHaveAttribute(
-      'data-attention',
-      'working',
-    );
+    await expect(row('billing-t1')).toHaveAttribute('data-attention', 'needs_input');
+    await expect(row('billing-t1')).toHaveClass(/lit/);
+    await expect(row('shop-t1')).toHaveAttribute('data-attention', 'working');
     // kelta-tools' Claude finished long ago: "done" comes from review_due, not the seen flag.
+    const tools = row('kt-t1');
     await expect(tools).toHaveAttribute('data-attention', 'none');
     await expect(page.getByTestId('inbox-badge')).toBeVisible();
     await expect(page.getByTestId('rail-inbox')).toHaveAttribute(
@@ -106,7 +99,7 @@ test.describe('project switching', () => {
       /^Now: Claude: 1 asks\u2002\u20021 LLM diff/,
     );
 
-    // A Claude stop with changes lights the tile.
+    // A Claude stop with changes lights the row.
     await page.evaluate(() => {
       const mock = window.__keltaMock!;
       const w = mock.state.work.find((x) => x.project_id === 'kelta-tools')!;
@@ -167,6 +160,22 @@ test.describe('project switching', () => {
     await expect.poll(() => activeProject(page)).toBe('billing');
     await expect(page.getByTestId('tab').filter({ hasText: 'Diagnostics' })).toHaveCount(1);
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
+  });
+
+  test('a rail row of another project opens from Now, with its pane focused', async ({ page }) => {
+    await boot(page);
+    await page.getByTestId('rail-inbox').click();
+    await expect(page.getByTestId('global-host')).toBeVisible();
+    const row = page.locator('[data-testid="rail-row"][data-tab-id="billing-t1"]');
+    await row.click();
+    await expect(page.getByTestId('global-host')).toBeHidden();
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await expect(row).toHaveAttribute('aria-current', 'page');
+    await expect(
+      page.locator(
+        '[data-testid="workspace"][data-project-id="billing"] [data-testid="pane"][data-focused="true"]',
+      ),
+    ).toHaveCount(1);
   });
 
   test('closing a project keeps its sessions running unless stop is chosen', async ({ page }) => {

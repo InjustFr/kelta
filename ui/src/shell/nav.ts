@@ -35,6 +35,7 @@ import {
   type Direction,
   type PaneNode,
 } from '$lib/layout';
+import { webTools } from '$lib/plugin-host/web.svelte';
 import { layout, projects, sessions, toasts, ui, work, type GlobalView } from '$lib/stores';
 import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
@@ -50,6 +51,71 @@ import { confirms } from './confirm.svelte';
 export function railProjects(): ProjectInfo[] {
   const open = projects.list.filter((p) => p.open);
   return [...open.filter((p) => !p.builtin), ...open.filter((p) => p.builtin)];
+}
+
+/** A rail row: one tab of an open project. */
+export interface RailRow {
+  project: ProjectId;
+  tab: Tab;
+}
+
+/** The rail's rows: every non-tool tab of every open project, in rail order then tab order. */
+export function railRows(): RailRow[] {
+  return railProjects().flatMap((p) =>
+    (layout.get(p.id)?.tabs ?? []).filter((tab) => !isToolTab(tab)).map((tab) => ({ project: p.id, tab })),
+  );
+}
+
+/** The tool a pane shows: a tool session's id, a web pane's tool (`''` until known); null otherwise. */
+export function paneTool(p: PaneNode): string | null {
+  if (p.content.kind === 'web') return webTools[p.content.tool_instance_id]?.toolId ?? '';
+  const id = paneSession(p);
+  const kind = id ? sessions.get(id)?.kind : null;
+  return kind?.type === 'tool' ? kind.tool_id : null;
+}
+
+/** A tab made only of tool panes: the rail lists it under Tools, not in its project's band. */
+export function isToolTab(tab: Tab): boolean {
+  const panes = allPanes(tab.root);
+  return panes.length > 0 && panes.every((p) => paneTool(p) !== null);
+}
+
+/** Live sessions of a project that no pane shows (tools aside): the dim rows at the end of its band. */
+export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
+  const l = layout.get(projectId);
+  if (!l) return [];
+  return sessions
+    .forProject(projectId)
+    .filter((s) => s.lifecycle === 'live' && s.kind.type !== 'tool' && !findSession(l, s.id));
+}
+
+/** A tool pane of an open project (a Tools sub-line). */
+export interface ToolInstance {
+  project: ProjectId;
+  tab: Tab;
+  pane: PaneNode;
+}
+
+export function toolInstances(toolId: string): ToolInstance[] {
+  return railProjects().flatMap((p) =>
+    (layout.get(p.id)?.tabs ?? []).flatMap((tab) =>
+      allPanes(tab.root)
+        .filter((pane) => paneTool(pane) === toolId)
+        .map((pane) => ({ project: p.id, tab, pane })),
+    ),
+  );
+}
+
+/** Rail label of a tab: `KEY title` for a work tab whose title lacks the key. */
+export function rowLabel(tab: Tab): string {
+  const key = workItemOfTab(tab)?.ticket?.key;
+  return key && !tab.title.startsWith(key) ? `${key} ${tab.title}` : tab.title;
+}
+
+/** A rail row click: the project (leaving a global view), then the tab. */
+export function selectRow(project: ProjectId, tabId: TabId): void {
+  void activateProject(project);
+  selectTab(project, tabId);
 }
 
 export function activeProjectId(): ProjectId | null {
@@ -407,7 +473,17 @@ export function tabAttention(tab: Tab): Lamp {
   return maxLamp(lamps);
 }
 
-/** Rail tile lamp: the project's sessions folded with its work items' phases. */
+/** Lamp of a running PTY tool: its sessions' attention, else a plain activity dot; `none` when not running. */
+export function toolLamp(toolId: string): Lamp {
+  const live = sessions.all.filter(
+    (s) => s.kind.type === 'tool' && s.kind.tool_id === toolId && s.lifecycle === 'live',
+  );
+  if (live.length === 0) return 'none';
+  const lvl = sessionsLamp(live.map((s) => s.id));
+  return lvl === 'none' ? 'activity' : lvl;
+}
+
+/** Project lamp (peek-next, switcher): the project's sessions folded with its work items' phases. */
 export function projectAttention(id: ProjectId): Lamp {
   const lamps = sessions.forProject(id).map(sessionLamp);
   for (const item of work.forProject(id)) if (item.state.kind !== 'finished') lamps.push(phaseNow(item).lamp);

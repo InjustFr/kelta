@@ -114,7 +114,7 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
 | Work bar (tab header, above all panes, survives pane zoom) | key, title, ticket status chip (opens the status picker), phase lamp + label + detail, branch, `↑a ↓b`, `+ins −del` (and a `dirty` tag), primary button, **Work ⌘.** menu. Mockup `f2-work-tab.png`. Clicking the phase label opens the existing `WorkItemPane` (saga steps, sessions) as a split down: this is the missing UI path to it. |
-| Rail tile | aggregate lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
+| Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
@@ -178,7 +178,7 @@ The header answers "review LLM work or grab a new feature?" in the order of that
 
 `Claude: 1 asks · 3 LLM diffs · 2 PRs waiting · Fix 2 · 1 working · 4 up next`
 
-"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. Project rows on the rail carry their Ready for review count. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
+"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
 
 ### 3.2 Row grammar
 
@@ -211,7 +211,7 @@ In the Tickets list (not Now; the same in the rail's Tickets view, where the sou
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
 
 ### 3.4 Next waiting, without opening Now
 

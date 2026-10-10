@@ -332,13 +332,14 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 
 ### 6.2 Rail (`shell/ProjectRail.svelte`)
 
-- 44px wide, `--k-bezel`. Under Search, the global views in loop order: **Tickets** (`ticket` icon, `12 mine`), **Now** (`inbox` icon, red badge), **Reviews** (`git-pull-request` icon, `2 to review`). Home / settings / add pinned at the bottom. The global views, home, settings and add are flat ghost icons; only the current destination (a project, home or a global view) wears the selected row style and the full-height index bar (a global view's bar is the accent); project rows drop theirs while a global view is shown.
+- 240px wide (64px compact), `--k-bezel`. Under Search, the global views in loop order: **Tickets** (`ticket` icon, `12 mine`), **Now** (`inbox` icon, red badge), **Reviews** (`git-pull-request` icon, `2 to review`), 44px two-line rows. Settings is pinned at the bottom. Only the current destination (a row or a global view) wears the selected row style and the full-height index bar (a global view's bar is the accent); rows drop theirs while a global view is shown.
 - Counts: only Now's badge is red. Tickets and Reviews counts are muted (the sub line in the wide rail; a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot of the compact rail), so nothing is counted twice in red.
-- Project tile: 28px square, radius 4, `--k-well` face, initial(s) in `--k-fg-chrome`, a 3px project-colour index bar on the tile's left edge (raw project colour, not the clamped accent). No fill with the project colour, no text-shadow.
-- Active: index bar runs full tile height, initial goes to `--k-fg` 600.
-- Lamp socket at the top-right corner, 10px.
-- **Lit tile** *(from Faceplate)*: when any session in the project needs input, the tile face takes `color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well))` (`--k-lit-mix` 14% light, 30% dark, where 14% vanished into the graphite) and the socket shows the lamp plus a tabular count (10px/600). That makes Claude waiting the brightest thing in the window, readable in peripheral vision.
-- Focus: 2px `--k-focus` ring with a 2px `--k-bezel` gap (`box-shadow: 0 0 0 2px var(--k-bezel), 0 0 0 4px var(--k-focus)`).
+- **Bands**: one per open project, Home last. A caption (project name, `--k-fg-muted` 12/500, `⋯` on hover) over one row per tab. No project tile, status word, lamp or ready count on the caption: its rows carry them.
+- **Rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][glyph 16px][title]`, a 2px project-colour bar on the left (55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus. Background sessions are `--k-fg-muted` rows at the end of the band.
+- **Lit row** *(from Faceplate)*: a row whose session needs input takes `--k-lit` (`color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well))`, `--k-lit-mix` 14% light, 30% dark), the brightest thing in the window, readable in peripheral vision. The selected row keeps its face; its lamp speaks.
+- **Tools**: the same 32px rows, `[lamp][icon or 2 letters][label]`, `↗` (`external-link` 12px, `--k-fg-muted`) for web and external tools, 55% opacity when not installed. Live instances are `--k-fg-muted` sub-lines `└ KEY` indented under the lamp column.
+- Compact (< 1100px): the caption becomes a 1px rule in the project colour and each row a 28px tile (bar, lamp, glyph); names are in the tooltips and the accessibility tree; sub-lines, `×` and `⋯` are hidden.
+- Focus: 2px `--k-focus` outline inset 2px.
 - Drag-over: 2px accent insertion line.
 
 ### 6.3 Tab bar (`shell/TabBar.svelte`)
