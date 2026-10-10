@@ -114,12 +114,17 @@ export function nowSections(input: NowInput): Section[] {
   for (const r of input.requested) {
     const rp = reviewPhase(r.review);
     if (ownedPrs.has(prKey(r)) || rp === 'reviewed') continue;
-    const reason = rp === 'updated' ? 'Updated since your review' : 'Review requested';
+    // The blocking band first (Louis is the last required reviewer), then the oldest request.
+    const reason = r.review.blocking
+      ? "Blocking: you're the last reviewer"
+      : rp === 'updated'
+        ? 'Updated since your review'
+        : 'Review requested';
     add(
       'requests',
       { type: 'review', id: `r:${prKey(r)}`, review: r, mine: false, reason },
-      0,
-      r.review.updated_at,
+      r.review.blocking ? 0 : 1,
+      r.review.requested_at ?? r.review.updated_at,
     );
   }
   for (const a of input.authored) {

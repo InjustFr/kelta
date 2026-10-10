@@ -729,7 +729,8 @@ pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, sour
   ci: CiState /*Success|Failure|Pending|Error|None*/, decision: Option<ReviewDecision /*Approved|ChangesRequested|ReviewRequired*/>,
   my_state: Option<MyReviewState /*Pending|Approved|ChangesRequested|Commented*/>, mergeable: Option<bool>,
   labels: Vec<String>, kind: ReviewKind /*ReviewRequested|Authored*/, updated_at: String, linked_tickets: Vec<String>,
-  additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/ }
+  additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/,
+  requested_at: Option<String> /*when my review was requested*/, blocking: bool /*I am the last required reviewer*/ }
 pub struct Feedback { threads: Vec<FeedbackThread{id, author, path?, line?, body_md, url}>,
   reviews: Vec<FeedbackReview{author, state?, body_md}>, failed_checks: Vec<FailedCheck{name, url?, log_tail?}>, reviewers: Vec<String> }
 ```

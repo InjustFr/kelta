@@ -614,6 +614,7 @@ export const reviewPage: ReviewPage = {
           "login": "bob",
           "name": "Bob"
         },
+        "blocking": false,
         "ci": "success",
         "decision": "review_required",
         "decision_head": null,
@@ -632,6 +633,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "requested_at": null,
         "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
@@ -669,6 +671,7 @@ export const reviewDetail: ReviewDetail = {
       "login": "bob",
       "name": "Bob"
     },
+    "blocking": false,
     "ci": "success",
     "decision": "review_required",
     "decision_head": null,
@@ -687,6 +690,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "requested_at": null,
     "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",

@@ -18,4 +18,12 @@ linked_tickets: Array<string>, additions: number | null, deletions: number | nul
 /**
  * Head commit the latest decisive review (changes requested / approved) was left on.
  */
-decision_head?: string | null, };
+decision_head?: string | null, 
+/**
+ * When my review was requested (review requests only); `None`: the UI ages the row by `updated_at`.
+ */
+requested_at?: string | null, 
+/**
+ * I am the last required reviewer: my approval unblocks the author (review requests only).
+ */
+blocking: boolean, };
