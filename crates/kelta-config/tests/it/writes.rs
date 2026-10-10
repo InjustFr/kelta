@@ -258,13 +258,21 @@ fn project_crud_with_trash() {
     };
     let cfg = svc.project_update(&ProjectId::new("shop"), &patch).unwrap();
     assert_eq!(cfg.name, "Shop 2");
-    assert_eq!(cfg.tracker.as_ref().unwrap().views[0].jql.as_deref(), Some("assignee = currentUser()"));
+    // the board goes to the global `[[sources]]`, never to `[project.tracker]`
+    assert!(cfg.tracker.is_none());
+    let sources = svc.effective(None).sources.clone();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].projects, vec![ProjectId::new("shop")]);
+    assert_eq!(sources[0].tracker.views[0].jql.as_deref(), Some("assignee = currentUser()"));
     let text = read(&file);
     assert!(text.contains("name = \"Shop 2\" # display name"), "{text}");
-    let cfg = svc
-        .project_update(&ProjectId::new("shop"), &ProjectPatch { remove_tracker: true, ..Default::default() })
+    assert!(!text.contains("tracker"), "{text}");
+    svc.project_update(&ProjectId::new("shop"), &ProjectPatch { remove_tracker: true, ..Default::default() })
         .unwrap();
-    assert!(cfg.tracker.is_none());
+    // the source stays, feeding no project
+    let sources = svc.effective(None).sources.clone();
+    assert_eq!(sources.len(), 1);
+    assert!(sources[0].projects.is_empty());
 
     // removal moves the file to .trash
     svc.project_remove(&ProjectId::new("shop")).unwrap();
@@ -328,4 +336,129 @@ fn new_project_failing_merged_validation_is_rejected() {
     d.default_template = Some("nope".into());
     assert_eq!(svc.project_create(&d).unwrap_err().code, ErrorCode::InvalidArgument);
     assert!(!e.dirs.projects_dir().join("shop.toml").exists());
+}
+
+// ---- ticket sources (#238) ------------------------------------------------------------------
+
+fn board(columns: &str) -> String {
+    format!(
+        "[project.tracker]\naccount = \"jira-acme\"\nviews = [{{ id = \"mine\", label = \"My open\", jql = \"assignee = currentUser()\" }}]\n{columns}\nstatus_map = {{ start = {{ name = \"In Progress\" }} }}\n"
+    )
+}
+
+fn trashed(e: &common::Env) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(e.dirs.projects_dir().join(".trash"))
+        .map(|rd| rd.flatten().map(|f| f.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default();
+    v.sort();
+    v
+}
+
+#[test]
+fn migration_moves_trackers_to_sources_once() {
+    let e = env();
+    e.global(GLOBAL);
+    let shared = board("columns = [{ id = \"todo\", label = \"To do\", categories = [\"todo\"] }]");
+    e.project(
+        "web",
+        &format!("{shared}repo_rules = [{{ match = {{ component = \"Web\" }}, repo = \"api\" }}]\n"),
+    );
+    e.project("api", &shared);
+    e.project("cli", &board(""));
+    let svc = e.load();
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 3);
+
+    let s = svc.effective(None).sources.clone();
+    let ids: Vec<(&str, &str)> = s.iter().map(|x| (x.id.as_str(), x.label.as_str())).collect();
+    assert_eq!(ids, [("my-open-api", "My open · api"), ("my-open-cli", "My open · cli")]);
+    assert_eq!(s[0].projects, [ProjectId::new("api"), ProjectId::new("web")]);
+    assert_eq!(s[0].routes.len(), 1);
+    assert_eq!(s[0].routes[0].project, ProjectId::new("web"));
+    let global = read(&e.dirs.global_config());
+    assert!(global.contains("theme = \"dark\" # keep me") && global.contains("[[sources]]"), "{global}");
+    let trash = trashed(&e);
+    assert_eq!(trash.len(), 3, "{trash:?}");
+    assert!(trash.iter().all(|f| f.contains("-tracker-")), "{trash:?}");
+    for id in ["web", "api", "cli"] {
+        let text = read(&e.dirs.projects_dir().join(format!("{id}.toml")));
+        assert!(!text.contains("tracker"), "{text}");
+        assert!(svc.project(&ProjectId::new(id)).unwrap().tracker.is_none());
+    }
+
+    // a re-run (next launch) changes nothing
+    let svc = e.load();
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 0);
+    assert_eq!(read(&e.dirs.global_config()), global);
+    assert_eq!(trashed(&e).len(), 3);
+}
+
+#[test]
+fn migration_after_a_crash_between_writes_only_strips() {
+    let e = env();
+    e.project("web", &board(""));
+    let svc = e.load();
+    svc.migrate_project_trackers().unwrap();
+    let global = read(&e.dirs.global_config());
+    // the global file was written, the project file was not stripped
+    e.project("web", &board(""));
+    let svc = e.load();
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 1);
+    assert_eq!(read(&e.dirs.global_config()), global);
+    assert!(!read(&e.dirs.projects_dir().join("web.toml")).contains("tracker"));
+    assert_eq!(svc.effective(None).sources[0].projects, [ProjectId::new("web")]);
+}
+
+#[cfg(unix)]
+#[test]
+fn migration_failure_leaves_project_files_untouched() {
+    use std::os::unix::fs::PermissionsExt;
+    let e = env();
+    e.global(GLOBAL);
+    e.project("web", &board(""));
+    let before = read(&e.dirs.projects_dir().join("web.toml"));
+    let svc = e.load();
+    let dir = e.dirs.global_config().parent().unwrap().to_path_buf();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let writable = std::fs::write(dir.join("probe"), "").is_ok(); // root ignores modes
+    let r = svc.migrate_project_trackers();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if writable {
+        return;
+    }
+    assert!(r.is_err());
+    assert_eq!(read(&e.dirs.global_config()), GLOBAL);
+    assert_eq!(read(&e.dirs.projects_dir().join("web.toml")), before);
+    // the read path still sees the block
+    assert!(svc.project(&ProjectId::new("web")).unwrap().tracker.is_some());
+}
+
+#[test]
+fn project_create_with_a_tracker_joins_an_equal_source() {
+    let e = env();
+    let svc = e.load();
+    let t = kelta_proto::samples::tracker_binding();
+    let mut d = draft(&e, "shop");
+    d.tracker = Some(t.clone());
+    svc.project_create(&d).unwrap();
+    let mut d = draft(&e, "blog");
+    d.tracker = Some(t.clone());
+    svc.project_create(&d).unwrap();
+    for id in ["shop", "blog"] {
+        assert!(!read(&e.dirs.projects_dir().join(format!("{id}.toml"))).contains("tracker"));
+    }
+    let s = svc.effective(None).sources.clone();
+    assert_eq!(s.len(), 1, "{s:?}");
+    assert_eq!(s[0].projects, [ProjectId::new("shop"), ProjectId::new("blog")]);
+    assert_eq!(s[0].binding_for(&ProjectId::new("blog")), t);
+    // an update replaces that source's board and this project's routes
+    let mut t2 = t.clone();
+    t2.repo_rules.clear();
+    t2.columns.clear();
+    svc.project_update(&ProjectId::new("blog"), &ProjectPatch { tracker: Some(t2), ..Default::default() })
+        .unwrap();
+    let s = svc.effective(None).sources.clone();
+    assert_eq!(s.len(), 1);
+    assert!(s[0].tracker.columns.is_empty());
+    assert_eq!(s[0].binding_for(&ProjectId::new("shop")).repo_rules, t.repo_rules);
+    assert!(s[0].binding_for(&ProjectId::new("blog")).repo_rules.is_empty());
 }

@@ -1,0 +1,7 @@
+{
+  "scope": {
+    "id": "product",
+    "kind": "source"
+  },
+  "type": "tickets.changed"
+}

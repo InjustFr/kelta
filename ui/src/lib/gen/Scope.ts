@@ -2,6 +2,6 @@
 import type { ProjectId } from "./ProjectId";
 
 /**
- * `{"kind":"project","id":"shop"}` | `{"kind":"all"}`.
+ * `{"kind":"project","id":"shop"}` | `{"kind":"source","id":"product"}` | `{"kind":"all"}`.
  */
-export type Scope = { "kind": "project", id: ProjectId, } | { "kind": "all" };
+export type Scope = { "kind": "project", id: ProjectId, } | { "kind": "source", id: string, } | { "kind": "all" };

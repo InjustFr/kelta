@@ -70,6 +70,27 @@ async fn plan_templating_and_unicode_slug() {
 }
 
 #[tokio::test]
+async fn migrated_routes_still_pick_the_repo() {
+    need_git!();
+    let fx = Fx::new();
+    // the fixture's binding comes from a `[[sources]]` route: component `frontend` → repo `web`
+    let mut p = kelta_proto::api::CoreApi::project(&*fx.core, &project()).unwrap();
+    let mut web = p.repos[0].clone();
+    web.id = "web".into();
+    web.primary = false;
+    p.repos.push(web);
+    fx.core.add_project(p);
+    let mut d = fx.tracker.ticket("SHOP-141").unwrap();
+    d.ticket.labels = vec!["frontend".into()];
+    fx.core.add_tracker(
+        AccountId::new("jira-acme"),
+        Arc::new(kelta_proto::testing::FakeTracker::with_tickets(vec![d])),
+    );
+    let plan = fx.service().plan(&project(), ticket("SHOP-141")).await.unwrap();
+    assert_eq!(plan.repo_id, "web");
+}
+
+#[tokio::test]
 async fn invalid_branch_template_is_sanitized_or_rejected() {
     need_git!();
     let fx = Fx::new();

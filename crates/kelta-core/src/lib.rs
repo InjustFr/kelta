@@ -353,6 +353,7 @@ impl Core {
     /// Synchronous startup: state from SQLite (before window creation), config watch, Dormant
     /// sessions; async services are queued until the runtime is reachable.
     fn boot(self: &Arc<Self>) -> Result<(), KeltaError> {
+        self.migrate_trackers();
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
@@ -383,6 +384,33 @@ impl Core {
             }
         });
         Ok(())
+    }
+
+    /// `[project.tracker]` → global `[[sources]]` (#238), before the first ticket subscription. It
+    /// empties the project files, so the toast shows once; a failure keeps them (read path).
+    fn migrate_trackers(&self) {
+        match self.config.migrate_project_trackers() {
+            Ok(0) => {}
+            Ok(n) => {
+                tracing::info!(blocks = n, "project trackers moved to ticket sources");
+                let mut t = Toast::info("Ticket sources moved out of your projects");
+                t.action = Some(kelta_proto::events::ToastAction {
+                    label: "Review".into(),
+                    command: "settings.open".into(),
+                    args: Some(serde_json::json!({ "section": "projects" })),
+                });
+                self.emit(UiEvent::Toast { toast: t });
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "project trackers not moved to ticket sources");
+                self.emit(UiEvent::Toast {
+                    toast: Toast::error(format!(
+                        "Ticket sources not moved out of your projects: {}",
+                        e.message
+                    )),
+                });
+            }
+        }
     }
 
     /// Async startup (runs once the runtime is reachable).

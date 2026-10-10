@@ -101,6 +101,14 @@ pub struct Settings {
         "x-kelta-merge" = "by_id"
     ))]
     pub session_templates: Vec<SessionTemplate>,
+    /// Ticket boards, each feeding zero or more projects (SETTINGS §2).
+    #[schemars(extend(
+        "x-kelta-category" = "Projects",
+        "x-kelta-order" = 5,
+        "x-kelta-scope" = ["global"],
+        "x-kelta-merge" = "by_id"
+    ))]
+    pub sources: Vec<Source>,
     #[schemars(extend(
         "x-kelta-category" = "Tools",
         "x-kelta-order" = 13,
@@ -1514,6 +1522,7 @@ impl Default for Settings {
             accounts: BTreeMap::new(),
             oauth: OAuthSettings::default(),
             session_templates: default_session_templates(),
+            sources: Vec::new(),
             tools: Vec::new(),
             triggers: Vec::new(),
             commands: Vec::new(),
@@ -1658,7 +1667,7 @@ pub struct RepoRule {
     pub repo: String,
 }
 
-/// `[project.tracker]`.
+/// `[sources.tracker]`, and the deprecated `[project.tracker]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct TrackerBinding {
@@ -1666,7 +1675,124 @@ pub struct TrackerBinding {
     pub views: Vec<TrackerView>,
     pub columns: Vec<ColumnSpec>,
     pub status_map: StatusMap,
+    /// `[project.tracker]` only; a source uses `routes`.
     pub repo_rules: Vec<RepoRule>,
+}
+
+/// `[[sources.routes]]`: tickets matching `match` start in `project`'s `repo`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct SourceRoute {
+    #[serde(rename = "match")]
+    pub r#match: RepoMatch,
+    /// Must be listed in the source's `projects`.
+    pub project: ProjectId,
+    pub repo: String,
+}
+
+/// `[[sources]]`: a ticket board, global, feeding zero or more projects (SETTINGS §2).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Source {
+    pub id: String,
+    pub label: String,
+    /// Projects this board feeds; may be empty.
+    pub projects: Vec<ProjectId>,
+    /// `repo_rules` must stay empty: `routes` replace them.
+    pub tracker: TrackerBinding,
+    pub routes: Vec<SourceRoute>,
+}
+
+impl Source {
+    /// The binding a project sees: the tracker with this project's routes as `repo_rules`.
+    pub fn binding_for(&self, project: &ProjectId) -> TrackerBinding {
+        let rules = self.routes.iter().filter(|r| &r.project == project);
+        TrackerBinding {
+            repo_rules: rules
+                .map(|r| RepoRule { r#match: r.r#match.clone(), repo: r.repo.clone() })
+                .collect(),
+            ..self.tracker.clone()
+        }
+    }
+}
+
+/// Same account and same set of views, each with its account resolved (what `tickets_key` hashes).
+fn same_views(a: &TrackerBinding, b: &TrackerBinding) -> bool {
+    let views = |t: &TrackerBinding| -> Vec<(AccountId, TrackerView)> {
+        t.views.iter().map(|v| (v.account.clone().unwrap_or_else(|| t.account.clone()), v.clone())).collect()
+    };
+    let (x, y) = (views(a), views(b));
+    a.account == b.account && x.len() == y.len() && x.iter().all(|v| y.contains(v))
+}
+
+fn same_board(a: &TrackerBinding, b: &TrackerBinding) -> bool {
+    same_views(a, b) && a.columns == b.columns && a.status_map == b.status_map
+}
+
+fn slug(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars().flat_map(char::to_lowercase) {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out = out.trim_matches('-');
+    if out.is_empty() { "source".into() } else { out.into() }
+}
+
+/// `existing` plus the projects' deprecated `[project.tracker]` blocks (the migration and the read
+/// path): a board equal to a source's (account, views, columns, status_map) joins it, the
+/// project and its `repo_rules` as routes; another becomes a new source, labelled after its only
+/// view or its account, plus ` · <project name>` when another source has the same views but
+/// other columns or status_map. Ids are the label's slug, made unique with `-2`, `-3`, ….
+pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) -> Vec<Source> {
+    let mut out = existing.to_vec();
+    for p in projects {
+        let Some(t) = &p.tracker else { continue };
+        let tracker = TrackerBinding { repo_rules: Vec::new(), ..t.clone() };
+        let i = match out.iter().position(|s| same_board(&s.tracker, &tracker)) {
+            Some(i) => i,
+            None => {
+                out.push(Source { tracker, ..Source::default() });
+                out.len() - 1
+            }
+        };
+        let s = &mut out[i];
+        if !s.projects.contains(&p.id) {
+            s.projects.push(p.id.clone());
+        }
+        for r in &t.repo_rules {
+            let route =
+                SourceRoute { r#match: r.r#match.clone(), project: p.id.clone(), repo: r.repo.clone() };
+            if !s.routes.contains(&route) {
+                s.routes.push(route);
+            }
+        }
+    }
+    for i in existing.len()..out.len() {
+        let t = &out[i].tracker;
+        let mut label = match t.views.as_slice() {
+            [v] if !v.label.is_empty() => v.label.clone(),
+            [v] if !v.id.is_empty() => v.id.clone(),
+            _ => t.account.to_string(),
+        };
+        if out.iter().enumerate().any(|(j, s)| j != i && same_views(&s.tracker, t)) {
+            let first = projects.iter().find(|p| out[i].projects.first() == Some(&p.id));
+            let name = first.map(|p| if p.name.is_empty() { p.id.to_string() } else { p.name.clone() });
+            label = format!("{label} · {}", name.unwrap_or_default());
+        }
+        let base = slug(&label);
+        let (mut id, mut n) = (base.clone(), 2);
+        while out.iter().any(|s| s.id == id) {
+            id = format!("{base}-{n}");
+            n += 1;
+        }
+        out[i].id = id;
+        out[i].label = label;
+    }
+    out
 }
 
 /// `[project]` table.
@@ -1681,6 +1807,9 @@ pub struct ProjectConfig {
     pub icon: Option<String>,
     pub default_template: Option<String>,
     pub repos: Vec<RepoConfig>,
+    /// Deprecated: boards live in the global `[[sources]]`. Still read for one release, and moved
+    /// there at startup (SETTINGS §3).
+    #[schemars(extend("deprecated" = true))]
     pub tracker: Option<TrackerBinding>,
 }
 
@@ -1938,5 +2067,74 @@ enabled = true
         assert_eq!(p.overrides.claude.profiles["default"].model, "sonnet");
         let tracker = p.project.tracker.unwrap();
         assert_eq!(tracker.status_map.review, Some(TransitionTarget::Name { name: "In Review".into() }));
+    }
+
+    fn tracked(id: &str, name: &str, t: TrackerBinding) -> ProjectConfig {
+        ProjectConfig {
+            id: ProjectId::new(id),
+            name: name.into(),
+            tracker: Some(t),
+            ..ProjectConfig::default()
+        }
+    }
+
+    #[test]
+    fn same_board_merges_into_one_source_with_both_projects_and_routes() {
+        let a = crate::samples::tracker_binding();
+        let mut b = a.clone();
+        b.repo_rules[0].repo = "api".into();
+        let out = sources_from_trackers(&[], &[tracked("web", "Web", a.clone()), tracked("api", "Api", b)]);
+        assert_eq!(out.len(), 1, "{out:?}");
+        let s = &out[0];
+        assert_eq!(s.projects, vec![ProjectId::new("web"), ProjectId::new("api")]);
+        assert_eq!((s.label.as_str(), s.id.as_str()), ("My open", "my-open"));
+        assert!(s.tracker.repo_rules.is_empty());
+        assert_eq!(s.routes.len(), 2);
+        // the project view gets its own routes back: lossless round trip
+        assert_eq!(s.binding_for(&ProjectId::new("web")), a);
+        assert_eq!(s.binding_for(&ProjectId::new("api")).repo_rules[0].repo, "api");
+    }
+
+    #[test]
+    fn same_views_other_columns_stay_two_labelled_sources() {
+        let a = crate::samples::tracker_binding();
+        let mut b = a.clone();
+        b.columns.clear();
+        let mut c = a.clone();
+        c.status_map.done = None;
+        let out = sources_from_trackers(
+            &[],
+            &[tracked("web", "Web", a), tracked("api", "Api", b), tracked("cli", "", c)],
+        );
+        let labels: Vec<(&str, &str)> = out.iter().map(|s| (s.id.as_str(), s.label.as_str())).collect();
+        assert_eq!(
+            labels,
+            vec![
+                ("my-open-web", "My open · Web"),
+                ("my-open-api", "My open · Api"),
+                ("my-open-cli", "My open · cli")
+            ]
+        );
+    }
+
+    #[test]
+    fn multi_view_source_is_labelled_after_its_account_and_ids_stay_unique() {
+        let mut a = crate::samples::tracker_binding();
+        a.views.push(TrackerView { id: "team".into(), label: "Team".into(), ..TrackerView::default() });
+        let taken = Source { id: "jira-acme".into(), label: "x".into(), ..Source::default() };
+        let out = sources_from_trackers(std::slice::from_ref(&taken), &[tracked("web", "Web", a)]);
+        assert_eq!((out[1].id.as_str(), out[1].label.as_str()), ("jira-acme-2", "jira-acme"));
+    }
+
+    #[test]
+    fn existing_equal_source_absorbs_the_project_and_a_rerun_is_a_no_op() {
+        let a = crate::samples::tracker_binding();
+        let first = sources_from_trackers(&[], &[tracked("web", "Web", a.clone())]);
+        // a crash before the project file was stripped: the next run finds the same block again
+        assert_eq!(sources_from_trackers(&first, &[tracked("web", "Web", a.clone())]), first);
+        let joined = sources_from_trackers(&first, &[tracked("api", "Api", a)]);
+        assert_eq!(joined.len(), 1);
+        assert_eq!(joined[0].id, first[0].id);
+        assert_eq!(joined[0].projects, vec![ProjectId::new("web"), ProjectId::new("api")]);
     }
 }
