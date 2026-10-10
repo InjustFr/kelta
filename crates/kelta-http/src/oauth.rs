@@ -128,9 +128,9 @@ async fn post_form<T: DeserializeOwned>(
     let body = res.bytes().await.map_err(map_reqwest_error)?;
     serde_json::from_slice(&body).map_err(|_| {
         let msg = format!("unexpected answer from {} (HTTP {status})", kelta_proto::redact::redact_url(url));
-        // a 5xx page is transient (Upstream keeps the device flow polling); a non-JSON 4xx (wrong
-        // server URL, a proxy login page) will not get better
-        if status >= 500 {
+        // a 5xx, timeout or rate-limit page is transient (Upstream keeps the device flow polling);
+        // another non-JSON 4xx (wrong server URL, a proxy login page) will not get better
+        if status >= 500 || matches!(status, 408 | 429) {
             KeltaError::upstream(msg)
         } else {
             KeltaError::invalid(format!("{msg}: check the server URL"))

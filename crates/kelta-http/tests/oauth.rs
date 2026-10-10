@@ -105,13 +105,15 @@ async fn gitlab_device_flow_stores_refresh_token_and_expiry() {
     let server = MockServer::start().await;
     mount_device(&server, "/oauth/authorize_device").await;
     answer(&server, "/oauth/token", 400, json!({"error": "authorization_pending"})).await;
-    // a deploy's 502 page mid-poll does not end the sign-in
-    Mock::given(path("/oauth/token"))
-        .respond_with(ResponseTemplate::new(502).set_body_string("<html>502 Bad Gateway</html>"))
-        .up_to_n_times(1)
-        .expect(1)
-        .mount(&server)
-        .await;
+    // a deploy's 502 page or a CDN's 429 page mid-poll does not end the sign-in
+    for status in [502, 429] {
+        Mock::given(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(status).set_body_string("<html>try later</html>"))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
     answer(
         &server,
         "/oauth/token",
