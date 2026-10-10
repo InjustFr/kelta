@@ -17,7 +17,7 @@ const STRUCTURED: &[(&str, &[&str])] = &[
     ("session", &["id", "name", "cwd", "kind", "status", "visible"]),
     ("plugin", &["dir", "id"]),
     ("app", &["focused"]),
-    ("work", &["port"]),
+    ("work", &["id", "port"]),
 ];
 
 /// Scalar roots.
@@ -255,6 +255,22 @@ impl Vars {
     pub fn expand_all(&self, items: &[String]) -> Result<Vec<String>, KeltaError> {
         items.iter().map(|s| self.expand(s)).collect()
     }
+
+    /// Expand every string leaf of a JSON value (objects and arrays recursively).
+    pub fn expand_value(&self, v: &Value) -> Result<Value, KeltaError> {
+        Ok(match v {
+            Value::String(s) => Value::String(self.expand(s)?),
+            Value::Array(a) => {
+                Value::Array(a.iter().map(|x| self.expand_value(x)).collect::<Result<_, _>>()?)
+            }
+            Value::Object(m) => Value::Object(
+                m.iter()
+                    .map(|(k, x)| Ok((k.clone(), self.expand_value(x)?)))
+                    .collect::<Result<_, KeltaError>>()?,
+            ),
+            other => other.clone(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -287,6 +303,10 @@ mod tests {
         assert_eq!(v.expand("{branch}").unwrap(), "");
         assert_eq!(v.expand("{payload|json}").unwrap(), r#"{"n":3,"path":"src/main.rs"}"#);
         assert_eq!(v.expand("{payload.n|json}").unwrap(), "3");
+        assert_eq!(
+            v.expand_value(&json!({"p": "{project.id}", "l": ["{payload.n}", 1], "n": null})).unwrap(),
+            json!({"p": "shop", "l": ["3", 1], "n": null})
+        );
     }
 
     #[test]
@@ -302,6 +322,7 @@ mod tests {
         assert_eq!(unknown_placeholders("{nope} {repo.path} {project.bogus}"), vec!["nope", "project.bogus"]);
         assert!(vars().expand("{nope}").is_err());
         assert!(unknown_placeholders("{settings.view_id} {event.name} {repo.path|shell}").is_empty());
+        assert_eq!(unknown_placeholders("{work.id} {work.nope}"), vec!["work.nope"]);
     }
 
     #[test]
