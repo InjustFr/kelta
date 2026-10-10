@@ -88,7 +88,18 @@ async fn detail_keeps_textile_preformatted_and_only_notes_become_comments() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
     mount(&server, "GET", "/issues/4567.json", 200, "redmine/issue.json").await;
+    Mock::given(method("GET"))
+        .and(path("/issues.json"))
+        .and(query_param("parent_id", "4567"))
+        .and(query_param("status_id", "*"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [{
+            "id": 4568, "subject": "Child", "status": {"id": 1, "name": "New"},
+            "project": {"id": 1, "name": "Client"}, "updated_on": "2026-10-01T08:30:00Z"
+        }]})))
+        .mount(&server)
+        .await;
     let d = rm(&server, json!({})).get(&r()).await.unwrap();
+    assert_eq!(d.children.iter().map(|c| c.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), vec!["4568"]);
     assert_eq!(d.body_format, BodyFormat::Textile);
     assert!(d.body_md.starts_with("h1. Steps"));
     assert!(d.body_html.starts_with("<pre>"));

@@ -721,9 +721,19 @@ impl Core {
         let projects: Vec<ProjectId> =
             self.project_for_account(&t.account).map(|p| p.id.clone()).into_iter().collect();
         let repos = self.code_repos(&projects);
-        d.prs =
-            ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &self.cached_reviews().await, &repos);
+        let reviews = self.cached_reviews().await;
+        d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &reviews, &repos);
         d.caps = self.tracker_of(&t.account)?.caps();
+        // Sub-tasks: the provider gives each ticket, the rest is ours (like a list row).
+        for c in &mut d.children {
+            *c = TicketItem {
+                work_item_id: work.get(&c.ticket.r#ref).map(|w| w.id.clone()),
+                ticket: std::mem::take(&mut c.ticket),
+                project_ids: projects.clone(),
+                ..TicketItem::default()
+            };
+            self.enrich(c, &work, &reviews);
+        }
         Ok(d)
     }
 

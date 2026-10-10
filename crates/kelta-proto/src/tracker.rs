@@ -180,7 +180,7 @@ pub struct Comment {
     pub body_html: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TicketDetail {
     pub ticket: Ticket,
     pub body_md: String,
@@ -191,6 +191,9 @@ pub struct TicketDetail {
     pub comments: Vec<Comment>,
     #[serde(default)]
     pub parent: Option<TicketRef>,
+    /// Sub-tasks (TICKETS.md T7): providers fill each `ticket`, kelta-core the rest of the item.
+    #[serde(default)]
+    pub children: Vec<TicketItem>,
     /// Filled by kelta-core (TICKETS.md T1); providers leave it empty.
     #[serde(default)]
     pub prs: Vec<PrLink>,

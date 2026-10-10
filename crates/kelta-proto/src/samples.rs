@@ -873,6 +873,16 @@ pub fn all() -> Vec<Fixture> {
                     body_html: "<p>On it.</p>".into(),
                 }],
                 parent: None,
+                children: vec![TicketItem {
+                    ticket: Ticket {
+                        r#ref: TicketRef { key: "SHOP-143".into(), id: "10143".into(), ..ticket_ref() },
+                        title: "Audit log".into(),
+                        url: "https://acme.atlassian.net/browse/SHOP-143".into(),
+                        ..ticket()
+                    },
+                    project_ids: vec![ProjectId::new("shop")],
+                    ..TicketItem::default()
+                }],
                 prs: Vec::new(),
                 caps: Default::default(),
             }

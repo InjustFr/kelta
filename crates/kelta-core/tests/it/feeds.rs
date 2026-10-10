@@ -794,6 +794,12 @@ async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
     assert!(prs(&page, "SHOP-141").is_empty());
     let detail = e.h.core.tracker_get(&kelta_proto::samples::ticket_ref()).await.unwrap();
     assert_eq!(detail.prs, linked);
+    // Sub-tasks come back as list rows: project, PRs and caps filled like the list's.
+    let [child] = detail.children.as_slice() else { panic!("one sub-task") };
+    assert_eq!(child.ticket.r#ref.key, "SHOP-143");
+    assert_eq!(child.project_ids, vec![ProjectId::new("shop")]);
+    assert_eq!(child.prs.iter().map(|l| l.number).collect::<Vec<_>>(), vec![95]);
+    assert_eq!(child.caps, e.tracker.caps);
 }
 
 #[test]

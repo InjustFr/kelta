@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import type { CiState, ProjectId, TicketItem } from '$lib/gen';
+  import type { CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
   import { clipboardWrite, openExternal, trackerAssign, trackerComment } from '$lib/ipc/commands';
   import { projects, tickets, toasts, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
@@ -147,7 +147,8 @@
   }
 
   function onkeydown(e: KeyboardEvent): void {
-    if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
+    const own = 'input, textarea, select, [role="dialog"], [role="menu"], [data-child]';
+    if ((e.target as HTMLElement).closest(own)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const action = TICKET_ACTIONS.find((a) => a.key === e.key);
     // Shift variants: `S` starts with no sheet, `P` opens the PR in the browser.
@@ -157,6 +158,18 @@
     else if (e.key === 'R') void tickets.loadDetail(ref);
     else return;
     e.preventDefault();
+  }
+
+  function openTicket(ticket: TicketRef): void {
+    if (project) void openContent(project, { kind: 'ticket_detail', ticket });
+  }
+
+  /** A focused sub-task row: `s` starts work on it (`S` with no sheet); its other keys do nothing. */
+  function childKeys(e: KeyboardEvent, child: TicketItem): void {
+    if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== 's' && e.key !== 'S')) return;
+    e.preventDefault();
+    const opts = e.key === 'S' ? { preview: false } : {};
+    void startWorkOnTicket(child.ticket.ref, child.project_ids[0] ?? project, opts);
   }
 
   function commentKeys(e: KeyboardEvent): void {
@@ -214,11 +227,7 @@
       <span class="key k-selectable">{ref.key}</span>
       {#if detail?.parent}
         {@const parent = detail.parent}
-        <button
-          type="button"
-          class="link"
-          onclick={() => project && void openContent(project, { kind: 'ticket_detail', ticket: parent })}
-        >
+        <button type="button" class="link" onclick={() => openTicket(parent)}>
           parent {parent.key}
         </button>
       {/if}
@@ -304,6 +313,27 @@
         <p class="muted">No pull request yet.</p>
       {/each}
     </section>
+
+    {#if detail && detail.children.length > 0}
+      <section aria-label="Sub-tasks">
+        <h2>Sub-tasks <span class="muted k-num">{detail.children.length}</span></h2>
+        {#each detail.children as c (c.ticket.ref.key)}
+          <button
+            type="button"
+            class="child"
+            data-child
+            aria-keyshortcuts="s"
+            title="Open (Enter), start work (s)"
+            onclick={() => openTicket(c.ticket.ref)}
+            onkeydown={(e) => childKeys(e, c)}
+          >
+            <span class="key">{c.ticket.ref.key}</span>
+            <StatusChip status={c.ticket.status} />
+            <span class="pr-title">{c.ticket.title}</span>
+          </button>
+        {/each}
+      </section>
+    {/if}
 
     <section aria-label="Description">
       <h2>Description</h2>
@@ -516,6 +546,27 @@
 
   .pr-meta code {
     font-size: var(--k-font-size-xs);
+  }
+
+  .child {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-3);
+    width: 100%;
+    max-width: var(--k-measure);
+    padding: var(--k-space-1) var(--k-space-2);
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: transparent;
+    color: var(--k-fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .child:hover,
+  .child:focus-visible {
+    background: var(--k-bezel-raised);
   }
 
   /* Task lists are the tracker's to tick: shown, never toggled here. */

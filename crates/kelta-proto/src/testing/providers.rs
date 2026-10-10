@@ -17,7 +17,7 @@ use crate::samples;
 use crate::settings::{TrackerBinding, TrackerView};
 use crate::tracker::{
     Assignee, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketItem, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 
 /// The four statuses of the fake workflow.
@@ -61,16 +61,16 @@ impl FakeTracker {
                 body_format: crate::tracker::BodyFormat::Markdown,
                 comments: vec![],
                 parent: None,
+                children: Vec::new(),
                 prs: Vec::new(),
                 caps: Default::default(),
             }
         };
         let wf = workflow();
-        Self::with_tickets(vec![
-            mk(141, "Add login form", wf[0].clone()),
-            mk(142, "Rate-limit login", wf[1].clone()),
-            mk(143, "Audit log", wf[2].clone()),
-        ])
+        let audit = mk(143, "Audit log", wf[2].clone());
+        let mut rate = mk(142, "Rate-limit login", wf[1].clone());
+        rate.children = vec![TicketItem { ticket: audit.ticket.clone(), ..TicketItem::default() }];
+        Self::with_tickets(vec![mk(141, "Add login form", wf[0].clone()), rate, audit])
     }
 
     pub fn with_tickets(tickets: Vec<TicketDetail>) -> Self {
@@ -240,6 +240,7 @@ impl Tracker for FakeTracker {
             body_format: crate::tracker::BodyFormat::Markdown,
             comments: vec![],
             parent: None,
+            children: Vec::new(),
             prs: Vec::new(),
             caps: Default::default(),
         });

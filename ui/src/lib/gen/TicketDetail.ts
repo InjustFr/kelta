@@ -3,6 +3,7 @@ import type { BodyFormat } from "./BodyFormat";
 import type { Comment } from "./Comment";
 import type { PrLink } from "./PrLink";
 import type { Ticket } from "./Ticket";
+import type { TicketItem } from "./TicketItem";
 import type { TicketRef } from "./TicketRef";
 import type { TrackerCaps } from "./TrackerCaps";
 
@@ -15,6 +16,10 @@ body_html: string, body_format: BodyFormat,
  * Last 20 comments, oldest first.
  */
 comments: Array<Comment>, parent: TicketRef | null, 
+/**
+ * Sub-tasks (TICKETS.md T7): providers fill each `ticket`, kelta-core the rest of the item.
+ */
+children: Array<TicketItem>, 
 /**
  * Filled by kelta-core (TICKETS.md T1); providers leave it empty.
  */

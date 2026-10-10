@@ -613,6 +613,60 @@ export const ticketDetail: TicketDetail = {
     "projects_v2": false,
     "transitions_need_fetch": false
   },
+  "children": [
+    {
+      "caps": {
+        "assign": false,
+        "board_columns": false,
+        "comment": false,
+        "projects_v2": false,
+        "transitions_need_fetch": false
+      },
+      "project_ids": [
+        "shop"
+      ],
+      "prs": [],
+      "ticket": {
+        "assignee": {
+          "avatar_url": null,
+          "id": "5b10ac8d82e05b22cc7d4ef5",
+          "login": "ada",
+          "name": "Ada Lovelace"
+        },
+        "due": "2026-10-15",
+        "estimate": "3",
+        "kind": "Story",
+        "labels": [
+          "api"
+        ],
+        "priority": "High",
+        "priority_rank": 1,
+        "project_hint": "SHOP",
+        "ref": {
+          "account": "jira-acme",
+          "id": "10143",
+          "key": "SHOP-143"
+        },
+        "sprint": {
+          "active": true,
+          "ends_at": "2026-10-16",
+          "id": "42",
+          "name": "SHOP Sprint 12"
+        },
+        "status": {
+          "category": "in_progress",
+          "id": "3",
+          "name": "In Progress"
+        },
+        "status_since": "2026-10-09T12:00:00Z",
+        "title": "Audit log",
+        "updated_at": "2026-10-09T12:00:00Z",
+        "url": "https://acme.atlassian.net/browse/SHOP-143"
+      },
+      "view_ids": [],
+      "work_item_id": null
+    }
+  ],
   "comments": [
     {
       "author": {
