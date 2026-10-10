@@ -1,0 +1,17 @@
+{
+  "state": "failure",
+  "sha": "abc",
+  "total_count": 2,
+  "statuses": [
+    {
+      "context": "ci/build",
+      "status": "success",
+      "target_url": "https://ci.acme.example/1"
+    },
+    {
+      "context": "ci/test",
+      "status": "failure",
+      "target_url": ""
+    }
+  ]
+}

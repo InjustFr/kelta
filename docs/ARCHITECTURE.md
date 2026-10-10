@@ -13,7 +13,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 |---|---|---|---|
 | D1 | **Tauri v2 + Svelte 5 + xterm.js 6.0.0**, Rust core | Electron misses the memory budget (Chromium multi-process baseline 250-350 MB). Native egui/GPUI cannot embed sl web in-window on native Wayland and is too risky for a one-pass parallel build. Tauri reuses the system webview (WKWebView / WebKitGTK). | Gate G1 or G2 fails after tuning (BUILD_PLAN §6) → replace only `apps/desktop` + `ui/` with a native front end over the Tauri-free crates. |
 | D2 | **Rust is the terminal source of truth.** One headless `alacritty_terminal::Term` per session; xterm.js instances exist only for visible panes plus a small LRU (`terminal.max_live_views`, default 2) | Hidden sessions cost only a Rust grid (no JS heap/DOM). Re-attach = compact ANSI snapshot. Background sessions still answer terminal queries correctly. | — |
-| D3 | **No session daemon in v0.1**; PTYs live in the app process behind the `TerminalHost` trait | Delivery risk; a `keltad` mux daemon is v0.2 and swaps in behind the same trait without UI changes. Closing the window ("background mode") keeps sessions alive and drops WebKit. | Users demand sessions surviving quit → v0.2 `keltad`. |
+| D3 | PTYs live behind the `TerminalHost` trait: in **`keltad`** (`terminal.session_host = "daemon"`, default) or in the app process (`inprocess`, also the fallback when keltad cannot start) | `keltad` runs kelta-term's `PtyTerminalHost` unchanged in its own process and the app talks to it with `DaemonTerminalHost` (same frames, attach/detach, acks, snapshots), so sessions survive quitting the app with no UI change; the models live only in keltad (no duplicate in the app). Closing the window ("background mode") keeps sessions alive and drops WebKit. | keltad's per-session memory or socket hop shows up in `kelta-bench` → move the hot path to fd passing. |
 | D4 | Blocking reader **thread per PTY** (256 KiB stack) + `poll(2)` with timeout for DEC 2026 sync deadlines | Simplest correct design; ~10-20 threads is cheap with `M_ARENA_MAX=2`. | Profiling shows thread overhead > 1 MB/session. |
 | D5 | **Typed IPC**: one Tauri command per operation, DTOs in `kelta-proto`, TS generated with `ts-rs`, CI drift check | Compile-time agreement between 10 parallel agents. | — |
 | D6 | Programs are **exec'd directly** with a login environment resolved once (sentinel-delimited) — no `$SHELL -c` wrapper | Works with fish/nushell, no quoting bugs, Dock-launched apps get the user's PATH. | — |
@@ -122,13 +122,15 @@ WebKit helpers (OS-managed): WebContent (UI + all iframes), Network, GPU (macOS)
 children (each in its own PTY + session/process group): claude, nvim, $SHELL -l, lazygit, lazydocker …
 non-PTY children: web-tool servers (sl web …) owned by kelta-plugins, killed with their tool instance
 kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
+keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the PTY children above; outlives the app
 ```
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids. MCP tools: `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `add_review_comment{path, line, body}` (line comment on the pending review of the PR under review in the session's review-kind work item, via `CodeHost::add_pending_comment`; published by the user's a / c / m in the review detail), `notify` (PLUGINS §8).
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
-- **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
+- **Session daemon (`keltad`):** `<runtime>/keltad.sock` (0600 in the 0700 runtime dir, peer uid checked on both ends). Core launches it from the stable copy `<data>/bin/<version>/keltad` (`keltad --socket <path>`, stderr → `<logs>/keltad.log`); it binds, forks into its own session, and the launcher connects once the parent exits. Messages: `u32 len` + `u32 json_len` + JSON head + raw bytes (input, frames). Each session's events go to the client that spawned or last adopted it. On quit, sessions core would restore stay running (no SIGHUP); the others are killed and closed. On start, core `adopt`s every persisted session keltad still runs (Live, same hook token) before any Dormant respawn and kills the rest. keltad exits 30 s after it has no client and no running session (one-shot grace armed by the disconnect / exit, no polling).
+- **Bundling:** `kelta-ctl` and `keltad` are added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
 
 ### 2.1 Filesystem locations
@@ -140,7 +142,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 | state db | `<data>/kelta.db` | same |
 | terminal history logs | `<data>/history/` (0700): `<session id>.log` + `<session id>.1.log` (0600), §9.6 | same |
 | logs | `$XDG_STATE_HOME/kelta/logs/kelta.log` (5 MB × 2) | `~/Library/Logs/Kelta/kelta.log` |
-| stable CLI copy | `<data>/bin/<version>/kelta-ctl` + `<data>/bin/current` symlink | same |
+| stable CLI copy | `<data>/bin/<version>/{kelta-ctl,keltad}` + `<data>/bin/current` symlink | same |
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
 | per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
 
@@ -158,14 +160,15 @@ crates/kelta-proto      [scaffold]  ids, DTOs, IPC request/response types, UiEve
                                     service traits (§4), KeltaError, `testing` feature: FakeCore, FakeTerminalHost, FakeTracker,
                                     FakeCodeHost, FakeSecrets, FakeSettings, fixtures
 crates/kelta-term       [L1]  TerminalHost impl: PtyBackend (portable-pty | rustix), login-env exec, reader threads, alacritty model,
-                              query responder, snapshot encoder, flow control, scrollback memory budget
+                              query responder, snapshot encoder, flow control, scrollback memory budget;
+                              `daemon`: the `keltad` binary and the `DaemonTerminalHost` client
 crates/kelta-config     [L4]  layered load/merge/provenance, validation, toml_edit writes, hot reload, repo trust check helpers,
                               project files CRUD, early `linux.graphics` reader
 crates/kelta-secrets    [L4]  SecretRef resolution chain, keyring stores, backend status
 crates/kelta-http       [L5]  shared reqwest client, HttpCtx (retry, backoff, rate limits, ETag LRU), markdown→HTML
                               (scaffold ships a functional baseline: plain send, no retry)
-crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Linear; ADF walker
-crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST)
+crates/kelta-trackers   [L5]  Jira Cloud + DC, Redmine, GitHub Issues (+Projects v2), GitLab Issues, Gitea/Forgejo Issues, Linear; ADF walker
+crates/kelta-codehosts  [L5]  GitHub (GraphQL list, REST actions, notifications gate), GitLab (REST), Bitbucket Cloud (REST 2.0), Gitea/Forgejo (REST v1)
 crates/kelta-work       [L6]  git CLI ops, templates (branch/path/slug), work saga (journaled), Claude launcher, editor adapters
                               (nvim msgpack-RPC, vim keys, emacsclient, helix, external), review_start
 crates/kelta-server     [L7]  ctl socket server, hook ingestion + status machine, lazy axum server, MCP endpoint, http hooks
@@ -219,6 +222,8 @@ pub trait TerminalHost: Send + Sync {
   fn history_search(&self, ids: &[SessionId], query: &str, limit: u32) -> Result<Vec<HistoryHit>, KeltaError>;
   fn history_delete(&self, id: &SessionId);                                     // session row gone
   fn stats(&self) -> TerminalStats;                                             // per-session bytes, lines, inflight
+  fn persistent(&self) -> bool { false }                                        // keltad: quit leaves restorable sessions running
+  fn adopt(&self, id: &SessionId, events: Arc<dyn TerminalEvents>) -> Option<BTreeMap<String,String>> { None } // re-route a running session's events after an app restart; its spawn env
 }
 pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // false = channel closed → auto-detach
 pub trait TerminalEvents: Send + Sync { fn on_event(&self, id: &SessionId, ev: TerminalEvent); }
@@ -596,8 +601,8 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 | Pane hidden / project switch / UI reload / webview crash | Session keeps running; view re-attaches with Snapshot. |
 | Window closed, `close_behavior=background` | Webview destroyed; sessions run; attention → dock badge / notifications. |
 | Process exit | `Exited{code}`; `close_on_exit` applies; else banner "Exited (code) — Enter restart, x close". |
-| App quit | Confirm if any Claude session is `Working`/`NeedsInput`. nvim sessions get RPC `:wall \| mksession! <data>/sessions/<sid>.vim`. All persisted as `Dormant` with `RestorePolicy`; SIGHUP → 2 s → SIGKILL. |
-| Next start | Layout restored; `Dormant` sessions spawn **when their pane is first attached** (`app.restore_mode = lazy`; `eager`, `none` available): Claude `claude --resume <uuid>` (fallback `--continue` if resume is refused), nvim `-S <file> --listen <sock>`, shell in last OSC 7 cwd, tools relaunched. A dimmed "restored" separator shows the persisted text tail (≤ 200 lines, `sessions.text_tail`). |
+| App quit | keltad (`terminal.session_host = daemon`): restorable sessions keep running, no confirmation; the rest below applies to the others. Confirm if any Claude session is `Working`/`NeedsInput`. nvim sessions get RPC `:wall \| mksession! <data>/sessions/<sid>.vim`. All persisted as `Dormant` with `RestorePolicy`; SIGHUP → 2 s → SIGKILL. |
+| Next start | Layout restored; sessions still running in keltad are re-adopted `Live` (no respawn); other `Dormant` sessions spawn **when their pane is first attached** (`app.restore_mode = lazy`; `eager`, `none` available): Claude `claude --resume <uuid>` (fallback `--continue` if resume is refused), nvim `-S <file> --listen <sock>`, shell in last OSC 7 cwd, tools relaunched. A dimmed "restored" separator shows the persisted text tail (≤ 200 lines, `sessions.text_tail`). |
 
 ### 7.6 Claude status machine (pure fn in kelta-server `hooks::map`)
 
@@ -622,7 +627,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 
 ```rust
 #[async_trait] pub trait Tracker: Send + Sync {
-  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | Linear
+  fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | GiteaIssues | Linear
   fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
   async fn me(&self) -> Result<User, KeltaError>;
   async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
@@ -654,6 +659,7 @@ pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
 | Flavor | `GET /rest/api/2/serverInfo` → `deploymentType`, cached per account | | |
 | Redmine | `X-Redmine-API-Key` header | `/issues.json?assigned_to_id=me&status_id=open&sort=updated_on:desc&limit=100` (+ `project_id`, `query_id`) | `PUT /issues/{id}.json {issue:{status_id}}` restricted to `include=allowed_statuses`; 422 surfaced; poll ≥ 60 s |
 | GitHub Issues | gh-cli / keyring PAT / env | `GET /issues?filter=assigned&state=open` (drop items with `pull_request`) or per-repo; ETag | no project: open/closed; Projects v2: Status single-select field/option ids resolved **by name** at runtime, cached; `updateProjectV2ItemFieldValue` |
+| Gitea Issues | `Authorization: Bearer` (keyring/env/command) | `/repos/issues/search?type=issues&assigned=true` or `/repos/:o/:r/issues` | open / closed only: Close / Reopen via `PATCH {state}` |
 | GitLab Issues | `PRIVATE-TOKEN` (keyring/glab-cli/env/command) | `/api/v4/issues?scope=assigned_to_me&state=opened` or `/projects/:id/issues` | scoped labels `<scope>::<value>` (default `workflow`): `PUT add_labels` + explicit `remove_labels` of same-scope labels; Done = `state_event=close` |
 | Linear | personal API key, raw `Authorization` header (`auth = "bearer"` for OAuth) | `POST https://api.linear.app/graphql` `issues(filter, first: 50, after, orderBy: updatedAt)` (assignee `isMe`, team key, project name, labels); `pageInfo.endCursor`, cap 20 pages | `issueUpdate(stateId)` with state ids read at runtime from the issue's team `states` (matched by name, never hard-coded); rate limit = HTTP 400 + `RATELIMITED` → `RateLimited` |
 
@@ -663,7 +669,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
 
 ```rust
 #[async_trait] pub trait CodeHost: Send + Sync {
-  fn kind(&self) -> CodeHostKind;                      // Github | Gitlab
+  fn kind(&self) -> CodeHostKind;                      // Github | Gitlab | Bitbucket | Gitea
   async fn me(&self) -> Result<User, KeltaError>;
   async fn changed_since_last(&self) -> Result<bool, KeltaError>;  // cheap gate; default Ok(true)
   async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;  // kind + include_team + include_drafts
@@ -677,7 +683,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn add_pending_comment(&self, r: &ReviewRef, path: &str, line: u32, body: &str) -> Result<(), KeltaError>;
   async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
   async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
-  fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:…
+  fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:… | <source branch>:… (Bitbucket)
   fn repo_from_remote(&self, url: &str) -> Option<String>;
 }
 // Review.reviewed_head = commit of my last submitted review (ReviewRequested kind). With head_sha it gives
@@ -694,6 +700,8 @@ pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, sour
 
 - GitHub: list = one GraphQL request with aliased searches `is:pr is:open review-requested:@me archived:false` (`user-review-requested:@me` if `reviews.include_team_requests=false`) and `is:pr is:open author:@me`; small nested `first:`. Gate: `GET /notifications?participating=true` + `If-None-Match` only for classic/gh tokens (fine-grained → no gate). Actions REST: `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`. GHE via `base_url`.
 - GitLab: `GET /merge_requests?scope=all&state=opened&reviewer_username=<me>` and `scope=created_by_me`, `updated_after`; `draft=` if `/version` ≥ 16 else `wip=`; approve `POST …/approve {sha}` (409 → `Conflict`); request changes = note (+ optional unapprove). Gate: `/todos?state=pending&action=review_requested` count+max id.
+- Gitea/Forgejo: `GET /api/v1/repos/issues/search?type=pulls&state=open&review_requested=true` (or `created=true`) returns issue-shaped rows, each expanded with `GET …/pulls/{n}` (branches, head sha); pagination follows `Link: rel="next"`. Approve / request changes = `POST …/pulls/{n}/reviews {event, commit_id}`; comment = issue comment; draft = `draft` or a `WIP:` title. Bearer token auth, `base_url` required. No change gate (always `true`).
+- Bitbucket Cloud: the cross-workspace endpoints were retired in April 2026, so lists walk `GET /user/workspaces`: my PRs from `/workspaces/{ws}/pullrequests/{me}`, review requests from `reviewers.uuid` queries over the workspace's 50 most recently updated member repositories; `next` URLs are followed. Auth is `Basic <email>:<API token>` (app passwords were retired in 2026) or Bearer for access tokens. Request changes = comment + `POST …/request-changes`; approve compares the PR's current head with the reviewed sha first (`Conflict` if moved); no PR refs exist, so "review locally" fetches the source branch (no forks). List rows carry no CI (detail rolls up `/statuses`). No change gate.
 - `linked_tickets`: regex `reviews.ticket_key_regex` over branch + title.
 
 ### 8.3 HttpCtx (kelta-http)

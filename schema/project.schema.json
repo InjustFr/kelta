@@ -681,7 +681,7 @@
         "properties": {
           "auth": {
             "default": null,
-            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).",
+            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth).",
             "enum": [
               "basic",
               "bearer",
@@ -696,7 +696,7 @@
           },
           "base_url": {
             "default": null,
-            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.",
+            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0`; required for jira/redmine/gitea.",
             "type": [
               "string",
               "null"
@@ -719,14 +719,28 @@
             "type": "string"
           },
           "kind": {
-            "enum": [
-              "jira",
-              "redmine",
-              "github",
-              "gitlab",
-              "linear"
-            ],
-            "type": "string"
+            "oneOf": [
+              {
+                "enum": [
+                  "jira",
+                  "redmine",
+                  "github",
+                  "gitlab",
+                  "linear"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "bitbucket",
+                "description": "Bitbucket Cloud: code host only (its issue tracker was removed in August 2026).",
+                "type": "string"
+              },
+              {
+                "const": "gitea",
+                "description": "Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.",
+                "type": "string"
+              }
+            ]
           },
           "poll_secs": {
             "default": null,
@@ -2704,7 +2718,7 @@
                   },
                   "labels": {
                     "default": null,
-                    "description": "gitlab, linear (label names).",
+                    "description": "gitlab, gitea, linear (label names).",
                     "items": {
                       "type": "string"
                     },
@@ -2715,7 +2729,7 @@
                   },
                   "project": {
                     "default": null,
-                    "description": "gitlab: `group/sub/proj`; linear: project name.",
+                    "description": "gitlab: `group/sub/proj`; gitea: `owner/name`; linear: project name.",
                     "type": [
                       "string",
                       "null"
@@ -2776,7 +2790,7 @@
                   },
                   "scope": {
                     "default": null,
-                    "description": "gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.",
+                    "description": "gitlab, gitea: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.",
                     "type": [
                       "string",
                       "null"
@@ -3109,6 +3123,7 @@
           "shell": 3000,
           "tool": 500
         },
+        "session_host": "daemon",
         "shell": "",
         "shift_enter": {
           "claude": "esc-cr",
@@ -3313,6 +3328,26 @@
             }
           },
           "type": "object"
+        },
+        "session_host": {
+          "default": "daemon",
+          "description": "`daemon` = sessions survive quit (keltad).",
+          "oneOf": [
+            {
+              "const": "inprocess",
+              "description": "PTYs in the app process: quitting ends them.",
+              "type": "string"
+            },
+            {
+              "const": "daemon",
+              "description": "PTYs in `keltad`: sessions survive quit and re-attach on the next start.",
+              "type": "string"
+            }
+          ],
+          "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "shell": {
           "default": "",

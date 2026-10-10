@@ -53,12 +53,13 @@ use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
     SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
-use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
+use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::tracker::{Ticket, TicketRef};
 use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
+use kelta_term::daemon::DaemonTerminalHost;
 use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -179,6 +180,37 @@ pub struct Core {
     install_ctl: bool,
 }
 
+/// `terminal.session_host`: keltad (sessions survive quit) or PTYs in this process.
+fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<dyn TerminalHost> {
+    let limits = TerminalLimits::from_settings(&settings.terminal);
+    if settings.terminal.session_host == SessionHost::Daemon {
+        // Launched from a stable copy: the AppImage mount (or an updated bundle) goes away on quit.
+        let daemon = ctl::bundled("keltad")
+            .and_then(|src| ctl::install_stable_bin(&src, &dirs.bin, kelta_proto::VERSION))
+            .and_then(|exe| {
+                DaemonTerminalHost::connect_or_launch(
+                    &dirs.keltad_socket(),
+                    &exe,
+                    &dirs.logs.join("keltad.log"),
+                    &dirs.data.join("history"),
+                )
+            });
+        match daemon {
+            Ok(d) => {
+                d.set_limits(limits);
+                return d;
+            }
+            Err(e) => tracing::warn!(error = %e, "keltad unavailable; sessions run in-process"),
+        }
+    }
+    Arc::new(PtyTerminalHost::with_history_dir(
+        login_env.clone(),
+        limits,
+        kelta_term::backend::default_backend(),
+        dirs.data.join("history"),
+    ))
+}
+
 impl Core {
     /// Construct every service (each lane service receives `Weak<dyn CoreApi>`).
     pub fn start(cfg: CoreConfig) -> Result<Arc<Core>, KeltaError> {
@@ -218,12 +250,7 @@ impl Core {
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => Arc::new(PtyTerminalHost::with_history_dir(
-                login_env.clone(),
-                TerminalLimits::from_settings(&settings.terminal),
-                kelta_term::backend::default_backend(),
-                dirs.data.join("history"),
-            )),
+            None => terminal_host(&dirs, &settings, &login_env),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?
@@ -306,6 +333,7 @@ impl Core {
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
+        self.adopt_live_sessions();
         let weak = self.me.clone();
         self.cfg.watch(Box::new(move |diff| {
             if let Some(core) = weak.upgrade() {

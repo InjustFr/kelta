@@ -490,8 +490,9 @@ impl CodeHost for FakeCodeHost {
 
     fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String {
         match self.kind {
-            CodeHostKind::Github => format!("pull/{}/head:{local_branch}", r.number),
+            CodeHostKind::Github | CodeHostKind::Gitea => format!("pull/{}/head:{local_branch}", r.number),
             CodeHostKind::Gitlab => format!("merge-requests/{}/head:{local_branch}", r.number),
+            CodeHostKind::Bitbucket => format!("pull-requests/{}/from:{local_branch}", r.number),
         }
     }
 

@@ -158,6 +158,7 @@ export type * from './ScreenScope';
 export type * from './ScrollbackSettings';
 export type * from './SecretBackendStatus';
 export type * from './SecretRef';
+export type * from './SessionHost';
 export type * from './SessionId';
 export type * from './SessionInfo';
 export type * from './SessionKind';

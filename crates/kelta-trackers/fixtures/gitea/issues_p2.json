@@ -1,0 +1,35 @@
+[
+  {
+    "id": 1014,
+    "number": 14,
+    "title": "Cache headers",
+    "body": "Rate limit the API. <script>alert(1)</script>",
+    "state": "open",
+    "html_url": "https://git.acme.example/acme/shop/issues/14",
+    "user": {
+      "id": 2,
+      "login": "dave",
+      "full_name": "Dave R",
+      "avatar_url": "https://git.acme.example/avatars/2"
+    },
+    "assignee": null,
+    "assignees": [],
+    "labels": [
+      {
+        "id": 1,
+        "name": "bug"
+      },
+      {
+        "id": 2,
+        "name": "priority/high"
+      }
+    ],
+    "updated_at": "2026-10-08T09:12:44Z",
+    "repository": {
+      "id": 5,
+      "name": "shop",
+      "owner": "acme",
+      "full_name": "acme/shop"
+    }
+  }
+]

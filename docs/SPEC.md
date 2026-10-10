@@ -1,6 +1,6 @@
 # Kelta v0.1 — Product spec
 
-Kelta lets a developer take a ticket from their tracker (Jira, Redmine, GitHub Issues, GitLab Issues, Linear) and build it in a git worktree with **Claude Code and a terminal editor (nvim) side by side** in built-in terminals; review the PRs/MRs they are asked to review; move tickets; run tools (lazydocker, lazygit, sl web) inside the app; work on **several projects in one window**; extend everything with tools, triggers and plugin screens; configure everything through settings. Open source (MIT). macOS 13+ and Ubuntu 24.04+ (Hyprland, Sway, GNOME). It must be **fast and small** (ARCHITECTURE §13).
+Kelta lets a developer take a ticket from their tracker (Jira, Redmine, GitHub Issues, GitLab Issues, Gitea Issues, Linear) and build it in a git worktree with **Claude Code and a terminal editor (nvim) side by side** in built-in terminals; review the PRs/MRs they are asked to review; move tickets; run tools (lazydocker, lazygit, sl web) inside the app; work on **several projects in one window**; extend everything with tools, triggers and plugin screens; configure everything through settings. Open source (MIT). macOS 13+ and Ubuntu 24.04+ (Hyprland, Sway, GNOME). It must be **fast and small** (ARCHITECTURE §13).
 
 Glossary: **Project** = named set of local repos + tracker binding + code-host bindings + defaults. **Session** = one PTY process (Claude, nvim, shell, tool). **Tab** = split layout of panes within a project. **WorkItem** = ticket/review/branch ↔ worktree ↔ branch ↔ sessions ↔ PR link. **Inbox** = aggregated view across all projects.
 
@@ -33,6 +33,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 - Several projects are open at once; open set and order persist. `kelta-ctl open <path>` opens/creates and focuses.
 - Per-project groupings: tabs, layouts, sessions, work items, tools, triggers, settings overrides, tickets/reviews views.
 - Aggregated views: **Inbox** = "My tickets" (all open projects' tracker views, grouped by project) + "Review requests" (all configured code-host accounts, grouped by project, unmatched items in **Other**) + "My PRs" + "Needs input" (sessions across projects).
+- **Quitting Kelta** leaves the sessions running in the `keltad` session daemon (`terminal.session_host = "daemon"`); the next start re-attaches every live one where it was (shells, Claude, nvim keep their process and scrollback). Sessions that ended meanwhile restore as below.
 - Close project: sessions keep running unless "Close and stop sessions" is chosen. Remove project: moves config to `projects/.trash/`.
 
 ## 3. Core flows
@@ -72,7 +73,7 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 ### 3.3 PR / MR review list and actions
 - **Reviews** pane per project (repos bound to the project) or aggregated (Inbox, all accounts, "Other" for unbound repos). Sections: *Review requested*, *My PRs*. Row: title, repo/project chip, author, draft, CI (✓ ✗ ● –), decision, my state, size (+/−), age, linked ticket keys. Filters: include drafts, repo (team requests follow `reviews.include_team_requests`).
 - **Detail:** sanitized description, reviewers, checks summary, file list (+/− counts). Actions: **Approve** (sends the shown `head_sha`; stale → "PR changed, refresh"), **Comment**, **Request changes** (GitLab: comment + optional unapprove), **Open in browser**, **Review locally**.
-- **Review locally** (`work_plan` with `Review` source → same sheet): fetch `pull/<n>/head:kelta/pr-<n>` (GitHub) / `merge-requests/<iid>/head:kelta/mr-<iid>` (GitLab) → worktree `<root>/review-<n>` → template `review` (Claude with profile `review`, `--permission-mode plan`, prompt from `claude.prompt_templates.review`; nvim with `editor.review_args`, e.g. `-c "DiffviewOpen origin/{base}...HEAD"`; shell with `git diff --stat origin/<base>...`).
+- **Review locally** (`work_plan` with `Review` source → same sheet): fetch `pull/<n>/head:kelta/pr-<n>` (GitHub) / `merge-requests/<iid>/head:kelta/mr-<iid>` (GitLab) / `pull/<n>/head:kelta/pr-<n>` (Gitea) / the source branch (Bitbucket Cloud, which exposes no PR refs) → worktree `<root>/review-<n>` → template `review` (Claude with profile `review`, `--permission-mode plan`, prompt from `claude.prompt_templates.review`; nvim with `editor.review_args`, e.g. `-c "DiffviewOpen origin/{base}...HEAD"`; shell with `git diff --stat origin/<base>...`).
 - Rows refresh on window focus through the list query (one request, also brings back PRs pushed after my review, badge "Updated since your review"), never through `get` on each row.
 - New review requests detected via `seen_reviews` (never on the first poll after start) → desktop notification (toggle) + rail/Inbox badge.
 
@@ -80,7 +81,7 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 - **Board:** columns from `tracker_columns` (project `tracker.columns` override; default by status category: To do / In progress / In review / Done). Drag a card (or select + `m`) → `tracker_move`: resolves column → transition by category or names; several candidates → small picker; none → toast "No transition to <column> — Open in browser"; `NeedsFields` → field form or browser. Optimistic move with rollback on error.
 - **Detail:** "Move to…" menu filled from `tracker_transitions`; assign (Me / none), comment box (Markdown).
 - **Palette:** "Move SHOP-142 to…".
-- Provider semantics: Jira transitions; Redmine `allowed_statuses`; GitHub Projects v2 Status (or open/closed); GitLab scoped labels + close/reopen; Linear workflow states of the ticket's team.
+- Provider semantics: Jira transitions; Redmine `allowed_statuses`; GitHub Projects v2 Status (or open/closed); GitLab scoped labels + close/reopen; Linear workflow states of the ticket's team; Gitea open/closed.
 
 ### 3.5 Open a tool
 Tools are opened from the palette ("Open tool: lazydocker"), the `+` menu of the TabBar, a tool's keybinding, or a trigger. `tool_open` → PTY tools become sessions (`kind = Tool`, cwd per tool template, exit banner with **Relaunch**, `close_on_exit` option); web tools start their server (if any), wait for readiness from stdout (no polling), then open a Web pane. Embed `auto`: iframe; if a HEAD probe sees `X-Frame-Options`/`frame-ancestors` → local proxy that strips them (WebSocket passthrough); failure → **Open in browser** button. Web tool processes stop when the pane/tab closes (`lifecycle`), or with the project. Missing binary → empty state with `install_hint` and "Check again".
@@ -150,9 +151,9 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 ## 6. v0.1 scope
 
-**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
+**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

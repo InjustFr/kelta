@@ -1,0 +1,28 @@
+{
+  "pagelen": 500,
+  "page": 1,
+  "values": [
+    {
+      "type": "diffstat",
+      "status": "added",
+      "lines_added": 12,
+      "lines_removed": 0,
+      "old": null,
+      "new": {
+        "path": "src/limiter.rs"
+      }
+    },
+    {
+      "type": "diffstat",
+      "status": "modified",
+      "lines_added": 2,
+      "lines_removed": 3,
+      "old": {
+        "path": "src/lib.rs"
+      },
+      "new": {
+        "path": "src/lib.rs"
+      }
+    }
+  ]
+}

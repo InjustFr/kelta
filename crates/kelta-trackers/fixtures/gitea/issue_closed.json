@@ -1,0 +1,45 @@
+{
+  "id": 1012,
+  "number": 12,
+  "title": "Rate limit the API",
+  "body": "Rate limit the API. <script>alert(1)</script>",
+  "state": "closed",
+  "html_url": "https://git.acme.example/acme/shop/issues/12",
+  "user": {
+    "id": 2,
+    "login": "dave",
+    "full_name": "Dave R",
+    "avatar_url": "https://git.acme.example/avatars/2"
+  },
+  "assignee": {
+    "id": 1,
+    "login": "louis",
+    "full_name": "Louis D",
+    "avatar_url": "https://git.acme.example/avatars/1"
+  },
+  "assignees": [
+    {
+      "id": 1,
+      "login": "louis",
+      "full_name": "Louis D",
+      "avatar_url": "https://git.acme.example/avatars/1"
+    }
+  ],
+  "labels": [
+    {
+      "id": 1,
+      "name": "bug"
+    },
+    {
+      "id": 2,
+      "name": "priority/high"
+    }
+  ],
+  "updated_at": "2026-10-08T09:12:44Z",
+  "repository": {
+    "id": 5,
+    "name": "shop",
+    "owner": "acme",
+    "full_name": "acme/shop"
+  }
+}

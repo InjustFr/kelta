@@ -11,17 +11,23 @@ host="$(rustc -vV | sed -n 's/^host: //p')"
 bins=apps/desktop/src-tauri/binaries
 mkdir -p "$bins"
 
+# Sidecars (externalBin): kelta-ctl and the keltad session daemon.
+sidecars=(kelta-ctl keltad)
+build_sidecars() { cargo build --release --locked -p kelta-ctl -p kelta-term --bin kelta-ctl --bin keltad "$@"; }
+
 if [[ "$(uname)" == Darwin && "${UNIVERSAL:-0}" == 1 ]]; then
   for t in aarch64-apple-darwin x86_64-apple-darwin; do
-    cargo build --release --locked -p kelta-ctl --target "$t"
-    cp "target/$t/release/kelta-ctl" "$bins/kelta-ctl-$t"
+    build_sidecars --target "$t"
+    for b in "${sidecars[@]}"; do cp "target/$t/release/$b" "$bins/$b-$t"; done
   done
-  lipo -create -output "$bins/kelta-ctl-universal-apple-darwin" \
-    "$bins/kelta-ctl-aarch64-apple-darwin" "$bins/kelta-ctl-x86_64-apple-darwin"
+  for b in "${sidecars[@]}"; do
+    lipo -create -output "$bins/$b-universal-apple-darwin" \
+      "$bins/$b-aarch64-apple-darwin" "$bins/$b-x86_64-apple-darwin"
+  done
   target=(--target universal-apple-darwin)
 else
-  cargo build --release --locked -p kelta-ctl
-  cp target/release/kelta-ctl "$bins/kelta-ctl-$host"
+  build_sidecars
+  for b in "${sidecars[@]}"; do cp "target/release/$b" "$bins/$b-$host"; done
   target=()
 fi
 

@@ -167,7 +167,7 @@ async fn real_claude_gate_c1() {
     let mut dirs = Dirs::under(home.path());
     // Like macOS "Application Support": the hook command must survive a space.
     dirs.bin = home.path().join("data dir").join("bin");
-    kelta_core::ctl::install_ctl_from(&kelta_ctl(), &dirs.bin, kelta_proto::VERSION).unwrap();
+    kelta_core::ctl::install_stable_bin(&kelta_ctl(), &dirs.bin, kelta_proto::VERSION).unwrap();
 
     let mut settings = Settings::default();
     settings.worktree.root = format!("{}/wt/{{project}}/{{repo}}/{{key}}-{{slug}}", work.path().display());

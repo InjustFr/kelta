@@ -1,5 +1,5 @@
 //! One conformance harness, run against every tracker provider (Jira Cloud, Jira DC, Redmine,
-//! GitHub Issues, GitLab Issues, Linear). Each provider only supplies its mocks and expectations.
+//! GitHub Issues, GitLab Issues, Gitea Issues, Linear). Each provider only supplies its mocks and expectations.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -111,6 +111,15 @@ mocks!(gitlab_mocks, |s| {
     ok_status(s, "POST", "/api/v4/projects/grp%2Fsub%2Fproj/issues/12/notes", 201).await;
 });
 
+mocks!(gitea_mocks, |s| {
+    mount(s, "GET", "/api/v1/user", 200, "gitea/user.json").await;
+    mount(s, "GET", "/api/v1/repos/issues/search", 200, "gitea/issues_p1.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/issues/12", 200, "gitea/issue.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/issues/12/comments", 200, "gitea/comments.json").await;
+    ok_status(s, "POST", "/api/v1/repos/acme/shop/issues/12/comments", 201).await;
+    mount(s, "PATCH", "/api/v1/repos/acme/shop/issues/12", 200, "gitea/issue_closed.json").await;
+});
+
 mocks!(linear_mocks_ok, |s| {
     linear_mocks(s).await;
 });
@@ -175,6 +184,17 @@ fn cases() -> Vec<Case> {
             branch_key: "gl-12",
             build: |base| tracker("gitlab-acme", "gitlab", base, json!({})),
             mock_ok: gitlab_mocks,
+        },
+        Case {
+            name: "gitea issues",
+            kind: TrackerKind::GiteaIssues,
+            account_id: "gitea-main",
+            ticket: tref("gitea-main", "acme/shop#12", "1012"),
+            view: view("mine"),
+            binding: TrackerBinding::default(),
+            branch_key: "gt-12",
+            build: |base| tracker("gitea-main", "gitea", base, json!({})),
+            mock_ok: gitea_mocks,
         },
         Case {
             name: "linear",

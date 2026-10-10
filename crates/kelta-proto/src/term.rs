@@ -142,9 +142,9 @@ pub enum ClipboardKind {
     Primary,
 }
 
-/// Events from a terminal session to core (`TerminalEvents::on_event`).
+/// Events from a terminal session to core (`TerminalEvents::on_event`; keltad sends them as JSON).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TerminalEvent {
     Title(String),
     /// OSC 7.
