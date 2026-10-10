@@ -28,7 +28,13 @@ async function start(): Promise<void> {
     window.__kelta = { stores, registry, actions };
   } else {
     setTransport(createTauriTransport());
+    // The webview is destroyed on close: save the debounced layout first (the window waits for it).
+    void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
+      getCurrentWindow().onCloseRequested(() => stores.layout.flushForClose()),
+    );
   }
+  // shortcut: best effort on reload / Cmd+Q (app.exit does not wait for the page), upgrade by routing quit through the UI.
+  window.addEventListener('beforeunload', () => void stores.layout.flush());
 
   injectSprite();
   const target = document.getElementById('app');
