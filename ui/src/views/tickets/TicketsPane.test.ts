@@ -62,6 +62,8 @@ async function ready(c: HTMLElement, key = 'SHOP-151'): Promise<HTMLElement> {
   await waitFor(() => expect(card(c, key)).not.toBeNull());
   const el = card(c, key) as HTMLElement;
   await fireEvent.click(el);
+  // A transitions reload from the previous test's move can land after beforeEach.
+  tickets.transitions = {};
   return el;
 }
 
@@ -562,7 +564,7 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"number":98'));
   });
 
-  it('the row status chip opens the move menu', async () => {
+  it('the row status chip opens the status picker', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
     await fireEvent.click(
@@ -592,7 +594,7 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     await waitFor(() => expect(container.querySelector('.picked')).toBeNull());
   });
 
-  it('a multi-move that stops early says how many moved', async () => {
+  it('a multi-move that stops early says how many moved and keeps the selection', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');
     await press('x');
@@ -603,9 +605,10 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     mock.failNext('tracker_transition', { code: 'internal', message: 'jira exploded' });
     await fireEvent.keyDown(menu, { key: '1' });
     await waitFor(() =>
-      expect(toasts.list.some((t) => t.toast.text === 'Moved 0 of 2; stopped at SHOP-151')).toBe(true),
+      expect(toasts.list.map((t) => t.toast.text)).toContain('Moved 0 of 2 tickets to In progress'),
     );
     expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').length).toBe(1);
+    expect(container.querySelectorAll('.picked').length).toBe(2);
   });
 
   it('x toggles, Ctrl+click adds, Esc clears the selection', async () => {
@@ -660,5 +663,49 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
       "gitlab-corp can't change assignees from Kelta. Open #88 in the browser (o).",
       "gitlab-corp can't take comments from Kelta. Open #88 in the browser (o).",
     ]);
+  });
+});
+
+describe('TicketsPane split view', () => {
+  let width = 1000;
+  beforeEach(() => {
+    width = 1000;
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => width });
+    return () => void delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+  });
+  const detail = () => screen.queryByTestId('ticket-detail');
+
+  it('follows the selection; Space toggles it, Enter focuses it, Esc returns to the list', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    await waitFor(() => expect(detail()?.getAttribute('aria-label')).toBe('Ticket SHOP-151'));
+    await press('j');
+    await waitFor(() => expect(detail()?.getAttribute('aria-label')).toBe('Ticket SHOP-155'));
+    await press(' ');
+    expect(detail()).toBeNull();
+    await press(' ');
+    expect(detail()).not.toBeNull();
+    await press('Enter');
+    await waitFor(() => expect(document.activeElement).toBe(detail()));
+    await fireEvent.keyDown(detail()!, { key: 'j' }); // the detail's keys stay in the detail
+    expect(detail()?.getAttribute('aria-label')).toBe('Ticket SHOP-155');
+    await fireEvent.keyDown(detail()!, { key: 'Escape' });
+    expect(document.activeElement).toBe(pane());
+    expect(JSON.stringify(layout.get('shop') ?? null)).not.toContain('"ticket_detail"');
+  });
+
+  it('Shift+Enter opens the standalone pane; a narrow pane opens it from Space and Enter', async () => {
+    const wide = mountBoard('list');
+    await ready(wide.container, 'SHOP-151');
+    await press('Enter', { shiftKey: true });
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
+    wide.unmount();
+    layout.byProject = {};
+    width = 600;
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    expect(detail()).toBeNull();
+    await press(' ');
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
   });
 });

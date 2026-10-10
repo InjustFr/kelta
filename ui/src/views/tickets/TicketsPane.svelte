@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, PrLink, TicketItem, TicketSort, TicketsMode, Transition, Who } from '$lib/gen';
+  import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
   import { layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
@@ -34,14 +34,14 @@
   import { startWorkOnTicket } from '../work/startWork';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
-  import MoveMenu from './MoveMenu.svelte';
   import StatusChip from './StatusChip.svelte';
+  import StatusPicker from './StatusPicker.svelte';
+  import TicketDetail from './TicketDetail.svelte';
   import {
     GROUP_BYS,
     SORTS,
     ageDays,
     ageLevel,
-    commonByTarget,
     flowOf,
     groupTickets,
     sortTickets,
@@ -369,14 +369,8 @@
   let root = $state<HTMLDivElement>();
   let filterInput = $state<HTMLInputElement>();
   let sourceBtn = $state<HTMLElement>();
-  /** One ticket, or a selection (`items`, with each ticket's own moves in `lists`). */
-  let moveMenu = $state.raw<{
-    x: number;
-    y: number;
-    items: TicketItem[];
-    transitions: Transition[] | null;
-    lists: Transition[][];
-  } | null>(null);
+  /** The status picker: one ticket, or a selection (moves shared by target status name). */
+  let picker = $state.raw<{ tickets: Ticket[]; anchor: HTMLElement | null } | null>(null);
   let prMenu = $state<{ x: number; y: number; prs: PrLink[]; projectId: string; browser: boolean } | null>(
     null,
   );
@@ -387,6 +381,23 @@
   let chord: string | null = null;
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
+
+  // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
+  // shortcut: on/off is per mount, not persisted; add `PaneContent::Tickets.split` if it should stick.
+  let split = $state(true);
+  let paneWidth = $state(0);
+  let side = $state<HTMLElement>();
+  /** Below ~720px the list would be too narrow: the detail opens as its own pane instead. */
+  const wide = $derived(paneWidth >= 720);
+  const splitShown = $derived(split && wide && mode === 'list');
+
+  /** Enter: the detail column takes the keyboard (narrow pane: the standalone pane). */
+  async function focusDetail(item: TicketItem): Promise<void> {
+    if (!wide || mode !== 'list') return openDetail(item);
+    split = true;
+    await tick();
+    side?.querySelector<HTMLElement>('[data-testid="ticket-detail"]')?.focus();
+  }
 
   function refresh(): void {
     void tickets.load(scope, viewId, true, who);
@@ -415,48 +426,24 @@
     void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId, { preview });
   }
 
-  /**
-   * Opens at once (loading) so the menu, not the pane, gets a digit typed while transitions load.
-   * Several tickets: only the moves common to all, matched by target status name.
-   */
-  async function openMoveMenu(list: TicketItem[]): Promise<void> {
+  /** Opens the status picker under the first ticket's status chip (its card on the board). */
+  function openPicker(list: TicketItem[]): void {
     const [item] = list;
     if (!item) return;
-    const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
-    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, items: list, transitions: null, lists: [] };
-    const slots = await Promise.all(list.map((i) => tickets.loadTransitions(i.ticket.ref)));
-    if (moveMenu?.items !== list) return;
-    const failed = slots.findIndex((s) => !s.data);
-    if (failed < 0) {
-      const lists = slots.map((s) => s.data ?? []);
-      moveMenu = { ...moveMenu, lists, transitions: commonByTarget(lists) };
-    } else {
-      moveMenu = null;
-      root?.focus();
-      toasts.error(slots[failed]?.error ?? 'No transitions', `Moving ${list[failed]?.ticket.ref.key ?? ''}`);
-    }
+    const el = rowEl(keyOf(item));
+    picker = {
+      tickets: list.map((i) => i.ticket),
+      anchor: el?.querySelector<HTMLElement>('[data-status]') ?? el ?? null,
+    };
   }
 
-  /** Applies a move to every ticket of the menu (each through its own transition); stops at the first failure. */
-  async function applyMove(t: Transition): Promise<void> {
-    const m = moveMenu;
-    if (!m) return;
-    if (m.items.length === 1) {
-      void move.moveViaTransition(m.items[0]!.ticket, t);
-      return;
-    }
-    let moved = 0;
-    for (const [n, i] of m.items.entries()) {
-      const own = m.lists[n]?.find((x) => x.to.name === t.to.name);
-      if (i.ticket.status.name === t.to.name || !own) continue;
-      if (!(await move.moveViaTransition(i.ticket, own))) {
-        // A field form or an error stops the loop; say which tickets were left behind.
-        toasts.info(`Moved ${moved} of ${m.items.length}; stopped at ${i.ticket.ref.key}`);
-        return;
-      }
-      moved++;
-    }
-    picked = [];
+  function closePicker(): void {
+    const was = picker;
+    picker = null;
+    root?.focus();
+    // A selection that moved is done with; one dismissed (Esc) stays for another try.
+    const now = (t: Ticket) => items.find((i) => keyOf(i) === ticketKey(t.ref))?.ticket.status.name;
+    if (was && was.tickets.length > 1 && was.tickets.some((t) => now(t) !== t.status.name)) picked = [];
   }
 
   /** `p` / `P`: the only PR at once, else a picker. */
@@ -490,7 +477,7 @@
   }
 
   function pickOrMove(item: TicketItem): void {
-    void openMoveMenu(picked.length > 0 && picked.includes(keyOf(item)) ? pickedItems : [item]);
+    openPicker(picked.length > 0 && picked.includes(keyOf(item)) ? pickedItems : [item]);
   }
 
   function openSourceMenu(): void {
@@ -520,6 +507,14 @@
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // The detail column runs its own keys; Esc hands the keyboard back to the list.
+    if (side?.contains(target)) {
+      if (e.key === 'Escape') {
+        root?.focus();
+        e.preventDefault();
+      }
+      return;
+    }
     const item = cur;
     const first = chord;
     chord = null;
@@ -580,7 +575,14 @@
         laneStep(1);
         break;
       case 'Enter':
-        if (selRow?.kind === 'group') toggleGroup(selRow);
+        if (e.shiftKey) {
+          if (item) openDetail(item);
+        } else if (selRow?.kind === 'group') toggleGroup(selRow);
+        else if (item) void focusDetail(item);
+        break;
+      case ' ':
+        if (mode !== 'list') return;
+        if (wide) split = !split;
         else if (item) openDetail(item);
         break;
       case '/':
@@ -602,8 +604,8 @@
         refresh();
         break;
       case 'm':
-        if (picked.length > 0) void openMoveMenu(pickedItems);
-        else if (item) void openMoveMenu([item]);
+        if (picked.length > 0) openPicker(pickedItems);
+        else if (item) openPicker([item]);
         break;
       case 'a':
         if (item && can(item, 'assign')) void assign(item, 'me');
@@ -675,6 +677,7 @@
   data-testid="tickets-pane"
   data-mode={mode}
   bind:this={root}
+  bind:clientWidth={paneWidth}
   tabindex="0"
   role="group"
   aria-label="Tickets"
@@ -817,132 +820,143 @@
         {#snippet actions()}<Button onclick={() => setGroup('status')}>By status</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list'}
-      <div class="list">
-        <VirtualList
-          bind:this={vlist}
-          items={rows}
-          itemHeight={ROW_HEIGHT}
-          key={(r) => r.key}
-          label="Tickets"
-          onend={() =>
-            void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
-        >
-          {#snippet row(r)}
-            {#if r.kind === 'group'}
-              {@const overWip =
-                groupBy === 'flow' &&
-                r.group.id === 'doing' &&
-                r.group.items.filter(hasWork).length > wipLimit}
-              <button
-                type="button"
-                tabindex="-1"
-                class="k-group head"
-                class:selected={selKey === r.key}
-                class:wip={overWip}
-                aria-expanded={r.open}
-                data-group={r.group.id}
-                onclick={() => {
-                  selKey = r.key;
-                  toggleGroup(r);
-                }}
-              >
-                <Icon name={r.open ? 'chevron-down' : 'chevron-right'} size={12} />
-                {r.group.label}
-                <span class="count k-num">{r.group.items.length}</span>
-                {#if overWip}<span class="wip-note">Above your limit of {wipLimit}</span>{/if}
-              </button>
-            {:else}
-              {@const item = r.item}
-              {@const t = item.ticket}
-              {@const pr = prOf(item)}
-              {@const isPicked = picked.includes(r.key)}
-              {@const age = ageLevel(t, Date.now())}
-              <button
-                type="button"
-                tabindex="-1"
-                class="k-row"
-                class:selected={cur === item}
-                class:picked={isPicked}
-                aria-current={cur === item ? 'true' : undefined}
-                aria-pressed={picked.length > 0 ? isPicked : undefined}
-                data-key={r.key}
-                onclick={(e) => {
-                  selKey = r.key;
-                  if (e.metaKey || e.ctrlKey) togglePick(r.key);
-                }}
-                ondblclick={() => openDetail(item)}
-              >
-                <span class="k-row-lamp"
-                  >{#if isPicked}<Icon name="check" size={12} />{:else}<Lamp
-                      level={sessionsLamp(workOf(item)?.session_ids ?? [])}
-                    />{/if}</span
+      <div class="split">
+        <div class="list">
+          <VirtualList
+            bind:this={vlist}
+            items={rows}
+            itemHeight={ROW_HEIGHT}
+            key={(r) => r.key}
+            label="Tickets"
+            onend={() =>
+              void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
+          >
+            {#snippet row(r)}
+              {#if r.kind === 'group'}
+                {@const overWip =
+                  groupBy === 'flow' &&
+                  r.group.id === 'doing' &&
+                  r.group.items.filter(hasWork).length > wipLimit}
+                <button
+                  type="button"
+                  tabindex="-1"
+                  class="k-group head"
+                  class:selected={selKey === r.key}
+                  class:wip={overWip}
+                  aria-expanded={r.open}
+                  data-group={r.group.id}
+                  onclick={() => {
+                    selKey = r.key;
+                    toggleGroup(r);
+                  }}
                 >
-                <span class="k-row-key">{t.ref.key}</span>
-                <span class="k-row-title">{t.title}</span>
-                <span class="acts" data-acts>
-                  <RowButton
-                    icon="arrow-right"
-                    label="Move (m)"
-                    onclick={() => {
-                      selKey = r.key;
-                      pickOrMove(item);
-                    }}
-                  />
-                  <RowButton
-                    icon="git-pull-request"
-                    label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
-                    disabled={item.prs.length === 0}
-                    onclick={() => openPrOf(item, false)}
-                  />
-                  <RowButton
-                    icon="play"
-                    label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
-                    onclick={() => start(item)}
-                  />
-                </span>
-                <span class="meta">
-                  {#if pr}<span class="pr" data-pr
-                      ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
-                        ><PrChip {pr} /></RowButton
-                      ></span
-                    >{/if}
-                  {#if t.sprint && groupBy !== 'sprint'}
-                    <span
-                      class="sprint"
-                      class:active={t.sprint.active}
-                      title={t.sprint.active ? `${t.sprint.name} (current)` : t.sprint.name}
-                      >{t.sprint.name}</span
-                    >
-                  {/if}
-                  <span class="status-slot" data-status
-                    ><RowButton
-                      label={`${t.status.name}: move ${t.ref.key} (m)`}
+                  <Icon name={r.open ? 'chevron-down' : 'chevron-right'} size={12} />
+                  {r.group.label}
+                  <span class="count k-num">{r.group.items.length}</span>
+                  {#if overWip}<span class="wip-note">Above your limit of {wipLimit}</span>{/if}
+                </button>
+              {:else}
+                {@const item = r.item}
+                {@const t = item.ticket}
+                {@const pr = prOf(item)}
+                {@const isPicked = picked.includes(r.key)}
+                {@const age = ageLevel(t, Date.now())}
+                <button
+                  type="button"
+                  tabindex="-1"
+                  class="k-row"
+                  class:selected={cur === item}
+                  class:picked={isPicked}
+                  aria-current={cur === item ? 'true' : undefined}
+                  aria-pressed={picked.length > 0 ? isPicked : undefined}
+                  data-key={r.key}
+                  onclick={(e) => {
+                    selKey = r.key;
+                    if (e.metaKey || e.ctrlKey) togglePick(r.key);
+                  }}
+                  ondblclick={() => openDetail(item)}
+                >
+                  <span class="k-row-lamp"
+                    >{#if isPicked}<Icon name="check" size={12} />{:else}<Lamp
+                        level={sessionsLamp(workOf(item)?.session_ids ?? [])}
+                      />{/if}</span
+                  >
+                  <span class="k-row-key">{t.ref.key}</span>
+                  <span class="k-row-title">{t.title}</span>
+                  <span class="acts" data-acts>
+                    <RowButton
+                      icon="arrow-right"
+                      label="Move (m)"
                       onclick={() => {
                         selKey = r.key;
                         pickOrMove(item);
-                      }}><StatusChip status={t.status} /></RowButton
-                    ></span
-                  >
-                  <span class="age-slot"
-                    >{#if age}<span
-                        class="aged {age}"
-                        data-age={age}
-                        title={`${ageDays(t, Date.now())} days in ${t.status.name}`}
-                        >{ageDays(t, Date.now())}d</span
-                      >{/if}</span
-                  >
-                  {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
-                  {#if whoTab !== 'mine'}
-                    <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
-                      >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
+                      }}
+                    />
+                    <RowButton
+                      icon="git-pull-request"
+                      label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
+                      disabled={item.prs.length === 0}
+                      onclick={() => openPrOf(item, false)}
+                    />
+                    <RowButton
+                      icon="play"
+                      label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
+                      onclick={() => start(item)}
+                    />
+                  </span>
+                  <span class="meta">
+                    {#if pr}<span class="pr" data-pr
+                        ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
+                          ><PrChip {pr} /></RowButton
+                        ></span
+                      >{/if}
+                    {#if t.sprint && groupBy !== 'sprint'}
+                      <span
+                        class="sprint"
+                        class:active={t.sprint.active}
+                        title={t.sprint.active ? `${t.sprint.name} (current)` : t.sprint.name}
+                        >{t.sprint.name}</span
+                      >
+                    {/if}
+                    <span class="status-slot" data-status
+                      ><RowButton
+                        label={`${t.status.name}: move ${t.ref.key} (m)`}
+                        onclick={() => {
+                          selKey = r.key;
+                          pickOrMove(item);
+                        }}><StatusChip status={t.status} /></RowButton
+                      ></span
                     >
-                  {/if}
-                  <span class="k-row-meta age">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
-                </span>
-              </button>
+                    <span class="age-slot"
+                      >{#if age}<span
+                          class="aged {age}"
+                          data-age={age}
+                          title={`${ageDays(t, Date.now())} days in ${t.status.name}`}
+                          >{ageDays(t, Date.now())}d</span
+                        >{/if}</span
+                    >
+                    {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
+                    {#if whoTab !== 'mine'}
+                      <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
+                        >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
+                      >
+                    {/if}
+                    <span class="k-row-meta age">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
+                  </span>
+                </button>
+              {/if}
+            {/snippet}
+          </VirtualList>
+        </div>
+        {#if splitShown}
+          <aside class="side" bind:this={side} aria-label="Ticket detail">
+            {#if cur}
+              <TicketDetail item={cur} projectId={cur.project_ids[0] ?? projectId} embedded />
+            {:else}
+              <p class="side-empty">Select a ticket to see it here.</p>
             {/if}
-          {/snippet}
-        </VirtualList>
+          </aside>
+        {/if}
       </div>
     {:else}
       <div class="board" data-testid="board">
@@ -1023,7 +1037,9 @@
   <KeyHints
     hints={[
       ['j/k', 'move'],
+      ['Space', 'split'],
       ['Enter', 'open'],
+      ['⇧Enter', 'own pane'],
       ['1/2/3', 'who'],
       ['m', 'move to'],
       ['x', 'select'],
@@ -1039,22 +1055,8 @@
   />
 </div>
 
-{#if moveMenu}
-  {@const lead = moveMenu.items[0]!.ticket}
-  <!-- shortcut: a selection borrows the first ticket's flow strip and names the count as its key; U3's StatusPicker replaces it. -->
-  <MoveMenu
-    ticket={moveMenu.items.length === 1
-      ? lead
-      : { ...lead, ref: { ...lead.ref, key: `${moveMenu.items.length} tickets` } }}
-    transitions={moveMenu.transitions}
-    x={moveMenu.x}
-    y={moveMenu.y}
-    onselect={(t) => void applyMove(t)}
-    onclose={() => {
-      moveMenu = null;
-      root?.focus();
-    }}
-  />
+{#if picker}
+  <StatusPicker tickets={picker.tickets} {projectId} anchor={picker.anchor} onclose={closePicker} />
 {/if}
 {#if prMenu}
   {@const m = prMenu}
@@ -1138,6 +1140,32 @@
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Split view: list left, the selected ticket's detail right, the 1px splitter gap between. */
+  .split {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 1px;
+    background: var(--k-border);
+  }
+
+  .split .list {
+    min-width: 0;
+    background: var(--k-well);
+  }
+
+  .side {
+    flex: 0 0 clamp(320px, 44%, 640px);
+    min-width: 0;
+    background: var(--k-well);
+  }
+
+  .side-empty {
+    margin: 0;
+    padding: var(--k-space-5) var(--k-space-4);
+    color: var(--k-fg-subtle);
   }
 
   /* The title is the row: the meta shrinks first, then drops the source and avatar at split widths. */

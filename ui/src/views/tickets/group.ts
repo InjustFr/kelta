@@ -52,7 +52,8 @@ export function categoryBar(c: StatusCategory): string {
 /** Statuses deduped by name, in workflow order (stable within a category). */
 export function flowOrder(statuses: Status[]): Status[] {
   const seen = new Map<string, Status>();
-  for (const s of statuses) if (!seen.has(s.name)) seen.set(s.name, s);
+  // "To Do" (the ticket) and "To do" (a transition) are one step; the first spelling wins.
+  for (const s of statuses) if (!seen.has(s.name.toLowerCase())) seen.set(s.name.toLowerCase(), s);
   return [...seen.values()].sort((a, b) => FLOW_ORDER.indexOf(a.category) - FLOW_ORDER.indexOf(b.category));
 }
 
@@ -189,10 +190,4 @@ export function groupTickets(
   return [...groups.values()]
     .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
     .map(({ order: _, ...g }) => g);
-}
-
-/** Transitions common to every list, matched by target status name, from the first list. */
-export function commonByTarget<T extends { to: { name: string } }>(lists: readonly (readonly T[])[]): T[] {
-  const [first = [], ...rest] = lists;
-  return first.filter((t) => rest.every((l) => l.some((o) => o.to.name === t.to.name)));
 }

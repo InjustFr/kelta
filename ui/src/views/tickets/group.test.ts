@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { PrLink, Sprint, StatusCategory, Ticket, TicketItem, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
-import {
-  ageLevel,
-  commonByTarget,
-  flowOf,
-  flowOrder,
-  groupTickets,
-  sortTickets,
-  type FlowSignals,
-} from './group';
+import { ageLevel, flowOf, flowOrder, groupTickets, sortTickets, type FlowSignals } from './group';
 
 const item = (
   key: string,
@@ -216,24 +208,13 @@ describe('priority, sprint, sort and age', () => {
     ]);
     expect(ageLevel({ ...samples.ticket, status_since: null, updated_at: daysAgo(15) }, NOW)).toBe('warn');
   });
-
-  it('keeps the moves common to every ticket, by target status name', () => {
-    const t = (id: string, name: string) => ({ id, to: { name } });
-    expect(
-      commonByTarget([
-        [t('1', 'Done'), t('2', 'QA'), t('3', 'Blocked')],
-        [t('a', 'QA'), t('b', 'Done')],
-      ]).map((x) => x.id),
-    ).toEqual(['1', '2']);
-    expect(commonByTarget([])).toEqual([]);
-  });
 });
 
 describe('flowOrder', () => {
   it('dedupes by name and orders by workflow', () => {
     const s = (name: string, category: StatusCategory) => ({ id: name, name, category });
     expect(
-      flowOrder([s('Done', 'done'), s('To Do', 'todo'), s('Review', 'in_review'), s('To Do', 'todo')]).map(
+      flowOrder([s('Done', 'done'), s('To Do', 'todo'), s('Review', 'in_review'), s('To do', 'todo')]).map(
         (x) => x.name,
       ),
     ).toEqual(['To Do', 'Review', 'Done']);
