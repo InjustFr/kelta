@@ -442,6 +442,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `secret_delete` | `{secret_ref}` | `()` | |
 | `secret_backends_status` | `{}` | `Vec<SecretBackendStatus{backend, available, detail}>` | |
 | `secret_unlock` | `{passphrase: String, create: bool}` | `()` (unlocks `file:` refs for this run; passphrase zeroized, never logged) | |
+| `oauth_device_start` | `{kind: AccountKind, base_url, secret_ref}` | `OAuthDevicePrompt{user_code, verification_uri, expires_in}` (device code kept in core; client id from `oauth.client_ids`; `secret_ref` must be `keyring:`/`file:`) | |
+| `oauth_device_finish` | `{user_code}` | `()` once approved and stored (tokens at `secret_ref` + `<secret_ref>.oauth`); `timeout` expired, `cancelled` denied | |
 | `account_test` | `{account_id}` | `AccountTestResult{ok, user: Option<User>, error: Option<KeltaError>}` | `commands/settings.rs` (L4) via CoreApi |
 | **projects** | | | `commands/project.rs` (L3) |
 | `project_list` | `{}` | `Vec<ProjectInfo>` | |

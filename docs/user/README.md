@@ -4,6 +4,7 @@
 - [Compositor bindings and window rules](compositors.md) (Hyprland, Sway, GNOME)
 - [Graphics and NVIDIA troubleshooting](graphics.md)
 - [Keyring and notification daemon](keyring-and-notifications.md)
+- [Sign in with the browser (GitHub, GitLab)](oauth.md)
 - [Bitbucket Cloud](bitbucket.md)
 - [Gitea and Forgejo](gitea.md)
 - [Linear](linear.md)

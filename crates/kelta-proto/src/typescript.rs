@@ -91,11 +91,11 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         CallOrigin, ProxiedRequest, ProxiedResponse, PluginGrant,
         // settings
         Layer, Settings, ProjectConfig, RepoConfig, CodeHostBinding, TrackerBinding, TrackerView,
-        ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig,
+        ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig, OAuthSettings,
         SessionTemplate, TemplateNode, EditorPreset, ClaudeProfile, LinuxGraphics,
         EffectiveSettings, LayerDoc, ValidationIssue, TrustInfo, SettingsDiff,
         // secrets
-        SecretRef, SecretBackendStatus,
+        SecretRef, SecretBackendStatus, OAuthDevicePrompt,
         // events
         ToastLevel, ToastAction, Toast, Notification, AccountStatus, UiEvent, TriggerChain,
         BusEvent,

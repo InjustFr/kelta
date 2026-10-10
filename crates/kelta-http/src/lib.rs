@@ -15,6 +15,7 @@ pub mod auth;
 mod ctx;
 pub mod graphql;
 pub mod markdown;
+pub mod oauth;
 pub mod provider;
 pub mod util;
 

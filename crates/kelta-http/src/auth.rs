@@ -20,6 +20,8 @@ pub enum AuthScheme {
     Basic { user: String },
     /// `<name>: <secret>` (`X-Redmine-API-Key`, `PRIVATE-TOKEN`).
     Header(String),
+    /// Bearer token from the device flow, refreshed before it expires ([`crate::oauth`]).
+    OAuth,
 }
 
 impl AuthScheme {
@@ -31,6 +33,7 @@ impl AuthScheme {
             AuthKind::Bearer => Self::Bearer,
             AuthKind::ApiKey => Self::Header("X-Redmine-API-Key".into()),
             AuthKind::Token => Self::Bearer,
+            AuthKind::Oauth => Self::OAuth,
         })
     }
 }
@@ -88,6 +91,12 @@ impl Authed {
                 self.http.account_id()
             )));
         };
+        if self.scheme == AuthScheme::OAuth
+            && let Some(fresh) =
+                crate::oauth::refreshed(self.http.client(), &*self.secrets, r, &self.secret_ctx).await?
+        {
+            return Ok(fresh);
+        }
         self.secrets.resolve(r, &self.secret_ctx).await
     }
 
@@ -96,7 +105,7 @@ impl Authed {
         let token = self.token().await?;
         let token = token.expose();
         req = match &self.scheme {
-            AuthScheme::Bearer => req.bearer(token),
+            AuthScheme::Bearer | AuthScheme::OAuth => req.bearer(token),
             AuthScheme::Basic { user } => req.basic(user, token),
             AuthScheme::Header(name) => req.header(name.clone(), token),
         };

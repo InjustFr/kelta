@@ -122,6 +122,17 @@ pub struct SecretBackendStatus {
     pub detail: Option<String>,
 }
 
+/// What the UI shows during "Sign in with browser": the code to type and where. The device
+/// code itself stays in the backend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct OAuthDevicePrompt {
+    /// Also the flow id passed back to `oauth_device_finish`.
+    pub user_code: String,
+    pub verification_uri: String,
+    /// Seconds until the code expires.
+    pub expires_in: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
