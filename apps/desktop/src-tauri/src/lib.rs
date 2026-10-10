@@ -81,15 +81,15 @@ pub fn run() -> ExitCode {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("kelta-plugin", |ctx, request, responder| {
-            let response = match ctx.app_handle().try_state::<Arc<Core>>() {
-                Some(core) => kelta_plugins::uri::handle(core.plugins(), request),
-                None => {
-                    let mut r = tauri::http::Response::new(b"core not ready".to_vec());
-                    *r.status_mut() = tauri::http::StatusCode::SERVICE_UNAVAILABLE;
-                    r
-                }
+            let Some(core) = ctx.app_handle().try_state::<Arc<Core>>().map(|c| c.inner().clone()) else {
+                let mut r = tauri::http::Response::new(b"core not ready".to_vec());
+                *r.status_mut() = tauri::http::StatusCode::SERVICE_UNAVAILABLE;
+                return responder.respond(r);
             };
-            responder.respond(response);
+            // Called on the webview main thread: the file reads must not block it.
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(kelta_plugins::uri::handle(core.plugins(), request));
+            });
         })
         .setup(move |app| {
             let bridge = TauriBridge::new(app.handle().clone());
