@@ -30,7 +30,7 @@ use tokio::sync::broadcast;
 use crate::claude::{self, ContextInfo, LaunchMode, LaunchSpec};
 use crate::layout::{self, SlotKind};
 use crate::plan::{self, TicketSnap};
-use crate::template::{Ctx, Mode, render, shell_quote, shell_words, slugify};
+use crate::template::{Ctx, Mode, render, render_shell, shell_quote, shell_words, slugify};
 use crate::{WorkService, editor, files, git};
 
 /// Default PTY size for sessions spawned before a view attaches (resized on attach).
@@ -1122,7 +1122,7 @@ impl WorkService {
                     .session_spawn(base_req(SessionKind::Shell, name.unwrap_or("shell").into()))
                     .await?;
                 if let Some(cmd) = command.as_ref().filter(|c| !c.trim().is_empty()) {
-                    let line = render(cmd, &ctx, Mode::Lenient)?;
+                    let line = render_shell(cmd, &ctx, Mode::Lenient)?;
                     env.core.session_write(&info.id, format!("{line}\r").as_bytes()).await?;
                 }
                 Ok(info.id)

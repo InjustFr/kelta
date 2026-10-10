@@ -791,7 +791,7 @@ impl Core {
             new_keys.push(r.r#ref.clone());
             let project = bindings
                 .iter()
-                .find(|(a, repo, _)| a == account && repo == &r.r#ref.repo)
+                .find(|(a, repo, _)| a == account && repo.eq_ignore_ascii_case(&r.r#ref.repo))
                 .map(|(_, _, p)| p.clone());
             let mut ev = BusEvent::new(bus::PR_REVIEW_REQUESTED, serde_json::json!({ "review": r }));
             if let Some(p) = &project {
@@ -803,7 +803,9 @@ impl Core {
         self.emit(UiEvent::ReviewsChanged { scope: Scope::All, new_keys: new_keys.clone() });
         let mut projects: Vec<ProjectId> = bindings
             .iter()
-            .filter(|(a, repo, _)| a == account && fresh.iter().any(|r| &r.r#ref.repo == repo))
+            .filter(|(a, repo, _)| {
+                a == account && fresh.iter().any(|r| repo.eq_ignore_ascii_case(&r.r#ref.repo))
+            })
             .map(|(_, _, p)| p.clone())
             .collect();
         projects.dedup();
@@ -828,7 +830,7 @@ impl Core {
             let Some(p) = prev.get(&r.r#ref) else { continue };
             let project = bindings
                 .iter()
-                .find(|(a, repo, _)| a == account && repo == &r.r#ref.repo)
+                .find(|(a, repo, _)| a == account && repo.eq_ignore_ascii_case(&r.r#ref.repo))
                 .map(|(_, _, p)| p.clone());
             let with = |ev: BusEvent| match &project {
                 Some(p) => ev.with_project(p.clone()),

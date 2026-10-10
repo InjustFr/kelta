@@ -161,8 +161,8 @@ async fn first_review_poll_is_silent() {
         assert!(bus_names(&mut rx).iter().all(|ev| ev.name != "pr.review_requested"));
         assert!(e.h.ui.notifications().is_empty());
 
-        // a new request on the next poll fires once
-        e.host.reviews.lock().push(review("acme/shop-api", 88, ReviewKind::ReviewRequested));
+        // a new request on the next poll fires once (host spells the repo with another case)
+        e.host.reviews.lock().push(review("Acme/Shop-API", 88, ReviewKind::ReviewRequested));
         e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
         let evs: Vec<BusEvent> =
             bus_names(&mut rx).into_iter().filter(|ev| ev.name == "pr.review_requested").collect();
@@ -171,6 +171,7 @@ async fn first_review_poll_is_silent() {
         assert_eq!(evs[0].project_id.as_ref().map(|p| p.as_str()), Some("shop"));
         assert_eq!(e.h.ui.notifications().len(), 1);
         assert!(e.h.ui.events().iter().any(|ev| matches!(ev, UiEvent::ReviewsChanged { new_keys, .. } if new_keys.len() == 1 && new_keys[0].number == 88)));
+        assert!(e.h.ui.events().iter().any(|ev| matches!(ev, UiEvent::ReviewsChanged { scope: Scope::Project { id }, .. } if id.as_str() == "shop")));
         // nothing new → nothing fired
         e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
         assert!(bus_names(&mut rx).iter().all(|ev| ev.name != "pr.review_requested"));
@@ -181,7 +182,7 @@ async fn first_review_poll_is_silent() {
         tmp.path(),
         vec![
             review("acme/shop-api", 87, ReviewKind::ReviewRequested),
-            review("acme/shop-api", 88, ReviewKind::ReviewRequested),
+            review("Acme/Shop-API", 88, ReviewKind::ReviewRequested),
             review("acme/shop-api", 89, ReviewKind::ReviewRequested),
         ],
     );

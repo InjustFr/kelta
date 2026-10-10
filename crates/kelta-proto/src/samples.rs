@@ -735,6 +735,7 @@ pub fn all() -> Vec<Fixture> {
                 preview: Some("All tests pass.".into()),
                 file_edited: None,
                 raw_event: "Stop".into(),
+                session_uuid: None,
             }
         ),
         fx!(

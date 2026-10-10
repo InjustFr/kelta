@@ -384,6 +384,7 @@ export const statusChange: StatusChange = {
   "file_edited": null,
   "preview": "All tests pass.",
   "raw_event": "Stop",
+  "session_uuid": null,
   "status": "done"
 };
 

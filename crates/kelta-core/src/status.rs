@@ -123,8 +123,13 @@ pub enum Heuristic {
 }
 
 pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
-    let change =
-        |status| StatusChange { status, preview: None, file_edited: None, raw_event: "heuristic".into() };
+    let change = |status| StatusChange {
+        status,
+        preview: None,
+        file_edited: None,
+        raw_event: "heuristic".into(),
+        session_uuid: None,
+    };
     match ev {
         Heuristic::Output => {
             if prev.status == SessionStatus::Working {

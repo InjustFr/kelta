@@ -115,7 +115,11 @@ export interface Commands {
   settings_validate: { args: { layer: Layer; text: string }; result: ValidationIssue[] };
   settings_write_raw: { args: LayerArgs & { text: string }; result: EffectiveSettings };
   settings_open_file: { args: LayerArgs; result: SessionInfo };
-  repo_trust: { args: { project_id: ProjectId; repo_id: string; trust: boolean }; result: TrustInfo };
+  repo_trust: {
+    // sha256 = hash of the text the user reviewed (required to trust).
+    args: { project_id: ProjectId; repo_id: string; trust: boolean; sha256?: string };
+    result: TrustInfo;
+  };
   secret_set: { args: { secret_ref: string; value: string }; result: null };
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };

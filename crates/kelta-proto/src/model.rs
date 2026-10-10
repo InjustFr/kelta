@@ -331,6 +331,9 @@ pub struct StatusChange {
     pub file_edited: Option<PathBuf>,
     /// `hook_event_name` (+ `:<notification_type>` for Notification).
     pub raw_event: String,
+    /// Claude's conversation uuid from the hook payload (changes on `/clear`); core resumes it.
+    #[serde(default)]
+    pub session_uuid: Option<String>,
 }
 
 // ---------------------------------------------------------------------------------------------
