@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { ProjectId, TicketItem } from '$lib/gen';
+  import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button } from '$lib/ui';
 
   import { ticketCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
+  import { workflows } from './workflow.svelte';
 
   // Ticket detail action bar (TICKETS.md T3): one button per action with its key; an action the
   // tracker (or the ticket) cannot do stays visible, off, with the reason as its tooltip.
@@ -31,6 +33,7 @@
     unassign: 'Unassign',
     comment: 'Comment',
     refine: 'Refine with Claude',
+    workflow: 'Run workflow…',
     branch: 'Copy branch',
     browser: 'Open in browser',
   };
@@ -44,7 +47,7 @@
           : a.id === 'pr' && item.prs.length > 1
             ? 'Open PRs'
             : LABELS[a.id],
-      reason: blockedReason(a.id, item, branch),
+      reason: blockedReason(a.id, item, branch, workflows[ticketKey(item.ticket.ref)]),
     })),
   );
 </script>

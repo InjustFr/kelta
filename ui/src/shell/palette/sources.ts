@@ -25,6 +25,7 @@ import { attentionRank, lampOf, reviewKey, type LampLevel } from '$lib/stores/re
 import { currentPlatform } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
+import { pickWorkflow } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
@@ -323,6 +324,7 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
   });
   return [
     verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref)),
+    verb('workflow', `Run workflow on ${ref.key}…`, 'play', () => void pickWorkflow(ref)),
     verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
       ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
     ),

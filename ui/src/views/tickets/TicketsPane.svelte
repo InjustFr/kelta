@@ -54,6 +54,7 @@
   import PrChip from './PrChip.svelte';
   import { ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems } from './prs';
   import RowButton from './RowButton.svelte';
+  import { pickWorkflow } from './workflow.svelte';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -712,6 +713,9 @@
       case 'S':
         if (item) start(item, false);
         break;
+      case 'w':
+        if (item) void pickWorkflow(item.ticket.ref);
+        break;
       default:
         return;
     }
@@ -1163,6 +1167,7 @@
       ['f then s', 'Current sprint'],
       ['a shift+a', 'Assign me, unassign'],
       ['s shift+s', 'Start work, start now'],
+      ['w', 'Run workflow'],
       ['v', 'Source'],
       ['shift+g', 'Group'],
       ['c', 'Comment'],

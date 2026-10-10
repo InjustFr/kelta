@@ -300,15 +300,16 @@ describe('palette sources', () => {
     const hits = mock.state.tickets.slice(0, 5);
     const items = ticketItems(hits);
     const key = hits[0]!.ticket.ref.key;
-    expect(items.map((i) => i.label).slice(0, 5)).toEqual([
+    expect(items.map((i) => i.label).slice(0, 6)).toEqual([
       `${key} ${hits[0]!.ticket.title}`,
       `Start work on ${key}`,
+      `Run workflow on ${key}…`,
       `Move ${key} to…`,
       `Assign ${key} to me`,
       `Open ${key} in browser`,
     ]);
-    // 3 hits with 4 verbs + 2 plain hits
-    expect(items).toHaveLength(5 + 3 * 4);
+    // 3 hits with 5 verbs + 2 plain hits
+    expect(items).toHaveLength(5 + 3 * 5);
     expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
 
     await items.find((i) => i.label === `Assign ${key} to me`)!.run();
@@ -347,6 +348,20 @@ describe('palette sources', () => {
       }),
     );
     await waitFor(() => expect(ui.sheet).toBeNull());
+  });
+
+  it('"Run workflow on KEY…" opens the workflow picker for that ticket', async () => {
+    ui.sheets = [];
+    const hit = mock.state.tickets[1]!;
+    await ticketItems([hit])
+      .find((i) => i.label === `Run workflow on ${hit.ticket.ref.key}…`)!
+      .run();
+    await waitFor(() =>
+      expect(ui.sheet).toMatchObject({
+        key: 'workflow_run',
+        props: { ticket: hit.ticket.ref, workflows: mock.state.workflows },
+      }),
+    );
   });
 
   it('offers no assign verb on a tracker that cannot assign', () => {

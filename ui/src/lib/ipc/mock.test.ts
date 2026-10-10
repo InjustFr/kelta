@@ -243,6 +243,8 @@ describe('mock transport', () => {
       tracker_priorities: { ticket },
       tracker_set_priority: { ticket, priority: 'Low' },
       tracker_refine: { ticket, project_id: null },
+      workflows_list: { ticket },
+      workflow_run: { ticket: s.tickets[1]!.ticket.ref, workflow: 'kelta-ticket-pass' },
       tracker_search: { scope: { kind: 'all' }, text: 'rate' },
       tracker_sources: { account_id: 'jira-acme', query: '' },
       next_up_put: { item: { project_id: 'shop', ticket, rank: 1, snoozed_until: null } },
