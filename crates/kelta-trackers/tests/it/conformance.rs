@@ -10,7 +10,7 @@ use kelta_proto::settings::{TrackerBinding, TrackerView};
 use kelta_proto::testing::conformance::{TrackerCase, tracker_contract};
 use kelta_proto::tracker::{Assignee, TicketRef, TrackerKind};
 use serde_json::json;
-use wiremock::matchers::{any, method, path};
+use wiremock::matchers::{any, body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn err_code<T: std::fmt::Debug>(r: Result<T, kelta_proto::error::KeltaError>) -> ErrorCode {
@@ -93,6 +93,16 @@ mocks!(github_mocks, |s| {
     mount(s, "GET", "/repos/acme/shop/issues/12/comments", 200, "github/comments_last.json").await;
     ok_status(s, "POST", "/repos/acme/shop/issues/12/comments", 201).await;
     mount(s, "PATCH", "/repos/acme/shop/issues/12", 200, "github/issue_closed.json").await;
+    // the list's board enrichment (one `nodes(ids:)` query per page), before the catch-all below
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("nodes(ids"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(fixture_text("github/gql_nodes_no_projects.json")),
+        )
+        .expect(1..)
+        .mount(s)
+        .await;
     mount(s, "POST", "/graphql", 200, "github/gql_issue_no_projects.json").await;
 });
 

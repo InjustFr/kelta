@@ -1,0 +1,37 @@
+{
+  "data": {
+    "nodes": [
+      {
+        "id": "I_12",
+        "projectItems": {
+          "nodes": [
+            {
+              "id": "PVTI_item1",
+              "project": { "id": "PVT_proj1", "number": 5, "owner": { "login": "acme" } },
+              "fieldValues": {
+                "nodes": [
+                  { "name": "In Progress", "field": { "name": "Status" } },
+                  { "name": "P1", "field": { "name": "Priority", "options": [{ "name": "P0" }, { "name": "P1" }] } },
+                  { "iterationId": "it1", "title": "Sprint 7", "startDate": "2020-01-01", "duration": 14 }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      { "id": "I_14", "projectItems": { "nodes": [] } },
+      {
+        "id": "I_15",
+        "projectItems": {
+          "nodes": [
+            {
+              "id": "PVTI_item15",
+              "project": { "id": "PVT_proj1", "number": 5, "owner": { "login": "acme" } },
+              "fieldValues": { "nodes": [{ "name": "In Review", "field": { "name": "Status" } }] }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
