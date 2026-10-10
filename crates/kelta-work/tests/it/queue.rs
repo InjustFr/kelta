@@ -138,3 +138,32 @@ async fn hold_threshold_keeps_items_queued() {
     fx.core.exit_session(&sid, 0);
     wait_active(&fx, &b.id).await;
 }
+
+#[tokio::test]
+async fn reruns_past_claude_files_still_wait_for_a_slot() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    fx.settings(|s| s.claude.max_live = 2);
+    let w = fx.service();
+    let a = start(&w, "g/a").await;
+    // b gets past claude_files, then dies before spawning its Claude.
+    let plan =
+        w.plan(&project(), WorkSource::Branch { name: "g/b".into(), task: None, repo: None }).await.unwrap();
+    w.set_crash_after(Some("claude_files"));
+    w.start(plan).await.unwrap_err();
+    let b = fx.store.list_items(None).await.unwrap().into_iter().find(|i| i.id != a.id).unwrap();
+    fx.settings(|s| s.claude.max_live = 1);
+    let resumed = w.resume(&b.id).await.unwrap();
+    assert_eq!(resumed.state, WorkState::Queued { pos: 0 }, "{:?}", resumed.steps);
+    assert_eq!(live_claude(&fx).len(), 1);
+
+    // a's Claude exits, b takes the slot; retrying a's Claude queues a instead of going over cap.
+    let sid = live_claude(&fx).into_iter().find(|s| s.work_item_id.as_ref() == Some(&a.id)).unwrap().id;
+    fx.core.exit_session(&sid, 0);
+    wait_active(&fx, &b.id).await;
+    let retried = w.retry_step(&a.id, "claude").await.unwrap();
+    assert!(matches!(retried.state, WorkState::Queued { .. }), "{:?}", retried.state);
+    assert_eq!(live_claude(&fx).len(), 1);
+}

@@ -501,14 +501,20 @@ impl WorkService {
         };
         item.state = WorkState::Starting;
         self.save(&mut item).await?;
-        for step in WORK_STEPS {
+        let gate = WORK_STEPS.iter().position(|s| *s == "claude_files").unwrap_or(0);
+        let claude_pending = !item
+            .steps
+            .iter()
+            .any(|s| s.step == "claude" && matches!(s.status, StepStatus::Done | StepStatus::Skipped));
+        for (i, step) in WORK_STEPS.iter().enumerate() {
             let status =
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
             if matches!(status, StepStatus::Done | StepStatus::Skipped) {
                 continue;
             }
-            // Worktree ready: the Claude half waits for a slot (#141).
-            if *step == "claude_files"
+            // Worktree ready: the Claude half waits for a slot (#141), also when a rerun starts past claude_files.
+            if i >= gate
+                && claude_pending
                 && layout::slots(&self.template_of(&env, &j).layout)
                     .iter()
                     .any(|s| matches!(s.kind, SlotKind::Claude { .. }))
@@ -589,7 +595,7 @@ impl WorkService {
             // Re-running a finished saga step keeps the item's state afterwards.
             let state = item.state.clone();
             let mut out = self.run_saga_locked(id).await?;
-            if !matches!(out.state, WorkState::Failed { .. }) {
+            if !matches!(out.state, WorkState::Failed { .. } | WorkState::Queued { .. }) {
                 out.state = state;
                 self.save(&mut out).await?;
             }
