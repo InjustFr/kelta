@@ -163,6 +163,12 @@ function createClient(win, init, port) {
         },
         notify: (title, body) => call('notify.send', { title, body }),
         clipboard: { write: (text) => call('clipboard.write', { text }) },
+        kv: {
+            get: (key) => call('kv.get', { key }),
+            set: (key, value) => call('kv.set', { key, value }),
+            delete: (key) => call('kv.delete', { key }),
+            list: () => call('kv.list'),
+        },
         onVisibility: (cb) => sub(visibility, cb),
         onParams: (cb) => sub(paramsListeners, cb),
         onTheme: (cb) => sub(themeListeners, cb),

@@ -1,4 +1,4 @@
-// Hello screen: everything goes through the permission-checked host API (no network, no storage).
+// Hello screen: everything goes through the permission-checked host API (no network, no browser storage).
 import { connect } from './kelta-sdk.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +18,15 @@ async function main() {
     text($('project'), `Project: ${project.name} (${project.repos.length} repo(s))`);
   } catch (e) {
     text($('project'), `Project unavailable: ${e.message}`);
+  }
+
+  // Persisted per plugin by the host (`storage` permission, `kv.*`).
+  try {
+    const visits = ((await kelta.kv.get('visits')) ?? 0) + 1;
+    await kelta.kv.set('visits', visits);
+    text($('visits'), `Opened ${visits} time(s).`);
+  } catch (e) {
+    text($('visits'), `Storage unavailable: ${e.message}`);
   }
 
   const renderSessions = async () => {

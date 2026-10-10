@@ -155,11 +155,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, WASM logic plugins, rpm. Windows: out of scope.
 
-## 7. Notifications
-
-Desktop notifications (`tauri-plugin-notification`) fire only when the related pane is not visible or the window is unfocused (`notifications.only_when_unfocused`), outside `quiet_hours`: Claude needs input, Claude done, new review request, CI failed on my PR, my PR approved / changes requested, bell in a background project. Click → focus window, project, tab and pane (macOS: focus app if click routing unsupported). Dock badge (macOS) / urgency hint (Linux) = number of sessions needing input.
 
 ## 8. Platform behaviour
 

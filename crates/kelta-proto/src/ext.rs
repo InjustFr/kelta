@@ -629,6 +629,8 @@ pub enum Permission {
     UiOpen,
     Notify,
     ClipboardWrite,
+    /// Own key-value store (`kv.*`).
+    Storage,
     /// `exec:<command>` (argv[0] basename)
     Exec(String),
     /// `net:<host>` (exact or `*.domain`)
@@ -651,6 +653,7 @@ impl Permission {
             "ui.open" => Self::UiOpen,
             "notify" => Self::Notify,
             "clipboard.write" => Self::ClipboardWrite,
+            "storage" => Self::Storage,
             other => {
                 let (kind, arg) = other.split_once(':')?;
                 if arg.is_empty() {
@@ -683,6 +686,7 @@ impl Permission {
             Self::UiOpen => "Open panes and screens, change focus".into(),
             Self::Notify => "Show desktop notifications".into(),
             Self::ClipboardWrite => "Write to the clipboard".into(),
+            Self::Storage => "Store its own data in Kelta (up to 1 MiB)".into(),
             Self::Exec(c) => format!("Run the program `{c}`"),
             Self::Net(h) => format!("Make network requests to {h}"),
         }
@@ -706,6 +710,7 @@ impl std::fmt::Display for Permission {
             Self::UiOpen => f.write_str("ui.open"),
             Self::Notify => f.write_str("notify"),
             Self::ClipboardWrite => f.write_str("clipboard.write"),
+            Self::Storage => f.write_str("storage"),
             Self::Exec(c) => write!(f, "exec:{c}"),
             Self::Net(h) => write!(f, "net:{h}"),
         }
@@ -790,6 +795,14 @@ pub enum PluginMethod {
     NotifySend,
     #[serde(rename = "clipboard.write")]
     ClipboardWrite,
+    #[serde(rename = "kv.get")]
+    KvGet,
+    #[serde(rename = "kv.set")]
+    KvSet,
+    #[serde(rename = "kv.delete")]
+    KvDelete,
+    #[serde(rename = "kv.list")]
+    KvList,
 }
 
 /// Permission requirement of a [`PluginMethod`].
@@ -835,6 +848,10 @@ impl PluginMethod {
         Self::UiFocus,
         Self::NotifySend,
         Self::ClipboardWrite,
+        Self::KvGet,
+        Self::KvSet,
+        Self::KvDelete,
+        Self::KvList,
     ];
 
     pub fn required_permission(self) -> MethodPermission {
@@ -860,6 +877,7 @@ impl PluginMethod {
             Self::UiOpenScreen | Self::UiFocus => Static(Permission::UiOpen),
             Self::NotifySend => Static(Permission::Notify),
             Self::ClipboardWrite => Static(Permission::ClipboardWrite),
+            Self::KvGet | Self::KvSet | Self::KvDelete | Self::KvList => Static(Permission::Storage),
         }
     }
 }
@@ -949,6 +967,7 @@ mod tests {
             "exec:kubectl",
             "net:*.acme.com",
             "clipboard.write",
+            "storage",
         ] {
             let p = Permission::parse(s).unwrap();
             assert_eq!(p.to_string(), s);
@@ -960,6 +979,6 @@ mod tests {
     #[test]
     fn method_names() {
         assert_eq!(serde_json::to_string(&PluginMethod::TicketsList).unwrap(), "\"tickets.list\"");
-        assert_eq!(PluginMethod::ALL.len(), 29);
+        assert_eq!(PluginMethod::ALL.len(), 33);
     }
 }

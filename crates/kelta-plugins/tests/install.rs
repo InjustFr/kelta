@@ -42,8 +42,10 @@ async fn inspect_shows_permissions_in_plain_language_and_install_checks_the_hash
     let again = env.host.inspect(&hello()).await.unwrap();
     assert!(again.warnings.iter().any(|w| w.starts_with("Replaces the installed version")));
 
+    env.grants.kv_set(&PluginId::new("hello-screen"), "k", "1".into(), 10).await.unwrap();
     env.host.uninstall(&PluginId::new("hello-screen")).await.unwrap();
     assert!(env.host.plugins().await.unwrap().is_empty());
+    assert!(env.grants.kv_keys(&PluginId::new("hello-screen")).await.unwrap().is_empty(), "kv cleared");
     assert!(env.grants.grants(&PluginId::new("hello-screen")).await.unwrap().is_empty());
     assert!(!env.plugins_dir().join("hello-screen").exists());
 }

@@ -308,6 +308,29 @@ pub trait GrantStore: Send + Sync {
         manifest_sha256: &str,
     ) -> Result<(), KeltaError>;
     async fn revoke_all(&self, plugin: &PluginId) -> Result<(), KeltaError>;
+
+    // Plugin KV (`plugin_kv`, PLUGINS §7 `kv.*`): per-plugin state, so it lives next to the grants.
+    /// The stored JSON text of `key`.
+    async fn kv_get(&self, plugin: &PluginId, key: &str) -> Result<Option<String>, KeltaError>;
+    /// Upsert. `InvalidArgument` (nothing written) when the plugin's total key + value bytes would
+    /// exceed `quota`.
+    async fn kv_set(
+        &self,
+        plugin: &PluginId,
+        key: &str,
+        value: String,
+        quota: usize,
+    ) -> Result<(), KeltaError>;
+    async fn kv_delete(&self, plugin: &PluginId, key: &str) -> Result<(), KeltaError>;
+    /// Keys, sorted.
+    async fn kv_keys(&self, plugin: &PluginId) -> Result<Vec<String>, KeltaError>;
+    /// Every key of `plugin` (uninstall).
+    async fn kv_clear(&self, plugin: &PluginId) -> Result<(), KeltaError>;
+}
+
+/// The `kv_set` quota error.
+pub fn kv_quota_error(quota: usize) -> KeltaError {
+    KeltaError::invalid(format!("kv.set: plugin storage is limited to {quota} bytes"))
 }
 
 #[async_trait]
