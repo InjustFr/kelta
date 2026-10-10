@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use kelta_proto::api::{CodeHost, Tracker};
@@ -32,6 +32,9 @@ use crate::scheduler::{IntervalPolicy, Refresher, SubKey};
 use crate::status::NotifyKind;
 use crate::store::q;
 
+/// `tracker_transitions` of one ticket: (status id when fetched, fetched at, transitions).
+type CachedTransitions = (Option<String>, Instant, Vec<Transition>);
+
 #[derive(Default)]
 pub struct Feeds {
     /// Accounts whose review-requested list was fetched once in this process.
@@ -47,6 +50,7 @@ pub struct Feeds {
     pr_items: Mutex<HashMap<WorkItemId, ProjectId>>,
     /// PRs whose merge / close was published in this process (live diff and check publish once).
     ended: Mutex<HashSet<ReviewRef>>,
+    transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
 }
 
 /// One tracker list query shared by the projects that use it.
@@ -716,11 +720,25 @@ impl Core {
         }
     }
 
+    /// Cached for the focused polling interval. Keyed per ticket + current status, not account + status:
+    /// Jira/Redmine/GitLab/Linear workflows differ per project, issue type, team or role at the same status.
     pub async fn tracker_transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError> {
         self.rt.capture();
+        let status = self.cached_ticket(t).await.map(|x| x.status.id);
+        let fresh = self.focused_interval();
+        if let Some((s, at, list)) = self.feeds.transitions.lock().get(t)
+            && *s == status
+            && at.elapsed() < fresh
+        {
+            return Ok(list.clone());
+        }
         let r = self.tracker_of(&t.account)?.transitions(t).await;
         self.note_account(&t.account, &r);
-        r
+        let list = r?;
+        let mut cache = self.feeds.transitions.lock();
+        cache.retain(|_, (_, at, _)| at.elapsed() < fresh);
+        cache.insert(t.clone(), (status, Instant::now(), list.clone()));
+        Ok(list)
     }
 
     pub async fn tracker_transition(
@@ -856,6 +874,7 @@ impl Core {
     /// After a write, before its bus event: patch cached pages and notify views (the event's
     /// [`Core::on_ticket_written`] refreshes the account; patching first keeps that fetch last).
     async fn after_ticket_write(&self, ticket: &Ticket) {
+        self.feeds.transitions.lock().remove(&ticket.r#ref);
         let queries: Vec<TicketQuery> =
             self.feeds.views.lock().values().filter(|q| q.account == ticket.r#ref.account).cloned().collect();
         let mut projects = Vec::new();

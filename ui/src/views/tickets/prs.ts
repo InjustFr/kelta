@@ -35,6 +35,15 @@ export function ciLamp(ci: CiState): LampLevel {
   return ci === 'success' ? 'done' : ci === 'pending' ? 'working' : ci === 'none' ? 'none' : 'error';
 }
 
+/** One lamp for CI and review (DESIGN §6.1 precedence): changes requested = needs input, then CI failed or
+ * running, approved = done, awaiting a required review = activity, else the CI shape. */
+export function prLamp(pr: PrLink): LampLevel {
+  if (pr.review === 'changes_requested') return 'needs_input';
+  const ci = ciLamp(pr.ci);
+  if (ci === 'error' || ci === 'working' || pr.review === null) return ci;
+  return pr.review === 'approved' ? 'done' : 'activity';
+}
+
 /** Review state word for the detail meta row. */
 export function reviewWord(pr: PrLink): string {
   if (pr.state === 'merged') return 'Merged';

@@ -288,6 +288,23 @@ async fn who_override_view_account_and_sources() {
 }
 
 #[tokio::test]
+async fn transitions_are_cached_until_a_move() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let shop = Scope::Project { id: "shop".into() };
+    e.h.core.tracker_list(shop, None, None, None, false).await.unwrap();
+    let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
+    let fetches = || e.tracker.calls().iter().filter(|c| c.starts_with("transitions:")).count();
+    let first = e.h.core.tracker_transitions(&t).await.unwrap();
+    assert_eq!(e.h.core.tracker_transitions(&t).await.unwrap(), first);
+    assert_eq!(fetches(), 1, "a reopened picker within the interval makes no tracker call");
+    e.h.core.tracker_transition(&t, &first[0].id, None, None).await.unwrap();
+    let after = e.h.core.tracker_transitions(&t).await.unwrap();
+    assert_eq!(fetches(), 2, "a move invalidates the ticket's transitions");
+    assert_ne!(after, first);
+}
+
+#[tokio::test]
 async fn tracker_move_resolves_columns() {
     let tmp = tempfile::tempdir().unwrap();
     let e = env(tmp.path(), vec![]);

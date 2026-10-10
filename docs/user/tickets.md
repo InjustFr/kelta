@@ -106,8 +106,9 @@ request, Start work).
 
 ## Pull requests
 
-A row shows the pull request linked to the ticket as `#12` (`!12` on GitLab) with a CI shape: dot passed, ring
-running, diamond failed. A ticket links to the pull requests of its work item and to any pull request in your
+A row shows the pull request linked to the ticket as `#12` (`!12` on GitLab) with one lamp for CI and review:
+halo dot changes requested, diamond CI failed, ring CI running, dot approved (or passed with no review needed),
+small dot waiting for review. Hover it for both states. A ticket links to the pull requests of its work item and to any pull request in your
 review lists whose branch or title carries the ticket key. The detail lists each with its title, state, CI,
 review state and branch. `p` opens it in Kelta's review detail when its repository is bound to a code host
 account, else in the browser; `P` always opens the browser. With several pull requests a small menu asks which.

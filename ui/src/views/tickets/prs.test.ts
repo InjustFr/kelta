@@ -5,7 +5,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 
 import { openContent } from '../work/nav';
-import { ciLamp, mainPr, openPr, openPrs, prLabel, reviewWord } from './prs';
+import { ciLamp, mainPr, openPr, openPrs, prLabel, prLamp, reviewWord } from './prs';
 
 vi.mock('../work/nav', () => ({ openContent: vi.fn(async () => true) }));
 
@@ -45,6 +45,15 @@ describe('PR links', () => {
     expect(reviewWord(pr({ state: 'merged' }))).toBe('Merged');
     expect(reviewWord(pr({ draft: true }))).toBe('Draft');
     expect(reviewWord(pr({ review: 'changes_requested' }))).toBe('Changes requested');
+  });
+
+  it('folds CI and review into one lamp', () => {
+    expect(prLamp(pr({ review: 'changes_requested', ci: 'success' }))).toBe('needs_input');
+    expect(prLamp(pr({ review: 'approved', ci: 'failure' }))).toBe('error');
+    expect(prLamp(pr({ review: 'approved', ci: 'pending' }))).toBe('working');
+    expect(prLamp(pr({ review: 'approved', ci: 'none' }))).toBe('done');
+    expect(prLamp(pr({ review: 'review_required' }))).toBe('activity');
+    expect(prLamp(pr())).toBe('done'); // no review policy: CI alone
   });
 
   it('shows the first open PR, else the first', () => {

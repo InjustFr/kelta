@@ -403,7 +403,9 @@ describe('TicketsPane workbench', () => {
     await waitFor(() => {
       const chip = card(container, 'SHOP-120')?.querySelector('[data-pr]');
       expect(chip?.textContent?.trim()).toBe('#305');
-      expect(chip?.querySelector('[data-attention="done"]')).not.toBeNull(); // CI success = dot
+      // CI passed but changes requested: one lamp, the review wins; the label names both
+      const lamp = chip?.querySelector('[data-attention="needs_input"]');
+      expect(lamp?.getAttribute('aria-label')).toBe('CI passed, changes requested');
     });
     expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
   });
