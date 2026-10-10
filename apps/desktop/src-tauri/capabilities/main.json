@@ -102,6 +102,7 @@
     "allow-work-rebase",
     "allow-work-push",
     "allow-work-link",
+    "allow-work-create-ticket",
     "allow-work-status-all",
     "allow-work-diff",
     "allow-work-mark-reviewed",

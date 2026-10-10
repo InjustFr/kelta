@@ -415,3 +415,17 @@ async fn planning_fields_come_from_iteration_milestone_labels_and_time_stats() {
     assert_eq!(c.status_since.as_deref(), Some("2026-10-02T10:00:00.000Z"));
     assert_eq!(a.status_since.as_deref(), Some(a.updated_at.as_str()));
 }
+
+#[tokio::test]
+async fn search_sends_the_text_as_search() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v4/issues"))
+        .and(query_param("search", "login"))
+        .and(query_param("scope", "assigned_to_me"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issues_p1.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert_eq!(gl(&server).search(&view("mine"), "login").await.unwrap().len(), 2);
+}

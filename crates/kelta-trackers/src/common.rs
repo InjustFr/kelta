@@ -1,7 +1,7 @@
 //! Helpers shared by the tracker providers.
 
 use kelta_proto::error::KeltaError;
-use kelta_proto::settings::{AccountConfig, TrackerBinding};
+use kelta_proto::settings::{AccountConfig, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{Column, Comment, Status, StatusCategory, User};
 use serde_json::Value;
 
@@ -147,6 +147,17 @@ pub fn split_repo_number(key: &str) -> Result<(String, u64), KeltaError> {
     Ok((repo.to_owned(), n))
 }
 
+/// Where `Tracker::create` files a ticket: `value`, the view's `field`. It reaches URL paths, so it is
+/// checked like a ticket key's repo part.
+pub fn create_in<'a>(view: &TrackerView, field: &str, value: Option<&'a str>) -> Result<&'a str, KeltaError> {
+    value.filter(|v| split_repo_number(&format!("{v}#1")).is_ok()).ok_or_else(|| {
+        KeltaError::invalid(format!(
+            "tracker source `{}` names no valid `{field}` to create tickets in",
+            view.label
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +178,10 @@ mod tests {
         assert!(split_repo_number("#3").is_err());
         assert!(split_repo_number("a/b/../../x#1").is_err());
         assert!(split_repo_number("a/b?x#1").is_err());
+        let v = TrackerView { label: "Mine".into(), ..TrackerView::default() };
+        assert_eq!(create_in(&v, "repo", Some("acme/shop")).unwrap(), "acme/shop");
+        assert!(create_in(&v, "repo", None).unwrap_err().message.contains("`Mine` names no valid `repo`"));
+        assert!(create_in(&v, "repo", Some("a/../b")).is_err());
     }
 
     #[test]

@@ -26,6 +26,7 @@ export type WorkActionId =
   | 'rebase_abort'
   | 'conflicts'
   | 'link'
+  | 'create_ticket'
   | 'open_ticket'
   | 'open_pr'
   | 'open_review'
