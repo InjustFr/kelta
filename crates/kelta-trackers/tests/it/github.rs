@@ -110,6 +110,7 @@ async fn repo_views_filter_by_state_and_assignee() {
     let page = gh(&server).list(&v, None).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.next.is_none());
+    assert!(bodies(&server, "POST", "/graphql").await.is_empty(), "closed lists skip the board lookup");
 }
 
 #[tokio::test]
@@ -653,6 +654,8 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     assert_eq!(gql_bodies.len(), 1, "one enrichment request per page, not one per issue");
     assert_eq!(gql_bodies[0]["variables"]["ids"], json!(["I_12", "I_14", "I_15"]));
+    // ~3 rate-limit points per page: few items per issue
+    assert!(gql_bodies[0]["query"].as_str().unwrap().contains("projectItems(first:5)"));
 
     // the detail (`get`) agrees with the list
     gql(&server, "repository(owner", "github/gql_issue_projects.json").await;
@@ -723,4 +726,20 @@ async fn repo_columns_follow_the_board_its_issues_sit_on() {
         (b[1]["variables"]["owner"].as_str(), b[1]["variables"]["number"].as_u64()),
         (Some("acme"), Some(5))
     );
+}
+
+#[tokio::test]
+async fn repo_columns_still_find_the_board_after_a_no_board_list() {
+    let server = MockServer::start().await;
+    mount_repo_list(&server).await;
+    gql_nodes(&server, "github/gql_nodes_no_projects.json", 1).await; // the untriaged tab lands first
+    gql_nodes(&server, "github/gql_nodes_projects.json", u64::MAX).await;
+    gql(&server, "projectV2(number", "github/gql_columns.json").await;
+    let t = gh(&server);
+    let mut v = repo_view();
+    v.who = Some(Who::Unassigned);
+    t.list(&v, None).await.unwrap();
+    let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
+    let cols = t.columns(&b).await.unwrap();
+    assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["Todo", "In Progress", "Done"]);
 }

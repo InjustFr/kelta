@@ -52,10 +52,11 @@ macro_rules! field_value_fragments {
 }
 
 /// `projectItems` of an issue: ids, owner and field values (shared by `issue_projects` and the list enrichment).
+/// `$first` caps the items per issue: GitHub prices a query from its `first` limits.
 macro_rules! project_items {
-    () => {
+    ($first:literal) => {
         concat!(
-            "projectItems(first:20){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:30){ nodes{ ",
+            "projectItems(first:", $first, "){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:30){ nodes{ ",
             field_value_fragments!(),
             " } } } }"
         )
@@ -87,8 +88,8 @@ pub struct GithubIssues {
     me: Mutex<Option<User>>,
     /// project node id → Status field (cached for the provider's lifetime).
     fields: Mutex<HashMap<String, FieldMeta>>,
-    /// repo (lower-case) → the board (owner, number) its listed issues sit on; `None` = listed, no board.
-    boards: Mutex<HashMap<String, Option<(String, u32)>>>,
+    /// repo (lower-case) → the board (owner, number) its listed issues were seen on.
+    boards: Mutex<HashMap<String, (String, u32)>>,
     /// (owner lower-case, project number) → configured status field name.
     status_fields: Mutex<HashMap<(String, u32), String>>,
 }
@@ -416,7 +417,7 @@ impl GithubIssues {
     async fn issue_projects(&self, repo: &str, number: u64) -> Result<IssueProjects, KeltaError> {
         const Q: &str = concat!(
             "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state ",
-            project_items!(),
+            project_items!(20),
             " } } }"
         );
         let (owner, name) =
@@ -481,16 +482,19 @@ impl GithubIssues {
     /// REST issues as tickets with their board Status and fields, from ONE GraphQL call over the
     /// issues' node ids (they may span repos). Runs on every poll, a 304 included: a board move does not
     /// change the REST ETag. No project scope or a failed call: the plain Open/Closed tickets.
-    async fn with_boards(&self, issues: &[Value]) -> Vec<Ticket> {
+    /// `closed_only`: skip the call, a closed issue is "Closed" whatever its board says.
+    async fn with_boards(&self, issues: &[Value], closed_only: bool) -> Vec<Ticket> {
+        // 5 items per issue keeps a 50-issue page at ~3 rate-limit points (20 would be ~11).
         const Q: &str =
-            concat!("query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id ", project_items!(), " } } }");
+            concat!("query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id ", project_items!(5), " } } }");
         let ids: Vec<&str> = issues
             .iter()
             .filter(|i| i.get("pull_request").is_none())
             .filter_map(|i| s(i, "node_id"))
             .collect();
         let mut by_id: HashMap<String, ItemInfo> = HashMap::new();
-        if !ids.is_empty()
+        if !closed_only
+            && !ids.is_empty()
             && let Ok(d) = self.gql(Q, json!({"ids": ids})).await
         {
             for n in d.get("nodes").and_then(Value::as_array).into_iter().flatten() {
@@ -510,11 +514,8 @@ impl GithubIssues {
                 if let Some(x) = item {
                     apply_project_fields(&mut t, &x.vals, &today);
                 }
-                let known = boards
-                    .entry(t.project_hint.clone().unwrap_or_default().to_ascii_lowercase())
-                    .or_default();
-                if board.is_some() {
-                    *known = board;
+                if let Some(b) = board {
+                    boards.insert(t.project_hint.clone().unwrap_or_default().to_ascii_lowercase(), b);
                 }
                 Some(t)
             })
@@ -775,10 +776,7 @@ impl Tracker for GithubIssues {
         } else {
             resp.body.get("items").cloned().unwrap_or(Value::Null)
         };
-        let items = self.with_boards(list.as_array().map_or(&[][..], Vec::as_slice)).await;
-        if let Some(repo) = view.repo.as_deref().filter(|r| !r.is_empty()) {
-            self.boards.lock().entry(repo.to_ascii_lowercase()).or_default();
-        }
+        let items = self.with_boards(list.as_array().map_or(&[][..], Vec::as_slice), state == "closed").await;
         let has_next = link_rel(&resp.headers, "next").is_some();
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
     }
@@ -992,10 +990,11 @@ impl Tracker for GithubIssues {
         });
         if let Some(v) = repo_view {
             let repo = v.repo.as_deref().unwrap_or("").to_ascii_lowercase();
+            // No board seen yet (or none at all): list once more; a no-board repo pays this per pane open.
             if !self.boards.lock().contains_key(&repo) {
                 let _ = self.list(v, None).await;
             }
-            let board = self.boards.lock().get(&repo).cloned().flatten();
+            let board = self.boards.lock().get(&repo).cloned();
             if let Some((owner, number)) = board
                 && let Ok(c) =
                     self.board_columns(&owner, number, &self.status_field_name(&owner, number)).await
