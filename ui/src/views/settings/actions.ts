@@ -6,6 +6,8 @@ import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
 import { toasts, layout, projects } from '$lib/stores';
 
+import { activateProject } from '../../shell/nav';
+
 let tomlRequest: string | null = null;
 
 /** Project whose TOML the next Settings pane opens on, once. */
@@ -22,6 +24,7 @@ registerAction('settings.open', async (args) => {
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
   try {
     await layout.ensure(projectId);
+    await activateProject(projectId); // from a global view the pane would open out of sight
     layout.open(projectId, {
       content: { kind: 'settings', section },
       placement: 'new_tab',

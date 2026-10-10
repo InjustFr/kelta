@@ -685,6 +685,7 @@ export function createMockTransport(options: MockOptions = {}): {
       state.layouts[layout.project_id] = { ...clone(layout), rev };
       return { rev };
     },
+    ui_set_global_view: () => null,
     // ---- sessions --------------------------------------------------------------------------
     session_spawn: ({ req }) => {
       const s = spawn(req.project_id, req.kind, req.name, req.cwd);

@@ -123,7 +123,7 @@
         for (const s of created) sessions.upsert(s);
       }
       onclose();
-      if (projects.activeId !== projectId) await activateProject(projectId);
+      await activateProject(projectId);
     } catch (err) {
       toasts.error(err, 'Starting the session failed');
     } finally {

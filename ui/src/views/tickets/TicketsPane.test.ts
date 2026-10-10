@@ -6,8 +6,10 @@ import { sheetRegistry } from '$app/registry';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import type { PaneContent } from '$lib/gen';
-import { layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
+import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
+import { activateProject } from '../../shell/nav';
+import { globalContent } from '../work/nav';
 import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
 import { selection } from '../work/selection.svelte';
@@ -751,5 +753,47 @@ describe('TicketsPane split view', () => {
     await press('Enter');
     expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
     expect(container.querySelector('.hints')?.textContent).not.toContain('Review changes');
+  });
+});
+
+describe('TicketsPane in the rail Tickets view', () => {
+  const mountGlobal = () =>
+    render(TicketsPane, {
+      props: {
+        projectId: GLOBAL,
+        tabId: GLOBAL,
+        paneId: 'tickets',
+        content: globalContent('tickets') as Extract<PaneContent, { kind: 'tickets' }>,
+        visible: true,
+        focused: true,
+      },
+    });
+
+  beforeEach(() => localStorage.removeItem('kelta.view.tickets'));
+
+  it('remembers who across restarts and opens a ticket in its own project, leaving the view', async () => {
+    localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone' }));
+    await activateProject('billing');
+    ui.view = 'tickets';
+    const { container } = mountGlobal();
+    await ready(container, 'SHOP-151');
+    await press('2');
+    expect(globalContent('tickets')).toMatchObject({ who: 'unassigned', scope: { kind: 'all' } });
+    const polled = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1)?.args;
+    expect(polled).toMatchObject({ content: { kind: 'tickets', who: 'unassigned' } });
+    await press('3');
+    await ready(container, 'SHOP-151');
+    await press('Enter', { shiftKey: true });
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
+    expect([ui.view, projects.activeId]).toEqual([null, 'shop']);
+    expect(JSON.stringify(layout.get(GLOBAL))).not.toContain('ticket_detail');
+  });
+
+  it('with no source in any open project: the empty state adds one to the active project', async () => {
+    projects.list = projects.list.map((p) => ({ ...p, tracker: null }));
+    mountGlobal();
+    expect(await screen.findByText('No ticket source yet.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: projects.activeId } });
   });
 });

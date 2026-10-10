@@ -126,6 +126,7 @@ function createClient(win, init, port) {
             spawn: (p) => call('sessions.spawn', p),
             sendText: (session_id, text, bracketed) => call('sessions.send_text', { session_id, text, bracketed }),
         },
+        work: { list: (p = {}) => call('work.list', p), get: (id) => call('work.get', { id }) },
         tools: { open: (tool_id, placement) => call('tools.open', { tool_id, placement }) },
         events: {
             on(name, cb) {

@@ -526,7 +526,7 @@ async fn transition(
 async fn by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(Arc<dyn Tracker>, TicketRef), String> {
     let key = str_arg(args, "key")?;
     let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty());
-    let listed = core.ticket_list(Scope::All, None, false).await.ok().and_then(|p| {
+    let listed = core.ticket_list(Scope::All, None, None, false).await.ok().and_then(|p| {
         p.items
             .into_iter()
             .map(|i| i.ticket.r#ref)
@@ -572,7 +572,7 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
     };
     let refresh = args.get("refresh").and_then(Value::as_bool).unwrap_or(false);
     let page =
-        core.ticket_list(scope, opt("view").map(str::to_owned), refresh).await.map_err(|e| e.message)?;
+        core.ticket_list(scope, opt("view").map(str::to_owned), None, refresh).await.map_err(|e| e.message)?;
     let norm = |s: &str| s.trim().to_lowercase().replace([' ', '-'], "_");
     let category =
         |t: &Ticket| serde_json::to_value(t.status.category).ok().and_then(|v| v.as_str().map(str::to_owned));

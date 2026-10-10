@@ -59,7 +59,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
-use kelta_proto::tracker::{Ticket, TicketPage, TicketRef};
+use kelta_proto::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketPage, TicketRef};
 use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
@@ -650,16 +650,23 @@ impl CoreApi for Core {
     ) -> Result<(), KeltaError> {
         self.tracker_comment(ticket, markdown, session).await
     }
+    async fn ticket_close(&self, ticket: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.tracker_close(ticket).await
+    }
+    async fn ticket_assign(&self, ticket: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError> {
+        self.tracker_assign(ticket, who).await
+    }
     async fn ticket_list(
         &self,
         scope: Scope,
-        view: Option<String>,
+        view_id: Option<String>,
+        cursor: Option<Cursor>,
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
-        self.tracker_list(scope, view, None, None, refresh).await
+        self.tracker_list(scope, view_id, None, cursor, refresh).await
     }
-    async fn ticket_close(&self, ticket: &TicketRef) -> Result<Ticket, KeltaError> {
-        self.tracker_close(ticket).await
+    async fn ticket_get(&self, ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {
+        self.tracker_get(ticket).await
     }
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
@@ -673,6 +680,9 @@ impl CoreApi for Core {
     }
     async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
         Core::work_get(self, id).await
+    }
+    async fn work_list(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
+        self.work.list(project).await
     }
     async fn work_create_pr(
         &self,

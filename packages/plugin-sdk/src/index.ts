@@ -73,6 +73,7 @@ export interface Kelta {
     assign(ticket: unknown, assignee: unknown): Promise<unknown>;
   };
   reviews: {
+    /** `kind: 'authored'` = your own PRs; default `review_requested`. */
     list(params?: { scope?: 'project' | 'all'; kind?: string }): Promise<unknown>;
     get(review: unknown): Promise<unknown>;
     approve(review: unknown, headSha: string): Promise<unknown>;
@@ -83,6 +84,13 @@ export interface Kelta {
     list(params?: { project?: string }): Promise<unknown>;
     spawn(params: Record<string, unknown>): Promise<unknown>;
     sendText(sessionId: string, text: string, bracketed?: boolean): Promise<unknown>;
+  };
+  /** Work items (needs `work.read`): branch, worktree, linked ticket, PR. `project: null` = every
+   * project (global screens only); default = the screen's project. */
+  work: {
+    list(params?: { project?: string | null }): Promise<unknown[]>;
+    /** `not_found` for another project's item on a project screen. */
+    get(id: string): Promise<unknown>;
   };
   tools: { open(toolId: string, placement?: string): Promise<unknown> };
   /** Subscribes (needs `events:<glob>`); returns an unsubscribe function. */
@@ -230,6 +238,7 @@ function createClient(win: Window, init: ScreenInit, port: MessagePort): Kelta {
       spawn: (p) => call('sessions.spawn', p),
       sendText: (session_id, text, bracketed) => call('sessions.send_text', { session_id, text, bracketed }),
     },
+    work: { list: (p = {}) => call('work.list', p), get: (id) => call('work.get', { id }) },
     tools: { open: (tool_id, placement) => call('tools.open', { tool_id, placement }) },
     events: {
       on(name, cb) {

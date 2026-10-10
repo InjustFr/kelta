@@ -6,7 +6,7 @@ use crate::common;
 use std::time::Duration;
 
 use kelta_proto::ErrorCode;
-use kelta_proto::events::bus;
+use kelta_proto::events::{ToastLevel, bus};
 use kelta_proto::ext::{EmbedMode, Ready, StopSpec, ToolDef, ToolHandle, ToolKind, ToolSource, WebStart};
 use kelta_proto::ids::{PluginId, ProjectId, ToolId};
 use kelta_proto::model::{PaneContent, Placement, SessionKind, TemplateCtx, WorkItem};
@@ -255,6 +255,47 @@ async fn external_tools_start_in_the_work_items_worktree() {
     let ctx = TemplateCtx { work_item_id: Some(w.id), ..Default::default() };
     env.host.tool_open(&shop(), &ToolId::new("fork"), ctx, Placement::SplitRight).await.unwrap();
     assert!(common::wait_for(|| wt.join("opened-here").exists()).await);
+}
+
+fn external_sh(id: &str, label: &str, script: &str) -> ToolDef {
+    ToolDef {
+        id: id.into(),
+        label: label.into(),
+        kind: ToolKind::External,
+        command: Some("sh".into()),
+        args: vec!["-c".into(), script.into()],
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn failed_external_launch_toasts_its_last_stderr_line() {
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(external_sh(
+            "fork",
+            "Fork",
+            "echo \"Unable to find application named 'Forkk'\" >&2; exit 3",
+        ));
+    });
+    env.host
+        .tool_open(&shop(), &ToolId::new("fork"), TemplateCtx::default(), Placement::NewTab)
+        .await
+        .unwrap();
+    assert!(common::wait_for(|| !env.core.toasts().is_empty()).await);
+    let toasts = env.core.toasts();
+    assert_eq!(toasts.len(), 1);
+    assert_eq!(toasts[0].level, ToastLevel::Error);
+    assert_eq!(toasts[0].text, "Open Fork: Unable to find application named 'Forkk'");
+}
+
+#[tokio::test]
+async fn external_tool_open_does_not_wait_for_the_child() {
+    let env = common::Env::new().with_settings(|s| s.tools.push(external_sh("app", "", "sleep 5")));
+    let (shop, app) = (shop(), ToolId::new("app"));
+    let open = env.host.tool_open(&shop, &app, TemplateCtx::default(), Placement::NewTab);
+    let h = tokio::time::timeout(Duration::from_secs(2), open).await.expect("tool_open waited for the child");
+    assert!(matches!(h.unwrap(), ToolHandle::External));
+    assert!(env.core.toasts().is_empty());
 }
 
 #[tokio::test]

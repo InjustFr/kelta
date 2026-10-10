@@ -22,7 +22,7 @@ use crate::model::{
     SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
 };
 use crate::settings::Settings;
-use crate::tracker::{Ticket, TicketRef};
+use crate::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketPage, TicketRef};
 
 /// A recorded `CoreApi` call: method name + JSON-ish argument summary.
 #[derive(Debug, Clone, PartialEq)]
@@ -433,6 +433,50 @@ impl CoreApi for FakeCore {
             ),
         );
         Ok(())
+    }
+
+    async fn ticket_assign(&self, ticket: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError> {
+        self.record("ticket_assign", serde_json::json!({ "ticket": ticket, "assignee": Self::arg(&who) }));
+        let t = self.tracker_for(&ticket.account).await?.assign(ticket, who.clone()).await?;
+        self.publish_inner(BusEvent::new(
+            bus::TICKET_ASSIGNED,
+            serde_json::json!({ "ticket": ticket, "assignee": Self::arg(&who) }),
+        ));
+        Ok(t)
+    }
+
+    /// Set with `respond("ticket_list", page)`; empty otherwise.
+    async fn ticket_list(
+        &self,
+        scope: Scope,
+        view_id: Option<String>,
+        cursor: Option<Cursor>,
+        refresh: bool,
+    ) -> Result<TicketPage, KeltaError> {
+        self.record(
+            "ticket_list",
+            serde_json::json!({ "scope": Self::arg(&scope), "view_id": view_id, "cursor": Self::arg(&cursor), "refresh": refresh }),
+        );
+        self.overridden("ticket_list").unwrap_or_else(|| Ok(TicketPage::default()))
+    }
+
+    async fn ticket_get(&self, ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {
+        self.record("ticket_get", serde_json::json!({ "ticket": ticket }));
+        if let Some(r) = self.overridden("ticket_get") {
+            return r;
+        }
+        self.tracker_for(&ticket.account).await?.get(ticket).await
+    }
+
+    async fn work_list(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
+        self.record("work_list", serde_json::json!({ "project": project }));
+        Ok(self
+            .work_items
+            .lock()
+            .iter()
+            .filter(|w| project.is_none_or(|p| &w.project_id == p))
+            .cloned()
+            .collect())
     }
 
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {

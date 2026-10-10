@@ -296,20 +296,30 @@ pub trait CoreApi: Send + Sync {
         markdown: &str,
         session: Option<&SessionId>,
     ) -> Result<(), KeltaError>;
-    /// First page of a scope's ticket lists, cache first (MCP `list_tickets`).
+    /// Kelta's Tickets list (cached, merged views, with `work_item_id`, `prs`, `caps`); `view_id`
+    /// narrows to one view, `refresh` skips the cache (MCP `list_tickets`).
     async fn ticket_list(
         &self,
         _scope: Scope,
-        _view: Option<String>,
+        _view_id: Option<String>,
+        _cursor: Option<Cursor>,
         _refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
-        Err(KeltaError::unsupported("ticket lists"))
+        Ok(TicketPage::default())
     }
     async fn ticket_set_body(&self, ticket: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
         self.tracker_for(&ticket.account).await?.set_body(ticket, body_md).await
     }
     async fn ticket_close(&self, ticket: &TicketRef) -> Result<Ticket, KeltaError> {
         self.tracker_for(&ticket.account).await?.close(ticket).await
+    }
+    /// `ticket.assigned` + cache invalidation, like `ticket_transition`.
+    async fn ticket_assign(&self, _ticket: &TicketRef, _who: Assignee) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("ticket_assign"))
+    }
+    /// A ticket with its `prs` and `caps`, like Kelta's detail view.
+    async fn ticket_get(&self, _ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {
+        Err(KeltaError::unsupported("ticket_get"))
     }
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
@@ -319,6 +329,10 @@ pub trait CoreApi: Send + Sync {
     }
     async fn work_get(&self, _id: &WorkItemId) -> Option<WorkItem> {
         None
+    }
+    /// Work items of `project`, every project for `None`; newest first.
+    async fn work_list(&self, _project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
+        Ok(Vec::new())
     }
     async fn work_create_pr(
         &self,

@@ -3,14 +3,14 @@
 
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
-  import { attention, projects, sessions, toasts, ui } from '$lib/stores';
+  import { attention, projects, reviews, sessions, tickets, toasts, ui, type GlobalView } from '$lib/stores';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { readyByProject } from '../views/inbox/groups';
   import { nowSummary, refreshNow } from '../views/inbox/now';
   import { confirms } from './confirm.svelte';
   import { attentionLabel, chordFor } from './labels';
-  import { activateProject, openInbox, projectAttention, railProjects } from './nav';
+  import { activateProject, openView, projectAttention, railProjects, VIEW_NAMES } from './nav';
   import { peekHover, peekTarget } from './peek.svelte';
 
   const rail = $derived(railProjects());
@@ -20,6 +20,12 @@
   // Now's tile: badge = what waits on Louis (first four sections), tooltip = the split header.
   const now = $derived(nowSummary());
   const ready = $derived(readyByProject(now.sections));
+  // Tickets and Reviews counts are muted: the red badge stays on Now, so nothing is counted twice.
+  const ALL = { kind: 'all' } as const;
+  const mine = $derived(
+    tickets.items(ALL, null, 'mine').filter((i) => i.ticket.status.category !== 'done').length,
+  );
+  const toReview = $derived(reviews.list(ALL, 'review_requested').data?.items.length ?? 0);
 
   // Startup and window focus refresh Now's sources (no polling).
   onMount(() => void refreshNow());
@@ -181,6 +187,29 @@
   <span class="lamp-slot" aria-hidden="true"><Lamp level={lvl} /></span>
 {/snippet}
 
+<!-- A global view (SPEC §1): shown outside any project; the active project stays as it is. -->
+{#snippet place(view: GlobalView, icon: string, id: string, sub: string, n: number, muted: boolean)}
+  {@const name = VIEW_NAMES[view]}
+  <button
+    type="button"
+    class="item place"
+    class:active={ui.view === view}
+    onclick={() => openView(view)}
+    title={`${name}: ${sub}`}
+    aria-current={ui.view === view ? 'page' : undefined}
+    data-testid={`rail-${id}`}
+  >
+    <span class="tile plain"><Icon name={icon} size={18} /></span>
+    <span class="text">
+      <span class="name">{name}</span>
+      <span class="sub">{sub}</span>
+    </span>
+    {#if n > 0}
+      <span class="badge k-num" class:muted data-testid={`${id}-badge`}>{n > 99 ? '99+' : n}</span>
+    {/if}
+  </button>
+{/snippet}
+
 {#snippet more(p: ProjectInfo)}
   <IconButton
     class="more"
@@ -204,24 +233,9 @@
     {@render chord('palette.open')}
   </button>
 
-  <button
-    type="button"
-    class="item inbox"
-    class:active={ui.inboxActive}
-    onclick={openInbox}
-    title={`Now: ${now.header}`}
-    aria-current={ui.inboxActive ? 'page' : undefined}
-    data-testid="rail-inbox"
-  >
-    <span class="tile plain"><Icon name="inbox" size={18} /></span>
-    <span class="text">
-      <span class="name">Now</span>
-      <span class="sub">{now.header || 'Nothing waiting'}</span>
-    </span>
-    {#if now.waiting > 0}
-      <span class="badge k-num" data-testid="inbox-badge">{now.waiting > 99 ? '99+' : now.waiting}</span>
-    {/if}
-  </button>
+  {@render place('tickets', 'ticket', 'tickets', `${mine} mine`, mine, true)}
+  {@render place('now', 'inbox', 'inbox', now.header || 'Nothing waiting', now.waiting, false)}
+  {@render place('reviews', 'git-pull-request', 'reviews', `${toReview} to review`, toReview, true)}
 
   <div class="group">
     <div class="heading">
@@ -239,7 +253,7 @@
     <ul class="projects">
       {#each reorderable as p (p.id)}
         {@const lvl = projectAttention(p.id)}
-        {@const active = p.active && !ui.inboxActive}
+        {@const active = p.active && !ui.view}
         <li
           class="row"
           class:active
@@ -293,7 +307,7 @@
   <div class="footer">
     {#if home}
       {@const lvl = projectAttention(home.id)}
-      {@const active = home.active && !ui.inboxActive}
+      {@const active = home.active && !ui.view}
       <div class="row" class:active style:--project-color={home.color ?? 'var(--k-border-strong)'}>
         <button
           type="button"
@@ -426,7 +440,7 @@
     background-color: var(--k-bg-selected);
   }
 
-  .inbox.active {
+  .place.active {
     box-shadow: inset 3px 0 0 var(--k-accent);
   }
 
@@ -520,6 +534,14 @@
     font-weight: var(--k-weight-strong);
     line-height: 20px;
     text-align: center;
+  }
+
+  /* Muted counts (Tickets, Reviews): the sub line says it; the compact rail shows the number. */
+  .badge.muted {
+    display: none;
+    background: var(--k-bg-selected);
+    color: var(--k-fg-muted);
+    font-weight: var(--k-weight-medium);
   }
 
   .group {
@@ -685,6 +707,10 @@
       position: absolute;
       top: 2px;
       left: calc(50% + 4px);
+    }
+
+    .badge.muted {
+      display: block;
     }
 
     /* Compact: the corner lamp is the only cue. */

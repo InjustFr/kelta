@@ -6,7 +6,7 @@
   import type { AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { onUiEvent } from '$lib/ipc/events';
-  import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
+  import { sessionSpawnTemplate, terminalSetPalette, uiSetGlobalView } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
   import { layout, projects, reviews, sessions, settings, toasts, tools, ui } from '$lib/stores';
   import { configFromSettings, terminalPool } from '$lib/terminal';
@@ -17,14 +17,22 @@
   import { confirms, prompts } from './confirm.svelte';
   import DialogHost from './DialogHost.svelte';
   import JumpHud from './JumpHud.svelte';
-  import InboxHost from './InboxHost.svelte';
+  import GlobalHost from './GlobalHost.svelte';
   import { noteFocus } from './jumplist';
   import PeekPopover from './PeekPopover.svelte';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
   import { fileRoots, openFileLink } from './actions';
-  import { activateProject, currentTab, focusedPane, focusedSessionId } from './nav';
+  import {
+    activateProject,
+    currentTab,
+    focusedPane,
+    focusedSessionId,
+    openView,
+    savedPlace,
+    savePlace,
+  } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
   import StatusBar from './StatusBar.svelte';
@@ -33,6 +41,7 @@
   import WindowChrome from './WindowChrome.svelte';
   import { startupUnlock } from './unlock';
   import Workspace from './Workspace.svelte';
+  import { globalContent } from '../views/work/nav';
 
   let prefixArmed = $state(false);
   let systemDark = $state(
@@ -117,9 +126,28 @@
   $effect(() => {
     // Every focus change, wherever it came from; `nav.back` landing on an entry records nothing.
     const project = projects.activeId;
-    const tab = ui.inboxActive ? null : currentTab();
+    const tab = ui.view ? null : currentTab();
     const pane = tab ? focusedPane() : null;
     if (project && tab && pane) noteFocus({ project, tab: tab.id, pane: pane.id });
+  });
+
+  // ---- global views ----------------------------------------------------------------------------
+
+  // Kelta reopens on the last place: restored once the projects are known, saved on every change after.
+  let placeRestored = false;
+  $effect(() => {
+    const view = ui.view;
+    if (!projects.loaded) return;
+    if (placeRestored) return savePlace(view);
+    placeRestored = true;
+    const saved = savedPlace();
+    if (saved && view === null) openView(saved);
+  });
+
+  $effect(() => {
+    // A shown view is polled like a visible pane; `null` hands polling back to the project.
+    const view = ui.view;
+    uiSetGlobalView({ content: view ? globalContent(view) : null }).catch(() => {});
   });
 
   // ---- keys ------------------------------------------------------------------------------------
@@ -239,8 +267,8 @@
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
   <ProjectRail />
   <div class="main">
-    {#if ui.inboxActive}
-      <InboxHost />
+    {#if ui.view}
+      <GlobalHost view={ui.view} />
     {:else if active}
       <TabBar projectId={active.id} />
       <Workspace projectId={active.id} />
@@ -262,7 +290,7 @@
     {:else}
       <div class="grow"></div>
     {/if}
-    <StatusBar {prefixArmed} inbox={ui.inboxActive} />
+    <StatusBar {prefixArmed} view={ui.view} />
   </div>
 
   {#if ui.overlay === 'palette' && Palette}

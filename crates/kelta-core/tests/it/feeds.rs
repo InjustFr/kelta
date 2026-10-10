@@ -675,6 +675,30 @@ async fn search_by_key_prefix_still_reads_the_cached_page() {
 }
 
 #[tokio::test]
+async fn global_tickets_view_is_polled_without_a_tickets_pane() {
+    use kelta_proto::model::{PaneContent, TicketsMode};
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    e.h.cfg.update(|s| s.notifications.enabled = false);
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "the active layout has no Tickets pane");
+    e.h.core.ui_set_global_view(Some(PaneContent::Tickets {
+        scope: Scope::All,
+        view_id: None,
+        mode: TicketsMode::List,
+        who: Some(Who::Mine),
+        group: None,
+        sort: None,
+        person: None,
+    }));
+    settle().await;
+    assert!(e.h.core.scheduler_snapshot().subscriptions > 0, "the view's cache keys are subscribed");
+    e.h.core.ui_set_global_view(None);
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "back to a project");
+}
+
+#[tokio::test]
 async fn visible_list_refreshes_after_a_saga_transition() {
     use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, TicketsMode};
     let tmp = tempfile::tempdir().unwrap();
@@ -881,7 +905,7 @@ async fn concurrent_cold_lists_share_one_provider_call() {
     let tmp = tempfile::tempdir().unwrap();
     let e = env(tmp.path(), vec![]);
     let core: Arc<dyn CoreApi> = e.h.core.clone();
-    let pages = futures::future::join_all((0..5).map(|_| core.ticket_list(Scope::All, None, false))).await;
+    let pages = futures::future::join_all((0..5).map(|_| core.ticket_list(Scope::All, None, None, false))).await;
     for p in pages {
         assert_eq!(p.unwrap().items.len(), 3);
     }
@@ -898,13 +922,13 @@ async fn writes_patch_the_cached_list() {
     let status = |page: &kelta_proto::tracker::TicketPage, key: &str| {
         page.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().ticket.status.name.clone()
     };
-    let page = core.ticket_list(Scope::All, None, false).await.unwrap();
+    let page = core.ticket_list(Scope::All, None, None, false).await.unwrap();
     let before = lists();
     let r = |key: &str| page.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().ticket.r#ref.clone();
     // SHOP-141 To Do → In Progress (FakeTracker transition ids are `t<status id>`).
     core.ticket_transition(&r("SHOP-141"), "t3", None, None).await.unwrap();
     core.ticket_close(&r("SHOP-142")).await.unwrap();
-    let page = core.ticket_list(Scope::All, None, false).await.unwrap();
+    let page = core.ticket_list(Scope::All, None, None, false).await.unwrap();
     assert_eq!(status(&page, "SHOP-141"), "In Progress");
     assert_eq!(status(&page, "SHOP-142"), "Done");
     assert_eq!(lists(), before, "served from the patched cache: {:?}", e.tracker.calls());

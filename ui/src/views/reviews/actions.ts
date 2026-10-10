@@ -1,13 +1,15 @@
 // Action handlers owned by L9 (reviews): `reviews.open`.
 import { registerAction } from '$lib/actions';
-import { projects, toasts } from '$lib/stores';
+import { projects } from '$lib/stores';
 
+import { openView } from '../../shell/nav';
 import { openContent } from '../work/nav';
 
+// Without `project_id`: the cross-project Reviews view on the rail.
 registerAction('reviews.open', async (args) => {
-  const projectId = (args?.project_id as string | undefined) ?? projects.activeId;
+  const projectId = args?.project_id as string | undefined;
   if (!projectId) {
-    toasts.info('Open a project first');
+    openView('reviews');
     return;
   }
   const home = projects.byId(projectId)?.builtin ?? false;

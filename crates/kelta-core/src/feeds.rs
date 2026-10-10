@@ -54,6 +54,8 @@ pub struct Feeds {
     transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
     /// Cold-cache list fetches by cache key: concurrent misses share one provider call.
     fetches: Mutex<HashMap<String, Arc<FetchGate>>>,
+    /// The pane a global view on the rail shows outside any layout (`ui_set_global_view`).
+    global_view: Mutex<Option<PaneContent>>,
 }
 
 /// Single-flight of one ticket list: `done` counts the fetches made under `lock`.
@@ -1590,11 +1592,19 @@ impl Core {
     }
 
     /// Recompute subscriptions: visible panes of the active tab + notification rules.
+    /// `ui_set_global_view`: the rail's Tickets, Now or Reviews view (`None` = a project) is
+    /// polled like a visible pane.
+    pub fn ui_set_global_view(&self, content: Option<PaneContent>) {
+        *self.feeds.global_view.lock() = content;
+        self.resubscribe();
+    }
+
     pub(crate) fn resubscribe(&self) {
         let s = self.accounts_settings();
         let active = self.active_project();
-        let contents: Vec<PaneContent> =
+        let mut contents: Vec<PaneContent> =
             self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
+        contents.extend(self.feeds.global_view.lock().clone());
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
         let tickets = |scope: &Scope,
                        view: Option<&str>,

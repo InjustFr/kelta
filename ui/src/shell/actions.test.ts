@@ -37,7 +37,7 @@ beforeEach(async () => {
   layout.byProject = {};
   ui.closeOverlay();
   ui.sheets = [];
-  ui.inboxActive = false;
+  ui.view = null;
   terminalUi.searchSession = null;
   toasts.clear();
   await Promise.all([projects.load(), sessions.load(), work.load()]);
@@ -78,7 +78,7 @@ describe('shell actions', () => {
     await dispatch('project.prev');
     expect(projects.activeId).toBe('billing');
     await dispatch('inbox.open');
-    expect(ui.inboxActive).toBe(true);
+    expect(ui.view).toBe('now');
   });
 
   it('terminal.search targets the focused session', async () => {

@@ -332,7 +332,8 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 
 ### 6.2 Rail (`shell/ProjectRail.svelte`)
 
-- 44px wide, `--k-bezel`. Inbox at top, home / settings / add pinned at the bottom. Inbox, home, settings and add are flat ghost icons; only the current destination (a project, home or the inbox) wears the `--k-well` tile face and the full-height index bar.
+- 44px wide, `--k-bezel`. Under Search, the global views in loop order: **Tickets** (`ticket` icon, `12 mine`), **Now** (`inbox` icon, red badge), **Reviews** (`git-pull-request` icon, `2 to review`). Home / settings / add pinned at the bottom. The global views, home, settings and add are flat ghost icons; only the current destination (a project, home or a global view) wears the selected row style and the full-height index bar (a global view's bar is the accent); project rows drop theirs while a global view is shown.
+- Counts: only Now's badge is red. Tickets and Reviews counts are muted (the sub line in the wide rail; a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot of the compact rail), so nothing is counted twice in red.
 - Project tile: 28px square, radius 4, `--k-well` face, initial(s) in `--k-fg-chrome`, a 3px project-colour index bar on the tile's left edge (raw project colour, not the clamped accent). No fill with the project colour, no text-shadow.
 - Active: index bar runs full tile height, initial goes to `--k-fg` 600.
 - Lamp socket at the top-right corner, 10px.
