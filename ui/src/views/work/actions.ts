@@ -352,7 +352,7 @@ export async function runPrimary(item: WorkItem): Promise<void> {
 
 /** Work item of the active project's focused tab. */
 export function focusedWorkItem(): WorkItem | null {
-  if (ui.inboxActive || !projects.activeId) return null;
+  if (ui.view || !projects.activeId) return null;
   const id = currentTab()?.work_item_id;
   return id ? work.get(id) : null;
 }

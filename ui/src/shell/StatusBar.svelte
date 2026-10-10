@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { SessionInfo } from '$lib/gen';
-  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
+  import { lampOf, projects, sessions, settings, work, type GlobalView, type LampLevel } from '$lib/stores';
   import { Kbd, Lamp } from '$lib/ui';
 
   import { claudeSlots } from '../views/work/batch.svelte';
@@ -12,13 +12,14 @@
 
   interface Props {
     prefixArmed: boolean;
-    inbox: boolean;
+    /** Global view shown (no branch or session); `null` = the active project. */
+    view: GlobalView | null;
   }
 
-  let { prefixArmed, inbox }: Props = $props();
+  let { prefixArmed, view }: Props = $props();
 
   // The hint line teaches the keyboard: the user's own chords, skipped when unbound. Split and
-  // Close pane only show where they act: a project with a focused pane, not Now or the welcome screen.
+  // Close pane only show where they act: a project with a focused pane, not a global view or the welcome screen.
   const HINTS: { id: string; verb: string; pane?: true }[] = [
     { id: 'palette.open', verb: 'Commands' },
     { id: 'session.new', verb: 'New session' },
@@ -26,14 +27,14 @@
     { id: 'pane.close', verb: 'Close pane', pane: true },
     { id: 'attention.next', verb: 'Next waiting' },
   ];
-  const panes = $derived(!inbox && focusedPane() !== null);
+  const panes = $derived(!view && focusedPane() !== null);
   const hints = $derived(
     HINTS.filter((h) => panes || !h.pane)
       .map((h) => ({ ...h, chord: chordFor(h.id) }))
       .filter((h): h is { id: string; verb: string; chord: string } => !!h.chord),
   );
 
-  const session = $derived(inbox ? null : focusedSession());
+  const session = $derived(view ? null : focusedSession());
   const hooksOff = $derived(
     session?.kind.type === 'claude' && session.lifecycle === 'live' && session.claude?.hooks_active !== true,
   );

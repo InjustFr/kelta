@@ -19,6 +19,7 @@ import { WorkStore } from './work.svelte';
 export { AttentionStore, LayoutStore, PluginsStore, ProjectsStore, ReviewsStore, SessionsStore };
 export { SettingsStore, TicketsStore, ToastsStore, ToolsStore, UiStore, WorkStore };
 export type { Loadable } from './loadable';
+export { GLOBAL, type GlobalView } from './ui.svelte';
 export * from './reducers';
 
 export const projects = new ProjectsStore();

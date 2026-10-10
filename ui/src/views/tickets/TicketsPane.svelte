@@ -6,7 +6,7 @@
   import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
-  import { layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -25,7 +25,7 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { openContent } from '../work/nav';
+  import { openFrom, saveTicketsView } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -56,6 +56,8 @@
   import RowButton from './RowButton.svelte';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
+  /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
+  const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
   const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
@@ -92,7 +94,11 @@
   const sourceLabel = $derived(
     viewId ? (views.find((v) => v.id === viewId)?.label ?? 'this source') : (project?.name ?? 'all projects'),
   );
-  const noSource = $derived(project !== null && views.length === 0);
+  const noSource = $derived(
+    scope.kind === 'all'
+      ? !projects.openProjects.some((p) => p.tracker?.views.length)
+      : project !== null && views.length === 0,
+  );
 
   let whoOverride = $state<Who | null | undefined>(undefined);
   /** The persisted who the list loads with (`null` = each view decides). */
@@ -117,6 +123,7 @@
   let currentSprint = $state(false);
 
   function persist(patch: Partial<Omit<typeof content, 'kind' | 'scope'>>): void {
+    if (projectId === GLOBAL) return saveTicketsView(patch);
     const current = layout.get(projectId);
     if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
     layout.update(projectId, (l) => ({
@@ -163,8 +170,10 @@
     persist({ mode: m });
   }
 
+  /** The source picker of this project, or of the active one from the Tickets view (not Home). */
+  const sourceProject = $derived(project ?? (home ? projects.byId(home) : projects.active));
   function addSource(): void {
-    ui.openSheet('tracker.source_picker', { projectId: project?.id ?? projectId });
+    if (sourceProject) ui.openSheet('tracker.source_picker', { projectId: sourceProject.id });
   }
 
   // ---- data ---------------------------------------------------------------------------------
@@ -334,7 +343,7 @@
 
   $effect(() => {
     if (!focused || !cur) return;
-    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? projectId);
+    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? home);
     return () => selectTicket(null, null);
   });
 
@@ -424,7 +433,7 @@
   }
 
   function openDetail(item: TicketItem): void {
-    void openContent(projectId, { kind: 'ticket_detail', ticket: item.ticket.ref });
+    void openFrom(projectId, item.project_ids, { kind: 'ticket_detail', ticket: item.ticket.ref });
   }
 
   async function assign(item: TicketItem, to: 'me' | 'none'): Promise<void> {
@@ -442,7 +451,7 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId, { preview });
+    void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? home, { preview });
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -467,10 +476,17 @@
 
   /** `p` / `P`: the only PR at once, else a picker. */
   function openPrOf(item: TicketItem, browser: boolean): void {
-    const pid = item.project_ids[0] ?? projectId;
-    if (!openPrs(item.ticket.ref.key, item.prs, pid, browser)) return;
+    const pid = item.project_ids[0] ?? home ?? projects.activeId;
+    // No project to open Kelta's review detail in: the browser.
+    if (!openPrs(item.ticket.ref.key, item.prs, pid ?? '', browser || !pid)) return;
     const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
-    prMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, prs: item.prs, projectId: pid, browser };
+    prMenu = {
+      x: (r?.left ?? 0) + 24,
+      y: (r?.bottom ?? 0) + 2,
+      prs: item.prs,
+      projectId: pid ?? '',
+      browser: browser || !pid,
+    };
   }
 
   /** The tracker can do it, else a toast that says so and the way out. */
@@ -527,7 +543,7 @@
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     // #141: Mod+Enter starts the marked tickets; Space marks on the board only (the list's Space splits).
     const mark =
-      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? projectId } : null;
+      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? home } : null;
     if (!side?.contains(target) && batchKey(e, mark)) {
       e.preventDefault();
       return;
@@ -805,9 +821,14 @@
   </header>
 
   {#if noSource}
-    <EmptyState icon="ticket" title="No ticket source for this project.">
+    <EmptyState
+      icon="ticket"
+      title={scope.kind === 'all' ? 'No ticket source yet.' : 'No ticket source for this project.'}
+    >
       {#snippet actions()}
-        <Button variant="primary" onclick={addSource}>Add source</Button>
+        {#if project || (sourceProject && !sourceProject.builtin)}
+          <Button variant="primary" onclick={addSource}>Add source</Button>
+        {/if}
       {/snippet}
     </EmptyState>
   {:else if list.loading && !list.data}
@@ -995,7 +1016,7 @@
         {#if splitShown}
           <aside class="side" bind:this={side} aria-label="Ticket detail">
             {#if cur}
-              <TicketDetail item={cur} projectId={cur.project_ids[0] ?? projectId} embedded />
+              <TicketDetail item={cur} projectId={cur.project_ids[0] ?? home} embedded />
             {:else}
               <p class="side-empty">Select a ticket to see it here.</p>
             {/if}
@@ -1108,7 +1129,7 @@
 </div>
 
 {#if picker}
-  <StatusPicker tickets={picker.tickets} {projectId} anchor={picker.anchor} onclose={closePicker} />
+  <StatusPicker tickets={picker.tickets} projectId={home} anchor={picker.anchor} onclose={closePicker} />
 {/if}
 {#if prMenu}
   {@const m = prMenu}

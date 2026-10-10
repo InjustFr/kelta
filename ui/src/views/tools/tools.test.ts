@@ -54,7 +54,7 @@ describe('tools.open', () => {
   /** Shop active, its active tab tied to `workItemId`; returns the controls and a pty tool id. */
   async function inTab(workItemId: string | null) {
     const m = setup();
-    ui.inboxActive = false;
+    ui.view = null;
     layout.byProject = {};
     // No fixture tool instances: every instance comes from these opens.
     m.state.sessions = m.state.sessions.filter((s) => s.kind.type !== 'tool');
@@ -117,9 +117,9 @@ describe('tools.open', () => {
 
   it('leaves Now and opens the tool in the active project', async () => {
     const { open, opens } = await inTab(null);
-    ui.inboxActive = true;
+    ui.view = 'now';
     await open();
-    expect(ui.inboxActive).toBe(false);
+    expect(ui.view).toBeNull();
     expect(opens()[0].args).toMatchObject({ project_id: 'shop' });
   });
 });

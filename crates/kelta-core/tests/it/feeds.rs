@@ -675,6 +675,30 @@ async fn search_by_key_prefix_still_reads_the_cached_page() {
 }
 
 #[tokio::test]
+async fn global_tickets_view_is_polled_without_a_tickets_pane() {
+    use kelta_proto::model::{PaneContent, TicketsMode};
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    e.h.cfg.update(|s| s.notifications.enabled = false);
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "the active layout has no Tickets pane");
+    e.h.core.ui_set_global_view(Some(PaneContent::Tickets {
+        scope: Scope::All,
+        view_id: None,
+        mode: TicketsMode::List,
+        who: Some(Who::Mine),
+        group: None,
+        sort: None,
+        person: None,
+    }));
+    settle().await;
+    assert!(e.h.core.scheduler_snapshot().subscriptions > 0, "the view's cache keys are subscribed");
+    e.h.core.ui_set_global_view(None);
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "back to a project");
+}
+
+#[tokio::test]
 async fn visible_list_refreshes_after_a_saga_transition() {
     use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, TicketsMode};
     let tmp = tempfile::tempdir().unwrap();
