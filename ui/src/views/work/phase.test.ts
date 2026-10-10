@@ -151,7 +151,7 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
       phaseOf(item(withPr), null, pr({ ci: 'failure' }), git()),
       'checks_failed',
       'fix',
-      'fix',
+      'fix_checks',
     );
     check(
       '12 conflicts',
@@ -198,6 +198,15 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
       'in_flight',
       'go_claude',
     );
+  });
+
+  it('Checks failed sends the failures and names up to 3 checks', () => {
+    const n = samples.reviewDetail.review.ref.number;
+    const failed = (names: string[]) =>
+      phaseOf(item(withPr), null, pr({ ci: 'error', failed_check_names: names }), git());
+    expect([failed([]).primaryLabel, failed([]).detail]).toEqual(['Send failures to Claude', `#${n}`]);
+    expect(failed(['test (ubuntu)', 'lint']).detail).toBe(`#${n} · test (ubuntu), lint`);
+    expect(failed(['a', 'b', 'c', 'd', 'e']).detail).toBe(`#${n} · a, b, c +2`);
   });
 
   it('a missing worktree offers Recreate', () => {

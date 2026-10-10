@@ -7,7 +7,7 @@ import type { Feedback, ProjectId, ReviewRef, Toast, WorkItem, WorkItemId } from
 import * as ipc from '$lib/ipc/commands';
 import { isIpcError } from '$lib/ipc/transport';
 import { activeTab } from '$lib/layout';
-import { layout, projects, settings, toasts, ui, work } from '$lib/stores';
+import { layout, projects, sessions, settings, toasts, ui, work } from '$lib/stores';
 
 /** Reviewers of the last feedback read per item (label of "Re-request review from …"). */
 // eslint-disable-next-line svelte/prefer-svelte-reactivity -- read once when a toast is built
@@ -34,6 +34,7 @@ export interface WorkDialogProps {
 
 const FALLBACK_PROMPTS = {
   feedback: 'Address the review feedback in {file}. Do not push.',
+  checks: 'Fix the failed checks listed in {file}. Do not push.',
   conflicts: 'Resolve the rebase conflicts listed in {file}. Do not push.',
 };
 
@@ -258,15 +259,26 @@ async function push(w: WorkItem, force: boolean): Promise<void> {
   }
 }
 
-/** Sends a prompt to the item's Claude; refusals (busy, hooks inactive) become toasts. */
+/** A live Claude core cannot paste into now: `work_send` holds the prompt until its `Stop` (hooks,
+ * busy) or copies it (hooks inactive), and core toasts that itself. */
+export function sendDeferred(id: WorkItemId): boolean {
+  const c = sessions.all.find(
+    (s) => s.work_item_id === id && s.kind.type === 'claude' && s.lifecycle === 'live',
+  );
+  return !!c && (c.status_source !== 'hook' || !['done', 'waiting_user'].includes(c.status));
+}
+
+/** Sends a prompt to the item's Claude; errors become toasts. */
 export async function sendToClaude(
   w: WorkItem,
   prompt: string,
   files: { name: string; content: string }[] = [],
+  sent = 'Sent to Claude.',
 ): Promise<boolean> {
+  const deferred = sendDeferred(w.id);
   try {
     done(await ipc.workSend({ id: w.id, prompt, files, threads: null }));
-    toast('info', 'Sent to Claude.');
+    if (!deferred) toast('info', sent);
     return true;
   } catch (err) {
     refused(err, 'Send to Claude');
@@ -289,6 +301,28 @@ async function itemForReview(review: ReviewRef, projectId: ProjectId): Promise<W
     toasts.error(err, 'Fix with Claude');
     return null;
   }
+}
+
+/** Checks failed's primary (FLOW §4.2): the failed checks only, straight to the item's Claude. */
+export async function fixChecks(w: WorkItem): Promise<void> {
+  let checks: FeedbackEntry[];
+  try {
+    checks = feedbackEntries(await ipc.workFeedback({ id: w.id })).filter((e) => e.kind === 'check');
+  } catch (err) {
+    toasts.error(err, 'Send failures to Claude');
+    return;
+  }
+  if (checks.length === 0) {
+    toast('info', `No failed check on ${prLabel(w)} any more.`);
+    return;
+  }
+  const n = checks.length;
+  await sendToClaude(
+    w,
+    promptTemplate('checks'),
+    [{ name: 'feedback.md', content: feedbackMarkdown(checks) }],
+    `Sent ${n} failed check${n === 1 ? '' : 's'} to Claude.`,
+  );
 }
 
 // ---- registry --------------------------------------------------------------------------------

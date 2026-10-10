@@ -195,6 +195,13 @@ match = { "payload.path" = "glob:*.rs" }
 debounce_ms = 1500
 do = [ { action = "run", command = "cargo", args = ["clippy", "-q"], cwd = "{session.cwd}", show = "toast_on_error" } ]
 
+# Red CI on my PR (an errored rollup too); Enter on its Checks failed row sends the failures to Claude
+[[triggers]]
+id = "red-ci"
+on = "pr.ci_changed"
+match = { "payload.state" = ["failure", "error"] }
+do = [ { action = "notify", title = "Checks failed: {payload.review.title}", body = "{payload.review.url}", urgency = "critical" } ]
+
 # Merge → done + offer cleanup
 [[triggers]]
 id = "done-on-merge"

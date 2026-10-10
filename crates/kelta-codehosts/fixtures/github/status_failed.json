@@ -1,0 +1,15 @@
+{
+  "state": "failure",
+  "statuses": [
+    {
+      "context": "ci/jenkins",
+      "state": "failure",
+      "target_url": "https://jenkins.test/job/7"
+    },
+    {
+      "context": "ci/legacy",
+      "state": "success",
+      "target_url": "https://legacy.test/1"
+    }
+  ]
+}

@@ -74,6 +74,9 @@ pub struct Review {
     pub source_branch: String,
     pub target_branch: String,
     pub ci: CiState,
+    /// Failing check names from the head rollup (GitHub; empty on GitLab, whose list has no jobs).
+    #[serde(default)]
+    pub failed_check_names: Vec<String>,
     #[serde(default)]
     pub decision: Option<ReviewDecision>,
     #[serde(default)]
@@ -277,7 +280,7 @@ pub struct FeedbackReview {
 pub struct FailedCheck {
     pub name: String,
     pub url: Option<String>,
-    /// Last 40 log lines when the host exposes them.
+    /// Last 80 log lines (cleaned) when the host exposes them.
     pub log_tail: Option<String>,
 }
 
