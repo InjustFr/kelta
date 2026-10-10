@@ -490,6 +490,17 @@ impl CodeHost for FakeCodeHost {
         Ok(review)
     }
 
+    async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
+        self.enter(&format!("update_title:{}:{title}", r.number))?;
+        let mut reviews = self.reviews.lock();
+        let d = reviews
+            .iter_mut()
+            .find(|d| d.review.r#ref == *r)
+            .ok_or_else(|| KeltaError::not_found(format!("review {}", r.number)))?;
+        d.review.title = title.to_owned();
+        Ok(())
+    }
+
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {
         self.enter(&format!("find_for_branch:{branch}"))?;
         Ok(self

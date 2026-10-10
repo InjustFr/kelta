@@ -332,6 +332,7 @@ impl WorkService {
                 .await?
             }
         };
+        self.add_title_key(&env, &item, Some(review.clone())).await;
         // Re-load: the push took a while and hooks may have written the item meanwhile.
         let item = self
             .update(id, |w| {
@@ -512,6 +513,37 @@ impl WorkService {
             tracing::warn!(error = %e.message, "could not show the push pane");
         }
         await_exit(&env.core, &mut rx, &info.id, PUSH_TIMEOUT).await
+    }
+
+    /// FLOW §4.3 step 4: after Link to ticket, a Ship/Push adds the key to the PR title unless it has
+    /// one. Clears `pr_title_needs_key` once done or impossible; a failed rename retries next push.
+    pub(crate) async fn add_title_key(&self, env: &Env, item: &WorkItem, review: Option<Review>) {
+        let (true, Some(t), Some(binding)) = (item.pr_title_needs_key, &item.ticket, &env.repo.code_host)
+        else {
+            return;
+        };
+        let renamed = async {
+            let host = env.core.code_host_for(&binding.account).await?;
+            let review = match review {
+                Some(r) => Some(r),
+                None => host.find_for_branch(&binding.repo, &item.branch).await?,
+            };
+            let regex = &env.settings.reviews.ticket_key_regex;
+            match review.and_then(|r| Some((plan::pr_title_with_key(&r.title, &t.key, regex)?, r.r#ref))) {
+                Some((title, r)) => host.update_title(&r, &title).await,
+                None => Ok(()),
+            }
+        }
+        .await;
+        if let Err(e) = renamed
+            && e.code != ErrorCode::Unsupported
+        {
+            env.core.toast(Toast::warn(format!("{}: PR title not updated — {}", t.key, e.message)));
+            return;
+        }
+        if let Err(e) = self.update(&item.id, |w| std::mem::replace(&mut w.pr_title_needs_key, false)).await {
+            tracing::warn!(error = %e.message, "could not clear pr_title_needs_key");
+        }
     }
 
     /// `work.on_pr`: transition (status_map.review overrides) + comment; non-fatal.
