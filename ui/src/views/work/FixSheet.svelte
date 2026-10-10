@@ -9,7 +9,7 @@
   import * as ipc from '$lib/ipc/commands';
   import { isIpcError, toIpcError } from '$lib/ipc/transport';
   import { sessions, toasts, work } from '$lib/stores';
-  import { Button, Kbd, Sheet, Spinner, TextInput } from '$lib/ui';
+  import { Button, Sheet, Spinner, TextInput } from '$lib/ui';
   import { currentPlatform, relativeTime } from '$lib/ui/format';
 
   import {
@@ -211,9 +211,13 @@
         {/if}
       </span>
       <Button variant="ghost" onclick={onclose}>Cancel</Button>
-      <Button variant="primary" disabled={!ready} loading={sending} onclick={() => void send()}>
-        Send to Claude <Kbd chord={submitChord} />
-      </Button>
+      <Button
+        variant="primary"
+        disabled={!ready}
+        loading={sending}
+        chord={submitChord}
+        onclick={() => void send()}>Send to Claude</Button
+      >
     {/snippet}
   </Sheet>
 </div>
@@ -276,7 +280,7 @@
 
   .log {
     font-family: var(--k-font-mono);
-    font-size: 11px;
+    font-size: var(--k-font-size-xs);
   }
 
   .muted {

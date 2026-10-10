@@ -23,6 +23,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
   cursor: default;
+  font-variant-numeric: tabular-nums;
 }
 
 #app {
@@ -77,8 +78,8 @@ pre,
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -108,6 +109,7 @@ pre,
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  container-type: inline-size; /* rows drop low-value chips in narrow panes */
   outline: none;
   background: var(--k-well);
   color: var(--k-fg);
@@ -137,13 +139,13 @@ pre,
   gap: var(--k-space-3);
   height: var(--k-tabbar-height);
   flex: none;
-  padding: 0 var(--k-space-3);
+  padding: 0 var(--k-space-4);
   background: var(--k-bezel-raised);
   font-size: var(--k-font-size-sm);
 }
 
 .k-toolbar .k-select select {
-  height: 22px;
+  height: var(--k-control-height-sm);
 }
 
 /* Toolbar selects keep their label for screen readers only. */
@@ -156,8 +158,10 @@ pre,
 }
 
 .k-filter {
-  width: 180px;
-  height: 22px;
+  width: 240px;
+  flex: 0 1 240px; /* gives way in narrow panes before the toolbar wraps */
+  min-width: 96px;
+  height: var(--k-control-height-sm);
   padding: 0 var(--k-space-3);
   border: 1px solid var(--k-border);
   border-radius: var(--k-radius);
@@ -170,7 +174,7 @@ pre,
   align-items: center;
   gap: var(--k-space-3);
   width: 100%;
-  height: 100%;
+  height: var(--k-row-height);
   padding: 0 var(--k-space-3);
   border: 0;
   background: transparent;
@@ -193,12 +197,12 @@ pre,
   flex: none;
   display: inline-flex;
   justify-content: center;
-  width: 10px;
+  width: 12px;
 }
 
 .k-row-key {
   flex: none;
-  width: 76px;
+  width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--k-font-mono);
@@ -207,10 +211,36 @@ pre,
 }
 
 .k-row-title {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 18ch;
+  min-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Chips and meta after the title: they give way before the title does. Overflow is clipped on the
+   left, so the age and diffstat at the end stay readable. */
+.k-row-tail {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--k-space-3);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.k-row-tail > * {
+  flex: none;
+}
+
+.k-narrow-hide {
+  display: inline-flex;
+}
+
+@container (max-width: 720px) {
+  .k-row-tail .k-narrow-hide {
+    display: none;
+  }
 }
 
 .k-row-meta {
@@ -236,11 +266,11 @@ pre,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--k-bezel);
-  font-size: 10px;
+  font-size: var(--k-font-size-xs);
   color: var(--k-fg-muted);
 }
 
@@ -271,7 +301,7 @@ pre,
   min-width: 0;
 }
 
-@container (max-width: 480px) {
+@container (max-width: 560px) {
   .k-meta {
     grid-template-columns: auto 1fr;
   }
@@ -302,5 +332,6 @@ pre,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

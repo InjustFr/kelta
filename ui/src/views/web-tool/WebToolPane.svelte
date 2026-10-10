@@ -5,6 +5,7 @@
   import { onDestroy } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import { allPanes } from '$lib/layout';
   import * as ipc from '$lib/ipc/commands';
   import { forgetWebTool, rememberWebTool, webTools } from '$lib/plugin-host/web.svelte';
@@ -79,7 +80,11 @@
       icon="globe"
       title="This web tool is not running"
       body="It was stopped, or Kelta restarted. Open it again from the tool picker."
-    />
+    >
+      {#snippet actions()}
+        <Button onclick={() => void dispatch('tools.open')}>Open tools</Button>
+      {/snippet}
+    </EmptyState>
   {:else if tool.exited}
     <div class="exited">
       <p><strong>{tool.label}</strong> exited with code {tool.exited.code}</p>

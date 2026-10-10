@@ -9,7 +9,8 @@
   import { terminalPool } from '$lib/terminal';
   import { terminalUi } from '$lib/terminal/ui.svelte';
   import type { TerminalView, ViewState } from '$lib/terminal/view';
-  import { Button, currentPlatform, EmptyState, ErrorState, Menu, type MenuItem } from '$lib/ui';
+  import { dispatch } from '$lib/actions';
+  import { Button, currentPlatform, EmptyState, ErrorState, Kbd, Menu, type MenuItem } from '$lib/ui';
 
   import SearchBar from './SearchBar.svelte';
 
@@ -203,6 +204,11 @@
         onretry={retryAttach}
       >
         {#snippet actions()}
+          {#if viewState.error?.code === 'not_found'}
+            <Button icon="settings" onclick={() => void dispatch('settings.open', { section: 'editors' })}
+              >Open editor settings</Button
+            >
+          {/if}
           <Button
             icon="activity"
             onclick={() => openContent(projectId, { content: { kind: 'diagnostics' }, placement: 'new_tab' })}
@@ -214,12 +220,14 @@
   {:else if exited}
     <div class="banner" role="status" data-testid="exit-banner">
       <span class="mark" aria-hidden="true"></span>
-      <span
+      <span class="what"
         >Exited{exitCode !== null ? (exitCode === -1 ? ' on a signal' : ` with code ${exitCode}`) : ''}.</span
       >
-      <span class="keys"><kbd>Enter</kbd> restart</span>
-      <span class="keys"><kbd>x</kbd> close</span>
-      <span class="spacer"></span>
+      <!-- The buttons carry the actions; the key hints drop out first when the pane is narrow. -->
+      <span class="keys" aria-hidden="true">
+        <span class="key"><Kbd chord="enter" /> Restart</span>
+        <span class="key"><Kbd chord="x" /> Close</span>
+      </span>
       <Button size="sm" variant="primary" icon="refresh-cw" onclick={restart}>Restart</Button>
       <Button size="sm" icon="x" onclick={close}>Close</Button>
     </div>
@@ -272,18 +280,31 @@
     background: var(--k-lamp-error);
   }
 
+  .what {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* One line tall: hints that do not fit wrap out of view, the buttons keep their place. */
   .keys {
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .spacer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--k-space-4);
     flex: 1;
+    min-width: 0;
+    height: var(--k-control-height-sm);
+    overflow: hidden;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
+    white-space: nowrap;
   }
 
-  kbd {
-    border-bottom: 1px solid var(--k-border-strong);
-    color: var(--k-fg-muted);
+  .key {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: var(--k-control-height-sm);
   }
 
   .overlay {

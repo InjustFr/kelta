@@ -5,7 +5,7 @@
   import type { SettingsSectionProps } from '$app/registry';
   import type { JsonValue, TriggerInfo, TriggerRun } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
-  import { plugins, toasts } from '$lib/stores';
+  import { plugins, toasts, ui } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -70,7 +70,15 @@
   {:else if !plugins.triggers.data}
     <Spinner />
   {:else if plugins.triggers.data.length === 0}
-    <EmptyState icon="zap" title="No triggers configured" />
+    <EmptyState
+      icon="zap"
+      title="No triggers yet"
+      body="Triggers run a command when something happens, such as a session finishing. Install a plugin that adds some."
+    >
+      {#snippet actions()}
+        <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
+      {/snippet}
+    </EmptyState>
   {:else}
     <ul>
       {#each plugins.triggers.data as t (t.id)}
@@ -88,7 +96,7 @@
 
   {#if testing}
     <div class="test">
-      <h3>Test {testing.id}</h3>
+      <h3>Run test <code>{testing.id}</code></h3>
       <TextInput
         bind:value={payload}
         multiline

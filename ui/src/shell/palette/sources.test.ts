@@ -45,7 +45,7 @@ describe('palette sources', () => {
     expect([toReview.group, toReview.lamp, toReview.detail]).toEqual([
       'Work items',
       'done',
-      'To review · feat/SHOP-155-flaky-cart-test',
+      'To review\u2002\u2002feat/SHOP-155-flaky-cart-test',
     ]);
   });
 

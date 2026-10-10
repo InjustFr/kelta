@@ -12,10 +12,10 @@
     Button,
     EmptyState,
     ErrorState,
-    IconButton,
     Lamp,
     Select,
     Toggle,
+    ROW_HEIGHT,
     VirtualList,
     relativeTime,
   } from '$lib/ui';
@@ -29,7 +29,6 @@
 
   let { projectId, content, focused }: PaneProps<'reviews'> = $props();
 
-  const ROW_HEIGHT = 26;
   const scope = $derived(content.scope);
   const kinds: { kind: ReviewKind; label: string }[] = [
     { kind: 'review_requested', label: 'Review requested' },
@@ -228,7 +227,7 @@
       />
     {/if}
     <Toggle label="Drafts" bind:checked={includeDrafts} />
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
   {#if bothLoading && noData}
@@ -237,7 +236,7 @@
     <ErrorState error={firstError} title="Could not load reviews" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open settings'}
+          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -250,7 +249,11 @@
       onretry={refresh}
     />
     {#if totalItems === 0}
-      <EmptyState icon="git-pull-request" title="No review requests.">
+      <EmptyState
+        icon="git-pull-request"
+        title="No review requests."
+        body="Pull requests where you are a requested reviewer show up here."
+      >
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}
@@ -286,21 +289,23 @@
                 <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
                 <span class="k-row-key">#{rv.ref.number}</span>
                 <span class="k-row-title">{rv.title}</span>
-                {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
-                {#if rv.draft}<Badge>draft</Badge>{/if}
-                {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
-                {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-                {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
-                {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-                <Badge title={rv.ref.repo}>{chip(r.item)}</Badge>
-                <span class="k-row-meta">{rv.author.name}</span>
-                {#if rv.additions !== null || rv.deletions !== null}
-                  <span class="k-row-meta k-mono"
-                    ><span class="add">+{rv.additions ?? 0}</span>
-                    <span class="del">−{rv.deletions ?? 0}</span></span
-                  >
-                {/if}
-                <span class="k-row-meta">{relativeTime(Date.parse(rv.updated_at))}</span>
+                <span class="k-row-tail">
+                  {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
+                  {#if rv.draft}<Badge>draft</Badge>{/if}
+                  {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
+                  {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
+                  {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
+                  {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
+                  <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
+                  <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
+                  {#if rv.additions !== null || rv.deletions !== null}
+                    <span class="k-row-meta k-mono"
+                      ><span class="add">+{rv.additions ?? 0}</span>
+                      <span class="del">−{rv.deletions ?? 0}</span></span
+                    >
+                  {/if}
+                  <span class="k-row-meta">{relativeTime(Date.parse(rv.updated_at))}</span>
+                </span>
               </button>
             {/if}
           {/snippet}
@@ -311,12 +316,12 @@
 
   <KeyHints
     hints={[
-      ['j/k', 'move'],
-      ['Enter', 'open'],
-      ['/', 'filter'],
-      ['o', 'browser'],
-      ['s', 'review locally'],
-      ['R', 'refresh'],
+      ['j k', 'Move'],
+      ['enter', 'Open'],
+      ['/', 'Filter'],
+      ['s', 'Review locally'],
+      ['o', 'Open in browser'],
+      ['shift+r', 'Refresh'],
     ]}
   />
 </div>

@@ -3,13 +3,16 @@
   import { dispatch } from '$lib/actions';
   import type { ProjectId } from '$lib/gen';
   import { activeTab, nodeAt, resizeGutter, updateTab } from '$lib/layout';
-  import { layout, projects, ui } from '$lib/stores';
+  import { layout, projects } from '$lib/stores';
   import { Button, EmptyState, ErrorState, Spinner } from '$lib/ui';
 
+  import WelcomePane from '../views/welcome/WelcomePane.svelte';
   import { applyZoom, layoutGeometry, type Gutter as GutterSpec } from './geometry';
   import GutterView from './Gutter.svelte';
+  import { chordFor } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import PaneHost from './PaneHost.svelte';
+  import { spawnTemplate } from './spawn';
 
   interface Props {
     projectId: ProjectId;
@@ -62,21 +65,42 @@
   {:else if !current}
     <div class="loading" aria-busy="true"><Spinner size={18} /></div>
   {:else if !tab}
-    <EmptyState
-      icon="square-terminal"
-      title="Nothing open in this project"
-      body="Start a session, open your tickets or open a tool."
-    >
-      {#snippet actions()}
-        <Button variant="primary" icon="plus" onclick={() => dispatch('session.new')}>New session</Button>
-        <Button icon="ticket" onclick={() => dispatch('tickets.open')}>Tickets</Button>
-        {#if onlyHome}
-          <Button icon="folder-plus" onclick={() => ui.openSheet('project_new')}
-            >Create project from folder</Button
+    {#if onlyHome && projectId === projects.home?.id}
+      <WelcomePane {projectId} />
+    {:else if projectId === projects.home?.id}
+      <EmptyState
+        icon="square-terminal"
+        title="Nothing open in Home"
+        body="Home runs terminals in your home folder, outside any project."
+      >
+        {#snippet actions()}
+          <Button variant="primary" icon="square-terminal" onclick={() => spawnTemplate(projectId, 'shell')}
+            >Open a terminal</Button
           >
-        {/if}
-      {/snippet}
-    </EmptyState>
+          <Button icon="plus" chord={chordFor('session.new')} onclick={() => dispatch('session.new')}
+            >New session…</Button
+          >
+        {/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState
+        icon="square-terminal"
+        title={`Nothing open in ${projects.byId(projectId)?.name ?? 'this project'} yet`}
+        body="A session is a terminal running Claude Code, nvim or a shell in this project's folder."
+      >
+        {#snippet actions()}
+          <Button variant="primary" icon="play" onclick={() => spawnTemplate(projectId, 'claude+editor')}
+            >Start Claude and nvim</Button
+          >
+          <Button icon="plus" chord={chordFor('session.new')} onclick={() => dispatch('session.new')}
+            >New session…</Button
+          >
+          <Button icon="ticket" chord={chordFor('tickets.open')} onclick={() => dispatch('tickets.open')}
+            >Tickets</Button
+          >
+        {/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     {#if tab.work_item_id && HeaderComponent}
       <div class="tab-header" data-testid="tab-header">
@@ -122,12 +146,13 @@
     position: relative;
     flex: 1;
     min-height: 0;
+    margin: calc(var(--k-gap) / 2);
     background: var(--k-bezel);
   }
 
   .tab-header {
     flex: none;
-    margin-bottom: var(--k-gap);
+    margin-bottom: 0;
   }
 
   .loading {

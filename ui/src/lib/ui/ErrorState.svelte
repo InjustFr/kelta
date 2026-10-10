@@ -37,7 +37,8 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--k-space-2);
-    padding: var(--k-space-5);
+    max-width: 480px;
+    padding: var(--k-space-7) var(--k-space-6);
   }
 
   .title {
@@ -46,18 +47,21 @@
     gap: var(--k-space-3);
     margin: 0;
     color: var(--k-fg);
+    font-size: var(--k-font-size-lg);
+    font-weight: var(--k-weight-strong);
   }
 
   .mark {
-    width: 7px;
-    height: 7px;
+    width: 14px;
+    height: 14px;
+    margin: 3px;
     transform: rotate(45deg);
     background: var(--k-danger);
   }
 
   .message {
     margin: 0;
-    max-width: var(--k-measure);
+    max-width: 52ch;
     color: var(--k-fg-muted);
     overflow-wrap: anywhere;
   }

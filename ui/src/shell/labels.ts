@@ -1,7 +1,10 @@
 // Display labels for sessions and panes (headers, palette, status bar).
 
 import type { PaneContent, SessionInfo, SessionKind, SessionStatus } from '$lib/gen';
+import { effectiveChords } from '$lib/keys/manager';
 import { defaultTitle } from '$lib/layout';
+import { settings } from '$lib/stores';
+import type { LampLevel } from '$lib/stores/reducers';
 
 const STATUS_LABELS: Record<SessionStatus, string> = {
   starting: 'Starting',
@@ -78,4 +81,21 @@ export function paneIcon(content: PaneContent, session: SessionInfo | null): str
 export function paneTitle(content: PaneContent, session: SessionInfo | null): string {
   if (content.kind === 'terminal') return session?.title?.trim() || session?.name || 'Terminal';
   return defaultTitle(content);
+}
+
+const ATTENTION_LABELS: Record<LampLevel, string> = {
+  none: '',
+  activity: 'New output',
+  done: 'Ready to review',
+  working: 'Working',
+  error: 'Error',
+  needs_input: 'Needs input',
+};
+/** Status word shown beside a project/tab/pane lamp. */
+export function attentionLabel(level: LampLevel): string {
+  return ATTENTION_LABELS[level];
+}
+/** The user's first effective chord for an action (bindings override ⊕ platform default). */
+export function chordFor(actionId: string): string | undefined {
+  return effectiveChords(actionId, settings.value()?.keys ?? null)[0];
 }

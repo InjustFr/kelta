@@ -188,8 +188,21 @@ export interface EnumOption {
 export function enumOptions(node: SchemaNode): EnumOption[] {
   const r = resolve(node).node;
   const values = (r.enum ?? []).filter((v): v is string => typeof v === 'string');
-  return values.map((value, i) => ({ value, label: value, description: r.enumDescriptions?.[i] }));
+  return values.map((value, i) => ({
+    value,
+    label: value[0]!.toUpperCase() + value.slice(1),
+    description: r.enumDescriptions?.[i],
+  }));
 }
+
+/** UI wording for settings whose generated title or doc comment speaks implementation. */
+export const COPY: Record<string, { label?: string; help?: string }> = {
+  'app.restore_mode': {
+    label: 'Reopen sessions on launch',
+    help: 'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
+  },
+  'app.confirm_quit_with_running': { label: 'Ask before quitting while sessions run' },
+};
 
 const ACRONYMS: Record<string, string> = {
   mcp: 'MCP',

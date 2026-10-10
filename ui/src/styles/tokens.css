@@ -6,14 +6,16 @@
     system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Cantarell, Ubuntu, 'Noto Sans', sans-serif;
   --k-font-mono:
     ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, 'Cascadia Mono', 'DejaVu Sans Mono', monospace;
-  --k-font-size-xs: 11px; /* meta: ages, priorities, counts */
-  --k-font-size-sm: 12px; /* chrome: tabs, pane headers, status strip */
-  --k-font-size: 13px; /* content: list rows, forms, settings */
-  --k-font-size-lg: 15px; /* view and dialog titles */
-  --k-font-size-xl: 18px; /* ticket / review detail title only */
-  --k-line-height: 1.38;
-  --k-line-height-read: 1.5;
-  --k-measure: 72ch;
+  --k-font-size-xs: 12px; /* floor: ages, counts, kbd, badges, status bar, sidebar sub-lines */
+  --k-font-size-sm: 13px; /* chrome: tabs, pane headers, toolbars, small buttons, group headers */
+  --k-font-size: 14px; /* content: rows, forms, menus, sidebar names, empty-state body */
+  --k-font-size-lg: 16px; /* view, dialog and empty-state titles; palette input */
+  --k-font-size-xl: 20px; /* ticket / review detail title */
+  --k-font-size-display: 26px; /* welcome heading only */
+  --k-line-height: 1.43;
+  --k-line-height-read: 1.55;
+  --k-measure: 68ch;
+  --k-weight-medium: 500;
   --k-weight-strong: 600;
 
   --k-space-1: 2px;
@@ -22,18 +24,26 @@
   --k-space-4: 12px;
   --k-space-5: 16px;
   --k-space-6: 24px;
+  --k-space-7: 32px;
+  --k-space-8: 48px;
 
-  --k-radius-sm: 2px; /* in-pane marks: chips, cards, kbd */
-  --k-radius: 4px; /* controls: buttons, inputs, rail tiles */
-  --k-radius-lg: 8px; /* floating: menus, palette, dialogs, sheets, toasts */
+  --k-radius-sm: 3px; /* marks: chips, badges, kbd */
+  --k-radius: 6px; /* controls: buttons, inputs, rows, tabs, tiles */
+  --k-radius-screen: 8px; /* panes: screens set into the housing */
+  --k-radius-lg: 10px; /* floating: menus, palette, dialogs, sheets, toasts */
 
-  --k-rail-width: 44px;
-  --k-tabbar-height: 30px;
-  --k-statusbar-height: 22px;
-  --k-pane-header-height: 22px;
-  --k-control-height: 26px;
-  --k-row-height: 26px;
-  --k-gap: 1px; /* bezel visible between panes instead of borders */
+  --k-rail-width: 240px; /* labelled sidebar */
+  --k-rail-width-compact: 64px; /* sidebar below 1100px window width */
+  --k-sidebar-row-height: 44px; /* two lines: name + status word */
+  --k-tabbar-height: 40px; /* also .k-toolbar */
+  --k-work-header-height: 44px;
+  --k-statusbar-height: 28px; /* also WindowChrome */
+  --k-pane-header-height: 32px;
+  --k-control-height: 32px;
+  --k-control-height-sm: 28px; /* smallest target anywhere */
+  --k-row-height: 32px; /* list rows, menu items, picker rows; mirrored by ROW_HEIGHT in lib/ui */
+  --k-gap: 6px; /* housing visible between screens */
+  --k-gutter-hit: 10px;
 
   --k-z-pane: 1;
   --k-z-menu: 30;
@@ -46,39 +56,40 @@
   --k-project: #4f8fb3; /* overwritten per active project */
 
   /* light: putty housing, paper-white screens */
-  --k-bezel: #e3e6e9;
-  --k-bezel-raised: #eceef0;
-  --k-well: #fafbfb;
+  --k-bezel: #e1e5e9;
+  --k-bezel-raised: #eaedf0;
+  --k-well: #fafbfb; /* must equal lib/terminal/theme.ts LIGHT bg (terminal.spec asserts #fafbfb) */
   --k-bg: var(--k-well);
   --k-bg-elev: var(--k-bezel-raised);
   --k-bg-sunken: var(--k-bezel);
   --k-bg-float: #ffffff;
-  --k-bg-hover: rgba(27, 32, 38, 0.05);
-  --k-bg-active: rgba(27, 32, 38, 0.09);
-  --k-bg-selected: #e3edf3; /* hex fallback, overridden below */
-  --k-fg: #1b2026;
-  --k-fg-muted: #56606b;
-  --k-fg-subtle: #5f6873; /* >= 4.5:1 on every light surface (4.51 on bezel) */
-  --k-fg-chrome: #5d6772;
-  --k-border: #cfd4d9;
-  --k-border-strong: #b6bdc4;
-  --k-accent: #2b6f93; /* static fallback accent */
+  --k-bg-hover: rgba(22, 27, 33, 0.06);
+  --k-bg-active: rgba(22, 27, 33, 0.1);
+  --k-bg-selected: #dde9f1; /* hex fallback, overridden below */
+  --k-fg: #161b21; /* 13.7 on bezel */
+  --k-fg-muted: #46505b; /* 6.5 on bezel, 5.3 on lit */
+  --k-fg-subtle: #535d68; /* 5.3 on bezel; never on lit */
+  --k-fg-chrome: #434d57; /* 6.8 on bezel: chrome now carries labels */
+  --k-border: #cbd1d7;
+  --k-border-strong: #77818c; /* 3.1 on bezel: inputs, gutter grip */
+  --k-accent: #28698c; /* static fallback accent, 4.75 on bezel */
   --k-accent-fg: #ffffff;
-  --k-danger: #b8352e;
+  --k-danger: #b0302a;
   --k-danger-fg: #ffffff;
-  --k-warn: #8a5c00;
-  --k-ok: #2e7a4a;
-  --k-info: #2e62a8;
-  --k-overlay: rgba(20, 24, 29, 0.28);
-  --k-shadow: 0 8px 24px rgba(20, 24, 29, 0.14), 0 0 0 1px rgba(20, 24, 29, 0.08);
+  --k-warn: #7f5500;
+  --k-ok: #287043;
+  --k-info: #2a5c9f;
+  --k-overlay: rgba(20, 24, 29, 0.32);
+  --k-shadow: 0 12px 32px rgba(20, 24, 29, 0.16), 0 0 0 1px rgba(20, 24, 29, 0.08);
 
-  /* lamps: colour + shape (see §6.1) */
-  --k-lamp-needs-input: #c93a33;
-  --k-lamp-working: #1d7a80;
-  --k-lamp-error: #a86f00;
-  --k-lamp-done: #2e8550;
-  --k-lamp-activity: #737c87;
-  --k-lit-mix: 14%; /* lit rail tile: needs-input share of the tile face */
+  /* lamps: colour + shape */
+  --k-lamp-needs-input: #c4352e;
+  --k-lamp-working: #1a7379;
+  --k-lamp-error: #946000; /* 3:1 on lit as a non-text mark */
+  --k-lamp-done: #2a7a49;
+  --k-lamp-activity: #626b76;
+  --k-lit-mix: 14%; /* call light: needs-input share of the surface */
+  --k-lit: #ddcccf; /* call light fallback; color-mix version below */
 
   /* terminal (mirror of lib/terminal/theme.ts LIGHT, which is the source of truth) */
   --k-term-bg: #fafbfb;
@@ -103,12 +114,14 @@
 
 @supports (color: oklch(from red l c h)) {
   :root {
-    --k-accent: oklch(from var(--k-project) 0.52 0.11 h);
+    --k-accent: oklch(from var(--k-project) 0.5 0.11 h);
   }
 }
 @supports (color: color-mix(in oklab, red, blue)) {
   :root {
     --k-bg-selected: color-mix(in oklab, var(--k-accent) 14%, var(--k-well));
+    /* one declaration serves both themes: the vars resolve per theme on :root */
+    --k-lit: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel));
   }
 }
 :root {
@@ -118,32 +131,32 @@
 /* dark: graphite housing, slate screens. Same block twice (media + explicit). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --k-bezel: #1c2026;
-    --k-bezel-raised: #21262d;
-    --k-well: #121519;
-    --k-bg-float: #262b33;
-    --k-bg-hover: rgba(216, 221, 227, 0.06);
-    --k-bg-active: rgba(216, 221, 227, 0.1);
-    --k-bg-selected: #1e2a33;
-    --k-fg: #d8dde3;
-    --k-fg-muted: #9ca6b1;
-    --k-fg-subtle: #88929e;
-    --k-fg-chrome: #8e98a4;
-    --k-border: #2a3038;
-    --k-border-strong: #39414b;
-    --k-accent: #6fa8c7;
-    --k-accent-fg: #0e1418;
-    --k-danger: #e0675f;
+    --k-bezel: #1a1e24;
+    --k-bezel-raised: #22272e;
+    --k-well: #121519; /* must equal theme.ts DARK bg (terminal.spec asserts #121519) */
+    --k-bg-float: #282e36;
+    --k-bg-hover: rgba(225, 230, 236, 0.07);
+    --k-bg-active: rgba(225, 230, 236, 0.11);
+    --k-bg-selected: #1d2b35;
+    --k-fg: #e1e6ec; /* 13.3 on bezel, 8.4 on lit */
+    --k-fg-muted: #aab4bf; /* 8.0 on bezel, 5.0 on lit */
+    --k-fg-subtle: #97a1ad; /* 5.2 on float; never on lit */
+    --k-fg-chrome: #a6b0bb;
+    --k-border: #2d343d;
+    --k-border-strong: #6a7582;
+    --k-accent: #78b0cf;
+    --k-accent-fg: #0f161b;
+    --k-danger: #ec7a72;
     --k-danger-fg: #1a0d0c;
-    --k-warn: #d9a03f;
-    --k-ok: #6fbf8a;
-    --k-info: #7fa6d6;
-    --k-overlay: rgba(6, 8, 10, 0.55);
-    --k-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(216, 221, 227, 0.06);
-    --k-lamp-needs-input: #e5534b;
-    --k-lamp-working: #5fb3b8;
-    --k-lamp-error: #d9a03f;
-    --k-lamp-done: #5db37e;
+    --k-warn: #e0ab4e;
+    --k-ok: #79c793;
+    --k-info: #8fb2df;
+    --k-overlay: rgba(6, 8, 10, 0.58);
+    --k-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(225, 230, 236, 0.07);
+    --k-lamp-needs-input: #ef6a62;
+    --k-lamp-working: #62b9be;
+    --k-lamp-error: #e0ab4e;
+    --k-lamp-done: #62bb84;
     --k-lamp-activity: #8b95a1;
     --k-lit-mix: 30%;
     --k-term-bg: #121519;
@@ -175,32 +188,32 @@
 }
 
 :root[data-theme='dark'] {
-  --k-bezel: #1c2026;
-  --k-bezel-raised: #21262d;
-  --k-well: #121519;
-  --k-bg-float: #262b33;
-  --k-bg-hover: rgba(216, 221, 227, 0.06);
-  --k-bg-active: rgba(216, 221, 227, 0.1);
-  --k-bg-selected: #1e2a33;
-  --k-fg: #d8dde3;
-  --k-fg-muted: #9ca6b1;
-  --k-fg-subtle: #88929e;
-  --k-fg-chrome: #8e98a4;
-  --k-border: #2a3038;
-  --k-border-strong: #39414b;
-  --k-accent: #6fa8c7;
-  --k-accent-fg: #0e1418;
-  --k-danger: #e0675f;
+  --k-bezel: #1a1e24;
+  --k-bezel-raised: #22272e;
+  --k-well: #121519; /* must equal theme.ts DARK bg (terminal.spec asserts #121519) */
+  --k-bg-float: #282e36;
+  --k-bg-hover: rgba(225, 230, 236, 0.07);
+  --k-bg-active: rgba(225, 230, 236, 0.11);
+  --k-bg-selected: #1d2b35;
+  --k-fg: #e1e6ec; /* 13.3 on bezel, 8.4 on lit */
+  --k-fg-muted: #aab4bf; /* 8.0 on bezel, 5.0 on lit */
+  --k-fg-subtle: #97a1ad; /* 5.2 on float; never on lit */
+  --k-fg-chrome: #a6b0bb;
+  --k-border: #2d343d;
+  --k-border-strong: #6a7582;
+  --k-accent: #78b0cf;
+  --k-accent-fg: #0f161b;
+  --k-danger: #ec7a72;
   --k-danger-fg: #1a0d0c;
-  --k-warn: #d9a03f;
-  --k-ok: #6fbf8a;
-  --k-info: #7fa6d6;
-  --k-overlay: rgba(6, 8, 10, 0.55);
-  --k-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(216, 221, 227, 0.06);
-  --k-lamp-needs-input: #e5534b;
-  --k-lamp-working: #5fb3b8;
-  --k-lamp-error: #d9a03f;
-  --k-lamp-done: #5db37e;
+  --k-warn: #e0ab4e;
+  --k-ok: #79c793;
+  --k-info: #8fb2df;
+  --k-overlay: rgba(6, 8, 10, 0.58);
+  --k-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(225, 230, 236, 0.07);
+  --k-lamp-needs-input: #ef6a62;
+  --k-lamp-working: #62b9be;
+  --k-lamp-error: #e0ab4e;
+  --k-lamp-done: #62bb84;
   --k-lamp-activity: #8b95a1;
   --k-lit-mix: 30%;
   --k-term-bg: #121519;

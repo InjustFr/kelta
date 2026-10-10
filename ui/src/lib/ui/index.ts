@@ -19,5 +19,7 @@ export { default as TextInput } from './TextInput.svelte';
 export { default as Toast } from './Toast.svelte';
 export { default as Toggle } from './Toggle.svelte';
 export { default as VirtualList } from './VirtualList.svelte';
+/** Mirrors --k-row-height. */
+export const ROW_HEIGHT = 32;
 export { currentPlatform, formatChord, relativeTime } from './format';
 export { ICON_NAMES, injectSprite, isIconName, type IconName } from './icons';

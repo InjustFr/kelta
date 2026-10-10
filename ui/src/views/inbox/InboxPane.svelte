@@ -8,7 +8,7 @@
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { projects, reviews, tickets, toasts, work } from '$lib/stores';
-  import { Button, EmptyState, ErrorState, IconButton, Kbd, Lamp, VirtualList, relativeTime } from '$lib/ui';
+  import { Button, EmptyState, ErrorState, Kbd, Lamp, ROW_HEIGHT, VirtualList, relativeTime } from '$lib/ui';
 
   import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
   import { isAuthError } from '../work/common';
@@ -23,7 +23,6 @@
 
   let { focused }: PaneProps<'inbox'> = $props();
 
-  const ROW_HEIGHT = 26;
   const ALL = { kind: 'all' } as const;
 
   $effect(() => {
@@ -96,9 +95,9 @@
         const pr = prOf(item);
         const meta: string[] = [];
         if (git && (git.insertions || git.deletions))
-          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' dirty' : ''}`);
+          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
-        if (git?.behind) meta.push(`↓${git.behind} ${item.base}`);
+        if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
@@ -343,24 +342,26 @@
   {onkeydown}
 >
   <header class="bar">
-    <span class="title">Now</span>
+    <span class="heading">
+      <span class="title">Now</span>
+      <span class="subtitle">Everything waiting on you, across projects</span>
+    </span>
     <span class="split" data-testid="now-header" title={summary.header}>
       {#each summary.parts as part (part)}<span>{part}</span>{/each}
     </span>
-    {#if stale}<span class="asof" data-testid="now-asof">as of {stale.at}</span>{/if}
+    {#if stale}<span class="asof" data-testid="now-asof">Updated {relativeTime(stale.ms)}</span>{/if}
     <span class="spacer"></span>
-    {#if filtering || filter}
-      <input
-        bind:this={filterEl}
-        bind:value={filter}
-        class="filter"
-        placeholder="Filter id, title, project, branch"
-        aria-label="Filter"
-        onkeydown={onFilterKey}
-        onblur={() => (filtering = false)}
-      />
-    {/if}
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <input
+      bind:this={filterEl}
+      bind:value={filter}
+      class="k-filter"
+      placeholder="Filter"
+      aria-label="Filter Now"
+      onfocus={() => (filtering = true)}
+      onkeydown={onFilterKey}
+      onblur={() => (filtering = false)}
+    />
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
   {#if loading}
@@ -369,7 +370,7 @@
     <ErrorState error={firstError} title="Could not load Now" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open settings'}
+          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -378,8 +379,10 @@
     {#if lines.length === 0}
       <EmptyState
         icon="inbox"
-        title={filter ? `Nothing matches "${filter}".` : 'Nothing waiting and nothing up next.'}
-        body=""
+        title={filter ? `Nothing matches "${filter}".` : 'Nothing needs you right now'}
+        body={filter
+          ? ''
+          : 'Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.'}
       >
         {#snippet actions()}
           {#if filter}<Button onclick={() => (filter = '')}>Clear filter</Button>{:else}<Button
@@ -438,8 +441,13 @@
     {/if}
   {/if}
 
-  <footer class="hints" aria-hidden="true">
-    j/k move, Enter next action, g go, o open on host, / filter, R refresh
+  <footer class="hints">
+    <span><Kbd chord="j" /><Kbd chord="k" /> Move</span>
+    <span><Kbd chord="enter" /> Next action</span>
+    <span><Kbd chord="g" /> Go to</span>
+    <span><Kbd chord="o" /> Open in browser</span>
+    <span><Kbd chord="/" /> Filter</span>
+    <span><Kbd chord="shift+r" /> Refresh</span>
   </footer>
 </div>
 
@@ -462,10 +470,18 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-4);
-    min-height: 30px;
+    min-height: var(--k-tabbar-height);
     padding: 0 var(--k-space-3);
     border-bottom: 1px solid var(--k-border);
     background: var(--k-bg-elev);
+  }
+
+  .heading {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    padding: var(--k-space-2) 0;
+    line-height: 1.3;
   }
 
   .title {
@@ -483,6 +499,11 @@
     white-space: nowrap;
   }
 
+  .subtitle {
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
+  }
+
   .asof {
     font-size: var(--k-font-size-xs);
     color: var(--k-warn);
@@ -490,18 +511,6 @@
 
   .spacer {
     flex: 1;
-  }
-
-  .filter {
-    width: 220px;
-    height: 22px;
-    padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    background: var(--k-bg);
-    color: var(--k-fg);
-    font-family: var(--k-font-mono);
-    font-size: var(--k-font-size-sm);
   }
 
   .list {
@@ -514,7 +523,7 @@
     align-items: center;
     gap: var(--k-space-2);
     height: 100%;
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-3) 0 var(--k-space-4);
     font-size: var(--k-font-size-sm);
     font-weight: 600;
     color: var(--k-fg-muted);
@@ -530,7 +539,8 @@
     display: inline-flex;
     justify-content: center;
     flex: none;
-    width: 10px;
+    width: 12px;
+    margin-right: var(--k-space-2);
   }
 
   .row {
@@ -539,7 +549,7 @@
     gap: var(--k-space-2);
     width: 100%;
     height: 100%;
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-3) 0 var(--k-space-4);
     border: 0;
     box-shadow: inset 3px 0 0 var(--hue);
     background: transparent;
@@ -580,7 +590,7 @@
 
   .proj {
     flex: none;
-    font-size: 11px;
+    font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
   }
 
@@ -608,7 +618,7 @@
 
   .detail {
     gap: var(--k-space-3);
-    padding-left: calc(var(--k-space-3) + 10px + 76px + 2 * var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
   }
 
   .msg {
@@ -631,15 +641,31 @@
   }
 
   .moreline {
-    padding-left: calc(var(--k-space-3) + 10px + var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + 2 * var(--k-space-2));
     color: var(--k-accent);
     cursor: pointer;
   }
 
+  /* One line tall: hints that wrap fall out of view instead of adding a second line. */
   .hints {
-    padding: var(--k-space-1) var(--k-space-3);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--k-space-5);
+    flex: none;
+    height: var(--k-statusbar-height);
+    overflow: hidden;
+    padding: 0 var(--k-space-3);
     border-top: 1px solid var(--k-border);
     font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
+    color: var(--k-fg-muted);
+    white-space: nowrap;
+  }
+
+  .hints > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: var(--k-statusbar-height);
   }
 </style>

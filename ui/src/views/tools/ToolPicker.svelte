@@ -1,6 +1,7 @@
 <script lang="ts">
   // Tool picker sheet (SPEC §3.5): filter, Enter/click opens. An open that fails on a missing
   // binary shows its install hint and "Check again" (tool_check).
+  import { dispatch } from '$lib/actions';
   import type { SheetProps } from '$app/registry';
   import type { ToolCheck, ToolInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -73,9 +74,18 @@
     {:else if shown.length === 0}
       <EmptyState
         icon="wrench"
-        title="No tools"
-        body="Add [[tools]] to your config or install a plugin that contributes tools."
-      />
+        title="No tools yet"
+        body="Install a plugin that adds tools, or add one in Settings under Tools."
+      >
+        {#snippet actions()}
+          <Button
+            onclick={() => {
+              onclose();
+              void dispatch('settings.open', { section: 'tools' });
+            }}>Open tool settings</Button
+          >
+        {/snippet}
+      </EmptyState>
     {:else}
       <ul>
         {#each shown as t (t.id)}
@@ -85,7 +95,6 @@
               <span class="label">{t.label}</span>
               {#if t.description}<span class="desc">{t.description}</span>{/if}
               {#if t.source.kind === 'plugin'}<Badge>{t.source.plugin_id}</Badge>{/if}
-              <Badge tone="info">{t.kind}</Badge>
             </button>
             {#if !installed(t)}
               <div class="missing" role="status">

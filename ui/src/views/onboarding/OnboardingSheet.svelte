@@ -7,14 +7,13 @@
   import * as ipc from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { projects, settings, ui } from '$lib/stores';
-  import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Sheet from '$lib/ui/Sheet.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
 
   import { openDiagnostics } from '../diagnostics/open';
-  import { needsAttention, sortChecks, STATUS_ICON, STATUS_TONE } from '../diagnostics/report';
+  import { needsAttention, sortChecks, STATUS_ICON } from '../diagnostics/report';
 
   let { onclose }: SheetProps = $props();
 
@@ -92,7 +91,6 @@
               <span class="icon {c.status}"><Icon name={STATUS_ICON[c.status]} size={16} /></span>
               <div>
                 <strong>{c.label}</strong>
-                <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
                 <p>{c.detail}</p>
                 {#if c.fix}<p class="fix"><code>{c.fix}</code></p>{/if}
               </div>
@@ -107,8 +105,8 @@
         {/if}
         {#if needsAttention(diag)}
           <p class="muted">
-            Kelta works with what is missing; those features are just unavailable. Details stay in
-            Diagnostics.
+            Kelta works with what is missing; those features are just unavailable. Open diagnostics for
+            details.
           </p>
         {/if}
       {/if}

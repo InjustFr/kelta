@@ -106,12 +106,17 @@
       <TextInput
         label="Folder"
         bind:value={path}
-        placeholder="~/Sites/shop"
-        hint="A git repository, or a folder containing several."
+        placeholder="Path to a code folder, e.g. ~/code/shop"
         data-testid="project-path"
       />
-      <Button icon="folder-open" loading={detecting} disabled={!path.trim()} onclick={detect}>Detect</Button>
+      {#if draft}<Button icon="search" loading={detecting} disabled={!path.trim()} onclick={detect}
+          >Scan again</Button
+        >{/if}
     </div>
+    <p class="hint">
+      A git repository, or a folder containing several. Kelta lists the repositories and tracker it finds; you
+      confirm before anything is saved.
+    </p>
 
     {#if error}<p class="error" role="alert" data-testid="project-error">{error}</p>{/if}
 
@@ -125,17 +130,14 @@
         hint="Becomes projects/&lt;id&gt;.toml."
       />
 
-      <div class="row">
-        <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
-        <input
-          class="icon"
-          aria-label="Icon (1-2 characters)"
-          placeholder="Icon"
-          maxlength="2"
-          value={draft.icon ?? ''}
-          oninput={(e) => draft && (draft.icon = e.currentTarget.value || null)}
-        />
-      </div>
+      <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
+      <TextInput
+        label="Initial (optional)"
+        hint="One or two letters shown in the sidebar. Leave empty to use the first letter of the name."
+        maxlength={2}
+        value={draft.icon ?? ''}
+        oninput={(e) => draft && (draft.icon = e.currentTarget.value || null)}
+      />
 
       <fieldset>
         <legend>Repositories</legend>
@@ -203,13 +205,25 @@
 
   {#snippet actions()}
     <Button variant="ghost" onclick={onclose}>Cancel</Button>
-    <Button
-      variant="primary"
-      loading={creating}
-      disabled={!draft || !issues || hasIssues(issues)}
-      onclick={create}
-      data-testid="project-create">Create project</Button
-    >
+    <!-- One primary throughout: scan the folder first, then create from what was found. -->
+    {#if draft}
+      <Button
+        variant="primary"
+        loading={creating}
+        disabled={!issues || hasIssues(issues)}
+        onclick={create}
+        data-testid="project-create">Create project</Button
+      >
+    {:else}
+      <Button
+        variant="primary"
+        icon="search"
+        loading={detecting}
+        disabled={!path.trim()}
+        onclick={detect}
+        data-testid="project-create">Scan folder</Button
+      >
+    {/if}
   {/snippet}
 </Sheet>
 
@@ -228,6 +242,10 @@
 
   .pick :global(.k-field) {
     flex: 1;
+  }
+
+  .pick + .hint {
+    margin-top: calc(-1 * var(--k-space-3));
   }
 
   fieldset {
@@ -272,16 +290,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--k-space-3);
-  }
-
-  .row {
-    display: flex;
-    gap: var(--k-space-3);
-    align-items: center;
-  }
-
-  .icon {
-    width: 56px;
   }
 
   .hint {

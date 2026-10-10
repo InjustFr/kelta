@@ -24,8 +24,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-1);
-    height: 18px;
-    padding: 0 5px;
+    height: 20px;
+    padding: 0 6px;
     border-radius: var(--k-radius-sm);
     font-size: var(--k-font-size-xs);
     font-variant-numeric: tabular-nums;
@@ -50,7 +50,7 @@
   .k-badge.danger,
   .k-badge.info {
     box-shadow: inset 2px 0 0 var(--tone);
-    padding-left: 7px;
+    padding-left: 8px;
   }
 
   .accent {

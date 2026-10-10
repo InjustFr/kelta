@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createMockTransport } from '$lib/ipc/mock';
@@ -8,7 +9,9 @@ import Button from './Button.svelte';
 import EmptyState from './EmptyState.svelte';
 import ErrorState from './ErrorState.svelte';
 import HtmlContent from './HtmlContent.svelte';
+import IconButton from './IconButton.svelte';
 import Kbd from './Kbd.svelte';
+import Lamp from './Lamp.svelte';
 import Menu from './Menu.svelte';
 import Tabs from './Tabs.svelte';
 import Toggle from './Toggle.svelte';
@@ -69,9 +72,13 @@ describe('components', () => {
     expect(onretry).toHaveBeenCalledOnce();
   });
 
-  it('Kbd shows chord parts', () => {
-    const { container } = render(Kbd, { props: { chord: 'cmd+k', platform: 'macos' } });
-    expect([...container.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['⌘', 'K']);
+  it('Kbd shows one cap on macOS and one cap per key on Linux', () => {
+    const caps = (platform: 'macos' | 'linux') =>
+      [...render(Kbd, { props: { chord: 'mod+k', platform } }).container.querySelectorAll('kbd')].map(
+        (k) => k.textContent,
+      );
+    expect(caps('macos')).toEqual(['⌘K']);
+    expect(caps('linux')).toEqual(['Ctrl', 'Shift', 'K']);
   });
 
   it('Tabs selects with click and arrows', async () => {
@@ -174,5 +181,28 @@ describe('components', () => {
     expect(rows.length).toBeLessThan(60);
     expect(container.querySelector('.spacer')?.getAttribute('style')).toContain('28000px');
     void VirtualList;
+  });
+});
+
+describe('labelled primitives', () => {
+  const textSnippet = (t: string) => createRawSnippet(() => ({ render: () => `<span>${t}</span>` }));
+
+  it('Button chord is decorative and keeps the accessible name', () => {
+    render(Button, { props: { chord: 'cmd+k', children: textSnippet('Search') } });
+    const btn = screen.getByRole('button', { name: 'Search' });
+    expect(btn.querySelector('.chord')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('IconButton puts the chord in the tooltip only', () => {
+    render(IconButton, { props: { icon: 'x', label: 'Close pane', chord: 'ctrl+w' } });
+    const btn = screen.getByRole('button', { name: 'Close pane' });
+    expect(btn.getAttribute('title')).toMatch(/^Close pane \(.+\)$/);
+  });
+
+  it('Lamp with a label shows the word and hides the lamp from the tree', () => {
+    const { container } = render(Lamp, { props: { level: 'needs_input', label: 'Needs input' } });
+    expect(screen.getByText('Needs input')).toBeTruthy();
+    expect(container.querySelector('.lamp')?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('img')).toBeNull();
   });
 });

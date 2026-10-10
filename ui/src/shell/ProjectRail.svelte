@@ -4,10 +4,11 @@
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
   import { attention, projects, sessions, toasts, ui } from '$lib/stores';
-  import { Icon, isIconName, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { nowSummary, refreshNow } from '../views/inbox/now';
   import { confirms } from './confirm.svelte';
+  import { attentionLabel, chordFor } from './labels';
   import { activateProject, openInbox, projectAttention, railProjects } from './nav';
 
   const rail = $derived(railProjects());
@@ -36,12 +37,11 @@
     return icon && isIconName(icon) ? icon : null;
   }
 
-  function dotTitle(p: ProjectInfo): string {
+  function subLine(p: ProjectInfo): string {
     const lvl = projectAttention(p.id);
     const n = attention.forProject(p.id).needs_input_count;
-    return lvl === 'needs_input' && n > 0
-      ? `${n} session${n === 1 ? '' : 's'} need input`
-      : lvl.replace('_', ' ');
+    if (lvl === 'needs_input' && n > 1) return `${n} need input`;
+    return attentionLabel(lvl) || (p.builtin ? 'Terminals in your home folder' : '');
   }
 
   function menuItems(p: ProjectInfo): MenuItem[] {
@@ -156,116 +156,168 @@
 
 <svelte:window onfocus={() => void refreshNow()} />
 
+{#snippet chord(id: string)}
+  {@const c = chordFor(id)}
+  {#if c}<span class="kbd" aria-hidden="true"><Kbd chord={c} /></span>{/if}
+{/snippet}
+
+{#snippet face(p: ProjectInfo)}
+  {@const lvl = projectAttention(p.id)}
+  {@const sub = subLine(p)}
+  <span class="tile" aria-hidden="true">
+    {#if iconName(p)}<Icon name={iconName(p) ?? ''} size={16} />{:else}<span class="glyph">{glyph(p)}</span
+      >{/if}
+  </span>
+  <span class="text">
+    <span class="name">{p.name}</span>
+    {#if sub}<span class="sub">{sub}</span>{/if}
+  </span>
+  <span class="lamp-slot" aria-hidden="true"><Lamp level={lvl} /></span>
+{/snippet}
+
+{#snippet more(p: ProjectInfo)}
+  <IconButton
+    class="more"
+    size="sm"
+    icon="ellipsis"
+    label={`Menu for ${p.name}`}
+    onclick={(e) => openMenu(e, p)}
+  />
+{/snippet}
+
 <nav class="rail" aria-label="Projects" data-testid="rail">
+  <button
+    type="button"
+    class="search"
+    title="Search or run a command"
+    onclick={() => void dispatch('palette.open')}
+    data-testid="rail-search"
+  >
+    <Icon name="search" size={16} />
+    <span class="search-text">Search or run…</span>
+    {@render chord('palette.open')}
+  </button>
+
   <button
     type="button"
     class="item inbox"
     class:active={ui.inboxActive}
     onclick={openInbox}
     title={`Now: ${now.header}`}
-    aria-label="Now"
     aria-current={ui.inboxActive ? 'page' : undefined}
     data-testid="rail-inbox"
   >
-    <Icon name="inbox" size={16} />
+    <span class="tile plain"><Icon name="inbox" size={18} /></span>
+    <span class="text">
+      <span class="name">Now</span>
+      <span class="sub">{now.header || 'Nothing waiting'}</span>
+    </span>
     {#if now.waiting > 0}
-      <span class="badge" data-testid="inbox-badge">{now.waiting > 99 ? '99+' : now.waiting}</span>
+      <span class="badge k-num" data-testid="inbox-badge">{now.waiting > 99 ? '99+' : now.waiting}</span>
     {/if}
   </button>
 
-  <div class="list" role="list">
-    {#each reorderable as p (p.id)}
-      {@const lvl = projectAttention(p.id)}
-      {@const n = attention.forProject(p.id).needs_input_count}
-      <div role="listitem" class="slot" class:over={overId === p.id && dragId !== p.id}>
-        <button
-          type="button"
-          class="item project"
-          class:active={p.active && !ui.inboxActive}
-          class:lit={lvl === 'needs_input'}
+  <div class="group">
+    <div class="heading">
+      <h2>Projects</h2>
+      <Button
+        variant="ghost"
+        size="sm"
+        icon="plus"
+        title="Open or create a project"
+        onclick={() => ui.openSheet('project_new')}
+        data-testid="rail-add">Add project</Button
+      >
+    </div>
+
+    <ul class="projects">
+      {#each reorderable as p (p.id)}
+        {@const lvl = projectAttention(p.id)}
+        {@const active = p.active && !ui.inboxActive}
+        <li
+          class="row"
+          class:active
+          class:over={overId === p.id && dragId !== p.id}
           style:--project-color={p.color ?? 'var(--k-border-strong)'}
-          title={p.name}
-          aria-label={p.name}
-          aria-current={p.active && !ui.inboxActive ? 'page' : undefined}
-          data-testid="rail-project"
-          data-project-id={p.id}
-          data-attention={lvl}
-          draggable="true"
-          onclick={() => activateProject(p.id)}
-          oncontextmenu={(e) => openMenu(e, p)}
-          ondragstart={(e) => {
-            dragId = p.id;
-            e.dataTransfer?.setData('text/plain', p.id);
-            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-          }}
-          ondragover={(e) => {
-            if (!dragId) return;
-            e.preventDefault();
-            overId = p.id;
-          }}
-          ondragleave={() => (overId = null)}
-          ondrop={(e) => {
-            e.preventDefault();
-            void onDrop(p.id);
-          }}
-          ondragend={() => {
-            dragId = null;
-            overId = null;
-          }}
         >
-          {#if iconName(p)}<Icon name={iconName(p) ?? ''} size={14} />{:else}<span class="glyph"
-              >{glyph(p)}</span
-            >{/if}
-          {#if lvl !== 'none'}
-            <span class="att">
-              <Lamp level={lvl} title={dotTitle(p)} />
-              {#if lvl === 'needs_input' && n > 1}<span class="count k-num">{n}</span>{/if}
-            </span>
-          {/if}
-        </button>
-      </div>
-    {/each}
+          <button
+            type="button"
+            class="item project"
+            class:active
+            class:lit={lvl === 'needs_input'}
+            title={p.name}
+            aria-current={active ? 'page' : undefined}
+            data-testid="rail-project"
+            data-project-id={p.id}
+            data-attention={lvl}
+            draggable="true"
+            onclick={() => activateProject(p.id)}
+            oncontextmenu={(e) => openMenu(e, p)}
+            ondragstart={(e) => {
+              dragId = p.id;
+              e.dataTransfer?.setData('text/plain', p.id);
+              if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+            }}
+            ondragover={(e) => {
+              if (!dragId) return;
+              e.preventDefault();
+              overId = p.id;
+            }}
+            ondragleave={() => (overId = null)}
+            ondrop={(e) => {
+              e.preventDefault();
+              void onDrop(p.id);
+            }}
+            ondragend={() => {
+              dragId = null;
+              overId = null;
+            }}
+          >
+            {@render face(p)}
+          </button>
+          {@render more(p)}
+        </li>
+      {:else}
+        <li class="none">No projects yet</li>
+      {/each}
+    </ul>
   </div>
 
-  {#if home}
-    {@const lvl = projectAttention(home.id)}
+  <div class="footer">
+    {#if home}
+      {@const lvl = projectAttention(home.id)}
+      {@const active = home.active && !ui.inboxActive}
+      <div class="row" class:active style:--project-color={home.color ?? 'var(--k-border-strong)'}>
+        <button
+          type="button"
+          class="item project home"
+          class:active
+          class:lit={lvl === 'needs_input'}
+          title={home.name}
+          aria-current={active ? 'page' : undefined}
+          data-testid="rail-project"
+          data-project-id={home.id}
+          data-attention={lvl}
+          onclick={() => activateProject(home.id)}
+          oncontextmenu={(e) => openMenu(e, home)}
+        >
+          {@render face(home)}
+        </button>
+        {@render more(home)}
+      </div>
+    {/if}
     <button
       type="button"
-      class="item project home"
-      class:active={home.active && !ui.inboxActive}
-      title="Home"
-      aria-label="Home"
-      aria-current={home.active && !ui.inboxActive ? 'page' : undefined}
-      data-testid="rail-project"
-      data-project-id={home.id}
-      data-attention={lvl}
-      onclick={() => activateProject(home.id)}
-      oncontextmenu={(e) => openMenu(e, home)}
+      class="item settings"
+      title="Settings"
+      onclick={() => void dispatch('settings.open')}
+      data-testid="rail-settings"
     >
-      <Icon name="house" size={16} />
-      {#if lvl !== 'none'}<span class="att"><Lamp level={lvl} title={dotTitle(home)} /></span>{/if}
+      <span class="tile plain"><Icon name="settings" size={18} /></span>
+      <span class="text"><span class="name">Settings</span></span>
+      {@render chord('settings.open')}
     </button>
-  {/if}
-  <button
-    type="button"
-    class="item"
-    title="Settings"
-    aria-label="Settings"
-    onclick={() => void dispatch('settings.open')}
-    data-testid="rail-settings"
-  >
-    <Icon name="settings" size={16} />
-  </button>
-  <button
-    type="button"
-    class="item add"
-    title="Open or create a project"
-    aria-label="New project"
-    onclick={() => ui.openSheet('project_new')}
-    data-testid="rail-add"
-  >
-    <Icon name="plus" size={16} />
-  </button>
+  </div>
 </nav>
 
 {#if menu}
@@ -284,140 +336,334 @@
   .rail {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     width: var(--k-rail-width);
     flex: none;
-    padding: var(--k-space-3) 0;
+    min-height: 0;
+    padding: var(--k-space-3);
+    border-right: 1px solid var(--k-border);
     background: var(--k-bezel);
   }
 
-  .list {
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  .search {
     display: flex;
-    flex-direction: column;
     align-items: center;
     gap: var(--k-space-3);
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-    padding: var(--k-space-3) 0;
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  .slot {
+    flex: none;
+    height: var(--k-control-height);
+    padding: 0 var(--k-space-2) 0 var(--k-space-3);
+    border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
+    background: var(--k-well);
+    color: var(--k-fg-muted);
+    cursor: pointer;
+    text-align: left;
   }
 
-  .slot.over {
-    box-shadow: 0 -4px 0 -2px var(--k-accent);
+  .search:hover {
+    border-color: var(--k-border-strong);
+    color: var(--k-fg);
   }
 
+  .search-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--k-font-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kbd {
+    display: inline-flex;
+    flex: none;
+  }
+
+  /* Rows: tile | name over status word | lamp or "⋯". */
   .item {
     position: relative;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
+    gap: 10px;
+    width: 100%;
+    height: var(--k-sidebar-row-height);
+    flex: none;
+    padding: 0 var(--k-space-3);
     border: none;
     border-radius: var(--k-radius);
     background: transparent;
-    color: var(--k-fg-chrome);
+    color: var(--k-fg);
     cursor: pointer;
-    transition: background var(--k-duration) ease-out;
+    text-align: left;
+    transition: background-color var(--k-duration) ease-out;
   }
 
+  /* Hover layers on top of whatever the row wears (selected, lit) instead of replacing it. */
   .item:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
+    background-image: linear-gradient(var(--k-bg-hover), var(--k-bg-hover));
   }
 
-  .item:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px var(--k-bezel),
-      0 0 0 4px var(--k-focus);
+  .item:focus-visible,
+  .search:focus-visible {
+    outline: 2px solid var(--k-focus);
+    outline-offset: -2px;
   }
 
-  /* Only the current destination (a project, home or the inbox) wears a tile face. */
-  .item.active,
-  .project:not(.home) {
-    background: var(--k-well);
-    overflow: visible;
+  .item.active {
+    background-color: var(--k-bg-selected);
   }
 
-  /* Index bar: raw project colour, short when idle, full height on the current destination. */
-  .project:not(.home)::before,
-  .item.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: var(--k-radius) 0 0 var(--k-radius);
-    background: var(--project-color, var(--k-fg-muted));
+  .inbox.active {
+    box-shadow: inset 3px 0 0 var(--k-accent);
   }
 
-  .item.active::before {
-    top: 0;
-    bottom: 0;
+  .project.active {
+    box-shadow: inset 3px 0 0 var(--project-color);
   }
 
-  .item.active,
-  .project:not(.home):hover {
-    color: var(--k-fg);
-  }
-
-  .project.active .glyph {
+  .project.active .name {
     font-weight: var(--k-weight-strong);
   }
 
-  /* Claude waiting is the brightest thing in the window. */
-  .project.lit {
-    background: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-well));
+  /* Call light: a session waits on you here. Selected rows keep their face; the lamp and word speak. */
+  .project.lit:not(.active) {
+    --k-fg-subtle: var(--k-fg-muted); /* only fg and fg-muted read on lit (§4.4) */
+    background-color: var(--k-lit);
   }
 
-  .glyph {
-    padding-left: 2px;
-    font-size: var(--k-font-size);
-  }
-
-  .att {
-    position: absolute;
-    top: -4px;
-    right: -5px;
+  .tile {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    min-width: 10px;
-    height: 10px;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--k-radius);
+    background: color-mix(in oklab, var(--project-color) 28%, var(--k-well));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--project-color) 55%, transparent);
+    color: var(--k-fg);
   }
 
-  .count {
-    font-size: 10px;
+  .tile.plain {
+    background: none;
+    box-shadow: none;
+    color: var(--k-fg-chrome);
+  }
+
+  .glyph {
+    font-size: var(--k-font-size-sm);
     font-weight: var(--k-weight-strong);
     line-height: 1;
-    color: var(--k-lamp-needs-input);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+  }
+
+  .name,
+  .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .name {
+    font-size: var(--k-font-size);
+    font-weight: var(--k-weight-medium);
+  }
+
+  .sub {
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
   }
 
   .badge {
-    position: absolute;
-    top: -4px;
-    right: -6px;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    border-radius: 7px;
+    flex: none;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
     background: var(--k-lamp-needs-input);
     color: var(--k-well);
-    font-size: 10px;
+    font-size: var(--k-font-size-xs);
     font-weight: var(--k-weight-strong);
-    font-variant-numeric: tabular-nums;
-    line-height: 14px;
+    line-height: 20px;
     text-align: center;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: var(--k-space-2);
+  }
+
+  .heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-space-3);
+    flex: none;
+    padding-left: var(--k-space-3);
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-medium);
+  }
+
+  .projects {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  .row {
+    position: relative;
+    flex: none;
+    border-radius: var(--k-radius);
+  }
+
+  .row.over {
+    box-shadow: 0 -2px 0 0 var(--k-accent);
+  }
+
+  .lamp-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 28px;
+  }
+
+  /* "⋯" shares the lamp's slot: it shows on hover, keyboard focus and the current row. */
+  .row :global(.more) {
+    position: absolute;
+    top: calc((var(--k-sidebar-row-height) - var(--k-control-height-sm)) / 2);
+    right: var(--k-space-3);
+    visibility: hidden;
+  }
+
+  .row:is(:hover, :focus-within, .active) :global(.more) {
+    visibility: visible;
+  }
+
+  .row:is(:hover, :focus-within, .active) .lamp-slot {
+    visibility: hidden;
+  }
+
+  .none {
+    padding: var(--k-space-3);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+    flex: none;
+    padding-top: var(--k-space-3);
+    border-top: 1px solid var(--k-border);
+  }
+
+  .settings {
+    height: 36px;
+    color: var(--k-fg-chrome);
+  }
+
+  .settings:hover {
+    color: var(--k-fg);
+  }
+
+  /* Compact sidebar: a column of tiles with lamps. Labels stay in the accessibility tree. */
+  @media (max-width: 1099px) {
+    .rail {
+      width: var(--k-rail-width-compact);
+    }
+
+    .search {
+      align-self: center;
+      justify-content: center;
+      width: 40px;
+      padding: 0;
+    }
+
+    .item {
+      justify-content: center;
+      padding: 0;
+    }
+
+    .heading {
+      justify-content: center;
+      padding-left: 0;
+    }
+
+    .text,
+    .search-text,
+    .kbd,
+    h2,
+    .heading :global(.label),
+    .none {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .row :global(.more) {
+      display: none;
+    }
+
+    /* The corner lamp is the only state cue here: a bezel halo keeps it apart from the tile. */
+    .lamp-slot,
+    .row:is(:hover, :focus-within, .active) .lamp-slot {
+      position: absolute;
+      top: 2px;
+      left: calc(50% + 6px);
+      width: auto;
+      padding: 2px;
+      border-radius: 50%;
+      background: var(--k-bezel);
+      visibility: visible;
+    }
+
+    .lamp-slot:empty {
+      display: none;
+    }
+
+    .heading :global(.k-button) {
+      width: var(--k-control-height-sm);
+      padding: 0;
+      border-color: var(--k-border-strong);
+    }
+
+    .badge {
+      position: absolute;
+      top: 2px;
+      left: calc(50% + 4px);
+    }
   }
 </style>

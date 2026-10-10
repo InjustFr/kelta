@@ -39,11 +39,16 @@ export interface NowSummary {
 export function nowSummary(): NowSummary {
   const sections = currentSections();
   const parts = headerParts(sections, workingCount());
-  return { sections, parts, header: parts.join(' · ') || 'Nothing waiting', waiting: waitingCount(sections) };
+  return {
+    sections,
+    parts,
+    header: parts.join('\u2002\u2002') || 'Nothing waiting',
+    waiting: waitingCount(sections),
+  };
 }
 
 /** "as of hh:mm" when a source is stale or failed; null when everything is fresh. */
-export function asOf(): { at: string; error: KeltaError | null } | null {
+export function asOf(): { at: string; ms: number; error: KeltaError | null } | null {
   const lists = [
     tickets.list(ALL, null),
     reviews.list(ALL, 'review_requested'),
@@ -54,9 +59,10 @@ export function asOf(): { at: string; error: KeltaError | null } | null {
   const times = [...bad.map((l) => l.fetchedAt), work.gitError ? work.gitAt : null].filter(
     (t): t is number => t !== null,
   );
-  const d = new Date(times.length ? Math.min(...times) : Date.now());
+  const ms = times.length ? Math.min(...times) : Date.now();
+  const d = new Date(ms);
   const at = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  return { at, error: bad.find((l) => l.error)?.error ?? null };
+  return { at, ms, error: bad.find((l) => l.error)?.error ?? null };
 }
 
 /**

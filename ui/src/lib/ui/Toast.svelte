@@ -33,7 +33,7 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    width: 360px;
+    width: 400px;
     max-width: calc(100vw - 32px);
     padding: var(--k-space-2) var(--k-space-2) var(--k-space-2) var(--k-space-4);
     border-radius: var(--k-radius-lg);

@@ -92,10 +92,11 @@
   <header>
     <h3>{label}</h3>
     {#if description}<p class="desc">{description}</p>{/if}
-    <p class="desc">
+    <details class="desc">
+      <summary>How layering works</summary>
       Entries merge by <code>id</code>: a higher layer replaces the whole entry; a stub with only
       <code>enabled</code> toggles an inherited one.
-    </p>
+    </details>
   </header>
 
   {#each merged as e (idOf(e))}

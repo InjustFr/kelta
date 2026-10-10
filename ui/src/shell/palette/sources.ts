@@ -98,7 +98,7 @@ export function workItems(): PaletteItem[] {
       id: `work:${w.id}`,
       group: 'Work items' as const,
       label: `${workKey(w)} ${workTitle(w)}`,
-      detail: `${phase.label} · ${w.branch}`,
+      detail: [phase.label, w.branch].join(SEP),
       icon: 'git-branch',
       lamp: phase.lamp === 'none' ? undefined : phase.lamp,
       // work_resume recreates a closed tab and resumes Claude.

@@ -74,7 +74,7 @@
 <SectionForm sectionId="projects" {...props}>
   {#snippet before()}
     <div class="head">
-      <h3>Projects</h3>
+      <h3>Your projects</h3>
       <Button size="sm" variant="primary" icon="folder-plus" onclick={() => ui.openSheet('project_new')}
         >Create project from folder</Button
       >

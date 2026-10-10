@@ -237,9 +237,8 @@
 
 <section class="accounts" data-testid="accounts-section">
   <p class="blurb">
-    Accounts connect trackers and code hosts. Tokens never live in config files: an account stores a reference
-    (<code>keyring:</code>, <code>gh-cli</code>, <code>glab-cli</code>, <code>command:</code> or
-    <code>env:</code>).
+    Accounts connect trackers and code hosts. Tokens are kept in your system keychain or read from a CLI you
+    already use, never in config files.
   </p>
 
   {#if globalOnly}
@@ -310,8 +309,9 @@
   {/if}
 
   <header class="head">
-    <h3>Accounts</h3>
-    {#if !globalOnly}<Button
+    <h3>Connected accounts</h3>
+    <!-- While the list is empty its empty state carries the one Add account button. -->
+    {#if !globalOnly && accounts.length > 0}<Button
         size="sm"
         icon="plus"
         variant="primary"
@@ -468,7 +468,9 @@
       body="Add a tracker or code-host account to see tickets and reviews."
     >
       {#snippet actions()}
-        {#if !globalOnly}<Button variant="primary" icon="plus" onclick={openWizard}>Add account</Button>{/if}
+        {#if !globalOnly}<Button variant="primary" icon="plus" onclick={openWizard} data-testid="add-account"
+            >Add account</Button
+          >{/if}
       {/snippet}
     </EmptyState>
   {/if}

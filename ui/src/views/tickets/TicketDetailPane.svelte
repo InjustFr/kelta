@@ -13,6 +13,7 @@
     ErrorState,
     HtmlContent,
     Icon,
+    IconButton,
     Menu,
     TextInput,
     relativeTime,
@@ -180,7 +181,7 @@
       <ErrorState error={slot.error} title={`Could not load ${ref.key}`} onretry={refresh}>
         {#snippet actions()}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open settings'}
+            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open account settings'}
           </Button>
         {/snippet}
       </ErrorState>
@@ -209,17 +210,12 @@
       </div>
       <h1>{ticket.title}</h1>
       <div class="line actions">
-        <button
-          type="button"
-          class="status"
-          bind:this={statusBtn}
-          aria-haspopup="menu"
-          title="Move to… (m)"
-          onclick={() => void openMoveMenu()}
-        >
-          <Badge tone={statusTone(ticket.status.category)}>{ticket.status.name}</Badge>
-          <Icon name="chevron-down" size={12} />
-        </button>
+        <span class="status" bind:this={statusBtn}>
+          <Button aria-haspopup="menu" title="Move to… (m)" onclick={() => void openMoveMenu()}>
+            <Badge tone={statusTone(ticket.status.category)}>{ticket.status.name}</Badge>
+            <Icon name="chevron-down" size={14} />
+          </Button>
+        </span>
         <Button variant="primary" icon="play" onclick={() => void startWorkOnTicket(ref, projectId)}>
           {workItem ? 'Resume work' : 'Start work'}
         </Button>
@@ -227,7 +223,7 @@
         {#if ticket.assignee}<Button variant="ghost" onclick={() => void assign('none')}>Unassign</Button
           >{/if}
         <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
-        <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
+        <IconButton icon="refresh-cw" label="Refresh" onclick={refresh} />
       </div>
       <dl class="k-meta">
         <dt>Assignee</dt>
@@ -360,17 +356,12 @@
   .link,
   .status {
     display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-1);
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--k-accent);
-    cursor: pointer;
   }
 
-  .status {
-    color: var(--k-fg-muted);
+  .status :global(.label) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
   }
 
   .scroll {

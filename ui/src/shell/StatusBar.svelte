@@ -1,12 +1,11 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { SessionInfo } from '$lib/gen';
-  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
-  import { Icon, Lamp } from '$lib/ui';
+  import { lampOf, sessions, settings, type LampLevel } from '$lib/stores';
+  import { Kbd, Lamp } from '$lib/ui';
 
-  import { statusLabel } from './labels';
-  import { focusedSession, focusedSessionId, revealSession } from './nav';
-  import PerfHud from './PerfHud.svelte';
+  import { attentionLabel, chordFor } from './labels';
+  import { focusedPane, focusedSession, focusedSessionId, revealSession } from './nav';
 
   interface Props {
     prefixArmed: boolean;
@@ -15,13 +14,25 @@
 
   let { prefixArmed, inbox }: Props = $props();
 
-  const project = $derived(inbox ? null : projects.active);
+  // The hint line teaches the keyboard: the user's own chords, skipped when unbound. Split and
+  // Close pane only show where they act: a project with a focused pane, not Now or the welcome screen.
+  const HINTS: { id: string; verb: string; pane?: true }[] = [
+    { id: 'palette.open', verb: 'Commands' },
+    { id: 'session.new', verb: 'New session' },
+    { id: 'pane.split_right', verb: 'Split', pane: true },
+    { id: 'pane.close', verb: 'Close pane', pane: true },
+    { id: 'attention.next', verb: 'Next waiting' },
+  ];
+  const panes = $derived(!inbox && focusedPane() !== null);
+  const hints = $derived(
+    HINTS.filter((h) => panes || !h.pane)
+      .map((h) => ({ ...h, chord: chordFor(h.id) }))
+      .filter((h): h is { id: string; verb: string; chord: string } => !!h.chord),
+  );
+
   const session = $derived(inbox ? null : focusedSession());
-  const item = $derived(session?.work_item_id ? work.get(session.work_item_id) : null);
-  const hooks = $derived(
-    session?.kind.type === 'claude' && session.lifecycle === 'live'
-      ? (session.claude?.hooks_active ?? false)
-      : null,
+  const hooksOff = $derived(
+    session?.kind.type === 'claude' && session.lifecycle === 'live' && session.claude?.hooks_active !== true,
   );
   // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
   const METER: { lamp: LampLevel; label: string }[] = [
@@ -37,6 +48,12 @@
     })).filter((m) => m.list.length > 0),
   );
 
+  function words(lamp: LampLevel, n: number): string {
+    if (lamp === 'needs_input') return n === 1 ? `${n} needs input` : `${n} need input`;
+    if (lamp === 'done') return `${n} ready to review`;
+    return `${n} ${attentionLabel(lamp).toLowerCase()}`;
+  }
+
   function walk(lamp: LampLevel, list: SessionInfo[]): void {
     if (lamp === 'needs_input') {
       void dispatch('attention.next');
@@ -47,42 +64,22 @@
     if (next) void revealSession(next.id);
   }
   const restart = $derived(settings.pendingRestart.length > 0);
-
-  let hud = $state(false);
 </script>
 
 <footer class="statusbar k-num" data-testid="statusbar">
-  <span class="seg project" data-testid="status-project">
-    {#if inbox}
-      <Icon name="inbox" size={12} /> Inbox
-    {:else if project}
-      <span class="swatch" style:background={project.color ?? 'var(--k-border-strong)'}></span>
-      {project.name}
-    {/if}
-  </span>
-  {#if item}
-    <span class="seg" data-testid="status-branch" title="Branch of the focused session"
-      ><Icon name="git-branch" size={12} /> <span class="k-mono">{item.branch}</span></span
-    >
-  {/if}
-  {#if session}
-    <span class="seg" data-testid="status-session" title={session.name}>
-      <Lamp level={lampOf(session.attention, session.status === 'working')} />
-      {session.name}
-      {#if statusLabel(session.status)}<span class="state">{statusLabel(session.status)}</span>{/if}
-    </span>
-  {/if}
-  {#if hooks !== null}
-    <span class="seg" class:warn={!hooks} data-testid="status-hooks"
-      >{hooks ? 'Hooks ok' : 'Hooks inactive'}</span
-    >
-  {/if}
-  <span class="grow"></span>
+  <p class="hints">
+    {#each hints as h (h.id)}
+      <span class="hint"><Kbd chord={h.chord} />{h.verb}</span>
+    {/each}
+  </p>
   {#if prefixArmed}
-    <span class="seg prefix" data-testid="status-prefix" role="status">prefix…</span>
+    <span class="seg prefix" data-testid="status-prefix" role="status">Prefix: press a key</span>
   {/if}
   {#if restart}
     <span class="seg warn" title="Some settings need a restart">Restart needed</span>
+  {/if}
+  {#if hooksOff}
+    <span class="seg warn" data-testid="status-hooks">Live status off</span>
   {/if}
   {#each meter as m (m.lamp)}
     <button
@@ -94,26 +91,10 @@
       data-testid={m.lamp === 'needs_input' ? 'status-needs-input' : `status-${m.lamp}`}
     >
       <Lamp level={m.lamp} title={m.label} />
-      {m.list.length}
+      {words(m.lamp, m.list.length)}
     </button>
   {/each}
-  <button
-    type="button"
-    class="seg btn"
-    class:on={hud}
-    onclick={() => (hud = !hud)}
-    title="Performance (on demand)"
-    aria-label="Performance"
-    aria-expanded={hud}
-    data-testid="status-perf"
-  >
-    <Icon name="cpu" size={12} />
-  </button>
 </footer>
-
-{#if hud}
-  <PerfHud onclose={() => (hud = false)} />
-{/if}
 
 <style>
   .statusbar {
@@ -129,27 +110,33 @@
     white-space: nowrap;
   }
 
+  /* One line tall: a hint that does not fit wraps out of view whole instead of being cut. */
+  .hints {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--k-space-5);
+    flex: 1;
+    min-width: 0;
+    height: var(--k-statusbar-height);
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    height: var(--k-statusbar-height);
+  }
+
   .seg {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-3);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .swatch {
-    display: inline-block;
-    width: 3px;
-    height: 12px;
-  }
-
-  .state {
-    color: var(--k-fg-subtle);
-  }
-
-  .grow {
-    flex: 1;
+    flex: none;
   }
 
   .warn {
@@ -161,17 +148,19 @@
     font-weight: var(--k-weight-strong);
   }
 
+  /* Full bar height so the target stays 28px. */
   .btn {
-    padding: 0 var(--k-space-2);
+    align-self: stretch;
+    padding: 0 var(--k-space-3);
     border: none;
-    border-radius: var(--k-radius-sm);
+    border-radius: 0;
     background: transparent;
     color: inherit;
+    font: inherit;
     cursor: pointer;
   }
 
-  .btn:hover,
-  .btn.on {
+  .btn:hover {
     background: var(--k-bg-hover);
     color: var(--k-fg);
   }

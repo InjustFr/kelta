@@ -5,7 +5,7 @@
   import { workLink, workPlan, workStart } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { projects, settings, toasts, work } from '$lib/stores';
-  import { Button, currentPlatform, IconButton, Kbd, Select, Sheet, TextInput } from '$lib/ui';
+  import { Button, currentPlatform, IconButton, Select, Sheet, TextInput } from '$lib/ui';
 
   import { activateProject, railProjects } from '../../shell/nav';
   import { scratchBranch, taskTitle, validateBranch } from './common';
@@ -109,7 +109,9 @@
     }}
     {onkeydown}
   >
-    <p class="lede">A branch, a worktree and a Claude session. No ticket needed; you can link one later.</p>
+    <p class="lede">
+      Its own branch in a separate folder, with Claude ready to start. You can link a ticket later.
+    </p>
     <TextInput
       label="What should Claude do?"
       bind:value={task}
@@ -162,9 +164,14 @@
   {#snippet actions()}
     {#if title}<span class="note" {title}>Title: “{title}”</span>{/if}
     <Button variant="ghost" onclick={onclose}>Cancel</Button>
-    <Button variant="primary" type="submit" form="new-work-form" loading={busy} disabled={touched && !valid}>
-      Start <Kbd chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'} />
-    </Button>
+    <Button
+      variant="primary"
+      type="submit"
+      form="new-work-form"
+      loading={busy}
+      disabled={touched && !valid}
+      chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'}>Start</Button
+    >
   {/snippet}
 </Sheet>
 
