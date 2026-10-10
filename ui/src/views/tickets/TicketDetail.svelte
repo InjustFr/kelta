@@ -30,7 +30,8 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { startWorkOnTicket } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
-  import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
+  import { matchChord, parseChord } from '$lib/keys/chords';
+  import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
   import { loadWorkflows, pickWorkflow, workflows } from './workflow.svelte';
@@ -62,6 +63,8 @@
   const proposal = $derived(refines[key] ?? null);
 
   let root = $state<HTMLDivElement>();
+  let bar = $state<{ openMore(): void }>();
+  const moreChord = parseChord(MORE_CHORD);
   let statusBtn = $state<HTMLElement>();
   let commentBox = $state<HTMLDivElement>();
   let picker = $state<HTMLElement | null>(null);
@@ -259,6 +262,11 @@
   function onkeydown(e: KeyboardEvent): void {
     const own = 'input, textarea, select, [role="dialog"], [role="menu"], [data-child]';
     if ((e.target as HTMLElement).closest(own)) return;
+    if (moreChord && matchChord(moreChord, e)) {
+      bar?.openMore();
+      e.preventDefault();
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const action = TICKET_ACTIONS.find((a) => a.key === e.key);
     // Shift variants: `S` starts with no sheet, `P` opens the PR in the browser.
@@ -362,7 +370,7 @@
         </Button>
       </span>
     </div>
-    <ActionBar {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
+    <ActionBar bind:this={bar} {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
   </header>
 
   <div class="scroll">

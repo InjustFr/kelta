@@ -12,13 +12,13 @@
   import {
     Badge,
     Button,
+    Dialog,
     EmptyState,
     ErrorState,
     Icon,
+    Kbd,
     Lamp,
     Menu,
-    Select,
-    Tabs,
     ROW_HEIGHT,
     VirtualList,
     relativeTime,
@@ -37,26 +37,14 @@
   import { phaseNow } from '../work/live';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
-  import StatusChip from './StatusChip.svelte';
   import StatusPicker from './StatusPicker.svelte';
   import TicketDetail from './TicketDetail.svelte';
-  import {
-    GROUP_BYS,
-    SORTS,
-    ageDays,
-    ageLevel,
-    flowOf,
-    groupTickets,
-    sortTickets,
-    type GroupBy,
-    type TicketGroup,
-  } from './group';
+  import { GROUP_BYS, flowOf, groupTickets, sortTickets, type GroupBy, type TicketGroup } from './group';
   import { MoveController } from './move.svelte';
-  import PrChip from './PrChip.svelte';
-  import { ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems } from './prs';
-  import RowButton from './RowButton.svelte';
+  import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
+  import TicketRow from './TicketRow.svelte';
+  import TicketsToolbar from './TicketsToolbar.svelte';
   import { pickWorkflow } from './workflow.svelte';
-  import { waitChip } from '../people/waiting';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -64,21 +52,6 @@
 
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
   const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Team' };
-  const GROUP_LABELS: Record<GroupBy, string> = {
-    flow: 'By flow',
-    status: 'By status',
-    priority: 'By priority',
-    sprint: 'By sprint',
-    assignee: 'By assignee',
-    source: 'By source',
-    none: 'No grouping',
-  };
-  const SORT_LABELS: Record<TicketSort, string> = {
-    priority: 'Sort by priority',
-    updated: 'Sort by updated',
-    age: 'Sort by age in status',
-    key: 'Sort by key',
-  };
   const move = new MoveController();
 
   // ---- scope, source, who and mode ----------------------------------------------------------
@@ -331,13 +304,14 @@
     toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
   }
 
+  /** The key column fits the longest key in view, capped so a long key cannot take the title's room. */
+  const keyChars = $derived(Math.min(12, Math.max(4, ...shown.map((i) => i.ticket.ref.key.length))));
   const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
   const sourceOf = (item: TicketItem): string =>
     sources.find((s) => s.id === item.source_ids[0])?.label ?? 'Other';
 
   const workOf = (item: TicketItem) =>
     work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
-  const prOf = (item: TicketItem) => mainPr(item.prs);
   const liveWork = (item: TicketItem) => {
     const w = workOf(item);
     return w?.state.kind === 'finished' ? null : w;
@@ -452,6 +426,30 @@
   let chord: string | null = null;
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
+  /** The full key list (`?`); the footer shows the first five. */
+  let keysOpen = $state(false);
+  const hints = $derived<[string, string][]>([
+    ['j k', 'Move'],
+    ['enter', enterLabel],
+    ['s shift+s', 'Start work, start now'],
+    ['w', 'Run workflow'],
+    ['m', 'Move to'],
+    ['/', 'Filter'],
+    ['space', 'Split'],
+    ['g', 'Open detail'],
+    ['shift+enter', 'Own pane'],
+    ['1 2 3', 'Who'],
+    ['mod+enter', 'Start marked'],
+    ['x', 'Select'],
+    ['p shift+p', 'Pull request, in browser'],
+    ['f then s', 'Current sprint'],
+    ['a shift+a', 'Assign me, unassign'],
+    ['v', 'Source'],
+    ['shift+g', 'Group'],
+    ['c', 'Comment'],
+    ['o', 'Open in browser'],
+    ['shift+r', 'Refresh'],
+  ]);
 
   // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
   // shortcut: on/off is per mount, not persisted; add `PaneContent::Tickets.split` if it should stick.
@@ -692,6 +690,9 @@
         if (wide) split = !split;
         else if (item) openDetail(item);
         break;
+      case '?':
+        keysOpen = true;
+        break;
       case '/':
         filterInput?.focus();
         filterInput?.select();
@@ -796,100 +797,46 @@
   aria-label="Tickets"
   {onkeydown}
 >
-  <header class="k-toolbar bar">
-    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
-    <input
-      class="k-filter"
-      bind:this={filterInput}
-      bind:value={filter}
-      placeholder="Filter (/)"
-      aria-label="Filter tickets"
-      onkeydown={filterKeys}
-    />
-    {#if !noSource}
-      <div class="who">
-        <Tabs
-          label="Whose tickets"
-          items={WHOS.map((w) => {
-            const n = countOf(w);
-            return { id: w, label: n === undefined ? WHO_LABELS[w] : `${WHO_LABELS[w]} ${n}` };
-          })}
-          value={whoTab ?? undefined}
-          onchange={setWho}
-        />
-        {#if people.length > 0 || person}
-          <Select
-            label="Person"
-            value={personEntry?.key ?? person ?? ''}
-            options={[
-              { value: '', label: 'Any person' },
-              ...(person && !personEntry ? [{ value: person, label: person }] : []),
-              ...people.map((p) => ({
-                value: p.key,
-                label: p.matched ? p.name : `${p.name} (tracker only)`,
-              })),
-            ]}
-            onchange={(id) => setPerson(id === '' ? null : id)}
-          />
-        {/if}
-      </div>
-    {/if}
-    {#if hasSprints || currentSprint}
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={currentSprint ? 'check' : undefined}
-        aria-pressed={currentSprint}
-        title="Only tickets in an active sprint (f, then s)"
-        onclick={() => (currentSprint = !currentSprint)}>Current sprint</Button
-      >
-    {/if}
-    <span class="spacer"></span>
-    {#if menuChoices}
-      <button
-        type="button"
-        class="source"
-        bind:this={sourceBtn}
-        aria-haspopup="menu"
-        aria-expanded={sourceMenu !== null}
-        title="Source (v)"
-        onclick={openSourceMenu}
-      >
-        {source
-          ? [source.label, source.tracker.views.find((v) => v.id === viewId)?.label]
-              .filter(Boolean)
-              .join(' · ')
-          : 'All sources'}
-        <Icon name="chevron-down" size={12} />
-      </button>
-    {/if}
-    {#if mode === 'list' && !noSource}
-      <Select
-        label="Group (g)"
-        value={groupBy}
-        options={groupBys.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
-        onchange={setGroup}
-      />
-      <Select
-        label="Sort"
-        value={sort}
-        options={SORTS.map((x) => ({ value: x, label: SORT_LABELS[x] }))}
-        onchange={setSort}
-      />
-    {/if}
-    {#if single}
-      <Tabs
-        label="Display mode"
-        items={[
-          { id: 'list', label: 'List', icon: 'list' },
-          { id: 'board', label: 'Board', icon: 'kanban' },
-        ]}
-        value={mode}
-        onchange={setMode}
-      />
-    {/if}
-    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
-  </header>
+  <TicketsToolbar
+    allProjects={scope.kind === 'all'}
+    bind:filter
+    bind:filterInput
+    onfilterkey={filterKeys}
+    hasSource={!noSource}
+    who={WHOS.map((w) => {
+      const n = countOf(w);
+      return { id: w, label: n === undefined ? WHO_LABELS[w] : `${WHO_LABELS[w]} ${n}` };
+    })}
+    {whoTab}
+    onwho={setWho}
+    people={[
+      { value: '', label: 'Any person' },
+      ...(person && !personEntry ? [{ value: person, label: person }] : []),
+      ...people.map((p) => ({ value: p.key, label: p.matched ? p.name : `${p.name} (tracker only)` })),
+    ]}
+    person={personEntry?.key ?? person ?? ''}
+    onperson={setPerson}
+    showSprint={hasSprints || currentSprint}
+    {currentSprint}
+    onsprint={() => (currentSprint = !currentSprint)}
+    sourceText={menuChoices
+      ? source
+        ? [source.label, source.tracker.views.find((v) => v.id === viewId)?.label].filter(Boolean).join(' · ')
+        : 'All sources'
+      : null}
+    bind:sourceBtn
+    sourceOpen={sourceMenu !== null}
+    onsource={openSourceMenu}
+    list={mode === 'list'}
+    {groupBy}
+    ongroup={setGroup}
+    {sort}
+    onsort={setSort}
+    canBoard={single !== null}
+    {mode}
+    onmode={setMode}
+    onrefresh={refresh}
+  />
 
   {#if noSource}
     <EmptyState icon="ticket" title="Add a ticket source: pick a board">
@@ -941,7 +888,7 @@
       </EmptyState>
     {:else if mode === 'list'}
       <div class="split">
-        <div class="list">
+        <div class="list" style:--key-chars={keyChars}>
           <VirtualList
             bind:this={vlist}
             items={rows}
@@ -978,111 +925,30 @@
                   {#if overWip}<span class="wip-note">Above your limit of {wipLimit}</span>{/if}
                 </button>
               {:else}
-                {@const item = r.item}
-                {@const t = item.ticket}
-                {@const pr = prOf(item)}
-                {@const wait = waitChip(item.waiting.filter((w) => w.why !== 'assigned'))}
-                {@const isPicked = picked.includes(r.key)}
-                {@const phase = phaseFor(item)}
-                {@const age = ageLevel(t, Date.now())}
-                <button
-                  type="button"
-                  tabindex="-1"
-                  class="k-row"
-                  class:selected={cur === item}
-                  class:picked={isPicked}
-                  aria-current={cur === item ? 'true' : undefined}
-                  aria-pressed={picked.length > 0 ? isPicked : undefined}
-                  data-key={r.key}
-                  onclick={(e) => {
+                <TicketRow
+                  item={r.item}
+                  rowKey={r.key}
+                  selected={cur === r.item}
+                  picked={picked.includes(r.key)}
+                  picking={picked.length > 0}
+                  phase={phaseFor(r.item)}
+                  hasWork={hasWork(r.item)}
+                  marked={batch.has(r.item.ticket.ref)}
+                  {groupBy}
+                  source={showSource ? sourceOf(r.item) : null}
+                  showAssignee={whoTab !== 'mine'}
+                  onselect={(e) => {
                     selKey = r.key;
                     if (e.metaKey || e.ctrlKey) togglePick(r.key);
                   }}
-                  ondblclick={() => openDetail(item)}
-                >
-                  <span class="k-row-lamp"
-                    >{#if isPicked}<Icon name="check" size={12} />{:else}<Lamp
-                        level={phase?.lamp ?? 'none'}
-                        title={phase?.label}
-                      />{/if}</span
-                  >
-                  <span class="k-row-key">{t.ref.key}</span>
-                  <span class="k-row-title"
-                    >{t.title}<span class="acts" data-acts>
-                      <RowButton
-                        icon="arrow-right"
-                        label="Move (m)"
-                        onclick={() => {
-                          selKey = r.key;
-                          pickOrMove(item);
-                        }}
-                      />
-                      <RowButton
-                        icon="git-pull-request"
-                        label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
-                        disabled={item.prs.length === 0}
-                        onclick={() => openPrOf(item, false)}
-                      />
-                      <RowButton
-                        icon="play"
-                        label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
-                        onclick={() => start(item)}
-                      /></span
-                    ></span
-                  >
-                  <span class="meta">
-                    {#if batch.has(t.ref)}<Badge
-                        tone="accent"
-                        title="Marked: Mod+Enter starts the marked tickets">marked</Badge
-                      >{/if}
-                    {#if phase}<span
-                        class="k-row-meta"
-                        data-phase={phase.id}
-                        title={phase.id === 'run' ? phase.detail : undefined}>{phase.label}</span
-                      >{/if}
-                    {#if pr}<span class="pr" data-pr
-                        ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
-                          ><PrChip {pr} /></RowButton
-                        ></span
-                      >{/if}
-                    {#if wait}<Badge tone="neutral" title={wait.title}>{wait.label}</Badge>{/if}
-                    {#if t.sprint && groupBy !== 'sprint'}
-                      <span
-                        class="sprint"
-                        class:active={t.sprint.active}
-                        title={t.sprint.active ? `${t.sprint.name} (current)` : t.sprint.name}
-                        >{t.sprint.name}</span
-                      >
-                    {/if}
-                    <span class="status-slot" data-status
-                      ><RowButton
-                        label={`${t.status.name}: move ${t.ref.key} (m)`}
-                        onclick={() => {
-                          selKey = r.key;
-                          pickOrMove(item);
-                        }}><StatusChip status={t.status} /></RowButton
-                      ></span
-                    >
-                    <span class="age-slot"
-                      >{#if age}<span
-                          class="aged {age}"
-                          data-age={age}
-                          title={`${ageDays(t, Date.now())} days in ${t.status.name}`}
-                          >{ageDays(t, Date.now())}d</span
-                        >{/if}</span
-                    >
-                    {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
-                    {#if whoTab !== 'mine'}
-                      <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
-                        >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
-                      >
-                    {/if}
-                    <!-- An aged row shows one duration (days in status); the empty slot keeps the column. -->
-                    <span class="k-row-meta age"
-                      >{age ? '' : relativeTime(Date.parse(item.ticket.updated_at))}</span
-                    >
-                  </span>
-                </button>
+                  onopen={() => openDetail(r.item)}
+                  onmove={() => {
+                    selKey = r.key;
+                    pickOrMove(r.item);
+                  }}
+                  onpr={() => openPrOf(r.item, false)}
+                  onstart={() => start(r.item)}
+                />
               {/if}
             {/snippet}
           </VirtualList>
@@ -1179,30 +1045,7 @@
     {/if}
   {/if}
 
-  <KeyHints
-    hints={[
-      ['j k', 'Move'],
-      ['space', 'Split'],
-      ['enter', enterLabel],
-      ['g', 'Open detail'],
-      ['shift+enter', 'Own pane'],
-      ['1 2 3', 'Who'],
-      ['/', 'Filter'],
-      ['mod+enter', 'Start marked'],
-      ['m', 'Move to'],
-      ['x', 'Select'],
-      ['p shift+p', 'Pull request, in browser'],
-      ['f then s', 'Current sprint'],
-      ['a shift+a', 'Assign me, unassign'],
-      ['s shift+s', 'Start work, start now'],
-      ['w', 'Run workflow'],
-      ['v', 'Source'],
-      ['shift+g', 'Group'],
-      ['c', 'Comment'],
-      ['o', 'Open in browser'],
-      ['shift+r', 'Refresh'],
-    ]}
-  />
+  <KeyHints hints={[...hints.slice(0, 5), ['?', 'All keys']]} />
 </div>
 
 {#if picker}
@@ -1248,53 +1091,52 @@
   />
 {/if}
 <MoveDialogs {move} />
+{#if keysOpen}
+  <Dialog
+    title="Ticket keys"
+    width={420}
+    onclose={() => {
+      keysOpen = false;
+      root?.focus();
+    }}
+  >
+    <dl class="keys">
+      {#each hints as [keys, label] (keys)}
+        <dt>
+          {#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">then</span>{:else}<Kbd
+                chord={k}
+              />{/if}{/each}
+        </dt>
+        <dd>{label}</dd>
+      {/each}
+    </dl>
+  </Dialog>
+{/if}
 
 <style>
-  /* A narrow pane wraps the toolbar to a second line rather than hiding controls; labels never wrap. */
-  .bar {
-    flex-wrap: wrap;
-    row-gap: var(--k-space-2);
-    height: auto;
-    min-height: var(--k-toolbar-height);
-    padding-block: var(--k-space-2);
-    white-space: nowrap;
-  }
-
-  .bar .k-filter {
-    flex: 0 1 180px;
-    min-width: 72px;
-  }
-
-  .who {
-    display: inline-flex;
+  .keys {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--k-space-3) var(--k-space-5);
+    margin: 0;
     align-items: center;
-    gap: var(--k-space-3);
-    font-variant-numeric: tabular-nums;
   }
 
-  /* Fixed width so the category bars form one column down the list. */
-  .status-slot {
+  .keys dt {
     display: inline-flex;
-    flex: none;
-    width: 112px;
+    gap: var(--k-space-1);
+    justify-self: end;
   }
 
-  .status-slot :global(span) {
-    max-width: 100%;
+  .keys dd {
+    margin: 0;
+    color: var(--k-fg-muted);
   }
 
-  /* Fixed too, so source names of any length do not shift the status column. */
-  .source-slot {
-    display: inline-flex;
-    flex: none;
-    justify-content: flex-end;
-    width: 88px;
-  }
-
-  .source-slot :global(.k-badge) {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .then {
+    padding: 0 2px;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
   }
 
   /* Split view: list left, the selected ticket's detail right, the 1px splitter gap between. */
@@ -1323,40 +1165,8 @@
     color: var(--k-fg-subtle);
   }
 
-  /* The title is the row: the meta shrinks first, then drops the source and avatar at split widths. */
   .list {
     container-type: inline-size;
-  }
-
-  .k-row-title {
-    position: relative;
-    min-width: 120px;
-  }
-
-  @container (width < 560px) {
-    .source-slot,
-    .sprint,
-    .meta .k-avatar {
-      display: none;
-    }
-  }
-
-  .source {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    height: 22px;
-    padding: 0 var(--k-space-3);
-    border: 0;
-    border-radius: var(--k-radius);
-    background: transparent;
-    color: var(--k-fg-chrome);
-    cursor: pointer;
-  }
-
-  .source:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
   }
 
   .head {
@@ -1370,91 +1180,6 @@
   .head.selected {
     background: var(--k-bg-selected);
     box-shadow: inset 2px 0 0 var(--k-accent);
-  }
-
-  .meta {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-4);
-  }
-
-  .pr {
-    display: inline-flex;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
-  }
-
-  .age {
-    min-width: 52px;
-    text-align: right;
-  }
-
-  /* Status age: quiet at 7 days, --k-warn at 14, --k-danger at 21; text tint only (DESIGN §6.11). */
-  .age-slot {
-    display: inline-flex;
-    flex: none;
-    justify-content: flex-end;
-    width: 28px;
-  }
-
-  .aged {
-    font-size: var(--k-font-size-xs);
-    font-variant-numeric: tabular-nums;
-    color: var(--k-fg-muted);
-  }
-
-  .aged.warn {
-    color: var(--k-warn);
-  }
-
-  .aged.danger {
-    color: var(--k-danger);
-  }
-
-  .sprint {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .sprint.active {
-    color: var(--k-fg-muted);
-  }
-
-  /* Compact row actions: on the selected row, on hover and on focus-within (DESIGN §7), laid over
-     the end of the title on the row's own backing so showing them never reflows the row. */
-  .acts {
-    position: absolute;
-    inset: 0 0 0 auto;
-    display: none;
-    align-items: center;
-    gap: var(--k-space-1);
-    padding-left: var(--k-space-2);
-    background: linear-gradient(var(--k-bg-hover), var(--k-bg-hover)), var(--k-well);
-  }
-
-  .k-row.selected .acts,
-  .k-row.picked .acts {
-    background: var(--k-bg-selected);
-  }
-
-  .k-row:hover .acts,
-  .k-row.selected .acts,
-  .k-row:focus-within .acts {
-    display: inline-flex;
-  }
-
-  .k-row.picked {
-    background: var(--k-bg-selected);
-  }
-
-  .k-row.picked .k-row-lamp {
-    color: var(--k-accent);
   }
 
   .head.wip {

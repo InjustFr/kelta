@@ -22,6 +22,9 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'browser', key: 'o' },
 ];
 
+/** Opens the detail's More menu (Cmd+. on macOS, Ctrl+Shift+. on Linux). */
+export const MORE_CHORD = 'mod+.';
+
 /**
  * Why `action` cannot run on `item` (null = it can). `branch` is the ticket's branch, if any;
  * `workflows` its loaded workflows, or why there are none (`workflow.svelte.ts`).

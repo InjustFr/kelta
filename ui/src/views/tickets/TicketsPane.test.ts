@@ -338,6 +338,11 @@ describe('TicketsPane states', () => {
 });
 
 const pane = () => screen.getByTestId('tickets-pane');
+/** Person, sprint, grouping and sort live in the toolbar's View menu. */
+const openView = async () => {
+  if (!screen.queryByRole('dialog', { name: 'View' }))
+    await fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+};
 const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(pane(), { key, ...init });
 const groupNames = (c: HTMLElement) =>
   [...c.querySelectorAll<HTMLElement>('[data-group]')].map((g) => g.textContent?.replace(/\s+/g, ' ').trim());
@@ -471,6 +476,15 @@ describe('TicketsPane workbench', () => {
     expect(ui.sheet).toBeNull();
   });
 
+  it('the footer shows five keys and ?, which lists them all', async () => {
+    const { container } = mountBoard('list');
+    await ready(container);
+    expect(container.querySelectorAll('.hints .hint')).toHaveLength(6);
+    await press('?');
+    const keys = await screen.findByRole('dialog', { name: 'Ticket keys' });
+    expect(keys.textContent).toContain('Current sprint');
+  });
+
   it('shows the PR chip of a ticket linked by a review', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => {
@@ -532,6 +546,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
     await press('G');
+    await openView();
     await fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'key' } });
     expect(savedContent()).toMatchObject({ group: 'status', sort: 'key' });
   });
@@ -578,14 +593,16 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(doing()?.textContent).toContain('Above your limit of 0');
   });
 
-  it('f s keeps the current sprint; rows carry a sprint chip unless grouped by sprint', async () => {
+  it('f s keeps the current sprint; row tooltips name the sprint unless grouped by sprint', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
-    expect(row(container, 'SHOP-142').querySelector('.sprint')?.textContent).toBe('SHOP Sprint 12');
+    expect(row(container, 'SHOP-142').title).toContain('Sprint: SHOP Sprint 12');
     await press('f');
     await press('s');
     await waitFor(() => expect(row(container, 'SHOP-155')).toBeNull());
     expect(row(container, 'SHOP-142')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /^View, narrowed to current sprint/ })).toBeTruthy();
+    await openView();
     expect(screen.getByRole('button', { name: /Current sprint/ }).getAttribute('aria-pressed')).toBe('true');
     await fireEvent.click(screen.getByRole('button', { name: /Current sprint/ }));
     await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
@@ -594,13 +611,15 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(row(container, 'SHOP-155')).not.toBeNull();
     for (let i = 0; i < 3; i++) await press('G'); // sprint
     await waitFor(() => expect(container.querySelector('[data-group="SHOP Sprint 12"]')).toBeNull());
-    expect(row(container, 'SHOP-142').querySelector('.sprint')).toBeNull();
+    expect(row(container, 'SHOP-142').title).not.toContain('Sprint:');
   });
 
   it('narrows to a team person from the Who control, on top of Team, and persists it', async () => {
     inLayout();
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^View/ })).toBeTruthy());
+    await openView();
     await waitFor(() => expect(screen.getByRole('option', { name: /Bob.*\(tracker only\)/ })).toBeTruthy());
     await fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'jira-acme:u-bob' } });
     await waitFor(() => expect(row(container, 'SHOP-120')).not.toBeNull());
@@ -615,6 +634,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     const { container } = mountBoard('list', 'shop', { who: 'anyone', person: 'u-bob' });
     await waitFor(() => expect(row(container, 'SHOP-120')).not.toBeNull());
     expect(row(container, 'SHOP-151')).toBeNull();
+    await openView();
     await waitFor(() =>
       expect((screen.getByLabelText('Person') as HTMLSelectElement).value).toBe('jira-acme:u-bob'),
     );
@@ -900,6 +920,7 @@ describe('TicketsPane in the rail Tickets view', () => {
     await waitFor(() => expect(row(container, '#88', 'gitlab-corp')).not.toBeNull());
     expect(screen.queryByRole('tab', { name: 'Display mode' })).toBeNull(); // several sources: no board
     expect(screen.getByRole('tab', { name: /^Team/ })).toBeTruthy();
+    await openView();
     await fireEvent.change(screen.getByLabelText('Group (g)'), { target: { value: 'source' } });
     await waitFor(() => expect(groupNames(container).some((g) => g?.startsWith('Ops board'))).toBe(true));
     expect(groupNames(container)).toContain('Billing board 4');
