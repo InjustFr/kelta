@@ -109,9 +109,9 @@ else
   skip linux-check "no Linux paths changed"
 fi
 
-printf '\n%-14s %-30s %s\n' STEP RESULT SECONDS
+printf '\n%-14s %-50s %s\n' STEP RESULT SECONDS
 for i in "${!names[@]}"; do
-  printf '%-14s %-30s %s\n' "${names[$i]}" "${results[$i]}" "${secs[$i]}"
+  printf '%-14s %-50s %s\n' "${names[$i]}" "${results[$i]}" "${secs[$i]}"
 done
 # nextest prints a test that failed and then passed on its retry as FLAKY: list them, never hide them.
 flaky="$(grep -E '^ *FLAKY ' "$log" | sort -u || true)"
