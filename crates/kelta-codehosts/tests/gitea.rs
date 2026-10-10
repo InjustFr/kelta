@@ -57,6 +57,25 @@ async fn review_requested_search_follows_link_pages_and_drops_drafts() {
     assert!(all.iter().any(|r| r.draft && r.r#ref.number == 9));
 }
 
+#[tokio::test]
+async fn paging_never_follows_a_next_link_to_another_origin() {
+    let server = MockServer::start().await;
+    let other = MockServer::start().await;
+    common(&server).await;
+    let next = format!("{}/api/v1/repos/issues/search?page=2", other.uri());
+    Mock::given(path("/api/v1/repos/issues/search"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("link", format!("<{next}>; rel=\"next\"").as_str())
+                .set_body_string(fixture_text("gitea/search_pulls.json")),
+        )
+        .mount(&server)
+        .await;
+    let list = gt(&server).list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!(list.len(), 1, "first page only");
+    assert!(other.received_requests().await.unwrap().is_empty(), "token never sent to the other host");
+}
+
 async fn mount_page2(server: &MockServer) {
     mount(server, "GET", "/api/v1/repos/issues/search", 200, "gitea/search_pulls_p2.json").await;
 }
