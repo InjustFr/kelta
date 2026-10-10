@@ -5,7 +5,8 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { GLOBAL, projects, reviews, settings, toasts, ui, work } from '$lib/stores';
+  import { findPane, replacePaneContent } from '$lib/layout';
+  import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -15,6 +16,7 @@
     Lamp,
     Menu,
     Select,
+    Tabs,
     Toggle,
     ROW_HEIGHT,
     VirtualList,
@@ -24,7 +26,8 @@
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
-  import { openFrom } from '../work/nav';
+  import { openFrom, saveReviewsView } from '../work/nav';
+  import { groupByTicket } from './group';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
@@ -39,36 +42,60 @@
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const scope = $derived(content.scope);
-  const kinds: { kind: ReviewKind; label: string }[] = [
-    { kind: 'review_requested', label: 'Review requested' },
-    { kind: 'authored', label: 'My PRs' },
+  const TABS: { kind: ReviewKind; label: string }[] = [
+    { kind: 'review_requested', label: 'For me' },
+    { kind: 'team', label: 'Team' },
+    { kind: 'authored', label: 'Mine' },
   ];
+  /** Team spans the repos of the projects a ticket source feeds: in a project's pane, only when one feeds it. */
+  const sourceList = $derived(settings.value()?.sources ?? []);
+  const teamOffered = $derived(
+    scope.kind !== 'project' || sourceList.some((s) => s.projects.includes(scope.id)),
+  );
+  const tabs = $derived(TABS.filter((t) => t.kind !== 'team' || teamOffered));
+  let tabOverride = $state<ReviewKind | null>(null);
+  const tab = $derived.by((): ReviewKind => {
+    const t = tabOverride ?? content.tab ?? 'review_requested';
+    return tabs.some((x) => x.kind === t) ? t : 'review_requested';
+  });
+
+  function setTab(k: ReviewKind): void {
+    tabOverride = k;
+    if (projectId === GLOBAL) return saveReviewsView(k);
+    const current = layout.get(projectId);
+    if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
+    // The core polls Team only while a visible pane shows it (its `tab`).
+    layout.update(projectId, (l) => ({
+      ...l,
+      tabs: l.tabs.map((t) => ({ ...t, root: replacePaneContent(t.root, paneId, { ...content, tab: k }) })),
+    }));
+  }
 
   const lists = $derived({
     review_requested: reviews.list(scope, 'review_requested'),
+    team: reviews.list(scope, 'team'),
     authored: reviews.list(scope, 'authored'),
   });
-  const bothLoading = $derived(
-    (lists.review_requested.loading && !lists.review_requested.data) ||
-      (lists.authored.loading && !lists.authored.data),
-  );
-  const noData = $derived(!lists.review_requested.data && !lists.authored.data);
-  const firstError = $derived(lists.review_requested.error ?? lists.authored.error);
-  const stale = $derived(lists.review_requested.stale || lists.authored.stale);
-  const fetchedAt = $derived(lists.review_requested.fetchedAt ?? lists.authored.fetchedAt);
+  const shown = $derived(lists[tab]);
+  const noData = $derived(!shown.data);
+  const firstError = $derived(shown.error);
   const accountErrors = $derived.by(() => {
     const seen: Record<string, AccountError> = {};
-    for (const l of [lists.review_requested, lists.authored])
-      for (const e of l.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
+    for (const e of shown.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
     return Object.values(seen);
   });
 
+  // For me and Mine always (their counts, `p` hand-offs); Team only while shown.
   $effect(() => {
     const s = scope;
     untrack(() => {
       void reviews.load(s, 'review_requested');
       void reviews.load(s, 'authored');
     });
+  });
+  $effect(() => {
+    const s = scope;
+    if (tab === 'team') untrack(() => void reviews.load(s, 'team'));
   });
 
   // ---- filters ------------------------------------------------------------------------------
@@ -77,11 +104,23 @@
   let repo = $state('');
   let filterInput = $state<HTMLInputElement>();
 
-  const allItems = $derived([
-    ...(lists.review_requested.data?.items ?? []),
-    ...(lists.authored.data?.items ?? []),
-  ]);
+  const allItems = $derived(shown.data?.items ?? []);
   const repos = $derived([...new Set(allItems.map((i) => i.review.ref.repo))].sort());
+  /** `G` on Team: rows grouped by their first linked ticket. shortcut: per mount, not persisted. */
+  let grouped = $state(false);
+  /** My open PRs (Mine lists them all): Team rows read "you" as their author. */
+  const mineKeys = $derived(new Set((lists.authored.data?.items ?? []).map((i) => reviewKey(i.review.ref))));
+  /** No source feeds a project (of the scope) bound to a repository: Team has nothing to list. */
+  const noTeamReach = $derived(
+    settings.value() !== null &&
+      !sourceList.some((s) =>
+        s.projects.some(
+          (p) =>
+            (scope.kind !== 'project' || p === scope.id) &&
+            !!projects.byId(p)?.repos.some((r) => r.code_host),
+        ),
+      ),
+  );
 
   function matches(i: ReviewItem): boolean {
     const r = i.review;
@@ -99,14 +138,23 @@
     | { type: 'item'; id: string; item: ReviewItem };
 
   const rows = $derived.by((): Row[] => {
-    const out: Row[] = [];
-    for (const k of kinds) {
-      const items = (lists[k.kind].data?.items ?? []).filter(matches);
-      out.push({ type: 'header', id: `h:${k.kind}`, label: k.label, count: items.length });
-      for (const item of items)
-        out.push({ type: 'item', id: `${k.kind}:${reviewKey(item.review.ref)}`, item });
-    }
-    return out;
+    const items = allItems.filter(matches);
+    const row = (item: ReviewItem): Row => ({
+      type: 'item',
+      id: `${tab}:${reviewKey(item.review.ref)}`,
+      item,
+    });
+    if (tab !== 'team' || !grouped) return items.map(row);
+    const loaded = Object.values(tickets.lists).flatMap((l) => l.data?.items ?? []);
+    return groupByTicket(items, loaded).flatMap((g): Row[] => [
+      {
+        type: 'header',
+        id: `h:${g.key ?? ''}`,
+        label: g.key === null ? 'No ticket' : g.title ? `${g.key} ${g.title}` : g.key,
+        count: g.items.length,
+      },
+      ...g.items.map(row),
+    ]);
   });
   const itemRows = $derived(rows.filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item'));
   const totalItems = $derived(allItems.length);
@@ -121,12 +169,16 @@
     if (cur) vlist?.scrollToIndex(rows.indexOf(cur));
   });
 
-  // `p` on a ticket in the Tickets view (`ui.select`) lands on its PR here, in whichever list holds it.
+  // `p` on a ticket in the Tickets view (`ui.select`) lands on its PR here: For me, else Mine, else Team.
   $effect(() => {
     const want = ui.select;
     if (want?.view !== 'reviews' || home !== null) return;
-    const hit = itemRows.find((r) => reviewKey(r.item.review.ref) === want.key);
-    if (hit) selId = hit.id;
+    const holds = (k: ReviewKind) => lists[k].data?.items.some((i) => reviewKey(i.review.ref) === want.key);
+    const k = (['review_requested', 'authored', 'team'] as const).find(holds);
+    if (k) {
+      if (k !== untrack(() => tab)) setTab(k);
+      selId = `${k}:${want.key}`;
+    }
     ui.select = null;
   });
 
@@ -161,6 +213,7 @@
   function refresh(): void {
     void reviews.load(scope, 'review_requested', true);
     void reviews.load(scope, 'authored', true);
+    if (tab === 'team') void reviews.load(scope, 'team', true);
   }
 
   function openDetail(item: ReviewItem): void {
@@ -267,6 +320,17 @@
       case 'R':
         refresh();
         break;
+      case '1':
+      case '2':
+      case '3': {
+        const t = tabs[Number(e.key) - 1];
+        if (t) setTab(t.kind);
+        break;
+      }
+      case 'G':
+        if (tab !== 'team') return;
+        grouped = !grouped;
+        break;
       case 'o':
         if (item) browse(item);
         break;
@@ -325,6 +389,15 @@
       aria-label="Filter reviews"
       onkeydown={filterKeys}
     />
+    <Tabs
+      label="Reviews"
+      items={tabs.map((t) => {
+        const n = lists[t.kind].data?.items.length;
+        return { id: t.kind, label: n === undefined ? t.label : `${t.label} ${n}` };
+      })}
+      value={tab}
+      onchange={setTab}
+    />
     <!-- The tab and pane header already say "Reviews"; only the cross-project scope is news. -->
     {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
     <span class="spacer"></span>
@@ -339,7 +412,7 @@
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
-  {#if bothLoading && noData}
+  {#if shown.loading && noData}
     <Loading label="Loading reviews" />
   {:else if noData && firstError}
     <ErrorState error={firstError} title="Could not load reviews" onretry={refresh}>
@@ -351,17 +424,33 @@
     </ErrorState>
   {:else}
     <StateBanner
-      {stale}
-      {fetchedAt}
+      stale={shown.stale}
+      fetchedAt={shown.fetchedAt}
       error={noData ? null : firstError}
       errors={accountErrors}
       onretry={refresh}
     />
-    {#if totalItems === 0}
+    {#if totalItems === 0 && tab === 'team' && noTeamReach}
+      <EmptyState icon="git-pull-request" title="No ticket source feeds a project with a repository yet">
+        {#snippet actions()}<Button
+            variant="primary"
+            onclick={() =>
+              ui.openSheet('tracker.source_picker', {
+                projectId: scope.kind === 'project' ? scope.id : undefined,
+              })}>Add a ticket source</Button
+          >{/snippet}
+      </EmptyState>
+    {:else if totalItems === 0}
       <EmptyState
         icon="git-pull-request"
-        title="No review requests."
-        body="Pull requests where you are a requested reviewer show up here."
+        title={tab === 'team'
+          ? "No open PRs on your sources' repos"
+          : tab === 'authored'
+            ? 'No open PRs of yours.'
+            : 'No review requests.'}
+        body={tab === 'review_requested'
+          ? 'Pull requests where you are a requested reviewer show up here.'
+          : undefined}
       >
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
@@ -418,7 +507,13 @@
                         >{wait.label}</Badge
                       >{/if}
                     <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
-                    <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
+                    <span class="k-row-meta k-narrow-hide"
+                      >{rv.kind !== 'team'
+                        ? rv.author.name
+                        : mineKeys.has(reviewKey(rv.ref))
+                          ? 'you'
+                          : `@${rv.author.login ?? rv.author.name}`}</span
+                    >
                     {#if rv.additions !== null || rv.deletions !== null}
                       <span class="k-row-meta k-mono"
                         ><span class="add">+{rv.additions ?? 0}</span>
@@ -461,6 +556,8 @@
   <KeyHints
     hints={[
       ['j k', 'Move'],
+      ['1 2 3', 'Tab'],
+      ...(tab === 'team' ? [['shift+g', 'Group by ticket'] as [string, string]] : []),
       ['space', 'Split'],
       ['enter', 'Open'],
       ['shift+enter', 'Own pane'],

@@ -10,7 +10,9 @@ use kelta_core::clipboard::MemClipboard;
 use kelta_core::{ConfigBackend, Core, CoreDeps};
 use kelta_http::{HttpCtx, ProviderFactory};
 use kelta_proto::api::{CodeHost, SecretResolver, SettingsSource, Tracker};
-use kelta_proto::codehost::{CodeHostKind, PrCreate, PrState, Review, ReviewDetail, ReviewQuery, ReviewRef};
+use kelta_proto::codehost::{
+    CodeHostKind, PrCreate, PrState, Review, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
+};
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
@@ -195,6 +197,18 @@ impl CodeHost for ListHost {
             .lock()
             .iter()
             .filter(|r| r.kind == q.kind && (q.include_drafts || !r.draft))
+            .cloned()
+            .collect())
+    }
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        *self.calls.lock() += 1;
+        Ok(self
+            .reviews
+            .lock()
+            .iter()
+            .filter(|r| {
+                r.kind == ReviewKind::Team && repos.contains(&r.r#ref.repo) && (include_drafts || !r.draft)
+            })
             .cloned()
             .collect())
     }

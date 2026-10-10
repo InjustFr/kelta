@@ -63,7 +63,9 @@ export function openPr(pr: PrLink, projectId: ProjectId, browser = false): void 
     const key = reviewKey(review);
     if (
       ui.view !== null &&
-      KINDS.some((k) => reviews.items(ALL, k).some((i) => reviewKey(i.review.ref) === key))
+      [...KINDS, 'team' as const].some((k) =>
+        reviews.items(ALL, k).some((i) => reviewKey(i.review.ref) === key),
+      )
     ) {
       openView('reviews', key);
       return;

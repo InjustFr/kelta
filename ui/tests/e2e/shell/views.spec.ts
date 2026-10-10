@@ -45,7 +45,7 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
   await host.locator('[data-key="redmine-corp:4567"]').click();
   await page.keyboard.press('p');
 
-  // Reviews, on the PR (My PRs), its detail in the column beside the list.
+  // Reviews, on the PR (Mine), its detail in the column beside the list.
   await expect(host).toHaveAttribute('data-view', 'reviews');
   await expect(host.locator('.k-row.selected')).toHaveAttribute(
     'data-key',

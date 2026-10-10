@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { GLOBAL, layout, projects, reviews, tickets, toasts, ui } from '$lib/stores';
+import type { ReviewKind, Settings } from '$lib/gen';
+import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui } from '$lib/stores';
 
 import { openPr } from '../tickets/prs';
 import TicketsPane from '../tickets/TicketsPane.svelte';
@@ -41,6 +42,7 @@ function mountReviews() {
 describe('ReviewsPane linked tickets', () => {
   it('a linked ticket badge opens that ticket without opening the review', async () => {
     mountReviews();
+    await fireEvent.keyDown(await screen.findByTestId('reviews-pane'), { key: '3' }); // Mine
     const badge = await screen.findByRole('button', { name: 'Open SHOP-120' });
     await fireEvent.dblClick(badge); // would open the review if it reached the row
     await fireEvent.click(badge);
@@ -208,15 +210,137 @@ describe('ReviewsPane waiting chips (#240)', () => {
     const request = mock.state.reviews.find((r) => r.review.kind === 'review_requested')!;
     request.waiting = [{ ...asked, person: 'gh:bob', name: 'Bob', why: 'author', since: null }];
     mountReviews();
-    const mine = await screen.findByText(/waiting on Anna/);
-    expect(mine.className).toMatch(/warn/);
-    const theirs = screen.getByText('waiting on Bob (author)');
+    const theirs = await screen.findByText('waiting on Bob (author)');
     expect(theirs.className).not.toMatch(/warn/);
     await fireEvent.click(theirs.closest('.k-row')!);
     await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
     expect(screen.queryByRole('menu', { name: 'Nudge reviewers' })).toBeNull();
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: '3' });
+    const mine = await screen.findByText(/waiting on Anna/);
+    expect(mine.className).toMatch(/warn/);
     await fireEvent.click(mine.closest('.k-row')!);
     await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
     expect(await screen.findByRole('menu', { name: 'Nudge reviewers' })).toBeTruthy();
+  });
+});
+
+describe('ReviewsPane tabs and Team (#241)', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('kelta.view.reviews');
+    settings.effective = {};
+    await Promise.all([projects.load(), settings.load()]);
+  });
+  const tabs = () => screen.getAllByRole('tab').map((t) => t.textContent?.trim());
+  const keys = () =>
+    [...document.querySelectorAll('.k-row[data-key]')].map((r) => r.getAttribute('data-key'));
+  const press = (key: string) => fireEvent.keyDown(pane(), { key });
+  const keysOf = (kind: ReviewKind) =>
+    mock.state.reviews
+      .filter((r) => r.review.kind === kind)
+      .map((r) => `${r.review.ref.account}:${r.review.ref.repo}#${r.review.ref.number}`);
+  const mountTab = (
+    tab: ReviewKind | null,
+    scope: { kind: 'all' } | { kind: 'project'; id: string } = { kind: 'all' },
+  ) =>
+    render(ReviewsPane, {
+      props: {
+        projectId: 'shop',
+        tabId: 'tab-1',
+        paneId: 'p',
+        content: { kind: 'reviews', scope, tab },
+        visible: true,
+        focused: true,
+      },
+    });
+
+  it('For me / Team / Mine with counts, switched by 1 2 3; the rail view saves the tab and polls it', async () => {
+    ui.view = 'reviews';
+    mountGlobal();
+    await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team', 'Mine 3']));
+    expect(keys().sort()).toEqual(keysOf('review_requested').sort());
+    await press('3');
+    await waitFor(() => expect(keys().sort()).toEqual(keysOf('authored').sort()));
+    expect(
+      mock.calls.some((c) => c.cmd === 'review_list' && (c.args as { kind: string }).kind === 'team'),
+    ).toBe(false);
+    await press('2');
+    await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team 7', 'Mine 3']));
+    expect(globalContent('reviews')).toMatchObject({ tab: 'team' });
+    const set = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1);
+    expect(set?.args).toMatchObject({ content: { kind: 'reviews', tab: 'team' } });
+  });
+
+  it('a project pane keeps its tab; a project no source feeds has no Team tab', async () => {
+    layout.byProject = {
+      shop: {
+        project_id: 'shop',
+        active_tab: 'tab-1',
+        rev: 0,
+        tabs: [
+          {
+            id: 'tab-1',
+            title: 'Reviews',
+            work_item_id: null,
+            focused_pane: 'p',
+            zoomed_pane: null,
+            root: {
+              type: 'pane',
+              id: 'p',
+              content: { kind: 'reviews', scope: { kind: 'project', id: 'shop' } },
+            },
+          },
+        ],
+      },
+    } as unknown as typeof layout.byProject;
+    const fed = mountTab(null, { kind: 'project', id: 'shop' });
+    await waitFor(() => expect(tabs()[1]).toBe('Team'));
+    await press('2');
+    const root = layout.get('shop')!.tabs[0]!.root;
+    expect(root.type === 'pane' && root.content).toMatchObject({ kind: 'reviews', tab: 'team' });
+    fed.unmount();
+    (mock.state.settings.value as unknown as Settings).sources = [];
+    settings.effective = {};
+    await settings.load();
+    mountTab('team', { kind: 'project', id: 'shop' });
+    await waitFor(() => expect(tabs().map((t) => t?.split(' ')[0])).toEqual(['For', 'Mine']));
+    expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^For me/);
+  });
+
+  it('Team rows read "you" on my PRs; G groups them by first ticket, No ticket last; j k skip headers', async () => {
+    mountTab('team');
+    await waitFor(() => expect(keys()).toHaveLength(7));
+    const mine = keysOf('authored')[0]!;
+    const row = (k: string) => document.querySelector(`.k-row[data-key="${k}"]`)!;
+    expect(row(mine).textContent).toContain('you');
+    expect(row(keysOf('review_requested')[0]!).textContent).toMatch(/@\S+/);
+    expect(document.querySelector('.k-group')).toBeNull();
+    await press('G');
+    const headers = () => [...document.querySelectorAll('.k-group')].map((h) => h.textContent?.trim() ?? '');
+    await waitFor(() => expect(headers().at(-1)).toMatch(/^No ticket/));
+    expect(headers().find((h) => h.startsWith('SHOP-142'))).toMatch(/2$/);
+    expect(headers()).toContainEqual(expect.stringMatching(/^ada\/kelta-tools#12/));
+    await press('Home');
+    for (let i = 0; i < 8; i++) {
+      await press('j');
+      expect(selectedKey()).toBeTruthy();
+    }
+    await press('G');
+    await waitFor(() => expect(document.querySelector('.k-group')).toBeNull());
+  });
+
+  it('p from a ticket lands on Team when the PR is only there', async () => {
+    const base = mock.state.reviews.find((r) => r.project_ids.includes('shop'))!;
+    const ref = { ...base.review.ref, number: 999 };
+    mock.state.reviews.push({ ...base, review: { ...base.review, ref, kind: 'team' } });
+    await Promise.all(
+      (['review_requested', 'authored', 'team'] as const).map((k) => reviews.load({ kind: 'all' }, k)),
+    );
+    const pr = mock.state.tickets.find((t) => t.ticket.ref.key === '4567')!.prs[0]!;
+    ui.view = 'tickets';
+    openPr({ ...pr, account: ref.account, repo: ref.repo, number: 999 }, 'shop');
+    expect(ui.view).toBe('reviews');
+    mountGlobal();
+    await waitFor(() => expect(selectedKey()).toBe(`${ref.account}:${ref.repo}#999`));
+    expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^Team/);
   });
 });

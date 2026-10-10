@@ -1045,11 +1045,16 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     // ---- reviews ---------------------------------------------------------------------------
+    // Team: every PR of the scope, as the core lists the source-fed repos' open PRs.
     review_list: ({ scope, kind }) => ({
       items: clone(
         state.reviews.filter(
-          (r) => r.review.kind === kind && (scope.kind === 'all' || r.project_ids.includes(scope.id)),
+          (r) =>
+            (kind === 'team' ? r.project_ids.length > 0 : r.review.kind === kind) &&
+            (scope.kind === 'all' || r.project_ids.includes(scope.id)),
         ),
+      ).map((r) =>
+        kind === 'team' ? { ...r, review: { ...r.review, kind, my_state: null, reviewed_head: null } } : r,
       ),
       stale: false,
       errors: [],
