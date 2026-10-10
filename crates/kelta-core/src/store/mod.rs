@@ -464,8 +464,8 @@ pub mod q {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
-             review_due, claude_replied, title, pr_title_needs_key)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -473,7 +473,8 @@ pub mod q {
              pr_url = excluded.pr_url, state_json = excluded.state_json, updated_at = excluded.updated_at,
              session_ids_json = excluded.session_ids_json, review_due = excluded.review_due,
              claude_replied = excluded.claude_replied, title = excluded.title,
-             pr_title_needs_key = excluded.pr_title_needs_key",
+             pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
+             rebase_json = excluded.rebase_json",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -496,6 +497,8 @@ pub mod q {
                 w.claude_replied,
                 w.title,
                 w.pr_title_needs_key,
+                serde_json::to_string(&w.sent_threads)?,
+                json_opt(&w.rebase)?,
             ],
         )
         .map_err(db_err)?;
@@ -513,13 +516,17 @@ pub mod q {
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
-        claude_replied, title, pr_title_needs_key";
+        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json";
 
-    fn work_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<(WorkItem, String, String, String, String)> {
+    type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
+
+    fn work_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkRaw> {
         let ticket: Option<String> = r.get(3)?;
         let review: Option<String> = r.get(4)?;
         let state: String = r.get(13)?;
         let sessions: String = r.get(15)?;
+        let threads: String = r.get(20)?;
+        let rebase: Option<String> = r.get(21)?;
         let item = WorkItem {
             id: WorkItemId::new(r.get::<_, String>(0)?),
             project_id: ProjectId::new(r.get::<_, String>(1)?),
@@ -542,12 +549,14 @@ pub mod q {
             claude_replied: r.get(17)?,
             title: r.get(18)?,
             pr_title_needs_key: r.get(19)?,
+            sent_threads: Vec::new(),
+            rebase: None,
         };
-        Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions))
+        Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }
 
-    fn finish_work(c: &Connection, raw: (WorkItem, String, String, String, String)) -> R<WorkItem> {
-        let (mut item, ticket, review, state, sessions) = raw;
+    fn finish_work(c: &Connection, raw: WorkRaw) -> R<WorkItem> {
+        let (mut item, ticket, review, state, sessions, threads, rebase) = raw;
         if !ticket.is_empty() {
             item.ticket = Some(serde_json::from_str::<TicketRef>(&ticket)?);
         }
@@ -556,6 +565,8 @@ pub mod q {
         }
         item.state = serde_json::from_str(&state)?;
         item.session_ids = serde_json::from_str(&sessions).unwrap_or_default();
+        item.sent_threads = serde_json::from_str(&threads).unwrap_or_default();
+        item.rebase = rebase.and_then(|r| serde_json::from_str(&r).ok());
         item.steps = steps(c, &item.id)?;
         Ok(item)
     }

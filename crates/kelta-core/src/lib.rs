@@ -17,6 +17,7 @@ pub mod feeds;
 pub mod layout;
 pub mod layout_store;
 pub mod notifier;
+pub mod oauth;
 pub mod perf;
 pub mod projects;
 pub mod providers;
@@ -175,6 +176,8 @@ pub struct Core {
     pub(crate) http_refs: std::sync::atomic::AtomicU32,
     pub(crate) last_reload: Mutex<Option<std::time::Instant>>,
     pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
+    /// Device-flow sign-ins between start and finish, by user code.
+    pub(crate) oauth: Mutex<std::collections::HashMap<String, oauth::Pending>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -323,6 +326,7 @@ impl Core {
                 http_refs: std::sync::atomic::AtomicU32::new(0),
                 last_reload: Mutex::new(None),
                 claude_ver: Mutex::new(None),
+                oauth: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -618,6 +622,9 @@ impl CoreApi for Core {
     async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
         self.work.create_pr(id, draft).await
     }
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
+        self.work.feedback(id).await
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,
@@ -625,6 +632,15 @@ impl CoreApi for Core {
         line: Option<u32>,
     ) -> Result<(), KeltaError> {
         self.work.editor_open(target, path, line).await
+    }
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.work.editor_diff(target, old, proposed, close).await
     }
     async fn tool_open(
         &self,

@@ -106,7 +106,8 @@ export interface AccountDraft {
   kind: AccountKind;
   base_url: string;
   flavor: 'auto' | 'cloud' | 'dc';
-  auth: '' | 'basic' | 'bearer' | 'api_key' | 'token';
+  /** `oauth` is set by "Sign in with GitHub / GitLab", never picked by hand. */
+  auth: '' | 'basic' | 'bearer' | 'api_key' | 'token' | 'oauth';
   email: string;
   user: string;
   secret: string;
@@ -207,6 +208,22 @@ export function buildAccount(d: AccountDraft): JsonValue {
   if (d.poll_secs.trim()) out.poll_secs = Number(d.poll_secs.trim());
   if (d.web_url.trim()) out.web_url = d.web_url.trim();
   return out;
+}
+
+/** Host `oauth.client_ids` is keyed by, for kinds with browser sign-in (mirrors kelta-http `oauth::client_host`). */
+export function oauthHost(kind: AccountKind, baseUrl: string): string | null {
+  if (kind !== 'github' && kind !== 'gitlab') return null;
+  try {
+    const host = new URL(baseUrl.trim() || kindInfo(kind).baseUrlDefault!).hostname;
+    return host === 'api.github.com' ? 'github.com' : host;
+  } catch {
+    return null;
+  }
+}
+
+/** Where browser sign-in stores the token: the draft's own keyring:/file: ref, else `keyring:<id>`. */
+export function oauthSecretRef(d: AccountDraft): string {
+  return /^(keyring|file):./.test(d.secret) ? d.secret : `keyring:${d.id}`;
 }
 
 export interface SecretAdvice {

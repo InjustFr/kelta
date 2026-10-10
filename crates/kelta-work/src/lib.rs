@@ -18,8 +18,10 @@ pub mod nvim;
 pub mod plan;
 pub mod template;
 
+mod fixloop;
 mod listener;
 mod ops;
+mod rebase;
 mod saga;
 mod signals;
 mod status;
@@ -33,15 +35,15 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use kelta_proto::api::{CoreApi, WorkStore};
-use kelta_proto::codehost::PrDraft;
+use kelta_proto::codehost::{Feedback, PrDraft};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    EditorTarget, FinishOpts, GitStatus, SessionInfo, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem,
-    WorkSource, WorkStepStatus,
+    EditorTarget, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo, StartWorkPlan, StepStatus,
+    WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
 use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};
@@ -179,7 +181,7 @@ impl WorkService {
     /// `work_resume`.
     pub async fn resume(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
         self.ensure_listener();
-        self.resume_item(id).await
+        self.resume_item(id, None).await
     }
 
     /// `work_retry_step` (`step` = a saga step id; `skip:<step>` skips it instead).
@@ -206,6 +208,45 @@ impl WorkService {
     /// `work_finish`.
     pub async fn finish(&self, id: &WorkItemId, opts: FinishOpts) -> Result<WorkItem, KeltaError> {
         self.finish_impl(id, opts).await
+    }
+
+    /// `work_send`: brief files into the private run dir, then `prompt` into the item's previous
+    /// Claude conversation; `threads` (review thread ids handed over) are remembered on success.
+    pub async fn send(
+        &self,
+        id: &WorkItemId,
+        prompt: &str,
+        files: Vec<SendFile>,
+        threads: Option<Vec<String>>,
+    ) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        self.send_impl(id, prompt, files, threads).await
+    }
+
+    /// `work_feedback`: unresolved threads, review summaries and failed checks of the item's PR.
+    pub async fn feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError> {
+        self.feedback_impl(id).await
+    }
+
+    /// `work_rerequest_review` → the logins asked again.
+    pub async fn rerequest_review(&self, id: &WorkItemId) -> Result<Vec<String>, KeltaError> {
+        self.rerequest_impl(id).await
+    }
+
+    /// `work_resolve_sent_threads`: resolve the threads the last Fix with Claude handed over.
+    pub async fn resolve_sent_threads(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.resolve_sent_impl(id).await
+    }
+
+    /// `work_rebase`.
+    pub async fn rebase(&self, id: &WorkItemId, op: RebaseOp) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        self.rebase_impl(id, op).await
+    }
+
+    /// `work_push` (`force` only over an own rewrite, FLOW §4.4 step 5).
+    pub async fn push(&self, id: &WorkItemId, force: bool) -> Result<WorkItem, KeltaError> {
+        self.push_impl(id, force).await
     }
 
     /// `work_status` (on demand).
@@ -241,6 +282,17 @@ impl WorkService {
         line: Option<u32>,
     ) -> Result<(), KeltaError> {
         self.editor_open_impl(target, path, line).await
+    }
+
+    /// `editor_diff` (Claude IDE bridge `openDiff`).
+    pub async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.editor_diff_impl(target, old, proposed, close).await
     }
 
     /// `editor_send_selection`: `@path#Lx-y` into the Claude session.

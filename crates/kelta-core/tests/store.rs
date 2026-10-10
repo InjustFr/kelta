@@ -33,7 +33,7 @@ async fn migrations_from_empty_and_idempotent() {
         })
         .await
         .unwrap();
-    assert_eq!(rows, SCHEMA_VERSION);
+    assert_eq!(rows, SCHEMA_VERSION, "one row per applied migration");
     assert_eq!(s.call(|c| q::ui_state_get(c, "onboarding_done")).await.unwrap().as_deref(), Some("true"));
     // migrate again explicitly: still one version row
     let v = s.call(|c| migrations::migrate(c).map_err(kelta_core::store::db_err)).await.unwrap();

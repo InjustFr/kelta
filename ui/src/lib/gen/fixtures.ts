@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -600,6 +600,7 @@ export const reviewPage: ReviewPage = {
         },
         "ci": "success",
         "decision": "review_required",
+        "decision_head": null,
         "deletions": 14,
         "draft": false,
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
@@ -654,6 +655,7 @@ export const reviewDetail: ReviewDetail = {
     },
     "ci": "success",
     "decision": "review_required",
+    "decision_head": null,
     "deletions": 14,
     "draft": false,
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
@@ -690,6 +692,7 @@ export const reviewDetail: ReviewDetail = {
 };
 
 export const startWorkPlan: StartWorkPlan = {
+  "adopt_pr": null,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "branch_exists": null,
@@ -739,9 +742,11 @@ export const workItem: WorkItem = {
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
+  "rebase": null,
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -845,9 +850,11 @@ export const workItemFailed: WorkItem = {
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
+  "rebase": null,
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -955,10 +962,167 @@ export const gitStatus: GitStatus = {
   "behind": 0,
   "deletions": 7,
   "dirty": true,
+  "diverged": false,
   "files": 3,
   "insertions": 41,
   "missing": false,
+  "remote_new": 0,
   "unpushed": true
+};
+
+export const workItemRebaseStopped: WorkItem = {
+  "base": "main",
+  "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
+  "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "created_at": "2026-10-09T12:00:00Z",
+  "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
+  "kind": "ticket",
+  "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "pr_title_needs_key": false,
+  "pr_url": "https://github.com/acme/shop-api/pull/74",
+  "project_id": "shop",
+  "rebase": {
+    "conflicts": [
+      "src/login.rs"
+    ],
+    "onto": "origin/main",
+    "pre_head": "9c1d8e7b6a5f4e3d2c1b0a998877665544aa3f2a",
+    "remote_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+    "step": 2,
+    "total": 3
+  },
+  "repo_id": "api",
+  "review": null,
+  "review_due": false,
+  "sent_threads": [
+    "PRRT_kwDOA1"
+  ],
+  "session_ids": [
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+    "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
+  ],
+  "state": {
+    "kind": "pr_open"
+  },
+  "steps": [
+    {
+      "detail": null,
+      "status": "done",
+      "step": "before_start",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_ticket",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "fetch_base",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "worktree",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "include_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude_files",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "layout",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "setup",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "editor",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "claude",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "tracker_side_effects",
+      "updated_at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "detail": null,
+      "status": "done",
+      "step": "persist",
+      "updated_at": "2026-10-09T12:00:00Z"
+    }
+  ],
+  "tab_id": "tab-1",
+  "ticket": {
+    "account": "jira-acme",
+    "id": "10142",
+    "key": "SHOP-142"
+  },
+  "title": null,
+  "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+};
+
+export const rebaseOp: RebaseOp = {
+  "kind": "start",
+  "no_fetch": false,
+  "onto": "base"
+};
+
+export const feedback: Feedback = {
+  "failed_checks": [
+    {
+      "log_tail": "test login::lockout ... FAILED",
+      "name": "ci / test",
+      "url": "https://github.com/acme/shop-api/actions/runs/2"
+    }
+  ],
+  "reviewers": [
+    "bob"
+  ],
+  "reviews": [
+    {
+      "author": "bob",
+      "body_md": "Close, two things to fix.",
+      "state": "changes_requested"
+    }
+  ],
+  "threads": [
+    {
+      "author": "bob",
+      "body_md": "bob: Reset the counter after a successful login.",
+      "id": "PRRT_kwDOA1",
+      "line": 42,
+      "path": "src/login.rs",
+      "url": "https://github.com/acme/shop-api/pull/74#discussion_r1"
+    }
+  ]
 };
 
 export const prDraft: PrDraft = {
@@ -1359,6 +1523,8 @@ export const settingsDefault: Settings = {
       }
     },
     "prompt_templates": {
+      "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
+      "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
       "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
@@ -1541,6 +1707,9 @@ export const settingsDefault: Settings = {
     "pr_changes_requested": true,
     "quiet_hours": "",
     "review_requested": true
+  },
+  "oauth": {
+    "client_ids": {}
   },
   "performance": {
     "hud": false
@@ -2806,9 +2975,11 @@ export const uiEventWorkUpdated: UiEvent = {
     "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",
+    "rebase": null,
     "repo_id": "api",
     "review": null,
     "review_due": false,
+    "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
       "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -3006,6 +3177,9 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "work_item_failed": workItemFailed,
   "finish_opts": finishOpts,
   "git_status": gitStatus,
+  "work_item_rebase_stopped": workItemRebaseStopped,
+  "rebase_op": rebaseOp,
+  "feedback": feedback,
   "pr_draft": prDraft,
   "editor_target": editorTarget,
   "tool_infos": toolInfos,

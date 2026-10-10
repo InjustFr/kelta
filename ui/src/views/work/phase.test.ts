@@ -52,7 +52,21 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
     );
     check(
       '3 rebase stopped',
-      phaseOf(item({ rebase: { conflicts: ['a.rs', 'b.rs'] } }), claude('needs_input'), null, null),
+      phaseOf(
+        item({
+          rebase: {
+            onto: 'origin/main',
+            pre_head: 'a',
+            remote_sha: null,
+            conflicts: ['a.rs', 'b.rs'],
+            step: 1,
+            total: 2,
+          },
+        }),
+        claude('needs_input'),
+        null,
+        null,
+      ),
       'rebase_stopped',
       'fix',
       'resolve',

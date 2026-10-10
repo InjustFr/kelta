@@ -120,8 +120,14 @@ ALTER TABLE work_items ADD COLUMN title TEXT;
 ALTER TABLE work_items ADD COLUMN pr_title_needs_key INTEGER NOT NULL DEFAULT 0;
 "#;
 
+/// v4: Fix with Claude and rebase state on work items (FLOW §8).
+const V4: &str = r#"
+ALTER TABLE work_items ADD COLUMN sent_threads_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE work_items ADD COLUMN rebase_json TEXT;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

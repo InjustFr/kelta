@@ -65,13 +65,10 @@ export interface Phase {
   section: NowSection;
 }
 
-// Fields other lanes add (rebase: fix-loop, merged/closed: ship-finish, decision_head and the
-// reviewed head: review-others). Optional and absent until those lanes land them.
-export type PhaseItem = Omit<WorkItem, 'state'> & {
-  state: WorkItem['state'] | { kind: 'merged' };
-  rebase?: { conflicts: string[] } | null;
-};
-export type PhaseGit = GitStatus & { remote_new?: number; diverged?: boolean };
+// Fields other lanes add (merged/closed: ship-finish, decision_head and the reviewed head:
+// review-others). Optional and absent until those lanes land them.
+export type PhaseItem = Omit<WorkItem, 'state'> & { state: WorkItem['state'] | { kind: 'merged' } };
+export type PhaseGit = GitStatus;
 export type PhasePr = Review & {
   state?: 'open' | 'merged' | 'closed';
   decision_head?: string | null;

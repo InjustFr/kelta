@@ -84,6 +84,12 @@ pub struct Settings {
     ))]
     pub accounts: BTreeMap<AccountId, AccountConfig>,
     #[schemars(extend(
+        "x-kelta-category" = "Accounts",
+        "x-kelta-order" = 6,
+        "x-kelta-scope" = ["global"]
+    ))]
+    pub oauth: OAuthSettings,
+    #[schemars(extend(
         "x-kelta-category" = "Worktree & work",
         "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"],
@@ -651,7 +657,7 @@ pub struct ClaudeSettings {
     pub extra_hooks: BTreeMap<String, serde_json::Value>,
     pub profiles: BTreeMap<String, ClaudeProfile>,
     pub prompt_templates: BTreeMap<String, String>,
-    /// v0.2; ignored in v0.1.
+    /// Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
     pub ide_bridge: bool,
 }
 
@@ -686,6 +692,14 @@ impl Default for ClaudeSettings {
                     "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.".to_owned(),
                 ),
                 ("standalone".to_owned(), "{task}".to_owned()),
+                (
+                    "feedback".to_owned(),
+                    "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.".to_owned(),
+                ),
+                (
+                    "conflicts".to_owned(),
+                    "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.".to_owned(),
+                ),
             ]),
             ide_bridge: false,
         }
@@ -1107,6 +1121,16 @@ pub enum AuthKind {
     Bearer,
     ApiKey,
     Token,
+    /// Bearer token from "Sign in with browser" (device flow), refreshed before it expires.
+    Oauth,
+}
+
+/// OAuth apps used by "Sign in with browser" (device flow, GitHub and GitLab).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct OAuthSettings {
+    /// Client id of the GitHub OAuth App or application id of the GitLab application, per host (`github.com`, `gitlab.com`, `gitlab.acme.example`). Public values; a host without one only offers pasted tokens.
+    pub client_ids: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -1317,6 +1341,7 @@ impl Default for Settings {
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),
+            oauth: OAuthSettings::default(),
             session_templates: default_session_templates(),
             tools: Vec::new(),
             triggers: Vec::new(),

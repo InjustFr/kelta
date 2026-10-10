@@ -83,9 +83,9 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem')).toHaveCount(15);
-  await expect(menu.getByRole('menuitem', { name: /Rebase onto main/ })).toHaveAttribute(
+  await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveAttribute(
     'title',
-    'not available yet',
+    'Only while a rebase is stopped',
   );
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();

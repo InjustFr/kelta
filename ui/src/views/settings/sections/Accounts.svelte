@@ -14,6 +14,7 @@
   import Select from '$lib/ui/Select.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
+  import DeviceSignIn from '../fields/DeviceSignIn.svelte';
   import Field from '../fields/Field.svelte';
   import SecretControl from '../fields/SecretControl.svelte';
   import { useEditor } from '../lib/editor.svelte';
@@ -24,6 +25,8 @@
     emptyDraft,
     kindInfo,
     needsEmail,
+    oauthHost,
+    oauthSecretRef,
     suggestId,
     validateDraft,
     type AccountDraft,
@@ -190,6 +193,18 @@
     } finally {
       saving = false;
     }
+  }
+
+  // Browser sign-in needs a registered OAuth app per host (`oauth.client_ids`).
+  const clientIds = $derived.by((): Record<string, unknown> => {
+    const v = editor.valueOf('oauth.client_ids');
+    return isRecord(v) ? v : {};
+  });
+
+  function signedIn(ref: string): void {
+    draft.secret = ref;
+    draft.auth = 'oauth';
+    void save(true);
   }
 
   async function remove(id: string): Promise<void> {
@@ -375,8 +390,26 @@
           <Button variant="primary" onclick={toSecret}>Next</Button>
         </div>
       {:else if step === 2}
+        {@const host = oauthHost(draft.kind, draft.base_url)}
+        {@const signInReady = !!host && typeof clientIds[host] === 'string' && !!clientIds[host].trim()}
         <div class="form">
-          <p class="muted">Where does Kelta get the token for <strong>{draft.id}</strong>?</p>
+          {#if signInReady}
+            {@const ref = oauthSecretRef(draft)}
+            <DeviceSignIn
+              kind={draft.kind}
+              baseUrl={draft.base_url.trim() || kindInfo(draft.kind).baseUrlDefault!}
+              secretRef={ref}
+              onsigned={() => signedIn(ref)}
+            />
+          {:else if host}
+            <p class="hint" data-testid="oauth-unset">
+              To sign in with the browser instead of a token, register an OAuth app on {host} and add its client
+              id under <code>oauth.client_ids</code> (see docs/user/oauth.md).
+            </p>
+          {/if}
+          <p class="muted">
+            {signInReady ? 'Or choose' : 'Choose'} where Kelta gets the token for <strong>{draft.id}</strong>.
+          </p>
           <SecretControl
             value={draft.secret}
             accountKind={draft.kind}

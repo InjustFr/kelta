@@ -534,16 +534,19 @@ async fn claude_restore_request_regenerates_files() {
     let sid = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
     // Reboot wipes the runtime dir.
     std::fs::remove_dir_all(fx.dirs.runtime.join("s")).unwrap();
-    let req = w.claude_restore_request(&sid, false).await.unwrap().unwrap();
+    let req = w.claude_restore_request(&sid, false, None).await.unwrap().unwrap();
     assert_eq!(req.args[..2], ["--resume".to_owned(), item.claude_uuid.clone().unwrap()]);
     assert_eq!(req.kind, SessionKind::Claude);
     assert_eq!(req.cwd.as_ref(), Some(&item.worktree));
     let settings = req.args.windows(2).find(|a| a[0] == "--settings").map(|a| a[1].clone()).unwrap();
     assert!(std::path::Path::new(&settings).exists(), "files regenerated");
-    let req = w.claude_restore_request(&sid, true).await.unwrap().unwrap();
+    let req = w.claude_restore_request(&sid, true, None).await.unwrap().unwrap();
     assert_eq!(req.args[0], "--continue");
     assert!(
-        w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false).await.unwrap().is_none()
+        w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false, None)
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 
@@ -558,6 +561,24 @@ async fn concurrent_starts_for_one_ticket_make_one_item() {
     assert!(!ids.is_empty());
     assert!(ids.iter().all(|i| *i == ids[0]));
     assert_eq!(fx.store_items().await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_stale_remote_branch_of_the_same_name_does_not_seed_a_new_item() {
+    need_git!();
+    let fx = Fx::new();
+    // An earlier item's branch was merged and deleted locally; origin kept it.
+    let b = "feat/SHOP-141-add-login-form";
+    git(&fx.repo, &["checkout", "-q", "-b", b]);
+    git(&fx.repo, &["commit", "-q", "--allow-empty", "-m", "old merged work"]);
+    git(&fx.repo, &["push", "-q", "origin", b]);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    git(&fx.repo, &["branch", "-q", "-D", b]);
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.branch, b);
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), git(&fx.repo, &["rev-parse", "origin/main"]));
 }
 
 #[tokio::test]

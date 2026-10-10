@@ -74,13 +74,13 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         Scope, Layout, Tab, SplitDir, LayoutNode, TicketsMode, PaneContent, Placement,
         OpenPaneRequest, PaneRef, WorkKind, WorkState, StepStatus, WorkStepStatus, WorkItem,
         WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, FinishOpts,
-        GitStatus, EditorTarget, TemplateCtx,
+        GitStatus, EditorTarget, TemplateCtx, RebaseState, RebaseOnto, RebaseOp, SendFile,
         // tracker / codehost
         TrackerKind, TrackerCaps, User, TicketRef, StatusCategory, Status, Ticket, BodyFormat,
         Comment, TicketDetail, Transition, Column, Cursor, Page<Ticket>, Assignee, AccountError,
         TicketItem, TicketPage, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
         ReviewKind, Review, ReviewQuery, Reviewer, CiCheck, FileChange, ReviewDetail, PrCreate,
-        PrDraft, ReviewItem, ReviewPage,
+        PrDraft, ReviewItem, ReviewPage, Feedback, FeedbackThread, FeedbackReview, FailedCheck,
         // ext
         ToolKind, EmbedMode, WebLifecycle, Ready, StopSpec, WebStart, ToolDef, ToolSource,
         ToolInfo, ToolCheck, ToolHandle, Matcher, TriggerDef, Urgency, RunStdin, RunShow,
@@ -91,11 +91,11 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         CallOrigin, ProxiedRequest, ProxiedResponse, PluginGrant,
         // settings
         Layer, Settings, ProjectConfig, RepoConfig, CodeHostBinding, TrackerBinding, TrackerView,
-        ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig,
+        ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig, OAuthSettings,
         SessionTemplate, TemplateNode, EditorPreset, ClaudeProfile, LinuxGraphics,
         EffectiveSettings, LayerDoc, ValidationIssue, TrustInfo, SettingsDiff,
         // secrets
-        SecretRef, SecretBackendStatus,
+        SecretRef, SecretBackendStatus, OAuthDevicePrompt,
         // events
         ToastLevel, ToastAction, Toast, Notification, AccountStatus, UiEvent, TriggerChain,
         BusEvent,

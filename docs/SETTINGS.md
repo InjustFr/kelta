@@ -111,8 +111,8 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `extra_args` | list<str> | `[]` | appended before the prompt |
 | `extra_hooks` | JSON-compatible table | `{}` | merged into generated `--settings` hooks |
 | `profiles` | map<str, ClaudeProfile> | `default = {model="opus", effort="high", permission_mode="acceptEdits"}`, `review = {model="opus", effort="high", permission_mode="plan"}`, `plan = {model="opus", effort="high", permission_mode="plan"}` | ClaudeProfile = {model: str, effort: enum(low\|medium\|high\|xhigh\|max), permission_mode: enum(default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions)} |
-| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = "{task}"` | `{task}` = the task of a New work item / `kelta-ctl start --task` | |
-| `ide_bridge` | bool | `false` | v0.2; ignored in v0.1 |
+| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = "{task}"`, `feedback = "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push."`, `conflicts = "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push."` | `feedback` is the editable prompt of the Fix with Claude sheet, `conflicts` the one of Ask Claude to resolve. Both are rendered by `work_send` with the work item's placeholders plus `{file}` (absolute path of the brief written to the private run dir: `feedback.md` / `conflicts.md`), `{pr.url}`, and during a rebase `{onto}`, `{step}`, `{total}`. `standalone`'s `{task}` is the task of a New work item or `kelta-ctl start --task`. |
+| `ide_bridge` | bool | `false` | Claude sessions see Kelta as their IDE (loopback WebSocket + `~/.claude/ide/<port>.lock`, `openFile`/`openDiff` in the editor pane); ARCHITECTURE §8.5 |
 
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
@@ -180,12 +180,17 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `plugin` | str? | — (required for `plugin_*`) | plugin id whose `[provider]` serves the account (PLUGINS §9); the whole account table and its resolved secret go to the plugin with each call |
 | `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0` | all (jira/redmine/gitea required; gitea accepts a trailing `/api/v1`) |
 | `flavor` | enum(auto\|cloud\|dc) | `auto` | jira |
-| `auth` | enum(basic\|bearer\|api_key\|token) | per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + Atlassian API token; `bearer` for repository/workspace access tokens), linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
+| `auth` | enum(basic\|bearer\|api_key\|token\|oauth) | `oauth` = set by browser sign-in (github/gitlab: Bearer, refreshed before expiry); per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + Atlassian API token; `bearer` for repository/workspace access tokens), linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
 | `email` / `user` | str | — | jira cloud and bitbucket email / basic user |
 | `secret` | SecretRef | — (required; optional for `plugin_*`) github default `gh-cli`, gitlab default `glab-cli`, linear a personal API key (`keyring:`, `env:` or `command:`) | x-kelta-secret |
 | `text_format` | enum(textile\|markdown) | `textile` | redmine |
 | `poll_secs` | int? | none | override |
 | `web_url` | str? | derived | browser links (GHE/GitLab/Gitea); bitbucket: only used to match git remotes (default `https://bitbucket.org`) |
+
+### [oauth]  (scope global only; category Accounts)
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `client_ids` | map<str,str> | `{}` | web host (`github.com`, `gitlab.com`, `gitlab.acme.example`) → OAuth App client id / GitLab application id. Public values. A host without one offers no "Sign in with GitHub / GitLab" (docs/user/oauth.md). |
 
 ### [[session_templates]]  (by_id; scope global+project+repo)
 `{ id, label, layout: TemplateNode, enabled = true }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
@@ -327,6 +332,7 @@ Config holds only `SecretRef` strings, never tokens:
 
 - Resolution runs off the UI thread with a 5 s timeout, result cached in memory only (zeroized on drop), invalidated on settings change or 401. Never written to disk, never sent to the UI, never logged.
 - `secret_set` / `secret_delete` write only `keyring:` and `file:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `file:`/`command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- Browser sign-in (`oauth_device_start` / `oauth_device_finish`, RFC 8628, GitHub and GitLab): the device code never leaves the core; the access token goes to the account's `keyring:`/`file:` ref and `<ref>.oauth` holds `{client_id, token_url, refresh_token, expires_at}` in the same backend. With `auth = "oauth"`, the HTTP auth layer refreshes a token expiring within 60 s (one refresh at a time; rotated refresh tokens are stored), and a refused refresh is `needs_auth` ("sign in again"); a network failure stays `network`.
 - `secret_unlock {passphrase, create}` (UI IPC only, no ctl equivalent) unlocks the encrypted file for the run; `create` makes it when missing (`not_found` otherwise). `secret_backends_status` reports it as `encrypted-file` (available = unlocked) and Diagnostics warns while an existing file is locked. A wrong passphrase and a modified file give the same `needs_auth` error.
 - macOS dev builds: Keychain prompts on each rebuild — CONTRIBUTING recommends `env:` refs in development.
 

@@ -3,8 +3,10 @@
   "behind": 0,
   "deletions": 7,
   "dirty": true,
+  "diverged": false,
   "files": 3,
   "insertions": 41,
   "missing": false,
+  "remote_new": 0,
   "unpushed": true
 }

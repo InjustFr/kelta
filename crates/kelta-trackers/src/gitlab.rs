@@ -46,7 +46,7 @@ impl GitlabIssues {
         let base = common::base_url(account)?;
         let root = base.strip_suffix("/api/v4").unwrap_or(&base).to_owned();
         let scheme = match account.auth {
-            Some(AuthKind::Bearer | AuthKind::Basic) => {
+            Some(AuthKind::Bearer | AuthKind::Basic | AuthKind::Oauth) => {
                 AuthScheme::from_account(account).unwrap_or(AuthScheme::Bearer)
             }
             _ => AuthScheme::Header("PRIVATE-TOKEN".into()),

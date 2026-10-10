@@ -453,6 +453,11 @@ impl CoreApi for FakeCore {
             .ok_or_else(|| KeltaError::not_found(format!("work item {id}")))
     }
 
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<crate::codehost::Feedback, KeltaError> {
+        self.record("work_feedback", serde_json::json!({ "id": id }));
+        self.overridden("work_feedback").unwrap_or_else(|| Ok(crate::codehost::Feedback::default()))
+    }
+
     async fn editor_open(
         &self,
         target: EditorTarget,
@@ -464,6 +469,20 @@ impl CoreApi for FakeCore {
             serde_json::json!({ "target": Self::arg(&target), "path": path, "line": line }),
         );
         self.overridden::<()>("editor_open").unwrap_or(Ok(()))
+    }
+
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.record(
+            "editor_diff",
+            serde_json::json!({ "target": Self::arg(&target), "old": old, "proposed": proposed, "close": close }),
+        );
+        self.overridden::<()>("editor_diff").unwrap_or(Ok(()))
     }
 
     async fn tool_open(

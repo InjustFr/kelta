@@ -54,6 +54,10 @@ export const ACTION_IDS = [
   "work.open_ticket",
   "work.open_pr",
   "work.finish",
+  "work.force_push",
+  "work.rebase_ask_claude",
+  "work.rerequest_review",
+  "work.resolve_threads",
   "work.finish_merged",
   "window.toggle",
 ] as const;
@@ -126,6 +130,10 @@ export const ACTIONS: readonly ActionMeta[] = [
   { id: "work.open_ticket", label: "Work: Open ticket", mac: [], linux: [], prefix: null, context: "global" },
   { id: "work.open_pr", label: "Work: Open PR", mac: [], linux: [], prefix: null, context: "global" },
   { id: "work.finish", label: "Work: Finish", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.force_push", label: "Work: Force push…", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rebase_ask_claude", label: "Work: Ask Claude to resolve conflicts", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.rerequest_review", label: "Work: Re-request review", mac: [], linux: [], prefix: null, context: "global" },
+  { id: "work.resolve_threads", label: "Work: Resolve sent threads", mac: [], linux: [], prefix: null, context: "global" },
   { id: "work.finish_merged", label: "Finish all merged", mac: [], linux: [], prefix: null, context: "global" },
   { id: "window.toggle", label: "Toggle window (kelta-ctl toggle)", mac: [], linux: [], prefix: null, context: "external" },
 ];

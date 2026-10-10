@@ -8,6 +8,7 @@ import type { EditorSettings } from "./EditorSettings";
 import type { KeysSettings } from "./KeysSettings";
 import type { LinuxSettings } from "./LinuxSettings";
 import type { NotificationSettings } from "./NotificationSettings";
+import type { OAuthSettings } from "./OAuthSettings";
 import type { PerformanceSettings } from "./PerformanceSettings";
 import type { PluginsSettings } from "./PluginsSettings";
 import type { PollingSettings } from "./PollingSettings";
@@ -24,7 +25,7 @@ import type { WorktreeSettings } from "./WorktreeSettings";
 /**
  * Effective (merged) settings. Also the schema of the global `config.toml`.
  */
-export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSettings, terminal: TerminalSettings, linux: LinuxSettings, polling: PollingSettings, notifications: NotificationSettings, claude: ClaudeSettings, editor: EditorSettings, worktree: WorktreeSettings, work: WorkSettings, reviews: ReviewsSettings, web: WebSettings, performance: PerformanceSettings, accounts: { [key in AccountId]: AccountConfig }, session_templates: Array<SessionTemplate>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, plugins: PluginsSettings, 
+export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSettings, terminal: TerminalSettings, linux: LinuxSettings, polling: PollingSettings, notifications: NotificationSettings, claude: ClaudeSettings, editor: EditorSettings, worktree: WorktreeSettings, work: WorkSettings, reviews: ReviewsSettings, web: WebSettings, performance: PerformanceSettings, accounts: { [key in AccountId]: AccountConfig }, oauth: OAuthSettings, session_templates: Array<SessionTemplate>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, plugins: PluginsSettings, 
 /**
  * Environment added to every session of the project (project/repo files).
  */

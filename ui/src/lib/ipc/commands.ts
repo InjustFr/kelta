@@ -9,6 +9,7 @@
 
 import type {
   AccountId,
+  AccountKind,
   AccountTestResult,
   AppInfo,
   Assignee,
@@ -19,6 +20,7 @@ import type {
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
+  Feedback,
   FinishOpts,
   GitStatus,
   HistoryHit,
@@ -38,6 +40,7 @@ import type {
   ProjectId,
   ProjectInfo,
   ProjectPatch,
+  RebaseOp,
   ReviewDetail,
   ReviewKind,
   ReviewPage,
@@ -45,8 +48,10 @@ import type {
   Scope,
   ScreenInstanceId,
   ScreenOpenResult,
+  OAuthDevicePrompt,
   SecretBackendStatus,
   SessionId,
+  SendFile,
   SessionInfo,
   SpawnRequest,
   StartWorkPlan,
@@ -115,6 +120,11 @@ export interface Commands {
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };
   secret_unlock: { args: { passphrase: string; create: boolean }; result: null };
+  oauth_device_start: {
+    args: { kind: AccountKind; base_url: string; secret_ref: string };
+    result: OAuthDevicePrompt;
+  };
+  oauth_device_finish: { args: { user_code: string }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -196,6 +206,16 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids. */
+  work_send: {
+    args: { id: WorkItemId; prompt: string; files: SendFile[]; threads?: string[] | null };
+    result: WorkItem;
+  };
+  work_feedback: { args: { id: WorkItemId }; result: Feedback };
+  work_rerequest_review: { args: { id: WorkItemId }; result: string[] };
+  work_resolve_sent_threads: { args: { id: WorkItemId }; result: WorkItem };
+  work_rebase: { args: { id: WorkItemId; op: RebaseOp }; result: WorkItem };
+  work_push: { args: { id: WorkItemId; force: boolean }; result: WorkItem };
   work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
@@ -262,6 +282,8 @@ export const COMMAND_NAMES = [
   'secret_delete',
   'secret_backends_status',
   'secret_unlock',
+  'oauth_device_start',
+  'oauth_device_finish',
   'account_test',
   'project_list',
   'project_detect',
@@ -312,6 +334,12 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_send',
+  'work_feedback',
+  'work_rerequest_review',
+  'work_resolve_sent_threads',
+  'work_rebase',
+  'work_push',
   'work_link',
   'work_status_all',
   'work_diff',
@@ -405,6 +433,8 @@ export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
 export const secretBackendsStatus = wrap('secret_backends_status');
 export const secretUnlock = wrap('secret_unlock');
+export const oauthDeviceStart = wrap('oauth_device_start');
+export const oauthDeviceFinish = wrap('oauth_device_finish');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------
@@ -498,6 +528,12 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workSend = wrap('work_send');
+export const workFeedback = wrap('work_feedback');
+export const workRerequestReview = wrap('work_rerequest_review');
+export const workResolveSentThreads = wrap('work_resolve_sent_threads');
+export const workRebase = wrap('work_rebase');
+export const workPush = wrap('work_push');
 export const workLink = wrap('work_link');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
