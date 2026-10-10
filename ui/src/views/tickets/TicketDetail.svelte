@@ -351,7 +351,7 @@
         </Button>
       </span>
     </div>
-    <ActionBar {item} {branch} resume={workItem !== null} onrun={(a) => run(a)} />
+    <ActionBar {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
   </header>
 
   <div class="scroll">

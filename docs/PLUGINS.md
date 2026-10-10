@@ -14,7 +14,7 @@ Tools, triggers, commands and session templates use the **same schema** in `conf
 
 ## 1. Placeholders
 
-As in SETTINGS.md §6: `{project.id|name|root}`, `{repo.id|path|name}`, `{worktree}`, `{branch}`, `{base}`, `{ticket.key|title|url|file}`, `{pr.url|number|head|base|title}`, `{session.id|name|cwd}`, `{sid8}`, `{run}`, `{port}`, `{config_dir}`, `{data_dir}`, `{plugin.dir}`, `{settings.<key>}` (plugin's own namespace), `{event.<path>}`, `{payload.<path>}` (triggers). Filters `|slug`, `|shell`, `|json`; fallback `{a|b}`. Unknown placeholders are load-time errors. Values are substituted **per argv element** (no shell parsing).
+As in SETTINGS.md §6: `{project.id|name|root}`, `{repo.id|path|name}`, `{worktree}`, `{branch}`, `{base}`, `{ticket.key|title|url|file}`, `{pr.url|number|head|base|title}`, `{session.id|name|cwd}`, `{work.id|port}` (the work item), `{sid8}`, `{run}`, `{port}`, `{config_dir}`, `{data_dir}`, `{plugin.dir}`, `{settings.<key>}` (plugin's own namespace), `{event.<path>}`, `{payload.<path>}` (triggers). Filters `|slug`, `|shell`, `|json`; fallback `{a|b}`. Unknown placeholders are load-time errors. Values are substituted **per argv element** (no shell parsing).
 
 ## 2. Tools
 
@@ -144,7 +144,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `spawn_session` | `template? \| command+args`, `cwd?`, `placement?`, `focus? = false` | new session in the event's project | `sessions.spawn` |
 | `send_keys` | `session = "{event.session_id}"\|"claude"\|"editor"`, `text`, `bracketed? = true` | writes into a PTY | `terminal.write` |
 | `open_tool` | `tool`, `placement?` (default: the tool's) | `tool_open` | `sessions.spawn` |
-| `open_screen` | `plugin?`, `screen`, `params?`, `placement?` | opens a plugin screen | `ui.open` |
+| `open_screen` | `plugin?`, `screen`, `params?`, `placement?` | opens a plugin screen in the run's project (Home without one); every string in `params` is a template, delivered expanded in `kelta:init.params` (e.g. `params = { ticket = "{ticket.key}", work = "{work.id}" }`) | `ui.open` |
 | `start_work` | `ticket = "{ticket.key}"`, `project?` | opens StartWorkPlan (preview unless `work.plan_preview=false`) | `tickets.read`,`sessions.spawn` |
 | `transition_ticket` | `to_category?` \| `to_name?` | via provider transitions | `tickets.write` |
 | `comment_ticket` | `body` | Markdown comment | `tickets.write` |
@@ -230,7 +230,7 @@ Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~
 | `[[contributes.keybindings]]` | `{command, key: Chord}` | | user bindings win; conflicts reported |
 | `[[contributes.session_templates]]` | session template | | |
 | `[[contributes.screens]]` | ScreenDef | | §4.1 |
-| `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]` | `{id, title, do: [ActionDef]}` | | buttons on detail panes |
+| `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]` | `{id, title, do: [ActionDef]}` | | after the built-ins of the ticket detail action bar / the review detail buttons (one ghost button, or a `Plugins ▾` menu when there are several; no key). Ticket actions get the ticket and its work item (`{branch}`, `{worktree}`, `{work.*}`); review actions get `{pr.*}`. They run in the ticket's work item's project, else the ticket's or PR's first project, the pane's, then the active project; an action with an `open_screen`, `open_tool` or `spawn_session` step shows that project first |
 | `[contributes.settings]` | `{schema = "settings.schema.json"}` | | flat JSON Schema mounted at `plugins.<id>`, validated, rendered in Settings |
 | `[provider]` | ProviderDef | | process (KPP) tracker / code-host provider, §9; needs the `provider` permission |
 

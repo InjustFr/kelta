@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { TicketItem } from '$lib/gen';
+  import type { ProjectId, TemplateCtx, TicketItem } from '$lib/gen';
+  import { work } from '$lib/stores';
   import { Button } from '$lib/ui';
 
+  import PluginActions from '../plugins/PluginActions.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
 
   // Ticket detail action bar (TICKETS.md T3): one button per action with its key; an action the
@@ -12,9 +14,25 @@
     /** A work item exists: Start reads Resume. */
     resume: boolean;
     onrun: (action: TicketAction) => void;
+    /** The detail's project; `null` in a global view. */
+    projectId?: ProjectId | null;
   }
 
-  let { item, branch, resume, onrun }: Props = $props();
+  let { item, branch, resume, onrun, projectId = null }: Props = $props();
+
+  /** Plugin actions run where the ticket's work runs, else in the ticket's (or the pane's) project. */
+  const pluginCtx = $derived.by((): Partial<TemplateCtx> => {
+    const project_id =
+      (item.work_item_id ? work.get(item.work_item_id)?.project_id : undefined) ??
+      item.project_ids[0] ??
+      projectId ??
+      undefined;
+    return {
+      ticket: item.ticket.ref,
+      work_item_id: item.work_item_id,
+      extra: project_id ? { project_id } : {},
+    };
+  });
 
   const LABELS: Record<TicketAction, string> = {
     start: 'Start work',
@@ -61,6 +79,7 @@
       {a.label}
     </Button>
   {/each}
+  <PluginActions kind="ticket" ctx={pluginCtx} />
 </div>
 
 <style>

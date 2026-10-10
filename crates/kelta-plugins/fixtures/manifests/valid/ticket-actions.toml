@@ -1,0 +1,23 @@
+id = "qa-deploy"
+name = "QA deploy"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "Ticket and review actions"
+author = "a"
+license = "MIT"
+permissions = ["ui.open"]
+
+[[contributes.screens]]
+id = "deploy"
+title = "Deploy"
+entry = "index.html"
+
+[[contributes.ticket_actions]]
+id = "deploy"
+title = "Deploy to QA"
+do = [{ action = "open_screen", screen = "deploy", params = { ticket = "{ticket.key}", work = "{work.id}" } }]
+
+[[contributes.review_actions]]
+id = "say"
+title = "Say PR"
+do = [{ action = "toast", text = "{pr.number} {pr.head}" }]

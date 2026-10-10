@@ -123,7 +123,7 @@ impl PluginHost {
             v.set("branch", json!(w.branch));
             v.set("base", json!(w.base));
             // `env` is not a placeholder: `launch_env` adds it to the tool's process.
-            v.set("work", json!({ "port": w.port_base, "env": w.env() }));
+            v.set("work", json!({ "id": w.id, "port": w.port_base, "env": w.env() }));
         }
         if let Some(s) = &session {
             let visible = self.wiring().ui.map(|ui| {

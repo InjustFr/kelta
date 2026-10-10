@@ -2,6 +2,7 @@
 
 - [Getting started](getting-started.md)
 - [Working with tickets](tickets.md)
+- [Tools: lazygit, lazydocker, apps like Fork](tools.md)
 - [Compositor bindings and window rules](compositors.md) (Hyprland, Sway, GNOME)
 - [Graphics and NVIDIA troubleshooting](graphics.md)
 - [Keyring and notification daemon](keyring-and-notifications.md)
