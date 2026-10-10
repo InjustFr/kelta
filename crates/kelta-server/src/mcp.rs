@@ -188,6 +188,8 @@ pub(crate) fn tool_defs() -> Value {
             "name": "get_review_feedback",
             "description": "Get the review feedback on this session's pull/merge request: unresolved review threads (author, file:line, comments), review summaries and failed checks with the end of their logs, as Markdown.",
             "inputSchema": empty,
+        },
+        {
             "name": "add_review_comment",
             "description": "Add a line comment to the pending (draft) review on the pull request this session is reviewing. Nothing is published until the user submits the review in Kelta. `line` is a line of the new version of `path`.",
             "inputSchema": {

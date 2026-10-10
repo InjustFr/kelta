@@ -657,7 +657,9 @@ impl CodeHost for GitlabHost {
             "/request_review {}",
             logins.iter().map(|l| format!("@{l}")).collect::<Vec<_>>().join(" ")
         );
-        self.comment(r, &body).await?;
+        // Not `comment`: that would also publish my pending draft notes.
+        let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
+        self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(logins)
     }
 

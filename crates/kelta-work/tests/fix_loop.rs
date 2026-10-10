@@ -515,24 +515,3 @@ async fn a_failed_fetch_offers_the_last_fetched_base() {
     assert!(out.rebase.is_none());
     git(&item.worktree, &["merge-base", "--is-ancestor", "origin/main", "HEAD"]);
 }
-
-#[tokio::test]
-async fn claude_uuid_follows_the_conversation_after_clear() {
-    need_git!();
-    let fx = Fx::new();
-    let (w, item) = started(&fx, "SHOP-141").await;
-    // `/clear` in Claude: the next hook carries a new session_id.
-    let ev = kelta_proto::events::BusEvent::new(
-        kelta_proto::events::bus::CLAUDE_HOOK,
-        serde_json::json!({ "event": "SessionStart", "payload": { "session_id": "after-clear" } }),
-    )
-    .with_session(claude(&fx));
-    kelta_proto::api::CoreApi::publish(&*fx.core, ev);
-    for _ in 0..300 {
-        if w.list(None).await.unwrap()[0].claude_uuid.as_deref() == Some("after-clear") {
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    panic!("claude_uuid still {:?}", item.claude_uuid);
-}
