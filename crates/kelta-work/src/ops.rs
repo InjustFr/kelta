@@ -791,6 +791,10 @@ impl WorkService {
             return Ok(item);
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
+        // A run's adopted worktree and branch are the run's (#235), and so is the ticket's status.
+        let adopted = item.run.is_some();
+        let opts =
+            if adopted { FinishOpts { remove_worktree: false, delete_branch: false, ..opts } } else { opts };
         let j = self.load_journal(id);
         let ev = BusEvent::new(
             bus::WORK_BEFORE_FINISH,
@@ -836,7 +840,8 @@ impl WorkService {
             verified_clean = report.files.is_empty() && report.unpushed == 0;
         }
 
-        if !env.settings.worktree.teardown.trim().is_empty()
+        if !adopted
+            && !env.settings.worktree.teardown.trim().is_empty()
             && item.worktree.is_dir()
             && let Err(e) = self.teardown(&env, &item).await
         {
@@ -883,7 +888,7 @@ impl WorkService {
         {
             env.core.toast(Toast::warn(format!("Branch {} kept: {}", item.branch, e.message)));
         }
-        if let Some(t) = &item.ticket {
+        if let Some(t) = item.ticket.as_ref().filter(|_| !adopted) {
             // Merged / closed: the merge listener already made the unambiguous move; any other
             // Done status is an explicit choice, never a default.
             let target = if item.state.pr_done() {
@@ -1331,6 +1336,10 @@ impl WorkService {
             if let Err(e) = crate::review::prune_refs(&r, &keep).await {
                 tracing::warn!(repo = %r.display(), error = %e.message, "review refs prune failed");
             }
+        }
+        // Claims of sessions that did not survive the restart.
+        if let Err(e) = self.orphan_claims(None).await {
+            tracing::warn!(error = %e.message, "orphaning claims failed");
         }
         // Armed items merged right before a quit/crash: their Finish never ran.
         for w in items.iter().filter(|w| w.auto_finish) {

@@ -673,6 +673,37 @@ pub struct WorkItem {
     /// Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
     #[serde(default)]
     pub nvim_kept: u32,
+    /// Claimed by a background run (MCP `claim_ticket`, #235): the item adopts the run's worktree and
+    /// branch, which Finish never removes.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub run: Option<RunClaim>,
+}
+
+/// A background run's claim on a ticket and how far it got (MCP `claim_ticket` / `report_progress`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RunClaim {
+    /// Workflow name (`kelta-ticket-pass`).
+    pub name: Option<String>,
+    pub run_id: Option<String>,
+    /// The claiming Claude session; `None` from the global `/mcp`.
+    pub session_id: Option<SessionId>,
+    /// Free text from the workflow (its phase titles).
+    pub phase: Option<String>,
+    pub state: RunState,
+    pub note: Option<String>,
+    pub sha: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum RunState {
+    Running,
+    Blocked,
+    Failed,
+    Done,
+    /// The claiming session exited while the run was `running`.
+    Orphaned,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files
@@ -755,6 +786,24 @@ pub struct NextUp {
 pub const PORT_BLOCK: u16 = 10;
 
 impl WorkItem {
+    /// `claim_ticket` of `self` against `held`, an unfinished item of the same ticket: an orphaned
+    /// claim, or one of the same session, is taken over (same id, the new run's worktree); anything
+    /// else wins and comes back as `Err`.
+    pub fn claim_over(self, held: Option<WorkItem>) -> Result<WorkItem, Box<WorkItem>> {
+        let Some(mut h) = held else { return Ok(self) };
+        let new = self.run.as_ref();
+        let take = h.run.as_ref().is_some_and(|r| {
+            r.state == RunState::Orphaned
+                || (r.session_id.is_some() && r.session_id == new.and_then(|n| n.session_id.clone()))
+        });
+        if !take {
+            return Err(Box::new(h));
+        }
+        (h.repo_id, h.worktree, h.branch, h.base, h.run) =
+            (self.repo_id, self.worktree, self.branch, self.base, self.run);
+        Ok(h)
+    }
+
     /// Env of every process of the item: `KELTA_PORT`, `KELTA_PORT_1..9` (when it has a block) and
     /// `COMPOSE_PROJECT_NAME=kelta-<key-slug>` so parallel worktrees get their own containers.
     pub fn env(&self) -> BTreeMap<String, String> {

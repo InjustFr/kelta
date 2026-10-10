@@ -5,13 +5,15 @@
   import type { PaneProps } from '$app/registry';
   import { confirms } from '../../shell/confirm.svelte';
   import { closePaneById, openContent } from '../../shell/nav';
-  import { sessions, settings, toasts, ui } from '$lib/stores';
+  import { sessions, settings, toasts, ui, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
   import { terminalUi } from '$lib/terminal/ui.svelte';
   import type { TerminalView, ViewState } from '$lib/terminal/view';
   import { dispatch } from '$lib/actions';
-  import { Button, currentPlatform, EmptyState, ErrorState, Kbd, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, EmptyState, ErrorState, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
+  import { phaseNow } from '../work/live';
+  import { workKey } from '../work/phase';
   import SearchBar from './SearchBar.svelte';
 
   let { projectId, tabId, paneId, content, visible, focused }: PaneProps<'terminal'> = $props();
@@ -37,6 +39,10 @@
   // The session was killed or removed: nothing to show (and nothing to attach to).
   const missing = $derived(sessions.loaded && !session);
   const searching = $derived(terminalUi.searchSession === sessionId);
+  // Tickets this session's background runs hold (MCP `claim_ticket`, #235).
+  const claims = $derived(
+    work.all.filter((w) => w.run?.session_id === sessionId && w.state.kind !== 'finished'),
+  );
 
   // Show the pooled view while the pane is visible; hide (not destroy) it otherwise.
   $effect(() => {
@@ -188,6 +194,16 @@
     <SearchBar {view} onclose={closeSearch} />
   {/if}
 
+  {#if claims.length > 0}
+    <ul class="claims" data-testid="run-claims" aria-label="Tickets held by this session's runs">
+      {#each claims as w (w.id)}
+        <li title={w.run?.note ?? undefined}>
+          <Lamp level={phaseNow(w).lamp} />{workKey(w)} · {w.run?.phase ?? 'claimed'} · {w.run?.state}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
   {#if missing}
     <div class="overlay" data-testid="terminal-missing">
       <EmptyState
@@ -271,6 +287,27 @@
   .host {
     position: absolute;
     inset: 0;
+  }
+
+  .claims {
+    position: absolute;
+    top: var(--k-space-2);
+    right: var(--k-space-3);
+    z-index: 2;
+    margin: 0;
+    padding: var(--k-space-1) var(--k-space-2);
+    list-style: none;
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+    border-radius: var(--k-radius-sm);
+  }
+
+  .claims li {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    white-space: nowrap;
   }
 
   .banner {

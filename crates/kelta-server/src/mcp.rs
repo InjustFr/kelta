@@ -13,8 +13,10 @@ use kelta_proto::api::{CoreApi, Tracker};
 use kelta_proto::codehost::{PrDraft, ReviewKind};
 use kelta_proto::events::Notification;
 use kelta_proto::ext::Urgency;
-use kelta_proto::ids::{AccountId, SessionId};
-use kelta_proto::model::{EditorTarget, Lifecycle, Scope, SessionKind, ShipOrigin, WorkItem};
+use kelta_proto::ids::{AccountId, ProjectId, SessionId};
+use kelta_proto::model::{
+    EditorTarget, Lifecycle, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
+};
 use kelta_proto::tracker::{Ticket, TicketDetail, TicketRef, Transition};
 use serde_json::{Value, json};
 
@@ -129,7 +131,8 @@ fn initialize(params: &Value) -> Value {
         "instructions": "Kelta workbench tools: list the ticket board from Kelta's cache, read, move, comment, \
     edit or close any ticket by key; in a session Kelta started, also read and move the linked ticket, open \
     files in the tab's editor, create the pull request, list review requests, add line comments to the \
-    pending review of a pull request under review and notify the user."
+    pending review of a pull request under review and notify the user. Background runs claim a ticket \
+    (claim_ticket), report each phase (report_progress) and release it (release_ticket)."
     })
 }
 
@@ -176,6 +179,9 @@ const TOOL_NAMES: &[&str] = &[
     "comment_ticket_by_key",
     "update_ticket_body",
     "close_ticket",
+    "claim_ticket",
+    "report_progress",
+    "release_ticket",
 ];
 
 pub(crate) fn tool_defs() -> Value {
@@ -323,6 +329,53 @@ pub(crate) fn tool_defs() -> Value {
                 "required": ["key"], "additionalProperties": false
             },
         },
+        {
+            "name": "claim_ticket",
+            "description": "Claim a ticket for this run: Kelta tracks it as a work item adopting the run's worktree and branch (never removed by Kelta), shown on the ticket with the run's phase. Fails with Conflict, naming the holder, when the ticket already has live work; pick another ticket then. Does not move the ticket on the board.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": key, "account": account,
+                    "project": { "type": "string", "description": "Kelta project id (default: the ticket's)" },
+                    "worktree": { "type": "string", "description": "Absolute path of a git worktree of one of the project's repos (default: the primary repo)" },
+                    "branch": { "type": "string", "description": "Default: the worktree's checked-out branch" },
+                    "run": {
+                        "type": "object",
+                        "properties": { "id": { "type": "string" }, "name": { "type": "string", "description": "Workflow name, shown on the ticket" } },
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["key"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "report_progress",
+            "description": "Report how far the run on a claimed ticket got. `phase` is free text (the workflow's phase title); `state` drives the lamp; blocked and failed runs show in Kelta's Now with their `note`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": key,
+                    "phase": { "type": "string" },
+                    "state": { "type": "string", "enum": ["running", "blocked", "failed", "done"] },
+                    "note": { "type": "string" },
+                    "sha": { "type": "string" }
+                },
+                "required": ["key", "phase", "state"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "release_ticket",
+            "description": "End the claim on a ticket: its work item is finished; Kelta leaves the worktree and branch alone (remove them yourself when merged).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": key,
+                    "outcome": { "type": "string", "enum": ["merged", "abandoned"] },
+                    "sha": { "type": "string" }
+                },
+                "required": ["key", "outcome"], "additionalProperties": false
+            },
+        },
     ])
 }
 
@@ -359,6 +412,30 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             Ok(format!("Comment added to {}.", t.key))
         }
         "update_ticket_body" => update_ticket_body(core, args).await,
+        "claim_ticket" => claim_ticket(core, sid, args).await,
+        "report_progress" => {
+            let state = match str_arg(args, "state")? {
+                "running" => RunState::Running,
+                "blocked" => RunState::Blocked,
+                "failed" => RunState::Failed,
+                "done" => RunState::Done,
+                other => return Err(format!("InvalidArgument: unknown state {other:?}")),
+            };
+            let (key, phase) = (str_arg(args, "key")?, str_arg(args, "phase")?);
+            core.work_report(key, Some(phase.to_owned()), state, opt_arg(args, "note"), opt_arg(args, "sha"))
+                .await
+                .map_err(coded)?;
+            Ok(format!("{key}: {phase} ({}).", str_arg(args, "state")?))
+        }
+        "release_ticket" => {
+            let key = str_arg(args, "key")?;
+            let outcome = str_arg(args, "outcome")?;
+            if !matches!(outcome, "merged" | "abandoned") {
+                return Err(format!("InvalidArgument: outcome must be merged or abandoned, not {outcome:?}"));
+            }
+            core.work_release(key, opt_arg(args, "sha")).await.map_err(coded)?;
+            Ok(format!("{key} released ({outcome})."))
+        }
         "list_review_requests" => list_review_requests(core).await,
         "close_ticket" => {
             let (_, t) = by_key(core, args).await?;
@@ -524,21 +601,69 @@ async fn transition(
 
 /// The ticket `args.key` names: from Kelta's lists, else `args.account` + the key (providers take keys).
 async fn by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(Arc<dyn Tracker>, TicketRef), String> {
+    let (t, _) = ref_by_key(core, args).await?;
+    let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
+    Ok((tracker, t))
+}
+
+/// `by_key` without the tracker, plus the Kelta projects the listed ticket belongs to.
+async fn ref_by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(TicketRef, Vec<ProjectId>), String> {
     let key = str_arg(args, "key")?;
     let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty());
     let listed = core.ticket_list(Scope::All, None, None, false).await.ok().and_then(|p| {
-        p.items
-            .into_iter()
-            .map(|i| i.ticket.r#ref)
-            .find(|r| r.key == key && account.is_none_or(|a| r.account.as_str() == a))
+        p.items.into_iter().find(|i| {
+            i.ticket.r#ref.key == key && account.is_none_or(|a| i.ticket.r#ref.account.as_str() == a)
+        })
     });
-    let t = match (listed, account) {
-        (Some(t), _) => t,
-        (None, Some(a)) => TicketRef { account: AccountId::new(a), key: key.to_owned(), id: key.to_owned() },
-        (None, None) => return Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
+    match (listed, account) {
+        (Some(i), _) => Ok((i.ticket.r#ref, i.project_ids)),
+        (None, Some(a)) => Ok((
+            TicketRef { account: AccountId::new(a), key: key.to_owned(), id: key.to_owned() },
+            Vec::new(),
+        )),
+        (None, None) => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
+    }
+}
+
+fn opt_arg(args: &Value, key: &str) -> Option<String> {
+    args.get(key).and_then(Value::as_str).filter(|s| !s.trim().is_empty()).map(str::to_owned)
+}
+
+/// `Conflict: …`, `InvalidArgument: …`: the run branches on the code.
+fn coded(e: kelta_proto::error::KeltaError) -> String {
+    format!("{:?}: {}", e.code, e.message)
+}
+
+async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
+    let (ticket, projects) = ref_by_key(core, args).await?;
+    let project = opt_arg(args, "project")
+        .map(ProjectId::new)
+        .or_else(|| projects.into_iter().next())
+        .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
+        .ok_or_else(|| format!("no Kelta project for {}; pass `project`", ticket.key))?;
+    let run = args.get("run");
+    let run_str = |k: &str| run.and_then(|r| r.get(k)).and_then(Value::as_str).map(str::to_owned);
+    let claim = RunClaim {
+        name: run_str("name"),
+        run_id: run_str("id"),
+        session_id: sid.cloned(),
+        phase: None,
+        state: RunState::Running,
+        note: None,
+        sha: None,
     };
-    let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
-    Ok((tracker, t))
+    let key = ticket.key.clone();
+    let w = core
+        .work_claim(
+            &project,
+            ticket,
+            opt_arg(args, "worktree").map(PathBuf::from),
+            opt_arg(args, "branch"),
+            claim,
+        )
+        .await
+        .map_err(coded)?;
+    Ok(format!("Claimed {key}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
 }
 
 /// Revision of a description: FNV-1a of its text, stable across restarts.

@@ -9,6 +9,7 @@
 //! (`kelta_plugins::PluginHost::run_blocking`). Without a host (tests), MCP config is omitted and
 //! blocking pre-events are only published.
 
+mod claim;
 pub mod claude;
 pub mod editor;
 pub mod files;
@@ -487,7 +488,7 @@ impl WorkService {
     }
 
     /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`,
-    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`), Louis's `next_note` / `left_at` and the park (`parked_at`, `nvim_kept`) are never written here: `item` takes the stored ones, so a long
+    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`), Louis's `next_note` / `left_at`, the park (`parked_at`, `nvim_kept`) and a run's claim (`run`) are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -505,6 +506,7 @@ impl WorkService {
                 item.cost_usd = cur.cost_usd;
                 item.parked_at = cur.parked_at;
                 item.nvim_kept = cur.nvim_kept;
+                item.run = cur.run;
             }
             self.store.put_item(item).await?;
         }
