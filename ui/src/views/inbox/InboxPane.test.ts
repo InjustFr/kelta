@@ -9,7 +9,10 @@ import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
 import InboxPane from './InboxPane.svelte';
-import { nextWaiting, nowSummary } from './now';
+import { focusedSessionId } from '../../shell/nav';
+import { hud } from '../../shell/hud.svelte';
+import { jumpQueue, rowKey, type NowRow } from './groups';
+import { currentSections, nextWaiting, nowSummary } from './now';
 
 let mock: MockControls;
 
@@ -178,24 +181,43 @@ async function nextWaitingTo(container: HTMLElement, prefix: string): Promise<vo
   throw new Error(`no row ${prefix}`);
 }
 
-describe('Next waiting', () => {
-  it('walks the first four sections in order, cycling', async () => {
+describe('Next waiting (Mod+J)', () => {
+  it('walks the jump queue across projects, focusing the row and counting in the HUD, cycling', async () => {
     await Promise.all([
       tickets.load({ kind: 'all' }, null),
       reviews.load({ kind: 'all' }, 'review_requested'),
       reviews.load({ kind: 'all' }, 'authored'),
     ]);
-    const waiting = nowSummary()
-      .sections.filter((s) => ['needs_you', 'to_review', 'fix', 'requests'].includes(s.id))
-      .flatMap((s) => s.rows);
-    expect(nowSummary().waiting).toBe(waiting.length);
-    await nextWaiting(); // the scratch item that replied (billing)
-    expect(ui.inboxActive).toBe(false);
-    expect(projects.activeId).toBe('billing');
-    await nextWaiting(); // SHOP-155 to review
-    expect(projects.activeId).toBe('shop');
-    for (let i = 2; i < waiting.length; i += 1) await nextWaiting();
+    const queue = jumpQueue(currentSections(), sessions.all);
+    expect(queue.length).toBeGreaterThan(2);
+    expect(new Set(queue.map((j) => rowProject(j.row))).size).toBeGreaterThan(1);
+    for (const [i, j] of queue.entries()) {
+      const before = projects.activeId; // a row without a project opens in the active one
+      await nextWaiting();
+      expect(hud.text).toBe(`${i + 1}/${queue.length} · ${j.label} · ${rowKey(j.row)}`);
+      expect(ui.inboxActive).toBe(false);
+      expect(projects.activeId).toBe(rowProject(j.row) ?? before);
+      if (j.row.type === 'session') expect(focusedSessionId()).toBe(j.row.session.id);
+    }
     await nextWaiting(); // cycles back to the first
-    expect(projects.activeId).toBe('billing');
+    expect(hud.text.startsWith(`1/${queue.length} · `)).toBe(true);
+    await nextWaiting(-1); // Mod+Shift+J: the last
+    expect(hud.text.startsWith(`${queue.length}/${queue.length} · `)).toBe(true);
+  });
+
+  it('offers Tickets when nothing is waiting', async () => {
+    sessions.byId = {};
+    work.byId = {};
+    await nextWaiting();
+    expect(hud.text).toBe('nothing waiting');
+    expect(hud.enter).toEqual({ action: 'tickets.open', label: 'Tickets' });
   });
 });
+
+/** The project a queue row lands in. */
+function rowProject(row: NowRow): string | null {
+  if (row.type === 'work') return row.item.project_id;
+  if (row.type === 'session') return row.session.project_id;
+  if (row.type === 'review') return row.review.project_ids[0] ?? null;
+  return row.ticket.project_ids[0] ?? null;
+}

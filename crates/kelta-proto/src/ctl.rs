@@ -32,6 +32,10 @@ pub enum CtlCommand {
     },
     Toggle,
     Palette,
+    /// Jump to the next thing waiting on me (`attention.next`).
+    Next,
+    /// Walk the jumplist back (`nav.back`).
+    Back,
     Open {
         path: PathBuf,
     },

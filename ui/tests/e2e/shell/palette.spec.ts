@@ -1,4 +1,4 @@
-// Command palette, project switcher and Next waiting (attention.next) across projects.
+// Command palette, project switcher, Next waiting (attention.next, Mod+J) and the jumplist across projects.
 import { expect, test } from '@playwright/test';
 
 import { activeProject, boot, callsOf, dispatch, SESSIONS } from './helpers';
@@ -74,15 +74,56 @@ test.describe('palette', () => {
     await expect(page.locator('[data-testid="workspace"][data-project-id="kelta-tools"]')).toBeVisible();
   });
 
-  test('Next waiting walks the Now queue across projects, cycling', async ({ page }) => {
+  test('Next waiting walks the jump queue across projects', async ({ page }) => {
     await boot(page);
     // First waiting row: Claude replied on the billing scratch item.
-    await page.keyboard.press('Control+Shift+U');
+    await page.keyboard.press('Control+Shift+J');
     await expect.poll(() => activeProject(page)).toBe('billing');
+    await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · /);
+    // Then the failed start in billing (error band).
+    await dispatch(page, 'attention.next');
+    await expect(page.getByTestId('jump-hud')).toContainText(/^2\/\d+ · error · /);
     // Then SHOP-155 to review: its closed work tab is recreated around its Claude session.
     await dispatch(page, 'attention.next');
     await expect.poll(() => activeProject(page)).toBe('shop');
     await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
+  });
+
+  test('nav.back returns to the exact pane after Mod+J, kelta-ctl next and kelta-ctl focus-project', async ({
+    page,
+  }) => {
+    await boot(page);
+    const focused = page.locator('[data-testid="pane"][data-focused="true"] [data-testid="terminal-pane"]');
+    // Focus nvim (not the default pane) so "exact pane" is tested.
+    await page.locator(`[data-testid="terminal-pane"][data-session-id="${SESSIONS.shopNvim}"]`).click();
+    await expect(focused).toHaveAttribute('data-session-id', SESSIONS.shopNvim);
+
+    const ctl = (cmd: Record<string, unknown>) =>
+      page.evaluate((c) => window.__keltaMock!.emit({ type: 'ctl.command', cmd: c as never }), cmd);
+    const backToNvim = async () => {
+      await expect.poll(() => activeProject(page)).toBe('shop');
+      await expect(focused).toHaveAttribute('data-session-id', SESSIONS.shopNvim);
+    };
+
+    await page.keyboard.press('Control+Shift+J');
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await dispatch(page, 'nav.back');
+    await backToNvim();
+    await dispatch(page, 'nav.forward');
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await dispatch(page, 'nav.back');
+    await backToNvim();
+
+    await ctl({ cmd: 'next' });
+    await expect(page.getByTestId('jump-hud')).toContainText(/^2\//);
+    await expect(focused).not.toHaveAttribute('data-session-id', SESSIONS.shopNvim);
+    await ctl({ cmd: 'back' });
+    await backToNvim();
+
+    await ctl({ cmd: 'focus_project', id: 'billing' });
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await ctl({ cmd: 'back' });
+    await backToNvim();
   });
 });

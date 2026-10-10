@@ -2,14 +2,23 @@
 // Used by the Now pane, the rail tile (badge + tooltip) and `attention.next`.
 
 import type { KeltaError } from '$lib/gen';
-import { projects, reviews, sessions, tickets, toasts, work } from '$lib/stores';
+import { projects, reviews, sessions, tickets, work } from '$lib/stores';
 
+import { hud } from '../../shell/hud.svelte';
 import { revealSession } from '../../shell/nav';
 import { runPrimary } from '../work/actions';
 import { phaseNow, unfinishedWork } from '../work/live';
 import { goToWork, openFromNow, openReview } from '../work/nav';
 import { reviewLocally, startWorkOnTicket } from '../work/startWork';
-import { headerParts, nowSections, WAITING, waitingCount, type NowRow, type Section } from './groups';
+import {
+  headerParts,
+  jumpQueue,
+  nowSections,
+  rowKey,
+  waitingCount,
+  type NowRow,
+  type Section,
+} from './groups';
 
 const ALL = { kind: 'all' } as const;
 
@@ -118,19 +127,28 @@ export function reviewRowLocally(row: Extract<NowRow, { type: 'review' }>): void
   void reviewLocally(row.review.review.ref, rowProject(row.review.project_ids));
 }
 
-let lastWaiting: string | null = null;
+let lastJump: string | null = null;
 
-/** `attention.next` (Next waiting): the next row of the first four sections, cycling. */
-export async function nextWaiting(): Promise<void> {
-  const rows = currentSections()
-    .filter((s) => WAITING.includes(s.id))
-    .flatMap((s) => s.rows);
-  if (rows.length === 0) {
-    toasts.info('Nothing is waiting on you');
+/**
+ * `attention.next` / `attention.prev` (Mod+J / Mod+Shift+J): goes to the next or previous item of the
+ * jump queue, cycling, and shows `2/7 · needs input · SHOP-142`. With nothing waiting, `Enter` on the
+ * HUD opens Up next (in Now), or Tickets when Up next is empty.
+ */
+export async function nextWaiting(delta: 1 | -1 = 1): Promise<void> {
+  const sections = currentSections();
+  const queue = jumpQueue(sections, sessions.all);
+  if (queue.length === 0) {
+    // shortcut: "queued · parked" and the Next up view wait on #145; Up next stands in for them.
+    const up = sections.find((s) => s.id === 'up_next');
+    const queued = up ? up.rows.length + up.more : 0;
+    if (queued) hud.show(`nothing waiting · ${queued} up next`, { action: 'inbox.open', label: 'Up next' });
+    else hud.show('nothing waiting', { action: 'tickets.open', label: 'Tickets' });
     return;
   }
-  const at = rows.findIndex((r) => r.id === lastWaiting);
-  const row = rows[(at + 1) % rows.length]!;
-  lastWaiting = row.id;
-  await goToRow(row);
+  const at = queue.findIndex((j) => j.row.id === lastJump);
+  const i = at < 0 ? (delta > 0 ? 0 : queue.length - 1) : (at + delta + queue.length) % queue.length;
+  const jump = queue[i]!;
+  lastJump = jump.row.id;
+  hud.show(`${i + 1}/${queue.length} · ${jump.label} · ${rowKey(jump.row)}`);
+  await goToRow(jump.row);
 }

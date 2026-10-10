@@ -4,7 +4,7 @@
 import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
-import type { Lamp, NowSection, Phase, PhaseId } from '../work/phase';
+import { workKey, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
 
 export interface WorkEntry {
   item: WorkItem;
@@ -219,4 +219,70 @@ export function readyByProject(sections: readonly Section[]): Map<string, number
   for (const r of sections.find((s) => s.id === 'to_review')?.rows ?? [])
     if (r.type === 'work') out.set(r.item.project_id, (out.get(r.item.project_id) ?? 0) + 1);
   return out;
+}
+
+// ---- Mod+J (ticket #136) ----------------------------------------------------------------------
+
+/** Mod+J's bands, most urgent first. */
+const BANDS = ['needs input', 'error', 'ready for review', 'feedback', 'review request'] as const;
+/** Fix rows that are broken work rather than PR feedback. */
+const BROKEN = new Set<PhaseId>(['failed', 'rebase_stopped']);
+
+export interface Jump {
+  row: NowRow;
+  band: number;
+  label: string;
+}
+
+/** When a row started waiting (oldest first within a band). */
+function waitingSince(row: NowRow): string {
+  switch (row.type) {
+    case 'work':
+      return row.item.claude_at ?? row.item.created_at;
+    case 'session':
+      return row.session.created_at;
+    case 'review':
+      return (row.mine ? null : row.review.review.requested_at) ?? row.review.review.updated_at;
+    case 'ticket':
+      return '';
+  }
+}
+
+/** The row's short name in the HUD: `SHOP-142`, `#57`, the session name. */
+export function rowKey(row: NowRow): string {
+  switch (row.type) {
+    case 'work':
+      return workKey(row.item);
+    case 'session':
+      return row.session.name;
+    case 'review':
+      return `#${row.review.review.ref.number}`;
+    case 'ticket':
+      return row.ticket.ticket.ref.key;
+  }
+}
+
+/**
+ * Mod+J's queue across projects: Claude needs input, error or rate-limited, ready for review, feedback
+ * or red CI on my PRs, review requests (blocking first). Oldest first within a band.
+ */
+export function jumpQueue(sections: readonly Section[], sessions: readonly SessionInfo[]): Jump[] {
+  const out: (Jump & { blocking: boolean; at: string })[] = [];
+  const add = (row: NowRow, band: number, blocking = false): void => {
+    out.push({ row, band, label: BANDS[band]!, blocking, at: waitingSince(row) });
+  };
+  for (const s of sections)
+    for (const row of s.rows) {
+      if (s.id === 'needs_you') add(row, 0);
+      else if (s.id === 'to_review') add(row, 2);
+      else if (s.id === 'fix') add(row, row.type === 'work' && BROKEN.has(row.phase.id) ? 1 : 3);
+      else if (s.id === 'requests') add(row, 4, row.type === 'review' && row.review.review.blocking);
+    }
+  // A Claude stopped by an API error, rate limits included (StopFailure hook).
+  for (const s of sessions)
+    if (s.status === 'error' && s.lifecycle === 'live')
+      add({ type: 'session', id: `e:${s.id}`, session: s }, 1);
+  return out
+    .sort((a, b) => a.band - b.band || Number(b.blocking) - Number(a.blocking) || a.at.localeCompare(b.at))
+    .map(({ row, band, label }) => ({ row, band, label }));
 }

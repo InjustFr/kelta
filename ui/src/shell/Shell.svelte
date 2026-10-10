@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
 
   import type { AnyComponent } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import { onUiEvent } from '$lib/ipc/events';
   import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
@@ -14,12 +15,14 @@
 
   import { confirms, prompts } from './confirm.svelte';
   import DialogHost from './DialogHost.svelte';
+  import JumpHud from './JumpHud.svelte';
   import InboxHost from './InboxHost.svelte';
+  import { recordJump } from './jumplist';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
   import { fileRoots, openFileLink } from './actions';
-  import { activateProject, focusedPane, focusedSessionId } from './nav';
+  import { activateProject, currentTab, focusedPane, focusedSessionId } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
   import StatusBar from './StatusBar.svelte';
@@ -97,6 +100,16 @@
     }
   });
 
+  // ---- jumplist -------------------------------------------------------------------------------
+
+  $effect(() => {
+    // Every focus change, wherever it came from; `nav.back` landing on an entry records nothing.
+    const project = projects.activeId;
+    const tab = ui.inboxActive ? null : currentTab();
+    const pane = tab ? focusedPane() : null;
+    if (project && tab && pane) recordJump({ project, tab: tab.id, pane: pane.id });
+  });
+
   // ---- keys ------------------------------------------------------------------------------------
 
   $effect(() => {
@@ -151,6 +164,8 @@
     });
     const offCtl = ui.onCtl((cmd) => {
       if (cmd.cmd === 'focus_project') void activateProject(cmd.id);
+      else if (cmd.cmd === 'next') void dispatch('attention.next');
+      else if (cmd.cmd === 'back') void dispatch('nav.back');
       else if (cmd.cmd === 'emit' && cmd.name === 'custom.bench.run')
         import('./bench')
           .then((b) => b.runScenario(cmd.payload))
@@ -246,6 +261,7 @@
   <SheetHost />
   <DialogHost />
   <ToastHost />
+  <JumpHud />
 </main>
 
 <style>

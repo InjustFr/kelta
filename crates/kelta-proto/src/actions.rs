@@ -78,9 +78,14 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("pane.focus_right", "Focus pane right", ["cmd+alt+right"], [], Some("l"), Global),
     a!("pane.zoom", "Zoom pane", ["cmd+shift+enter"], ["ctrl+shift+z"], Some("z"), Global),
     a!("pane.close", "Close pane", ["cmd+w"], ["ctrl+shift+w"], Some("x"), Global),
-    a!("tickets.open", "Open tickets", ["cmd+shift+j"], ["ctrl+shift+j"], Some("t"), Global),
+    // Mod+J / Mod+Shift+J belong to the jump queue (ticket #136).
+    a!("tickets.open", "Open tickets", ["cmd+shift+b"], ["ctrl+shift+b"], Some("t"), Global),
     a!("reviews.open", "Open reviews", ["cmd+shift+r"], ["ctrl+shift+r"], Some("r"), Global),
-    a!("attention.next", "Next waiting", ["cmd+shift+u"], ["ctrl+shift+u"], Some("u"), Global),
+    a!("attention.next", "Next waiting", ["cmd+j"], ["ctrl+shift+j"], Some("u"), Global),
+    // Linux: Mod is ctrl+shift, so Mod+Shift+J does not exist there.
+    a!("attention.prev", "Previous waiting", ["cmd+shift+j"], [], Some("U"), Global),
+    a!("nav.back", "Go back", ["cmd+ctrl+left"], [], Some("-"), Global),
+    a!("nav.forward", "Go forward", ["cmd+ctrl+right"], [], Some("="), Global),
     a!("work.start", "Start work", ["cmd+enter"], ["ctrl+enter"], Some("s"), TicketViews),
     // Linux: ctrl+shift+o is pane.split_down.
     a!("toast.run_last", "Run last toast action", ["cmd+shift+o"], ["ctrl+shift+a"], Some("o"), Global),
