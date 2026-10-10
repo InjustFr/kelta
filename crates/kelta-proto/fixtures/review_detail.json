@@ -37,6 +37,7 @@
     ],
     "mergeable": true,
     "my_state": "pending",
+    "nudged_at": null,
     "ref": {
       "account": "github-work",
       "number": 87,
@@ -48,7 +49,8 @@
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
     "updated_at": "2026-10-09T12:00:00Z",
-    "url": "https://github.com/acme/shop-api/pull/87"
+    "url": "https://github.com/acme/shop-api/pull/87",
+    "waiting_on": []
   },
   "reviewers": [
     {

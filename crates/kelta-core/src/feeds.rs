@@ -83,6 +83,9 @@ fn review_kind_str(k: ReviewKind) -> &'static str {
     }
 }
 
+/// A PR's reviewers are nudged at most once per this long (`review_nudge`).
+const NUDGE_COOLDOWN: Duration = Duration::from_secs(24 * 3600);
+
 /// Seconds since an RFC 3339 timestamp (`u64::MAX`-ish when unparsable).
 pub fn age_of(ts: &str) -> Duration {
     use time::format_description::well_known::Rfc3339;
@@ -1359,6 +1362,11 @@ impl Core {
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         let stamps = self.reviewed_stamps().await;
         all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
+        if kind == ReviewKind::Authored {
+            let nudges = self.store.call(|c| q::nudges(c)).await.unwrap_or_default();
+            all.iter_mut()
+                .for_each(|r| r.nudged_at = nudges.get(&(r.r#ref.repo.clone(), r.r#ref.number)).cloned());
+        }
         Ok(ReviewPage { items: merge_reviews(all, &bindings), stale, errors })
     }
 
@@ -1403,6 +1411,32 @@ impl Core {
     pub async fn review_request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         self.rt.capture();
         self.code_host_of(&r.account)?.request_changes(r, body).await?;
+        self.after_review_write(r).await;
+        Ok(())
+    }
+
+    /// Nudges the reviewers of my PR: re-requests `who` (its `waiting_on`; `comment` `None`) or
+    /// posts `comment`. One nudge per PR per 24 h, kept in `nudges` across restarts.
+    pub async fn review_nudge(
+        &self,
+        r: &ReviewRef,
+        who: &[String],
+        comment: Option<&str>,
+    ) -> Result<(), KeltaError> {
+        self.rt.capture();
+        let key = (r.repo.clone(), r.number);
+        let last = self.store.call(|c| q::nudges(c)).await?.remove(&key);
+        if last.is_some_and(|at| age_of(&at) < NUDGE_COOLDOWN) {
+            return Err(KeltaError::invalid("already nudged in the last 24 h"));
+        }
+        let host = self.code_host_of(&r.account)?;
+        match comment {
+            Some(body) => host.post_note(r, body).await?,
+            None if who.is_empty() => return Err(KeltaError::invalid("this pull request waits on nobody")),
+            None => drop(host.rerequest_review(r, who).await?),
+        }
+        let rr = r.clone();
+        self.store.call(move |c| q::nudge_put(c, &rr, &kelta_proto::now_rfc3339())).await?;
         self.after_review_write(r).await;
         Ok(())
     }

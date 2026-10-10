@@ -80,6 +80,7 @@ pub const COMMANDS: &[&str] = &[
     "review_approve",
     "review_comment",
     "review_request_changes",
+    "review_nudge",
     // work
     "work_plan",
     "work_start",

@@ -98,13 +98,22 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub decision_head: Option<String>,
-    /// When my review was requested (review requests only); `None`: the UI ages the row by `updated_at`.
+    /// When my review was requested (review requests only), or since when my PR waits on
+    /// `waiting_on` (authored); `None`: the UI ages the row by `updated_at`.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub requested_at: Option<String>,
     /// I am the last required reviewer: my approval unblocks the author (review requests only).
     #[serde(default)]
     pub blocking: bool,
+    /// Reviewers my PR waits on (authored only): asked and not reviewed since, or who requested
+    /// changes before my last push.
+    #[serde(default)]
+    pub waiting_on: Vec<String>,
+    /// My last nudge from Kelta (authored only, `nudges` table; core-filled).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub nudged_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

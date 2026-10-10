@@ -128,6 +128,8 @@ pub fn review() -> Review {
         decision_head: None,
         requested_at: None,
         blocking: false,
+        waiting_on: Vec::new(),
+        nudged_at: None,
     }
 }
 

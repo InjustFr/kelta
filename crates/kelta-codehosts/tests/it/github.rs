@@ -468,6 +468,44 @@ async fn update_title_patches_the_pull_request() {
 }
 
 #[tokio::test]
+async fn a_nudge_re_requests_who_the_pr_waits_on_even_before_any_review() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/pulls/101/reviews"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .mount(&server)
+        .await;
+    for m in ["DELETE", "POST"] {
+        Mock::given(method(m))
+            .and(path("/repos/acme/shop/pulls/101/requested_reviewers"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    }
+    let who = ["anna".to_owned(), "acme/backend".to_owned()];
+    let asked = gh(&server).rerequest_review(&rref("github-work", "acme/shop", 101), &who).await.unwrap();
+    assert_eq!(asked, who);
+    let want = json!({ "reviewers": ["anna"], "team_reviewers": ["backend"] });
+    let url = "/repos/acme/shop/pulls/101/requested_reviewers";
+    assert_eq!(bodies(&server, "DELETE", url).await, vec![want.clone()], "pending: dropped first");
+    assert_eq!(bodies(&server, "POST", url).await, vec![want]);
+
+    let server = MockServer::start().await;
+    for (m, code) in [("DELETE", 200), ("POST", 500)] {
+        Mock::given(method(m))
+            .and(path(url))
+            .respond_with(ResponseTemplate::new(code).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    }
+    let err = gh(&server).rerequest_review(&rref("github-work", "acme/shop", 101), &who).await.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("anna") && msg.contains("acme/backend"), "lost reviewers named: {msg}");
+    assert_eq!(bodies(&server, "POST", url).await.len(), 2, "POST retried once");
+}
+
+#[tokio::test]
 async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thread() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/user", 200, "github/user.json").await;
@@ -478,7 +516,7 @@ async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thr
         .mount(&server)
         .await;
     let h = gh(&server);
-    let who = h.rerequest_review(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    let who = h.rerequest_review(&rref("github-work", "acme/shop", 101), &[]).await.unwrap();
     assert_eq!(who, vec!["zed", "erin"], "me (louis) never re-requested");
     let body = &bodies(&server, "POST", "/repos/acme/shop/pulls/101/requested_reviewers").await[0];
     assert_eq!(body["reviewers"], json!(["zed", "erin"]));
@@ -592,6 +630,14 @@ async fn decisions_publish_the_pending_review_with_its_comments() {
         ]
     );
     assert_eq!(count(&server, "POST", "/repos/acme/shop/issues/101/comments").await, 0);
+    // a nudge ping is a plain comment: the pending review stays a draft
+    mount(&server, "POST", "/repos/acme/shop/issues/101/comments", 201, "github/review_posted.json").await;
+    h.post_note(&r, "ping").await.unwrap();
+    assert_eq!(count(&server, "POST", "/repos/acme/shop/pulls/101/reviews/9/events").await, 3);
+    assert_eq!(
+        bodies(&server, "POST", "/repos/acme/shop/issues/101/comments").await,
+        vec![json!({"body": "ping"})]
+    );
     // the pending review began on abc123: approving another head would approve unseen code
     let e = h.approve(&r, "newer").await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument);

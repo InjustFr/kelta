@@ -188,6 +188,8 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets; applied at startup and on reload (an invalid pattern keeps the previous one) |
 | `repos_allow` / `repos_deny` | list<glob> | `[]` / `[]` | |
 | `ignore_globs` | list<glob> | `["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]` | counted as generated (not review lines) in the Ready for review chip, with `linguist-generated` / `-diff` attributes |
+| `sla_hours` | int | `24` | My PRs: the `waiting on @x · Nh` chip turns amber past this many hours |
+| `nudge_template` | str | `"{reviewers} friendly ping: this is waiting on your review."` | My PRs: the comment of `n` → Comment ping; `{reviewers}` = `@anna @bob` |
 
 ### [web]
 | `embed_default` | enum(auto\|iframe\|proxy\|external) | `auto` | |

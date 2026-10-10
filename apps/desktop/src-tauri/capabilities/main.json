@@ -83,6 +83,7 @@
     "allow-review-approve",
     "allow-review-comment",
     "allow-review-request-changes",
+    "allow-review-nudge",
     "allow-work-plan",
     "allow-work-start",
     "allow-work-list",

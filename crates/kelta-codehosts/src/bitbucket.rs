@@ -155,6 +155,8 @@ impl BitbucketHost {
             decision_head: None,
             requested_at: None,
             blocking: false,
+            waiting_on: Vec::new(),
+            nudged_at: None,
             my_state: (kind == ReviewKind::ReviewRequested)
                 .then(|| mine.map_or(MyReviewState::Pending, |p| state_of(p))),
             mergeable: None,
