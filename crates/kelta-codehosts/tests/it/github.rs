@@ -490,6 +490,19 @@ async fn a_nudge_re_requests_who_the_pr_waits_on_even_before_any_review() {
     let url = "/repos/acme/shop/pulls/101/requested_reviewers";
     assert_eq!(bodies(&server, "DELETE", url).await, vec![want.clone()], "pending: dropped first");
     assert_eq!(bodies(&server, "POST", url).await, vec![want]);
+
+    let server = MockServer::start().await;
+    for (m, code) in [("DELETE", 200), ("POST", 500)] {
+        Mock::given(method(m))
+            .and(path(url))
+            .respond_with(ResponseTemplate::new(code).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    }
+    let err = gh(&server).rerequest_review(&rref("github-work", "acme/shop", 101), &who).await.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("anna") && msg.contains("acme/backend"), "lost reviewers named: {msg}");
+    assert_eq!(bodies(&server, "POST", url).await.len(), 2, "POST retried once");
 }
 
 #[tokio::test]

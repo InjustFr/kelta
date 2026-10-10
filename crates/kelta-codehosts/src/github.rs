@@ -915,7 +915,16 @@ impl CodeHost for GithubHost {
             let url = format!("{pull_url}/requested_reviewers");
             // A still-pending request is not notified again: drop it first. Best effort, the POST re-adds it.
             let _ = self.auth.send_text(HttpRequest::delete(url.clone()).json(body.clone())).await;
-            self.auth.send_text(HttpRequest::post(url).json(body)).await?;
+            let post = || self.auth.send_text(HttpRequest::post(url.clone()).json(body.clone()));
+            // The DELETE may have dropped every request: one retry, then say who was lost.
+            if post().await.is_err() {
+                post().await.map_err(|e| {
+                    KeltaError::upstream(format!(
+                        "review requests for {} were removed and could not be re-added: {e}",
+                        who.join(", ")
+                    ))
+                })?;
+            }
             return Ok(who.to_vec());
         }
         let me = self.me().await?;
