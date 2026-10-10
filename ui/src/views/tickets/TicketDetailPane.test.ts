@@ -68,7 +68,7 @@ describe('TicketDetailPane', () => {
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 'm' });
     const menu = await screen.findByRole('menu');
     await screen.findAllByRole('menuitem');
-    await fireEvent.keyDown(menu, { key: 'ArrowDown' }); // first transition: In progress
+    // the first transition (In progress) is lit as Enter's target
     await fireEvent.keyDown(menu, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
     expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({

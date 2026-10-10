@@ -47,18 +47,31 @@
 
   // Keyed on the ticket key, not the `ref` object: list refreshes and patches make new objects.
   $effect(() => {
-    const k = key;
+    void key;
     untrack(() => {
       // A reused instance (split view following the selection) must not carry a draft across.
       comment = '';
       picker = null;
       prMenu = null;
-      // The standalone pane has just loaded it: no second `tracker_get` on mount.
-      const s = tickets.details[k];
-      if (!s?.loading && Date.now() - (s?.fetchedAt ?? 0) > 2000) void tickets.loadDetail(ref);
+      loadCurrent();
       ensureReviews();
     });
   });
+
+  // One `tracker_get` at a time: walking the split view with j/k loads where the selection lands,
+  // not every ticket passed on the way.
+  let inflight = false;
+  function loadCurrent(): void {
+    const s = tickets.details[key];
+    // The standalone pane has just loaded it: no second `tracker_get` on mount.
+    if (inflight || s?.loading || Date.now() - (s?.fetchedAt ?? 0) <= 2000) return;
+    inflight = true;
+    const loading = key;
+    void tickets.loadDetail(ref).finally(() => {
+      inflight = false;
+      if (key !== loading) loadCurrent();
+    });
+  }
 
   async function assign(who: 'me' | 'none'): Promise<void> {
     try {

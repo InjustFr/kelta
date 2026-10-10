@@ -357,6 +357,22 @@ async fn comment_and_assign() {
 }
 
 #[tokio::test]
+async fn assign_keeps_the_board_fields_of_a_project_item() {
+    let server = MockServer::start().await;
+    gql(&server, "projectItems", "github/gql_issue_projects.json").await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    Mock::given(method("PATCH"))
+        .and(path("/repos/acme/shop/issues/12"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/issue.json")))
+        .mount(&server)
+        .await;
+    let t = gh(&server).assign(&r(), Assignee::Me).await.unwrap();
+    assert_eq!(t.status.name, "In Progress");
+    assert_eq!(t.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
+    assert_eq!(t.priority_rank, Some(1));
+}
+
+#[tokio::test]
 async fn auth_and_rate_limit_errors() {
     let server = MockServer::start().await;
     Mock::given(path("/user")).respond_with(ResponseTemplate::new(401)).mount(&server).await;

@@ -191,8 +191,9 @@ export class TicketsStore {
   }
 
   apply(ev: UiEvent): void {
-    // Rows carry core-joined PRs (CI, review), so a review poll refreshes them too (cache only).
-    if (ev.type !== 'tickets.changed' && ev.type !== 'reviews.changed') return;
+    // Not on reviews.changed: reloading every list on each review poll revalidated trackers and dropped
+    // loadMore pages; PR chips catch up on the next ticket refresh.
+    if (ev.type !== 'tickets.changed') return;
     const lists: Record<string, TicketList> = {};
     let touched = false;
     for (const [k, l] of Object.entries(this.lists)) {

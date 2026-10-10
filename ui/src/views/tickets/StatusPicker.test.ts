@@ -57,6 +57,8 @@ describe('StatusPicker', () => {
     await labels();
     await fireEvent.input(filter(), { target: { value: 'blk' } });
     expect(await labels()).toEqual(['Blocked 1']);
+    // Enter's target is lit before it is pressed.
+    await waitFor(() => expect(screen.getByRole('menuitem').classList.contains('active')).toBe(true));
     await fireEvent.keyDown(filter(), { key: 'Enter' });
     await waitFor(() =>
       expect(transitionCalls().at(-1)?.args).toMatchObject({ transition_id: 'to-blocked' }),

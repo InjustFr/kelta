@@ -474,6 +474,21 @@ async fn a_view_without_jql_gets_a_default_from_its_project_or_board_or_who() {
         jql_sent(&t, &server, &b).await,
         "(filter = 10010 AND statusCategory != Done) AND assignee is EMPTY ORDER BY updated DESC"
     );
+    // `closed` (the core's recently-done fetch) flips the open clause, defaults and source JQL alike.
+    v.status = Some("closed".into());
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = \"SHOP\" AND statusCategory = Done) AND assignee = currentUser() ORDER BY updated DESC"
+    );
+    let src = TrackerView {
+        jql: Some("project = SHOP AND statusCategory != Done ORDER BY updated DESC".into()),
+        status: Some("closed".into()),
+        ..view("s")
+    };
+    assert_eq!(
+        jql_sent(&t, &server, &src).await,
+        "project = SHOP AND statusCategory = Done ORDER BY updated DESC"
+    );
     let mut m = view("m");
     m.who = Some(Who::Mine);
     assert_eq!(jql_sent(&t, &server, &m).await, "assignee = currentUser() ORDER BY updated DESC");

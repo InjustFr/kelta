@@ -524,6 +524,18 @@ impl GithubIssues {
         }))
     }
 
+    /// A REST issue as a ticket with its first Projects v2 item's Status and board fields (sprint,
+    /// priority, estimate), so assign / open / close / get never strip them. `None` = a pull request.
+    async fn ticket_with_board(&self, repo: &str, number: u64, v: &Value) -> Option<Ticket> {
+        // No project, or a token without project scope: the plain issue.
+        let item = self.issue_projects(repo, number).await.ok().and_then(|p| p.items.into_iter().next());
+        let mut t = self.ticket_from_rest(v, item.as_ref().and_then(|i| i.current.as_deref()))?;
+        if let Some(i) = &item {
+            apply_project_fields(&mut t, &i.vals, &today());
+        }
+        Some(t)
+    }
+
     fn page_cursor(c: Option<Cursor>) -> Result<u32, KeltaError> {
         match c {
             None => Ok(1),
@@ -750,7 +762,8 @@ impl Tracker for GithubIssues {
         let (repo, number) = split_repo_number(&t.key)?;
         let issue = self.fetch_issue(&repo, number).await?;
         let ticket = self
-            .ticket_from_rest(&issue, None)
+            .ticket_with_board(&repo, number, &issue)
+            .await
             .ok_or_else(|| KeltaError::not_found(format!("{} is a pull request, not an issue", t.key)))?;
         // Comments are oldest first: take the last page(s) so we show the newest 20.
         let url = format!("{}/repos/{repo}/issues/{number}/comments", self.api);
@@ -929,7 +942,8 @@ impl Tracker for GithubIssues {
                 return self.move_in_project(&repo, number, name).await;
             }
         };
-        self.ticket_from_rest(&v, None)
+        self.ticket_with_board(&repo, number, &v)
+            .await
             .ok_or_else(|| KeltaError::upstream("issue response without repository"))
     }
 
@@ -958,7 +972,8 @@ impl Tracker for GithubIssues {
             )
             .await?
             .body;
-        self.ticket_from_rest(&v, None)
+        self.ticket_with_board(&repo, number, &v)
+            .await
             .ok_or_else(|| KeltaError::upstream("issue response without repository"))
     }
 

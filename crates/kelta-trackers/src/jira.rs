@@ -806,8 +806,10 @@ impl Tracker for JiraTracker {
 impl JiraTracker {
     /// The view's own JQL, else a default built from its board / project (newest first).
     async fn base_jql(&self, view: &TrackerView) -> Result<String, KeltaError> {
+        let closed = view.status.as_deref() == Some("closed");
         if let Some(j) = view.jql.as_deref().filter(|j| !j.trim().is_empty()) {
-            return Ok(j.to_owned());
+            // `closed` (the core's recently-done fetch) flips the view's own open clause; other JQL is kept.
+            return Ok(if closed { j.replace(OPEN, DONE) } else { j.to_owned() });
         }
         let cond = if let Some(board) = view.board_id {
             // shortcut: the board's filter only; a kanban board's `subQuery` is ignored.
@@ -828,6 +830,8 @@ impl JiraTracker {
         // open tickets only, like the other providers; `status = "*"` lists every state
         let cond = if cond.is_empty() || view.status.as_deref() == Some("*") {
             cond
+        } else if closed {
+            format!("{cond} AND {DONE}")
         } else {
             format!("{cond} AND {OPEN}")
         };
@@ -871,6 +875,7 @@ impl JiraTracker {
 /// `project = SHOP`, `project in (SHOP, OPS)`, `project = "SHOP"` → first key.
 /// The JQL clause that keeps a list to open tickets.
 const OPEN: &str = "statusCategory != Done";
+const DONE: &str = "statusCategory = Done";
 
 pub(crate) fn project_key_from_jql(jql: &str) -> Option<String> {
     static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();

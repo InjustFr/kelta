@@ -67,10 +67,10 @@
     none: 'No grouping',
   };
   const SORT_LABELS: Record<TicketSort, string> = {
-    priority: 'Priority',
-    updated: 'Updated',
-    age: 'Age in status',
-    key: 'Key',
+    priority: 'Sort by priority',
+    updated: 'Sort by updated',
+    age: 'Sort by age in status',
+    key: 'Sort by key',
   };
   const move = new MoveController();
 
@@ -717,15 +717,14 @@
       </div>
     {/if}
     {#if hasSprints || currentSprint}
-      <button
-        type="button"
-        class="quick"
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={currentSprint ? 'check' : undefined}
         aria-pressed={currentSprint}
-        title="Only tickets in an active sprint (f s)"
-        onclick={() => (currentSprint = !currentSprint)}
+        title="Only tickets in an active sprint (f, then s)"
+        onclick={() => (currentSprint = !currentSprint)}>Current sprint</Button
       >
-        {#if currentSprint}<Icon name="check" size={12} />{/if}Current sprint
-      </button>
     {/if}
     <span class="spacer"></span>
     {#if project?.tracker}
@@ -881,28 +880,29 @@
                       />{/if}</span
                   >
                   <span class="k-row-key">{t.ref.key}</span>
-                  <span class="k-row-title">{t.title}</span>
-                  <span class="acts" data-acts>
-                    <RowButton
-                      icon="arrow-right"
-                      label="Move (m)"
-                      onclick={() => {
-                        selKey = r.key;
-                        pickOrMove(item);
-                      }}
-                    />
-                    <RowButton
-                      icon="git-pull-request"
-                      label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
-                      disabled={item.prs.length === 0}
-                      onclick={() => openPrOf(item, false)}
-                    />
-                    <RowButton
-                      icon="play"
-                      label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
-                      onclick={() => start(item)}
-                    />
-                  </span>
+                  <span class="k-row-title"
+                    >{t.title}<span class="acts" data-acts>
+                      <RowButton
+                        icon="arrow-right"
+                        label="Move (m)"
+                        onclick={() => {
+                          selKey = r.key;
+                          pickOrMove(item);
+                        }}
+                      />
+                      <RowButton
+                        icon="git-pull-request"
+                        label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
+                        disabled={item.prs.length === 0}
+                        onclick={() => openPrOf(item, false)}
+                      />
+                      <RowButton
+                        icon="play"
+                        label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
+                        onclick={() => start(item)}
+                      /></span
+                    ></span
+                  >
                   <span class="meta">
                     {#if pr}<span class="pr" data-pr
                         ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
@@ -940,7 +940,10 @@
                         >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
                       >
                     {/if}
-                    <span class="k-row-meta age">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
+                    <!-- An aged row shows one duration (days in status); the empty slot keeps the column. -->
+                    <span class="k-row-meta age"
+                      >{age ? '' : relativeTime(Date.parse(item.ticket.updated_at))}</span
+                    >
                   </span>
                 </button>
               {/if}
@@ -1044,7 +1047,7 @@
       ['m', 'Move to'],
       ['x', 'Select'],
       ['p shift+p', 'Pull request, in browser'],
-      ['f s', 'Current sprint'],
+      ['f then s', 'Current sprint'],
       ['a shift+a', 'Assign me, unassign'],
       ['s shift+s', 'Start work, start now'],
       ['v', 'Source'],
@@ -1101,10 +1104,13 @@
 <MoveDialogs {move} />
 
 <style>
-  /* One line at any pane width: the toolbar scrolls sideways instead of wrapping labels. */
+  /* A narrow pane wraps the toolbar to a second line rather than hiding controls; labels never wrap. */
   .bar {
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    row-gap: var(--k-space-2);
+    height: auto;
+    min-height: var(--k-tabbar-height);
+    padding-block: var(--k-space-2);
     white-space: nowrap;
   }
 
@@ -1123,6 +1129,7 @@
   /* Fixed width so the category bars form one column down the list. */
   .status-slot {
     display: inline-flex;
+    flex: none;
     width: 112px;
   }
 
@@ -1133,6 +1140,7 @@
   /* Fixed too, so source names of any length do not shift the status column. */
   .source-slot {
     display: inline-flex;
+    flex: none;
     justify-content: flex-end;
     width: 88px;
   }
@@ -1175,6 +1183,7 @@
   }
 
   .k-row-title {
+    position: relative;
     min-width: 120px;
   }
 
@@ -1240,6 +1249,7 @@
   /* Status age: quiet at 7 days, --k-warn at 14, --k-danger at 21; text tint only (DESIGN §6.11). */
   .age-slot {
     display: inline-flex;
+    flex: none;
     justify-content: flex-end;
     width: 28px;
   }
@@ -1256,7 +1266,6 @@
 
   .aged.danger {
     color: var(--k-danger);
-    font-weight: var(--k-weight-strong);
   }
 
   .sprint {
@@ -1271,12 +1280,21 @@
     color: var(--k-fg-muted);
   }
 
-  /* Compact row actions: on the selected row, on hover and on focus-within (DESIGN §7). */
+  /* Compact row actions: on the selected row, on hover and on focus-within (DESIGN §7), laid over
+     the end of the title on the row's own backing so showing them never reflows the row. */
   .acts {
+    position: absolute;
+    inset: 0 0 0 auto;
     display: none;
-    flex: none;
     align-items: center;
     gap: var(--k-space-1);
+    padding-left: var(--k-space-2);
+    background: linear-gradient(var(--k-bg-hover), var(--k-bg-hover)), var(--k-well);
+  }
+
+  .k-row.selected .acts,
+  .k-row.picked .acts {
+    background: var(--k-bg-selected);
   }
 
   .k-row:hover .acts,
@@ -1300,30 +1318,6 @@
   .wip-note {
     font-weight: 400;
     font-size: var(--k-font-size-xs);
-  }
-
-  .quick {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    height: 22px;
-    padding: 0 var(--k-space-3);
-    border: 0;
-    border-radius: var(--k-radius);
-    background: transparent;
-    color: var(--k-fg-chrome);
-    cursor: pointer;
-  }
-
-  .quick:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
-  }
-
-  .quick[aria-pressed='true'] {
-    color: var(--k-fg);
-    font-weight: var(--k-weight-strong);
-    box-shadow: inset 0 -2px 0 var(--k-accent);
   }
 
   /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */

@@ -435,8 +435,22 @@ impl Core {
         if !matches!(&r, Err(e) if e.code == ErrorCode::InvalidArgument) {
             self.note_account(&q.account, &r);
         }
-        let page = r?;
+        let mut page = r?;
         if cursor.is_none() {
+            // Open-only default lists never return done tickets: add the ones done in the last 7 days (Flow's Done).
+            // shortcut: first page of the provider's closed list, page on when 7 days of closures exceed it.
+            if q.view.status.is_none() {
+                let closed = TrackerView { status: Some("closed".into()), ..q.view.clone() };
+                let week = Duration::from_secs(7 * 86_400);
+                let done = tracker.list(&closed, None).await.map(|p| p.items).unwrap_or_default();
+                let fresh: Vec<Ticket> = done
+                    .into_iter()
+                    .filter(|t| t.status.category == StatusCategory::Done)
+                    .filter(|t| age_of(t.status_since.as_deref().unwrap_or(&t.updated_at)) <= week)
+                    .filter(|t| !page.items.iter().any(|o| o.r#ref == t.r#ref))
+                    .collect();
+                page.items.extend(fresh);
+            }
             self.cache_put(&q.cache_key, &page);
         }
         Ok(page)
@@ -1131,7 +1145,6 @@ impl Core {
         self.publish_ev(ev);
     }
 
-    /// `(account, repo)` of the code host bound to a work item's repo.
     /// The code-host repos of `projects`.
     fn code_repos(&self, projects: &[ProjectId]) -> Vec<String> {
         projects
@@ -1146,6 +1159,7 @@ impl Core {
             .collect()
     }
 
+    /// `(account, repo)` of the code host bound to a work item's repo.
     fn work_binding(&self, w: &WorkItem) -> Option<(AccountId, String)> {
         let p = self.cfg.project(&w.project_id)?;
         let ch = p.repos.iter().find(|r| r.id == w.repo_id)?.code_host.clone()?;

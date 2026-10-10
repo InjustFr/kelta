@@ -71,7 +71,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 
 | Group by | Groups |
 |---|---|
-| Flow (default) | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days; older ones are left out. |
+| Flow (default) | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
 | Status | the tracker's own status names, in progress first, Done collapsed |
 | Priority | the provider's priorities, highest first, then no priority |
 | Sprint | active sprints, other sprints, then no sprint |
@@ -81,11 +81,11 @@ Within a group the sort is Priority (then most recently updated), Updated, Age i
 Each ticket carries the provider's priority, how long it has been in its status, its sprint, estimate and due date.
 GitHub and Gitea have no native priority: they rank from `priority:` style labels, and GitHub reads priority, sprint and estimate from Projects v2 fields.
 
-- **Age badge**: a ticket not done shows `7d`, `14d`, `21d`... in its row after a week in the same status; the text
-  warms at 14 days and turns red at 21. Providers that do not date a status change fall back to the last update.
+- **Age badge**: a ticket not done shows `7d`, `14d`, `21d`... in its row after a week in the same status, in place of
+  the last-update time; the text warms at 14 days and turns red at 21. Providers that do not date a status change fall back to the last update.
 - **WIP limit**: when more tickets are in Doing than `tickets.wip_limit` (default 3, [Settings](../SETTINGS.md)) the
   group header says so in the warning colour. It only warns; nothing is blocked.
-- **Sprint**: rows show the sprint name unless you group by sprint. `f` `s` keeps the active sprint only (a quick
+- **Sprint**: rows show the sprint name unless you group by sprint. `f` then `s` keeps the active sprint only (a quick
   filter, separate from the per-source current iteration below).
 
 ## The detail column

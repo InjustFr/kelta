@@ -255,17 +255,14 @@ describe('TicketsStore', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
   });
 
-  it('refetches loaded lists on reviews.changed (row PR chips)', async () => {
+  it('ignores reviews.changed (no tracker reload per review poll)', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'project' as const, id: 'billing' };
     await store.load(scope, 'mine');
     const before = mock.calls.filter((c) => c.cmd === 'tracker_list').length;
     store.apply({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
     await flush();
-    await flush();
-    const calls = mock.calls.filter((c) => c.cmd === 'tracker_list');
-    expect(calls.length).toBe(before + 1);
-    expect(calls.at(-1)?.args).toMatchObject({ refresh: false });
+    expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before);
   });
 
   it('loadMore skips tickets already in the list', async () => {

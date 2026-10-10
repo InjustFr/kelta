@@ -197,7 +197,6 @@ describe('TicketsPane board', () => {
     await fireEvent.keyDown(screen.getByTestId('tickets-pane'), { key: 'm' });
     const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
     await screen.findAllByRole('menuitem'); // the menu opens before its moves load
-    await fireEvent.keyDown(menu, { key: 'ArrowDown' });
     await fireEvent.keyDown(menu, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
     await waitFor(() => expect(laneOf(container, 'SHOP-151')).toBe('in_progress'));

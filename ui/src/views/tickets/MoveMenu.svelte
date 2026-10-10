@@ -91,6 +91,7 @@
     {x}
     {y}
     {label}
+    filtered
     onselect={(id) => {
       const t = moves.find((m) => m.id === id);
       if (t) onselect(t);

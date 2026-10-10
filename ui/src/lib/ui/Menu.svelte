@@ -34,11 +34,13 @@
     label?: string;
     /** Content above the items; it also describes the menu (`aria-describedby`). */
     header?: Snippet;
+    /** A filter in the header narrows the items: the first enabled one stays lit as Enter's target. */
+    filtered?: boolean;
     onselect: (id: string) => void;
     onclose: () => void;
   }
 
-  let { items, x, y, label = 'Menu', header, onselect, onclose }: Props = $props();
+  let { items, x, y, label = 'Menu', header, filtered = false, onselect, onclose }: Props = $props();
   const headerId = $props.id();
 
   let el = $state<HTMLDivElement>();
@@ -56,6 +58,10 @@
 
   $effect(() => {
     el?.focus();
+  });
+
+  $effect(() => {
+    if (filtered) active = enabled[0] ?? -1;
   });
 
   function move(delta: number): void {

@@ -56,7 +56,11 @@ fn env(root: &std::path::Path, reviews: Vec<Review>) -> Env {
 }
 
 fn env_with(root: &std::path::Path, host: Arc<ListHost>) -> Env {
-    let tracker = Arc::new(FakeTracker::new());
+    env_full(root, host, FakeTracker::new())
+}
+
+fn env_full(root: &std::path::Path, host: Arc<ListHost>, tracker: FakeTracker) -> Env {
+    let tracker = Arc::new(tracker);
     let factory = Arc::new(Factory::default());
     factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker.clone() as Arc<dyn Tracker>);
     factory.hosts.lock().insert(AccountId::new("github-work"), host.clone() as Arc<dyn CodeHost>);
@@ -108,6 +112,31 @@ async fn all_scope_dedups_and_tags_projects() {
     assert_eq!(shop.items.len(), 1);
     // linked tickets from branch + title
     assert_eq!(bound.review.linked_tickets, vec!["SHOP-140"]);
+}
+
+#[tokio::test]
+async fn default_lists_add_tickets_done_this_week() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = FakeTracker::new();
+    let done = |key: &str, since: String| {
+        let mut d = base.ticket("SHOP-143").unwrap();
+        d.ticket.r#ref.key = key.into();
+        d.ticket.status = kelta_proto::samples::status("5", "Done", StatusCategory::Done);
+        d.ticket.status_since = Some(since);
+        d
+    };
+    let fake = FakeTracker::with_tickets(vec![
+        base.ticket("SHOP-141").unwrap(),
+        base.ticket("SHOP-142").unwrap(),
+        done("SHOP-143", kelta_proto::now_rfc3339()),
+        done("SHOP-144", "2020-01-01T00:00:00Z".into()),
+    ])
+    .with_page_size(2);
+    let e = env_full(tmp.path(), ListHost::new(vec![]), fake);
+    let shop = Scope::Project { id: "shop".into() };
+    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
+    assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"], "open first page + done in the last 7 days");
 }
 
 #[tokio::test]

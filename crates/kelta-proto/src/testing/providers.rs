@@ -165,7 +165,9 @@ impl Tracker for FakeTracker {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        self.enter(&format!("list:{}", view.id))?;
+        // The core's recently-done fetch (`status: closed`) is logged apart so `list:` counts stay per view.
+        let closed = view.status.as_deref() == Some("closed");
+        self.enter(&format!("{}:{}", if closed { "list-closed" } else { "list" }, view.id))?;
         let start = match cursor {
             Some(Cursor::Offset(n)) => n as usize,
             None => 0,
@@ -176,6 +178,7 @@ impl Tracker for FakeTracker {
             .lock()
             .iter()
             .map(|d| d.ticket.clone())
+            .filter(|t| !closed || t.status.category == StatusCategory::Done)
             .filter(|t| match view.who {
                 Some(Who::Mine) => t.assignee.as_ref().is_some_and(|a| a.id == self.me.id),
                 Some(Who::Unassigned) => t.assignee.is_none(),
