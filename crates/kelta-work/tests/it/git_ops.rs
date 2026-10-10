@@ -323,3 +323,31 @@ async fn scratch_pr_uses_the_item_title_and_task() {
     assert!(detail.body_html.contains("Keep the ranking the same."), "{}", detail.body_html);
     assert!(fx.tracker.calls().is_empty(), "no tracker side effects");
 }
+
+#[tokio::test]
+async fn snapshot_takes_untracked_files_and_leaves_head_index_and_stash() {
+    need_git!();
+    let fx = Fx::new();
+    let repo = &fx.repo;
+    std::fs::write(repo.join("README.md"), "stashed\n").unwrap();
+    git(repo, &["stash", "-q"]);
+    std::fs::write(repo.join("README.md"), "edited\n").unwrap();
+    std::fs::write(repo.join("staged.txt"), "staged\n").unwrap();
+    git(repo, &["add", "staged.txt"]);
+    std::fs::write(repo.join("new.txt"), "untracked\n").unwrap();
+    let state = || {
+        ["rev-parse HEAD", "diff --cached --name-status", "stash list", "status --porcelain"]
+            .map(|c| git(repo, &c.split(' ').collect::<Vec<_>>()))
+    };
+    let before = state();
+
+    let sha = kelta_work::git::snapshot(repo, "refs/kelta/wi/w1/last").await.unwrap();
+    assert_eq!(state(), before, "HEAD, index, stash and status untouched");
+    assert_eq!(git(repo, &["rev-parse", "refs/kelta/wi/w1/last"]), sha);
+    assert_eq!(git(repo, &["rev-parse", &format!("{sha}^")]), before[0], "parent is HEAD");
+    assert_eq!(git(repo, &["show", &format!("{sha}:new.txt")]), "untracked");
+    assert_eq!(git(repo, &["show", &format!("{sha}:README.md")]), "edited");
+    assert_eq!(git(repo, &["show", &format!("{sha}:staged.txt")]), "staged");
+    let files = git(repo, &["ls-tree", "-r", "--name-only", &sha]);
+    assert!(!files.lines().any(|f| f == ".env"), "ignored files stay out: {files}");
+}

@@ -128,13 +128,35 @@ pub async fn work_status_all(core: State<'_, Arc<Core>>) -> Res<BTreeMap<WorkIte
     core.work().status_all().await
 }
 
-/// The review diff session (the UI places it zoomed in the work tab).
+/// The review diff session (the UI places it zoomed in the work tab). `delta`: only what changed
+/// since the last review; `from`: a review item's reviewed PR head.
 #[tauri::command(rename_all = "snake_case")]
-pub async fn work_diff(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<SessionInfo> {
-    core.work().diff(&id).await
+pub async fn work_diff(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    delta: Option<bool>,
+    from: Option<String>,
+) -> Res<SessionInfo> {
+    core.work().diff(&id, delta.unwrap_or(false), from.as_deref()).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_mark_reviewed(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
     core.work().mark_reviewed(&id).await
+}
+
+/// Louis's `next:` note on the item (null or blank clears it).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_set_note(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    note: Option<String>,
+) -> Res<WorkItem> {
+    core.work().set_note(&id, note).await
+}
+
+/// Louis left the item's tab (the return strip's clock).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_left(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().left(&id).await
 }

@@ -96,7 +96,8 @@ async fn hooks_set_and_clear_signals() {
     let cur = wait_item(&fx, &item, |w| w.claude_uuid.as_deref() == Some("after-clear")).await;
     assert!(!cur.review_due && !cur.claude_replied);
 
-    // Finish clears both.
+    // Finish clears both (a new change: login.rs was reviewed).
+    std::fs::write(item.worktree.join("signup.rs"), "fn signup() {}\n").unwrap();
     fx.core.publish(hook(&claude, "Stop", json!({})));
     wait_item(&fx, &item, |w| w.review_due).await;
     let opts = FinishOpts { remove_worktree: true, delete_branch: false, force: true, transition_to: None };
@@ -191,10 +192,12 @@ async fn status_all_compares_with_remote_base_after_first_push() {
 async fn prose_answer_after_a_commit_is_a_reply() {
     need_git!();
     let fx = Fx::new();
-    let (_w, item, claude) = started(&fx).await;
+    let (w, item, claude) = started(&fx).await;
     std::fs::write(item.worktree.join("a.txt"), "a\n").unwrap();
     git(&item.worktree, &["add", "a.txt"]);
     git(&item.worktree, &["commit", "-q", "-m", "a"]);
+    // Louis looked at the commit (never reviewed, the whole branch would still be to review).
+    w.mark_reviewed(&item.id).await.unwrap();
 
     // "Why did you do X?": Claude answers without touching code, the branch stays ahead of base.
     fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
@@ -275,4 +278,87 @@ async fn status_all_leaves_a_review_checkout_alone_while_claude_works() {
     move_pr_head(&fx, "second.txt");
     w.status_all().await.unwrap();
     assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head, "HEAD stays while Claude reads it");
+}
+
+fn refs(fx: &Fx, item: &WorkItem) -> String {
+    git(&fx.repo, &["for-each-ref", "--format=%(refname:short)", &format!("refs/kelta/wi/{}/", item.id)])
+}
+
+fn spawn_args(fx: &Fx) -> serde_json::Value {
+    fx.core.calls().iter().rev().find(|c| c.method == "session_spawn").unwrap().args.clone()
+}
+
+#[tokio::test]
+async fn ready_for_review_is_the_delta_since_the_last_look() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item, claude) = started(&fx).await;
+    let wt = item.worktree.clone();
+    let last = format!("refs/kelta/wi/{}/last", item.id);
+    let reviewed = format!("refs/kelta/wi/{}/reviewed", item.id);
+
+    // Claude leaves uncommitted work: the snapshot holds it, the delta is its shape, the full message kept.
+    std::fs::write(wt.join("login.rs"), "fn a() {}\nfn b() {}\n").unwrap();
+    let long = "x".repeat(500);
+    fx.core.publish(hook(&claude, "Stop", json!({ "last_assistant_message": long })));
+    let cur = wait_item(&fx, &item, |w| w.review_due).await;
+    let d = cur.delta.unwrap();
+    assert_eq!((d.lines, d.files, d.tests, d.generated), (2, 1, 0, 0));
+    assert_eq!(cur.claude_message.as_deref(), Some(long.as_str()), "not cut at 200 chars");
+    assert_eq!(git(&wt, &["show", &format!("{last}:login.rs")]), "fn a() {}\nfn b() {}");
+
+    // `v`: the delta range (shell without review_args), then in nvim.
+    let s = w.diff(&item.id, true, None).await.unwrap();
+    let base = git(&wt, &["merge-base", "origin/main", "HEAD"]);
+    let tip = git(&wt, &["rev-parse", &last]);
+    assert_eq!(fx.core.written_text(&s.id), format!("git diff {base} {tip}\r"));
+    fx.settings(|s| s.editor.review_args = vec!["-c".into(), "DiffviewOpen {range}".into()]);
+    w.diff(&item.id, true, None).await.unwrap();
+    assert_eq!(spawn_args(&fx)["args"], json!(["-c", format!("DiffviewOpen {base}..{tip}")]));
+    // `V`: the full diff keeps `<remote>/<base>`.
+    w.diff(&item.id, false, None).await.unwrap();
+    assert_eq!(spawn_args(&fx)["args"], json!(["-c", "DiffviewOpen origin/main"]));
+
+    // `R`: reviewed = last, the row goes.
+    let out = w.mark_reviewed(&item.id).await.unwrap();
+    assert!(!out.review_due && out.delta.is_none());
+    assert_eq!(git(&wt, &["rev-parse", &reviewed]), tip);
+    let e = w.diff(&item.id, true, None).await.unwrap_err();
+    assert!(e.message.contains("Nothing new"), "{}", e.message);
+
+    // Done with an empty delta: a reply, never ready for review.
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    let cur = wait_item(&fx, &item, |w| w.claude_replied).await;
+    assert!(!cur.review_due && cur.delta.is_none());
+
+    // Next round: only the new work, lockfiles counted apart, a test file counted.
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    std::fs::write(wt.join("Cargo.lock"), "a\nb\nc\n").unwrap();
+    std::fs::create_dir_all(wt.join("tests")).unwrap();
+    std::fs::write(wt.join("tests/login.rs"), "#[test]\nfn t() {}\n").unwrap();
+    std::fs::write(wt.join(".gitattributes"), "api.gen.ts linguist-generated\n").unwrap();
+    std::fs::write(wt.join("api.gen.ts"), "1\n2\n3\n4\n").unwrap();
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    let cur = wait_item(&fx, &item, |w| w.review_due).await;
+    let d = cur.delta.unwrap();
+    assert_eq!((d.lines, d.files, d.tests, d.generated), (3, 2, 1, 7));
+
+    // Finish deletes both refs.
+    assert_eq!(refs(&fx, &item).lines().count(), 2);
+    let opts = FinishOpts { remove_worktree: true, delete_branch: false, force: true, transition_to: None };
+    w.finish(&item.id, opts).await.unwrap();
+    assert_eq!(refs(&fx, &item), "");
+}
+
+#[tokio::test]
+async fn startup_prunes_refs_of_items_that_are_gone() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item, _) = started(&fx).await;
+    w.mark_reviewed(&item.id).await.unwrap();
+    git(&fx.repo, &["update-ref", "refs/kelta/wi/gone/last", "HEAD"]);
+    w.startup().await.unwrap();
+    assert_eq!(git(&fx.repo, &["for-each-ref", "--format=%(refname)", "refs/kelta/wi/"]).lines().count(), 2);
+    assert!(refs(&fx, &item).contains("reviewed"), "an unfinished item keeps its refs");
 }

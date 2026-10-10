@@ -170,12 +170,14 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `pr.title_template` | Template | `"{ticket.key}: {ticket.title}"` | prefills the Ship dialog title for ticket items; other items use the last commit subject |
 | `pr.body_template` | Template | `"{ticket.url}\n\n{closes}"` | `{closes}` = `Closes #n` for GitHub issues |
 | `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
+| `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return strip (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
 
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
 | `include_drafts` | bool | `false` | review requests only: my own (authored) PRs always include drafts |
 | `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets; applied at startup and on reload (an invalid pattern keeps the previous one) |
 | `repos_allow` / `repos_deny` | list<glob> | `[]` / `[]` | |
+| `ignore_globs` | list<glob> | `["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]` | counted as generated (not review lines) in the Ready for review chip, with `linguist-generated` / `-diff` attributes |
 
 ### [web]
 | `embed_default` | enum(auto\|iframe\|proxy\|external) | `auto` | |

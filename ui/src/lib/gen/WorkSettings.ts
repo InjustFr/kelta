@@ -13,4 +13,9 @@ plan_preview: boolean, default_template: string, review_template: string, on_sta
  * Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
  * the task's first line.
  */
-scratch_branch_template: string, };
+scratch_branch_template: string, 
+/**
+ * Refocusing a work item after this many minutes away shows the return strip (`next:` note,
+ * Claude's last message, the delta since review). 0 turns it off.
+ */
+return_brief_after_mins: number, };
