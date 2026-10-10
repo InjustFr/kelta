@@ -86,3 +86,25 @@ pub async fn tracker_sources(
 ) -> Res<Vec<SourceHit>> {
     core.tracker_sources(&account_id, &query).await
 }
+
+/// My Next up list, snoozes and seen tickets (#145): Kelta-local, never a tracker call.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn next_up_list(core: State<'_, Arc<Core>>) -> Res<NextUp> {
+    core.next_up_list().await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn next_up_put(core: State<'_, Arc<Core>>, item: NextUpItem) -> Res<()> {
+    core.next_up_put(item).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn next_up_remove(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Res<()> {
+    core.next_up_remove(ticket).await
+}
+
+/// Clears the tickets' `New` badge.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn ticket_seen(core: State<'_, Arc<Core>>, tickets: Vec<TicketRef>) -> Res<()> {
+    core.ticket_seen(tickets).await
+}
