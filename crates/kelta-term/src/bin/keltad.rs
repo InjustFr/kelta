@@ -14,10 +14,13 @@ const IDLE_GRACE: Duration = Duration::from_secs(30);
 
 fn main() -> ExitCode {
     let mut args = std::env::args_os().skip(1);
-    let sock = match (args.next(), args.next()) {
-        (Some(flag), Some(path)) if flag == "--socket" => PathBuf::from(path),
+    let (sock, history) = match (args.next(), args.next(), args.next(), args.next()) {
+        (Some(flag), Some(path), None, None) if flag == "--socket" => (PathBuf::from(path), None),
+        (Some(f), Some(path), Some(h), Some(dir)) if f == "--socket" && h == "--history" => {
+            (PathBuf::from(path), Some(PathBuf::from(dir)))
+        }
         _ => {
-            eprintln!("usage: keltad --socket <path>");
+            eprintln!("usage: keltad --socket <path> [--history <dir>]");
             return ExitCode::from(2);
         }
     };
@@ -43,6 +46,13 @@ fn main() -> ExitCode {
     tracing_subscriber::fmt().with_ansi(false).with_writer(std::io::stderr).init();
     tracing::info!(socket = %sock.display(), pid = std::process::id(), "keltad started");
     // Spawn specs carry the complete environment; the host's own login env is unused.
-    daemon::serve(listener, PtyTerminalHost::new(LoginEnv::default(), TerminalLimits::default()), IDLE_GRACE);
+    let (env, limits) = (LoginEnv::default(), TerminalLimits::default());
+    let host = match history {
+        Some(dir) => {
+            PtyTerminalHost::with_history_dir(env, limits, kelta_term::backend::default_backend(), dir)
+        }
+        None => PtyTerminalHost::new(env, limits),
+    };
+    daemon::serve(listener, host, IDLE_GRACE);
     ExitCode::SUCCESS
 }

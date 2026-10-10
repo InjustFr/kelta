@@ -102,7 +102,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         // ctl / hooks
         CtlCommand, CtlRequest, CtlResponse, HookPayload,
         // terminal
-        KillSignal, ClipboardKind, TerminalPalette, TerminalLimits, SessionTermStats,
+        KillSignal, ClipboardKind, TerminalPalette, TerminalLimits, HistoryHit, SessionTermStats,
         TerminalStats, LoginEnvSource, LoginEnv,
         // ipc
         ToolVersion, AppInfo, ProcRole, ProcMem, SessionMem, PerfSnapshot, CheckStatus, Check,

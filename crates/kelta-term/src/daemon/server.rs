@@ -273,6 +273,14 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Req::TextTail { id, max_lines } => h.text_tail(&id, max_lines).map(Value::from),
+            Req::HistoryTail { id, max_lines } => h.history_tail(&id, max_lines).map(Value::from),
+            Req::HistorySearch { ids, query, limit } => {
+                Ok(serde_json::to_value(h.history_search(&ids, &query, limit)?)?)
+            }
+            Req::HistoryDelete { id } => {
+                h.history_delete(&id);
+                Ok(Value::Null)
+            }
             Req::Stats => Ok(serde_json::to_value(h.stats())?),
         }
     }

@@ -1,5 +1,5 @@
 // L9 e2e on the IPC mock (VITE_IPC=mock): start work from the board, move a ticket (and roll back),
-// approve a review, the Inbox "Other" group. The shell is L2's: the harness page hosts the panes.
+// approve a review, Now's review requests and ticket rows. The shell is L2's: the harness page hosts the panes.
 import { expect, test, type Page } from '@playwright/test';
 
 const HARNESS = '/tests/e2e/work/harness/index.html';
@@ -109,53 +109,84 @@ test.describe('reviews', () => {
   });
 });
 
-test.describe('inbox', () => {
-  test('lists unbound review requests under Other', async ({ page }) => {
+test.describe('reviewing others', () => {
+  test('request row, Enter, detail, s, Ctrl+Enter starts a local review', async ({ page }) => {
     const errors = await boot(page);
-    await page.evaluate(() =>
-      window.__kelta!.stores.layout.open('shop', {
-        content: { kind: 'inbox' },
-        placement: 'new_tab',
-        focus: true,
-        tab_title: 'Inbox',
-        work_item_id: null,
-      }),
+    await dispatch(page, 'reviews.open');
+    await expect(page.getByText('SHOP-150: cache product images')).toBeVisible();
+    await page.keyboard.press('Enter'); // first request: SHOP-150
+    const detail = page.getByTestId('review-detail');
+    await expect(detail).toBeVisible();
+    await page.keyboard.press('s');
+    const sheet = page.getByRole('dialog', { name: /acme\/shop-api#311|pr-311/ });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Control+Enter');
+    await expect(sheet).toBeHidden();
+    const started = await page.evaluate(() =>
+      window.__kelta!.stores.work.all.some((w) => w.kind === 'review' && w.review?.number === 311),
     );
-    const inbox = page.getByTestId('inbox-pane');
-    await expect(inbox).toBeVisible();
-    const requests = inbox.locator('[data-section="s:requested"]');
-    await expect(requests).toBeVisible();
-    await expect(inbox.getByText('Terraform: add read replica')).toBeVisible();
-    // The "Other" group header sits right above the unbound request.
-    const order = await inbox
-      .locator('[data-group], [data-section], .k-row')
-      .evaluateAll((els) =>
-        els.map((e) => e.getAttribute('data-group') ?? e.getAttribute('data-section') ?? e.textContent ?? ''),
-      );
-    const at = order.findIndex((t, i) => t === 'Other' && (order[i + 1] ?? '').includes('Terraform'));
-    expect(at).toBeGreaterThan(-1);
-    // Needs-input sessions of other projects are listed first, each with the needs-input lamp.
-    await expect(inbox.locator('[data-section="s:input"]')).toBeVisible();
-    await expect(inbox.getByRole('img', { name: 'needs input' }).first()).toBeVisible();
+    expect(started).toBe(true);
     expect(errors).toEqual([]);
   });
 
-  test('Enter on a ticket opens its detail', async ({ page }) => {
-    await boot(page);
+  test('pending comments are submitted with the decision', async ({ page }) => {
+    const errors = await boot(page);
+    await page.evaluate(() =>
+      window.__kelta!.stores.layout.open('shop', {
+        content: {
+          kind: 'review_detail',
+          review: { account: 'github-acme', repo: 'acme/shop-web', number: 101 },
+        },
+        placement: 'new_tab',
+        focus: true,
+        tab_title: 'PR',
+        work_item_id: null,
+      }),
+    );
+    const detail = page.getByTestId('review-detail');
+    await expect(detail.getByTestId('pending-comments')).toContainText('2 pending comments');
+    await page.keyboard.press('a');
+    await expect(page.getByTestId('toasts')).toContainText('Approved');
+    await expect(detail.getByTestId('pending-comments')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('now', () => {
+  async function openNow(page: Page): Promise<void> {
     await page.evaluate(() =>
       window.__kelta!.stores.layout.open('shop', {
         content: { kind: 'inbox' },
         placement: 'new_tab',
         focus: true,
-        tab_title: 'Inbox',
+        tab_title: 'Now',
         work_item_id: null,
       }),
     );
-    await expect(page.getByTestId('inbox-pane').getByText('Rate-limit login attempts')).toBeVisible();
-    await page.getByTestId('inbox-pane').focus();
-    // Needs-input sessions are listed first: j moves to the first ticket.
-    await page.keyboard.press('j');
-    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('inbox-pane')).toBeVisible();
+  }
+
+  test('lists review requests, also on repos bound to no project', async ({ page }) => {
+    const errors = await boot(page);
+    await openNow(page);
+    const now = page.getByTestId('inbox-pane');
+    await expect(now.locator('[data-section="requests"]')).toBeVisible();
+    await expect(now.getByText('Terraform: add read replica')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('g on an Up next ticket opens its detail', async ({ page }) => {
+    await boot(page);
+    await openNow(page);
+    const now = page.getByTestId('inbox-pane');
+    await expect(now.getByText('Checkout: show tax breakdown')).toBeVisible();
+    await now.focus();
+    for (let i = 0; i < 30; i += 1) {
+      const id = await now.locator('.row[aria-current="true"]').getAttribute('data-row');
+      if (id === 't:jira-acme:SHOP-151') break;
+      await page.keyboard.press('j');
+    }
+    await page.keyboard.press('g');
     await expect(page.getByTestId('ticket-detail')).toBeVisible();
   });
 });

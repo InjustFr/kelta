@@ -124,12 +124,13 @@ fn launches_the_keltad_binary() {
     let sock = tmp.path().join("run/keltad.sock");
     let log = tmp.path().join("logs/keltad.log");
     let exe = Path::new(env!("CARGO_BIN_EXE_keltad"));
-    let h = DaemonTerminalHost::connect_or_launch(&sock, exe, &log).unwrap();
+    let h = DaemonTerminalHost::connect_or_launch(&sock, exe, &log, &log.with_extension("history")).unwrap();
     let ev = Arc::new(Events::default());
     h.spawn(spec("s3", "/bin/sh", &["-c", "exit 7"], 80, 24, ev.clone())).unwrap();
     assert_eq!(ev.wait_exit(T), (Some(7), None));
     // A second launcher finds the running daemon.
-    let again = DaemonTerminalHost::connect_or_launch(&sock, exe, &log).unwrap();
+    let again =
+        DaemonTerminalHost::connect_or_launch(&sock, exe, &log, &log.with_extension("history")).unwrap();
     assert!(again.stats().sessions.iter().any(|s| s.id.as_str() == "s3"));
     assert!(std::fs::read_to_string(&log).unwrap().contains("keltad started"));
     // keltad exits on its own 30 s after both clients and the exited session are gone.

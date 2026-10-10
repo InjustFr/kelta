@@ -15,6 +15,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::flow::{AckAction, Flow};
 use crate::frames;
+use crate::history::{self, HistoryLog};
 use crate::model::{Output, TermModel};
 use crate::palette::Palette;
 
@@ -35,13 +36,16 @@ pub(crate) struct Shared {
     pub total_memory: AtomicU64,
     pub reader_threads: AtomicU32,
     pub view_tick: AtomicU64,
+    /// On-disk history log writer (ARCHITECTURE §9.6); None when the host has no history dir.
+    pub history: Option<HistoryLog>,
     shrink_lock: Mutex<()>,
     cap_warned: AtomicBool,
 }
 
 impl Shared {
-    pub fn new(limits: TerminalLimits) -> Self {
+    pub fn new(limits: TerminalLimits, history: Option<HistoryLog>) -> Self {
         Self {
+            history,
             sessions: RwLock::new(HashMap::new()),
             palette: RwLock::new(Palette::default()),
             limits: Mutex::new(limits),
@@ -51,6 +55,11 @@ impl Shared {
             shrink_lock: Mutex::new(()),
             cap_warned: AtomicBool::new(false),
         }
+    }
+
+    /// The history log when `terminal.history_log` is on.
+    pub fn history_on(&self) -> Option<&HistoryLog> {
+        self.history.as_ref().filter(|_| self.limits.lock().history_log)
     }
 
     pub fn tick(&self) -> u64 {
@@ -158,6 +167,13 @@ impl State {
         shared.add_memory(self.memory, mem);
         self.history = h;
         self.memory = mem;
+    }
+
+    /// Hand captured history lines to the log writer once there are `min` bytes (0 = any).
+    pub fn flush_log(&mut self, id: &SessionId, shared: &Shared, min: usize) {
+        if let (Some(h), Some(buf)) = (shared.history.as_ref(), self.model.log_buf()) {
+            history::flush(h, id, buf, min);
+        }
     }
 
     /// Send a frame to the view; a closed channel detaches it.

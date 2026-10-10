@@ -1,8 +1,8 @@
 # Kelta lint configuration (ARCHITECTURE §1.5/§13, BUILD_PLAN §2.6).
 #
 # Timers and threads are owned by a few allowlisted modules only:
-#   kelta-core::scheduler, kelta-core::store, kelta-term::reader, kelta-term::daemon (keltad
-#   connection threads), tests,
+#   kelta-core::scheduler, kelta-core::store, kelta-term::reader, kelta-term::history, kelta-term::daemon
+#   (keltad connection threads), tests,
 #   (and the fixtures/bench binaries).
 # In those modules use `#[allow(clippy::disallowed_methods)]` with a `// allowlisted: <reason>` comment.
 # One-shot timers armed by an event (`tokio::time::sleep`/`timeout`) are allowed with a

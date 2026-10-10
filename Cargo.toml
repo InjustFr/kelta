@@ -67,6 +67,9 @@ notify-debouncer-full = { version = "=0.7.0" }
 
 # ---- secrets / platform ----------------------------------------------------
 keyring-core = { version = "=1.0.0" }
+chacha20poly1305 = { version = "=0.11.0", features = ["zeroize"] }
+argon2 = { version = "=0.6.0", default-features = false, features = ["alloc", "zeroize"] }
+zeroize = { version = "=1.9.1" }
 apple-native-keyring-store = { version = "=1.0.2", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["rt-tokio-crypto-rust"] }
 zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }

@@ -70,10 +70,14 @@ pub fn run() -> ExitCode {
     };
     tauri::async_runtime::set(runtime.handle().clone());
 
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+    let mut builder = tauri::Builder::default();
+    // An isolated instance (own runtime dir) must not forward to, or receive from, the user's Kelta.
+    if std::env::var_os("KELTA_RUNTIME_DIR").is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             window::on_second_instance(app, argv, cwd);
-        }))
+        }));
+    }
+    let app = builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("kelta-plugin", |ctx, request, responder| {

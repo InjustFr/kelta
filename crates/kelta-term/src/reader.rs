@@ -25,6 +25,7 @@ use rustix::io::Errno;
 
 use crate::flow::DataAction;
 use crate::frames;
+use crate::history::BATCH;
 use crate::model::Output;
 use crate::session::{Session, Shared};
 
@@ -96,7 +97,7 @@ fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake
         let now = Instant::now();
         if idle_check && m_rev.is_empty() && w_rev.is_empty() {
             idle_check = false;
-            housekeeping(session);
+            housekeeping(session, shared);
             continue;
         }
         if w_rev.contains(PollFlags::IN) {
@@ -167,6 +168,7 @@ fn process(session: &Session, shared: &Shared, chunk: &[u8], now: Instant) {
         }
         st.model.advance(chunk, &palette, &mut outs);
         st.bytes_in += chunk.len() as u64;
+        st.flush_log(&session.id, shared, BATCH);
         if st.flow.on_data(chunk.len(), now) == DataAction::Send {
             st.send(frames::data(chunk), shared);
         }
@@ -182,9 +184,11 @@ fn process(session: &Session, shared: &Shared, chunk: &[u8], now: Instant) {
     }
 }
 
-/// Idle: hidden sessions give back the rows alacritty pre-allocates (in steps of 1000).
-fn housekeeping(session: &Session) {
+/// Idle: the history log gets the lines of the burst; hidden sessions give back the rows
+/// alacritty pre-allocates (in steps of 1000).
+fn housekeeping(session: &Session, shared: &Shared) {
     let mut st = session.state.lock();
+    st.flush_log(&session.id, shared, 0);
     if st.flow.attached() || st.released_at == Some(st.history) {
         return;
     }
@@ -195,7 +199,17 @@ fn housekeeping(session: &Session) {
 fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
     let palette = *shared.palette.read();
     let mut outs = Vec::new();
-    session.state.lock().model.flush_sync(&palette, &mut outs);
+    let log = {
+        let mut st = session.state.lock();
+        st.model.flush_sync(&palette, &mut outs);
+        // The screen rows never scroll out now: log them, and finish writing before Exited (quit
+        // follows the last exit).
+        st.model.log_screen();
+        st.model.log_buf().map(std::mem::take)
+    };
+    if let (Some(h), Some(text)) = (shared.history.as_ref(), log.filter(|t| !t.is_empty())) {
+        h.append_sync(&session.id, text);
+    }
     session.deliver(outs);
     session.close_io();
 

@@ -210,12 +210,33 @@ pub struct TerminalLimits {
     pub memory_cap_mb: u32,
     /// History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
     pub view_scrollback: u32,
+    /// On-disk history log (`terminal.history_log`; ARCHITECTURE §9.6).
+    pub history_log: bool,
+    /// Per-session log cap in MiB (`terminal.history_log_mb`; 0 = default 16).
+    pub history_log_mb: u32,
+    /// Cap of all logs in MiB (`terminal.history_log_total_mb`; 0 = default 512).
+    pub history_log_total_mb: u32,
 }
 
 impl TerminalLimits {
     pub fn from_settings(t: &crate::settings::TerminalSettings) -> Self {
-        Self { scrollback: t.scrollback, memory_cap_mb: t.memory_cap_mb, view_scrollback: t.view_scrollback }
+        Self {
+            scrollback: t.scrollback,
+            memory_cap_mb: t.memory_cap_mb,
+            view_scrollback: t.view_scrollback,
+            history_log: t.history_log,
+            history_log_mb: t.history_log_mb,
+            history_log_total_mb: t.history_log_total_mb,
+        }
     }
+}
+
+/// One matching line of the on-disk history log (`session_history_search`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HistoryHit {
+    pub session_id: SessionId,
+    /// Plain text (ANSI stripped, wrapped rows joined).
+    pub line: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

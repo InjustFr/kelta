@@ -98,7 +98,8 @@ impl Dirs {
             }
         };
         let data = overrides.data.clone().unwrap_or(data);
-        let runtime = overrides.runtime.clone().unwrap_or(runtime);
+        // `KELTA_RUNTIME_DIR` isolates a second instance (bench, tests) from the user's running one.
+        let runtime = overrides.runtime.clone().or_else(|| get("KELTA_RUNTIME_DIR")).unwrap_or(runtime);
         let bin = data.join("bin");
         Ok(Self { config, data, state, logs, runtime, bin })
     }
@@ -268,6 +269,10 @@ mod tests {
         assert_eq!(d.data, PathBuf::from("/Users/u/Library/Application Support/dev.kelta.Kelta"));
         assert_eq!(d.runtime, PathBuf::from("/tmp/kelta-501"));
         assert_eq!(d.logs, PathBuf::from("/Users/u/Library/Logs/Kelta"));
+
+        let e = env(&[("HOME", "/Users/u"), ("KELTA_RUNTIME_DIR", "/tmp/kb/run")]);
+        let d = Dirs::resolve_for(Os::Macos, &e, 501, &DirsOverrides::default()).unwrap();
+        assert_eq!(d.runtime, PathBuf::from("/tmp/kb/run"));
     }
 
     #[test]

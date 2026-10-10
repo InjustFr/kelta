@@ -16,6 +16,7 @@
   import { tickets, toasts, work } from '$lib/stores';
   import { Button, Icon, Select, Sheet, Spinner, TextInput, Toggle } from '$lib/ui';
 
+  import { activateProject } from '../../shell/nav';
   import { planValid, START_STEPS, stepLabel, validatePlan } from './common';
 
   interface Props extends SheetProps {
@@ -128,6 +129,7 @@
         const item = await workResume({ id: seed.existing });
         work.upsert(item);
         toasts.info(`Resumed ${item.branch}`);
+        void activateProject(item.project_id);
         onclose();
       } catch (err) {
         failure = toIpcError('work_resume', err).toKeltaError();
@@ -147,6 +149,8 @@
         return;
       }
       toasts.info(`Started ${item.branch}`);
+      // The work tab is the project's active tab: bring it to the front (leaves Now).
+      void activateProject(item.project_id);
       onclose();
     } catch (err) {
       failure = toIpcError('work_start', err).toKeltaError();

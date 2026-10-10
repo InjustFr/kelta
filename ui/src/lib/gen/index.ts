@@ -66,6 +66,7 @@ export type * from './FollowEdits';
 export type * from './GdkBackend';
 export type * from './GitStatus';
 export type * from './GraphicsProfile';
+export type * from './HistoryHit';
 export type * from './HookPayload';
 export type * from './HookTransport';
 export type * from './JiraFlavor';

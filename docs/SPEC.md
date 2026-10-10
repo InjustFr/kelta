@@ -61,7 +61,7 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
       `claude --session-id <uuid> -n "SHOP-142 Rate-limit login" --model <m> --effort <e> --permission-mode <p> --settings <run>/claude-settings.json --mcp-config <run>/mcp.json --allowedTools "mcp__kelta__*" --append-system-prompt-file <run>/context.md "<prompt>"` (cwd = worktree).
    7. Tracker side effects **after** sessions are up, in parallel, each non-fatal: assign me; transition to `status_map.start` (resolved by category or name from `transitions()`; `NeedsFields` → small form built from the field errors, or "Open in browser"); optional comment.
    8. Persist WorkItem; emit `ticket.started`, `worktree.created`; ticket card shows a "local work" badge.
-3. **While working:** Claude status in pane header/tab/rail; notifications when Claude needs input or finishes while its pane is hidden or the window unfocused. Claude edits → nvim `:checktime` (`editor.follow_claude_edits = reload`; `open` also opens the file without stealing focus). `Mod+Shift+L` in nvim sends the visual selection to Claude as `@path#Lx-y` (bracketed paste when enabled). Claude can call MCP tools `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `notify`.
+3. **While working:** Claude status in pane header/tab/rail; notifications when Claude needs input or finishes while its pane is hidden or the window unfocused. Claude edits → nvim `:checktime` (`editor.follow_claude_edits = reload`; `open` also opens the file without stealing focus). `Mod+Shift+L` in nvim sends the visual selection to Claude as `@path#Lx-y` (bracketed paste when enabled). Claude can call MCP tools `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `add_review_comment`, `notify`.
 4. **WorkItem header:** ticket key + status (click → Move to…), branch, ahead/behind (computed when the tab gains focus), buttons **Create PR**, **Open ticket**, **Open in browser**, **Finish**.
 5. **Create PR:** `git push -u origin <branch>` in a transient visible pane (credential prompts work) → if a PR already exists for the branch (Claude may have used `gh`), link it; else create via CodeHost with `work.pr.title_template` (`{key}: {title}`), `body_template` (ticket link, `Closes #n` for GitHub issues), `draft` → transition ticket to `status_map.review`, optional comment with PR URL → `pr.created`.
 6. **Finish** (offered when PR merged or ticket Done, or manually): kill sessions (confirm if Claude is working), `git worktree remove` (refused if dirty or unpushed unless **Force**), optionally delete local branch, transition to `status_map.done` if configured, mark WorkItem finished. `git worktree prune` runs at app start.
@@ -74,6 +74,7 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 - **Reviews** pane per project (repos bound to the project) or aggregated (Inbox, all accounts, "Other" for unbound repos). Sections: *Review requested*, *My PRs*. Row: title, repo/project chip, author, draft, CI (✓ ✗ ● –), decision, my state, size (+/−), age, linked ticket keys. Filters: include drafts, repo (team requests follow `reviews.include_team_requests`).
 - **Detail:** sanitized description, reviewers, checks summary, file list (+/− counts). Actions: **Approve** (sends the shown `head_sha`; stale → "PR changed, refresh"), **Comment**, **Request changes** (GitLab: comment + optional unapprove), **Open in browser**, **Review locally**.
 - **Review locally** (`work_plan` with `Review` source → same sheet): fetch `pull/<n>/head:kelta/pr-<n>` (GitHub) / `merge-requests/<iid>/head:kelta/mr-<iid>` (GitLab) → worktree `<root>/review-<n>` → template `review` (Claude with profile `review`, `--permission-mode plan`, prompt from `claude.prompt_templates.review`; nvim with `editor.review_args`, e.g. `-c "DiffviewOpen origin/{base}...HEAD"`; shell with `git diff --stat origin/<base>...`).
+- Rows refresh on window focus through the list query (one request, also brings back PRs pushed after my review, badge "Updated since your review"), never through `get` on each row.
 - New review requests detected via `seen_reviews` (never on the first poll after start) → desktop notification (toggle) + rail/Inbox badge.
 
 ### 3.4 Move ticket status
@@ -99,7 +100,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `palette.open` | Cmd+K | Ctrl+Shift+K | `:` |
 | `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
 | `project.goto.1..9` | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
-| `inbox.open` | Cmd+0 | Ctrl+Shift+0 | `0` |
+| `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
 | `project.next` / `project.prev` | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
 | `tab.next` / `tab.prev` | Cmd+Shift+] / [ | Ctrl+Shift+] / [ | `n` / `N` |
 | `session.new` | Cmd+T | Ctrl+Shift+T | `c` |
@@ -109,7 +110,9 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
 | `tickets.open` | Cmd+Shift+J | Ctrl+Shift+J | `t` |
 | `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
-| `attention.next` (next session needing input, any project) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
+| `attention.next` ("Next waiting": walks the first four sections of Now, any project, cycling) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
+| `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
+| `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
@@ -141,7 +144,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 | Worktree dirty on Finish | Dialog listing files; "Force remove" (destructive style) / Cancel. |
 | Repo-local config untrusted | Banner "This repo's .kelta/config.toml wants to run commands — Review & trust". |
 | Invalid config | Toast `file:line:col` + Settings issue list; last good config kept. |
-| Secret Service missing (Linux) | Accounts wizard explains and offers `command:`/`env:` sources. |
+| Secret Service missing (Linux) | Accounts wizard explains and offers the encrypted file (`file:`), `command:` and `env:` sources. |
 | Notification daemon missing | Settings → Notifications warning; in-app toasts still work. |
 | Web tool blocked from framing and proxy fails | "Open in browser". |
 | Plugin screen error | Inline error with plugin id, "Reload screen", "Disable plugin". |
@@ -150,7 +153,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, on-disk scrollback history log, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

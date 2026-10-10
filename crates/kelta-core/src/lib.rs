@@ -56,7 +56,7 @@ use kelta_proto::model::{
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::tracker::{Ticket, TicketRef};
-use kelta_secrets::Secrets;
+use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::DaemonTerminalHost;
@@ -192,6 +192,7 @@ fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<
                     &dirs.keltad_socket(),
                     &exe,
                     &dirs.logs.join("keltad.log"),
+                    &dirs.data.join("history"),
                 )
             });
         match daemon {
@@ -202,7 +203,12 @@ fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<
             Err(e) => tracing::warn!(error = %e, "keltad unavailable; sessions run in-process"),
         }
     }
-    PtyTerminalHost::new_arc(login_env.clone(), limits)
+    Arc::new(PtyTerminalHost::with_history_dir(
+        login_env.clone(),
+        limits,
+        kelta_term::backend::default_backend(),
+        dirs.data.join("history"),
+    ))
 }
 
 impl Core {
@@ -235,7 +241,10 @@ impl Core {
             None => config.clone(),
         };
         let settings_source: Arc<dyn SettingsSource> = cfg.clone();
-        let secrets = Secrets::new(settings_source.clone());
+        let secrets = Secrets::with_options(
+            settings_source.clone(),
+            SecretsOptions { file: Some(dirs.data.join(SECRETS_FILE)), ..SecretsOptions::default() },
+        );
         let resolver: Arc<dyn SecretResolver> = resolver.unwrap_or_else(|| secrets.clone());
         let settings = settings_source.effective(None);
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));

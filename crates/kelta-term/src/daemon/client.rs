@@ -16,7 +16,7 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
 use kelta_proto::term::{
-    KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
@@ -132,7 +132,7 @@ impl Conn {
 pub struct DaemonTerminalHost {
     sock: PathBuf,
     /// keltad binary + its log file; `None` = never launch (tests).
-    launch: Option<(PathBuf, PathBuf)>,
+    launch: Option<(PathBuf, PathBuf, PathBuf)>,
     conn: Mutex<Option<Arc<Conn>>>,
 }
 
@@ -145,10 +145,15 @@ impl DaemonTerminalHost {
     }
 
     /// Connect, starting `exe --socket <sock>` (stderr appended to `log`) when none answers.
-    pub fn connect_or_launch(sock: &Path, exe: &Path, log: &Path) -> Result<Arc<Self>, KeltaError> {
+    pub fn connect_or_launch(
+        sock: &Path,
+        exe: &Path,
+        log: &Path,
+        history: &Path,
+    ) -> Result<Arc<Self>, KeltaError> {
         let h = Self {
             sock: sock.to_path_buf(),
-            launch: Some((exe.to_path_buf(), log.to_path_buf())),
+            launch: Some((exe.to_path_buf(), log.to_path_buf(), history.to_path_buf())),
             conn: Mutex::new(None),
         };
         h.conn()?;
@@ -167,7 +172,7 @@ impl DaemonTerminalHost {
         let first = UnixStream::connect(&self.sock);
         let s = match (first, &self.launch) {
             (Ok(s), _) => s,
-            (Err(_), Some((exe, log))) => {
+            (Err(_), Some((exe, log, history))) => {
                 if let Some(dir) = log.parent() {
                     std::fs::create_dir_all(dir)?;
                 }
@@ -176,6 +181,8 @@ impl DaemonTerminalHost {
                 let status = Command::new(exe)
                     .arg("--socket")
                     .arg(&self.sock)
+                    .arg("--history")
+                    .arg(history)
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
                     .stderr(log)
@@ -362,6 +369,23 @@ impl TerminalHost for DaemonTerminalHost {
 
     fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError> {
         self.call(Req::TextTail { id: id.clone(), max_lines }, &[])
+    }
+
+    fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError> {
+        self.call(Req::HistoryTail { id: id.clone(), max_lines }, &[])
+    }
+
+    fn history_search(
+        &self,
+        ids: &[SessionId],
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError> {
+        self.call(Req::HistorySearch { ids: ids.to_vec(), query: query.to_string(), limit }, &[])
+    }
+
+    fn history_delete(&self, id: &SessionId) {
+        self.notify(Req::HistoryDelete { id: id.clone() });
     }
 
     fn stats(&self) -> TerminalStats {

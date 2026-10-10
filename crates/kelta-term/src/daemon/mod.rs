@@ -95,6 +95,18 @@ pub enum Req {
         id: SessionId,
         max_lines: u32,
     },
+    HistoryTail {
+        id: SessionId,
+        max_lines: u32,
+    },
+    HistorySearch {
+        ids: Vec<SessionId>,
+        query: String,
+        limit: u32,
+    },
+    HistoryDelete {
+        id: SessionId,
+    },
     Stats,
 }
 

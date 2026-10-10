@@ -1,6 +1,10 @@
 {
   "ahead": 2,
   "behind": 0,
+  "deletions": 7,
   "dirty": true,
+  "files": 3,
+  "insertions": 41,
+  "missing": false,
   "unpushed": true
 }

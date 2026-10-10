@@ -1,0 +1,23 @@
+# Gate S1 hostile plugin (scripts/sandbox-check.sh): its screen tries to escape the iframe sandbox.
+# The same page is served as a localhost web tool by fixtures/sandbox/run.mjs.
+id = "sandbox-probe"
+name = "Sandbox probe"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "Security gate S1 test fixture; never install it"
+author = "Kelta contributors"
+license = "MIT"
+permissions = ["projects.read", "tickets.read", "ui.open"]
+activation = ["onScreen:probe", "onCommand:sandbox-probe.open"]
+
+[[contributes.screens]]
+id = "probe"
+title = "Sandbox probe"
+entry = "index.html"
+scope = "project"
+placement = ["tab"]
+
+[[contributes.commands]]
+id = "sandbox-probe.open"
+title = "Sandbox probe: open screen"
+do = [{ action = "open_screen", screen = "probe", placement = "new_tab" }]
