@@ -1,0 +1,7 @@
+Terminal theme fixtures, copied unchanged from upstream (MIT License):
+
+- Dracula.itermcolors, Gruvbox Dark, Nord.conf, Catppuccin Latte.toml:
+  https://github.com/mbadolato/iTerm2-Color-Schemes (schemes/, ghostty/, kitty/, alacritty/)
+  Copyright (c) 2011 to Present Mark Badolato
+- one-light.yaml: https://github.com/tinted-theming/schemes (base16/)
+  Copyright (c) 2022 Tinted Theming (https://github.com/tinted-theming)
