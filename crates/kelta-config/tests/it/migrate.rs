@@ -72,3 +72,21 @@ args = ["-f", "{repo.path}/docker-compose.yml"]
     assert_eq!(read(&e.dirs.projects_dir().join("shop.toml")), shop);
     assert_eq!(std::fs::read_dir(e.dirs.projects_dir().join(".trash")).unwrap().count(), 2);
 }
+
+#[test]
+fn broken_global_does_not_drop_projects_with_tools() {
+    let e = env();
+    e.global("[[tools\n");
+    e.project("shop", "[[tools]]\nid = \"lazygit\"\ncommand = \"lazygit\"\n");
+    let before = read(&e.dirs.projects_dir().join("shop.toml"));
+
+    let svc = e.load();
+    assert_eq!(svc.tools_migrated(), 0);
+    assert_eq!(svc.projects().len(), 1, "the project still loads");
+    let issues = svc.issues();
+    assert!(
+        issues.iter().any(|i| i.issue.message.contains("cannot be set per project (global only)")),
+        "{issues:?}"
+    );
+    assert_eq!(read(&e.dirs.projects_dir().join("shop.toml")), before, "nothing rewritten");
+}

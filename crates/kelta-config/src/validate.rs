@@ -152,6 +152,8 @@ pub fn repo_key_issues(value: &Value) -> Vec<RawIssue> {
 /// Tools belong to the user, not to a committed repo file: reported, ignored, rest of the file applies.
 pub const REPO_TOOLS_PERSONAL: &str = "`tools` is personal: add it in Settings → Tools";
 
+pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (global only)";
+
 /// Duplicate or missing ids in keyed lists, per layer.
 pub fn id_issues(value: &Value) -> Vec<RawIssue> {
     let mut out = Vec::new();

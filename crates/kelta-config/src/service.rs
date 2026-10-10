@@ -543,15 +543,23 @@ impl ConfigService {
             (wrapped, raw)
         } else {
             let mut value = parsed.value.clone();
-            // `tools` is personal: a repo file's tools are reported and ignored, the rest still applies.
+            // `tools` is personal: a repo or project file's tools are reported and ignored, the rest
+            // still applies (a failed migration must not make the project vanish).
             let personal =
-                kind == FileKind::Repo && value.as_object_mut().and_then(|m| m.remove("tools")).is_some();
+                kind != FileKind::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some();
             let raw = validate::layer_issues(kind.layer(), &value, stem);
             if personal && raw.is_empty() {
                 let issues = validate::position(
                     &text,
                     Some(&parsed),
-                    vec![validate::RawIssue::new(&["tools".to_owned()], validate::REPO_TOOLS_PERSONAL)],
+                    vec![validate::RawIssue::new(
+                        &["tools".to_owned()],
+                        if kind == FileKind::Repo {
+                            validate::REPO_TOOLS_PERSONAL
+                        } else {
+                            validate::PROJECT_TOOLS_GLOBAL
+                        },
+                    )],
                 );
                 return FileLayer { path: path.to_owned(), exists, text, hash, value, valid: true, issues };
             }
