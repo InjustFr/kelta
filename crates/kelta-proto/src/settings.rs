@@ -320,7 +320,9 @@ pub enum ShiftEnter {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyboardProtocol {
+    // Kitty keyboard protocol: mode stack in the Rust model, keys encoded by the view.
     #[default]
+    Kitty,
     Legacy,
 }
 
@@ -446,7 +448,7 @@ impl Default for TerminalSettings {
                 ("claude".to_owned(), ShiftEnter::EscCr),
                 ("default".to_owned(), ShiftEnter::Passthrough),
             ]),
-            keyboard_protocol: KeyboardProtocol::Legacy,
+            keyboard_protocol: KeyboardProtocol::Kitty,
             shell: String::new(),
             env: BTreeMap::new(),
             minimum_contrast_ratio: 1.0,

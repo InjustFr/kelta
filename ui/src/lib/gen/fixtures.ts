@@ -1971,7 +1971,7 @@ export const settingsDefault: Settings = {
     "history_log": true,
     "history_log_mb": 16,
     "history_log_total_mb": 512,
-    "keyboard_protocol": "legacy",
+    "keyboard_protocol": "kitty",
     "letter_spacing": 0.0,
     "line_height": 1.15,
     "max_live_views": 2,
@@ -2522,6 +2522,7 @@ export const terminalLimits: TerminalLimits = {
   "history_log": true,
   "history_log_mb": 16,
   "history_log_total_mb": 512,
+  "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,

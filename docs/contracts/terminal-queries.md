@@ -36,11 +36,11 @@ Escapes: `\e` = ESC, `\a` = BEL, `\\` = backslash. `—` = no reply.
 | OSC11_BG | `\e]11;?\e\\` | `\e]11;rgb:1e1e/1e1e/1e1e\e\\` | yes |
 | OSC12_CURSOR | `\e]12;?\a` | `\e]12;rgb:d4d4/d4d4/d4d4\a` | yes |
 | XTWINOPS_CHARS | `\e[18t` | `\e[8;24;80t` | yes |
+| KITTY_KEYBOARD | `\e[?u` | `\e[?0u` | yes |
 | DA3 | `\e[=c` | — | no |
 | DECXCPR | `\e[?6n` | — | no |
 | XTVERSION | `\e[>0q` | — | no |
 | XTWINOPS_PIXELS | `\e[14t` | — | no |
-| KITTY_KEYBOARD | `\e[?u` | — | no |
 | XTQMODKEYS | `\e[?4m` | — | no |
 | OSC52_READ | `\e]52;c;?\a` | — | no |
 | DECRQSS | `\eP$qm\e\\` | — | no |
@@ -56,7 +56,10 @@ Escapes: `\e` = ESC, `\a` = BEL, `\\` = backslash. `—` = no reply.
   (supported, not active): Kelta flushes synchronized updates itself.
 - Queries inside a DEC 2026 synchronized update are answered when the update ends (at the
   latest after alacritty's 150 ms deadline).
-- Kitty keyboard is off (D7): `CSI ? u` gets no reply, so applications fall back via DA1.
+- Kitty keyboard (`terminal.keyboard_protocol = "kitty"`, the default): the model tracks the
+  `CSI > u` / `CSI < u` / `CSI = u` mode stacks and answers `CSI ? u` with the active stack top.
+  With `"legacy"` it is not answered (still swallowed: xterm.js 6.0 has no kitty support), so
+  applications fall back via DA1.
 - OSC 52 is copy-only: reads are not answered (and not swallowed).
 - XTWINOPS 18 (`CSI 18 t`, text area size in characters) is answered by the model and swallowed,
   so the swallowed list stays the exact answered set even if xterm.js `windowOptions` is enabled.

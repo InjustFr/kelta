@@ -17,7 +17,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 | D4 | Blocking reader **thread per PTY** (256 KiB stack) + `poll(2)` with timeout for DEC 2026 sync deadlines | Simplest correct design; ~10-20 threads is cheap with `M_ARENA_MAX=2`. | Profiling shows thread overhead > 1 MB/session. |
 | D5 | **Typed IPC**: one Tauri command per operation, DTOs in `kelta-proto`, TS generated with `ts-rs`, CI drift check | Compile-time agreement between 10 parallel agents. | — |
 | D6 | Programs are **exec'd directly** with a login environment resolved once (sentinel-delimited) — no `$SHELL -c` wrapper | Works with fish/nushell, no quoting bugs, Dock-launched apps get the user's PATH. | — |
-| D7 | **xterm 6.0.0 stable, kitty keyboard off**; the Rust model runs with `kitty_keyboard = false`; Shift+Enter remapped per session kind | xterm 6.0.0 cannot encode kitty; model and encoder must agree. | xterm 6.1 stable ships → v0.2 setting `terminal.keyboard_protocol = "kitty"`. |
+| D7 | **xterm 6.0.0 stable; kitty keyboard via the Rust model**: alacritty_terminal tracks the mode stack and answers `CSI ? u` (`kitty_keyboard` from `terminal.keyboard_protocol`, default `kitty`); the active flags reach the view in Keyboard frames (§6.1) and `ui/src/lib/terminal/kitty.ts` (port of alacritty's encoder) encodes keys while they are non-zero. Shift+Enter remapped per session kind when the program did not enable kitty | xterm 6.0.0 cannot encode kitty, so the view encodes; the model is the only source of the flags, so model and encoder agree. | xterm ships a stable kitty encoder → compare with ours. |
 | D8 | Claude status from **async command hooks** calling an **absolute, version-stable** `kelta-ctl` path; HTTP hook transport optional | Independent of PATH/AppImage mount; `SessionStart` only supports command hooks. | Claude Code changes hook semantics → version gate `claude.min_version`. |
 | D9 | Extensibility = declarative tools + declarative triggers + plugin manifests with **sandboxed iframe screens**; no resident plugin runtime | Zero memory when unused; strong sandbox. Provider plugins (process/KPP, PLUGINS §9) run a child process per plugin, spawned on first use and served through the same `Tracker`/`CodeHost` traits (`KppFactory` wraps the built-in factories). | WASM logic plugins if process plugins prove too heavy. |
 | D10 | Plugin grants and repo trust live in **SQLite app state**, never in user/repo-editable TOML | A repo or a hand edit must not be able to grant permissions. | — |
@@ -545,6 +545,7 @@ First byte = tag. Little-endian.
 | `0x01` | Data | raw PTY bytes | `term.write(bytes, () => ack(n))` |
 | `0x02` | Snapshot | ANSI repaint (§9.3) | `term.reset()` then write, ack |
 | `0x03` | Exit | `i32` code (`-1` = signal) | show exit banner |
+| `0x04` | Keyboard | `u8` kitty keyboard flags of the active screen | key encoding (§7.4); sent when the flags change, and after a Snapshot when non-zero (a Snapshot resets them to 0); not acked |
 
 Acks are batched per animation frame (`session_ack` with summed bytes). A frame of a stale `generation` is ignored by the UI; a stale ack is ignored by Rust.
 
@@ -614,7 +615,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 
 - Model answers: DA1 (`CSI c`), DA2 (`CSI > c`), DSR 5/6 (`CSI n`), DECRQM (`CSI ? Ps $ p`, `CSI Ps $ p`), XTWINOPS 18 (`CSI 18 t`), OSC 4/10/11/12 `?` (from the palette pushed by `terminal_set_palette`, re-pushed on theme change), plus anything else alacritty_terminal 0.26 answers. L1 records the exact answered set in `docs/contracts/terminal-queries.md` (L1-owned file) with tests.
 - xterm.js swallows exactly that set via `term.parser.registerCsiHandler` / `registerOscHandler` returning `true` (constant list in `ui/src/lib/gen/terminal_queries.ts`, generated from `kelta_proto::term::SWALLOWED_QUERIES`). Queries the model does not answer (e.g. XTVERSION if unsupported) are **not** swallowed.
-- Kitty: model `kitty_keyboard = false` (D7) — it ignores `CSI > u` pushes and does not answer `CSI ? u`; apps fall back via DA1.
+- Kitty (D7): with `terminal.keyboard_protocol = "kitty"` the model keeps the `CSI > u` / `CSI < u` / `CSI = u` stacks (one per screen) and answers `CSI ? u`; flag changes go to the view as Keyboard frames. With `legacy` it ignores them and does not answer; apps fall back via DA1. Pushes beyond alacritty's 4096-deep stack are dropped (alacritty 0.26 would panic evicting from the title stack).
 
 ### 7.5 Lifecycle and persistence
 
