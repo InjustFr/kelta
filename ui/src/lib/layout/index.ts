@@ -245,13 +245,6 @@ export function normalizeTree(node: LayoutNode): LayoutNode {
   return { type: 'split', dir: node.dir, children, ratios: normalizeRatios(ratios) };
 }
 
-/** Sets the ratios of the split at `path` (normalized). */
-export function setSplitRatios(root: LayoutNode, path: NodePath, ratios: readonly number[]): LayoutNode {
-  const node = nodeAt(root, path);
-  if (!node || node.type !== 'split' || ratios.length !== node.children.length) return root;
-  return replaceAt(root, path, { ...node, ratios: normalizeRatios(ratios) });
-}
-
 /**
  * Moves the gutter between child `index` and `index + 1` of the split at `path` by `delta`
  * (fraction of the split size). Both neighbours stay ≥ MIN_RATIO.
@@ -466,21 +459,6 @@ export function layoutSessions(layout: Layout): SessionId[] {
     }
   }
   return out;
-}
-
-/**
- * Shows `sessionId` in the target pane (replacing its content). If the session was shown in
- * another pane, that pane is closed (a session lives in at most one pane).
- */
-export function moveSession(layout: Layout, sessionId: SessionId, target: PaneLocation): Layout {
-  const from = findSession(layout, sessionId);
-  if (from && from.tabId === target.tabId && from.paneId === target.paneId) return layout;
-  let next = updateTab(layout, target.tabId, (t) => ({
-    ...t,
-    root: replacePaneContent(t.root, target.paneId, { kind: 'terminal', session_id: sessionId }),
-  }));
-  if (from) next = closePaneInLayout(next, from.tabId, from.paneId);
-  return next;
 }
 
 export function defaultTitle(content: PaneContent): string {
