@@ -571,8 +571,10 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
         None => Scope::All,
     };
     let refresh = args.get("refresh").and_then(Value::as_bool).unwrap_or(false);
-    let page =
-        core.ticket_list(scope, opt("view").map(str::to_owned), None, refresh).await.map_err(|e| e.message)?;
+    let page = core
+        .ticket_list(scope, opt("view").map(str::to_owned), None, refresh)
+        .await
+        .map_err(|e| e.message)?;
     let norm = |s: &str| s.trim().to_lowercase().replace([' ', '-'], "_");
     let category =
         |t: &Ticket| serde_json::to_value(t.status.category).ok().and_then(|v| v.as_str().map(str::to_owned));

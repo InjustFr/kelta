@@ -905,7 +905,8 @@ async fn concurrent_cold_lists_share_one_provider_call() {
     let tmp = tempfile::tempdir().unwrap();
     let e = env(tmp.path(), vec![]);
     let core: Arc<dyn CoreApi> = e.h.core.clone();
-    let pages = futures::future::join_all((0..5).map(|_| core.ticket_list(Scope::All, None, None, false))).await;
+    let pages =
+        futures::future::join_all((0..5).map(|_| core.ticket_list(Scope::All, None, None, false))).await;
     for p in pages {
         assert_eq!(p.unwrap().items.len(), 3);
     }
