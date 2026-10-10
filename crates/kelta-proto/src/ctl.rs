@@ -91,6 +91,11 @@ pub enum CtlCommand {
     NoteSend {
         session: SessionId,
     },
+    /// Resolve one note of the editor session's work item.
+    NoteResolve {
+        session: SessionId,
+        note: i64,
+    },
     Version,
 }
 

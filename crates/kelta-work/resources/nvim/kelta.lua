@@ -140,6 +140,18 @@ local function send()
   end
 end
 
+-- Resolves the note whose lines cover the cursor in this buffer.
+local function resolve()
+  local name, l = vim.api.nvim_buf_get_name(0), vim.fn.line('.')
+  for _, n in ipairs(state.notes) do
+    if n.state ~= 'resolved' and abs(n.path) == name and n.line_start <= l and l <= n.line_end then
+      call({ cmd = 'note_resolve', note = n.id })
+      return
+    end
+  end
+  vim.notify('Kelta: no review note on this line', vim.log.levels.WARN)
+end
+
 -- Keymaps once the user's config has set <leader>; notes re-placed from Kelta on attach.
 vim.api.nvim_create_autocmd('VimEnter', {
   once = true,
@@ -154,6 +166,7 @@ vim.api.nvim_create_autocmd('VimEnter', {
       add(math.min(a, b), math.max(a, b))
     end, { desc = 'Kelta: review note on these lines' })
     vim.keymap.set('n', '<leader>kN', list, { desc = 'Kelta: review notes in quickfix' })
+    vim.keymap.set('n', '<leader>kx', resolve, { desc = 'Kelta: resolve the review note on this line' })
     vim.keymap.set('n', '<leader>ks', send, { desc = 'Kelta: send review notes to Claude' })
     vim.api.nvim_create_autocmd('BufWinEnter', {
       group = vim.api.nvim_create_augroup('kelta_notes', { clear = true }),

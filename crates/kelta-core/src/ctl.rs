@@ -358,6 +358,9 @@ impl Core {
             CtlCommand::NoteSend { session } => {
                 Ok(serde_json::to_value(self.work.notes_send_of_session(&session).await?)?)
             }
+            CtlCommand::NoteResolve { session, note } => {
+                Ok(serde_json::to_value(self.work.note_resolve_of_session(&session, note).await?)?)
+            }
             CtlCommand::Version => Ok(json!({ "version": kelta_proto::VERSION })),
         }
     }

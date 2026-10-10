@@ -11,6 +11,7 @@ use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::{
     Lifecycle, NoteState, ReviewNote, SessionKind, SessionStatus, StatusSource, WorkItem, WorkSource,
+    WorkState,
 };
 use kelta_proto::samples;
 use serde_json::json;
@@ -64,7 +65,7 @@ async fn notes_go_in_one_message_after_the_busy_turn_and_are_judged_on_the_next_
     assert_eq!(args[0], "--cmd");
     let lua = fx.dirs.data.join("nvim/kelta.lua");
     assert_eq!(args[1], format!("lua dofile([==[{}]==])", lua.display()));
-    assert!(std::fs::read_to_string(&lua).unwrap().contains("note_send"));
+    assert!(std::fs::read_to_string(&lua).unwrap().contains("note_resolve"));
 
     let wt = &item.worktree;
     let text: String = (1..=40).map(|i| format!("line {i}\n")).collect();
@@ -109,10 +110,54 @@ async fn notes_go_in_one_message_after_the_busy_turn_and_are_judged_on_the_next_
     assert_eq!((since.insertions, since.deletions), (1, 1));
 
     // Resolved notes stay out; the untouched one goes again, pasted now that Claude is idle.
-    w.note_resolve(&item.id, notes[0].id).await.unwrap();
+    w.note_resolve_of_session(&editor, notes[0].id).await.unwrap();
     w.notes_send(&item.id).await.unwrap();
     let typed = fx.core.written_text(&claude);
     assert!(typed.ends_with("Review notes:\n- @a.rs#L35 — rename\nAddress each, then reply with one line per note saying what you changed.\x1b[201~\r"), "{typed}");
     let e = w.notes_send(&item.id).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument, "nothing open");
+}
+
+#[tokio::test]
+async fn a_held_message_that_fails_at_stop_reopens_its_notes() {
+    if !has_git() {
+        eprintln!("skipping: git not found");
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w
+        .start(w.plan(&project(), WorkSource::Ticket { ticket: samples::ticket_ref() }).await.unwrap())
+        .await
+        .unwrap();
+    let live = |k: fn(&SessionKind) -> bool| {
+        fx.spawned_of(k).into_iter().find(|s| s.lifecycle == Lifecycle::Live).unwrap().id
+    };
+    let claude = live(|k| *k == SessionKind::Claude);
+    let editor = live(|k| matches!(k, SessionKind::Editor { .. }));
+    std::fs::write(item.worktree.join("a.rs"), "x\n").unwrap();
+    w.note_add(&editor, &item.worktree.join("a.rs"), (1, 1), "why?").await.unwrap();
+    let mut s = fx.core.session_get(&claude).unwrap();
+    (s.status, s.status_source) = (SessionStatus::Working, StatusSource::Hook);
+    fx.core.insert_session(s);
+    w.notes_send(&item.id).await.unwrap();
+
+    // The item can no longer be resumed when Claude stops: the message cannot go.
+    let set_state = |state| async {
+        let mut i = fx.store.get_item(&item.id).await.unwrap().unwrap();
+        i.state = state;
+        fx.store.put_item(&i).await.unwrap();
+    };
+    set_state(WorkState::Finished).await;
+    stop(&fx, &claude);
+    wait_notes(&fx, &item, |n| n.iter().all(|n| n.state == NoteState::Open && n.sent_at.is_none())).await;
+    assert!(fx.core.toasts().iter().any(|t| t.text.contains("did not reach Claude")));
+
+    // Not held any more: a later Stop types nothing; sending again pastes the notes once.
+    set_state(WorkState::Active).await;
+    stop(&fx, &claude);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(fx.core.written_text(&claude), "");
+    w.notes_send(&item.id).await.unwrap();
+    assert_eq!(fx.core.written_text(&claude).matches("Review notes:").count(), 1);
 }

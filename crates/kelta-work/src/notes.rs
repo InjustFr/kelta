@@ -110,11 +110,21 @@ impl WorkService {
     pub(crate) async fn notes_on_stop(&self, sid: &SessionId) -> Result<(), KeltaError> {
         let Some(item) = self.for_session(sid).await else { return Ok(()) };
         if let Some(p) = self.load_journal(&item.id).pending_prompt {
-            // On failure it stays held for the next Stop.
-            self.resume_item(&item.id, Some(p)).await?;
+            let delivered = self.resume_item(&item.id, Some(p)).await;
+            // Dropped either way: held past this Stop it would land after some unrelated turn.
             let mut j = self.load_journal(&item.id);
             j.pending_prompt = None;
-            return self.save_journal(&item.id, &j);
+            self.save_journal(&item.id, &j)?;
+            let Err(e) = delivered else { return Ok(()) };
+            // Reopen the notes it carried so `s` / `<leader>ks` can send them again.
+            for mut n in self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent)
+            {
+                (n.state, n.sent_at) = (NoteState::Open, None);
+                self.store.put_note(&n).await?;
+            }
+            let env = self.env(&item.project_id, &item.repo_id)?;
+            env.core.toast(Toast::error(format!("Your held message did not reach Claude: {}", e.message)));
+            return self.notes_changed(&item.id).await.map(|_| ());
         }
         let mut sent: Vec<ReviewNote> =
             self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent).collect();
@@ -215,6 +225,16 @@ impl WorkService {
     pub async fn notes_send_of_session(&self, session: &SessionId) -> Result<ReviewNotes, KeltaError> {
         let item = self.item_of_session(session).await?;
         self.notes_send(&item.id).await
+    }
+
+    /// ctl `note_resolve`.
+    pub async fn note_resolve_of_session(
+        &self,
+        session: &SessionId,
+        note: i64,
+    ) -> Result<ReviewNotes, KeltaError> {
+        let item = self.item_of_session(session).await?;
+        self.note_resolve(&item.id, note).await
     }
 
     /// `work_note_resolve`.
