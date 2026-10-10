@@ -14,8 +14,8 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, JiraFlavor, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Comment, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -356,12 +356,15 @@ impl Tracker for JiraTracker {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        let jql = view
-            .jql
-            .as_deref()
-            .filter(|j| !j.trim().is_empty())
-            .ok_or_else(|| KeltaError::invalid(format!("jira view `{}` needs a jql", view.id)))?;
         let api = self.api().await?;
+        let jql = compose_jql(&self.base_jql(view).await?, view.who, view.current_iteration);
+        if split_order_by(&jql).0.is_empty() {
+            return Err(KeltaError::invalid(format!(
+                "jira view `{}` needs a jql, project or board",
+                view.id
+            )));
+        }
+        let jql = jql.as_str();
         match api.flavor {
             Flavor::Cloud => {
                 let (done, token) = Self::decode_cloud_cursor(cursor)?;
@@ -573,6 +576,92 @@ impl Tracker for JiraTracker {
         self.fetch_ticket(&api, &t.key).await
     }
 
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let api = self.api().await?;
+        let acct = self.account().to_string();
+        let q = query.trim().to_lowercase();
+        let matches = |name: &str, extra: &str| {
+            q.is_empty() || name.to_lowercase().contains(&q) || extra.to_lowercase().contains(&q)
+        };
+        let hit = |kind: &str, slug: String, label: String, detail: Option<String>, mut view: TrackerView| {
+            view.id = format!("{acct}-{slug}");
+            view.label = label.clone();
+            view.who = Some(Who::Mine);
+            SourceHit { kind: kind.to_owned(), label, detail, view }
+        };
+        let mut out = Vec::new();
+
+        // Cloud filters server-side; Data Center lists every project the user can browse.
+        let projects = match api.flavor {
+            Flavor::Cloud => {
+                let v = api
+                    .json(
+                        HttpRequest::get(api.url("/project/search"))
+                            .query("query", q.clone())
+                            .query("maxResults", "50"),
+                    )
+                    .await?;
+                v.get("values").cloned().unwrap_or(Value::Null)
+            }
+            Flavor::Dc => api.json(HttpRequest::get(api.url("/project"))).await?,
+        };
+        for p in projects.as_array().into_iter().flatten() {
+            let (Some(key), name) = (s(p, "key"), s(p, "name").unwrap_or("")) else { continue };
+            if matches(name, key) {
+                let view = TrackerView { jql: Some(format!("project = {key}")), ..TrackerView::default() };
+                out.push(hit(
+                    "project",
+                    format!("project-{key}"),
+                    name.to_owned(),
+                    Some(key.to_owned()),
+                    view,
+                ));
+            }
+        }
+
+        // Boards and filters need a Jira Software seat / the permission: a failure only hides them.
+        // shortcut: first 50 boards, no paging, upgrade when a site has more.
+        let agile = format!("{}/rest/agile/1.0/board", self.base);
+        let boards =
+            api.json(HttpRequest::get(agile).query("name", q.clone()).query("maxResults", "50")).await.ok();
+        for b in boards.iter().filter_map(|b| b.get("values")).filter_map(Value::as_array).flatten() {
+            let (Some(id), Some(name)) = (b.get("id").and_then(Value::as_u64), s(b, "name")) else {
+                continue;
+            };
+            let scrum = s(b, "type") == Some("scrum");
+            let view = TrackerView { board_id: Some(id), ..TrackerView::default() };
+            let detail = if scrum { "Scrum board" } else { "Board" };
+            out.push(hit("board", format!("board-{id}"), name.to_owned(), Some(detail.into()), view.clone()));
+            if scrum {
+                let view = TrackerView { current_iteration: true, ..view };
+                let label = format!("{name} (current sprint)");
+                out.push(hit(
+                    "sprint",
+                    format!("board-{id}-sprint"),
+                    label,
+                    Some("Active sprint".into()),
+                    view,
+                ));
+            }
+        }
+        if let Ok(f) = api.json(HttpRequest::get(api.url("/filter/favourite"))).await {
+            for f in f.as_array().into_iter().flatten() {
+                let (Some(id), Some(name)) = (f.get("id").and_then(idstr), s(f, "name")) else { continue };
+                if matches(name, "") {
+                    let view = TrackerView { jql: Some(format!("filter = {id}")), ..TrackerView::default() };
+                    out.push(hit(
+                        "filter",
+                        format!("filter-{id}"),
+                        name.to_owned(),
+                        s(f, "jql").map(str::to_owned),
+                        view,
+                    ));
+                }
+            }
+        }
+        Ok(out)
+    }
+
     fn browser_url(&self, t: &TicketRef) -> String {
         format!("{}/browse/{}", self.web, t.key)
     }
@@ -583,6 +672,30 @@ impl Tracker for JiraTracker {
 }
 
 impl JiraTracker {
+    /// The view's own JQL, else a default built from its board / project (newest first).
+    async fn base_jql(&self, view: &TrackerView) -> Result<String, KeltaError> {
+        if let Some(j) = view.jql.as_deref().filter(|j| !j.trim().is_empty()) {
+            return Ok(j.to_owned());
+        }
+        let cond = if let Some(board) = view.board_id {
+            // shortcut: the board's filter only; a kanban board's `subQuery` is ignored.
+            let conf = self
+                .api()
+                .await?
+                .json(HttpRequest::get(format!("{}/rest/agile/1.0/board/{board}/configuration", self.base)))
+                .await?;
+            let id = conf.pointer("/filter/id").and_then(idstr);
+            let id = id.ok_or_else(|| KeltaError::upstream(format!("jira board {board} has no filter")))?;
+            format!("filter = {id}")
+        } else {
+            match view.project_id.as_deref().or(view.project.as_deref()).filter(|p| !p.trim().is_empty()) {
+                Some(p) => format!("project = \"{}\"", p.replace('"', "")),
+                None => String::new(),
+            }
+        };
+        Ok(format!("{cond} ORDER BY updated DESC"))
+    }
+
     fn tickets_from(&self, v: &Value) -> Result<Vec<Ticket>, KeltaError> {
         Ok(v.get("issues")
             .and_then(Value::as_array)
@@ -628,9 +741,77 @@ pub(crate) fn project_key_from_jql(jql: &str) -> Option<String> {
     re.captures(jql).map(|c| c[1].to_owned())
 }
 
+/// Split a trailing `ORDER BY ...` off a JQL string: (conditions, order clause).
+fn split_order_by(jql: &str) -> (&str, &str) {
+    static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| regex::Regex::new(r"(?i)\border\s+by\b").ok()).as_ref();
+    // The last match outside a quoted string.
+    let m = re.and_then(|re| {
+        re.find_iter(jql)
+            .filter(|m| b"\"'".iter().all(|q| jql[..m.start()].bytes().filter(|b| b == q).count() % 2 == 0))
+            .last()
+    });
+    match m {
+        Some(m) => (jql[..m.start()].trim(), jql[m.start()..].trim()),
+        None => (jql.trim(), ""),
+    }
+}
+
+/// AND the `who` / current-sprint clauses onto `base`, keeping its `ORDER BY` last. Untouched when there is
+/// nothing to add (`who` None keeps the legacy JQL as written).
+fn compose_jql(base: &str, who: Option<Who>, iteration: bool) -> String {
+    let extra: Vec<&str> = [
+        match who {
+            Some(Who::Mine) => Some("assignee = currentUser()"),
+            Some(Who::Unassigned) => Some("assignee is EMPTY"),
+            _ => None,
+        },
+        iteration.then_some("sprint in openSprints()"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if extra.is_empty() {
+        return base.to_owned();
+    }
+    let (cond, order) = split_order_by(base);
+    let mut parts: Vec<String> = Vec::new();
+    if !cond.is_empty() {
+        parts.push(format!("({cond})"));
+    }
+    parts.extend(extra.into_iter().map(str::to_owned));
+    format!("{} {order}", parts.join(" AND ")).trim_end().to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jql_composition() {
+        let c = compose_jql;
+        // No who, no iteration: as written.
+        assert_eq!(c("project = A ORDER BY rank", None, false), "project = A ORDER BY rank");
+        assert_eq!(c("project = A", Some(Who::Anyone), false), "project = A");
+        // Each who, with and without ORDER BY (any case), and the OR-safe parentheses.
+        assert_eq!(
+            c("project = A OR project = B order  by updated DESC", Some(Who::Mine), false),
+            "(project = A OR project = B) AND assignee = currentUser() order  by updated DESC"
+        );
+        assert_eq!(c("project = A", Some(Who::Unassigned), false), "(project = A) AND assignee is EMPTY");
+        // Iteration alone and combined; an ORDER BY-only base drops the empty condition.
+        assert_eq!(c("project = A", None, true), "(project = A) AND sprint in openSprints()");
+        assert_eq!(
+            c(" ORDER BY updated DESC", Some(Who::Mine), true),
+            "assignee = currentUser() AND sprint in openSprints() ORDER BY updated DESC"
+        );
+        // An `order by` inside a quoted string is not the clause.
+        assert_eq!(
+            c("summary ~ \"order by\" ORDER BY key", Some(Who::Mine), false),
+            "(summary ~ \"order by\") AND assignee = currentUser() ORDER BY key"
+        );
+        assert_eq!(split_order_by("a = 1").1, "");
+    }
 
     #[test]
     fn jira_times_become_rfc3339() {

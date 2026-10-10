@@ -2,10 +2,10 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{ColumnSpec, TrackerBinding};
-use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory};
+use kelta_proto::settings::{ColumnSpec, TrackerBinding, TrackerView};
+use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory, Who};
 use serde_json::json;
-use wiremock::matchers::{body_partial_json, header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn cloud(server: &MockServer) -> std::sync::Arc<dyn kelta_proto::api::Tracker> {
@@ -422,4 +422,131 @@ async fn caps_and_keys() {
     let r = tref("jira-acme", "SHOP-142", "10142");
     assert_eq!(t.branch_key(&r), "SHOP-142");
     assert_eq!(t.browser_url(&r), format!("{}/browse/SHOP-142", server.uri()));
+}
+
+async fn jql_sent(
+    t: &std::sync::Arc<dyn kelta_proto::api::Tracker>,
+    server: &MockServer,
+    v: &TrackerView,
+) -> String {
+    t.list(v, None).await.unwrap();
+    let all = bodies(server, "POST", "/rest/api/3/search/jql").await;
+    all.last().unwrap()["jql"].as_str().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn who_and_iteration_compose_the_jql_and_none_keeps_the_legacy_one() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    let t = cloud(&server);
+    let mut v = view("v");
+    v.jql = Some("project = SHOP ORDER BY rank".into());
+    assert_eq!(jql_sent(&t, &server, &v).await, "project = SHOP ORDER BY rank");
+    v.who = Some(Who::Mine);
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = SHOP) AND assignee = currentUser() ORDER BY rank"
+    );
+    v.who = Some(Who::Unassigned);
+    assert_eq!(jql_sent(&t, &server, &v).await, "(project = SHOP) AND assignee is EMPTY ORDER BY rank");
+    v.who = Some(Who::Anyone);
+    v.current_iteration = true;
+    assert_eq!(jql_sent(&t, &server, &v).await, "(project = SHOP) AND sprint in openSprints() ORDER BY rank");
+}
+
+#[tokio::test]
+async fn a_view_without_jql_gets_a_default_from_its_project_or_board_or_who() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    mount(&server, "GET", "/rest/agile/1.0/board/7/configuration", 200, "jira/board_config.json").await;
+    let t = cloud(&server);
+    let mut v = view("v");
+    v.project_id = Some("SHOP".into());
+    v.who = Some(Who::Mine);
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = \"SHOP\") AND assignee = currentUser() ORDER BY updated DESC"
+    );
+    let mut b = view("b");
+    b.board_id = Some(7);
+    b.who = Some(Who::Unassigned);
+    assert_eq!(
+        jql_sent(&t, &server, &b).await,
+        "(filter = 10010) AND assignee is EMPTY ORDER BY updated DESC"
+    );
+    let mut m = view("m");
+    m.who = Some(Who::Mine);
+    assert_eq!(jql_sent(&t, &server, &m).await, "assignee = currentUser() ORDER BY updated DESC");
+    // Nothing bounds the search: still an error, as before.
+    for bare in [view("n"), TrackerView { who: Some(Who::Anyone), ..view("a") }] {
+        assert_eq!(t.list(&bare, None).await.unwrap_err().code, ErrorCode::InvalidArgument);
+    }
+}
+
+#[tokio::test]
+async fn sources_offer_projects_boards_sprints_and_favourite_filters() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/project/search"))
+        .and(query_param("query", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"values": [
+            {"key": "SHOP", "name": "Shop"}
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/agile/1.0/board"))
+        .and(query_param("name", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"values": [
+            {"id": 7, "name": "SHOP board", "type": "scrum"},
+            {"id": 8, "name": "SHOP flow", "type": "kanban"}
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/filter/favourite"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id": "10", "name": "Shop hot bugs", "jql": "priority = Highest"},
+            {"id": "11", "name": "Other", "jql": "x = y"}
+        ])))
+        .mount(&server)
+        .await;
+    let hits = cloud(&server).sources(" Shop ").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("project", "jira-acme-project-SHOP", "Shop"),
+            ("board", "jira-acme-board-7", "SHOP board"),
+            ("sprint", "jira-acme-board-7-sprint", "SHOP board (current sprint)"),
+            ("board", "jira-acme-board-8", "SHOP flow"),
+            ("filter", "jira-acme-filter-10", "Shop hot bugs"),
+        ]
+    );
+    assert_eq!(hits[0].view.jql.as_deref(), Some("project = SHOP"));
+    assert_eq!((hits[1].view.board_id, hits[1].view.current_iteration), (Some(7), false));
+    assert_eq!((hits[2].view.board_id, hits[2].view.current_iteration), (Some(7), true));
+    assert_eq!(hits[4].view.jql.as_deref(), Some("filter = 10"));
+    assert_eq!(hits[4].detail.as_deref(), Some("priority = Highest"));
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+}
+
+#[tokio::test]
+async fn sources_survive_a_site_without_jira_software_and_data_center_filters_projects_locally() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/2/project"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"key": "SHOP", "name": "Shop"}, {"key": "OPS", "name": "Operations"}
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(path("/rest/agile/1.0/board")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    Mock::given(path("/rest/api/2/filter/favourite"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    let hits = dc(&server).sources("ops").await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].view.jql.as_deref(), Some("project = OPS"));
 }

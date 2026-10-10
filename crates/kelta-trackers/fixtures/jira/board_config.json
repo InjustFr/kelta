@@ -1,6 +1,9 @@
 {
   "id": 7,
   "name": "SHOP board",
+  "filter": {
+    "id": "10010"
+  },
   "columnConfig": {
     "columns": [
       {

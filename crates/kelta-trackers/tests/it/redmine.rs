@@ -2,8 +2,8 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::TrackerBinding;
-use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory};
+use kelta_proto::settings::{TrackerBinding, TrackerView};
+use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -200,4 +200,139 @@ async fn me_does_not_leak_the_api_key() {
     let me = rm(&server, json!({})).me().await.unwrap();
     assert_eq!(me.login.as_deref(), Some("louis"));
     assert!(!format!("{me:?}").contains("must-never-leak"));
+}
+
+async fn issues_query(
+    server: &MockServer,
+    t: &std::sync::Arc<dyn kelta_proto::api::Tracker>,
+    v: &TrackerView,
+) -> String {
+    t.list(v, None).await.unwrap();
+    let reqs = server.received_requests().await.unwrap();
+    let r = reqs.iter().rev().find(|r| r.url.path() == "/issues.json").unwrap();
+    r.url.query().unwrap_or("").to_owned()
+}
+
+#[tokio::test]
+async fn who_sets_assigned_to_id_and_overrides_the_legacy_field() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    Mock::given(method("GET"))
+        .and(path("/issues.json"))
+        .and(query_param("assigned_to_id", "!*"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("redmine/issues_p2.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/issues.json", 200, "redmine/issues_p2.json").await;
+    let t = rm(&server, json!({}));
+    let mut v = view("v");
+    v.assigned_to = Some("any".into());
+    v.who = Some(Who::Mine);
+    assert!(issues_query(&server, &t, &v).await.contains("assigned_to_id=me"));
+    v.who = Some(Who::Unassigned);
+    assert!(issues_query(&server, &t, &v).await.contains("assigned_to_id=%21*"));
+    v.who = Some(Who::Anyone);
+    v.assigned_to = None; // legacy would say `me`
+    assert!(!issues_query(&server, &t, &v).await.contains("assigned_to_id"));
+    v.who = None;
+    assert!(issues_query(&server, &t, &v).await.contains("assigned_to_id=me"));
+}
+
+#[tokio::test]
+async fn current_iteration_filters_on_the_projects_current_version() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    mount(&server, "GET", "/issues.json", 200, "redmine/issues_p2.json").await;
+    Mock::given(method("GET"))
+        .and(path("/projects/client-site/versions.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"versions": [
+            {"id": 1, "status": "closed", "due_date": "2999-01-01"},
+            {"id": 9, "status": "open", "due_date": "2999-02-01"},
+            {"id": 8, "status": "open", "due_date": "2999-01-15"},
+            {"id": 7, "status": "open", "due_date": "2000-01-01"}
+        ]})))
+        .mount(&server)
+        .await;
+    let t = rm(&server, json!({}));
+    let mut v = view("v");
+    v.project_id = Some("client-site".into());
+    v.current_iteration = true;
+    assert!(issues_query(&server, &t, &v).await.contains("fixed_version_id=8"));
+    // Without a project there is no version to pick: no filter.
+    v.project_id = None;
+    assert!(!issues_query(&server, &t, &v).await.contains("fixed_version_id"));
+}
+
+#[tokio::test]
+async fn who_on_a_saved_query_filters_the_returned_page() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    mount(&server, "GET", "/users/current.json", 200, "redmine/current_user.json").await;
+    let issue = |id: u64, who: serde_json::Value| json!({"id": id, "subject": "s", "status": {"id": 1, "name": "New"}, "assigned_to": who});
+    mount_json(
+        &server,
+        "/issues.json",
+        json!({"total_count": 3, "issues": [
+            issue(1, json!({"id": 7, "name": "Me"})),
+            issue(2, json!({"id": 8, "name": "Other"})),
+            issue(3, serde_json::Value::Null),
+        ]}),
+    )
+    .await;
+    let t = rm(&server, json!({}));
+    let mut v = view("q");
+    v.query_id = Some(12);
+    let keys =
+        |items: Vec<kelta_proto::tracker::Ticket>| items.into_iter().map(|i| i.r#ref.key).collect::<Vec<_>>();
+    assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["1", "2", "3"]);
+    v.who = Some(Who::Mine);
+    assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["1"]);
+    v.who = Some(Who::Unassigned);
+    assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["3"]);
+}
+
+#[tokio::test]
+async fn sources_list_projects_and_saved_queries_filtered_by_name() {
+    let server = MockServer::start().await;
+    mount_json(
+        &server,
+        "/projects.json",
+        json!({"projects": [
+            {"id": 3, "name": "Client Site", "identifier": "client-site"},
+            {"id": 4, "name": "Intranet", "identifier": "intranet"}
+        ]}),
+    )
+    .await;
+    mount_json(
+        &server,
+        "/queries.json",
+        json!({"queries": [
+            {"id": 12, "name": "Client bugs", "is_public": true, "project_id": 3},
+            {"id": 13, "name": "Mine, all projects", "is_public": false}
+        ]}),
+    )
+    .await;
+    let t = rm(&server, json!({}));
+    let hits = t.sources("client").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("project", "redmine-client-project-client-site", "Client Site"),
+            ("query", "redmine-client-query-12", "Client bugs"),
+        ]
+    );
+    assert_eq!(hits[0].view.project_id.as_deref(), Some("client-site"));
+    assert_eq!((hits[1].view.query_id, hits[1].view.project_id.as_deref()), (Some(12), Some("3")));
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+    assert_eq!(t.sources("").await.unwrap().len(), 4);
+}
+
+async fn mount_json(server: &MockServer, p: &str, body: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(p))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(server)
+        .await;
 }

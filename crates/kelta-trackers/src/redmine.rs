@@ -10,8 +10,8 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, TextFormat, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
+    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -161,6 +161,23 @@ impl RedmineTracker {
     }
 }
 
+/// The project's current version: the open one with the earliest `due_date >= today`, else an open undated one.
+/// ISO dates compare as strings.
+fn current_version(versions: &Value, today: &str) -> Option<String> {
+    let open: Vec<&Value> = versions
+        .get("versions")
+        .and_then(Value::as_array)?
+        .iter()
+        .filter(|v| s(v, "status") == Some("open"))
+        .collect();
+    open.iter()
+        .filter_map(|v| Some((s(v, "due_date").filter(|d| *d >= today)?, v)))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, v)| v)
+        .or_else(|| open.iter().find(|v| s(v, "due_date").is_none()))
+        .and_then(|v| v.get("id").and_then(idstr))
+}
+
 /// `422 {"errors": ["Subject cannot be blank"]}` → readable message + `detail.errors`.
 fn surface_422(e: KeltaError) -> KeltaError {
     if e.code != ErrorCode::InvalidArgument {
@@ -225,8 +242,18 @@ impl Tracker for RedmineTracker {
         if let Some(p) = &view.project_id {
             req = req.query("project_id", p.clone());
         }
+        if view.current_iteration
+            && let Some(p) = &view.project_id
+        {
+            let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
+            let today = time::OffsetDateTime::now_utc().date();
+            let today = format!("{:04}-{:02}-{:02}", today.year(), u8::from(today.month()), today.day());
+            if let Some(id) = current_version(&v, &today) {
+                req = req.query("fixed_version_id", id);
+            }
+        }
         if let Some(q) = view.query_id {
-            // A saved query carries its own filters.
+            // A saved query carries its own filters; `who` can only be applied to what comes back.
             req = req.query("query_id", q.to_string());
         } else {
             let status = match view.status.as_deref() {
@@ -235,16 +262,32 @@ impl Tracker for RedmineTracker {
                 _ => "open",
             };
             req = req.query("status_id", status);
-            if view.assigned_to.as_deref().unwrap_or("me") != "any" {
-                req = req.query("assigned_to_id", "me");
+            match view.who {
+                Some(Who::Mine) => req = req.query("assigned_to_id", "me"),
+                Some(Who::Unassigned) => req = req.query("assigned_to_id", "!*"),
+                Some(Who::Anyone) => {}
+                None if view.assigned_to.as_deref().unwrap_or("me") != "any" => {
+                    req = req.query("assigned_to_id", "me");
+                }
+                None => {}
             }
         }
         let v = self.json(req).await?;
-        let items: Vec<Ticket> = v
+        let mut items: Vec<Ticket> = v
             .get("issues")
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(|i| self.ticket_from(i).ok()).collect())
             .unwrap_or_default();
+        if view.query_id.is_some() {
+            match view.who {
+                Some(Who::Mine) => {
+                    let me = self.me().await?.id;
+                    items.retain(|t| t.assignee.as_ref().is_some_and(|a| a.id == me));
+                }
+                Some(Who::Unassigned) => items.retain(|t| t.assignee.is_none()),
+                _ => {}
+            }
+        }
         let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
         let end = offset as u64 + items.len() as u64;
         let next = (!items.is_empty() && end < total).then_some(Cursor::Offset(end as u32));
@@ -373,11 +416,73 @@ impl Tracker for RedmineTracker {
         self.ticket_from(&self.fetch_issue(&t.id, None).await?)
     }
 
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let q = query.trim().to_lowercase();
+        let acct = self.account().to_string();
+        let hit = |kind: &str, slug: String, label: &str, detail: String, mut view: TrackerView| {
+            view.id = format!("{acct}-{slug}");
+            view.label = label.to_owned();
+            view.who = Some(Who::Mine);
+            SourceHit { kind: kind.to_owned(), label: label.to_owned(), detail: Some(detail), view }
+        };
+        let mut out = Vec::new();
+        // shortcut: first 100 projects and queries, filtered client-side; upgrade to paging for bigger sites.
+        let v =
+            self.json(HttpRequest::get(format!("{}/projects.json", self.base)).query("limit", "100")).await?;
+        for p in v.get("projects").and_then(Value::as_array).into_iter().flatten() {
+            let (Some(name), Some(ident)) = (s(p, "name"), s(p, "identifier")) else { continue };
+            if q.is_empty() || name.to_lowercase().contains(&q) || ident.to_lowercase().contains(&q) {
+                let view = TrackerView { project_id: Some(ident.to_owned()), ..TrackerView::default() };
+                out.push(hit("project", format!("project-{ident}"), name, ident.to_owned(), view));
+            }
+        }
+        let v =
+            self.json(HttpRequest::get(format!("{}/queries.json", self.base)).query("limit", "100")).await?;
+        for qy in v.get("queries").and_then(Value::as_array).into_iter().flatten() {
+            let (Some(id), Some(name)) = (qy.get("id").and_then(Value::as_u64), s(qy, "name")) else {
+                continue;
+            };
+            if q.is_empty() || name.to_lowercase().contains(&q) {
+                let view = TrackerView {
+                    query_id: Some(id),
+                    project_id: qy.get("project_id").and_then(idstr),
+                    ..TrackerView::default()
+                };
+                let public = qy.get("is_public").and_then(Value::as_bool).unwrap_or(false);
+                let detail = if public { "Public query" } else { "Private query" };
+                out.push(hit("query", format!("query-{id}"), name, detail.to_owned(), view));
+            }
+        }
+        Ok(out)
+    }
+
     fn browser_url(&self, t: &TicketRef) -> String {
         format!("{}/issues/{}", self.web, t.id)
     }
 
     fn branch_key(&self, t: &TicketRef) -> String {
         t.id.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn current_version_picks_the_next_open_due_date_then_an_undated_one() {
+        let v = json!({"versions": [
+            {"id": 1, "status": "closed", "due_date": "2026-10-20"},
+            {"id": 2, "status": "open", "due_date": "2026-10-01"},
+            {"id": 3, "status": "open", "due_date": "2026-11-15"},
+            {"id": 4, "status": "open", "due_date": "2026-10-10"},
+            {"id": 5, "status": "open", "due_date": null},
+        ]});
+        assert_eq!(current_version(&v, "2026-10-10").as_deref(), Some("4"));
+        assert_eq!(current_version(&v, "2026-10-11").as_deref(), Some("3"));
+        assert_eq!(current_version(&v, "2027-01-01").as_deref(), Some("5"));
+        let past = json!({"versions": [{"id": 2, "status": "open", "due_date": "2026-10-01"}]});
+        assert_eq!(current_version(&past, "2026-10-10"), None);
+        assert_eq!(current_version(&json!({}), "2026-10-10"), None);
     }
 }
