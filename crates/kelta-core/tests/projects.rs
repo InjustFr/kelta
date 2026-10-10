@@ -168,7 +168,11 @@ async fn kelta_ctl_trust_is_bound_to_the_hash_and_persisted() {
         let h = start(tmp.path(), Settings::defaults(), vec![]);
         assert!(setup(&h.core).is_empty(), "untrusted: exec keys inert");
         let sock = h.core.server().start_ctl().await.unwrap();
-        let trust = |sha: &str| serde_json::json!({ "v": 1, "cmd": "trust", "repo": repo, "sha256": sha });
+        // a non-canonical path (`..`) must land on the key the project TOML uses
+        let trust = |sha: &str| serde_json::json!({ "v": 1, "cmd": "trust", "repo": repo.join("../api"), "sha256": sha });
+        let elsewhere =
+            serde_json::json!({ "v": 1, "cmd": "trust", "repo": tmp.path(), "sha256": "0".repeat(64) });
+        assert_eq!(ctl_send(&sock, elsewhere).await["error"]["code"], "not_found");
         let stale = ctl_send(&sock, trust(&"0".repeat(64))).await;
         assert_eq!(stale["error"]["code"], "conflict", "{stale}");
         assert!(setup(&h.core).is_empty());

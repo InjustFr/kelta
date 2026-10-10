@@ -331,7 +331,15 @@ impl Core {
             }
             CtlCommand::Trust { repo, sha256 } => {
                 let repo = crate::projects::repo_path(&repo.to_string_lossy(), &self.home_dir());
-                let file = repo.join(".kelta").join("config.toml");
+                // Trust is keyed by the project TOML's path: match canonically (`..`, symlinks).
+                let canon = |p: &std::path::Path| std::fs::canonicalize(p).ok();
+                let want = canon(&repo.join(".kelta").join("config.toml"));
+                let file = self
+                    .config
+                    .repo_config_paths()
+                    .into_iter()
+                    .find(|p| want.is_some() && canon(p) == want)
+                    .ok_or_else(|| KeltaError::not_found("not a repo of any project"))?;
                 Ok(serde_json::to_value(self.config.trust_file(&file, Some(&sha256)).await?)?)
             }
             CtlCommand::EditorOpen { file, line } => {
