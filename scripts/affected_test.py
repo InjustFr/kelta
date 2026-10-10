@@ -8,9 +8,10 @@ from affected import plan  # noqa: E402
 
 # kelta-proto <- core <- desktop (nested under apps/desktop), kelta-proto <- xtask (dev-dep counts too); term alone.
 DIRS = {"kelta-proto": "crates/kelta-proto", "core": "crates/core", "term": "crates/term",
-        "desktop": "apps/desktop/src-tauri", "xtask": "xtask", "sim": "fixtures/sim"}
+        "desktop": "apps/desktop/src-tauri", "xtask": "xtask", "sim": "fixtures/sim",
+        "kelta-term": "crates/kelta-term", "kelta-plugins": "crates/kelta-plugins"}
 DEPS = {"kelta-proto": set(), "core": {"kelta-proto"}, "term": set(), "desktop": {"core", "term"},
-        "xtask": {"kelta-proto"}, "sim": set()}
+        "xtask": {"kelta-proto"}, "sim": set(), "kelta-term": set(), "kelta-plugins": set()}
 
 CASES = [
     # (changed files, rust, ui, e2e, deny)
@@ -28,6 +29,8 @@ CASES = [
     (["ui/src/lib/gen/Foo.ts"], "all", 1, 1, 0),
     (["packages/plugin-sdk/src/index.ts"], "none", 1, 1, 0),
     (["packaging/build.sh", "docker/ubuntu-build.Dockerfile"], "none", 0, 0, 0),
+    (["docs/contracts/terminal-queries.md"], "kelta-term", 0, 0, 0),  # read by a kelta-term test
+    (["ui/tests/e2e/plugins/hello-screen.preview.json"], "kelta-plugins", 1, 1, 0),  # read by a kelta-plugins test
     (["Cargo.lock"], "all", 0, 0, 1),
     (["deny.toml"], "all", 0, 0, 1),
     (["Cargo.toml"], "all", 0, 0, 0),

@@ -24,6 +24,9 @@ DENY = ("Cargo.lock", "deny.toml")
 # Tests that run another workspace package's binary, which is not a cargo dependency.
 # shortcut: kept by hand; a new test spawning a sibling binary must be added here.
 RUNTIME_DEPS = {"kelta-server": {"kelta-ctl"}, "kelta-term": {"tui-sim"}, "kelta-bench": {"tui-sim"}}
+# Files outside a package that its tests read (they would otherwise fall under NO_RUST).
+# shortcut: kept by hand; a new test reading a file outside its crate must be added here.
+FILE_DEPS = {"docs/contracts/": "kelta-term", "ui/tests/e2e/plugins/": "kelta-plugins"}
 
 
 def plan(files, dirs, deps):
@@ -36,6 +39,7 @@ def plan(files, dirs, deps):
         if f.startswith(FULL_RUST):
             full_rust = True
             continue
+        changed.update(n for prefix, n in FILE_DEPS.items() if f.startswith(prefix))
         owners = [n for n, d in dirs.items() if f.startswith(d + "/")]
         if owners:
             changed.add(max(owners, key=lambda n: len(dirs[n])))  # nested members: the innermost owns it
