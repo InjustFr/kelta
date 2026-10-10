@@ -94,8 +94,10 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 2. Open the PR when it is ready. Draft PRs do not run CI; marking one ready does. A PR runs only the jobs for
    what it changes (Rust, UI, packaging), on Linux only, and docs-only PRs run nothing. Every push to `main`
    runs every job on Linux and macOS: ticket passes merge after `ci-local.sh`, and this run confirms on the
-   runners. There is no CI on pushes to other branches. CI and `scripts/linux-check.sh` install the same
-   pinned Neovim (`scripts/install-nvim.sh`).
+   runners. There is no CI on pushes to other branches. The Linux jobs (ci, nightly, release) and
+   `scripts/linux-check.sh` run in the same image, `ghcr.io/injustfr/kelta-ci` (`docker/ubuntu-build.Dockerfile`:
+   system packages, pinned Neovim, Rust, nextest), which `.github/workflows/ci-image.yml` publishes when the
+   Dockerfile changes on `main`; macOS CI installs the same pinned Neovim (`scripts/install-nvim.sh`).
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
