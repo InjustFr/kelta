@@ -425,3 +425,18 @@ async fn authored_pr_on_an_item_branch_is_joined_once() {
     let moves = e.tracker.calls().iter().filter(|c| c.starts_with("transition:SHOP-142")).count();
     assert_eq!(moves, 1, "{:?}", e.tracker.calls());
 }
+
+#[tokio::test]
+async fn approving_in_kelta_stamps_the_reviewed_head_hosts_do_not_report() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![review("acme/shop-api", 87, ReviewKind::ReviewRequested)]);
+    let r = ReviewRef { account: "github-work".into(), repo: "acme/shop-api".into(), number: 87 };
+    let head = e.h.core.review_get(&r).await.unwrap().review.head_sha;
+    assert_eq!(e.h.core.review_get(&r).await.unwrap().review.reviewed_head, None);
+    e.h.core.review_approve(&r, &head).await.unwrap();
+    // The PR moves on: "Updated since your review", on any host.
+    e.host.reviews.lock()[0].head_sha = "f".repeat(40);
+    assert_eq!(e.h.core.review_get(&r).await.unwrap().review.reviewed_head, Some(head.clone()));
+    let page = e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
+    assert_eq!(page.items[0].review.reviewed_head, Some(head));
+}

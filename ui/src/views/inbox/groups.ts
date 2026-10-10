@@ -38,7 +38,7 @@ export interface Section {
 
 export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] = [
   { id: 'needs_you', label: 'Claude needs you', lamp: 'needs_input' },
-  { id: 'to_review', label: 'To review', lamp: 'done' },
+  { id: 'to_review', label: 'Ready for review', lamp: 'done' },
   { id: 'fix', label: 'Fix', lamp: 'error' },
   { id: 'requests', label: 'Review requests', lamp: 'none' },
   { id: 'ship', label: 'Ship and clean up', lamp: 'none' },
@@ -79,10 +79,11 @@ const ticketKey = (t: TicketItem): string => `${t.ticket.ref.account}:${t.ticket
 
 /** Builds the seven sections; empty ones are dropped. */
 export function nowSections(input: NowInput): Section[] {
-  type Ranked = { row: NowRow; rank: number; at: string };
+  // `size` breaks ties: a smaller delta to review first.
+  type Ranked = { row: NowRow; rank: number; at: string; size: number };
   const by = new Map<NowSection, Ranked[]>(SECTIONS.map((s) => [s.id, []]));
-  const add = (section: NowSection, row: NowRow, rank: number, at: string) =>
-    by.get(section)!.push({ row, rank, at });
+  const add = (section: NowSection, row: NowRow, rank: number, at: string, size = 0) =>
+    by.get(section)!.push({ row, rank, at, size });
 
   const itemIds = new Set(input.work.map((w) => w.item.id));
   for (const { item, phase } of input.work)
@@ -91,6 +92,7 @@ export function nowSections(input: NowInput): Section[] {
       { type: 'work', id: `w:${item.id}`, item, phase },
       PHASE_ORDER[phase.id] ?? 0,
       item.claude_at ?? item.created_at,
+      item.delta ? item.delta.lines + item.delta.generated : 0,
     );
 
   // Plain sessions asking (WaitingUser is idle, never "needs you").
@@ -166,7 +168,9 @@ export function nowSections(input: NowInput): Section[] {
       .get(s.id)!
       .sort(
         (a, b) =>
-          a.rank - b.rank || (newestFirst.has(s.id) ? b.at.localeCompare(a.at) : a.at.localeCompare(b.at)),
+          a.rank - b.rank ||
+          (newestFirst.has(s.id) ? b.at.localeCompare(a.at) : a.at.localeCompare(b.at)) ||
+          a.size - b.size,
       );
     if (ranked.length === 0) return [];
     const cap = s.id === 'up_next' ? UP_NEXT_MAX : Infinity;
@@ -186,20 +190,28 @@ export function waitingCount(sections: readonly Section[]): number {
 
 /**
  * The split header in decision order, zero parts dropped:
- * `Claude: 1 asks, 2 ready`, `Teammates: 3 PRs`, `Fix 2`, `1 working`, `4 up next`.
+ * `Claude: 1 asks`, `3 LLM diffs`, `2 PRs waiting`, `Fix 2`, `1 working`, `4 up next`.
  */
 export function headerParts(sections: readonly Section[], working: number): string[] {
   const asks = count(sections, 'needs_you');
   const ready = count(sections, 'to_review');
-  const claude = [asks ? `${asks} asks` : '', ready ? `${ready} ready` : ''].filter(Boolean).join(', ');
   const prs = count(sections, 'requests');
   const fix = count(sections, 'fix');
   const next = count(sections, 'up_next');
   return [
-    claude ? `Claude: ${claude}` : '',
-    prs ? `Teammates: ${prs} PR${prs === 1 ? '' : 's'}` : '',
+    asks ? `Claude: ${asks} asks` : '',
+    ready ? `${ready} LLM diff${ready === 1 ? '' : 's'}` : '',
+    prs ? `${prs} PR${prs === 1 ? '' : 's'} waiting` : '',
     fix ? `Fix ${fix}` : '',
     working ? `${working} working` : '',
     next ? `${next} up next` : '',
   ].filter(Boolean);
+}
+
+/** Ready for review rows per project (the project rail's count badge). */
+export function readyByProject(sections: readonly Section[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of sections.find((s) => s.id === 'to_review')?.rows ?? [])
+    if (r.type === 'work') out.set(r.item.project_id, (out.get(r.item.project_id) ?? 0) + 1);
+  return out;
 }

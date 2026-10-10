@@ -97,7 +97,7 @@ pub enum UiEvent {
     #[serde(rename = "reviews.changed")]
     ReviewsChanged { scope: Scope, new_keys: Vec<ReviewRef> },
     #[serde(rename = "work.updated")]
-    WorkUpdated { work: WorkItem },
+    WorkUpdated { work: Box<WorkItem> },
     #[serde(rename = "settings.changed")]
     SettingsChanged { layers: Vec<Layer>, paths: Vec<String>, requires_restart: Vec<String> },
     #[serde(rename = "account.status")]

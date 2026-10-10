@@ -91,8 +91,8 @@ follow the host load, so measure on an idle machine.
 GitHub Actions is the confirmation, not the test bench. Do not push to see whether it works.
 
 1. Verify locally with `bash scripts/ci-local.sh`: the local mirror of `ci.yml` (`scripts/qa.sh`, Playwright
-   e2e, cargo-deny) for what the change affects (see QA). It also runs `scripts/linux-check.sh` when the diff
-   against `origin/main` touches Linux code (`--linux` or `--full` forces it, `--base <ref>` changes the base).
+   e2e, cargo-deny) for what the change affects (see QA). `scripts/linux-check.sh` runs only with `--linux` or
+   `--full` (`--base <ref>` changes the base).
 2. Open the PR when it is ready. Draft PRs do not run CI; marking one ready does. A PR runs only the jobs for
    what it changes (Rust, UI, packaging), and docs-only PRs run nothing. There is no CI on pushes to `main`
    or to branches.

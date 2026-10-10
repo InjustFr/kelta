@@ -1,5 +1,5 @@
 // Flow 1 on the IPC mock (FLOW §4.1): Now → Up next → start work → Claude stops with changes →
-// To review row → Enter opens the diff zoomed in the work tab. Also the work menu from a terminal.
+// Ready for review row → Enter opens the delta zoomed in the work tab. Also the work menu from a terminal.
 import { expect, test, type Page } from '@playwright/test';
 
 import { activeProject, boot, callsOf } from '../shell/helpers';
@@ -57,7 +57,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(header).toHaveAttribute('data-phase', 'to_review');
   await expect(header).toContainText('+30');
 
-  // Now: the item sits in To review with Claude's last message; Enter opens the diff.
+  // Now: the item sits in Ready for review with Claude's last message; Enter opens the delta.
   await page.keyboard.press('Control+Shift+0');
   const toReview = now(page).locator('[data-section="to_review"]');
   await expect(toReview).toBeVisible();
@@ -82,7 +82,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Shift+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveCount(15);
+  await expect(menu.getByRole('menuitem')).toHaveCount(17);
   await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveAttribute(
     'title',
     'Only while a rebase is stopped',

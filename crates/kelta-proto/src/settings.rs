@@ -1030,6 +1030,9 @@ pub struct WorkSettings {
     /// Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
     /// the task's first line.
     pub scratch_branch_template: String,
+    /// Refocusing a work item after this many minutes away shows the return strip (`next:` note,
+    /// Claude's last message, the delta since review). 0 turns it off.
+    pub return_brief_after_mins: u32,
 }
 
 impl Default for WorkSettings {
@@ -1043,6 +1046,7 @@ impl Default for WorkSettings {
             on_merge: OnMerge::default(),
             pr: PrSettings::default(),
             scratch_branch_template: "wip/{slug}".into(),
+            return_brief_after_mins: 20,
         }
     }
 }
@@ -1060,6 +1064,9 @@ pub struct ReviewsSettings {
     pub ticket_key_regex: String,
     pub repos_allow: Vec<String>,
     pub repos_deny: Vec<String>,
+    /// Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
+    /// and `-diff` attributes.
+    pub ignore_globs: Vec<String>,
 }
 
 impl Default for ReviewsSettings {
@@ -1070,6 +1077,9 @@ impl Default for ReviewsSettings {
             ticket_key_regex: "[A-Z][A-Z0-9]+-\\d+|#\\d+".into(),
             repos_allow: Vec::new(),
             repos_deny: Vec::new(),
+            ignore_globs: ["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]
+                .map(String::from)
+                .to_vec(),
         }
     }
 }

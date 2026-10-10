@@ -21,7 +21,7 @@ const FETCH_FLOOR: Duration = Duration::from_secs(5 * 60);
 impl WorkService {
     /// What `ahead`/`behind`/diffstat compare with: `<remote>/<base>`, never the branch's own
     /// upstream (B4); the local base when the remote ref is missing.
-    async fn base_ref(env: &Env, item: &WorkItem) -> Result<Option<String>, KeltaError> {
+    pub(crate) async fn base_ref(env: &Env, item: &WorkItem) -> Result<Option<String>, KeltaError> {
         for r in [format!("{}/{}", env.repo.remote, item.base), item.base.clone()] {
             if git::ref_exists(&item.worktree, &r).await? {
                 return Ok(Some(r));
@@ -119,18 +119,56 @@ impl WorkService {
         true
     }
 
-    /// `work_diff`: spawns the review diff of the item in its worktree (merge base to working tree,
-    /// so uncommitted work shows). The editor with `editor.review_args` when set, else
-    /// `git diff $(git merge-base <base> HEAD)` typed into a shell. The UI places the pane.
-    pub(crate) async fn diff_impl(&self, id: &WorkItemId) -> Result<SessionInfo, KeltaError> {
+    /// `work_diff`: spawns the review diff of the item in its worktree. Full: merge base to working
+    /// tree, so uncommitted work shows. `delta`: `reviewed..last` (what changed since the last look).
+    /// `from`: a review item's reviewed PR head to HEAD, or `git range-diff` in a shell when the PR
+    /// was force-pushed. The editor with `editor.review_args` (`{range}`) when set, else the git
+    /// command typed into a shell. The UI places the pane.
+    pub(crate) async fn diff_impl(
+        &self,
+        id: &WorkItemId,
+        delta: bool,
+        from: Option<&str>,
+    ) -> Result<SessionInfo, KeltaError> {
         let item = self.load(id).await?;
         if !item.worktree.is_dir() {
             return Err(KeltaError::not_found(format!("worktree missing at {}", item.worktree.display())));
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
-        let ctx = self.item_ctx(&env, &item, &self.load_journal(id));
+        let mut ctx = self.item_ctx(&env, &item, &self.load_journal(id));
+        let wt = &item.worktree;
+        // (range for the editor, shell line; None = the shell only).
+        let (range, line) = if let Some(from) = from {
+            if git::rev(wt, from).await?.is_none() {
+                return Err(KeltaError::not_found(format!("reviewed head {from} is not fetched here")));
+            }
+            let (f, q) = (from.to_owned(), shell_quote(from));
+            if git::is_ancestor(wt, from, "HEAD").await? {
+                (Some(format!("{f}..HEAD")), format!("git diff {q} HEAD"))
+            } else {
+                (None, format!("git range-diff {q}...HEAD"))
+            }
+        } else if delta {
+            let last = crate::review::wi_ref(&item.id, "last");
+            let to = match git::rev(wt, &last).await? {
+                Some(s) => s,
+                None => git::snapshot(wt, &last).await?,
+            };
+            let from = self.reviewed_base(&env, &item).await?;
+            if git::run(wt, &["diff", "--quiet", &from, &to], git::LOCAL_TIMEOUT).await?.ok() {
+                return Err(KeltaError::invalid("Nothing new since your last review"));
+            }
+            (Some(format!("{from}..{to}")), format!("git diff {from} {to}"))
+        } else {
+            let base = Self::base_ref(&env, &item).await?.unwrap_or_else(|| item.base.clone());
+            (None, format!("git diff $(git merge-base {} HEAD)", shell_quote(&base)))
+        };
+        if let Some(r) = &range {
+            ctx.set("range", r.clone());
+        }
         let review = &env.settings.editor.review_args;
-        let preset = editor::preset(&env.settings.editor, None).filter(|p| !p.external && !review.is_empty());
+        let preset = editor::preset(&env.settings.editor, None)
+            .filter(|p| !p.external && !review.is_empty() && (range.is_some() || from.is_none()));
         let (kind, program, args) = match preset {
             Some(p) => (
                 SessionKind::Editor { adapter: p.id.clone() },
@@ -161,9 +199,7 @@ impl WorkService {
             })
             .await?;
         if shell {
-            let base = Self::base_ref(&env, &item).await?.unwrap_or_else(|| item.base.clone());
-            let line = format!("git diff $(git merge-base {} HEAD)\r", shell_quote(&base));
-            env.core.session_write(&info.id, line.as_bytes()).await?;
+            env.core.session_write(&info.id, format!("{line}\r").as_bytes()).await?;
         }
         Ok(info)
     }

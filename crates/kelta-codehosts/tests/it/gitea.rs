@@ -117,6 +117,7 @@ async fn detail_rolls_up_reviews_and_ci() {
     assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested));
     assert_eq!(d.review.my_state, Some(MyReviewState::Pending));
     assert_eq!(d.review.ci, CiState::Failure);
+    assert_eq!(d.pending_comments, 2, "my PENDING review's comments are the drafts");
     assert_eq!(
         d.checks.iter().map(|c| (c.name.as_str(), c.state)).collect::<Vec<_>>(),
         [("ci/build", CiState::Success), ("ci/test", CiState::Failure)]

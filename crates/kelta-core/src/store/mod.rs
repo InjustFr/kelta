@@ -330,6 +330,32 @@ pub mod q {
         .map_err(db_err)
     }
 
+    /// Louis reviewed `r` at `sha` in Kelta (approve): read back as `reviewed_head` when the host
+    /// does not report one.
+    pub fn seen_review_stamp(c: &Connection, r: &ReviewRef, sha: &str) -> R<()> {
+        c.execute(
+            "INSERT INTO seen_reviews (account, repo, number, head_sha, first_seen, reviewed_sha)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?4)
+             ON CONFLICT(account, repo, number) DO UPDATE SET reviewed_sha = excluded.reviewed_sha",
+            params![r.account.as_str(), r.repo, r.number as i64, sha, kelta_proto::now_rfc3339()],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
+    /// `(account, repo, number) → reviewed_sha` of every stamped PR.
+    pub fn reviewed_shas(c: &Connection) -> R<std::collections::HashMap<(String, String, u64), String>> {
+        let mut st = c
+            .prepare(
+                "SELECT account, repo, number, reviewed_sha FROM seen_reviews WHERE reviewed_sha IS NOT NULL",
+            )
+            .map_err(db_err)?;
+        let rows = st
+            .query_map([], |r| Ok(((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? as u64), r.get(3)?)))
+            .map_err(db_err)?;
+        rows.collect::<rusqlite::Result<std::collections::HashMap<_, _>>>().map_err(db_err)
+    }
+
     pub fn seen_review_key(r: &ReviewRef) -> (String, String, u64) {
         (r.account.as_str().to_owned(), r.repo.clone(), r.number)
     }
@@ -464,8 +490,10 @@ pub mod q {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
-             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, port_base)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at,
+             claude_message, delta_json, next_note, left_at, port_base)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
+             ?25, ?26, ?27, ?28, ?29)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -474,7 +502,9 @@ pub mod q {
              session_ids_json = excluded.session_ids_json, review_due = excluded.review_due,
              claude_replied = excluded.claude_replied, title = excluded.title,
              pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
-             rebase_json = excluded.rebase_json, claude_at = excluded.claude_at, port_base = excluded.port_base",
+             rebase_json = excluded.rebase_json, claude_at = excluded.claude_at,
+             claude_message = excluded.claude_message, delta_json = excluded.delta_json,
+             next_note = excluded.next_note, left_at = excluded.left_at, port_base = excluded.port_base",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -500,6 +530,10 @@ pub mod q {
                 serde_json::to_string(&w.sent_threads)?,
                 json_opt(&w.rebase)?,
                 w.claude_at,
+                w.claude_message,
+                json_opt(&w.delta)?,
+                w.next_note,
+                w.left_at,
                 w.port_base,
             ],
         )
@@ -518,7 +552,8 @@ pub mod q {
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
-        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, port_base";
+        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, claude_message,
+        delta_json, next_note, left_at, port_base";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -554,7 +589,11 @@ pub mod q {
             pr_title_needs_key: r.get(19)?,
             sent_threads: Vec::new(),
             rebase: None,
-            port_base: r.get(23)?,
+            claude_message: r.get(23)?,
+            delta: r.get::<_, Option<String>>(24)?.and_then(|d| serde_json::from_str(&d).ok()),
+            next_note: r.get(25)?,
+            left_at: r.get(26)?,
+            port_base: r.get(27)?,
         };
         Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }

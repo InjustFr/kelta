@@ -2432,6 +2432,14 @@
     "reviews": {
       "additionalProperties": false,
       "default": {
+        "ignore_globs": [
+          "*.lock",
+          "package-lock.json",
+          "pnpm-lock.yaml",
+          "go.sum",
+          "*.min.js",
+          "*.snap"
+        ],
         "include_drafts": false,
         "include_team_requests": true,
         "repos_allow": [],
@@ -2439,6 +2447,21 @@
         "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
       },
       "properties": {
+        "ignore_globs": {
+          "default": [
+            "*.lock",
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "go.sum",
+            "*.min.js",
+            "*.snap"
+          ],
+          "description": "Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`\nand `-diff` attributes.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "include_drafts": {
           "default": false,
           "type": "boolean"
@@ -4074,6 +4097,7 @@
           "draft": false,
           "title_template": "{ticket.key}: {ticket.title}"
         },
+        "return_brief_after_mins": 20,
         "review_template": "review",
         "scratch_branch_template": "wip/{slug}"
       },
@@ -4304,6 +4328,13 @@
             }
           },
           "type": "object"
+        },
+        "return_brief_after_mins": {
+          "default": 20,
+          "description": "Refocusing a work item after this many minutes away shows the return strip (`next:` note,\nClaude's last message, the delta since review). 0 turns it off.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         },
         "review_template": {
           "default": "review",

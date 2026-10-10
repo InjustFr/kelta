@@ -131,13 +131,23 @@ const V5: &str = r#"
 ALTER TABLE work_items ADD COLUMN claude_at TEXT;
 "#;
 
-/// v6: per-item port block (`WorkItem.port_base`).
+/// v6: Ready for review (#134): Claude's full last message, the delta since review, Louis's
+/// `next:` note and when he left the item; the reviewed head of PRs next to `seen_reviews`.
 const V6: &str = r#"
+ALTER TABLE work_items ADD COLUMN claude_message TEXT;
+ALTER TABLE work_items ADD COLUMN delta_json TEXT;
+ALTER TABLE work_items ADD COLUMN next_note TEXT;
+ALTER TABLE work_items ADD COLUMN left_at TEXT;
+ALTER TABLE seen_reviews ADD COLUMN reviewed_sha TEXT;
+"#;
+
+/// v7: per-item port block (`WorkItem.port_base`).
+const V7: &str = r#"
 ALTER TABLE work_items ADD COLUMN port_base INTEGER;
 "#;
 
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

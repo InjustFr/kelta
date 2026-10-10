@@ -40,5 +40,20 @@
     "dismissed": true,
     "stale": false,
     "submitted_at": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": 4,
+    "user": {
+      "id": 1,
+      "login": "louis",
+      "full_name": "Louis D",
+      "avatar_url": "https://git.acme.example/avatars/1"
+    },
+    "state": "PENDING",
+    "commit_id": "abc",
+    "comments_count": 2,
+    "dismissed": false,
+    "stale": false,
+    "submitted_at": null
   }
 ]
