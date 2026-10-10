@@ -271,10 +271,37 @@ label = "Shell"
 layout = { session = "shell" }
 ```
 
-### [[tools]], [[triggers]], [[commands]]
-Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
+### [[sources]]  (by_id; scope global only; category Projects)
+Ticket boards. A source belongs to no project: it feeds zero or more of them, and the Tickets pane's `All` scope lists every source, also those feeding no project or only closed ones.
 
-The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+```toml
+[[sources]]
+id = "product"
+label = "Product board"
+projects = ["web", "api"]          # projects this board feeds; may be empty
+
+[sources.tracker]                  # the §3 tracker binding without repo_rules
+account = "jira-acme"
+views = [{ id = "mine", label = "My open", jql = "project = SHOP AND assignee = currentUser()" }]
+columns = [{ id = "todo", label = "To do", categories = ["todo"] }]
+status_map = { start = { category = "in_progress" }, done = { category = "done" } }
+
+[[sources.routes]]                 # was repo_rules; names the project whose repo starts the ticket
+match = { component = "Web" }
+project = "web"
+repo = "web"
+```
+
+Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account.
+
+A project's Tracker section (Settings > Projects) and `ProjectInfo.tracker` show the first source listing the project, with its routes for that project as `repo_rules`. Saving it replaces that source's tracker and the project's routes; removing it takes the project out of the source, which stays.
+
+### [[tools]], [[triggers]], [[commands]]
+Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.
+
+The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global layer; the Project layer shows the merged list and **Go to Global**). A tool opens where you are: the shown project and its focused work item, else Home (from Tickets, Now or Reviews). A tool whose template fields (`command`, `args`, `cwd`, `env`, `url`, `start.*`) use a `{project.*}` or `{repo.*}` placeholder, even in a fallback like `{worktree|project.root}`, needs a project: with no project in context a project picker asks which one, and the palette adds "Open <label> for project…", which always asks.
+
+Migration (once, on load): each `projects/<id>.toml` that has `[[tools]]` is copied to `projects/.trash/`, then its entries move to `config.toml`. A new id is appended unchanged (placeholders kept), an identical entry or an `id`/`enabled`-only override is dropped, and a different definition under a taken id becomes `<id>-<project id>` labelled "<label> (<project name>)". A toast "Tools moved to your global settings" offers **Review** (Settings → Tools). Repo files are never rewritten. No tool is built in or auto-detected.
 
 ```toml
 [[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),
@@ -323,7 +350,7 @@ remote = "origin"
 base = "develop"
 code_host = { account = "gitlab-acme", repo = "shop/web" }
 
-[project.tracker]
+[project.tracker]              # deprecated: moved to the global [[sources]] at startup (below)
 account = "jira-acme"
 views = [
   { id = "mine",   label = "My open", jql = "project = SHOP AND assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC" },
@@ -345,15 +372,12 @@ DATABASE_URL = "postgres://localhost/shop_dev"
 setup = ["pnpm install --frozen-lockfile"]
 [claude.profiles.default]
 model = "sonnet"
-[[tools]]
-id = "lazydocker"
-enabled = true
 ```
 
 Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys valid for every kind:
 - `who = "mine"|"unassigned"|"anyone"` (optional). When set it replaces the provider's assignee fields (`assigned_to`, `scope`, an assignee clause you wrote yourself in `jql` is kept as is). Absent keeps the per-kind keys below. The Tickets pane's Who tab overrides it.
 - `current_iteration = true|false` (default `false`): only the current sprint (Jira), cycle (Linear), iteration (GitHub Projects v2), started milestone (GitLab) or next open version (Redmine). Ignored on gitea.
-- `account = "<id>"` (optional): take this source from another account; absent uses `[project.tracker].account`. Board mode and columns stay on the binding account.
+- `account = "<id>"` (optional): take this source from another account; absent uses the binding's `account`. Board mode and columns stay on the binding account.
 
 - jira: `jql` (required), `board_id?` (columns from board config when set).
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
@@ -367,9 +391,17 @@ The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with n
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 
+**`[project.tracker]` is deprecated** (removed in the next release); the binding schema above is the one of `[sources.tracker]` (§2). At startup Kelta moves every block to the global `[[sources]]`:
+- each project file is first copied to `projects/.trash/<id>-tracker-<secs>.toml`, then the global file is written, then the block is removed from the project file; a failure stops there, logs and shows an error toast;
+- blocks with the same account, views (each view's account resolved), `columns` and `status_map` become one source feeding all their projects; `repo_rules` become `routes` naming their project;
+- same views with other columns or status_map stay separate sources labelled `<label> · <project name>`; a source is labelled after its only view, else its account; its id is the label's slug, made unique with `-2`, `-3`, …;
+- a block equal to an existing source only adds the project to it, so a second run changes nothing.
+
+A block still on disk (hand-written, restored from `.trash`, or a failed move) is read the same way in memory until the next launch moves it. After a move, the toast "Ticket sources moved out of your projects" offers **Review** (Settings > Projects).
+
 ## 4. Repo-local `.kelta/config.toml`
 
-Allowed top-level keys: `tools`, `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`tools`, `triggers`, `commands`, `worktree.setup`, `env`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
+Allowed top-level keys: `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`triggers`, `commands`, `worktree.setup`, `env`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
 
 ## 5. Secrets
 
@@ -486,6 +518,21 @@ command = "lazydocker"
 cwd = "{repo.path|project.root}"
 check = ["lazydocker", "--version"]
 install_hint = "brew install lazydocker"
+
+[[sources]]
+id = "my-open"
+label = "My open"
+projects = ["shop"]
+
+[sources.tracker]
+account = "jira-acme"
+views = [{ id = "mine", label = "My open", who = "mine", jql = "project = SHOP" }]
+status_map = { start = { category = "in_progress" }, done = { category = "done" } }
+
+[[sources.routes]]
+match = { component = "frontend" }
+project = "shop"
+repo = "web"
 ```
 
 ## 9. Settings UI

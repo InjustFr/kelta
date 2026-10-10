@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
 
+mod branch_script;
 mod common;
 mod exec;
 mod install;

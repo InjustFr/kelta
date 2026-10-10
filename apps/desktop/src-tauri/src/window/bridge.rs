@@ -16,8 +16,8 @@ use tauri_plugin_notification::NotificationExt;
 
 use super::MAIN_WINDOW;
 
-/// Backend-initiated commands that arrive while the webview does not exist (background mode) are
-/// queued and delivered on the next subscription. Bounded so a stuck UI cannot grow memory.
+/// Backend-initiated commands and toasts that arrive while the webview does not exist (startup,
+/// background mode) are queued and delivered on the next subscription. Bounded so a stuck UI cannot grow memory.
 const PENDING_CAP: usize = 32;
 
 /// Subscriber list plus the queue of commands that arrived with no subscriber. Generic over the
@@ -148,6 +148,8 @@ impl UiBridge for TauriBridge {
             // Toggle is native: it must work when the webview is destroyed or hung.
             UiEvent::CtlCommand { cmd: CtlCommand::Toggle } => super::toggle(&self.handle),
             e if needs_window(e) => self.deliver_command(ev),
+            // A boot toast (tools moved, MCP offer) predates the webview's subscription: keep it.
+            UiEvent::Toast { .. } => self.hub.deliver(ev, send_ev),
             _ => {
                 let _ = self.hub.fan_out(&ev, send_ev);
             }

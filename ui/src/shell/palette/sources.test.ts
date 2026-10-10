@@ -11,7 +11,9 @@ import { idle } from '$lib/stores/loadable';
 import { reviewKey } from '$lib/stores/reducers';
 
 import '../actions';
+import '../../views/tools/actions';
 import { rank } from './fuzzy';
+import Switcher from './Switcher.svelte';
 import {
   actionItems,
   buildItems,
@@ -224,6 +226,36 @@ describe('palette sources', () => {
   it('lists tools of the active project and settings sections', () => {
     expect(toolItems().map((i) => i.label)).toContain('Open lazygit');
     expect(settingsItems().map((i) => i.label)).toContain('Settings: Keys');
+  });
+
+  it('offers "for project…" only for tools that take a project, and it always asks', async () => {
+    const labels = toolItems().map((i) => i.label);
+    expect(labels).toContain('Open Sapling ISL for project…');
+    expect(labels.filter((l) => l.endsWith('for project…'))).toEqual(['Open Sapling ISL for project…']);
+    expect(labels).not.toContain('Open lazydocker for project…');
+    await projects.activate('shop');
+    toolItems()
+      .find((i) => i.id === 'tool-for:sl-web')!
+      .run();
+    await waitFor(() => expect(ui.pick?.placeholder).toBe('Open Sapling ISL for project…'));
+    ui.closeOverlay();
+  });
+
+  it('the switcher as a project picker leaves Home out and hands the pick over', async () => {
+    Element.prototype.scrollIntoView ??= () => {}; // not in jsdom
+    const picked: string[] = [];
+    const active = projects.activeId;
+    render(Switcher, {
+      onclose: () => {},
+      placeholder: 'Open x for project…',
+      onpick: (id: string) => picked.push(id),
+    });
+    expect(screen.getByPlaceholderText('Open x for project…')).toBeTruthy();
+    const options = screen.getAllByRole('option').map((o) => o.querySelector('.label')!.textContent);
+    expect(options).toEqual(['Shop', 'Billing', 'Kelta tools']);
+    await fireEvent.click(screen.getAllByRole('option')[1]!);
+    expect(picked).toEqual(['billing']);
+    expect(projects.activeId).toBe(active);
   });
 
   it('maps ticket search hits to palette items with their project', () => {

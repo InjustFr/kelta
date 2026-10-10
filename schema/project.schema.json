@@ -1801,9 +1801,7 @@
       "x-kelta-merge": "by_id",
       "x-kelta-order": 13,
       "x-kelta-scope": [
-        "global",
-        "project",
-        "repo"
+        "global"
       ]
     },
     "editor": {
@@ -2641,7 +2639,8 @@
         "tracker": {
           "additionalProperties": false,
           "default": null,
-          "description": "`[project.tracker]`.",
+          "deprecated": true,
+          "description": "Deprecated: boards live in the global `[[sources]]`. Still read for one release, and moved\nthere at startup (SETTINGS §3).",
           "properties": {
             "account": {
               "default": "",
@@ -2690,6 +2689,7 @@
             },
             "repo_rules": {
               "default": [],
+              "description": "`[project.tracker]` only; a source uses `routes`.",
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -3352,6 +3352,528 @@
         "global",
         "project",
         "repo"
+      ]
+    },
+    "sources": {
+      "default": [],
+      "description": "Ticket boards, each feeding zero or more projects (SETTINGS §2).",
+      "items": {
+        "additionalProperties": false,
+        "description": "`[[sources]]`: a ticket board, global, feeding zero or more projects (SETTINGS §2).",
+        "properties": {
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "type": "string"
+          },
+          "projects": {
+            "default": [],
+            "description": "Projects this board feeds; may be empty.",
+            "items": {
+              "description": "Project slug `[a-z0-9-]{1,40}`; `\"home\"` reserved (built-in Home project), `\"inbox\"` reserved pseudo id.",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "routes": {
+            "default": [],
+            "items": {
+              "additionalProperties": false,
+              "description": "`[[sources.routes]]`: tickets matching `match` start in `project`'s `repo`.",
+              "properties": {
+                "match": {
+                  "additionalProperties": false,
+                  "default": {
+                    "component": null,
+                    "label": null,
+                    "type": null
+                  },
+                  "properties": {
+                    "component": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "project": {
+                  "default": "",
+                  "description": "Must be listed in the source's `projects`.",
+                  "type": "string"
+                },
+                "repo": {
+                  "default": "",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tracker": {
+            "additionalProperties": false,
+            "default": {
+              "account": "",
+              "columns": [],
+              "repo_rules": [],
+              "status_map": {
+                "done": null,
+                "review": null,
+                "start": null
+              },
+              "views": []
+            },
+            "description": "`repo_rules` must stay empty: `routes` replace them.",
+            "properties": {
+              "account": {
+                "default": "",
+                "description": "Account key from settings, e.g. `\"jira-acme\"`.",
+                "type": "string"
+              },
+              "columns": {
+                "default": [],
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "categories": {
+                      "default": [],
+                      "items": {
+                        "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                        "enum": [
+                          "todo",
+                          "in_progress",
+                          "in_review",
+                          "done",
+                          "unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "label": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "names": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "repo_rules": {
+                "default": [],
+                "description": "`[project.tracker]` only; a source uses `routes`.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "match": {
+                      "additionalProperties": false,
+                      "default": {
+                        "component": null,
+                        "label": null,
+                        "type": null
+                      },
+                      "properties": {
+                        "component": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "label": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "type": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "repo": {
+                      "default": "",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "status_map": {
+                "additionalProperties": false,
+                "default": {
+                  "done": null,
+                  "review": null,
+                  "start": null
+                },
+                "description": "`start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.",
+                "properties": {
+                  "done": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "category": {
+                                "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                "enum": [
+                                  "todo",
+                                  "in_progress",
+                                  "in_review",
+                                  "done",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "category"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "review": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "category": {
+                                "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                "enum": [
+                                  "todo",
+                                  "in_progress",
+                                  "in_review",
+                                  "done",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "category"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "start": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "category": {
+                                "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                "enum": [
+                                  "todo",
+                                  "in_progress",
+                                  "in_review",
+                                  "done",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "category"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "type": "object"
+              },
+              "views": {
+                "default": [],
+                "items": {
+                  "additionalProperties": false,
+                  "description": "Tracker view; fields used depend on the account kind (SETTINGS §3).",
+                  "properties": {
+                    "account": {
+                      "default": null,
+                      "description": "Account of this view; `None` = the binding's account.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "assigned_to": {
+                      "default": null,
+                      "description": "redmine: `me` (default) | `any`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "board_id": {
+                      "default": null,
+                      "description": "jira: columns from board config when set.",
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "current_iteration": {
+                      "default": false,
+                      "description": "Only the current sprint / cycle / iteration (providers that support it).",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "jql": {
+                      "default": null,
+                      "description": "jira (required for jira).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "labels": {
+                      "default": null,
+                      "description": "gitlab, gitea, linear (label names).",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "project": {
+                      "default": null,
+                      "description": "gitlab: `group/sub/proj`; gitea: `owner/name`; linear: project name.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "project_id": {
+                      "default": null,
+                      "description": "redmine.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "project_v2": {
+                      "additionalProperties": false,
+                      "default": null,
+                      "description": "github Projects v2.",
+                      "properties": {
+                        "number": {
+                          "format": "uint32",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "status_field": {
+                          "default": "Status",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "owner",
+                        "number"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "query_id": {
+                      "default": null,
+                      "description": "redmine.",
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "repo": {
+                      "default": null,
+                      "description": "github: `owner/name`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "scope": {
+                      "default": null,
+                      "description": "gitlab, gitea: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "search": {
+                      "default": null,
+                      "description": "github: search query.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "default": null,
+                      "description": "redmine: `open` (default) | `closed` | `*`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "team": {
+                      "default": null,
+                      "description": "linear: team key (`ENG`).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "who": {
+                      "default": null,
+                      "description": "Whose tickets; `None` = the provider fields above decide.",
+                      "enum": [
+                        "mine",
+                        "unassigned",
+                        "anyone",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workflow_scope": {
+                      "default": null,
+                      "description": "gitlab scoped-label scope (default `workflow`).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Projects",
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 5,
+      "x-kelta-scope": [
+        "global"
       ]
     },
     "terminal": {
@@ -4226,9 +4748,7 @@
       "x-kelta-merge": "by_id",
       "x-kelta-order": 13,
       "x-kelta-scope": [
-        "global",
-        "project",
-        "repo"
+        "global"
       ]
     },
     "triggers": {

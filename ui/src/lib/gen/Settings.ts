@@ -15,6 +15,7 @@ import type { PollingSettings } from "./PollingSettings";
 import type { PortsSettings } from "./PortsSettings";
 import type { ReviewsSettings } from "./ReviewsSettings";
 import type { SessionTemplate } from "./SessionTemplate";
+import type { Source } from "./Source";
 import type { TerminalSettings } from "./TerminalSettings";
 import type { ThemeDef } from "./ThemeDef";
 import type { TicketsSettings } from "./TicketsSettings";
@@ -28,7 +29,11 @@ import type { WorktreeSettings } from "./WorktreeSettings";
 /**
  * Effective (merged) settings. Also the schema of the global `config.toml`.
  */
-export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSettings, terminal: TerminalSettings, linux: LinuxSettings, polling: PollingSettings, notifications: NotificationSettings, claude: ClaudeSettings, editor: EditorSettings, worktree: WorktreeSettings, work: WorkSettings, ports: PortsSettings, reviews: ReviewsSettings, tickets: TicketsSettings, web: WebSettings, performance: PerformanceSettings, accounts: { [key in AccountId]: AccountConfig }, oauth: OAuthSettings, session_templates: Array<SessionTemplate>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, plugins: PluginsSettings, 
+export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSettings, terminal: TerminalSettings, linux: LinuxSettings, polling: PollingSettings, notifications: NotificationSettings, claude: ClaudeSettings, editor: EditorSettings, worktree: WorktreeSettings, work: WorkSettings, ports: PortsSettings, reviews: ReviewsSettings, tickets: TicketsSettings, web: WebSettings, performance: PerformanceSettings, accounts: { [key in AccountId]: AccountConfig }, oauth: OAuthSettings, session_templates: Array<SessionTemplate>, 
+/**
+ * Ticket boards, each feeding zero or more projects (SETTINGS §2).
+ */
+sources: Array<Source>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, plugins: PluginsSettings, 
 /**
  * Environment added to every session of the project (project/repo files).
  */

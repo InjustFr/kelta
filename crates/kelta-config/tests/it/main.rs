@@ -2,5 +2,6 @@
 
 mod common;
 mod layers;
+mod migrate;
 mod reload;
 mod writes;

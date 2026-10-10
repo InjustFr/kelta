@@ -2,7 +2,7 @@
 
 ## Install
 
-See "Try the latest build" in the [README](../../README.md): dmg on macOS, AppImage or deb on Linux.
+See "Install" in the [README](../../README.md#install): dmg on macOS, AppImage or deb on Linux.
 `kelta-ctl` is installed next to the app and copied to `<data>/bin/current` so scripts and compositor bindings
 have a stable path.
 

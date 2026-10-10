@@ -301,7 +301,6 @@ export function nodeAt(root: SchemaNode, segs: readonly string[]): SchemaNode | 
 
 /** Repo-local allowed keys (SETTINGS §4); mirrors `kelta_proto::settings::REPO_ALLOWED_KEYS`. */
 export const REPO_ALLOWED_KEYS: readonly string[] = [
-  'tools',
   'triggers',
   'session_templates',
   'commands',
@@ -315,7 +314,7 @@ export const REPO_ALLOWED_KEYS: readonly string[] = [
 ];
 
 /** Repo-local keys that stay inert until trusted (`REPO_EXEC_KEYS`). */
-export const REPO_EXEC_KEYS: readonly string[] = ['tools', 'triggers', 'commands', 'worktree.setup', 'env'];
+export const REPO_EXEC_KEYS: readonly string[] = ['triggers', 'commands', 'worktree.setup', 'env'];
 
 export function repoAllows(path: string): boolean {
   return REPO_ALLOWED_KEYS.some((k) => path === k || path.startsWith(`${k}.`));

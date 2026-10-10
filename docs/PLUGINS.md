@@ -239,6 +239,8 @@ Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~
 | `[contributes.settings]` | `{schema = "settings.schema.json"}` | | flat JSON Schema mounted at `plugins.<id>`, validated, rendered in Settings |
 | `[provider]` | ProviderDef | | process (KPP) tracker / code-host provider, §9; needs the `provider` permission |
 
+Walkthrough of the actions and a screen acting on their subject: [plugins-guide/acting-on-work.md](plugins-guide/acting-on-work.md) (example `examples/plugins/branch-script`).
+
 ### 4.1 ScreenDef
 `{ id, title, icon?, entry: "dist/index.html", scope: "project"|"global", placement: ["tab","pane"], keep_alive = false, min_width? }`. Served at `kelta-plugin://<plugin-id>/<entry>`.
 

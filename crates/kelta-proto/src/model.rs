@@ -368,11 +368,17 @@ pub struct StatusChange {
 // Scope
 // ---------------------------------------------------------------------------------------------
 
-/// `{"kind":"project","id":"shop"}` | `{"kind":"all"}`.
+/// `{"kind":"project","id":"shop"}` | `{"kind":"source","id":"product"}` | `{"kind":"all"}`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Scope {
-    Project { id: ProjectId },
+    Project {
+        id: ProjectId,
+    },
+    /// One `[[sources]]` entry (tickets; reviews of the repos of its projects).
+    Source {
+        id: String,
+    },
     All,
 }
 

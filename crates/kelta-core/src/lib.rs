@@ -50,7 +50,7 @@ use kelta_proto::codehost::{PrDraft, ReviewItem, ReviewKind};
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, UiEvent};
+use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, ToastAction, UiEvent};
 use kelta_proto::ext::{BlockingOutcome, ProxiedRequest, ProxiedResponse, ToolHandle};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
@@ -188,6 +188,8 @@ pub struct Core {
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
     /// The global `/mcp` holds an HTTP server reference (Claude Code registration, ticket #234).
     pub(crate) claude_mcp_ref: AtomicBool,
+    /// Startup toast held until `app_ready`: the bridge drops events while no window listens.
+    boot_toast: Mutex<Option<Toast>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -341,6 +343,7 @@ impl Core {
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
                 claude_mcp_ref: AtomicBool::new(false),
+                boot_toast: Mutex::new(None),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -353,6 +356,7 @@ impl Core {
     /// Synchronous startup: state from SQLite (before window creation), config watch, Dormant
     /// sessions; async services are queued until the runtime is reachable.
     fn boot(self: &Arc<Self>) -> Result<(), KeltaError> {
+        self.migrate_trackers();
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
@@ -376,6 +380,16 @@ impl Core {
         });
         self.sync_plugin_schemas();
         apply_ticket_key_regex(&self.cfg.effective(None));
+        // The migration runs once (it empties the project files), so this toast shows once.
+        if self.config.tools_migrated() > 0 {
+            let mut t = Toast::info("Tools moved to your global settings");
+            t.action = Some(ToastAction {
+                label: "Review".into(),
+                command: "settings.open".into(),
+                args: Some(serde_json::json!({ "section": "tools" })),
+            });
+            self.emit(UiEvent::Toast { toast: t });
+        }
         let weak = self.me.clone();
         self.rt.spawn(async move {
             if let Some(core) = weak.upgrade() {
@@ -383,6 +397,30 @@ impl Core {
             }
         });
         Ok(())
+    }
+
+    /// `[project.tracker]` → global `[[sources]]` (#238), before the first ticket subscription. It
+    /// empties the project files, so the toast shows once (at `app_ready`); a failure keeps them
+    /// (read path).
+    fn migrate_trackers(&self) {
+        let toast = match self.config.migrate_project_trackers() {
+            Ok(0) => return,
+            Ok(n) => {
+                tracing::info!(blocks = n, "project trackers moved to ticket sources");
+                let mut t = Toast::info("Ticket sources moved out of your projects");
+                t.action = Some(kelta_proto::events::ToastAction {
+                    label: "Review".into(),
+                    command: "settings.open".into(),
+                    args: Some(serde_json::json!({ "section": "projects" })),
+                });
+                t
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "project trackers not moved to ticket sources");
+                Toast::error(format!("Ticket sources not moved out of your projects: {}", e.message))
+            }
+        };
+        *self.boot_toast.lock() = Some(toast);
     }
 
     /// Async startup (runs once the runtime is reachable).
@@ -520,6 +558,10 @@ impl Core {
     pub async fn app_ready(&self, t_ms: f64) -> Result<(), KeltaError> {
         self.rt.capture();
         tracing::info!(t_ms, "app ready");
+        let toast = self.boot_toast.lock().take();
+        if let Some(toast) = toast {
+            self.emit(UiEvent::Toast { toast });
+        }
         self.on_window_changed();
         self.scheduler.kick(None);
         Ok(())

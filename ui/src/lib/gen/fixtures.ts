@@ -1488,6 +1488,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "layer",
@@ -1502,6 +1503,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "plugin",
@@ -2206,6 +2208,7 @@ export const settingsDefault: Settings = {
       }
     }
   ],
+  "sources": [],
   "terminal": {
     "bell": "attention",
     "confirm_multiline_paste": true,
@@ -3470,6 +3473,14 @@ export const uiEventTicketsChanged: UiEvent = {
   "type": "tickets.changed"
 };
 
+export const uiEventTicketsChangedSource: UiEvent = {
+  "scope": {
+    "id": "product",
+    "kind": "source"
+  },
+  "type": "tickets.changed"
+};
+
 export const uiEventReviewsChanged: UiEvent = {
   "new_keys": [
     {
@@ -3784,6 +3795,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_project_removed": uiEventProjectRemoved,
   "ui_event_layout_changed": uiEventLayoutChanged,
   "ui_event_tickets_changed": uiEventTicketsChanged,
+  "ui_event_tickets_changed_source": uiEventTicketsChangedSource,
   "ui_event_reviews_changed": uiEventReviewsChanged,
   "ui_event_work_updated": uiEventWorkUpdated,
   "ui_event_settings_changed": uiEventSettingsChanged,

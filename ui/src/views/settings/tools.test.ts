@@ -83,8 +83,8 @@ describe('Add tool form', () => {
     await fireEvent.click((await screen.findAllByRole('button', { name: 'Add tool' }))[0]!);
   }
 
-  it('shows the new empty-state copy and writes a terminal tool to the project layer only', async () => {
-    const m = await mount('project');
+  it('shows the new empty-state copy and writes a terminal tool to the global layer', async () => {
+    const m = await mount('global');
     expect(await screen.findByText('Add a terminal program like lazygit, or an app like Fork.')).toBeTruthy();
     expect(
       screen.getByText('Buttons that open programs like lazygit in a pane, or apps like Fork.'),
@@ -96,15 +96,14 @@ describe('Add tool form', () => {
     expect(button.disabled).toBe(true);
     await fill('Command line', 'lazydocker');
     expect(await add(m)).toMatchObject({
-      layer: 'project',
-      project_id: 'shop',
+      layer: 'global',
       path: 'tools',
       value: [{ id: 'lazydocker', label: 'lazydocker', command: 'lazydocker' }],
     });
   });
 
   it('keeps Add disabled when the command line has an empty first token', async () => {
-    await mount('project');
+    await mount('global');
     await openForm();
     await fill('Name', 'x');
     await fill('Command line', '""');
@@ -112,7 +111,7 @@ describe('Add tool form', () => {
   });
 
   it('splits the command line and rejects an unclosed quote', async () => {
-    const m = await mount('project');
+    const m = await mount('global');
     await openForm();
     await fill('Name', 'k9s');
     await fill('Command line', 'k9s --context "my ctx');
@@ -124,15 +123,15 @@ describe('Add tool form', () => {
     ]);
   });
 
-  it('suffixes an id taken by an inherited global tool and leaves that entry alone', async () => {
-    const m = await mount('project', (ts) =>
-      ts.map((t) => (t.id === 'lazygit' ? { ...t, source: { kind: 'layer', layer: 'global' } } : t)),
+  it('suffixes an id taken by a listed tool and leaves that entry alone', async () => {
+    const m = await mount('global', (ts) =>
+      ts.map((t) => (t.id === 'lazygit' ? { ...t, source: { kind: 'plugin', plugin_id: 'git' } } : t)),
     );
     await openForm();
     await fill('Name', 'lazygit');
     await fill('Command line', 'lazygit');
     const args = (await add(m)) as { layer: string; value: { id: string }[] };
-    expect(args.layer).toBe('project');
+    expect(args.layer).toBe('global');
     expect(args.value.map((t) => t.id)).toEqual(['lazygit-2']);
   });
 
@@ -158,7 +157,7 @@ describe('Add tool form', () => {
   });
 
   it('warns when the recorded key is taken, not when it is free', async () => {
-    await mount('project');
+    await mount('global');
     await openForm();
     const rec = screen.getByTestId('tool-key');
     await fireEvent.keyDown(rec, { code: 'KeyK', key: 'K', ctrlKey: true, shiftKey: true });
@@ -173,5 +172,25 @@ describe('Add tool form', () => {
     await mount('repo');
     await screen.findByText('No tools yet');
     expect(screen.queryByRole('button', { name: 'Add tool' })).toBeNull();
+  });
+
+  it('is absent at the project layer, which points to Global', async () => {
+    const m = await mount('project');
+    await screen.findByText('No tools yet');
+    expect(screen.queryByRole('button', { name: 'Add tool' })).toBeNull();
+    expect(screen.getByTestId('tools-personal').textContent).toMatch(
+      /Tools are personal: they live in your global settings/,
+    );
+    m.calls.length = 0;
+    await fireEvent.click(screen.getByRole('button', { name: 'Go to Global' }));
+    await vi.waitFor(() =>
+      expect(
+        m.calls.some(
+          (c) => c.cmd === 'settings_layer_get' && (c.args as { layer: string }).layer === 'global',
+        ),
+      ).toBe(true),
+    );
+    expect(await screen.findAllByRole('button', { name: 'Add tool' })).not.toHaveLength(0);
+    expect(screen.queryByTestId('tools-personal')).toBeNull();
   });
 });

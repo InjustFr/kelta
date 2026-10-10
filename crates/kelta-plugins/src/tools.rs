@@ -101,26 +101,36 @@ impl State {
     }
 }
 
+/// A template field uses `{project.*}` or `{repo.*}`, which Home cannot fill.
+fn needs_project(def: &ToolDef) -> bool {
+    let start = def.start.as_ref();
+    let start_fields = start
+        .into_iter()
+        .flat_map(|s| std::iter::once(&s.command).chain(&s.args).chain(&s.cwd).chain(s.env.values()));
+    def.command
+        .iter()
+        .chain(&def.args)
+        .chain(&def.cwd)
+        .chain(def.env.values())
+        .chain(&def.url)
+        .chain(start_fields)
+        .flat_map(|s| crate::template::roots(s))
+        .any(|r| r == "project" || r == "repo")
+}
+
 fn plugin_tool_id(plugin: &PluginId, id: &str) -> String {
     format!("{plugin}/{id}")
 }
 
 impl PluginHost {
-    /// Config tools (merged by id by kelta-config) + enabled plugin tools.
-    pub(crate) fn resolve_tools(&self, project: Option<&ProjectId>) -> Vec<Resolved> {
-        let effective = self.settings(project);
-        let global = self.settings(None);
+    /// Global config tools (tools are personal: no project or repo layer) + enabled plugin tools.
+    pub(crate) fn resolve_tools(&self) -> Vec<Resolved> {
         let mut out: Vec<Resolved> = Vec::new();
-        for t in effective.tools.iter().filter(|t| t.enabled && !t.id.is_empty()) {
-            let layer = if project.is_some() && !global.tools.iter().any(|g| g == t) {
-                Layer::Project
-            } else {
-                Layer::Global
-            };
+        for t in self.settings(None).tools.iter().filter(|t| t.enabled && !t.id.is_empty()) {
             out.push(Resolved {
                 id: ToolId::new(t.id.clone()),
                 def: t.clone(),
-                source: ToolSource::Layer { layer },
+                source: ToolSource::Layer { layer: Layer::Global },
                 plugin: None,
             });
         }
@@ -140,11 +150,12 @@ impl PluginHost {
         out
     }
 
-    pub(crate) fn tool_infos(&self, project: &ProjectId) -> Vec<ToolInfo> {
+    pub(crate) fn tool_infos(&self) -> Vec<ToolInfo> {
         let checks = self.tools.checks.lock().clone();
-        self.resolve_tools(Some(project))
+        self.resolve_tools()
             .into_iter()
             .map(|r| ToolInfo {
+                needs_project: needs_project(&r.def),
                 label: if r.def.label.is_empty() { r.def.id.clone() } else { r.def.label.clone() },
                 icon: r.def.icon.clone(),
                 kind: r.def.kind,
@@ -158,19 +169,11 @@ impl PluginHost {
             .collect()
     }
 
-    fn find_tool(&self, project: Option<&ProjectId>, tool: &ToolId) -> Result<Resolved, KeltaError> {
-        self.resolve_tools(project)
+    fn find_tool(&self, tool: &ToolId) -> Result<Resolved, KeltaError> {
+        self.resolve_tools()
             .into_iter()
             .find(|r| &r.id == tool)
             .ok_or_else(|| KeltaError::not_found(format!("tool `{tool}` not found")))
-    }
-
-    /// `tool_check` has no project: global + plugin tools first, then each project's config tools.
-    fn find_tool_any(&self, tool: &ToolId) -> Result<Resolved, KeltaError> {
-        self.find_tool(None, tool).or_else(|e| {
-            let projects = self.wiring().settings.map(|s| s.projects()).unwrap_or_default();
-            projects.iter().find_map(|p| self.find_tool(Some(&p.id), tool).ok()).ok_or(e)
-        })
     }
 
     fn program_of(def: &ToolDef) -> Option<&str> {
@@ -192,7 +195,7 @@ impl PluginHost {
     }
 
     pub(crate) async fn check_tool(&self, tool: &ToolId) -> Result<ToolCheck, KeltaError> {
-        let r = self.find_tool_any(tool)?;
+        let r = self.find_tool(tool)?;
         let vars = self.build_vars(CtxSpec { plugin: r.plugin.as_deref(), ..Default::default() }).await;
         let hint = r.def.install_hint.clone();
         // Same PATH the tool will launch with (see `launch_env`).
@@ -225,7 +228,7 @@ impl PluginHost {
         ctx: TemplateCtx,
         placement: Option<Placement>,
     ) -> Result<ToolHandle, KeltaError> {
-        let r = self.find_tool(Some(project), tool)?;
+        let r = self.find_tool(tool)?;
         let placement = placement.unwrap_or(r.def.placement);
         if let Some(e) = &r.plugin {
             self.mark_activated(&e.id);
