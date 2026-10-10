@@ -4,7 +4,7 @@ import type { NextUpItem, TicketItem, TicketRef } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { tickets } from '$lib/stores';
+import { projects, tickets } from '$lib/stores';
 import { ticketListKey } from '$lib/stores/tickets.svelte';
 
 import { currentSections } from './now';
@@ -96,6 +96,14 @@ describe('against the mock transport', () => {
     expect(mock.calls.filter((c) => c.cmd === 'ticket_seen')).toHaveLength(1);
     expect(ticketPool().length).toBeGreaterThan(0);
     expect(ticketPool().some((t) => nextUp.isNew(t.ticket.ref))).toBe(false);
+    // Unassigned tickets are not baselined: assigned to me later, they are New.
+    const loose = mock.state.tickets.find((t) => !t.ticket.assignee)!;
+    expect(nextUp.isNew(loose.ticket.ref)).toBe(false);
+    loose.ticket.assignee = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
+    await loadPool(true);
+    expect(nextUp.isNew(loose.ticket.ref)).toBe(true);
+    loose.ticket.assignee = null;
+    await loadPool(true);
     const ids = currentSections().map((s) => s.id);
     expect(ids).toContain('up_next');
     expect(ids).not.toContain('new');
@@ -106,6 +114,7 @@ describe('against the mock transport', () => {
   });
 
   it('prune drops closed tickets, and missing ones only when both lists are whole', async () => {
+    await projects.load();
     listed('SHOP-151', '4590', '#15');
     mock.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-151')!.ticket.status.category = 'done';
     mock.state.tickets = mock.state.tickets.filter((t) => t.ticket.ref.key !== '#15');
@@ -125,5 +134,15 @@ describe('against the mock transport', () => {
     await nextUp.prune();
     expect(listedKeys()).toEqual(['4590']);
     expect(mock.state.nextUp.items.map((i) => i.ticket.key)).toEqual(['4590']);
+  });
+
+  it('prune keeps the items of a closed project (its tickets are not listed)', async () => {
+    await projects.load();
+    listed('SHOP-151');
+    mock.state.tickets = mock.state.tickets.filter((t) => t.ticket.ref.key !== 'SHOP-151');
+    await loadPool(true);
+    projects.list = projects.list.map((p) => (p.id === 'shop' ? { ...p, open: false } : p));
+    await nextUp.prune();
+    expect(listedKeys()).toEqual(['SHOP-151']);
   });
 });

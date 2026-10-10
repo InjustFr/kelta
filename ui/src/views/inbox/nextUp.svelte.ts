@@ -4,7 +4,7 @@
 
 import type { NextUpItem, ProjectId, TicketItem, TicketRef } from '$lib/gen';
 import { nextUpList, nextUpPut, nextUpRemove, ticketSeen } from '$lib/ipc/commands';
-import { tickets, toasts, work } from '$lib/stores';
+import { projects, tickets, toasts, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 const ALL = { kind: 'all' } as const;
@@ -89,9 +89,17 @@ class NextUpStore {
     }
   }
 
-  /** Unseen: before the first load nothing is New (no flash of badges). */
+  /** Unseen and assigned to me: before the first load nothing is New (no flash of badges). */
+  isNewKey(key: string): boolean {
+    return (
+      this.loaded &&
+      !(key in this.seen) &&
+      tickets.items(ALL, null, 'mine').some((t) => ticketKey(t.ticket.ref) === key)
+    );
+  }
+
   isNew(ref: TicketRef): boolean {
-    return this.loaded && !(ticketKey(ref) in this.seen);
+    return this.isNewKey(ticketKey(ref));
   }
 
   /** Listed or snoozed: left out of Up next and New. */
@@ -158,14 +166,14 @@ class NextUpStore {
   }
 
   /**
-   * First run (nothing seen yet): every ticket already loaded counts as seen, so `New` means
-   * assigned since then, not everything open on the day of the upgrade.
+   * First run (nothing seen yet): every ticket already assigned to me counts as seen, so `New` means
+   * assigned since then, not everything open on the day of the upgrade (unassigned ones are never New).
    */
   async baseline(): Promise<void> {
     const mine = tickets.list(ALL, null, 'mine');
     if (!this.loaded || Object.keys(this.seen).length || !mine.data || mine.error) return;
     // shortcut: with no ticket loaded yet no baseline is set, so the first ones to arrive later count as seen.
-    const refs = ticketPool().map((t) => t.ticket.ref);
+    const refs = mine.data.items.map((t) => t.ticket.ref);
     if (!refs.length) return;
     this.seen = Object.fromEntries(refs.map((r) => [ticketKey(r), true]));
     await ticketSeen({ tickets: refs }).catch((err) => toasts.error(err, 'Marking tickets seen'));
@@ -174,7 +182,8 @@ class NextUpStore {
   /**
    * The Now refresh, after the lists load: drops the items whose ticket closed or was started, and,
    * when both lists came back whole (no error, no further page), the ones neither list has any more
-   * (closed in a view that hides done tickets, or given to someone else).
+   * (closed in a view that hides done tickets, or given to someone else). The lists only cover open
+   * projects, so an item of a closed project is kept.
    */
   async prune(): Promise<void> {
     const lists = (['mine', 'unassigned'] as const).map((w) => tickets.list(ALL, null, w));
@@ -183,7 +192,8 @@ class NextUpStore {
     for (const [key, e] of Object.entries(this.entries)) {
       if (e.rank === null) continue;
       const t = pool.get(key);
-      if (t ? !isOpen(t) || started(t) : whole) await this.remove(e.ticket);
+      if (t ? !isOpen(t) || started(t) : whole && projects.openProjects.some((p) => p.id === e.project_id))
+        await this.remove(e.ticket);
     }
   }
 

@@ -22,7 +22,7 @@
     groomQueue(
       ticketPool(),
       nextUp.entries,
-      (k) => nextUp.loaded && !(k in nextUp.seen),
+      (k) => nextUp.isNewKey(k),
       (t) => work.forTicket(t.ticket.ref) !== null,
       Date.now(),
     ),
