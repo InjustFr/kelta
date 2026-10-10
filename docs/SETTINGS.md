@@ -77,7 +77,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `session_host` | enum(inprocess\|daemon) | `daemon` | restart; global. `daemon` = PTYs live in `keltad`: sessions survive quit and re-attach on the next start (falls back to `inprocess` when keltad cannot start) |
 
 ### [linux.graphics]  (x-kelta-scope global, x-kelta-restart; read by `platform::pre_init` with a minimal TOML parse)
-| `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds |
+| `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds; auto also turns compositing off without a GPU render node (`/dev/dri/renderD*`) |
 | `auto_nvidia` | bool | `true` | NVIDIA proprietary → dmabuf off + explicit sync off |
 | `disable_dmabuf` | bool | `false` | `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
 | `disable_compositing` | bool | `false` | `WEBKIT_DISABLE_COMPOSITING_MODE=1` |

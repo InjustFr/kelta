@@ -93,6 +93,7 @@ export interface Commands {
   // ---- app ---------------------------------------------------------------------------------
   app_info: { args: NoArgs; result: AppInfo };
   app_ready: { args: { t_ms: number }; result: null };
+  bench_mark: { args: { key: string; value: number }; result: null };
   events_subscribe: { args: { channel: IpcChannel<UiEvent> }; result: SubscribeResult };
   open_external: { args: { url: string }; result: null };
   perf_snapshot: { args: NoArgs; result: PerfSnapshot };
@@ -240,6 +241,7 @@ export type CommandResult<K extends CommandName> = Commands[K]['result'];
 export const COMMAND_NAMES = [
   'app_info',
   'app_ready',
+  'bench_mark',
   'events_subscribe',
   'open_external',
   'perf_snapshot',
@@ -375,6 +377,7 @@ function wrap<K extends CommandName>(cmd: K): Wrapper<K> {
 // ---- app ------------------------------------------------------------------------------------
 export const appInfo = wrap('app_info');
 export const appReady = wrap('app_ready');
+export const benchMark = wrap('bench_mark');
 export const openExternal = wrap('open_external');
 export const perfSnapshot = wrap('perf_snapshot');
 export const diagnosticsRun = wrap('diagnostics_run');

@@ -50,6 +50,9 @@ It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fm
 
 `scripts/linux-check.sh` repeats the checks on Ubuntu 24.04 (`docker/ubuntu-build.Dockerfile`), which is the
 primary Linux target. Run it when you touch `platform/`, `window/`, packaging or anything with `cfg(target_os)`.
+`scripts/linux-gui-check.sh` runs the release app under headless sway in the same image and measures the gate G2
+latency budgets with kelta-bench (slow; run it when you touch the terminal path or Linux graphics). Its timings
+follow the host load, so measure on an idle machine.
 
 ## CI
 

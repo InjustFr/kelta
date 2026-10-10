@@ -1,0 +1,11 @@
+# Gate G2 (BUILD_PLAN §6): the Linux latency budgets only. scripts/linux-gui-check.sh passes it with
+# --budgets; the other metrics of these scenarios are still printed, against no budget.
+
+[echo-latency.echo_frames_p95]
+max = 2.0
+
+[ink-redraw.frame_p95_ms]
+max = 25.0
+
+[flood.echo_max_ms]
+max = 50.0
