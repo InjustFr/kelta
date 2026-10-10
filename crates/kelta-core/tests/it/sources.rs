@@ -14,6 +14,7 @@ use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::model::Scope;
 use kelta_proto::settings::{AccountKind, RepoMatch, Settings, Source, SourceRoute, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
+use kelta_proto::tracker::Who;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
 
 fn view(id: &str, jql: &str) -> TrackerView {
@@ -135,6 +136,42 @@ async fn a_fetch_emits_tickets_changed_for_the_source_scope() {
     let changed =
         h.ui.events().into_iter().any(|e| matches!(e, UiEvent::TicketsChanged { scope } if scope == team));
     assert!(changed, "{:?}", h.ui.event_names());
+}
+
+#[tokio::test]
+async fn now_lists_my_tickets_of_a_source_feeding_no_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    // Now's Up next reads `tracker_list(All, None, Mine)`
+    let all = h.core.tracker_list(Scope::All, None, Some(Who::Mine), None, true).await.unwrap();
+    assert!(all.items.iter().any(|i| i.source_ids.contains(&"team".to_owned())));
+    let team = h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, true).await.unwrap();
+    assert!(!team.items.is_empty());
+    assert!(team.items.iter().all(|i| i.source_ids == ["team"] && i.project_ids.is_empty()));
+}
+
+#[tokio::test]
+async fn a_tickets_pane_narrowed_to_a_source_polls_only_that_source() {
+    use kelta_proto::model::{PaneContent, TicketsMode};
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    h.cfg.update(|s| s.notifications.enabled = false);
+    let pane = |source_id: Option<&str>| PaneContent::Tickets {
+        scope: Scope::All,
+        view_id: None,
+        source_id: source_id.map(Into::into),
+        mode: TicketsMode::List,
+        who: None,
+        group: None,
+        sort: None,
+        person: None,
+    };
+    h.core.ui_set_global_view(Some(pane(None)));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 4);
+    h.core.ui_set_global_view(Some(pane(Some("team"))));
+    settle().await;
+    assert_eq!(h.core.scheduler_snapshot().subscriptions, 1);
 }
 
 #[tokio::test]
