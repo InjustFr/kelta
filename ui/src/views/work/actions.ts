@@ -22,6 +22,7 @@ import { prompts } from '../../shell/confirm.svelte';
 import { currentTab, revealSession } from '../../shell/nav';
 import {
   askClaudeToResolve,
+  fixChecks,
   fixItem,
   forcePushItem,
   openConflicts,
@@ -263,6 +264,13 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     label: (c) => c.phase.primaryLabel,
     blocked: () => null,
     run: (c) => step(c, failedStep(c)),
+  },
+  {
+    id: 'fix_checks',
+    key: null,
+    label: (c) => c.phase.primaryLabel,
+    blocked: (c) => (hasPr(c) ? null : 'Needs a PR'),
+    run: async ({ item }) => fixChecks(item),
   },
   {
     id: 'start_now',

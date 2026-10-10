@@ -219,7 +219,17 @@
               {
                 "commit": {
                   "statusCheckRollup": {
-                    "state": "FAILURE"
+                    "state": "FAILURE",
+                    "contexts": {
+                      "nodes": [
+                        { "name": "test (ubuntu)", "conclusion": "FAILURE" },
+                        { "name": "build", "conclusion": "SUCCESS" },
+                        { "name": "e2e", "conclusion": "TIMED_OUT" },
+                        { "name": "pending", "conclusion": null },
+                        { "context": "ci/jenkins", "state": "ERROR" },
+                        { "context": "ci/legacy", "state": "SUCCESS" }
+                      ]
+                    }
                   }
                 }
               }

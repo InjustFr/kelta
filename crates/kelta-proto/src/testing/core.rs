@@ -582,6 +582,11 @@ impl CoreApi for FakeCore {
         self.toasts.lock().push(t);
     }
 
+    async fn clipboard_copy(&self, text: String) -> Result<(), KeltaError> {
+        self.record("clipboard_copy", serde_json::json!({ "text": text }));
+        self.overridden("clipboard_copy").unwrap_or(Ok(()))
+    }
+
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
         self.record(
             "http_fetch",

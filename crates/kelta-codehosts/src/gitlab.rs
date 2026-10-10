@@ -182,6 +182,7 @@ impl GitlabHost {
             source_branch: branch.clone(),
             target_branch: s(v, "target_branch").unwrap_or("").to_owned(),
             ci: ci_from(pipeline.and_then(|p| s(p, "status"))),
+            failed_check_names: vec![],
             decision: if blocked {
                 Some(ReviewDecision::ChangesRequested)
             } else {
@@ -742,7 +743,7 @@ impl CodeHost for GitlabHost {
             let log_tail = match j.get("id").and_then(Value::as_u64) {
                 Some(id) if i < MAX_LOGS => {
                     let req = HttpRequest::get(self.project_url(&r.repo, &format!("/jobs/{id}/trace")));
-                    self.auth.send_text(req).await.ok().map(|t| log_tail(&t.body))
+                    self.auth.send_text(req).await.ok().map(|t| log_tail(&t.body, false))
                 }
                 _ => None,
             };

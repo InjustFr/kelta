@@ -134,6 +134,7 @@ async fn authored_list_uses_created_by_me() {
     assert_eq!(list[0].kind, ReviewKind::Authored);
     assert_eq!(list[0].my_state, None);
     assert_eq!(list[0].ci, CiState::Pending);
+    assert!(list[0].failed_check_names.is_empty(), "the MR list has no job names");
     assert_eq!(list[0].waiting_on, ["anna", "bob"], "zed approved");
     assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-28T10:00:00Z"), "the oldest pending request");
 }

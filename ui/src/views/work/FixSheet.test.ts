@@ -8,7 +8,13 @@ import { setTransport } from '$lib/ipc/transport';
 import { sessions, toasts, work } from '$lib/stores';
 
 import FixSheet from './FixSheet.svelte';
-import { conflictsMarkdown, feedbackEntries, feedbackMarkdown } from './fixloop.svelte';
+import {
+  conflictsMarkdown,
+  feedbackEntries,
+  feedbackMarkdown,
+  fixChecks,
+  promptTemplate,
+} from './fixloop.svelte';
 
 let mock: MockControls;
 
@@ -63,17 +69,42 @@ describe('FixSheet', () => {
     expect(args.files[0]!.content).toContain('ci / test');
   });
 
-  it('refuses to send while Claude works and when hooks are inactive', async () => {
+  it('sends to a busy Claude when it stops, enabled', async () => {
     const c = claudeOf(pr());
     sessions.byId = { ...sessions.byId, [c.id]: { ...c, status: 'needs_input' } };
-    mountSheet();
-    expect(await screen.findByText('Claude is busy; send when it stops.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Send to Claude/ }) as HTMLButtonElement).disabled).toBe(true);
+    const onclose = mountSheet();
+    await waitFor(() => expect(screen.getAllByTestId('fix-item')).toHaveLength(3));
+    const button = screen.getByRole('button', { name: /Send when Claude stops/ }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await fireEvent.click(button);
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(sent()).toBeTruthy();
+    expect(toasts.list.some((t) => t.toast.text.startsWith('Sent '))).toBe(false); // core toasts the hold
+  });
+
+  it('stays enabled when hooks are inactive (core copies the prompt)', async () => {
+    const c = claudeOf(pr());
     sessions.byId = { ...sessions.byId, [c.id]: { ...c, status: 'done', status_source: 'heuristic' } };
+    mountSheet();
     expect(await screen.findByText(/status hooks inactive/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Send to Claude/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(mock.calls.some((x) => x.cmd === 'work_send')).toBe(false);
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /Send to Claude/ }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+  });
+
+  it('opens with the checks template when the feedback is failed checks only', async () => {
+    const saved = { threads: samples.feedback.threads, reviews: samples.feedback.reviews };
+    Object.assign(samples.feedback, { threads: [], reviews: [] });
+    try {
+      mountSheet();
+      await waitFor(() => expect(screen.getAllByTestId('fix-item')).toHaveLength(1));
+      expect((screen.getByLabelText('Prompt') as HTMLTextAreaElement).value).toBe(promptTemplate('checks'));
+    } finally {
+      Object.assign(samples.feedback, saved);
+    }
   });
 
   it('shows the host refusal and can send without feedback', async () => {
@@ -87,6 +118,32 @@ describe('FixSheet', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Send to Claude/ }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(sent()!.files).toEqual([]);
+  });
+});
+
+describe('fixChecks (Checks failed, Enter)', () => {
+  it('sends the failed checks only, with the checks template and feedback.md', async () => {
+    await fixChecks(pr());
+    const args = sent()!;
+    expect(args.prompt).toBe(promptTemplate('checks'));
+    expect(args.threads).toBeNull();
+    expect(args.files.map((f) => f.name)).toEqual(['feedback.md']);
+    expect(args.files[0]!.content).toContain('## Failed checks');
+    expect(args.files[0]!.content).not.toContain('## Unresolved threads');
+    expect(args.files[0]!.content).not.toContain('## Reviews');
+    expect(toasts.list.at(-1)?.toast.text).toBe('Sent 1 failed check to Claude.');
+  });
+
+  it('with no failed check left, toasts and sends nothing', async () => {
+    const saved = samples.feedback.failed_checks;
+    samples.feedback.failed_checks = [];
+    try {
+      await fixChecks(pr());
+    } finally {
+      samples.feedback.failed_checks = saved;
+    }
+    expect(mock.calls.some((c) => c.cmd === 'work_send')).toBe(false);
+    expect(toasts.list.at(-1)?.toast.text).toBe('No failed check on #13 any more.');
   });
 });
 
