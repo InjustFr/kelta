@@ -31,7 +31,9 @@ function mountReviews() {
 describe('ReviewsPane linked tickets', () => {
   it('a linked ticket badge opens that ticket without opening the review', async () => {
     mountReviews();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Open SHOP-120' }));
+    const badge = await screen.findByRole('button', { name: 'Open SHOP-120' });
+    await fireEvent.dblClick(badge); // would open the review if it reached the row
+    await fireEvent.click(badge);
     await waitFor(() => {
       const l = layout.get('shop')!;
       expect(findContent(l, (c) => c.kind === 'ticket_detail' && c.ticket.key === 'SHOP-120')).toBeTruthy();

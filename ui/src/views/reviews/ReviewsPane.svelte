@@ -312,6 +312,7 @@
                   {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
                       ticketKey={t}
                       {projectId}
+                      repo={rv.ref.repo}
                       tabindex={-1}
                     />{/each}
                   {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}

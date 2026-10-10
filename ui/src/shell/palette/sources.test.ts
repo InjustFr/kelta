@@ -116,6 +116,7 @@ describe('palette sources', () => {
       ticket: hits[0]!.ticket.ref,
       assignee: { kind: 'me' },
     });
+    await import('../../views/tickets/actions'); // registered late: an earlier test needs tickets.open absent
     await items.find((i) => i.label === `Open ${key} in browser`)!.run();
     expect(mock.calls.find((c) => c.cmd === 'open_external')?.args).toMatchObject({
       url: hits[0]!.ticket.url,

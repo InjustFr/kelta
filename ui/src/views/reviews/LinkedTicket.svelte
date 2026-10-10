@@ -8,15 +8,16 @@
   interface Props {
     ticketKey: string;
     projectId: ProjectId;
+    repo: string;
     /** -1 in the list (the pane owns the keyboard), 0 where the badge is the only way in. */
     tabindex?: 0 | -1;
   }
 
-  let { ticketKey, projectId, tabindex = 0 }: Props = $props();
+  let { ticketKey, projectId, repo, tabindex = 0 }: Props = $props();
 
   function open(e: Event): void {
     e.stopPropagation();
-    void openLinkedTicket(ticketKey, projectId);
+    void openLinkedTicket(ticketKey, projectId, repo);
   }
 </script>
 
@@ -27,6 +28,7 @@
   title={`Open ${ticketKey}`}
   aria-label={`Open ${ticketKey}`}
   onclick={open}
+  ondblclick={(e) => e.stopPropagation()}
   onkeydown={(e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -49,7 +51,7 @@
   }
 
   .link:focus-visible {
-    outline: 1px solid var(--k-focus);
+    outline: 2px solid var(--k-focus);
     outline-offset: 1px;
   }
 </style>

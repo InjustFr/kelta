@@ -8,7 +8,7 @@ import type { CommandDef, ProjectId, SessionInfo, TicketItem } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
-import { openExternal, trackerAssign } from '$lib/ipc/commands';
+import { trackerAssign } from '$lib/ipc/commands';
 import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools } from '$lib/stores';
 import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
@@ -267,13 +267,12 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
         toasts.error(err, `Assigning ${ref.key}`);
       }
     }),
-    verb('browser', `Open ${ref.key} in browser`, 'external-link', async () => {
-      try {
-        await openExternal({ url });
-      } catch (err) {
-        toasts.error(err, 'Open in browser');
-      }
-    }),
+    verb(
+      'browser',
+      `Open ${ref.key} in browser`,
+      'external-link',
+      () => void dispatch('tickets.open_in_browser', { url }),
+    ),
   ];
 }
 

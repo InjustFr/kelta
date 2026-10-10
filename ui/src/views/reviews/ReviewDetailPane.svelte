@@ -187,7 +187,7 @@
         <span class="check"><Lamp level={ci.lamp} title={ci.label} />{ci.label}</span>
         {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
         {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-        {#each rv.linked_tickets as t (t)}<LinkedTicket ticketKey={t} {projectId} />{/each}
+        {#each rv.linked_tickets as t (t)}<LinkedTicket ticketKey={t} {projectId} repo={rv.ref.repo} />{/each}
       </div>
       <h1>{rv.title}</h1>
       <p class="branches"><code>{rv.source_branch}</code> into <code>{rv.target_branch}</code></p>
