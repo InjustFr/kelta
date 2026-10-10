@@ -126,7 +126,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
-- **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids.
+- **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids. MCP tools: `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `add_review_comment{path, line, body}` (line comment on the pending review of the PR under review in the session's review-kind work item, via `CodeHost::add_pending_comment`; published by the user's a / c / m in the review detail), `notify` (PLUGINS §8).
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
 - **Bundling:** `kelta-ctl` is added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
@@ -467,7 +467,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_get` | `{review: ReviewRef}` | `ReviewDetail` | |
 | `review_approve` | `{review, head_sha}` | `()` (`Conflict` if head moved) | |
 | `review_comment` | `{review, body}` | `()` | |
-| `review_request_changes` | `{review, body}` | `()` | |
+| `review_request_changes` | `{review, body}` | `()` | publishes my pending line comments too (as do `review_approve` / `review_comment`) |
 | **work** | | | `commands/work.rs` (L6) |
 | `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name}*/}` | `StartWorkPlan` (§SPEC 3.1) | |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
@@ -663,11 +663,19 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
   async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
   async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+  // Line comment (new-side `line` of `path`) on MY pending review, created on first use. approve /
+  // comment / request_changes publish the pending review with the decision (GitHub: review events
+  // endpoint; GitLab: draft_notes + bulk_publish). Default: Unsupported.
+  async fn add_pending_comment(&self, r: &ReviewRef, path: &str, line: u32, body: &str) -> Result<(), KeltaError>;
   async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
   async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
   fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String; // pull/N/head:… | merge-requests/N/head:…
   fn repo_from_remote(&self, url: &str) -> Option<String>;
 }
+// Review.reviewed_head = commit of my last submitted review (ReviewRequested kind). With head_sha it gives
+// pending / "Updated since your review" / "Reviewed". GitHub ReviewRequested lists add a second search
+// `is:pr is:open reviewed-by:@me` (user-review-requested drops a PR once I review) and keep only the PRs
+// whose head moved since my review. ReviewDetail.pending_comments = line comments waiting in my pending review.
 pub struct ReviewRef { account: AccountId, repo: String, number: u64 }
 pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, source_branch, target_branch,
   ci: CiState /*Success|Failure|Pending|Error|None*/, decision: Option<ReviewDecision /*Approved|ChangesRequested|ReviewRequired*/>,
@@ -756,7 +764,7 @@ All writes go through the single sqlite thread. Startup reads (open projects, la
 ### 11.3 Plugins
 - Plugin screens: `<iframe sandbox="allow-scripts allow-forms">` (no `allow-same-origin`, no popups, no top-navigation) loading `kelta-plugin://<id>/<path>`; the scheme handler serves only canonicalized files inside the plugin dir and adds `Content-Security-Policy: default-src 'self' kelta-plugin://<id>; script-src kelta-plugin://<id>; style-src kelta-plugin://<id> 'unsafe-inline'; img-src kelta-plugin://<id> data:; connect-src 'none'; frame-ancestors 'self'`.
 - Bridge: host creates a `MessageChannel` per instance, transfers `port2` only after verifying `event.source === iframe.contentWindow`; every call → `plugin_call(instance_id, method, params)`; Rust checks the plugin's grants (SQLite) and the method's required permission (PLUGINS.md §4). `net:<host>` is enforced in Rust (`http_fetch`), exact host or `*.domain` glob, https only (http only for `127.0.0.1`/`localhost` when granted explicitly). Grants are re-prompted when a manifest update adds permissions.
-- **Security gate S1 (CI):** automated test that a sandboxed plugin iframe and a localhost tool iframe cannot reach `window.__TAURI_INTERNALS__`, `window.parent` DOM, or invoke any command, on WKWebView and WebKitGTK.
+- **Security gate S1:** a sandboxed plugin iframe and a localhost tool iframe cannot reach `window.__TAURI_INTERNALS__`, `window.parent` DOM, or invoke any command, on WKWebView and WebKitGTK: automated on WebKitGTK by `scripts/sandbox-check.sh`, manual on WKWebView (BUILD_PLAN §6.1). Iframes can post to `window.webkit.messageHandlers.ipc`; Tauri's per-launch invoke key (main frame only) is what rejects those messages.
 - Declarative tools/triggers from repo-local `.kelta/config.toml` that execute anything (`command`, `run`, `setup`, `http`) are **inert until trusted**: trust = SHA-256 of the file content stored in `repo_trust`; any change → untrusted again (banner).
 - Trigger engine: recursion guard (depth ≤ 4, a trigger never re-fires within a chain it started), per-trigger rate limit (10 runs / 60 s), `send_keys` requires `allow_send_keys = true` on the trigger and is rate-limited (1 / 2 s per session).
 

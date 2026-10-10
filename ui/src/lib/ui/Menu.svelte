@@ -143,10 +143,10 @@
     min-width: 180px;
     max-width: 360px;
     padding: var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    background: var(--k-bg-elev);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
   }
 
   button {
@@ -192,5 +192,9 @@
     height: 1px;
     margin: var(--k-space-2) 0;
     background: var(--k-border);
+  }
+
+  button :global(.k-kbd) {
+    color: var(--k-fg-subtle);
   }
 </style>

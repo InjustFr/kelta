@@ -8,14 +8,13 @@
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { projects, reviews, tickets, toasts, work } from '$lib/stores';
-  import { Button, EmptyState, ErrorState, IconButton, Kbd, VirtualList, relativeTime } from '$lib/ui';
+  import { Button, EmptyState, ErrorState, IconButton, Kbd, Lamp, VirtualList, relativeTime } from '$lib/ui';
 
-  import AttentionDot from '../../shell/AttentionDot.svelte';
-  import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
+    import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { openFromNow } from '../work/nav';
-  import { workKey, type Lamp, type WorkActionId } from '../work/phase';
+  import { workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -56,7 +55,7 @@
   });
 
   interface View {
-    lamp: Lamp;
+    lamp: LampKind;
     id: string;
     title: string;
     project: string | null;
@@ -393,7 +392,7 @@
           {#snippet row(l)}
             {#if l.type === 'section'}
               <div class="section" role="heading" aria-level="2" data-section={l.section.id}>
-                <span class="slot"><AttentionDot level={l.section.lamp} size={8} title="" /></span>
+                <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
                 {l.section.label}
                 <span class="count">{l.count}</span>
               </div>
@@ -415,7 +414,7 @@
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
                 >
-                  <span class="slot"><AttentionDot level={v.lamp} size={8} /></span>
+                  <span class="slot"><Lamp level={v.lamp} /></span>
                   <span class="id">{v.id}</span>
                   <span class="ttl">{v.title}</span>
                   {#if v.project}<span class="proj">{v.project}</span>{/if}

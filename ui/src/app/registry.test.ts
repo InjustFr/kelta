@@ -25,7 +25,7 @@ describe('registries', () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  }, 60_000); // cold-transforms every view (slow on a loaded machine)
+  }, 90_000); // cold-transforms every view
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
@@ -59,5 +59,5 @@ describe('registries', () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  }, 60_000); // cold transforms
+  }, 90_000); // cold-transforms every section
 });

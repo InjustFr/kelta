@@ -93,7 +93,7 @@
         <h3>Environment</h3>
         <dl>
           <dt>Version</dt>
-          <dd>{info.version} · {info.platform}/{info.arch}</dd>
+          <dd>{info.version}&ensp;<code>{info.platform}/{info.arch}</code></dd>
           <dt>Config</dt>
           <dd><code>{info.config_dir}</code></dd>
           <dt>Data</dt>
@@ -102,7 +102,7 @@
           <dd><code>{info.runtime_dir}</code></dd>
           {#if info.claude}
             <dt>Claude</dt>
-            <dd><code>{info.claude.path}</code> · {info.claude.version}</dd>
+            <dd>{info.claude.version}&ensp;<code>{info.claude.path}</code></dd>
           {/if}
           {#if info.safe_graphics}
             <dt>Graphics</dt>

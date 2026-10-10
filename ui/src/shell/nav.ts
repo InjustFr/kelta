@@ -36,6 +36,7 @@ import {
   type PaneNode,
 } from '$lib/layout';
 import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
+import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
 
 import { phaseNow } from '../views/work/live';
@@ -352,6 +353,15 @@ function sessionLamp(s: SessionInfo | null): Lamp {
   if (!s) return 'none';
   if (s.work_item_id && s.attention === 'done') return 'none';
   return s.attention;
+}
+
+/** One lamp for a set of sessions (a ticket's work item). */
+export function sessionsLamp(ids: (SessionId | null)[]) {
+  const tabSessions = ids.filter((s): s is SessionId => s !== null).map((s) => sessions.get(s));
+  return lampOf(
+    maxAttention(tabSessions.map((s) => s?.attention ?? 'none')),
+    tabSessions.some((s) => s?.status === 'working'),
+  );
 }
 
 /** Tab lamp: its sessions, and for a work tab the item's phase (FLOW §2.3). */

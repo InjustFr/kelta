@@ -1,6 +1,7 @@
 // Pure helpers shared by the work views (tickets, reviews, inbox, start-work sheet, work header).
 
 import type { AccountError, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
+import type { LampLevel } from '$lib/stores/reducers';
 
 // ---- plan validation ------------------------------------------------------------------------
 
@@ -229,17 +230,18 @@ export function columnFor<C extends { id: string; name: string; category: string
   );
 }
 
-export function ciGlyph(state: string): { glyph: string; tone: Tone; label: string } {
+/** CI state as a lamp: passed = done dot, failed = error diamond, running = working ring. */
+export function ciGlyph(state: string): { lamp: LampLevel; label: string } {
   switch (state) {
     case 'success':
-      return { glyph: '✓', tone: 'ok', label: 'CI passed' };
+      return { lamp: 'done', label: 'CI passed' };
     case 'failure':
     case 'error':
-      return { glyph: '✗', tone: 'danger', label: 'CI failed' };
+      return { lamp: 'error', label: 'CI failed' };
     case 'pending':
-      return { glyph: '●', tone: 'warn', label: 'CI running' };
+      return { lamp: 'working', label: 'CI running' };
     default:
-      return { glyph: '–', tone: 'neutral', label: 'No CI' };
+      return { lamp: 'none', label: 'No CI' };
   }
 }
 
@@ -269,4 +271,28 @@ export function myStateInfo(state: string | null): { label: string; tone: Tone }
     default:
       return null;
   }
+}
+
+// ---- review-kind items (FLOW §2.2, §4.7) -----------------------------------------------------
+
+export type ReviewPhase = 'pending' | 'updated' | 'reviewed';
+
+/**
+ * Where a PR I review stands: `pending` (Review requests), `updated` (the head moved after my
+ * review: back in Review requests as "Updated since your review"), `reviewed` (Ship and clean up).
+ */
+export function reviewPhase(r: {
+  my_state: string | null;
+  head_sha: string;
+  reviewed_head?: string | null;
+}): ReviewPhase {
+  if (r.reviewed_head && r.reviewed_head !== r.head_sha) return 'updated';
+  return r.my_state === null || r.my_state === 'pending' ? 'pending' : 'reviewed';
+}
+
+/** Why a work action is unavailable on a review-kind item (a `kelta/pr-<n>` checkout is never pushed). */
+export const REVIEW_READONLY = 'Review checkout: read-only';
+const READONLY_KEYS = ['p', 'r', 'f', 'l'];
+export function workActionDisabled(item: { kind: string }, key: string): string | null {
+  return item.kind === 'review' && READONLY_KEYS.includes(key) ? REVIEW_READONLY : null;
 }

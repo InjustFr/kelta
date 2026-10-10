@@ -165,7 +165,7 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
-    /// Confirm quit if a Claude session is Working/NeedsInput.
+    /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
@@ -1615,7 +1615,7 @@ install_hint = "brew install lazydocker"
 id = "isl"
 label = "Sapling ISL"
 kind = "web"
-start = { command = "sl", args = ["web", "--port", "{port}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
+start = { command = "sl", args = ["web", "--no-open", "--foreground", "--json", "--port", "{port}", "--cwd", "{repo.path}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
 embed = "auto"
 url_is_secret = true
 

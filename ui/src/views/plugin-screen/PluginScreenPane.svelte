@@ -150,7 +150,7 @@
     flex: 1;
     width: 100%;
     border: 0;
-    background: var(--k-bg);
+    background: var(--k-well);
   }
 
   iframe.hidden {
@@ -160,7 +160,6 @@
   .loading {
     display: flex;
     flex: 1;
-    align-items: center;
-    justify-content: center;
+    padding: var(--k-space-5);
   }
 </style>

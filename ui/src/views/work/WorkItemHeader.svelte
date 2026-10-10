@@ -6,10 +6,9 @@
   import { settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
-  import { Badge, Button, currentPlatform, Icon, Kbd, Menu, type MenuItem } from '$lib/ui';
+  import { Badge, Button, currentPlatform, Icon, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
-  import AttentionDot from '../../shell/AttentionDot.svelte';
-  import { focusedSessionId } from '../../shell/nav';
+    import { focusedSessionId } from '../../shell/nav';
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
   import { MoveController } from '../tickets/move.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
@@ -117,7 +116,7 @@
 
 {#if item && phase}
   <div class="bar" role="toolbar" aria-label="Work item" data-testid="work-header" data-phase={phase.id}>
-    <span class="lamp"><AttentionDot level={phase.lamp} size={8} title={phase.label} /></span>
+    <span class="lamp"><Lamp level={phase.lamp} title={phase.label} /></span>
     <span class="key">{workKey(item)}</span>
     <span class="ttl" title={workTitle(item)}>{workTitle(item)}</span>
     {#if ticketRef}
@@ -224,11 +223,12 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: var(--k-space-3);
-    min-height: 30px;
-    padding: 0 var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    flex-wrap: wrap;
+    gap: var(--k-space-2) var(--k-space-4);
+    min-height: var(--k-tabbar-height);
+    padding: var(--k-space-1) var(--k-space-3);
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-chrome);
     font-size: var(--k-font-size-sm);
     white-space: nowrap;
   }

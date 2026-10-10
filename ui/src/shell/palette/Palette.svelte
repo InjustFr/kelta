@@ -83,5 +83,5 @@
   {onclose}
   busy={searching}
   testid="palette"
-  empty="No matching action, project, session or ticket"
+  empty={`Nothing matches "${query}".`}
 />
