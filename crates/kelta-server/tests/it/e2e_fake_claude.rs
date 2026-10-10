@@ -1,8 +1,9 @@
 //! End-to-end: fixtures/fake-claude with Kelta-generated hook settings (PLUGINS §8) → real
-//! `kelta-ctl hook` → ctl socket → FakeCore receives Running → Working → NeedsInput → Done → Exited.
+//! `kelta-ctl hook` → ctl socket → FakeCore receives Running, Working, NeedsInput, Done and Exited.
 
 use crate::common;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -112,16 +113,17 @@ async fn fake_claude_drives_statuses_through_kelta_ctl() {
     assert!(status.success());
     wait_for(&e.fake, SessionStatus::Exited, Duration::from_secs(10)).await;
 
-    assert_eq!(
-        statuses(&e.fake),
-        vec![
-            SessionStatus::Running,
-            SessionStatus::Working,
-            SessionStatus::NeedsInput,
-            SessionStatus::Done,
-            SessionStatus::Exited
-        ]
-    );
+    // Kelta's hooks are `async: true`: one kelta-ctl process per hook, none awaited, so they can reach
+    // the socket in any order (a slow SessionStart lands after UserPromptSubmit): only the set is guaranteed.
+    let got: HashSet<SessionStatus> = statuses(&e.fake).into_iter().collect();
+    let want = HashSet::from([
+        SessionStatus::Running,
+        SessionStatus::Working,
+        SessionStatus::NeedsInput,
+        SessionStatus::Done,
+        SessionStatus::Exited,
+    ]);
+    assert_eq!(got, want, "{:?}", statuses(&e.fake));
     assert!(e.fake.hooks().iter().all(|(s, _)| s == &sid));
     let edited: Vec<Value> = e
         .fake
