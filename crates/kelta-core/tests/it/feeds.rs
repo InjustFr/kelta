@@ -16,7 +16,7 @@ use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
 use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
-use kelta_proto::tracker::StatusCategory;
+use kelta_proto::tracker::{Assignee, StatusCategory, Who};
 
 fn settings() -> Settings {
     let mut s = Settings::defaults();
@@ -83,7 +83,7 @@ async fn all_scope_dedups_and_tags_projects() {
             review("acme/unbound", 5, ReviewKind::ReviewRequested),
         ],
     );
-    let page = e.h.core.tracker_list(Scope::All, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
     // shop and blog share the same view → one provider call
     assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count(), 1);
     assert_eq!(page.items.len(), 3);
@@ -114,18 +114,18 @@ async fn cache_serves_first_then_revalidates_when_stale() {
     let e = env(tmp.path(), vec![]);
     let shop = Scope::Project { id: "shop".into() };
     let lists = || e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count();
-    let p1 = e.h.core.tracker_list(shop.clone(), None, None, false).await.unwrap();
+    let p1 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
     assert_eq!((lists(), p1.stale), (1, false));
     // fresh cache: no network
-    let p2 = e.h.core.tracker_list(shop.clone(), None, None, false).await.unwrap();
+    let p2 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
     assert_eq!((lists(), p2.stale, p2.items.len()), (1, false, 3));
     // age the cache row → served stale + background refresh + tickets.changed
-    let key = e.h.core.ticket_queries(&shop, None)[0].cache_key.clone();
+    let key = e.h.core.ticket_queries(&shop, None, None)[0].cache_key.clone();
     let row = e.h.core.store().call(move |c| q::cache_get(c, &key)).await.unwrap().unwrap();
     let old = ProviderCacheRow { fetched_at: "2020-01-01T00:00:00Z".into(), ..row };
     e.h.core.store().call(move |c| q::cache_put(c, &old)).await.unwrap();
     e.h.ui.take_events();
-    let p3 = e.h.core.tracker_list(shop.clone(), None, None, false).await.unwrap();
+    let p3 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
     assert!(p3.stale);
     for _ in 0..50 {
         settle().await;
@@ -139,7 +139,7 @@ async fn cache_serves_first_then_revalidates_when_stale() {
 
     // a failing account keeps serving the cache and reports the error
     e.tracker.fail_next(kelta_proto::KeltaError::needs_auth("401"));
-    let p4 = e.h.core.tracker_list(shop, None, None, true).await.unwrap();
+    let p4 = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
     assert!(p4.stale);
     assert_eq!(p4.items.len(), 3);
     assert_eq!(p4.errors[0].account_id.as_str(), "jira-acme");
@@ -219,6 +219,30 @@ async fn authored_changes_emit_pr_events() {
 }
 
 #[tokio::test]
+async fn who_override_view_account_and_sources() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let shop = Scope::Project { id: "shop".into() };
+    let key = |who| e.h.core.ticket_queries(&shop, None, who)[0].cache_key.clone();
+    assert_ne!(key(None), key(Some(Who::Mine)));
+    assert_ne!(key(Some(Who::Mine)), key(Some(Who::Unassigned)));
+    let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
+    e.tracker.assign(&t, Assignee::None).await.unwrap();
+    let page = e.h.core.tracker_list(shop.clone(), None, Some(Who::Unassigned), None, true).await.unwrap();
+    assert_eq!(page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), ["SHOP-142"]);
+    assert_eq!(e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap().items.len(), 3);
+    assert_eq!(e.h.core.tracker_sources(&AccountId::new("jira-acme"), "sh").await.unwrap().len(), 2);
+    // a view's own account wins over the binding's
+    {
+        let mut ps = e.h.cfg.projects.write();
+        let mut p = (*ps[0]).clone();
+        p.tracker.as_mut().unwrap().views[0].account = Some("github-work".into());
+        ps[0] = Arc::new(p);
+    }
+    assert_eq!(e.h.core.ticket_queries(&shop, None, None)[0].account.as_str(), "github-work");
+}
+
+#[tokio::test]
 async fn tracker_move_resolves_columns() {
     let tmp = tempfile::tempdir().unwrap();
     let e = env(tmp.path(), vec![]);
@@ -263,18 +287,21 @@ async fn tracker_move_resolves_columns() {
         vec!["todo", "late", "named", "weird"]
     );
 
-    let err = e.h.core.tracker_move(&t, "late").await.unwrap_err();
+    let err = e.h.core.tracker_move(&t, "late", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Conflict);
     assert_eq!(err.detail.unwrap()["candidates"].as_array().unwrap().len(), 2);
-    let err = e.h.core.tracker_move(&t, "weird").await.unwrap_err();
+    let err = e.h.core.tracker_move(&t, "weird", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
     assert!(err.detail.unwrap()["url"].as_str().unwrap().ends_with("SHOP-142"));
 
     let mut rx = e.h.core.subscribe();
     // names win over categories
-    let moved = e.h.core.tracker_move(&t, "named").await.unwrap();
+    let moved = e.h.core.tracker_move(&t, "named", None).await.unwrap();
     assert_eq!(moved.status.name, "In Review");
-    let moved = e.h.core.tracker_move(&t, "todo").await.unwrap();
+    let moved = e.h.core.tracker_move(&t, "todo", None).await.unwrap();
+    // an explicit project picks its own columns (blog has no `late`)
+    let err = e.h.core.tracker_move(&t, "late", Some(&ProjectId::new("blog"))).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
     assert_eq!(moved.status.category, StatusCategory::Todo);
     assert!(bus_names(&mut rx).iter().any(|ev| ev.name == "ticket.transitioned"));
     // blog (no override) uses the provider's columns

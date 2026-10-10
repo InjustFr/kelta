@@ -198,6 +198,27 @@ describe('TicketsStore', () => {
     expect(store.items({ kind: 'all' }).some((t) => t.project_ids.length === 0)).toBe(true);
   });
 
+  it('keeps one list per who and sends it', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'shop' };
+    await store.load(scope, null, false, 'unassigned');
+    expect(mock.calls.at(-1)!.args).toMatchObject({ who: 'unassigned' });
+    expect(store.items(scope, null, 'unassigned').map((t) => t.ticket.ref.key)).toEqual(['SHOP-155']);
+    expect(store.list(scope, null).data).toBeNull();
+    await store.load(scope);
+    expect(store.items(scope).length).toBeGreaterThan(1);
+  });
+
+  it('move passes the project whose columns resolve it', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'shop' };
+    await store.load(scope);
+    const cols = (await store.loadColumns('shop')).data!;
+    const ticket = store.items(scope)[0]!.ticket;
+    await store.move(ticket, cols[0]!, 'shop');
+    expect(mock.calls.at(-1)).toMatchObject({ cmd: 'tracker_move', args: { project_id: 'shop' } });
+  });
+
   it('moves optimistically and rolls back on error', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'project' as const, id: 'shop' };

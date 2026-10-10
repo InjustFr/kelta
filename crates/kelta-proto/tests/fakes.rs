@@ -14,7 +14,7 @@ use kelta_proto::secret::{SecretCtx, SecretRef};
 use kelta_proto::settings::TrackerView;
 use kelta_proto::term::*;
 use kelta_proto::testing::*;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 
 fn spawn_req(kind: SessionKind) -> SpawnRequest {
     SpawnRequest {
@@ -140,6 +140,36 @@ async fn fake_tracker_paginates_and_transitions() {
     assert!(t.assign(&r, Assignee::None).await.unwrap().assignee.is_none());
     t.fail_next(kelta_proto::KeltaError::needs_auth("401"));
     assert_eq!(t.me().await.unwrap_err().code, ErrorCode::NeedsAuth);
+}
+
+#[tokio::test]
+async fn fake_tracker_filters_by_who_and_lists_sources() {
+    let t = FakeTracker::new();
+    t.assign(&t.ticket("SHOP-142").unwrap().ticket.r#ref, Assignee::None).await.unwrap();
+    let keys = |p: kelta_proto::tracker::Page<kelta_proto::tracker::Ticket>| {
+        p.items.into_iter().map(|t| t.r#ref.key).collect::<Vec<_>>()
+    };
+    let view = |who| TrackerView { id: "v".into(), who, ..TrackerView::default() };
+    assert_eq!(keys(t.list(&view(Some(Who::Mine)), None).await.unwrap()), ["SHOP-141", "SHOP-143"]);
+    assert_eq!(keys(t.list(&view(Some(Who::Unassigned)), None).await.unwrap()), ["SHOP-142"]);
+    assert_eq!(t.list(&view(Some(Who::Anyone)), None).await.unwrap().items.len(), 3);
+    assert_eq!(t.list(&view(None), None).await.unwrap().items.len(), 3);
+    let hits = t.sources("sh").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine) && !h.view.id.is_empty()));
+}
+
+#[test]
+fn tracker_view_old_toml_still_parses() {
+    let v: TrackerView =
+        toml::from_str("id = \"mine\"\nlabel = \"Mine\"\njql = \"project = SHOP\"\n").unwrap();
+    assert_eq!((v.who, v.current_iteration, v.account), (None, false, None));
+    let v: TrackerView =
+        toml::from_str("id = \"m\"\nwho = \"unassigned\"\ncurrent_iteration = true\naccount = \"gh\"\n")
+            .unwrap();
+    assert_eq!(v.who, Some(Who::Unassigned));
+    assert!(v.current_iteration);
+    assert_eq!(v.account, Some(AccountId::new("gh")));
 }
 
 #[tokio::test]

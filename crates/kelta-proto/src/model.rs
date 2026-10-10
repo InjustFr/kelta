@@ -11,7 +11,7 @@ use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
 use crate::settings::{ClaudeEffort, CodeHostBinding, PermissionMode, TrackerBinding, TransitionTarget};
-use crate::tracker::TicketRef;
+use crate::tracker::{TicketRef, Who};
 
 // ---------------------------------------------------------------------------------------------
 // Projects
@@ -450,6 +450,8 @@ pub enum PaneContent {
         scope: Scope,
         view_id: Option<String>,
         mode: TicketsMode,
+        #[serde(default)]
+        who: Option<Who>,
     },
     TicketDetail {
         ticket: TicketRef,

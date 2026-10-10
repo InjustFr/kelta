@@ -16,7 +16,7 @@ use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
 use crate::secret::SecretRef;
-use crate::tracker::StatusCategory;
+use crate::tracker::{StatusCategory, Who};
 
 /// Configuration layer (low → high precedence).
 #[derive(
@@ -1487,6 +1487,12 @@ pub struct TrackerView {
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,
+    /// Whose tickets; `None` = the provider fields above decide.
+    pub who: Option<Who>,
+    /// Only the current sprint / cycle / iteration (providers that support it).
+    pub current_iteration: bool,
+    /// Account of this view; `None` = the binding's account.
+    pub account: Option<AccountId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]

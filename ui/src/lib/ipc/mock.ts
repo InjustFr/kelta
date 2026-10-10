@@ -24,6 +24,7 @@ import type {
   ScreenInstanceId,
   SessionInfo,
   SessionKind,
+  SourceHit,
   StatusCategory,
   Ticket,
   TicketDetail,
@@ -42,6 +43,7 @@ import type { CommandArgs, CommandName, CommandResult } from './commands';
 import layoutsJson from './mock/fixtures/layouts.json';
 import projectsJson from './mock/fixtures/projects.json';
 import reviewsJson from './mock/fixtures/reviews.json';
+import sourcesJson from './mock/fixtures/sources.json';
 import sessionsJson from './mock/fixtures/sessions.json';
 import ticketsJson from './mock/fixtures/tickets.json';
 import toolsJson from './mock/fixtures/tools.json';
@@ -59,6 +61,8 @@ const FIXTURES = {
   work: workJson as unknown as WorkItem[],
   git: workStatusJson as Record<string, GitStatus>,
   tools: toolsJson as unknown as ToolInfo[],
+  /** `tracker_sources` hits per account; absent account = provider without discovery. */
+  sources: sourcesJson as unknown as Record<string, SourceHit[]>,
 };
 
 export const MOCK_FIXTURES: Readonly<typeof FIXTURES> = FIXTURES;
@@ -121,6 +125,9 @@ const clone = <T>(v: T): T => structuredClone(v);
 function err(code: KeltaError['code'], message: string, detail: JsonValue | null = null): KeltaError {
   return { code, message, detail, retry_after_ms: null };
 }
+
+/** The mock's signed-in user (`Assignee::Me`, `who: mine`). */
+const ME = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
 
 const CATEGORY_NAMES: Record<StatusCategory, string> = {
   todo: 'To do',
@@ -730,9 +737,16 @@ export function createMockTransport(options: MockOptions = {}): {
         .slice(0, limit),
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
-    tracker_list: ({ scope, view_id, cursor }) => {
-      const items =
-        scope.kind === 'all' ? state.tickets : state.tickets.filter((t) => t.project_ids.includes(scope.id));
+    tracker_list: ({ scope, view_id, cursor, who }) => {
+      const items = state.tickets.filter(
+        (t) =>
+          (scope.kind === 'all' || t.project_ids.includes(scope.id)) &&
+          (who === 'mine'
+            ? t.ticket.assignee?.id === ME.id
+            : who === 'unassigned'
+              ? !t.ticket.assignee
+              : true),
+      );
       const filtered =
         view_id === 'sprint'
           ? items
@@ -774,9 +788,9 @@ export function createMockTransport(options: MockOptions = {}): {
       }
       return updateTicket(ticket, t.to.category, t.to.name);
     },
-    tracker_move: ({ ticket, column_id }) => {
+    tracker_move: ({ ticket, column_id, project_id }) => {
       const item = ticketItem(ticket);
-      const projectId = item.project_ids[0];
+      const projectId = project_id ?? item.project_ids[0];
       const columns = projectId ? handlers.tracker_columns({ project_id: projectId }) : defaultColumns();
       const col = (columns as Column[]).find((c) => c.id === column_id);
       if (!col) throw err('not_found', `column ${column_id} not found`);
@@ -795,7 +809,7 @@ export function createMockTransport(options: MockOptions = {}): {
         assignee.kind === 'none'
           ? null
           : assignee.kind === 'me'
-            ? { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null }
+            ? { ...ME }
             : { id: assignee.id, name: assignee.id, login: null, avatar_url: null };
       return clone(item.ticket);
     },
@@ -808,6 +822,12 @@ export function createMockTransport(options: MockOptions = {}): {
             (t.ticket.ref.key.toLowerCase().includes(q) || t.ticket.title.toLowerCase().includes(q)),
         ),
       );
+    },
+    tracker_sources: ({ account_id, query }) => {
+      const hits = FIXTURES.sources[account_id];
+      if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
+      const q = query.trim().toLowerCase();
+      return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
     },
     // ---- reviews ---------------------------------------------------------------------------
     review_list: ({ scope, kind }) => ({

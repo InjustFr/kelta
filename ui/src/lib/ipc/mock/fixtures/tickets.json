@@ -72,12 +72,7 @@
         "category": "todo"
       },
       "kind": "Bug",
-      "assignee": {
-        "id": "u-ada",
-        "name": "Ada Lovelace",
-        "login": "ada",
-        "avatar_url": null
-      },
+      "assignee": null,
       "labels": [],
       "priority": "Low",
       "updated_at": "2026-10-08T16:00:00Z",
@@ -102,9 +97,9 @@
       },
       "kind": "Task",
       "assignee": {
-        "id": "u-ada",
-        "name": "Ada Lovelace",
-        "login": "ada",
+        "id": "u-bob",
+        "name": "Bob Martin",
+        "login": "bob",
         "avatar_url": null
       },
       "labels": [],

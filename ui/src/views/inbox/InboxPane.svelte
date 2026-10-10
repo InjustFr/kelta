@@ -317,7 +317,7 @@
 
   function showAllOnBoard(): void {
     const pid = projects.activeId ?? projects.list.find((p) => p.open && !p.builtin)?.id;
-    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'board' });
+    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'board', who: null });
   }
 
   function onkeydown(e: KeyboardEvent): void {

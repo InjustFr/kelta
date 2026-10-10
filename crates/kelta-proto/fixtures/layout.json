@@ -47,7 +47,8 @@
             "id": "shop",
             "kind": "project"
           },
-          "view_id": "mine"
+          "view_id": "mine",
+          "who": "mine"
         },
         "id": "pane-3",
         "type": "pane"

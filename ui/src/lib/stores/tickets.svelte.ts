@@ -12,6 +12,7 @@ import type {
   TicketRef,
   Transition,
   UiEvent,
+  Who,
 } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
@@ -21,11 +22,13 @@ import { scopeAffects, scopeKey } from './reducers';
 export interface TicketList extends Loadable<TicketPage> {
   scope: Scope;
   viewId: string | null;
+  /** Overrides the view's own `who` (`null` = the view decides). */
+  who: Who | null;
   loadingMore: boolean;
 }
 
-export function ticketListKey(scope: Scope, viewId: string | null): string {
-  return `${scopeKey(scope)}|${viewId ?? ''}`;
+export function ticketListKey(scope: Scope, viewId: string | null, who: Who | null = null): string {
+  return `${scopeKey(scope)}|${viewId ?? ''}|${who ?? ''}`;
 }
 
 export function ticketKey(ref: TicketRef): string {
@@ -51,40 +54,57 @@ export class TicketsStore {
   columns = $state<Record<ProjectId, Loadable<Column[]>>>({});
   transitions = $state<Record<string, Loadable<Transition[]>>>({});
 
-  list(scope: Scope, viewId: string | null = null): TicketList {
+  list(scope: Scope, viewId: string | null = null, who: Who | null = null): TicketList {
     return (
-      this.lists[ticketListKey(scope, viewId)] ?? { ...idle<TicketPage>(), scope, viewId, loadingMore: false }
+      this.lists[ticketListKey(scope, viewId, who)] ?? {
+        ...idle<TicketPage>(),
+        scope,
+        viewId,
+        who,
+        loadingMore: false,
+      }
     );
   }
 
-  items(scope: Scope, viewId: string | null = null): TicketItem[] {
-    return this.list(scope, viewId).data?.items ?? [];
+  items(scope: Scope, viewId: string | null = null, who: Who | null = null): TicketItem[] {
+    return this.list(scope, viewId, who).data?.items ?? [];
   }
 
-  async load(scope: Scope, viewId: string | null = null, refresh = false): Promise<TicketList> {
-    const key = ticketListKey(scope, viewId);
-    const prev = this.list(scope, viewId);
+  async load(
+    scope: Scope,
+    viewId: string | null = null,
+    refresh = false,
+    who: Who | null = null,
+  ): Promise<TicketList> {
+    const key = ticketListKey(scope, viewId, who);
+    const prev = this.list(scope, viewId, who);
     this.lists = { ...this.lists, [key]: { ...prev, loading: true } };
     const next = await settle(
       prev,
-      () => ipc.trackerList({ scope, view_id: viewId, cursor: null, refresh }),
+      () => ipc.trackerList({ scope, view_id: viewId, cursor: null, refresh, who }),
       {
         stale: (p) => p.stale,
       },
     );
-    const entry: TicketList = { ...next, scope, viewId, loadingMore: false };
+    const entry: TicketList = { ...next, scope, viewId, who, loadingMore: false };
     this.lists = { ...this.lists, [key]: entry };
     return entry;
   }
 
   /** Fetches the next page and appends it. */
-  async loadMore(scope: Scope, viewId: string | null = null): Promise<void> {
-    const key = ticketListKey(scope, viewId);
+  async loadMore(scope: Scope, viewId: string | null = null, who: Who | null = null): Promise<void> {
+    const key = ticketListKey(scope, viewId, who);
     const prev = this.lists[key];
     if (!prev?.data?.next || prev.loadingMore) return;
     this.lists = { ...this.lists, [key]: { ...prev, loadingMore: true } };
     try {
-      const page = await ipc.trackerList({ scope, view_id: viewId, cursor: prev.data.next, refresh: false });
+      const page = await ipc.trackerList({
+        scope,
+        view_id: viewId,
+        cursor: prev.data.next,
+        refresh: false,
+        who,
+      });
       const cur = this.lists[key] ?? prev;
       // Offset paging can repeat a ticket across pages (order shifted between fetches).
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, not state
@@ -149,14 +169,19 @@ export class TicketsStore {
   /**
    * Optimistic board move: patches the status locally, calls `tracker_move`, applies the result
    * or rolls back (rethrowing the error, e.g. `Conflict` with candidates or `NeedsFields`).
+   * `projectId` picks whose columns resolve the move (default: the backend's guess by account).
    */
-  async move(ticket: Ticket, column: Column): Promise<Ticket> {
+  async move(ticket: Ticket, column: Column, projectId: ProjectId | null = null): Promise<Ticket> {
     this.patch({
       ...ticket,
       status: { id: `column:${column.id}`, name: column.name, category: column.category },
     });
     try {
-      const updated = await ipc.trackerMove({ ticket: ticket.ref, column_id: column.id });
+      const updated = await ipc.trackerMove({
+        ticket: ticket.ref,
+        column_id: column.id,
+        project_id: projectId,
+      });
       this.patch(updated);
       return updated;
     } catch (err) {
@@ -185,6 +210,6 @@ export class TicketsStore {
   /** Refetches every invalidated list that was loaded. */
   async refreshInvalidated(): Promise<void> {
     const stale = Object.values(this.lists).filter((l) => l.invalidated && !l.loading);
-    await Promise.all(stale.map((l) => this.load(l.scope, l.viewId, false)));
+    await Promise.all(stale.map((l) => this.load(l.scope, l.viewId, false, l.who)));
   }
 }

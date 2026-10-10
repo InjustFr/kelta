@@ -21,8 +21,8 @@ use kelta_proto::model::{PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
-    AccountError, Assignee, Column, Cursor, Page, StatusCategory, Ticket, TicketDetail, TicketItem,
-    TicketPage, TicketRef, Transition,
+    AccountError, Assignee, Column, Cursor, Page, SourceHit, StatusCategory, Ticket, TicketDetail,
+    TicketItem, TicketPage, TicketRef, Transition, Who,
 };
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -298,8 +298,8 @@ impl Core {
     // Tickets
     // =========================================================================================
 
-    /// The list queries behind a scope (one per distinct `(account, view)`).
-    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>) -> Vec<TicketQuery> {
+    /// The list queries behind a scope (one per distinct `(account, view)`). `who` overrides `view.who`.
+    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
         let projects: Vec<Arc<ProjectConfig>> = match scope {
             Scope::Project { id } => self.cfg.project(id).into_iter().collect(),
             Scope::All => {
@@ -310,21 +310,20 @@ impl Core {
         let mut out: Vec<TicketQuery> = Vec::new();
         for p in projects {
             let Some(b) = &p.tracker else { continue };
-            let view = match view_id {
+            let mut view = match view_id {
                 Some(v) => b.views.iter().find(|x| x.id == v).or(b.views.first()),
                 None => b.views.first(),
             }
             .cloned()
             .unwrap_or_else(default_view);
-            let key = tickets_key(&b.account, &view);
+            if who.is_some() {
+                view.who = who;
+            }
+            let account = view.account.clone().unwrap_or_else(|| b.account.clone());
+            let key = tickets_key(&account, &view);
             match out.iter_mut().find(|q| q.cache_key == key) {
                 Some(q) => q.projects.push(p.id.clone()),
-                None => out.push(TicketQuery {
-                    account: b.account.clone(),
-                    view,
-                    projects: vec![p.id.clone()],
-                    cache_key: key,
-                }),
+                None => out.push(TicketQuery { account, view, projects: vec![p.id.clone()], cache_key: key }),
             }
         }
         let mut views = self.feeds.views.lock();
@@ -415,6 +414,7 @@ impl Core {
         &self,
         scope: Scope,
         view_id: Option<String>,
+        who: Option<Who>,
         cursor: Option<Cursor>,
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
@@ -424,7 +424,7 @@ impl Core {
         {
             return Err(KeltaError::not_found(format!("project {id}")));
         }
-        let queries = self.ticket_queries(&scope, view_id.as_deref());
+        let queries = self.ticket_queries(&scope, view_id.as_deref(), who);
         if queries.is_empty() {
             return Ok(TicketPage::default());
         }
@@ -456,7 +456,7 @@ impl Core {
 
     /// `tracker_search` over the (cached) lists of a scope.
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
-        let page = self.tracker_list(scope, None, None, false).await?;
+        let page = self.tracker_list(scope, None, None, None, false).await?;
         let needle = text.trim().to_lowercase();
         Ok(page
             .items
@@ -468,6 +468,18 @@ impl Core {
             })
             .take(50)
             .collect())
+    }
+
+    /// `tracker_sources`: ticket sources of an account matching `query`.
+    pub async fn tracker_sources(
+        &self,
+        account: &AccountId,
+        query: &str,
+    ) -> Result<Vec<SourceHit>, KeltaError> {
+        self.rt.capture();
+        let r = self.tracker_of(account)?.sources(query).await;
+        self.note_account(account, &r);
+        r
     }
 
     pub async fn tracker_get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
@@ -547,15 +559,20 @@ impl Core {
     }
 
     /// `tracker_move`: column → transition (by names, then categories); ambiguous → `Conflict`.
+    /// `project` picks the columns; `None` = the project bound to the ticket's account.
     pub async fn tracker_move(
         &self,
         t: &TicketRef,
         column_id: &str,
+        project: Option<&ProjectId>,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
-        let project = self
-            .project_for_account(&t.account)
-            .ok_or_else(|| KeltaError::not_found(format!("no project uses tracker account {}", t.account)))?;
+        let project = match project {
+            Some(id) => self.cfg.project(id).ok_or_else(|| KeltaError::not_found(format!("project {id}")))?,
+            None => self.project_for_account(&t.account).ok_or_else(|| {
+                KeltaError::not_found(format!("no project uses tracker account {}", t.account))
+            })?,
+        };
         let binding = project.tracker.clone().unwrap_or_default();
         let (label, categories, names) = match binding.columns.iter().find(|c| c.id == column_id) {
             Some(s) => (
@@ -1184,8 +1201,11 @@ impl Core {
         let contents: Vec<PaneContent> =
             self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
-        let tickets = |scope: &Scope, view: Option<&str>, want: &mut BTreeMap<SubKey, IntervalPolicy>| {
-            for q in self.ticket_queries(scope, view) {
+        let tickets = |scope: &Scope,
+                       view: Option<&str>,
+                       who: Option<Who>,
+                       want: &mut BTreeMap<SubKey, IntervalPolicy>| {
+            for q in self.ticket_queries(scope, view, who) {
                 if s.accounts.contains_key(&q.account) {
                     let p = self.policy_for(&q.account, &s);
                     want.insert(SubKey { account: q.account, query: q.cache_key }, p);
@@ -1209,10 +1229,12 @@ impl Core {
         let both = [ReviewKind::ReviewRequested, ReviewKind::Authored];
         for c in &contents {
             match c {
-                PaneContent::Tickets { scope, view_id, .. } => tickets(scope, view_id.as_deref(), &mut want),
+                PaneContent::Tickets { scope, view_id, who, .. } => {
+                    tickets(scope, view_id.as_deref(), *who, &mut want)
+                }
                 PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
                 PaneContent::Inbox => {
-                    tickets(&Scope::All, None, &mut want);
+                    tickets(&Scope::All, None, None, &mut want);
                     reviews(self.review_accounts(&Scope::All), &both, &mut want);
                 }
                 _ => {}

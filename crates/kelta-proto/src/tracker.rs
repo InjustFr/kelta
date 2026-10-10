@@ -6,6 +6,7 @@ use ts_rs::TS;
 
 use crate::error::KeltaError;
 use crate::ids::{AccountId, ProjectId, WorkItemId};
+use crate::settings::TrackerView;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -48,6 +49,26 @@ pub struct TicketRef {
     pub key: String,
     /// Provider id (may equal key).
     pub id: String,
+}
+
+/// Whose tickets a list shows. On a view or a `tracker_list` call; `None` keeps the view's
+/// provider fields (`assigned_to`, `scope`, `jql`) as they are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Who {
+    Mine,
+    Unassigned,
+    Anyone,
+}
+
+/// One ticket source offered by `Tracker::sources`, ready to append to `TrackerBinding.views`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SourceHit {
+    /// `board` | `project` | `filter` | `query` | `repo` | `team` | `sprint` ...
+    pub kind: String,
+    pub label: String,
+    pub detail: Option<String>,
+    pub view: TrackerView,
 }
 
 /// Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).

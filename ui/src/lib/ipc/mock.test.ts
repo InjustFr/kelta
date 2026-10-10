@@ -65,7 +65,7 @@ describe('mock fixtures', () => {
       for (const r of p.repos) expect(typeof r.path).toBe('string');
       if (p.tracker) {
         expect(p.tracker.views.length).toBeGreaterThan(0);
-        for (const v of p.tracker.views) expect(Object.keys(v)).toHaveLength(16);
+        for (const v of p.tracker.views) expect(Object.keys(v)).toHaveLength(19);
       }
     }
     expect(MOCK_FIXTURES.projects.filter((p) => p.active)).toHaveLength(1);
@@ -201,6 +201,7 @@ describe('mock transport', () => {
       tracker_comment: { ticket, markdown: 'hi' },
       tracker_assign: { ticket, assignee: { kind: 'me' } },
       tracker_search: { scope: { kind: 'all' }, text: 'rate' },
+      tracker_sources: { account_id: 'jira-acme', query: '' },
       review_list: { scope: { kind: 'all' }, kind: 'authored', refresh: false },
       review_get: { review: review.ref },
       review_approve: { review: review.ref, head_sha: review.head_sha },
@@ -338,6 +339,32 @@ describe('mock transport', () => {
     await expect(call('tracker_transition', { ticket, transition_id: 'to-done' })).rejects.toMatchObject({
       code: 'needs_fields',
       detail: { fields: [{ id: 'resolution', name: 'Resolution', required: true }] },
+    });
+  });
+
+  it('tracker_list filters by who against the mock user', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const keys = async (who?: 'mine' | 'unassigned' | 'anyone') =>
+      (await call('tracker_list', { scope: { kind: 'project', id: 'shop' }, refresh: false, who })).items.map(
+        (i) => i.ticket.ref.key,
+      );
+    const anyone = await keys('anyone');
+    expect(await keys()).toEqual(anyone);
+    expect(await keys('unassigned')).toEqual(['SHOP-155']);
+    expect(await keys('mine')).not.toContain('SHOP-155');
+    expect(await keys('mine')).not.toContain('SHOP-120'); // Bob's
+    expect(anyone).toEqual(expect.arrayContaining(['SHOP-120', 'SHOP-155']));
+  });
+
+  it('tracker_sources filters fixture hits; accounts without hits are unsupported', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const hits = await call('tracker_sources', { account_id: 'jira-acme', query: 'board' });
+    expect(hits.map((h) => h.kind)).toEqual(['board', 'sprint']);
+    expect(hits[1]!.view).toMatchObject({ current_iteration: true, who: 'mine', account: 'jira-acme' });
+    await expect(call('tracker_sources', { account_id: 'gitlab-corp', query: '' })).rejects.toMatchObject({
+      code: 'unsupported',
     });
   });
 

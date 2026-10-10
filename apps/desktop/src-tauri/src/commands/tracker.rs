@@ -16,8 +16,9 @@ pub async fn tracker_list(
     view_id: Option<String>,
     cursor: Option<Cursor>,
     refresh: bool,
+    who: Option<Who>,
 ) -> Res<TicketPage> {
-    core.tracker_list(scope, view_id, cursor, refresh).await
+    core.tracker_list(scope, view_id, who, cursor, refresh).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -46,10 +47,16 @@ pub async fn tracker_transition(
     core.tracker_transition(&ticket, &transition_id, fields, None).await
 }
 
-/// Column → transition; ambiguous → `Conflict` with `detail.candidates`.
+/// Column → transition; ambiguous → `Conflict` with `detail.candidates`. `project_id` picks the
+/// columns (default: the project bound to the ticket's account).
 #[tauri::command(rename_all = "snake_case")]
-pub async fn tracker_move(core: State<'_, Arc<Core>>, ticket: TicketRef, column_id: String) -> Res<Ticket> {
-    core.tracker_move(&ticket, &column_id).await
+pub async fn tracker_move(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    column_id: String,
+    project_id: Option<ProjectId>,
+) -> Res<Ticket> {
+    core.tracker_move(&ticket, &column_id, project_id.as_ref()).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -69,4 +76,13 @@ pub async fn tracker_assign(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_search(core: State<'_, Arc<Core>>, scope: Scope, text: String) -> Res<Vec<TicketItem>> {
     core.tracker_search(scope, &text).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_sources(
+    core: State<'_, Arc<Core>>,
+    account_id: AccountId,
+    query: String,
+) -> Res<Vec<SourceHit>> {
+    core.tracker_sources(&account_id, &query).await
 }

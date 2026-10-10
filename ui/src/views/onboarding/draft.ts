@@ -89,6 +89,9 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
     scope: null,
     labels: null,
     workflow_scope: null,
+    who: null,
+    current_iteration: false,
+    account: null,
   };
   switch (kind) {
     case 'jira':

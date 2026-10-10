@@ -248,6 +248,7 @@ pub fn layout() -> Layout {
                         scope: Scope::Project { id: ProjectId::new("shop") },
                         view_id: Some("mine".into()),
                         mode: TicketsMode::Board,
+                        who: Some(Who::Mine),
                     },
                 },
                 focused_pane: None,
@@ -801,6 +802,25 @@ pub fn all() -> Vec<Fixture> {
             }
         ),
         fx!("ticket", Ticket, ticket()),
+        fx!(
+            "source_hit",
+            SourceHit,
+            SourceHit {
+                kind: "board".into(),
+                label: "SHOP board".into(),
+                detail: Some("Scrum".into()),
+                view: TrackerView {
+                    id: "board-12".into(),
+                    label: "SHOP board".into(),
+                    jql: Some("project = SHOP".into()),
+                    board_id: Some(12),
+                    who: Some(Who::Mine),
+                    current_iteration: true,
+                    account: Some(AccountId::new("jira-acme")),
+                    ..TrackerView::default()
+                },
+            }
+        ),
         fx!(
             "ticket_detail",
             TicketDetail,
