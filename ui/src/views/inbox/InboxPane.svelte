@@ -8,10 +8,21 @@
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { projects, reviews, sessions, settings, tickets, toasts, work } from '$lib/stores';
-  import { Button, EmptyState, ErrorState, Kbd, Lamp, ROW_HEIGHT, VirtualList, relativeTime } from '$lib/ui';
+  import {
+    Button,
+    EmptyState,
+    ErrorState,
+    Kbd,
+    Lamp,
+    Menu,
+    ROW_HEIGHT,
+    VirtualList,
+    relativeTime,
+  } from '$lib/ui';
 
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
-  import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
+  import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
+  import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { openFromNow } from '../work/nav';
@@ -210,7 +221,7 @@
           project: p.name,
           color: p.color,
           reason: t.status.name,
-          meta: t.priority ? [t.priority] : [],
+          meta: [...(batch.has(t.ref) ? ['marked'] : []), ...(t.priority ? [t.priority] : [])],
           age: age(t.updated_at),
           more: t.assignee?.name ?? '',
           actions: [
@@ -321,6 +332,14 @@
   }
 
   function onkeydown(e: KeyboardEvent): void {
+    const ticket =
+      cur?.type === 'ticket'
+        ? { ref: cur.ticket.ticket.ref, projectId: cur.ticket.project_ids[0] ?? null }
+        : null;
+    if (!filtering && batchKey(e, ticket)) {
+      e.preventDefault();
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey || filtering) return;
     switch (e.key) {
       case 'j':
@@ -362,6 +381,17 @@
         letter(cur, e.key);
     }
     e.preventDefault();
+  }
+
+  // Right-click on a queued row: Start now (over cap), Move to front.
+  const QUEUE_MENU: WorkActionId[] = ['start_now', 'queue_front'];
+  let queueMenu = $state<{ x: number; y: number; row: NowRow & { type: 'work' } } | null>(null);
+
+  function rowMenu(e: MouseEvent, row: NowRow): void {
+    if (row.type !== 'work' || row.item.state.kind !== 'queued') return;
+    e.preventDefault();
+    selId = row.id;
+    queueMenu = { x: e.clientX, y: e.clientY, row };
   }
 
   function onFilterKey(e: KeyboardEvent): void {
@@ -466,6 +496,7 @@
                   style:--hue={v.color ?? 'transparent'}
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
+                  oncontextmenu={(e) => rowMenu(e, l.row)}
                 >
                   <span class="slot"><Lamp level={v.lamp} /></span>
                   <span class="id">{v.id}</span>
@@ -507,8 +538,28 @@
     <span><Kbd chord="o" /> Open in browser</span>
     <span><Kbd chord="/" /> Filter</span>
     <span><Kbd chord="shift+r" /> Refresh</span>
+    <span><Kbd chord="space" /> Mark ticket</span>
+    <span><Kbd chord="mod+enter" /> Start marked</span>
   </footer>
 </div>
+
+{#if queueMenu}
+  {@const item = queueMenu.row.item}
+  <Menu
+    items={QUEUE_MENU.map((id) => ({
+      id,
+      label: workAction(id).label({ item, phase: queueMenu!.row.phase }),
+    }))}
+    x={queueMenu.x}
+    y={queueMenu.y}
+    label="Queued work"
+    onselect={(id) => void runWorkAction(id as WorkActionId, item)}
+    onclose={() => {
+      queueMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
 
 <style>
   .pane {

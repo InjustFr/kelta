@@ -43,4 +43,12 @@ ide_bridge: boolean,
 /**
  * Spend per work item (USD) past which its cost chip turns red; set it per project.
  */
-budget_usd: number | null, };
+budget_usd: number | null, 
+/**
+ * Live Claude processes start work may run at once; past it items wait `Queued` (0 = no cap).
+ */
+max_live: number, 
+/**
+ * Hold the queue while the 5h rate-limit usage (%) is at or above this; none = never hold.
+ */
+queue_hold_pct: number | null, };

@@ -148,7 +148,7 @@
         phase = 'failed';
         return;
       }
-      toasts.info(`Started ${item.branch}`);
+      toasts.info(`${item.state.kind === 'queued' ? 'Queued' : 'Started'} ${item.branch}`);
       // The work tab is the project's active tab: bring it to the front (leaves Now).
       void activateProject(item.project_id);
       onclose();

@@ -730,6 +730,9 @@ describe('TicketsPane split view', () => {
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
     await press(' ');
     expect(detail()).toBeNull();
+    vi.mocked(runPrimary).mockClear();
+    await press('Enter', { metaKey: true }); // #141's batch start, not the phase action
+    expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
     await press('Enter');
     expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
     await press('g');

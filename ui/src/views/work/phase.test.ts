@@ -52,6 +52,9 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
     check('1 failed', phaseOf(failed, claude('needs_input'), null, null), 'failed', 'fix', 'retry');
     expect(phaseOf(failed, null, null, null).primaryLabel).toBe('Retry creating the branch folder');
     expect(phaseOf(failed, null, null, null).label).toBe('Failed creating the branch folder');
+    const queued = phaseOf(item({ state: { kind: 'queued', pos: 0 } }), null, null, null);
+    check('queued', queued, 'queued', 'in_flight', 'start_now');
+    expect([queued.label, queued.lamp]).toEqual(['Queued', 'none']);
     check(
       '2 starting',
       phaseOf(item({ state: { kind: 'starting' } }), null, null, null),

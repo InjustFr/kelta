@@ -93,6 +93,11 @@ fn repo_of(project: &ProjectInfo, id: &str) -> Result<RepoInfo, KeltaError> {
         .ok_or_else(|| KeltaError::not_found(format!("repo {id} in project {}", project.id)))
 }
 
+/// The state a work item settles in once its saga has run.
+fn started_state(item: &WorkItem) -> WorkState {
+    if item.pr_url.is_some() { WorkState::PrOpen } else { WorkState::Active }
+}
+
 /// Await `session.exited` for `sid` (subscribe *before* the session can exit).
 pub(crate) async fn await_exit(
     core: &Arc<dyn CoreApi>,
@@ -481,19 +486,55 @@ impl WorkService {
     }
 
     pub(crate) async fn run_saga_locked(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        let r = self.run_saga(id).await;
+        self.release_slot(id);
+        // A slot may have freed while this saga ran: re-check now that the item is in the queue.
+        if r.as_ref().is_ok_and(|w| matches!(w.state, WorkState::Queued { .. })) {
+            self.kick_queue();
+        }
+        r
+    }
+
+    async fn run_saga(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
         let mut item = self.load(id).await?;
         let mut j = self.load_journal(id);
         if j.plan.is_none() {
             return Err(KeltaError::invalid(format!("work item {id} has no start journal")));
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
+        // A queued item that goes back through the saga keeps its place in the queue.
+        let queued_pos = match item.state {
+            WorkState::Queued { pos } => Some(pos),
+            _ => None,
+        };
         item.state = WorkState::Starting;
         self.save(&mut item).await?;
-        for step in WORK_STEPS {
+        let gate = WORK_STEPS.iter().position(|s| *s == "claude_files").unwrap_or(0);
+        let claude_pending = !item
+            .steps
+            .iter()
+            .any(|s| s.step == "claude" && matches!(s.status, StepStatus::Done | StepStatus::Skipped));
+        for (i, step) in WORK_STEPS.iter().enumerate() {
             let status =
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
             if matches!(status, StepStatus::Done | StepStatus::Skipped) {
                 continue;
+            }
+            // Worktree ready: the Claude half waits for a slot (#141), also when a rerun starts past claude_files.
+            if i >= gate
+                && claude_pending
+                && layout::slots(&self.template_of(&env, &j).layout)
+                    .iter()
+                    .any(|s| matches!(s.kind, SlotKind::Claude { .. }))
+                && !self.admit(&env.core, id)
+            {
+                let pos = match queued_pos {
+                    Some(p) => p,
+                    None => self.next_queue_pos().await?,
+                };
+                item.state = WorkState::Queued { pos };
+                self.save(&mut item).await?;
+                return Ok(item);
             }
             self.set_step(&mut item, step, StepStatus::Running, None).await?;
             let res = self.exec_step(step, &env, &mut item, &mut j).await;
@@ -524,6 +565,11 @@ impl WorkService {
                     return Ok(item);
                 }
             }
+        }
+        // `persist` already done (a dequeued step retry): nothing else ends `Starting`.
+        if item.state == WorkState::Starting {
+            item.state = started_state(&item);
+            self.save(&mut item).await?;
         }
         Ok(item)
     }
@@ -562,7 +608,7 @@ impl WorkService {
             // Re-running a finished saga step keeps the item's state afterwards.
             let state = item.state.clone();
             let mut out = self.run_saga_locked(id).await?;
-            if !matches!(out.state, WorkState::Failed { .. }) {
+            if !matches!(out.state, WorkState::Failed { .. } | WorkState::Queued { .. }) {
                 out.state = state;
                 self.save(&mut out).await?;
             }
@@ -1585,7 +1631,7 @@ impl WorkService {
         item: &mut WorkItem,
         j: &mut Journal,
     ) -> Result<Option<String>, KeltaError> {
-        item.state = if item.pr_url.is_some() { WorkState::PrOpen } else { WorkState::Active };
+        item.state = started_state(item);
         self.save(item).await?;
         if let Some(t) = &item.ticket {
             env.core.publish(
