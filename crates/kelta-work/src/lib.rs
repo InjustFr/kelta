@@ -20,6 +20,7 @@ pub mod template;
 
 mod fixloop;
 mod listener;
+mod notes;
 mod ops;
 mod rebase;
 mod review;
@@ -495,7 +496,7 @@ impl WorkService {
         Ok(item)
     }
 
-    fn publish_updated(&self, item: &WorkItem) {
+    pub(crate) fn publish_updated(&self, item: &WorkItem) {
         if let Ok(core) = self.api() {
             core.publish(
                 BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": item }))

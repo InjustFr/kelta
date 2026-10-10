@@ -44,6 +44,7 @@ import type {
   ProjectPatch,
   RebaseOp,
   ReviewDetail,
+  ReviewNotes,
   ReviewKind,
   ReviewPage,
   ReviewRef,
@@ -238,6 +239,11 @@ export interface Commands {
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
   work_left: { args: { id: WorkItemId }; result: WorkItem };
+  /** Review notes (#133) with `+N/−M since feedback`. */
+  work_notes: { args: { id: WorkItemId }; result: ReviewNotes };
+  work_note_resolve: { args: { id: WorkItemId; note: number }; result: ReviewNotes };
+  /** The open notes in one message to the item's Claude (held while it works). */
+  work_notes_send: { args: { id: WorkItemId }; result: ReviewNotes };
   /** Merge when ready: the host's auto-merge, then Finish once merged (`auto_finish`). */
   work_arm_merge: { args: { id: WorkItemId; method: MergeMethod }; result: WorkItem };
   work_disarm_merge: { args: { id: WorkItemId }; result: WorkItem };
@@ -372,6 +378,9 @@ export const COMMAND_NAMES = [
   'work_mark_reviewed',
   'work_set_note',
   'work_left',
+  'work_notes',
+  'work_note_resolve',
+  'work_notes_send',
   'work_arm_merge',
   'work_disarm_merge',
   'editor_open',
@@ -576,6 +585,9 @@ export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
+export const workNotes = wrap('work_notes');
+export const workNoteResolve = wrap('work_note_resolve');
+export const workNotesSend = wrap('work_notes_send');
 export const workArmMerge = wrap('work_arm_merge');
 export const workDisarmMerge = wrap('work_disarm_merge');
 export const editorOpen = wrap('editor_open');

@@ -666,6 +666,48 @@ pub struct ReviewDelta {
     pub deletions: u32,
 }
 
+/// Lifecycle of a review note: `sent` with the next message to Claude, then `touched` /
+/// `untouched` after its next `Stop` (a heuristic: a change within 5 lines of the anchor).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteState {
+    #[default]
+    Open,
+    Sent,
+    Touched,
+    Untouched,
+    Resolved,
+}
+
+/// Louis's review note on a work item, anchored at `path:line_start-line_end` (#133).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ReviewNote {
+    /// 0 until stored.
+    pub id: i64,
+    pub work_item_id: WorkItemId,
+    /// Relative to the worktree.
+    pub path: String,
+    pub line_start: u32,
+    pub line_end: u32,
+    pub body: String,
+    /// `nvim` | `pr`.
+    pub source: String,
+    /// Id of the note on its source (a PR comment); `None` for nvim notes.
+    pub ext_ref: Option<String>,
+    pub state: NoteState,
+    /// RFC 3339.
+    pub sent_at: Option<String>,
+}
+
+/// `work_notes`: the notes of an item and what changed since they were last sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ReviewNotes {
+    pub worktree: PathBuf,
+    pub notes: Vec<ReviewNote>,
+    /// `+N/−M since feedback` (worktree against the snapshot taken when the notes were sent).
+    pub since: Option<ReviewDelta>,
+}
+
 /// Ports per work item: `KELTA_PORT` plus `KELTA_PORT_1..9`.
 pub const PORT_BLOCK: u16 = 10;
 

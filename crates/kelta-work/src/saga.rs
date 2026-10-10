@@ -61,6 +61,9 @@ pub(crate) struct Journal {
     pub include_copies: Vec<String>,
     /// Tracker side effects already attempted (`assign`, `transition`, `comment`).
     pub effects_done: BTreeSet<String>,
+    /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
+    #[serde(default)]
+    pub pending_prompt: Option<String>,
 }
 
 impl Journal {
@@ -1140,6 +1143,9 @@ impl WorkService {
                 let _ = std::fs::remove_file(&sock);
                 let c = editor::ctx(Some(&sock), ".", None, None, &item.worktree, &key);
                 let mut args = editor::render_args(&preset.args, &c)?;
+                if preset.open == EditorOpenMode::Rpc {
+                    args.splice(0..0, self.nvim_plugin_args());
+                }
                 if item.kind == WorkKind::Review {
                     for a in &env.settings.editor.review_args {
                         args.push(render(a, &ctx, Mode::Lenient)?);

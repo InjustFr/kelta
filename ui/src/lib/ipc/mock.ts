@@ -19,6 +19,8 @@ import type {
   ProjectInfo,
   ReviewDetail,
   ReviewItem,
+  ReviewNote,
+  ReviewNotes,
   ScreenInstanceId,
   SessionInfo,
   SessionKind,
@@ -102,6 +104,8 @@ export interface MockState {
   /** Pending (draft) review line comments per `repo#number`. */
   pending: Record<string, number>;
   plugins: (typeof samples.pluginInfo)[];
+  /** Review notes per work item. */
+  notes: Record<string, ReviewNote[]>;
 }
 
 interface MockOptions {
@@ -126,6 +130,31 @@ const CATEGORY_NAMES: Record<StatusCategory, string> = {
   unknown: 'Unknown',
 };
 
+function sampleNotes(id: string): ReviewNote[] {
+  const note = (
+    n: number,
+    path: string,
+    line: number,
+    body: string,
+    st: ReviewNote['state'],
+  ): ReviewNote => ({
+    id: n,
+    work_item_id: id,
+    path,
+    line_start: line,
+    line_end: line + 2,
+    body,
+    source: 'nvim',
+    ext_ref: null,
+    state: st,
+    sent_at: st === 'open' ? null : '2026-01-01T10:00:00Z',
+  });
+  return [
+    note(1, 'src/checkout/rate_limit.rs', 10, 'use the existing backoff helper', 'open'),
+    note(2, 'src/checkout/mod.rs', 3, 'name this after the ticket', 'untouched'),
+  ];
+}
+
 function freshState(): MockState {
   return {
     projects: clone(FIXTURES.projects),
@@ -142,6 +171,7 @@ function freshState(): MockState {
     remoteNew: {},
     pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
+    notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
   };
 }
 
@@ -301,6 +331,11 @@ export function createMockTransport(options: MockOptions = {}): {
     if (!w) throw err('not_found', `work item not found: ${id}`);
     return w;
   };
+  const notesOf = (id: string): ReviewNotes => ({
+    worktree: work(id).worktree,
+    notes: clone(state.notes[id] ?? []),
+    since: null,
+  });
   // A recorded rebase awaiting its force push is "diverged"; `remoteNew` drives "Remote has new commits".
   const gitOf = (w: WorkItem): GitStatus => {
     const base = clone(state.git[w.id] ?? samples.gitStatus);
@@ -1190,6 +1225,22 @@ export function createMockTransport(options: MockOptions = {}): {
       w.left_at = new Date().toISOString();
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
+    },
+    work_notes: ({ id }) => notesOf(id),
+    work_note_resolve: ({ id, note }) => {
+      const n = (state.notes[id] ?? []).find((x) => x.id === note);
+      if (!n) throw err('not_found', `note ${note}`);
+      n.state = 'resolved';
+      emit({ type: 'work.updated', work: clone(work(id)) });
+      return notesOf(id);
+    },
+    work_notes_send: ({ id }) => {
+      const open = (state.notes[id] ?? []).filter((n) => n.state === 'open' || n.state === 'untouched');
+      if (open.length === 0) throw err('invalid_argument', 'no open review notes');
+      const now = new Date().toISOString();
+      for (const n of open) Object.assign(n, { state: 'sent', sent_at: now });
+      emit({ type: 'work.updated', work: clone(work(id)) });
+      return notesOf(id);
     },
     work_arm_merge: ({ id }) => {
       const w = work(id);

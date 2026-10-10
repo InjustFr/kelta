@@ -4,6 +4,7 @@ mod claude_files;
 mod common;
 mod fix_loop;
 mod git_ops;
+mod notes;
 mod nvim_rpc;
 mod saga;
 mod ship;

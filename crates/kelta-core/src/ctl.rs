@@ -349,6 +349,18 @@ impl Core {
                 self.work.editor_open(target, &file, line).await?;
                 Ok(Value::Null)
             }
+            CtlCommand::NoteAdd { session, path, line_start, line_end, body } => Ok(serde_json::to_value(
+                self.work.note_add(&session, &path, (line_start, line_end), &body).await?,
+            )?),
+            CtlCommand::NoteList { session } => {
+                Ok(serde_json::to_value(self.work.notes_of_session(&session).await?)?)
+            }
+            CtlCommand::NoteSend { session } => {
+                Ok(serde_json::to_value(self.work.notes_send_of_session(&session).await?)?)
+            }
+            CtlCommand::NoteResolve { session, note } => {
+                Ok(serde_json::to_value(self.work.note_resolve_of_session(&session, note).await?)?)
+            }
             CtlCommand::Version => Ok(json!({ "version": kelta_proto::VERSION })),
         }
     }

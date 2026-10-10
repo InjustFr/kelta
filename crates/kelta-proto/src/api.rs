@@ -23,8 +23,9 @@ use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
 use crate::ipc::WindowState;
 use crate::model::{
-    AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope,
-    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
+    AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, ReviewNote,
+    Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem,
+    WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -334,6 +335,10 @@ pub trait WorkStore: Send + Sync {
         detail: Option<String>,
     ) -> Result<(), KeltaError>;
     async fn steps(&self, id: &WorkItemId) -> Result<Vec<WorkStepStatus>, KeltaError>;
+    /// Review notes of an item, by path then line (`delete_item` drops them).
+    async fn notes(&self, id: &WorkItemId) -> Result<Vec<ReviewNote>, KeltaError>;
+    /// Insert (`id` 0) or update a note; returns its id.
+    async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
