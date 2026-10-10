@@ -39,11 +39,18 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 ## 3. Core flows
 
 ### 3.1 Start work on a ticket
-Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
+Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]` (without `--project`: the default below; a guess shows the sheet), trigger action `start_work`, batch start (one Project field: "Usual project for each ticket" skips a ticket whose project is only a guess, or one project for all).
 
-1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required):
+The project belongs to the work item (where the session runs), not to the ticket. Entry points pass the item's own project (the ticket source's, a sub-task's parent's) or none, never the active project; `work_plan { project_id?, source }` picks the default, first match wins:
+- **Ticket:** (1) the project of an unfinished work item for this ticket, in any project: always a Resume there, with no picker (a closed project opens); (2) the caller's project; (3) the project of my most recent work item on a ticket of the same tracker account; (4) an open project whose tracker binding uses that account; (5) the active project, marked `project_guessed`.
+- **PR (Review locally):** (1) its work item's project; (2) the caller's project if it binds the PR's repo; (3) the first open project that does. None → refused with "No project has acme/web as a repository" and an **Open project settings** action.
+- **Choices** (`project_choices`): open, non-Home projects with a repository; for a PR, those binding its repo. None → refused with "Add a repository to a project first" and an **Add project** action.
+
+1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required, a guessed project included, even with `S`):
    ```
-   StartWorkPlan { project_id, source: Ticket{ticket}, repo_id (picker if >1; remembered per ticket; repo_rules),
+   StartWorkPlan { project_id, project_choices (picker if >1, first field; switching re-plans branch, worktree,
+     Claude and side effects for that project), project_guessed (hint "No usual project for <account> tickets yet",
+     focus on Project), source: Ticket{ticket}, repo_id (picker if >1; remembered per ticket; repo_rules),
      base: "main", branch: "feat/SHOP-142-rate-limit-login" (template; validated with git check-ref-format),
      branch_exists: Option<{has_worktree, choice: Reuse|Suffix}> , worktree_path, template_id: "claude+editor",
      claude: {profile: "default", model, effort, permission_mode, prompt (rendered, editable)},
@@ -72,6 +79,8 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 
 ### 3.3 PR / MR review list and actions
 - **Reviews** pane per project (repos bound to the project) or aggregated (Inbox, all accounts, "Other" for unbound repos). Sections: *Review requested*, *My PRs*. Row: title, repo/project chip, author, draft, CI (✓ ✗ ● –), decision, my state, size (+/−), age, linked ticket keys. Filters: include drafts, repo (team requests follow `reviews.include_team_requests`).
+- **Split view** (as Tickets, §3.4b): in a Reviews pane 720px or wider (the rail's view and a project's tab) the selected PR's detail shows in a column on the right; selecting a row loads it and marks it seen. `Space` toggles it, `Enter` focuses it, `Esc` returns to the list, `Shift+Enter` opens the standalone detail in the PR's project (also what `Enter` does in a narrow pane). The column is the same `ReviewDetailPane`, run in the PR's first project (else the active one).
+- **Cross links in the rail's views:** `p` on a ticket in Tickets switches to Reviews with that PR selected, in whichever section holds it; a PR in neither list, or on an unbound code host, opens as before (standalone detail, or the browser). A PR's linked-ticket badge switches to Tickets with that ticket selected when the view has it loaded, else it searches and opens the ticket in its project as before.
 - **Detail:** sanitized description, reviewers, checks summary, file list (+/− counts). Actions: **Approve** (sends the shown `head_sha`; stale → "PR changed, refresh"), **Comment**, **Request changes** (GitLab: comment + optional unapprove), **Open in browser**, **Review locally**.
 - **Review locally** (`work_plan` with `Review` source → same sheet): fetch `pull/<n>/head:kelta/pr-<n>` (GitHub) / `merge-requests/<iid>/head:kelta/mr-<iid>` (GitLab) / `pull/<n>/head:kelta/pr-<n>` (Gitea) / the source branch (Bitbucket Cloud, which exposes no PR refs) → worktree `<root>/review-<n>` → template `review` (Claude with profile `review`, `--permission-mode plan`, prompt from `claude.prompt_templates.review`; nvim with `editor.review_args`, e.g. `-c "DiffviewOpen origin/{base}...HEAD"`; shell with `git diff --stat origin/<base>...`).
 - Rows refresh on window focus through the list query (one request, also brings back PRs pushed after my review, badge "Updated since your review"), never through `get` on each row.

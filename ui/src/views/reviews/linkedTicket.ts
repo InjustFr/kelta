@@ -2,10 +2,11 @@
 
 import { trackerSearch } from '$lib/ipc/commands';
 import type { ProjectId } from '$lib/gen';
-import { projects, toasts } from '$lib/stores';
+import { projects, tickets, toasts, ui } from '$lib/stores';
+import { ticketKey } from '$lib/stores/tickets.svelte';
 
-import { activateProject } from '../../shell/nav';
-import { openContent } from '../work/nav';
+import { activateProject, openView } from '../../shell/nav';
+import { globalContent, openContent } from '../work/nav';
 
 // `#12` badges: GitHub/GitLab/Gitea name tickets `repo#12`, Redmine uses the bare `12`.
 export function sameKey(k: string, key: string, repo: string): boolean {
@@ -19,6 +20,15 @@ export async function openLinkedTicket(
   projectId: ProjectId | null,
   repo: string,
 ): Promise<void> {
+  // From a global view, a ticket the Tickets view has loaded lands there instead of opening a project.
+  const tv = ui.view !== null ? globalContent('tickets') : null;
+  const loaded =
+    tv?.kind === 'tickets' &&
+    tickets.items(tv.scope, tv.view_id, tv.who).find((i) => sameKey(i.ticket.ref.key, key, repo));
+  if (loaded) {
+    openView('tickets', ticketKey(loaded.ticket.ref));
+    return;
+  }
   try {
     // The search is fuzzy (`SHOP-1` also finds `SHOP-12`): only an exact key counts.
     const hits = (await trackerSearch({ scope: { kind: 'all' }, text: key })).filter((h) =>

@@ -9,6 +9,7 @@
   import { reviewKey } from '$lib/stores/reducers';
   import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp } from '$lib/ui';
 
+  import PluginActions from '../plugins/PluginActions.svelte';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -16,7 +17,12 @@
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
 
-  let { projectId, content }: PaneProps<'review_detail'> = $props();
+  /** `embedded`: the Reviews split view's column; the list owns `Esc` and the focus. */
+  let {
+    projectId,
+    content,
+    embedded = false,
+  }: PaneProps<'review_detail'> & { embedded?: boolean } = $props();
 
   const ref = $derived(content.review);
   const slot = $derived(reviews.details[reviewKey(ref)]);
@@ -126,7 +132,7 @@
   }
 
   $effect(() => {
-    if (root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
+    if (!embedded && root && !root.contains(document.activeElement)) root.focus({ preventScroll: true });
   });
 </script>
 
@@ -136,6 +142,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="pane k-detail"
+  class:embedded
   data-testid="review-detail"
   bind:this={root}
   tabindex="0"
@@ -226,6 +233,20 @@
           </Button>
         {/if}
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
+        <PluginActions
+          kind="review"
+          size="md"
+          ctx={{
+            review: ref,
+            extra: {
+              project_id: projectId,
+              'pr.head': rv.source_branch,
+              'pr.base': rv.target_branch,
+              'pr.title': rv.title,
+              'pr.url': rv.url,
+            },
+          }}
+        />
       </div>
     </header>
 
@@ -339,6 +360,19 @@
     outline: none;
     background: var(--k-well);
     color: var(--k-fg);
+  }
+
+  /* Split view: list and detail share one pane, so mark which side has the keys (DESIGN §7). */
+  .embedded:focus-visible {
+    box-shadow: inset 2px 0 0 var(--k-focus);
+  }
+
+  .embedded .head {
+    padding: var(--k-space-4) var(--k-space-4) var(--k-space-3);
+  }
+
+  .embedded .scroll {
+    padding: 0 var(--k-space-4) var(--k-space-4);
   }
 
   .changed {

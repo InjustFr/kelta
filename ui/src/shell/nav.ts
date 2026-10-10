@@ -111,8 +111,10 @@ export function cycleProject(delta: 1 | -1): void {
 
 export const VIEW_NAMES: Record<GlobalView, string> = { tickets: 'Tickets', now: 'Now', reviews: 'Reviews' };
 
-/** Shows a global view on the rail; the active project stays as it is underneath. */
-export function openView(view: GlobalView): void {
+/** Shows a global view on the rail; the active project stays as it is underneath. `select`: the row
+ * key the view lands on (a cross link between Tickets and Reviews). */
+export function openView(view: GlobalView, select?: string): void {
+  ui.select = select ? { view, key: select } : null;
   ui.view = view;
   // Merges / closes missed while Kelta was closed or the poll was off (FLOW §3.6).
   if (view === 'now') workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));

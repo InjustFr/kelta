@@ -248,6 +248,23 @@ async fn review_locally_on_my_own_pr_resumes_its_work_item() {
 }
 
 #[tokio::test]
+async fn my_adopted_pr_planned_from_another_project_resumes_there() {
+    need_git!();
+    let fx = Fx::new();
+    let mut other = samples::project_info();
+    other.id = kelta_proto::ids::ProjectId::new("other");
+    other.repos[0].path = fx.repo.clone();
+    fx.core.add_project(other.clone());
+    let (w, item) = started(&fx, "SHOP-142").await;
+    let mut pr = samples::review_ref();
+    pr.number = 90;
+    let plan = w.plan(&other.id, WorkSource::Review { review: pr }).await.unwrap();
+    assert_eq!(plan.project_id, project());
+    assert_eq!(plan.existing.as_ref(), Some(&item.id));
+    assert!(plan.adopt_pr.is_none());
+}
+
+#[tokio::test]
 async fn my_pr_made_outside_kelta_is_adopted_on_its_head_branch() {
     need_git!();
     let fx = Fx::new();

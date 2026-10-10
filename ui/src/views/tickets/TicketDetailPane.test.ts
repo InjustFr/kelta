@@ -49,6 +49,14 @@ describe('TicketDetailPane', () => {
     expect(screen.getByRole('button', { name: 'Start work' })).toBeTruthy();
   });
 
+  it('s on a standalone pane sends no project as the caller', async () => {
+    mountDetail();
+    await screen.findByRole('heading', { level: 1 });
+    await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 's' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(true));
+    expect(mock.calls.find((c) => c.cmd === 'work_plan')!.args).toMatchObject({ project_id: null });
+  });
+
   it('posts a comment with Ctrl+Enter', async () => {
     mountDetail();
     const box = await screen.findByLabelText(/Add a comment/);

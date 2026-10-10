@@ -14,10 +14,10 @@ use super::Res;
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_plan(
     core: State<'_, Arc<Core>>,
-    project_id: ProjectId,
+    project_id: Option<ProjectId>,
     source: WorkSource,
 ) -> Res<StartWorkPlan> {
-    core.work().plan(&project_id, source).await
+    core.work_plan(project_id, source).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

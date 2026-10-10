@@ -1,26 +1,29 @@
 // Entry points of the start-work flow (SPEC §3.1): plan → (sheet | direct start | resume).
 
-import type { ProjectId, ReviewRef, StartWorkPlan, TicketRef, WorkItem, WorkSource } from '$lib/gen';
+import type {
+  ProjectId,
+  ReviewRef,
+  StartWorkPlan,
+  TicketRef,
+  ToastAction,
+  WorkItem,
+  WorkSource,
+} from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
-import { projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
+import { toIpcError } from '$lib/ipc/transport';
+import { settings, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 import { withCriteria } from '../tickets/refine.svelte';
 
-/** Kelta project a ticket belongs to: first matching project of any loaded list, else the active one. */
-export function projectForTicket(ref: TicketRef): ProjectId | null {
-  for (const list of Object.values(tickets.lists)) {
-    const hit = list.data?.items.find(
-      (i) => i.ticket.ref.account === ref.account && i.ticket.ref.key === ref.key,
-    );
-    if (hit && hit.project_ids[0]) return hit.project_ids[0];
-  }
-  return projects.activeId;
-}
-
-/** True when the plan needs a decision from the user (repo, existing branch, existing work item). */
+/** True when the plan needs a decision from the user (repo, guessed project, existing branch or item). */
 export function needsChoice(plan: StartWorkPlan): boolean {
-  return plan.existing !== null || plan.branch_exists !== null || plan.repo_choices.length > 1;
+  return (
+    plan.existing !== null ||
+    plan.branch_exists !== null ||
+    plan.repo_choices.length > 1 ||
+    (plan.project_guessed && plan.project_choices.length > 1)
+  );
 }
 
 /** Options of a start: `preview` overrides `work.plan_preview` (`false` = start with no sheet). */
@@ -28,9 +31,10 @@ export interface StartOpts {
   preview?: boolean;
 }
 
-/** Requests a plan and shows the sheet, or starts/resumes directly when previews are off. */
+/** Requests a plan and shows the sheet, or starts/resumes directly when previews are off.
+ * `projectId` is the item's own project, null when it has none: never the active project (SPEC §3.1). */
 export async function beginStartWork(
-  projectId: ProjectId,
+  projectId: ProjectId | null,
   source: WorkSource,
   opts: StartOpts = {},
 ): Promise<WorkItem | null> {
@@ -49,7 +53,10 @@ export async function beginStartWork(
     void activateProject(item.project_id);
     return item;
   } catch (err) {
-    toasts.error(err, 'Start work');
+    const e = toIpcError('work_plan', err);
+    const action = (e.detail as { action?: ToastAction } | null)?.action ?? null;
+    if (action) toasts.push({ level: 'error', text: e.message, action });
+    else toasts.error(err, 'Start work');
     return null;
   }
 }
@@ -59,34 +66,10 @@ export function startWorkOnTicket(
   projectId?: ProjectId | null,
   opts: StartOpts = {},
 ): Promise<WorkItem | null> {
-  const pid = projectId ?? projectForTicket(ref);
-  if (!pid) {
-    toasts.warn('Open a project first to start work on a ticket');
-    return Promise.resolve(null);
-  }
-  return beginStartWork(pid, { kind: 'ticket', ticket: ref }, opts);
-}
-
-/** Kelta project a review belongs to (first match of any loaded list), else `fallback`/the active one. */
-export function projectForReview(ref: ReviewRef, fallback?: ProjectId | null): ProjectId | null {
-  for (const list of Object.values(reviews.lists)) {
-    const hit = list.data?.items.find(
-      (i) =>
-        i.review.ref.account === ref.account &&
-        i.review.ref.repo === ref.repo &&
-        i.review.ref.number === ref.number,
-    );
-    if (hit && hit.project_ids[0]) return hit.project_ids[0];
-  }
-  return fallback ?? projects.activeId;
+  return beginStartWork(projectId ?? null, { kind: 'ticket', ticket: ref }, opts);
 }
 
 /** "Review locally": work_plan with a Review source, same sheet as start work. */
-export function reviewLocally(ref: ReviewRef, fallback?: ProjectId | null): Promise<WorkItem | null> {
-  const pid = projectForReview(ref, fallback);
-  if (!pid) {
-    toasts.warn('Open a project first to review locally');
-    return Promise.resolve(null);
-  }
-  return beginStartWork(pid, { kind: 'review', review: ref });
+export function reviewLocally(ref: ReviewRef, projectId?: ProjectId | null): Promise<WorkItem | null> {
+  return beginStartWork(projectId ?? null, { kind: 'review', review: ref });
 }

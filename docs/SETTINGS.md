@@ -394,7 +394,7 @@ Config holds only `SecretRef` strings, never tokens:
 
 Simple `{path}` substitution (no expressions). Filters: `{x|slug}`, `{x|shell}` (POSIX single-quote), `{x|json}`, `{a|b}` = first non-empty of `a` or `b` (e.g. `{worktree|project.root}`). Unknown placeholder → validation error at load time. In commands typed into a shell (a session template's `command`), every value is POSIX-quoted by default (`|shell` is implied; writing it does not quote twice), so a ticket title cannot run as shell code.
 
-Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`.
+Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.id` (the work item), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`.
 
 ## 7. Hot reload
 

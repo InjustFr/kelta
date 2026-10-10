@@ -239,7 +239,8 @@ export interface Commands {
   /** My PR: re-request `who` (its `waiting_on`; `comment` null) or post `comment`; refused for 24 h after a nudge. */
   review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
   // ---- work --------------------------------------------------------------------------------
-  work_plan: { args: { project_id: ProjectId; source: WorkSource }; result: StartWorkPlan };
+  /** `project_id` null: the backend picks the default project (SPEC §3.1). */
+  work_plan: { args: { project_id: ProjectId | null; source: WorkSource }; result: StartWorkPlan };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };
   work_list: { args: { project_id?: ProjectId | null }; result: WorkItem[] };
   work_resume: { args: { id: WorkItemId }; result: WorkItem };
