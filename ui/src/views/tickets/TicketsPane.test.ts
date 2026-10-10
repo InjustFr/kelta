@@ -272,7 +272,7 @@ describe('TicketsPane workbench', () => {
   it('switches who with 1/2/3, loads with that who and shows the counts', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Mine 2' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Mine 3' })).toBeTruthy());
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Unassigned 1' })).toBeTruthy());
     await press('2');
     await waitFor(() => expect(card(container, 'SHOP-151')).toBeNull());
@@ -290,10 +290,10 @@ describe('TicketsPane workbench', () => {
   it('groups by native status, cycles the grouping with g, and keeps Done collapsed', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
-    expect(groupNames(container)).toEqual(['In Progress 1', 'In Review 1', 'To Do 2']);
+    expect(groupNames(container)).toEqual(['Blocked 1', 'In Progress 1', 'In Review 1', 'To Do 2']);
     await press('g');
     await waitFor(() =>
-      expect(groupNames(container)).toEqual(['Ada Lovelace 2', 'Bob Martin 1', 'Unassigned 1']),
+      expect(groupNames(container)).toEqual(['Ada Lovelace 3', 'Bob Martin 1', 'Unassigned 1']),
     );
     await press('g'); // source
     await press('g'); // none
@@ -325,6 +325,7 @@ describe('TicketsPane workbench', () => {
       'In progress',
       'In review',
       'Done',
+      'Blocked',
     ]);
     await fireEvent.keyDown(menu, { key: '2' });
     await waitFor(() =>
@@ -365,9 +366,9 @@ describe('TicketsPane workbench', () => {
   });
 
   it('s opens the start sheet, S starts with no sheet', async () => {
-    const { container } = mountBoard('list', 'kelta-tools');
-    await waitFor(() => expect(container.querySelector('[data-key="github-oss:#15"]')).not.toBeNull());
-    await fireEvent.click(container.querySelector('[data-key="github-oss:#15"]') as HTMLElement);
+    const { container } = mountBoard('list', 'billing');
+    await waitFor(() => expect(container.querySelector('[data-key="redmine-corp:4610"]')).not.toBeNull());
+    await fireEvent.click(container.querySelector('[data-key="redmine-corp:4610"]') as HTMLElement);
     await press('s');
     await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
     ui.sheets = [];

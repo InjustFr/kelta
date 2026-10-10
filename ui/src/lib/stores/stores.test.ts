@@ -255,6 +255,19 @@ describe('TicketsStore', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
   });
 
+  it('refetches loaded lists on reviews.changed (row PR chips)', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'billing' };
+    await store.load(scope, 'mine');
+    const before = mock.calls.filter((c) => c.cmd === 'tracker_list').length;
+    store.apply({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
+    await flush();
+    await flush();
+    const calls = mock.calls.filter((c) => c.cmd === 'tracker_list');
+    expect(calls.length).toBe(before + 1);
+    expect(calls.at(-1)?.args).toMatchObject({ refresh: false });
+  });
+
   it('loadMore skips tickets already in the list', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'all' as const };
@@ -318,7 +331,7 @@ describe('WorkStore', () => {
   it('loads work items and finds them by ticket/session', async () => {
     const store = new WorkStore();
     await store.load();
-    expect(store.all).toHaveLength(8);
+    expect(store.all).toHaveLength(9);
     const w = store.all[0]!;
     expect(store.forTicket(w.ticket!)?.id).toBe(w.id);
     expect(store.forSession(w.session_ids[0]!)?.id).toBe(w.id);

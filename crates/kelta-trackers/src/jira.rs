@@ -449,6 +449,7 @@ impl Tracker for JiraTracker {
             comments: self.comments_from(api.flavor, &v),
             parent,
             prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

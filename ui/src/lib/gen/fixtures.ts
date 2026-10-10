@@ -606,6 +606,13 @@ export const ticketDetail: TicketDetail = {
   "body_format": "adf",
   "body_html": "<p>Limit login attempts to <strong>5/min</strong>.</p>",
   "body_md": "Limit login attempts to **5/min**.",
+  "caps": {
+    "assign": false,
+    "board_columns": false,
+    "comment": false,
+    "projects_v2": false,
+    "transitions_need_fetch": false
+  },
   "comments": [
     {
       "author": {

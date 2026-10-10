@@ -361,6 +361,7 @@ impl Tracker for GitlabIssues {
             comments,
             parent: None,
             prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

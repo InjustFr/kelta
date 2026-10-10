@@ -207,7 +207,7 @@
     "prs": [
       {
         "url": "https://github.com/acme/shop-api/pull/88",
-        "account": "github-acme",
+        "account": null,
         "repo": "acme/shop-api",
         "number": 88,
         "title": "SHOP-120: upgrade payment SDK",
@@ -344,7 +344,7 @@
     "prs": [
       {
         "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/44",
-        "account": "gitlab-corp",
+        "account": null,
         "repo": "fin/billing/core",
         "number": 44,
         "title": "",
@@ -506,7 +506,7 @@
       "due": null
     },
     "project_ids": ["kelta-tools"],
-    "work_item_id": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a009",
     "view_ids": ["mine"],
     "prs": [],
     "caps": {
@@ -604,6 +604,97 @@
       "board_columns": false,
       "assign": false,
       "comment": false,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "jira-acme",
+        "key": "SHOP-160",
+        "id": "10160"
+      },
+      "title": "Apple Pay: waiting on merchant certificate",
+      "url": "https://acme.atlassian.net/browse/SHOP-160",
+      "status": {
+        "id": "10010",
+        "name": "Blocked",
+        "category": "in_progress"
+      },
+      "kind": "Story",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "High",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "SHOP",
+      "priority_rank": 1,
+      "status_since": "2026-09-28T12:00:00Z",
+      "sprint": {
+        "id": "42",
+        "name": "SHOP Sprint 12",
+        "active": true,
+        "ends_at": "2026-10-16"
+      },
+      "estimate": "2",
+      "due": null
+    },
+    "project_ids": ["shop"],
+    "work_item_id": null,
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": true,
+      "projects_v2": false
+    }
+  },
+  {
+    "ticket": {
+      "ref": {
+        "account": "redmine-corp",
+        "key": "4610",
+        "id": "4610"
+      },
+      "title": "Multi-currency invoices",
+      "url": "https://redmine.corp.example/issues/4610",
+      "status": {
+        "id": "7",
+        "name": "Backlog",
+        "category": "unknown"
+      },
+      "kind": "Feature",
+      "assignee": {
+        "id": "u-ada",
+        "name": "Ada Lovelace",
+        "login": "ada",
+        "avatar_url": null
+      },
+      "labels": [],
+      "priority": "Low",
+      "updated_at": "2026-10-08T16:00:00Z",
+      "project_hint": "billing",
+      "priority_rank": 3,
+      "status_since": "2026-08-20T12:00:00Z",
+      "sprint": null,
+      "estimate": null,
+      "due": null
+    },
+    "project_ids": ["billing"],
+    "work_item_id": null,
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": false,
+      "assign": true,
+      "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": false
     }

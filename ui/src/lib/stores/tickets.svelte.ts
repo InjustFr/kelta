@@ -191,7 +191,8 @@ export class TicketsStore {
   }
 
   apply(ev: UiEvent): void {
-    if (ev.type !== 'tickets.changed') return;
+    // Rows carry core-joined PRs (CI, review), so a review poll refreshes them too (cache only).
+    if (ev.type !== 'tickets.changed' && ev.type !== 'reviews.changed') return;
     const lists: Record<string, TicketList> = {};
     let touched = false;
     for (const [k, l] of Object.entries(this.lists)) {

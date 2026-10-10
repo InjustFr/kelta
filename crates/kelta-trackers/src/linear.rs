@@ -313,6 +313,7 @@ impl Tracker for LinearTracker {
             comments,
             parent: None,
             prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

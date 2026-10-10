@@ -62,6 +62,7 @@ impl FakeTracker {
                 comments: vec![],
                 parent: None,
                 prs: Vec::new(),
+                caps: Default::default(),
             }
         };
         let wf = workflow();

@@ -194,6 +194,9 @@ pub struct TicketDetail {
     /// Filled by kelta-core (TICKETS.md T1); providers leave it empty.
     #[serde(default)]
     pub prs: Vec<PrLink>,
+    /// The ticket account's caps, filled by kelta-core (a standalone detail has no list item).
+    #[serde(default)]
+    pub caps: TrackerCaps,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

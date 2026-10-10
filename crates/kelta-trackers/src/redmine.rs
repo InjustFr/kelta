@@ -369,6 +369,7 @@ impl Tracker for RedmineTracker {
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent,
             prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

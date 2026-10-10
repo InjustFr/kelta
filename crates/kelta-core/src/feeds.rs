@@ -122,12 +122,14 @@ fn pr_link(r: &Review, source: PrSource) -> PrLink {
 
 /// A ticket's PRs (TICKETS.md T1), no network: its work item's `pr_url` (enriched from the feed
 /// when listed there), then open PRs of the polled feeds naming the ticket; de-duplicated by URL.
-/// `bound` is the code-host `(account, repo)` of the work item's repo.
+/// `bound` is the code-host `(account, repo)` of the work item's repo; `repos` are the code-host
+/// repos of the ticket's projects, the only ones a bare-number key (Redmine `12` ~ `#12`) matches in.
 pub fn ticket_prs(
     key: &str,
     work: Option<&WorkItem>,
     bound: Option<(AccountId, String)>,
     reviews: &[Review],
+    repos: &[String],
 ) -> Vec<PrLink> {
     let mut out: Vec<PrLink> = Vec::new();
     if let Some(w) = work
@@ -156,7 +158,12 @@ pub fn ticket_prs(
         };
         out.push(link);
     }
-    for r in reviews.iter().filter(|r| r.linked_tickets.iter().any(|l| same_key(key, l, &r.r#ref.repo))) {
+    let bare = key.bytes().all(|b| b.is_ascii_digit());
+    let in_scope = |r: &Review| !bare || repos.iter().any(|x| x.eq_ignore_ascii_case(&r.r#ref.repo));
+    for r in reviews
+        .iter()
+        .filter(|r| in_scope(r) && r.linked_tickets.iter().any(|l| same_key(key, l, &r.r#ref.repo)))
+    {
         if !out.iter().any(|l| l.url == r.url) {
             out.push(pr_link(r, PrSource::KeyMatch));
         }
@@ -512,7 +519,8 @@ impl Core {
     /// Core-filled ticket fields: linked PRs and the tracker's caps.
     fn enrich(&self, i: &mut TicketItem, work: &HashMap<TicketRef, WorkItem>, reviews: &[Review]) {
         let w = work.get(&i.ticket.r#ref);
-        i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews);
+        let repos = self.code_repos(&i.project_ids);
+        i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews, &repos);
         i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
     }
 
@@ -597,14 +605,14 @@ impl Core {
             let probe = TicketRef { account: q.account, key: key.into(), id: key.into() };
             if let Ok(d) = self.tracker_get(&probe).await {
                 let work = self.work_by_ticket().await;
-                let mut item = TicketItem {
+                return Ok(vec![TicketItem {
                     work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
                     ticket: d.ticket,
                     project_ids: q.projects,
+                    prs: d.prs,
+                    caps: d.caps,
                     ..TicketItem::default()
-                };
-                self.enrich(&mut item, &work, &self.cached_reviews().await);
-                return Ok(vec![item]);
+                }]);
             }
         }
         Ok(hits)
@@ -640,8 +648,13 @@ impl Core {
         }
         let mut d = r?;
         let work = self.work_by_ticket().await;
-        let w = work.get(t);
-        d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &self.cached_reviews().await);
+        let w = work.get(&d.ticket.r#ref);
+        let projects: Vec<ProjectId> =
+            self.project_for_account(&t.account).map(|p| p.id.clone()).into_iter().collect();
+        let repos = self.code_repos(&projects);
+        d.prs =
+            ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &self.cached_reviews().await, &repos);
+        d.caps = self.tracker_of(&t.account)?.caps();
         Ok(d)
     }
 
@@ -1119,6 +1132,20 @@ impl Core {
     }
 
     /// `(account, repo)` of the code host bound to a work item's repo.
+    /// The code-host repos of `projects`.
+    fn code_repos(&self, projects: &[ProjectId]) -> Vec<String> {
+        projects
+            .iter()
+            .filter_map(|id| self.cfg.project(id))
+            .flat_map(|p| {
+                p.repos
+                    .iter()
+                    .filter_map(|r| r.code_host.as_ref().map(|c| c.repo.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     fn work_binding(&self, w: &WorkItem) -> Option<(AccountId, String)> {
         let p = self.cfg.project(&w.project_id)?;
         let ch = p.repos.iter().find(|r| r.id == w.repo_id)?.code_host.clone()?;

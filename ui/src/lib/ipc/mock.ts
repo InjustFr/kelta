@@ -204,7 +204,7 @@ const FINISH_MERGED: FinishOpts = {
   transition_to: null,
 };
 
-function ticketDetailFor({ ticket: t, prs }: TicketItem, comments: string[]): TicketDetail {
+function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
   const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
   return {
     ticket: t,
@@ -225,6 +225,7 @@ function ticketDetailFor({ ticket: t, prs }: TicketItem, comments: string[]): Ti
     ],
     parent: null,
     prs,
+    caps,
   };
 }
 
@@ -246,16 +247,41 @@ function defaultColumns(): Column[] {
   }));
 }
 
+// Native status names per tracker, so transition sets differ across accounts (multi-select `m`).
+const NATIVE_STATUSES: Record<string, [StatusCategory, string][]> = {
+  'redmine-corp': [
+    ['todo', 'New'],
+    ['in_progress', 'In Progress'],
+    ['done', 'Resolved'],
+  ],
+  'jira-acme': [
+    ['todo', CATEGORY_NAMES.todo],
+    ['in_progress', CATEGORY_NAMES.in_progress],
+    ['in_review', CATEGORY_NAMES.in_review],
+    ['done', CATEGORY_NAMES.done],
+    ['in_progress', 'Blocked'],
+  ],
+};
+
 function transitionsFor(t: Ticket): Transition[] {
   const cats: StatusCategory[] = ['todo', 'in_progress', 'in_review', 'done'];
-  return cats
-    .filter((c) => c !== t.status.category)
-    .map((category) => ({
-      id: `to-${category}`,
-      name: CATEGORY_NAMES[category],
-      to: { id: `st-${category}`, name: CATEGORY_NAMES[category], category },
-      needs_fields: category === 'done' && t.ref.account === 'jira-acme',
-    }));
+  const native =
+    NATIVE_STATUSES[t.ref.account] ?? cats.map((c): [StatusCategory, string] => [c, CATEGORY_NAMES[c]]);
+  return native
+    .filter(
+      ([c, name]) =>
+        name !== t.status.name &&
+        (c !== t.status.category || name === 'Blocked' || t.status.name === 'Blocked'),
+    )
+    .map(([category, name]) => {
+      const id = name === 'Blocked' ? 'to-blocked' : `to-${category}`;
+      return {
+        id,
+        name,
+        to: { id: `st-${id.slice(3)}`, name, category },
+        needs_fields: category === 'done' && t.ref.account === 'jira-acme',
+      };
+    });
 }
 
 function setPath(root: JsonValue, path: string, value: JsonValue | undefined): JsonValue {
@@ -803,6 +829,10 @@ export function createMockTransport(options: MockOptions = {}): {
     tracker_transition: ({ ticket, transition_id, fields }) => {
       const t = transitionsFor(ticketItem(ticket).ticket).find((x) => x.id === transition_id);
       if (!t) throw err('not_found', `transition ${transition_id} not available`);
+      // The tracker refuses this one (workflow rule): the StatusPicker's error path.
+      if (ticket.account === 'redmine-corp' && ticket.key === '4567' && t.to.category === 'done') {
+        throw err('conflict', 'Redmine: status transition not allowed (422)');
+      }
       if (t.needs_fields && !fields) {
         throw err('needs_fields', `${t.name} requires fields`, {
           fields: [{ id: 'resolution', name: 'Resolution', required: true }],

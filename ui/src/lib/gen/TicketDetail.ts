@@ -4,6 +4,7 @@ import type { Comment } from "./Comment";
 import type { PrLink } from "./PrLink";
 import type { Ticket } from "./Ticket";
 import type { TicketRef } from "./TicketRef";
+import type { TrackerCaps } from "./TrackerCaps";
 
 export type TicketDetail = { ticket: Ticket, body_md: string, 
 /**
@@ -17,4 +18,8 @@ comments: Array<Comment>, parent: TicketRef | null,
 /**
  * Filled by kelta-core (TICKETS.md T1); providers leave it empty.
  */
-prs: Array<PrLink>, };
+prs: Array<PrLink>, 
+/**
+ * The ticket account's caps, filled by kelta-core (a standalone detail has no list item).
+ */
+caps: TrackerCaps, };

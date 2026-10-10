@@ -701,13 +701,17 @@ fn hash_keys_resolve_against_the_pr_repo_and_merged_items_win() {
     r.url = "https://github.com/acme/shop/pull/7".into();
     r.linked_tickets = vec!["#12".into()];
     let one = std::slice::from_ref(&r);
-    assert_eq!(ticket_prs("acme/shop#12", None, None, one).len(), 1);
-    assert_eq!(ticket_prs("12", None, None, one).len(), 1, "Redmine bare number");
-    assert!(ticket_prs("acme/other#12", None, None, one).is_empty());
-    assert!(ticket_prs("SHOP-12", None, None, one).is_empty());
+    assert_eq!(ticket_prs("acme/shop#12", None, None, one, &[]).len(), 1);
+    assert_eq!(ticket_prs("12", None, None, one, &["Acme/Shop".into()]).len(), 1, "Redmine bare number");
+    assert!(
+        ticket_prs("12", None, None, one, &["acme/other".into()]).is_empty(),
+        "outside the ticket's repos"
+    );
+    assert!(ticket_prs("acme/other#12", None, None, one, &[]).is_empty());
+    assert!(ticket_prs("SHOP-12", None, None, one, &[]).is_empty());
     // A merged work item keeps its PR, unbound repo → no account (browser only).
     let mut w = work_item("feat/x", Some("https://git.example/a/b/-/merge_requests/44/"));
     w.state = WorkState::Merged { detail: None };
-    let got = ticket_prs("X-1", Some(&w), None, &[]);
+    let got = ticket_prs("X-1", Some(&w), None, &[], &[]);
     assert_eq!((got[0].number, got[0].state, got[0].account.clone()), (44, PrState::Merged, None));
 }

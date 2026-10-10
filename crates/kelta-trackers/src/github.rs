@@ -678,6 +678,7 @@ impl Tracker for GithubIssues {
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent: None,
             prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 

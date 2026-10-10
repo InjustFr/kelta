@@ -128,7 +128,7 @@ describe('mock ticket workbench fixtures', () => {
     const days = (t: (typeof ts)[number]) =>
       Math.round((Date.parse('2026-10-10T12:00:00Z') - Date.parse(t.status_since!)) / 86_400_000);
     expect(new Set(ts.filter((t) => t.status.category !== 'done').map(days))).toEqual(
-      new Set([3, 10, 16, 25]),
+      new Set([3, 10, 12, 16, 25, 51]),
     );
     expect(ts.some((t) => t.estimate) && ts.some((t) => t.due)).toBe(true);
     const ro = MOCK_FIXTURES.tickets.filter((t) => !t.caps.assign && !t.caps.comment);
@@ -361,6 +361,21 @@ describe('mock transport', () => {
     });
   });
 
+  it('transitions use native names per tracker, and one is refused', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const names = async (ticket: { account: string; key: string; id: string }) =>
+      (await call('tracker_transitions', { ticket })).map((t) => t.name);
+    const redmine = { account: 'redmine-corp', key: '4567', id: '4567' };
+    expect(await names(redmine)).toEqual(['New', 'Resolved']);
+    expect(await names({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })).toContain('Blocked');
+    await expect(
+      call('tracker_transition', { ticket: redmine, transition_id: 'to-done' }),
+    ).rejects.toMatchObject({
+      code: 'conflict',
+    });
+  });
+
   it('tracker_transition requiring fields returns NeedsFields with detail.fields', async () => {
     const { transport } = createMockTransport();
     setTransport(transport);
@@ -388,7 +403,7 @@ describe('mock transport', () => {
     controls.state.projects.find((p) => p.id === 'shop')!.tracker!.views[0]!.who = 'unassigned';
     expect(await keys()).toEqual(['SHOP-155']);
     const billing = await call('tracker_list', { scope: { kind: 'project', id: 'billing' }, refresh: false });
-    expect(billing.items.map((i) => i.view_ids)).toEqual([['mine'], ['mine'], ['mine']]);
+    expect(billing.items.map((i) => i.view_ids)).toEqual([['mine'], ['mine'], ['mine'], ['mine']]);
     expect(billing.items.map((i) => i.ticket.ref.key)).toContain('4602'); // done kept when view_id is null
   });
 
