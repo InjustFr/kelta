@@ -344,13 +344,8 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 
 ### 6.3 Tab bar (`shell/TabBar.svelte`)
 
-- 30px, `--k-bezel-raised`. Text tabs, no background box or pill.
-- Layout per tab *(from Faceplate)*: `[lamp slot 10px][title][×]`. The lamp slot is fixed width even when empty, so the states of all tabs line up in one scannable column.
-- Session tab titles (session / branch) use mono 12; view tabs (Tickets, Reviews, Inbox) use the UI face 12.
-- Inactive: `--k-fg-chrome`. Active: `--k-fg` 600 and a 2px accent underline.
-- A tab whose session needs input gets a 2px `--k-lamp-needs-input` top edge, visible even when the tab is scrolled half out of view *(from Faceplate)*.
-- Close button shows on hover, on `:focus-visible`, and on the active tab, so it is keyboard reachable.
-- Tool strip (`shell/ToolStrip.svelte`): the project's first 6 tools after New tab, `[icon] Label` ghost `sm` buttons (label only when the icon is unknown), sticky at the right end with the `--k-bezel` background so overflowing tabs never push it out. A tool running in the current work item is pressed (active tab's `--k-well` face, `aria-pressed`, tooltip ` - running`); a missing tool is at 55% with a "Not installed" tooltip. No strip in Now or the top-level views.
+- `--k-tabbar-height`, `--k-bezel`. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
+- Left: `▌project › title`, a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row title in `--k-fg` 600 (ellipsis). Right: the `+` ghost button and its menu. The context bar (#248) replaces this bar.
 - Window chrome: macOS custom chrome reserves a 72px leading inset for the traffic lights and the empty bar area is `data-tauri-drag-region`. GNOME custom chrome adds a 30px controls cluster on the right. Hyprland/Sway: no title bar, the tab bar is the top edge.
 
 ### 6.4 Panes (`shell/PaneHost.svelte`)

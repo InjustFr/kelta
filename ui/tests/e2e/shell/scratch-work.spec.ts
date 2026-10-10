@@ -28,7 +28,7 @@ test.describe('scratch work items', () => {
 
     const [plan] = await callsOf(page, 'work_plan');
     expect(plan?.args?.source).toMatchObject({ kind: 'branch', name: '', task: TASK });
-    const active = page.locator('[data-testid="tab"][aria-selected="true"]');
+    const active = page.locator('[data-testid="rail-row"][aria-current="page"]');
     await expect(active).toContainText('wip Fix the login flake');
     await expect(page.getByTestId('work-key')).toHaveText('wip');
     const claude = await page.evaluate(() => {

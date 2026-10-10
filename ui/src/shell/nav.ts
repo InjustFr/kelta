@@ -14,6 +14,7 @@ import type {
   SplitDir,
   Tab,
   TabId,
+  ToolInfo,
 } from '$lib/gen';
 import { sessionSpawn, workCheckPrs } from '$lib/ipc/commands';
 import {
@@ -36,7 +37,7 @@ import {
   type PaneNode,
 } from '$lib/layout';
 import { webTools } from '$lib/plugin-host/web.svelte';
-import { layout, projects, sessions, toasts, ui, work, type GlobalView } from '$lib/stores';
+import { layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
 import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
 
@@ -64,6 +65,17 @@ export function railRows(): RailRow[] {
   return railProjects().flatMap((p) =>
     (layout.get(p.id)?.tabs ?? []).filter((tab) => !isToolTab(tab)).map((tab) => ({ project: p.id, tab })),
   );
+}
+
+// shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the
+// list global; then read that one.
+export function railToolsOf(): ProjectId {
+  return projects.activeId ?? 'home';
+}
+
+/** The rail's Tools section, in config order; `tool.goto.N` opens tool N. */
+export function railTools(): ToolInfo[] {
+  return tools.list(railToolsOf());
 }
 
 /** The tool a pane shows: a tool session's id, a web pane's tool (`''` until known); null otherwise. */
@@ -161,9 +173,10 @@ export async function activateProject(id: ProjectId): Promise<void> {
   await pending.catch(() => {});
 }
 
-export function gotoProjectIndex(n: number): void {
-  const target = railProjects()[n - 1];
-  if (target) void activateProject(target.id);
+/** `project.goto.N`: rail row N, counted across bands (tool tabs and background rows excluded). */
+export function gotoRailRow(n: number): void {
+  const row = railRows()[n - 1];
+  if (row) selectRow(row.project, row.tab.id);
 }
 
 export function cycleProject(delta: 1 | -1): void {
@@ -378,14 +391,14 @@ export async function closePaneAndStop(projectId: ProjectId, tabId: TabId, paneI
   if (sid) await sessions.kill(sid).catch((err: unknown) => toasts.error(err, 'Stopping the session failed'));
 }
 
+/** `tab.next/prev`: walks the rail rows across bands; from a global view, next is the first row. */
 export function cycleTab(delta: 1 | -1): void {
-  const projectId = projects.activeId;
-  const l = currentLayout();
-  if (!projectId || !l || l.tabs.length === 0) return;
-  const cur = activeTab(l);
-  const at = cur ? l.tabs.findIndex((t) => t.id === cur.id) : 0;
-  const next = l.tabs[(at + delta + l.tabs.length) % l.tabs.length];
-  if (next) layout.update(projectId, (x) => activateTab(x, next.id));
+  const rows = railRows();
+  if (rows.length === 0) return;
+  const cur = ui.view ? null : currentTab();
+  const at = cur ? rows.findIndex((r) => r.project === projects.activeId && r.tab.id === cur.id) : -1;
+  const next = rows[((at < 0 ? (delta > 0 ? -1 : 0) : at) + delta + rows.length) % rows.length];
+  if (next) selectRow(next.project, next.tab.id);
 }
 
 export function selectTab(projectId: ProjectId, tabId: TabId): void {

@@ -1,14 +1,14 @@
 <script lang="ts">
+  // The bar above the panes: `project › row title` and the `+` menu. The rail lists the tabs.
+  // shortcut: the context bar of #248 replaces this; until then it only names where you are.
   import { dispatch } from '$lib/actions';
-  import type { ProjectId, Tab, ToolInfo } from '$lib/gen';
-  import { activeTab, moveTab } from '$lib/layout';
-  import { layout, projects, sessions, toasts, tools, ui } from '$lib/stores';
-  import { Button, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import type { ProjectId, ToolInfo } from '$lib/gen';
+  import { activeTab } from '$lib/layout';
+  import { layout, projects, toasts, tools, ui } from '$lib/stores';
+  import { Button, Menu, type MenuItem } from '$lib/ui';
 
   import { chordFor } from './labels';
-  import { layoutSessionsOfTab, requestCloseTab, selectTab, tabAttention } from './nav';
-  import { peekHover, peekTarget } from './peek.svelte';
-  import ToolStrip from './ToolStrip.svelte';
+  import { rowLabel } from './nav';
 
   interface Props {
     projectId: ProjectId;
@@ -17,36 +17,16 @@
   let { projectId }: Props = $props();
 
   const current = $derived(layout.get(projectId));
-  const tabs = $derived(current?.tabs ?? []);
   const active = $derived(current ? activeTab(current) : null);
   const toolList = $derived(tools.list(projectId));
-  const projectName = $derived(projects.byId(projectId)?.name ?? '');
+  const project = $derived(projects.byId(projectId));
 
-  let tabMenu = $state<{ tab: Tab; x: number; y: number } | null>(null);
   let plusMenu = $state<{ x: number; y: number } | null>(null);
-  let dragId = $state<string | null>(null);
-  let overId = $state<string | null>(null);
 
   $effect(() => {
-    // Tools feed the "+" menu and the tool strip; they are cached per project.
+    // Tools feed the "+" menu; they are cached per project.
     if (tools.byProject[projectId] === undefined) void tools.load(projectId);
   });
-
-  function tabMenuItems(tab: Tab): MenuItem[] {
-    const index = tabs.findIndex((t) => t.id === tab.id);
-    return [
-      { id: 'close', label: 'Close tab', icon: 'x' },
-      { id: 'left', label: 'Move left', icon: 'arrow-left', disabled: index <= 0, separator: true },
-      { id: 'right', label: 'Move right', icon: 'arrow-right', disabled: index >= tabs.length - 1 },
-    ];
-  }
-
-  function onTabMenu(tab: Tab, id: string): void {
-    const index = tabs.findIndex((t) => t.id === tab.id);
-    if (id === 'close') void requestCloseTab(projectId, tab.id);
-    else if (id === 'left') layout.update(projectId, (l) => moveTab(l, tab.id, index - 1));
-    else if (id === 'right') layout.update(projectId, (l) => moveTab(l, tab.id, index + 1));
-  }
 
   function plusItems(): MenuItem[] {
     const items: MenuItem[] = [
@@ -79,97 +59,18 @@
       toasts.error(err, 'Could not open the view');
     }
   }
-
-  function onDrop(targetId: string): void {
-    const from = dragId;
-    dragId = null;
-    overId = null;
-    if (!from || from === targetId) return;
-    const to = tabs.findIndex((t) => t.id === targetId);
-    if (to >= 0) layout.update(projectId, (l) => moveTab(l, from, to));
-  }
-
-  function onAux(e: MouseEvent, tab: Tab): void {
-    if (e.button === 1) {
-      e.preventDefault();
-      void requestCloseTab(projectId, tab.id);
-    }
-  }
 </script>
 
-<div class="tabbar" role="tablist" aria-label="Tabs" data-testid="tabbar">
-  {#if projectName}<span class="project-name">{projectName}</span>{/if}
-  {#each tabs as tab (tab.id)}
-    {@const level = tabAttention(tab)}
-    <div
-      class="tab"
-      class:active={active?.id === tab.id}
-      class:asks={level === 'needs_input'}
-      class:over={overId === tab.id && dragId !== tab.id}
-      role="tab"
-      tabindex="0"
-      aria-selected={active?.id === tab.id}
-      data-testid="tab"
-      data-tab-id={tab.id}
-      draggable="true"
-      onclick={() => selectTab(projectId, tab.id)}
-      onkeydown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          selectTab(projectId, tab.id);
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          e.preventDefault();
-          void requestCloseTab(projectId, tab.id);
-        }
-      }}
-      onauxclick={(e) => onAux(e, tab)}
-      onmousedown={(e) => {
-        if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
-      }}
-      oncontextmenu={(e) => {
-        e.preventDefault();
-        tabMenu = { tab, x: e.clientX, y: e.clientY };
-      }}
-      ondragstart={(e) => {
-        dragId = tab.id;
-        e.dataTransfer?.setData('text/plain', tab.id);
-      }}
-      ondragover={(e) => {
-        if (!dragId) return;
-        e.preventDefault();
-        overId = tab.id;
-      }}
-      ondragleave={() => (overId = null)}
-      ondrop={(e) => {
-        e.preventDefault();
-        onDrop(tab.id);
-      }}
-      ondragend={() => {
-        dragId = null;
-        overId = null;
-      }}
-    >
-      {#if level !== 'none'}<span
-          class="lamp-slot"
-          use:peekHover={() => peekTarget(layoutSessionsOfTab(tab).map((id) => sessions.get(id)))}
-          ><Lamp {level} /></span
-        >{/if}
-      {#if tab.work_item_id}<Icon name="git-branch" size={14} />{/if}
-      <span class="title">{tab.title}</span>
-      <button
-        type="button"
-        class="close"
-        aria-label="Close tab {tab.title}"
-        tabindex="-1"
-        onclick={(e) => {
-          e.stopPropagation();
-          void requestCloseTab(projectId, tab.id);
-        }}
-      >
-        <Icon name="x" size={14} />
-      </button>
-    </div>
-  {/each}
+<div class="tabbar" data-testid="tabbar">
+  <span
+    class="context"
+    data-testid="tabbar-context"
+    style:--project-color={project?.color ?? 'var(--k-border-strong)'}
+  >
+    <span class="project">{project?.name ?? ''}</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <span class="title">{active ? rowLabel(active) : ''}</span>
+  </span>
   <Button
     variant="ghost"
     size="sm"
@@ -181,20 +82,8 @@
       plusMenu = { x: r.left, y: r.bottom + 2 };
     }}>New tab</Button
   >
-  <ToolStrip {projectId} workItemId={active?.work_item_id ?? null} />
 </div>
 
-{#if tabMenu}
-  {@const target = tabMenu.tab}
-  <Menu
-    items={tabMenuItems(target)}
-    x={tabMenu.x}
-    y={tabMenu.y}
-    label="Tab actions"
-    onselect={(id) => onTabMenu(target, id)}
-    onclose={() => (tabMenu = null)}
-  />
-{/if}
 {#if plusMenu}
   <Menu
     items={plusItems()}
@@ -216,141 +105,39 @@
     padding: 0 var(--k-space-3);
     background: var(--k-bezel);
     font-size: var(--k-font-size-sm);
-    overflow-x: auto;
-    /* The thin bar is the overflow indicator. */
-    scrollbar-width: thin;
   }
 
-  /* Only when the sidebar is compact and no longer names the project. */
-  .project-name {
-    display: none;
-    flex: none;
-    padding-right: var(--k-space-4);
-    margin-right: var(--k-space-2);
-    border-right: 1px solid var(--k-border);
-    font-size: var(--k-font-size-lg);
-    font-weight: var(--k-weight-strong);
-    color: var(--k-fg);
+  /* ▌project › title: the project colour bar, then where you are. */
+  .context {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    min-width: 0;
+    padding-left: var(--k-space-3);
+    box-shadow: inset 3px 0 0 var(--project-color);
     white-space: nowrap;
   }
 
-  @media (max-width: 1099px) {
-    .project-name {
-      display: inline-block;
-    }
-  }
-
-  .tab {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-3);
+  .project {
     flex: none;
-    height: var(--k-control-height);
-    max-width: 240px;
-    padding: 0 6px 0 var(--k-space-4);
-    border-radius: var(--k-radius);
-    color: var(--k-fg-chrome);
+    color: var(--k-fg-muted);
     font-weight: var(--k-weight-medium);
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      background var(--k-duration) ease-out,
-      color var(--k-duration) ease-out;
   }
 
-  .tab:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
-  }
-
-  .tab:focus-visible {
-    outline-offset: -2px;
-  }
-
-  /* Neighbouring plain tabs get a hairline between them so each one reads as its own target. */
-  .tab {
-    position: relative;
-  }
-
-  .tab:not(.active, .asks, :hover) + .tab:not(.active, .asks, :hover)::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--k-space-2) / 2 - 0.5px);
-    top: 25%;
-    bottom: 25%;
-    width: 1px;
-    background: var(--k-border);
-  }
-
-  /* Call light (§4.4): only while not selected; the lamp carries it on the active tab. */
-  .tab.asks {
-    --k-fg-subtle: var(--k-fg-muted);
-    background: var(--k-lit);
-    color: var(--k-fg);
-  }
-
-  .tab.active {
-    background: var(--k-well);
-    box-shadow: 0 0 0 1px var(--k-border);
-    color: var(--k-fg);
-  }
-
-  .tab.over {
-    box-shadow: inset 2px 0 0 var(--k-accent);
-  }
-
-  .lamp-slot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 12px;
-    flex: none;
+  .sep {
+    color: var(--k-fg-subtle);
   }
 
   .title {
     overflow: hidden;
+    color: var(--k-fg);
+    font-weight: var(--k-weight-strong);
     text-overflow: ellipsis;
-  }
-
-  .close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    position: relative;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-  }
-
-  /* The visible box stays small; the target reaches the 28px floor. */
-  .close::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-  }
-
-  /* Plain tabs show the close button only on hover or focus, but its slot is always reserved so the
-     tab never changes width under the pointer; the active tab always shows it. */
-  .tab:not(.active) .close {
-    visibility: hidden;
-  }
-
-  .tab:not(.active):is(:hover, :focus-within) .close {
-    visibility: visible;
-  }
-
-  .close:hover {
-    background: var(--k-bg-active);
   }
 
   .tabbar :global(.plus) {
     flex: none;
+    margin-left: auto;
     color: var(--k-fg-chrome);
   }
 </style>

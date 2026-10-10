@@ -51,7 +51,7 @@ test.describe('terminal pane', () => {
 
   test('exit banner: Enter restarts the session and re-attaches', async ({ page }) => {
     await boot(page);
-    await dispatch(page, 'project.goto.2');
+    await dispatch(page, 'project.goto.4'); // rail row 4: billing's work tab
     const pane = page.locator(`[data-session-id="${SESSIONS.billingExited}"]`);
     await expect(pane.getByTestId('exit-banner')).toContainText('Exited');
     await page.locator(`[data-pane-id="billing-p3"]`).click();
@@ -67,7 +67,7 @@ test.describe('terminal pane', () => {
 
   test('exit banner: x closes the pane without killing anything', async ({ page }) => {
     await boot(page);
-    await dispatch(page, 'project.goto.2');
+    await dispatch(page, 'project.goto.4'); // rail row 4: billing's work tab
     await expect(
       page.locator(`[data-session-id="${SESSIONS.billingExited}"]`).getByTestId('exit-banner'),
     ).toBeVisible();
@@ -172,7 +172,7 @@ test.describe('terminal pane', () => {
         message: '`claude` not found in your login PATH',
       }),
     );
-    await dispatch(page, 'project.goto.3'); // kelta-tools: its Claude pane attaches for the first time
+    await dispatch(page, 'project.goto.6'); // kelta-tools' work tab: its Claude pane attaches for the first time
     const error = page.getByTestId('terminal-error');
     await expect(error).toContainText('not found in your login PATH');
     await expect(error.getByRole('button', { name: 'Open diagnostics' })).toBeVisible();
@@ -194,9 +194,9 @@ test.describe('terminal pane', () => {
     const badge = page.getByTestId('hooks-badge').first();
     await expect(badge).toContainText('Live status off');
     await expect(page.getByTestId('status-hooks')).toContainText('Live status off');
-    const tabs = await page.getByTestId('tab').count();
+    const tabs = await page.getByTestId('rail-row').count();
     await badge.getByRole('button', { name: 'Fix' }).click();
-    await expect(page.getByTestId('tab')).toHaveCount(tabs + 1);
+    await expect(page.getByTestId('rail-row')).toHaveCount(tabs + 1);
   });
 
   test('theme changes re-theme terminals and push the palette to Rust', async ({ page }) => {
@@ -310,7 +310,7 @@ test.describe('terminal pane', () => {
     // The app (and the terminals of other tabs) are unaffected.
     await expect(page.getByTestId('tabbar')).toBeVisible();
     await page.getByRole('button', { name: 'Close pane' }).last().click();
-    await page.getByTestId('tab').first().click();
+    await page.getByTestId('rail-row').first().click();
     await waitForAttached(page, 2);
   });
 });

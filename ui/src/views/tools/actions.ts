@@ -1,14 +1,17 @@
 // `tools.open`: with `{tool_id}` opens that tool where the user is (the shown project and its focused
 // work item, else Home), asking for a project when the tool needs one; `{pick_project: true}` always
-// asks. Without `tool_id` it shows the tool picker.
+// asks. Without `tool_id` it shows the tool picker. Pressed again while the tool is in front, a tool
+// with no project argument goes back (`nav.back`), one that takes a project asks for another project.
+// `tool.goto.N` opens tool N of the rail's Tools section.
 
 import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, WorkItemId } from '$lib/gen';
-import { registerAction } from '$lib/actions';
+import { dispatch, registerAction } from '$lib/actions';
 import { findSession, focusPane, type PaneLocation } from '$lib/layout';
 import { toolCheck, toolOpen } from '$lib/ipc/commands';
 import { rememberWebTool } from '$lib/plugin-host/web.svelte';
 import { layout, projects, sessions, toasts, tools, ui } from '$lib/stores';
-import { activateProject } from '../../shell/nav';
+import { flushJump, navStep } from '../../shell/jumplist';
+import { activateProject, focusedPane, railTools } from '../../shell/nav';
 import { focusedWorkItem } from '../work/fixloop.svelte';
 
 export const EMPTY_CTX: TemplateCtx = {
@@ -86,7 +89,16 @@ registerAction('tools.open', async (args) => {
   const tool = info ?? { id: toolId, label: toolId };
   let projectId = here ?? home;
   let workItem = here ? focusedWorkItem() : null;
-  if (args?.pick_project === true || (info?.needs_project && !here)) {
+  // In front: the pane this open would focus is the focused one.
+  const ctxItem = (args?.ctx as Partial<TemplateCtx> | undefined)?.work_item_id;
+  const at = ui.view === null ? liveToolPane(projectId, toolId, ctxItem ?? workItem) : null;
+  const inFront = at !== null && projects.activeId === projectId && focusedPane()?.id === at.paneId;
+  if (inFront && !info?.needs_project && args?.pick_project !== true) {
+    navStep(-1);
+    return;
+  }
+  flushJump(); // the place this open leaves is a stop on the way back
+  if (args?.pick_project === true || (info?.needs_project && (!here || inFront))) {
     const picked = await ui.pickProject(`Open ${tool.label} for project…`);
     if (!picked) return;
     try {
@@ -105,3 +117,9 @@ registerAction('tools.open', async (args) => {
   if (typeof r === 'object')
     ui.openSheet('tool_picker', { projectId, query: toolId, checks: { [toolId]: r } });
 });
+
+for (let n = 1; n <= 9; n += 1)
+  registerAction(`tool.goto.${n}`, async () => {
+    const t = railTools()[n - 1];
+    if (t) await dispatch('tools.open', { tool_id: t.id });
+  });

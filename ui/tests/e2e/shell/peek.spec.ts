@@ -1,4 +1,4 @@
-// Peek & reply (ticket #139): the popover opens from a rail row, a tab dot, a Now row and the key,
+// Peek & reply (ticket #139): the popover opens from a rail row, a Now row and the key,
 // answers through session_write and never attaches a terminal to the peeked session.
 import { expect, test, type Page } from '@playwright/test';
 
@@ -48,9 +48,11 @@ test.describe('peek', () => {
     expect(await attached(page, SESSIONS.billingClaude)).toBe(false);
   });
 
-  test('tab dot and Now row hover open it too', async ({ page }) => {
+  test('another row and a Now row peek their own session', async ({ page }) => {
     await boot(page);
-    await page.locator('[data-testid="tab"] .lamp-slot').first().hover();
+    await page
+      .locator('[data-testid="rail-row"][data-tab-id="shop-t1"]')
+      .hover({ position: { x: 20, y: 10 } });
     await expect(peek(page)).toHaveAttribute('data-session-id', SESSIONS.shopClaude);
     await page.mouse.move(0, 0);
     await page.mouse.click(1, 400);

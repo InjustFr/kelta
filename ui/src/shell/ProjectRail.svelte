@@ -16,6 +16,7 @@
     type GlobalView,
   } from '$lib/stores';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { formatChord } from '$lib/ui/format';
 
   import { nowSummary, refreshNow } from '../views/inbox/now';
   import { confirms } from './confirm.svelte';
@@ -31,6 +32,9 @@
     openView,
     paneTool,
     railProjects,
+    railRows,
+    railTools,
+    railToolsOf,
     requestCloseTab,
     revealSession,
     rowLabel,
@@ -56,9 +60,10 @@
   );
   const toReview = $derived(reviews.list(ALL, 'review_requested').data?.items.length ?? 0);
 
-  // shortcut: the active project's tool list until #237 slice 6 makes it global; then read that one.
-  const toolsOf = $derived(projects.activeId ?? 'home');
-  const toolList = $derived(tools.list(toolsOf));
+  const toolsOf = $derived(railToolsOf());
+  const toolList = $derived(railTools());
+  // `project.goto.N` index of each row.
+  const index = $derived(new Map(railRows().map((r, i) => [r.tab.id, i + 1])));
   $effect(() => {
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
   });
@@ -277,6 +282,12 @@
   </button>
 {/snippet}
 
+<!-- The muted `⌘N` / `⌥⌘N` index of a row, when that chord is bound. -->
+{#snippet digit(id: string, text: string)}
+  {@const c = chordFor(id)}
+  {#if c}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
+{/snippet}
+
 {#snippet more(p: ProjectInfo)}
   <IconButton
     class="more"
@@ -413,6 +424,7 @@
                   <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
                   <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
                   <span class="text"><span class="name">{label}</span></span>
+                  {@render digit(`project.goto.${index.get(tab.id)}`, `${index.get(tab.id)}`)}
                 </button>
                 <IconButton
                   class="close"
@@ -451,7 +463,7 @@
         <section class="band tools" aria-label="Tools" data-testid="rail-tools">
           <h2 class="tools-heading">Tools</h2>
           <ul class="rows">
-            {#each toolList as t (t.id)}
+            {#each toolList as t, i (t.id)}
               {@const launchOnly = t.kind !== 'pty'}
               {@const lvl = launchOnly ? 'none' : toolLamp(t.id)}
               {@const instances = toolInstances(t.id)}
@@ -474,6 +486,7 @@
                       >{/if}
                   </span>
                   <span class="text"><span class="name">{t.label}</span></span>
+                  {@render digit(`tool.goto.${i + 1}`, `⌥${i + 1}`)}
                   {#if launchOnly}<span class="launch" aria-hidden="true"
                       ><Icon name="external-link" size={12} /></span
                     >{/if}
@@ -842,6 +855,12 @@
     font-weight: var(--k-weight-strong);
   }
 
+  .index {
+    flex: none;
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
+  }
+
   .launch {
     display: inline-flex;
     flex: none;
@@ -871,6 +890,10 @@
 
   .row:is(:hover, :focus-within) :global(:is(.close, .more)) {
     visibility: visible;
+  }
+
+  .row:has(:global(.close)):is(:hover, :focus-within) .index {
+    visibility: hidden;
   }
 
   .none {
@@ -935,6 +958,7 @@
     h2,
     .caption .name,
     .launch,
+    .index,
     .heading :global(.label),
     .none {
       position: absolute;

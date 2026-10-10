@@ -37,7 +37,7 @@ test.describe('project switching', () => {
     const goto = async (n: number): Promise<void> => {
       await page.evaluate((i) => window.__kelta!.actions.dispatch(`project.goto.${i}`), n);
     };
-    await goto(2); // billing (rail: shop, billing, kelta-tools, home)
+    await goto(4); // billing's work tab (rows: shop's three, then billing's)
     await expect(page.locator('[data-testid="workspace"][data-project-id="billing"] .xterm')).toHaveCount(3);
     await goto(1);
     await expect(page.locator('[data-testid="workspace"][data-project-id="shop"] .xterm')).toHaveCount(2);
@@ -59,7 +59,7 @@ test.describe('project switching', () => {
         });
       const out: number[] = [];
       for (let i = 0; i < 4; i += 1) {
-        window.__switchTo = i % 2 === 0 ? 'project.goto.2' : 'project.goto.1';
+        window.__switchTo = i % 2 === 0 ? 'project.goto.4' : 'project.goto.1';
         const sel =
           i % 2 === 0
             ? '[data-testid="workspace"][data-project-id="billing"] .xterm'
@@ -158,7 +158,7 @@ test.describe('project switching', () => {
       }),
     );
     await expect.poll(() => activeProject(page)).toBe('billing');
-    await expect(page.getByTestId('tab').filter({ hasText: 'Diagnostics' })).toHaveCount(1);
+    await expect(page.getByTestId('rail-row').filter({ hasText: 'Diagnostics' })).toHaveCount(1);
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
   });
 

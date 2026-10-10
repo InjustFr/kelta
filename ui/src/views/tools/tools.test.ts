@@ -7,6 +7,8 @@ import { setTransport } from '$lib/ipc/transport';
 import { activeTab } from '$lib/layout';
 import { layout, projects, sessions, tools, ui } from '$lib/stores';
 
+import { noteFocus } from '../../shell/jumplist';
+import { currentTab, focusedPane, paneTool } from '../../shell/nav';
 import './actions';
 import ToolPicker from './ToolPicker.svelte';
 
@@ -56,6 +58,7 @@ describe('tools.open', () => {
     const m = setup();
     ui.view = null;
     layout.byProject = {};
+    tools.byProject = {};
     // No fixture tool instances: every instance comes from these opens.
     m.state.sessions = m.state.sessions.filter((s) => s.kind.type !== 'tool');
     await projects.load();
@@ -192,5 +195,32 @@ describe('tools.open', () => {
     ui.resolvePick('shop');
     await done;
     expect(opens()[0].args).toMatchObject({ project_id: 'shop', ctx: { work_item_id: null } });
+  });
+
+  it('pressed again in front, a tool with no project argument goes back, here to Now', async () => {
+    const { id, opens } = await inTab(null);
+    ui.view = 'now';
+    noteFocus({ project: 'shop', tab: '', pane: '', view: 'now' }); // what the shell records
+    await dispatch('tools.open', { tool_id: id });
+    await Promise.all([sessions.load(), layout.load('home')]);
+    expect([ui.view, projects.activeId]).toEqual([null, 'home']);
+    const pane = focusedPane()!;
+    expect(paneTool(pane)).toBe(id);
+    noteFocus({ project: 'home', tab: currentTab()!.id, pane: pane.id });
+    await dispatch('tools.open', { tool_id: id });
+    expect(opens()).toHaveLength(1);
+    expect(ui.view).toBe('now');
+  });
+
+  it('pressed again in front, a tool that takes a project asks for another project', async () => {
+    const { open, id, opens } = await needsProject();
+    await open();
+    expect(paneTool(focusedPane()!)).toBe(id);
+    const done = dispatch('tools.open', { tool_id: id });
+    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+    ui.resolvePick('billing');
+    await done;
+    expect(opens()).toHaveLength(2);
+    expect(opens()[1].args).toMatchObject({ project_id: 'billing', ctx: { work_item_id: null } });
   });
 });
