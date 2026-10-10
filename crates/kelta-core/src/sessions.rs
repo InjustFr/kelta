@@ -923,16 +923,16 @@ impl Core {
     }
 
     pub(crate) fn write_session(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
-        let (lifecycle, timers) = {
+        let (info, timers) = {
             let s = self.sessions.lock();
             let e = s.get(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
-            (e.info.lifecycle, e.timers.clone())
+            (e.info.clone(), e.timers.clone())
         };
-        // Any input cancels auto-park (#142); focus reports are the view, not Louis typing.
+        // Any input restarts the auto-park clock (#142); focus reports are the view, not Louis typing.
         if bytes != b"\x1b[I" && bytes != b"\x1b[O" {
-            timers.park.cancel();
+            self.auto_park_status(&info, false, &timers);
         }
-        if lifecycle != Lifecycle::Live {
+        if info.lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
         }
         self.terminal.write(id, bytes)

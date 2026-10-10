@@ -117,7 +117,7 @@ impl Core {
         }
         let weak = self.me.clone();
         let sid = info.id.clone();
-        // one-shot: auto-park, armed on done + seen, cancelled by input (`write_session`).
+        // one-shot: auto-park, armed on done + seen, restarted by input (`write_session`).
         timers.park.arm(&self.rt, Duration::from_secs(u64::from(mins) * 60), async move {
             let Some(core) = weak.upgrade() else { return };
             let Some(item) = core.session_get(&sid).filter(parkable).and_then(|s| s.work_item_id) else {

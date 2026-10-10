@@ -116,7 +116,7 @@ async fn park_frees_claude_and_reopen_resumes_the_conversation() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn auto_park_only_after_done_and_seen_and_input_cancels_it() {
+async fn auto_park_only_after_done_and_seen_and_input_restarts_it() {
     let tmp = tempfile::tempdir().unwrap();
     let mut settings = Settings::defaults();
     settings.claude.auto_park_after_mins = 1;
@@ -145,17 +145,17 @@ async fn auto_park_only_after_done_and_seen_and_input_cancels_it() {
     h.core.session_mark_seen(&sid).unwrap();
     tokio::time::sleep(Duration::from_secs(30)).await;
     h.core.session_write(&sid, b"x").await.unwrap();
-    wait().await;
-    assert_eq!(lifecycle(&h, SID), Lifecycle::Live, "input cancels auto-park");
+    tokio::time::sleep(Duration::from_secs(45)).await;
+    settle().await;
+    assert_eq!(lifecycle(&h, SID), Lifecycle::Live, "input cancels the first clock");
 
-    h.core.session_apply_hook(&sid, ch(S::Working)).await.unwrap();
-    h.core.session_apply_hook(&sid, ch(S::Done)).await.unwrap();
-    h.core.session_mark_seen(&sid).unwrap();
     // Showing the pane sends a focus report: not input.
     h.core.session_write(&sid, b"\x1b[I").await.unwrap();
     // idle_prompt ~60 s after Stop: still parkable.
     h.core.session_apply_hook(&sid, ch(S::WaitingUser)).await.unwrap();
-    wait().await;
+    // Input re-armed the clock: it fires 60 s after the keystroke.
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    settle().await;
     for _ in 0..50 {
         settle().await;
         if parked_at(&h, &item).await.is_some() {
