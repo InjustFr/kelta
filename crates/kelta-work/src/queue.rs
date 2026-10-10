@@ -1,6 +1,7 @@
 //! Claude slots and the run queue (#141): start work past `claude.max_live` live Claude processes
 //! stops after the worktree steps with the item `Queued`; a freed slot (session exit, saga end, app
-//! start) runs the rest of the saga for the lowest `pos`. Event-armed only, no timer (§13).
+//! start) runs the rest of the saga for the lowest `pos`. Event-armed, plus one one-shot wake at the
+//! reset of a 5h window that holds the queue (§13).
 
 use std::sync::Arc;
 
@@ -56,17 +57,42 @@ impl WorkService {
             + starting.len();
         // Windows already reset are stale (same rule as the UI's `latestWindow`).
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
-        let five_hour = sessions
+        let windows: Vec<_> = sessions
             .iter()
             .filter_map(|s| s.claude.as_ref()?.usage.as_ref()?.five_hour.as_ref())
             .filter(|w| w.resets_at > now)
-            .map(|w| w.used_percentage)
-            .reduce(f64::max);
-        let ok = may_start(live, settings.claude.max_live, five_hour, settings.claude.queue_hold_pct);
+            .collect();
+        let five_hour = windows.iter().map(|w| w.used_percentage).reduce(f64::max);
+        let hold = settings.claude.queue_hold_pct;
+        let ok = may_start(live, settings.claude.max_live, five_hour, hold);
         if ok {
             starting.insert(id.clone());
+        } else if let Some(at) =
+            windows.iter().filter(|w| hold.is_some_and(|h| w.used_percentage >= h)).map(|w| w.resets_at).min()
+        {
+            self.wake_at(at - now);
         }
         ok
+    }
+
+    /// No session event marks a 5h window reset: re-check the held queue once it has passed.
+    /// shortcut: one wake at a time, a later hold with an earlier reset waits for the armed one or
+    /// the next event; key the wake by deadline if accounts with different windows ever share a queue.
+    fn wake_at(&self, secs: i64) {
+        use std::sync::atomic::Ordering::SeqCst;
+        let Ok(rt) = tokio::runtime::Handle::try_current() else { return };
+        if self.hold_wake.swap(true, SeqCst) {
+            return;
+        }
+        let me = self.me.clone();
+        rt.spawn(async move {
+            // one-shot: sleeps to the held window's `resets_at`, re-armed only by a later refusal (§13).
+            tokio::time::sleep(std::time::Duration::from_secs(secs.max(0) as u64)).await;
+            if let Some(me) = me.upgrade() {
+                me.hold_wake.store(false, SeqCst);
+                me.kick_queue();
+            }
+        });
     }
 
     /// The saga of `id` ended (or never ran): free its slot and let the next queued item have it.

@@ -140,6 +140,29 @@ async fn hold_threshold_keeps_items_queued() {
 }
 
 #[tokio::test]
+async fn held_queue_starts_when_the_window_resets() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    fx.settings(|s| s.claude.queue_hold_pct = Some(80.0));
+    let w = fx.service();
+    start(&w, "h/x").await;
+    let sid = live_claude(&fx)[0].id.clone();
+    let mut s = fx.core.sessions().into_iter().find(|s| s.id == sid).unwrap();
+    let resets_at = time::OffsetDateTime::now_utc().unix_timestamp() + 3;
+    s.claude.as_mut().unwrap().usage = Some(kelta_proto::model::ClaudeUsage {
+        five_hour: Some(kelta_proto::model::RateWindow { used_percentage: 91.0, resets_at }),
+        ..Default::default()
+    });
+    fx.core.insert_session(s);
+    let b = start(&w, "h/y").await;
+    assert_eq!(b.state, WorkState::Queued { pos: 0 });
+    // No session exits or stops: the armed wake drains the queue once the window has reset.
+    wait_active(&fx, &b.id).await;
+}
+
+#[tokio::test]
 async fn reruns_past_claude_files_still_wait_for_a_slot() {
     if !has_git() {
         return;
