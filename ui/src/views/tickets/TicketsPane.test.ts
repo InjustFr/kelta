@@ -592,6 +592,22 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     await waitFor(() => expect(container.querySelector('.picked')).toBeNull());
   });
 
+  it('a multi-move that stops early says how many moved', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    await press('x');
+    await press('J', { shiftKey: true });
+    await press('m');
+    const menu = await screen.findByRole('menu', { name: 'Move 2 tickets' });
+    await screen.findAllByRole('menuitem');
+    mock.failNext('tracker_transition', { code: 'internal', message: 'jira exploded' });
+    await fireEvent.keyDown(menu, { key: '1' });
+    await waitFor(() =>
+      expect(toasts.list.some((t) => t.toast.text === 'Moved 0 of 2; stopped at SHOP-151')).toBe(true),
+    );
+    expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').length).toBe(1);
+  });
+
   it('x toggles, Ctrl+click adds, Esc clears the selection', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');

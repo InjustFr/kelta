@@ -168,8 +168,13 @@ export function groupTickets(
         rank(item),
       ];
     } else if (by === 'sprint') {
-      // Active sprints first, then the others, then no sprint.
-      g = [t.sprint?.id ?? '', t.sprint?.name ?? 'No sprint', null, t.sprint ? (t.sprint.active ? 0 : 1) : 2];
+      // Active sprints first, then the others, then no sprint. Keyed per account: ids repeat across trackers.
+      g = [
+        t.sprint ? `${t.ref.account}:${t.sprint.id}` : '',
+        t.sprint?.name ?? 'No sprint',
+        null,
+        t.sprint ? (t.sprint.active ? 0 : 1) : 2,
+      ];
     } else if (by === 'assignee') {
       g = [t.assignee?.id ?? '', t.assignee?.name ?? 'Unassigned', null, t.assignee ? 0 : 1];
     } else {

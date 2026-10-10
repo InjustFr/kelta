@@ -445,10 +445,16 @@
       void move.moveViaTransition(m.items[0]!.ticket, t);
       return;
     }
+    let moved = 0;
     for (const [n, i] of m.items.entries()) {
       const own = m.lists[n]?.find((x) => x.to.name === t.to.name);
       if (i.ticket.status.name === t.to.name || !own) continue;
-      if (!(await move.moveViaTransition(i.ticket, own))) return;
+      if (!(await move.moveViaTransition(i.ticket, own))) {
+        // A field form or an error stops the loop; say which tickets were left behind.
+        toasts.info(`Moved ${moved} of ${m.items.length}; stopped at ${i.ticket.ref.key}`);
+        return;
+      }
+      moved++;
     }
     picked = [];
   }
@@ -806,6 +812,10 @@
       <EmptyState icon="search" title={`No tickets match "${filter}".`}>
         {#snippet actions()}<Button onclick={() => (filter = '')}>Clear filter</Button>{/snippet}
       </EmptyState>
+    {:else if mode === 'list' && groupBy === 'flow' && rows.length === 0}
+      <EmptyState icon="ticket" title="Nothing in flow; older done tickets are hidden.">
+        {#snippet actions()}<Button onclick={() => setGroup('status')}>By status</Button>{/snippet}
+      </EmptyState>
     {:else if mode === 'list'}
       <div class="list">
         <VirtualList
@@ -820,7 +830,9 @@
           {#snippet row(r)}
             {#if r.kind === 'group'}
               {@const overWip =
-                groupBy === 'flow' && r.group.id === 'doing' && r.group.items.length > wipLimit}
+                groupBy === 'flow' &&
+                r.group.id === 'doing' &&
+                r.group.items.filter(hasWork).length > wipLimit}
               <button
                 type="button"
                 tabindex="-1"

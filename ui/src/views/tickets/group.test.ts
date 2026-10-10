@@ -175,10 +175,15 @@ describe('priority, sprint, sort and age', () => {
       p('A', null, null, { sprint: sprint('13', false) }),
       p('B', null, null, { sprint: null }),
       p('C', null, null, { sprint: sprint('12', true) }),
+      p('D', null, null, {
+        sprint: sprint('13', false),
+        ref: { ...samples.ticket.ref, account: 'other', key: 'D' },
+      }),
     ];
     expect(summary(groupTickets(s, 'sprint'))).toEqual([
       ['Sprint 12', ['C']],
       ['Sprint 13', ['A']],
+      ['Sprint 13', ['D']], // same id on another account stays apart
       ['No sprint', ['B']],
     ]);
   });
