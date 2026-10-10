@@ -40,11 +40,16 @@ latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } autho
 latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
 timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
 
+/// Review threads with their last comment, spread into the authored search only (#208).
+const THREADS_FRAGMENT: &str = "fragment Threads on PullRequest { reviewThreads(first:100){ nodes{ isResolved \
+comments(last:1){ nodes{ createdAt author{ login } } } } } }";
+
 /// Unresolved threads (filtered client side: the connection has no `isResolved` argument), the
 /// latest review per reviewer and the head commit (FLOW §4.2).
 const FEEDBACK_QUERY: &str = "query($o:String!,$n:String!,$num:Int!){ viewer{ login } repository(owner:$o,name:$n){ \
 pullRequest(number:$num){ headRefOid url reviewThreads(first:100){ nodes{ id isResolved path line originalLine \
-comments(first:30){ nodes{ author{ login } body url } } } } latestReviews(first:50){ nodes{ state body author{ login } } } } } }";
+comments(first:30){ nodes{ author{ login } body url createdAt } } } } \
+latestReviews(first:50){ nodes{ state body submittedAt author{ login } } } } } }";
 
 const RESOLVE_THREAD: &str =
     "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
@@ -157,6 +162,7 @@ impl GithubHost {
         };
         let decision = decision_from(s(n, "reviewDecision"));
         let head_sha = s(n, "headRefOid").unwrap_or("").to_owned();
+        let (unresolved_threads, last_comment_at) = thread_state(n, me);
         let (requested_at, blocking, waiting_on) = match kind {
             ReviewKind::Authored => {
                 let (who, since) = waiting_state(n, &head_sha);
@@ -219,6 +225,8 @@ impl GithubHost {
             blocking,
             waiting_on,
             nudged_at: None,
+            unresolved_threads,
+            last_comment_at,
             title,
         })
     }
@@ -258,6 +266,8 @@ impl GithubHost {
             blocking: false,
             waiting_on: Vec::new(),
             nudged_at: None,
+            unresolved_threads: None,
+            last_comment_at: None,
             title,
         })
     }
@@ -360,6 +370,23 @@ fn request_state(n: &Value, me: &str, decision: Option<ReviewDecision>) -> (Opti
 /// who requested changes on an older head (since the head commit, i.e. my last push).
 // shortcut: the push time is the head's `committedDate` (a rebase keeps the old date) and team
 // requests have no request time; read `HeadRefForcePushedEvent` if that misleads.
+/// Unresolved review threads and the newest last comment among them that is not `me`'s (answered
+/// threads wait on the reviewer); `(None, None)` without the `Threads` fragment.
+fn thread_state(n: &Value, me: &str) -> (Option<u32>, Option<String>) {
+    let Some(threads) = n.pointer("/reviewThreads/nodes").and_then(Value::as_array) else {
+        return (None, None);
+    };
+    let open: Vec<&Value> =
+        threads.iter().filter(|t| t.get("isResolved").and_then(Value::as_bool) == Some(false)).collect();
+    let at = open
+        .iter()
+        .filter_map(|t| t.pointer("/comments/nodes/0"))
+        .filter(|c| c.pointer("/author/login").and_then(Value::as_str) != Some(me))
+        .filter_map(|c| s(c, "createdAt"))
+        .fold(None, |a, b| kelta_proto::later_rfc3339(a, Some(b.to_owned())));
+    (Some(open.len() as u32), at)
+}
+
 fn waiting_state(n: &Value, head: &str) -> (Vec<String>, Option<String>) {
     let nodes = |p: &str| n.pointer(p).and_then(Value::as_array).cloned().unwrap_or_default();
     let str_at = |v: &Value, p: &str| v.pointer(p).and_then(Value::as_str).map(str::to_owned);
@@ -586,8 +613,10 @@ impl CodeHost for GithubHost {
             ),
             ReviewKind::Authored => ("", "", json!({ "s": search })),
         };
+        let (spread, threads) =
+            if kind == ReviewKind::Authored { (" ...Threads", THREADS_FRAGMENT) } else { ("", "") };
         let query = format!(
-            "query($s:String!{decl}){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr }} }}{extra} }} {PR_FRAGMENT}"
+            "query($s:String!{decl}){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr{spread} }} }}{extra} }} {PR_FRAGMENT} {threads}"
         );
         let data = graphql(&self.auth, &self.graphql, &query, vars).await?;
         self.gate.lock().pending = false;
@@ -893,6 +922,11 @@ impl CodeHost for GithubHost {
                         .collect::<Vec<_>>()
                         .join("\n\n"),
                     url: s(first, "url").unwrap_or("").to_owned(),
+                    last_comment_at: comments
+                        .last()
+                        .filter(|c| login(c) != me)
+                        .and_then(|c| s(c, "createdAt"))
+                        .map(str::to_owned),
                 })
             })
             .collect();
@@ -906,6 +940,7 @@ impl CodeHost for GithubHost {
                 author: login(v),
                 state: s(v, "state").and_then(review_state),
                 body_md: s(v, "body").unwrap_or("").trim().to_owned(),
+                submitted_at: s(v, "submittedAt").map(str::to_owned),
             })
             .collect();
 

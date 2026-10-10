@@ -34,6 +34,8 @@ const PER_PAGE: &str = "100";
 
 /// `(repo, iid, head sha)`.
 type DiffKey = (String, u64, String);
+/// My MR's `(repo, iid)` → `((updated_at, user_notes_count), unresolved threads, last comment at)`.
+type ThreadCache = HashMap<(String, u64), ((String, u64), u32, Option<String>)>;
 
 #[derive(Default)]
 struct TodoGate {
@@ -55,6 +57,8 @@ pub struct GitlabHost {
     /// Requested MRs' `(additions, deletions)` by `(repo, iid, head sha)`: a diff only changes
     /// with its head, so `/changes` (the full diff) is fetched once per head, not every poll.
     diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
+    /// My MRs' thread state: `/discussions` is fetched again only when the MR's stamp moves.
+    threads: Mutex<ThreadCache>,
 }
 
 impl GitlabHost {
@@ -86,6 +90,7 @@ impl GitlabHost {
             major: Mutex::new(None),
             gate: Mutex::new(TodoGate::default()),
             diff_sizes: Mutex::new(HashMap::new()),
+            threads: Mutex::new(HashMap::new()),
         })
     }
 
@@ -210,6 +215,8 @@ impl GitlabHost {
             blocking: false,
             waiting_on: Vec::new(),
             nudged_at: None,
+            unresolved_threads: None,
+            last_comment_at: None,
             title,
         })
     }
@@ -294,6 +301,34 @@ impl GitlabHost {
         review.waiting_on = pending.into_iter().map(|(u, _)| u).collect();
     }
 
+    /// My MR: unresolved threads and the newest last note not by me among them (`/discussions`,
+    /// only when `(updated_at, user_notes_count)` moved since the last poll). Best effort.
+    async fn thread_state(&self, review: &mut Review, notes: u64, me: Option<&str>) {
+        let key = (review.r#ref.repo.clone(), review.r#ref.number);
+        let stamp = (review.updated_at.clone(), notes);
+        let cached = self.threads.lock().get(&key).filter(|c| c.0 == stamp).map(|c| (c.1, c.2.clone()));
+        let (count, at) = match cached {
+            Some(c) => c,
+            None => {
+                let url = self.mr_url(&key.0, &format!("/{}/discussions", key.1));
+                let Ok(r) = self.json(HttpRequest::get(url).query("per_page", PER_PAGE)).await else {
+                    return;
+                };
+                let open = open_discussions(&r.body);
+                let at = open
+                    .iter()
+                    .filter_map(|(_, notes)| notes.last())
+                    .filter(|n| n.pointer("/author/username").and_then(Value::as_str) != me)
+                    .filter_map(|n| s(n, "created_at"))
+                    .fold(None, |a, b| kelta_proto::later_rfc3339(a, Some(b.to_owned())));
+                let count = open.len() as u32;
+                self.threads.lock().insert(key, (stamp, count, at.clone()));
+                (count, at)
+            }
+        };
+        (review.unresolved_threads, review.last_comment_at) = (Some(count), at);
+    }
+
     fn project_url(&self, repo: &str, tail: &str) -> String {
         format!("{}/projects/{}{tail}", self.api, percent_encode(repo))
     }
@@ -333,6 +368,28 @@ impl GitlabHost {
         q.push(("per_page".into(), PER_PAGE.into()));
         Ok(q)
     }
+}
+
+/// Resolvable, unresolved discussions with their non-system notes, oldest first.
+fn open_discussions(discussions: &Value) -> Vec<(&Value, Vec<&Value>)> {
+    discussions
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|d| {
+            let notes: Vec<&Value> = d
+                .get("notes")
+                .and_then(Value::as_array)?
+                .iter()
+                .filter(|n| n.get("system").and_then(Value::as_bool) != Some(true))
+                .collect();
+            let resolvable: Vec<&&Value> =
+                notes.iter().filter(|n| n.get("resolvable").and_then(Value::as_bool) == Some(true)).collect();
+            let resolved =
+                resolvable.iter().all(|n| n.get("resolved").and_then(Value::as_bool) == Some(true));
+            (!notes.is_empty() && !resolvable.is_empty() && !resolved).then_some((d, notes))
+        })
+        .collect()
 }
 
 fn ci_from(status: Option<&str>) -> CiState {
@@ -418,27 +475,38 @@ impl CodeHost for GitlabHost {
         }
         let resp = self.json(req.with_etag()).await?;
         self.gate.lock().pending = false;
-        let mut list: Vec<Review> = resp
+        let mut list: Vec<(Review, u64)> = resp
             .body
             .as_array()
             .map(|a| {
                 a.iter()
-                    .filter_map(|m| self.review_from(m, None, q.kind))
-                    .filter(|r| q.include_drafts || !r.draft)
+                    .filter_map(|m| {
+                        let notes = m.get("user_notes_count").and_then(Value::as_u64).unwrap_or(0);
+                        Some((self.review_from(m, None, q.kind)?, notes))
+                    })
+                    .filter(|(r, _)| q.include_drafts || !r.draft)
                     .collect()
             })
             .unwrap_or_default();
         if q.kind == ReviewKind::ReviewRequested {
             let me = self.me().await?;
-            futures::future::join_all(list.iter_mut().map(|r| self.request_state(r, &me))).await;
+            futures::future::join_all(list.iter_mut().map(|(r, _)| self.request_state(r, &me))).await;
             // Bounded by the current list: closed or re-pushed MRs drop out.
             self.diff_sizes.lock().retain(|(repo, n, sha), _| {
-                list.iter().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
+                list.iter().any(|(r, _)| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
             });
         } else {
-            futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
+            let me = self.me().await.ok().and_then(|u| u.login);
+            futures::future::join_all(list.iter_mut().map(|(r, n)| async {
+                self.waiting_state(r).await;
+                self.thread_state(r, *n, me.as_deref()).await;
+            }))
+            .await;
+            self.threads.lock().retain(|(repo, n), _| {
+                list.iter().any(|(r, _)| r.r#ref.repo == *repo && r.r#ref.number == *n)
+            });
         }
-        Ok(list)
+        Ok(list.into_iter().map(|(r, _)| r).collect())
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -682,27 +750,11 @@ impl CodeHost for GitlabHost {
         let me = self.me().await.ok().and_then(|u| u.login);
         let username =
             |n: &Value| n.pointer("/author/username").and_then(Value::as_str).unwrap_or("ghost").to_owned();
-        let threads = discussions
-            .as_array()
+        let threads = open_discussions(&discussions)
             .into_iter()
-            .flatten()
-            .filter_map(|d| {
-                let notes: Vec<&Value> = d
-                    .get("notes")
-                    .and_then(Value::as_array)?
-                    .iter()
-                    .filter(|n| n.get("system").and_then(Value::as_bool) != Some(true))
-                    .collect();
+            .filter_map(|(d, notes)| {
                 let first = *notes.first()?;
-                let resolvable =
-                    notes.iter().any(|n| n.get("resolvable").and_then(Value::as_bool) == Some(true));
-                let resolved = notes
-                    .iter()
-                    .filter(|n| n.get("resolvable").and_then(Value::as_bool) == Some(true))
-                    .all(|n| n.get("resolved").and_then(Value::as_bool) == Some(true));
-                if !resolvable || resolved {
-                    return None;
-                }
+                let last = *notes.last()?;
                 let pos = first.get("position").filter(|p| !p.is_null());
                 let line = pos
                     .and_then(|p| p.get("new_line").filter(|l| !l.is_null()).or_else(|| p.get("old_line")));
@@ -721,6 +773,9 @@ impl CodeHost for GitlabHost {
                         .and_then(Value::as_u64)
                         .map(|id| format!("{web}#note_{id}"))
                         .unwrap_or(web.clone()),
+                    last_comment_at: (me.as_deref() != Some(username(last).as_str()))
+                        .then(|| s(last, "created_at").map(str::to_owned))
+                        .flatten(),
                 })
             })
             .collect();

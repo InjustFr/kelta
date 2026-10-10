@@ -25,6 +25,7 @@ async fn one_graphql_request_with_only_the_requested_alias() {
     assert_eq!(reqs.len(), 1, "one request per kind");
     let q = reqs[0]["query"].as_str().unwrap();
     assert!(q.contains("reviewRequested: search") && !q.contains("authored: search"));
+    assert!(!q.contains("reviewThreads"), "threads cost the authored search only");
     assert_eq!(reqs[0]["variables"]["s"], "is:pr is:open review-requested:@me archived:false draft:false");
 
     assert_eq!(
@@ -78,6 +79,14 @@ async fn authored_list() {
     assert_eq!(r.my_state, None);
     assert_eq!(r.mergeable, None);
     assert_eq!(r.failed_check_names, ["test (ubuntu)", "e2e", "ci/jenkins"]);
+    assert_eq!(r.unresolved_threads, Some(3), "every unresolved thread");
+    assert_eq!(
+        r.last_comment_at.as_deref(),
+        Some("2026-10-01T09:00:00Z"),
+        "resolved and answered threads left out; compared as instants"
+    );
+    let q = bodies(&server, "POST", "/graphql").await[0]["query"].as_str().unwrap().to_owned();
+    assert!(q.contains("...Threads") && q.contains("reviewThreads"));
 }
 
 #[tokio::test]
@@ -425,8 +434,11 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     let q = &bodies(&server, "POST", "/graphql").await[0];
     assert_eq!((q["variables"]["o"].as_str(), q["variables"]["num"].as_u64()), (Some("acme"), Some(101)));
 
-    assert_eq!(f.threads.len(), 1, "resolved threads are dropped");
+    assert_eq!(f.threads.len(), 2, "resolved threads are dropped");
     let t = &f.threads[0];
+    assert_eq!(t.last_comment_at, None, "I replied last: answered");
+    assert_eq!(f.threads[1].last_comment_at.as_deref(), Some("2026-10-02T09:00:00Z"));
+    assert_eq!(f.reviews[0].submitted_at.as_deref(), Some("2026-10-01T08:00:00Z"));
     assert_eq!((t.id.as_str(), t.author.as_str()), ("PRRT_open", "erin"));
     assert_eq!((t.path.as_deref(), t.line), (Some("src/limiter.rs"), Some(42)), "outdated → original line");
     assert_eq!(t.body_md, "erin: Reset the counter on success.\n\nlouis: Will do.");

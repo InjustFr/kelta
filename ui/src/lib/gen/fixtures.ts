@@ -791,6 +791,7 @@ export const reviewPage: ReviewPage = {
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
         "kind": "review_requested",
         "labels": [],
+        "last_comment_at": null,
         "linked_tickets": [
           "SHOP-140"
         ],
@@ -807,6 +808,7 @@ export const reviewPage: ReviewPage = {
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
+        "unresolved_threads": null,
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://github.com/acme/shop-api/pull/87",
         "waiting_on": []
@@ -851,6 +853,7 @@ export const reviewDetail: ReviewDetail = {
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
     "kind": "review_requested",
     "labels": [],
+    "last_comment_at": null,
     "linked_tickets": [
       "SHOP-140"
     ],
@@ -867,6 +870,7 @@ export const reviewDetail: ReviewDetail = {
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
+    "unresolved_threads": null,
     "updated_at": "2026-10-09T12:00:00Z",
     "url": "https://github.com/acme/shop-api/pull/87",
     "waiting_on": []
@@ -940,6 +944,7 @@ export const workItem: WorkItem = {
   "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
+  "feedback_at": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "left_at": null,
@@ -1060,6 +1065,7 @@ export const workItemFailed: WorkItem = {
   "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
+  "feedback_at": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "left_at": null,
@@ -1182,6 +1188,7 @@ export const workItemMerged: WorkItem = {
   "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
+  "feedback_at": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "left_at": null,
@@ -1335,6 +1342,7 @@ export const workItemRebaseStopped: WorkItem = {
   "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
+  "feedback_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "left_at": null,
@@ -1476,7 +1484,8 @@ export const feedback: Feedback = {
     {
       "author": "bob",
       "body_md": "Close, two things to fix.",
-      "state": "changes_requested"
+      "state": "changes_requested",
+      "submitted_at": "2026-10-09T12:00:00Z"
     }
   ],
   "threads": [
@@ -1484,6 +1493,7 @@ export const feedback: Feedback = {
       "author": "bob",
       "body_md": "bob: Reset the counter after a successful login.",
       "id": "PRRT_kwDOA1",
+      "last_comment_at": "2026-10-09T12:00:00Z",
       "line": 42,
       "path": "src/login.rs",
       "url": "https://github.com/acme/shop-api/pull/74#discussion_r1"
@@ -3539,6 +3549,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "cost_usd": 3.5,
     "created_at": "2026-10-09T12:00:00Z",
     "delta": null,
+    "feedback_at": null,
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "left_at": null,

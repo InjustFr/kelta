@@ -40,4 +40,12 @@ waiting_on: Array<string>,
 /**
  * My last nudge from Kelta (authored only, `nudges` table; core-filled).
  */
-nudged_at?: string | null, };
+nudged_at?: string | null, 
+/**
+ * Unresolved review threads (authored only; GitHub and GitLab).
+ */
+unresolved_threads?: number | null, 
+/**
+ * Newest last comment, not by me, of an unresolved thread (authored only; GitHub and GitLab).
+ */
+last_comment_at?: string | null, };

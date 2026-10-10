@@ -62,6 +62,7 @@ export const UP_NEXT_MAX = 10;
 // Order within a section: phases listed first come first.
 const PHASE_ORDER: Partial<Record<PhaseId, number>> = {
   changes_requested: 0,
+  new_comments: 0,
   checks_failed: 1,
   remote_new: 2,
   rebase_stopped: 3,

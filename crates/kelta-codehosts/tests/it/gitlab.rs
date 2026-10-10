@@ -139,6 +139,34 @@ async fn authored_list_uses_created_by_me() {
     assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-28T10:00:00Z"), "the oldest pending request");
 }
 
+#[tokio::test]
+async fn authored_threads_are_fetched_only_when_the_stamp_moves() {
+    let server = MockServer::start().await;
+    common(&server, "gitlab/version_16.json").await;
+    let list: serde_json::Value = serde_json::from_str(&fixture_text("gitlab/mrs_authored.json")).unwrap();
+    let mut moved = list.clone();
+    moved[0]["user_notes_count"] = json!(4);
+    for (body, polls) in [(list, 2), (moved, 1)] {
+        Mock::given(path("/api/v4/merge_requests"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .up_to_n_times(polls)
+            .mount(&server)
+            .await;
+    }
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/merge_requests/21/discussions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/discussions.json")))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let h = gl(&server);
+    for _ in 0..3 {
+        let r = h.list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap().remove(0);
+        assert_eq!(r.unresolved_threads, Some(2), "resolvable and unresolved: d-open, d-new");
+        // d-open's last note is mine; d-new's (system notes skipped) is zed's.
+        assert_eq!(r.last_comment_at.as_deref(), Some("2026-10-02T09:00:00.000+02:00"));
+    }
+}
+
 const MR: &str = "/api/v4/projects/grp%2Fother/merge_requests/8";
 
 async fn mount_detail(server: &MockServer, mr: &str, approvals: &str) {
@@ -413,8 +441,14 @@ async fn feedback_unresolved_discussions_and_failed_job_traces() {
         .mount(&server)
         .await;
     let f = gl(&server).feedback(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
-    assert_eq!(f.threads.len(), 1, "resolved, non-resolvable and system notes are dropped");
+    assert_eq!(f.threads.len(), 2, "resolved, non-resolvable and system notes are dropped");
     let t = &f.threads[0];
+    assert_eq!(t.last_comment_at, None, "I replied last: answered");
+    assert_eq!(
+        f.threads[1].last_comment_at.as_deref(),
+        Some("2026-10-02T09:00:00.000+02:00"),
+        "system note skipped"
+    );
     assert_eq!((t.id.as_str(), t.author.as_str()), ("d-open", "zed"));
     assert_eq!((t.path.as_deref(), t.line), (Some("a.rs"), Some(12)));
     assert_eq!(t.body_md, "zed: Use a constant here.\n\nlouis: Agreed.");
