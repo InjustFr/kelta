@@ -489,16 +489,19 @@ async fn approving_in_kelta_stamps_the_reviewed_head_hosts_do_not_report() {
     assert_eq!(page.items[0].review.reviewed_head, Some(head));
 }
 
-/// shop: views `mine` + `sprint` on jira-acme (same tickets) and `team` on linear-team; blog: `mine`.
+/// shop: views `mine` + `sprint` on jira-acme (same tickets) and `team` (who: mine) on linear-team,
+/// which also holds an unassigned TEAM-9; blog: `mine`.
 fn union_env(root: &std::path::Path) -> (Env, AccountId) {
     let e = env(root, vec![]);
     let linear = AccountId::new("linear-team");
     // same key as a jira ticket (kept apart: dedup is per account) + one only linear has
-    let tickets = [("SHOP-141", "SHOP-141"), ("SHOP-142", "TEAM-7")].map(|(k, as_key)| {
-        let mut d = e.tracker.ticket(k).unwrap();
-        d.ticket.r#ref = TicketRef { account: linear.clone(), key: as_key.into(), id: as_key.into() };
-        d
-    });
+    let tickets =
+        [("SHOP-141", "SHOP-141"), ("SHOP-142", "TEAM-7"), ("SHOP-143", "TEAM-9")].map(|(k, as_key)| {
+            let mut d = e.tracker.ticket(k).unwrap();
+            d.ticket.r#ref = TicketRef { account: linear.clone(), key: as_key.into(), id: as_key.into() };
+            d.ticket.assignee = d.ticket.assignee.filter(|_| as_key != "TEAM-9");
+            d
+        });
     e.factory.trackers.lock().insert(linear.clone(), Arc::new(FakeTracker::with_tickets(tickets.to_vec())));
     e.h.cfg.update(|s| {
         s.accounts.insert(linear.clone(), account(AccountKind::Linear));
@@ -516,6 +519,7 @@ fn union_env(root: &std::path::Path) -> (Env, AccountId) {
         b.views.push(TrackerView {
             id: "team".into(),
             account: Some(linear.clone()),
+            who: Some(Who::Mine),
             ..TrackerView::default()
         });
         ps[0] = Arc::new(shop);
@@ -558,10 +562,10 @@ async fn union_of_views_dedups_across_views_and_accounts() {
     let mine = e.h.core.ticket_queries(&shop, None, Some(Who::Mine));
     assert_eq!(mine.len(), 3);
     assert!(mine.iter().all(|q| q.view.who == Some(Who::Mine)));
-    assert!(keys(None).iter().all(|k| !keys(Some(Who::Mine)).contains(k)));
-    // `kelta start <bare key>` finds the account whose view lists the key
+    assert!(keys(None).iter().all(|k| !keys(Some(Who::Anyone)).contains(k)));
+    // `kelta start <bare key>` finds the account that has the key, even unassigned (off every list)
     use kelta_proto::ctl::CtlCommand;
-    for (key, account) in [("SHOP-143", "jira-acme"), ("TEAM-7", "linear-team")] {
+    for (key, account) in [("SHOP-143", "jira-acme"), ("TEAM-7", "linear-team"), ("TEAM-9", "linear-team")] {
         let plan = e.h.core.ctl(CtlCommand::Start { ticket: key.into(), project: Some("shop".into()) }).await;
         let plan = plan.unwrap();
         assert_eq!(plan["source"]["ticket"]["account"], account, "{plan}");
