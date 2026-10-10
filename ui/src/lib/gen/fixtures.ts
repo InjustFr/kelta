@@ -1480,6 +1480,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "placement": "split_right",
     "source": {
       "kind": "layer",
       "layer": "global"
@@ -1493,6 +1494,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "placement": "split_right",
     "source": {
       "kind": "plugin",
       "plugin_id": "tools-pack"
@@ -2419,7 +2421,7 @@ export const toolDef: ToolDef = {
   "kind": "web",
   "label": "Sapling ISL",
   "lifecycle": "on_close",
-  "placement": "new_tab",
+  "placement": "split_right",
   "scrollback": null,
   "start": {
     "args": [

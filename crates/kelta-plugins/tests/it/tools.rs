@@ -9,7 +9,8 @@ use kelta_proto::ErrorCode;
 use kelta_proto::events::bus;
 use kelta_proto::ext::{EmbedMode, Ready, StopSpec, ToolDef, ToolHandle, ToolKind, ToolSource, WebStart};
 use kelta_proto::ids::{PluginId, ProjectId, ToolId};
-use kelta_proto::model::{PaneContent, Placement, SessionKind, TemplateCtx};
+use kelta_proto::model::{PaneContent, Placement, SessionKind, TemplateCtx, WorkItem};
+use kelta_proto::samples;
 use kelta_proto::settings::Layer;
 
 /// Fake web server run from this very test binary (`fake_server_main`), configured by env vars.
@@ -206,6 +207,54 @@ async fn pty_tools_spawn_sessions_with_expanded_templates() {
     assert_eq!(req.placement, Placement::SplitDown);
     assert!(matches!(req.content, PaneContent::Terminal { .. }));
     assert!(env.core.published().iter().any(|e| e.name == bus::TOOL_OPENED));
+}
+
+#[tokio::test]
+async fn tools_default_to_the_work_items_worktree() {
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(ToolDef {
+            id: "lazygit".into(),
+            command: Some("lazygit".into()),
+            args: vec!["{branch}".into()],
+            ..Default::default()
+        });
+    });
+    let w = samples::work_item();
+    env.core.add_work_item(w.clone());
+    let ctx = TemplateCtx { work_item_id: Some(w.id.clone()), ..Default::default() };
+    let lg = ToolId::new("lazygit");
+    env.host.tool_open(&shop(), &lg, ctx, Placement::SplitRight).await.unwrap();
+    let spawns: Vec<_> =
+        env.core.calls().into_iter().filter(|c| c.method == "session_spawn").map(|c| c.args).collect();
+    assert_eq!(spawns[0]["cwd"], w.worktree.display().to_string());
+    assert_eq!(spawns[0]["args"], serde_json::json!([w.branch]));
+    assert_eq!(spawns[0]["work_item_id"], serde_json::json!(w.id));
+    assert_eq!(env.core.opened()[0].1.work_item_id.as_ref(), Some(&w.id));
+    // No work item: the project root, as before.
+    env.host.tool_open(&shop(), &lg, TemplateCtx::default(), Placement::SplitRight).await.unwrap();
+    let spawn = env.core.calls().into_iter().filter(|c| c.method == "session_spawn").nth(1).unwrap().args;
+    assert_eq!(spawn["cwd"], env.tmp.path().join("repo").display().to_string());
+    assert_eq!(spawn["work_item_id"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn external_tools_start_in_the_work_items_worktree() {
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(ToolDef {
+            id: "fork".into(),
+            kind: ToolKind::External,
+            command: Some("sh".into()),
+            args: vec!["-c".into(), "touch opened-here".into()],
+            ..Default::default()
+        });
+    });
+    let wt = env.tmp.path().join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    let w = WorkItem { worktree: wt.clone(), ..samples::work_item() };
+    env.core.add_work_item(w.clone());
+    let ctx = TemplateCtx { work_item_id: Some(w.id), ..Default::default() };
+    env.host.tool_open(&shop(), &ToolId::new("fork"), ctx, Placement::SplitRight).await.unwrap();
+    assert!(common::wait_for(|| wt.join("opened-here").exists()).await);
 }
 
 #[tokio::test]
