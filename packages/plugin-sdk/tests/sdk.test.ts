@@ -153,12 +153,12 @@ describe('matches', () => {
 });
 
 describe('vendored copy', () => {
-  // examples/plugins/hello-screen ships the SDK as plain ESM (no build step for plugin authors).
+  // The example plugins ship the SDK as plain ESM (no build step for plugin authors).
   // Regenerate with KELTA_UPDATE_VENDOR=1 pnpm --filter @kelta/plugin-sdk test.
-  it('matches the source', () => {
+  it.each(['hello-screen', 'branch-script'])('%s matches the source', (example) => {
     // vitest runs with the package directory as cwd.
     const src = resolve(process.cwd(), 'src/index.ts');
-    const vendored = resolve(process.cwd(), '../../examples/plugins/hello-screen/dist/kelta-sdk.js');
+    const vendored = resolve(process.cwd(), `../../examples/plugins/${example}/dist/kelta-sdk.js`);
     const out = ts.transpileModule(readFileSync(src, 'utf8'), {
       compilerOptions: {
         target: ts.ScriptTarget.ES2022,
