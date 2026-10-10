@@ -127,13 +127,6 @@
 </Sheet>
 
 <style>
-  .lamp {
-    display: inline-flex;
-    justify-content: center;
-    flex: none;
-    width: 10px;
-  }
-
   .picker {
     display: flex;
     flex-direction: column;
