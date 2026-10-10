@@ -43,3 +43,25 @@ test('picking a dark theme with the keyboard re-themes the window', async ({ pag
   await expect(page.getByTestId('theme-note')).toHaveText('Themes are chosen in global settings.');
   await expect(page.getByTestId('theme-picker')).toHaveCount(0);
 });
+
+test('importing a VS Code theme adds its card, selects it and re-themes the window', async ({ page }) => {
+  await boot(page);
+  await dispatch(page, 'settings.open', { section: 'general' });
+  const theme = {
+    name: 'Night Owl',
+    type: 'dark',
+    colors: { 'editor.background': '#011627', 'editor.foreground': '#d6deeb' },
+  };
+  await page.getByTestId('theme-import-input').setInputFiles({
+    name: 'night-owl-color-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(`// exported\n${JSON.stringify(theme)}`),
+  });
+
+  const card = page.getByRole('listbox', { name: /Dark theme/ }).locator('[data-theme-id="night-owl"]');
+  await expect(card).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Imported Night Owl (used in dark mode)')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--k-well')))
+    .toBe('#011627');
+});
