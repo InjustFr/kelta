@@ -12,6 +12,8 @@ import { reviewLocally, startWorkOnTicket } from '../work/startWork';
 import { headerParts, nowSections, WAITING, waitingCount, type NowRow, type Section } from './groups';
 
 const ALL = { kind: 'all' } as const;
+/** Up next is my tickets across every source, whatever each view's own `who` says. */
+const MINE = 'mine' as const;
 
 export function currentSections(): Section[] {
   return nowSections({
@@ -19,7 +21,7 @@ export function currentSections(): Section[] {
     sessions: sessions.all,
     requested: reviews.items(ALL, 'review_requested'),
     authored: reviews.items(ALL, 'authored'),
-    tickets: tickets.items(ALL, null),
+    tickets: tickets.items(ALL, null, MINE),
   });
 }
 
@@ -50,7 +52,7 @@ export function nowSummary(): NowSummary {
 /** "as of hh:mm" when a source is stale or failed; null when everything is fresh. */
 export function asOf(): { at: string; ms: number; error: KeltaError | null } | null {
   const lists = [
-    tickets.list(ALL, null),
+    tickets.list(ALL, null, MINE),
     reviews.list(ALL, 'review_requested'),
     reviews.list(ALL, 'authored'),
   ];
@@ -71,7 +73,7 @@ export function asOf(): { at: string; ms: number; error: KeltaError | null } | n
  */
 export async function refreshNow(force = false): Promise<void> {
   await Promise.allSettled([
-    tickets.load(ALL, null, force),
+    tickets.load(ALL, null, force, MINE),
     reviews.load(ALL, 'review_requested', force),
     reviews.load(ALL, 'authored', force),
     work.refreshStatus(),

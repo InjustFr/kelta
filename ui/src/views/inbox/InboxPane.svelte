@@ -41,7 +41,7 @@
   const summary = $derived(nowSummary());
   const stale = $derived(asOf());
   const lists = $derived([
-    tickets.list(ALL, null),
+    tickets.list(ALL, null, 'mine'),
     reviews.list(ALL, 'review_requested'),
     reviews.list(ALL, 'authored'),
   ]);
@@ -315,9 +315,9 @@
     else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
   }
 
-  function showAllOnBoard(): void {
+  function showAll(): void {
     const pid = projects.activeId ?? projects.list.find((p) => p.open && !p.builtin)?.id;
-    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'board', who: null });
+    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'list', who: 'mine' });
   }
 
   function onkeydown(e: KeyboardEvent): void {
@@ -450,8 +450,8 @@
             {:else if l.type === 'msg'}
               <div class="row msgline" data-testid="now-message">{l.text}</div>
             {:else if l.type === 'more'}
-              <button type="button" tabindex="-1" class="row moreline" onclick={showAllOnBoard}>
-                {l.count} more, show all on Board
+              <button type="button" tabindex="-1" class="row moreline" onclick={showAll}>
+                {l.count} more, show all
               </button>
             {:else}
               {@const v = view(l.row)}

@@ -13,6 +13,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
 
   let { projectId, content }: PaneProps<'review_detail'> = $props();
@@ -186,7 +187,7 @@
         <span class="check"><Lamp level={ci.lamp} title={ci.label} />{ci.label}</span>
         {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
         {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-        {#each rv.linked_tickets as t (t)}<Badge tone="info">{t}</Badge>{/each}
+        {#each rv.linked_tickets as t (t)}<LinkedTicket ticketKey={t} {projectId} />{/each}
       </div>
       <h1>{rv.title}</h1>
       <p class="branches"><code>{rv.source_branch}</code> into <code>{rv.target_branch}</code></p>

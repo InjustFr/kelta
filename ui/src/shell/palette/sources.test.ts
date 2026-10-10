@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createMockTransport } from '$lib/ipc/mock';
+import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { layout, plugins, projects, sessions, settings, tools, work } from '$lib/stores';
 
@@ -19,8 +19,12 @@ import {
   toolItems,
 } from './sources';
 
+let mock: MockControls;
+
 beforeEach(async () => {
-  setTransport(createMockTransport().transport);
+  const created = createMockTransport();
+  mock = created.controls;
+  setTransport(created.transport);
   layout.byProject = {};
   await Promise.all([projects.load(), sessions.load(), work.load(), settings.load()]);
   await tools.load('shop');
@@ -90,6 +94,32 @@ describe('palette sources', () => {
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });
     expect(items[0]!.detail).toBe('In progress\u2002\u2002Shop');
+  });
+
+  it('offers verbs on the best ticket hits only, each acting on the exact ticket', async () => {
+    const hits = mock.state.tickets.slice(0, 5);
+    const items = ticketItems(hits);
+    const key = hits[0]!.ticket.ref.key;
+    expect(items.map((i) => i.label).slice(0, 5)).toEqual([
+      `${key} ${hits[0]!.ticket.title}`,
+      `Start work on ${key}`,
+      `Move ${key} to…`,
+      `Assign ${key} to me`,
+      `Open ${key} in browser`,
+    ]);
+    // 3 hits with 4 verbs + 2 plain hits
+    expect(items).toHaveLength(5 + 3 * 4);
+    expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+
+    await items.find((i) => i.label === `Assign ${key} to me`)!.run();
+    expect(mock.calls.find((c) => c.cmd === 'tracker_assign')?.args).toMatchObject({
+      ticket: hits[0]!.ticket.ref,
+      assignee: { kind: 'me' },
+    });
+    await items.find((i) => i.label === `Open ${key} in browser`)!.run();
+    expect(mock.calls.find((c) => c.cmd === 'open_external')?.args).toMatchObject({
+      url: hits[0]!.ticket.url,
+    });
   });
 
   it('ranks across groups and keeps the display group order', () => {
