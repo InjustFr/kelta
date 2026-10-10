@@ -152,6 +152,7 @@ export type * from './RestoreMode';
 export type * from './RestorePolicy';
 export type * from './Review';
 export type * from './ReviewDecision';
+export type * from './ReviewDelta';
 export type * from './ReviewDetail';
 export type * from './ReviewItem';
 export type * from './ReviewKind';

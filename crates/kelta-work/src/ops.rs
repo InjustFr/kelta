@@ -1,6 +1,6 @@
 //! Work item operations after start: resume, create PR, finish, status; editor ops; app lifecycle.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -780,6 +780,7 @@ impl WorkService {
                 }
             }
         }
+        crate::review::delete_refs(&repo, id).await;
         for dir in [&j.claude_run, &j.editor_run].into_iter().flatten() {
             let _ = std::fs::remove_dir_all(dir);
         }
@@ -1124,9 +1125,15 @@ impl WorkService {
                 repos.push(r.path.clone());
             }
         }
+        // Review refs of finished (or deleted) items go with the prune, so their objects can be collected.
+        let keep: HashSet<String> =
+            items.iter().filter(|w| w.state != WorkState::Finished).map(|w| w.id.to_string()).collect();
         for r in repos {
             if let Err(e) = git::worktree_prune(&r).await {
                 tracing::warn!(repo = %r.display(), error = %e.message, "git worktree prune failed");
+            }
+            if let Err(e) = crate::review::prune_refs(&r, &keep).await {
+                tracing::warn!(repo = %r.display(), error = %e.message, "review refs prune failed");
             }
         }
         // Sagas interrupted by a quit/crash become Failed so the UI offers Retry / Skip.

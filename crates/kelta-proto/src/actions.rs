@@ -101,9 +101,11 @@ pub const ACTIONS: &[ActionMeta] = &[
     // Work menu and its entries for the focused tab's work item (FLOW §2.5, §3.5).
     a!("work.menu", "Work menu", ["cmd+."], ["ctrl+shift+."], Some("."), Global),
     a!("work.next", "Work: Next action", [], [], None, Global),
+    a!("work.review_delta", "Work: Review changes since last look", [], [], None, Global),
     a!("work.review_diff", "Work: Review diff", [], [], None, Global),
     a!("work.ship", "Work: Ship / Push", [], [], None, Global),
     a!("work.mark_reviewed", "Work: Mark reviewed", [], [], None, Global),
+    a!("work.edit_note", "Work: Edit next: note", [], [], None, Global),
     a!("work.fix", "Work: Fix with Claude", [], [], None, Global),
     a!("work.rebase", "Work: Rebase", [], [], None, Global),
     a!("work.rebase_continue", "Work: Continue rebase", [], [], None, Global),

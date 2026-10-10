@@ -407,7 +407,17 @@
     "review_due": true,
     "claude_replied": false,
     "title": null,
-    "pr_title_needs_key": false
+    "pr_title_needs_key": false,
+    "claude_message": "Added the retry wrapper around the payment call and covered the timeout path.\n\nI left the backoff constant at 3 tries; say if you want it configurable.",
+    "delta": {
+      "lines": 212,
+      "files": 9,
+      "tests": 0,
+      "generated": 1800,
+      "insertions": 1890,
+      "deletions": 122
+    },
+    "next_note": "check the retry path against staging"
   },
   {
     "id": "0199a6b2-0000-7000-8000-00000000a005",

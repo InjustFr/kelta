@@ -1112,14 +1112,24 @@ impl Core {
             });
         }
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        let stamps = self.reviewed_stamps().await;
+        all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
         Ok(ReviewPage { items: merge_reviews(all, &bindings), stale, errors })
     }
 
     pub async fn review_get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         self.rt.capture();
-        let res = self.code_host_of(&r.account)?.get(r).await;
+        let mut res = self.code_host_of(&r.account)?.get(r).await;
         self.note_account(&r.account, &res);
+        if let Ok(d) = &mut res {
+            fill_reviewed_head(&mut d.review, &self.reviewed_stamps().await);
+        }
         res
+    }
+
+    /// Heads Louis approved in Kelta (`seen_reviews.reviewed_sha`).
+    async fn reviewed_stamps(&self) -> HashMap<(String, String, u64), String> {
+        self.store.call(|c| q::reviewed_shas(c)).await.unwrap_or_default()
     }
 
     async fn after_review_write(&self, r: &ReviewRef) {
@@ -1130,6 +1140,10 @@ impl Core {
     pub async fn review_approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
         self.rt.capture();
         self.code_host_of(&r.account)?.approve(r, head_sha).await?;
+        let (rr, sha) = (r.clone(), head_sha.to_owned());
+        if let Err(e) = self.store.call(move |c| q::seen_review_stamp(c, &rr, &sha)).await {
+            tracing::warn!(error = %e.message, "reviewed head not stamped");
+        }
         self.after_review_write(r).await;
         Ok(())
     }
@@ -1271,5 +1285,16 @@ impl Core {
 impl Refresher for Core {
     async fn refresh(&self, key: &SubKey) -> Result<(), KeltaError> {
         self.refresh_key(key).await
+    }
+}
+
+/// Hosts that report no `reviewed_head` (GitLab, Bitbucket, Gitea) read the head Louis approved in
+/// Kelta, so "Updated since your review" works there too.
+/// shortcut: a review made on the host's website does not move the stamp; stamp other review kinds
+/// (comment, request changes) too if that shows up.
+fn fill_reviewed_head(r: &mut Review, stamps: &HashMap<(String, String, u64), String>) {
+    if r.reviewed_head.is_none() {
+        let k = (r.r#ref.account.as_str().to_owned(), r.r#ref.repo.clone(), r.r#ref.number);
+        r.reviewed_head = stamps.get(&k).cloned();
     }
 }

@@ -63,10 +63,19 @@ async fn work_store_round_trip() {
     w2.state = WorkState::Failed { step: "x".into(), message: "y".into() };
     w2.review_due = true;
     w2.claude_at = Some("2026-10-10T09:00:00Z".into());
+    w2.claude_message = Some("Done.\n\nNext: tests.".into());
+    w2.delta =
+        Some(kelta_proto::model::ReviewDelta { lines: 212, files: 9, generated: 1800, ..Default::default() });
+    w2.next_note = Some("check the retry path".into());
+    w2.left_at = Some("2026-10-10T09:30:00Z".into());
     s.put_item(&w2).await.unwrap();
     let got = s.get_item(&w.id).await.unwrap().unwrap();
-    assert_eq!((got.state, got.review_due, got.claude_replied), (w2.state.clone(), true, false));
+    assert_eq!((got.state.clone(), got.review_due, got.claude_replied), (w2.state.clone(), true, false));
     assert_eq!(got.claude_at, w2.claude_at);
+    assert_eq!(
+        (&got.claude_message, got.delta, &got.next_note, &got.left_at),
+        (&w2.claude_message, w2.delta, &w2.next_note, &w2.left_at)
+    );
     assert_eq!(s.list_items(Some(&w.project_id)).await.unwrap().len(), 1);
     assert_eq!(s.list_items(Some(&"other".into())).await.unwrap().len(), 0);
     s.delete_item(&w.id).await.unwrap();

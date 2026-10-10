@@ -594,6 +594,38 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub rebase: Option<Box<RebaseState>>,
+    /// Claude's full final message of its last `Stop` (the session preview keeps 200 chars).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub claude_message: Option<String>,
+    /// Shape of `refs/kelta/wi/<id>/reviewed..last` at the last `Stop`; `None` when empty or reviewed.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub delta: Option<ReviewDelta>,
+    /// Louis's own `next:` note (`work_set_note`).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub next_note: Option<String>,
+    /// When Louis last left the item's tab (RFC 3339, `work_left`); drives the return strip.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub left_at: Option<String>,
+}
+
+/// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files
+/// (`linguist-generated`, `-diff`) and `reviews.ignore_globs` count in `generated` only.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ReviewDelta {
+    /// Added + deleted lines of the real files.
+    pub lines: u32,
+    pub files: u32,
+    /// Real files that are tests.
+    pub tests: u32,
+    /// Added + deleted lines of lockfiles and generated files.
+    pub generated: u32,
+    /// Every file, for `+N/−M since you reviewed`.
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
 /// `work_rebase` bookkeeping (FLOW §4.4). `pre_head` is the last HEAD that contained the remote

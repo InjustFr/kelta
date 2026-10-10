@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{PluginId, ProjectId, SessionId, WorkItemId};
 
 /// Current schema version (`schema_version(v)`); bumped by L3 migrations.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 /// Table names.
 pub mod tables {
@@ -121,7 +121,8 @@ pub struct WorkStepRow {
     pub updated_at: String,
 }
 
-/// `seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))`.
+/// `seen_reviews(account, repo, number, head_sha, first_seen, reviewed_sha, PK(account, repo, number))`;
+/// `reviewed_sha` (the head Louis approved in Kelta) is written by `seen_review_stamp` only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SeenReviewRow {
     pub account: String,

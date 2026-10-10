@@ -65,7 +65,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 5 | Claude `status = Working` | Claude working (for 4m) | working | none | In flight |
 | 6 | `state = merged` | Merged (#n, ticket moved to Done, or "choose Done status") | none | Finish… | Ship and clean up |
 | 7 | PR closed unmerged | PR closed (#n) | none | Finish… | Ship and clean up |
-| 8 | `review_due` | To review (Claude finished 6m ago) | done | Review diff | To review |
+| 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
 | 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
 | 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (n threads) / Checks failed (names) | error | Fix with Claude | Fix |
@@ -88,15 +88,19 @@ Notes:
 
 Two flags on `WorkItem`, owned by kelta-work, both set only from a real `Stop` hook (`status_source = Hook`) of the item's Claude session:
 
-- **`review_due`**: set when the Stop finds changes Louis has not seen: `ahead > 0` or dirty.
+- **`review_due`**: set when the Stop finds changes Louis has not seen. Each Stop snapshots the whole working tree (tracked plus untracked non-ignored files, through a temporary index: HEAD, index and stash untouched) to `refs/kelta/wi/<id>/last`; changes = a non-empty `git diff <reviewed> <last>`, where `refs/kelta/wi/<id>/reviewed` is what Mark reviewed copied from `last` (before the first review: the merge base with the base branch). Its shape (`WorkItem.delta`: real lines, files, test files, lockfile and generated lines apart via `reviews.ignore_globs`, `linguist-generated`, `-diff`) is the row's chip. Claude's full final message is kept (`WorkItem.claude_message`). Finish and the startup prune delete both refs.
 - **`claude_replied`**: set when the Stop finds no changes. Claude ended its turn in prose (an answer, "approach A or B?"). This is what keeps a parallel slot from quietly dying as "No changes yet".
 
 Clearing:
 - Both are cleared by a `UserPromptSubmit` in that session (Louis answered Claude, so he looked).
-- `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`x`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
+- `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`R`, which also stamps `reviewed`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
 - `claude_replied` is also cleared by Finish.
 
 Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The work bar shows the existing "status hooks inactive · Fix" instead.
+
+**Return strip.** Leaving a work item's tab stamps `WorkItem.left_at` (`work_left`). Refocusing it after `work.return_brief_after_mins` (default 20) shows a dismissible strip under the work bar: the `next:` note, `+N/−M since you reviewed` and Claude's last message (folded). `v` opens the delta, `x` dismisses. Never while Claude is Working.
+
+**Others' PRs.** Approving in Kelta stamps the approved head next to `seen_reviews` (`reviewed_sha`); hosts that report no `reviewed_head` (GitLab, Bitbucket, Gitea) read it back, so "Updated since your review" works there too.
 
 `WaitingUser` (the `idle_prompt` notification) means *idle*, not *needs you*. It never puts an item in Claude needs you and never blocks sending to Claude. Only `status = NeedsInput` does.
 
@@ -127,9 +131,11 @@ No status strip segment: the work bar is always visible above the focused tab's 
 | Key | Action | Notes |
 |---|---|---|
 | `Enter` | primary action of the phase | |
-| `d` | Review diff in nvim | §4.1 |
+| `v` | Review changes since last look | `DiffviewOpen <reviewed>..<last>` (`{range}`); a review item: since the PR head I reviewed, `git range-diff` in a shell after a force push |
+| `V` | Review the whole diff in nvim | §4.1 |
 | `p` | Ship (push + PR) / Push / Force push… | one letter, wording follows the phase |
-| `x` | Mark reviewed | only with `review_due` |
+| `R` | Mark reviewed | only with `review_due` |
+| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return strip |
 | `f` | Fix with Claude | needs a PR |
 | `r` | Rebase onto {base} | |
 | `c` | Continue rebase | only in Rebase stopped |
@@ -160,7 +166,7 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Section | Lamp | Rows | Order within | Row `Enter` |
 |---|---|---|---|---|
 | Claude needs you | needs input | sessions with `status = NeedsInput` (work items and plain sessions); work items with `claude_replied` | longest waiting first | Go to Claude |
-| To review | done | work items with `review_due` | oldest first, so nothing rots | Review diff |
+| Ready for review | done | work items with `review_due` (an empty delta never lands here) | oldest wait first, so nothing rots; the smaller delta first on ties | Review changes |
 | Fix | error | my work items in phase rows 1, 3, 10, 11, 12; my PRs without a work item that have changes requested or failing checks | changes requested, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
 | Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | oldest first | Open review |
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
@@ -169,9 +175,9 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 
 The header answers "review LLM work or grab a new feature?" in the order of that decision, with section names as words:
 
-`Claude: 1 asks, 2 ready · Teammates: 3 PRs · Fix 2 · 1 working · 4 up next`
+`Claude: 1 asks · 3 LLM diffs · 2 PRs waiting · Fix 2 · 1 working · 4 up next`
 
-"asks" = Claude needs you, "ready" = To review, "Teammates" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
+"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. Project rows on the rail carry their Ready for review count. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
 
 ### 3.2 Row grammar
 
@@ -179,7 +185,7 @@ DESIGN §6.8 row (`lamp | id | title | meta`) plus a 3px project-hue bar at the 
 
 Meta, right-aligned, tabular: the *reason* in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
 
-The **selected row expands** to a second line: Claude's last message for Claude needs you and To review (`ClaudeMeta.preview`, already captured on Stop), the first unresolved thread for Changes requested, failing check names for Checks failed, and the row's actions as ghost buttons with their key. Nothing else ever expands; rows stay 26px in `VirtualList`.
+The **selected row expands** to a second line: Claude's last message for Claude needs you (`ClaudeMeta.preview`), the `next:` note and the first line of Claude's full final message for Ready for review (`m` unfolds the whole message line by line; the row's meta is the delta chip `212 lines · 9 files · tests: none · +1.8k generated`, `tests: none` in amber when source changed, and the age is the wait since Claude stopped), the first unresolved thread for Changes requested, failing check names for Checks failed, and the row's actions as ghost buttons with their key. Nothing else ever expands; rows stay 26px in `VirtualList`.
 
 ### 3.3 Keys in Now
 
@@ -189,7 +195,10 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `Enter` | the row's next action (table above) |
 | `g` | go to the row's place without acting: work tab, session pane, review detail |
 | `p` | Ship / Push on a work item row |
-| `x` | Mark reviewed (To review rows) |
+| `v` / `V` | Review changes since last look / the whole diff (work item rows) |
+| `R` | Mark reviewed on a Ready for review row (elsewhere: Refresh) |
+| `b` | Edit the `next:` note |
+| `m` | Unfold Claude's full message (Ready for review rows) |
 | `f` | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1) |
 | `r` | Rebase |
 | `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |

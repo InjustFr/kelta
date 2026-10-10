@@ -456,6 +456,10 @@ impl WorkService {
             review_due: false,
             claude_replied: false,
             claude_at: None,
+            claude_message: None,
+            delta: None,
+            next_note: None,
+            left_at: None,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;

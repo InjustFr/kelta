@@ -22,6 +22,7 @@ mod fixloop;
 mod listener;
 mod ops;
 mod rebase;
+mod review;
 mod saga;
 mod signals;
 mod status;
@@ -77,8 +78,6 @@ pub struct WorkService {
     write_lock: tokio::sync::Mutex<()>,
     /// Last `git fetch` per repo (`work_status_all` floor).
     fetched: Mutex<HashMap<PathBuf, std::time::Instant>>,
-    /// Worktree fingerprint at the last `UserPromptSubmit` per item: a `Stop` changed code iff it moved.
-    prompt_marks: Mutex<HashMap<WorkItemId, u64>>,
     /// Bus listener (follow_claude_edits, HTTP consumer release); started on first need.
     listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Claude sessions holding an HTTP server consumer.
@@ -101,7 +100,6 @@ impl WorkService {
             start_lock: tokio::sync::Mutex::new(()),
             write_lock: tokio::sync::Mutex::new(()),
             fetched: Mutex::new(HashMap::new()),
-            prompt_marks: Mutex::new(HashMap::new()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
             crash_after: Mutex::new(None),
@@ -292,8 +290,30 @@ impl WorkService {
     }
 
     /// `work_diff`: spawns the review diff session (editor with `editor.review_args`, else a shell).
-    pub async fn diff(&self, id: &WorkItemId) -> Result<SessionInfo, KeltaError> {
-        self.diff_impl(id).await
+    /// `delta`: only what changed since Louis's last review (`reviewed..last`); `from`: a review
+    /// item's reviewed PR head (`git range-diff` in a shell after a force push).
+    pub async fn diff(
+        &self,
+        id: &WorkItemId,
+        delta: bool,
+        from: Option<&str>,
+    ) -> Result<SessionInfo, KeltaError> {
+        self.diff_impl(id, delta, from).await
+    }
+
+    /// `work_set_note`: Louis's `next:` note (blank clears it).
+    pub async fn set_note(&self, id: &WorkItemId, note: Option<String>) -> Result<WorkItem, KeltaError> {
+        let note = note.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
+        self.update(id, |w| std::mem::replace(&mut w.next_note, note.clone()) != note).await
+    }
+
+    /// `work_left`: Louis left the item's tab now (the return strip's clock).
+    pub async fn left(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| {
+            w.left_at = Some(kelta_proto::now_rfc3339());
+            true
+        })
+        .await
     }
 
     /// Work item owning a session (for `CoreApi::work_for_session`).
@@ -405,8 +425,8 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`, a
-    /// stored `claude_uuid`) are never written here: `item` takes the stored ones, so a long
+    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`,
+    /// `claude_message`, `delta`, a stored `claude_uuid`) and Louis's `next_note` / `left_at` are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -417,6 +437,10 @@ impl WorkService {
                 item.claude_replied = cur.claude_replied;
                 item.claude_uuid = cur.claude_uuid.or(item.claude_uuid.take());
                 item.claude_at = cur.claude_at;
+                item.claude_message = cur.claude_message;
+                item.delta = cur.delta;
+                item.next_note = cur.next_note;
+                item.left_at = cur.left_at;
             }
             self.store.put_item(item).await?;
         }

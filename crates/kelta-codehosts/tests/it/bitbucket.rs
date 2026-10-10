@@ -110,7 +110,9 @@ async fn detail_rolls_up_statuses_and_sums_the_diffstat() {
     mount(&server, "GET", pr, 200, "bitbucket/pr_7.json").await;
     mount(&server, "GET", &format!("{pr}/statuses"), 200, "bitbucket/statuses.json").await;
     mount(&server, "GET", &format!("{pr}/diffstat"), 200, "bitbucket/diffstat.json").await;
+    mount(&server, "GET", &format!("{pr}/comments"), 200, "bitbucket/comments.json").await;
     let d = bb(&server).get(&rref("bitbucket-acme", "acme/shop", 7)).await.unwrap();
+    assert_eq!(d.pending_comments, 2, "only my live pending comments");
     assert_eq!(d.review.ci, CiState::Failure, "worst check wins");
     assert_eq!(
         d.checks.iter().map(|c| c.state).collect::<Vec<_>>(),

@@ -247,7 +247,16 @@ impl CodeHost for GiteaHost {
 
         // Latest meaningful state per reviewer; a plain COMMENT never overrides an approval or a veto.
         let mut states: Vec<(User, MyReviewState)> = Vec::new();
-        for rv in reviews?.body.as_array().map(Vec::as_slice).unwrap_or(&[]) {
+        let reviews = reviews?.body;
+        let reviews = reviews.as_array().map(Vec::as_slice).unwrap_or(&[]);
+        // My PENDING review holds my draft line comments.
+        let pending_comments = reviews
+            .iter()
+            .filter(|rv| s(rv, "state") == Some("PENDING"))
+            .filter(|rv| rv.get("user").map(Self::user_from).is_some_and(|u| u.id == me.id))
+            .filter_map(|rv| rv.get("comments_count").and_then(Value::as_u64))
+            .sum::<u64>() as u32;
+        for rv in reviews {
             let st = match s(rv, "state") {
                 Some("APPROVED") => MyReviewState::Approved,
                 Some("REQUEST_CHANGES") => MyReviewState::ChangesRequested,
@@ -334,7 +343,7 @@ impl CodeHost for GiteaHost {
         };
         Ok(ReviewDetail {
             state,
-            pending_comments: 0,
+            pending_comments,
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
             reviewers,

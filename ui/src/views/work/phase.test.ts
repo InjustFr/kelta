@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import * as samples from '$lib/gen/fixtures';
 
-import { maxLamp, phaseOf, type PhaseGit, type PhaseItem, type PhasePr } from './phase';
+import {
+  deltaChip,
+  maxLamp,
+  phaseOf,
+  testsMissing,
+  type PhaseGit,
+  type PhaseItem,
+  type PhasePr,
+} from './phase';
 
 const item = (patch: Partial<PhaseItem> = {}): PhaseItem => ({ ...samples.workItem, ...patch });
 const git = (patch: Partial<PhaseGit> = {}): PhaseGit => ({
@@ -112,7 +120,7 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
       phaseOf(item({ review_due: true, claude_replied: true }), claude('done'), null, git()),
       'to_review',
       'to_review',
-      'review_diff',
+      'review_delta',
     );
     check(
       '9 replied',
@@ -244,5 +252,23 @@ describe('maxLamp', () => {
     expect(maxLamp(['done', 'working', 'activity'])).toBe('working');
     expect(maxLamp(['error', 'needs_input'])).toBe('needs_input');
     expect(maxLamp([])).toBe('none');
+  });
+});
+
+describe('delta chip', () => {
+  const d = { lines: 212, files: 9, tests: 0, generated: 1800, insertions: 1890, deletions: 122 };
+  it('reads lines, files, tests and generated lines apart', () => {
+    expect(deltaChip(d)).toBe('212 lines · 9 files · tests: none · +1.8k generated');
+    expect(deltaChip({ ...d, lines: 1, files: 1, tests: 1, generated: 0 })).toBe(
+      '1 line · 1 file · tests: 1',
+    );
+    expect(phaseOf(item({ review_due: true, delta: d }), claude('done'), null, git()).detail).toBe(
+      deltaChip(d),
+    );
+  });
+  it('warns when source changed without tests', () => {
+    expect(testsMissing(d)).toBe(true);
+    expect(testsMissing({ ...d, tests: 2 })).toBe(false);
+    expect(testsMissing({ ...d, files: 0 })).toBe(false);
   });
 });

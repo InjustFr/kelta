@@ -4,4 +4,9 @@ export type ReviewsSettings = { include_team_requests: boolean, include_drafts: 
 /**
  * Linked tickets regex over branch + title.
  */
-ticket_key_regex: string, repos_allow: Array<string>, repos_deny: Array<string>, };
+ticket_key_regex: string, repos_allow: Array<string>, repos_deny: Array<string>, 
+/**
+ * Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
+ * and `-diff` attributes.
+ */
+ignore_globs: Array<string>, };

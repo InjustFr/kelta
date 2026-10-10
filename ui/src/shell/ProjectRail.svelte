@@ -6,6 +6,7 @@
   import { attention, projects, sessions, toasts, ui } from '$lib/stores';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
+  import { readyByProject } from '../views/inbox/groups';
   import { nowSummary, refreshNow } from '../views/inbox/now';
   import { confirms } from './confirm.svelte';
   import { attentionLabel, chordFor } from './labels';
@@ -17,6 +18,7 @@
 
   // Now's tile: badge = what waits on Louis (first four sections), tooltip = the split header.
   const now = $derived(nowSummary());
+  const ready = $derived(readyByProject(now.sections));
 
   // Startup and window focus refresh Now's sources (no polling).
   onMount(() => void refreshNow());
@@ -172,6 +174,9 @@
     <span class="name">{p.name}</span>
     {#if sub}<span class="sub">{sub}</span>{/if}
   </span>
+  {#if ready.get(p.id)}
+    <span class="ready k-num" title="Ready for review" data-testid="rail-ready">{ready.get(p.id)}</span>
+  {/if}
   <span class="lamp-slot" aria-hidden="true"><Lamp level={lvl} /></span>
 {/snippet}
 
@@ -487,6 +492,19 @@
     font-size: var(--k-font-size-xs);
   }
 
+  .ready {
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--k-bg-selected);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+    line-height: 18px;
+    text-align: center;
+  }
+
   .badge {
     flex: none;
     min-width: 20px;
@@ -664,6 +682,11 @@
       position: absolute;
       top: 2px;
       left: calc(50% + 4px);
+    }
+
+    /* Compact: the corner lamp is the only cue. */
+    .ready {
+      display: none;
     }
   }
 </style>
