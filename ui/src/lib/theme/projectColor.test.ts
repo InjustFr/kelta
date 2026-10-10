@@ -48,6 +48,11 @@ describe('resolveProjectColor', () => {
     for (const hex of ['#5f6b7a', '#ff8800', '#FF8800']) expect(resolveProjectColor(hex, theme)).toBe(hex);
   });
 
+  it('reads #rgb as #rrggbb', () => {
+    expect(resolveProjectColor('#abc', themes[0]!)).toBe('#aabbcc');
+    expect(parseProjectColor('#F80')).toEqual({ hex: '#FF8800' });
+  });
+
   it('rejects anything else', () => {
     for (const bad of [
       null,
@@ -57,7 +62,8 @@ describe('resolveProjectColor', () => {
       'theme:black',
       'theme:',
       'theme:toString',
-      '#f80',
+      '#f8',
+      '#ff880',
       'rgb(1,2,3)',
     ]) {
       expect(parseProjectColor(bad)).toBeNull();

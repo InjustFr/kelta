@@ -334,7 +334,7 @@ check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the ap
 [project]
 id = "shop"                  # must equal the file stem
 name = "Shop"
-color = "theme:green"         # a theme slot (follows the theme) or a custom "#rrggbb" (kept as typed)
+color = "theme:green"         # a theme slot (follows the theme) or a custom "#rrggbb" (kept as typed; "#rgb" reads as "#rrggbb"; anything else is a warning and the colour is unset)
 icon = "S"                   # 1-2 chars or sprite icon name
 default_template = "claude+editor"
 

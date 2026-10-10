@@ -13,7 +13,7 @@ export type ProjectConfig = {
 id: ProjectId, name: string, 
 /**
  * `theme:<slot>` follows the active theme's ANSI colour (`red`..`cyan`, `bright-red`..`bright-cyan`);
- * a `#rrggbb` hex stays as typed.
+ * a `#rrggbb` hex stays as typed (`#rgb` reads as `#rrggbb`).
  */
 color: string | null, 
 /**

@@ -154,6 +154,35 @@ pub const REPO_TOOLS_PERSONAL: &str = "`tools` is personal: add it in Settings â
 
 pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (global only)";
 
+pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
+
+/// A project colour is cosmetic: `#rgb` reads as `#rrggbb`, and a bad one is reported in `warnings` and
+/// dropped so the project still loads. Returns the file's other issues.
+pub fn lenient_project_color(
+    value: &mut Value,
+    stem: Option<&str>,
+    warnings: &mut Vec<RawIssue>,
+) -> Vec<RawIssue> {
+    if let Some(c) = value.pointer_mut("/project/color")
+        && let Some(h) = c.as_str().and_then(|s| s.strip_prefix('#'))
+        && h.len() == 3
+        && h.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
+        *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
+    }
+    let path = ["project".to_owned(), "color".to_owned()];
+    let raw = layer_issues(Layer::Project, value, stem);
+    if !raw.iter().any(|i| i.path == path) {
+        return raw;
+    }
+    if let Some(p) = value.get_mut("project").and_then(Value::as_object_mut) {
+        p.remove("color");
+    }
+    warnings.push(RawIssue::new(&path, PROJECT_COLOR));
+    // schema problems hide the follow-up checks, so validate again without the colour
+    layer_issues(Layer::Project, value, stem)
+}
+
 /// Duplicate or missing ids in keyed lists, per layer.
 pub fn id_issues(value: &Value) -> Vec<RawIssue> {
     let mut out = Vec::new();
@@ -753,10 +782,10 @@ mod tests {
             let v = json!({"project": {"id": "x", "name": "X", "color": c}});
             layer_issues(Layer::Project, &v, Some("x"))
         };
-        for ok in ["theme:green", "theme:bright-cyan", "#ff8800", "#5E8C4A"] {
+        for ok in ["theme:green", "theme:bright-cyan", "#ff8800", "#5E8C4A", "#f80"] {
             assert!(issues(ok).is_empty(), "{ok}: {:?}", issues(ok));
         }
-        for bad in ["green", "theme:black", "theme:bright-white", "theme:", "#f80", "#ff880", "rgb(1,2,3)"] {
+        for bad in ["green", "theme:black", "theme:bright-white", "theme:", "#f8", "#ff880", "rgb(1,2,3)"] {
             let i = issues(bad);
             assert_eq!(i.len(), 1, "{bad}: {i:?}");
             assert_eq!(join_path(&i[0].path), "project.color");
