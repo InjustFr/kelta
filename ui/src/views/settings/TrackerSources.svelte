@@ -15,8 +15,10 @@
   let { projectId }: Props = $props();
 
   const editable = $derived(projects.list.filter((p) => !p.builtin));
-  let chosen = $state<string | null>(null);
-  const project = $derived(editable.find((p) => p.id === (chosen ?? projectId)) ?? editable[0] ?? null);
+  // the block's own pick, dropped once the pane's project changes
+  let chosen = $state<{ id: string; from: string | null } | null>(null);
+  const shownId = $derived(chosen?.from === projectId ? chosen.id : projectId);
+  const project = $derived(editable.find((p) => p.id === shownId) ?? editable[0] ?? null);
   const binding = $derived(project?.tracker ?? null);
   const kindOf = (id: string) => settings.value()?.accounts[id]?.kind;
 
@@ -57,7 +59,8 @@
         <Select
           value={project.id}
           options={editable.map((p) => ({ value: p.id, label: p.name }))}
-          onchange={(id) => (chosen = id)}
+          label="Project"
+          onchange={(id) => (chosen = { id, from: projectId })}
           id="tracker-project"
         />
       {/if}
@@ -75,11 +78,12 @@
       <ul>
         {#each b.views as v (v.id)}
           {@const acc = viewAccount(b, v)}
-          {@const word = iterationWord(kindOf(acc))}
+          {@const word = iterationWord(kindOf(acc), v)}
           <li data-testid="tracker-source" data-view-id={v.id}>
             <span class="label">{v.label}</span>
             <span class="account">{acc}</span>
             <span class="who">
+              <label class="k-visually-hidden" for="who-{v.id}">Whose tickets in {v.label}</label>
               <Select
                 value={v.who ?? ''}
                 options={whoOptions(v)}

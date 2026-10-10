@@ -34,6 +34,8 @@
   const account = $derived(picked ?? binding?.account ?? accountIds[0] ?? '');
   let query = $state('');
   let hits = $state<SourceHit[]>([]);
+  // account the shown hits came from: `account` moves first while a new search is pending
+  let hitsAccount = $state('');
   let busy = $state(false);
   let failure = $state<{ unsupported: boolean; message: string } | null>(null);
   let selected = $state(0);
@@ -59,6 +61,7 @@
         const found = await trackerSources({ account_id: acc, query: q });
         if (mine === seq) {
           hits = found;
+          hitsAccount = acc;
           selected = 0;
         }
       } catch (err) {
@@ -77,10 +80,10 @@
   });
 
   async function add(hit: SourceHit | undefined): Promise<void> {
-    if (!hit || adding || isAdded(binding, account, hit)) return;
+    if (!hit || adding || isAdded(binding, hitsAccount, hit)) return;
     adding = true;
     try {
-      await saveTracker(projectId, withSource(binding, account, hit));
+      await saveTracker(projectId, withSource(binding, hitsAccount, hit));
     } catch (err) {
       toasts.error(err, `Could not add ${hit.label}`);
     } finally {
@@ -133,6 +136,8 @@
           autofocus
           spellcheck={false}
           {onkeydown}
+          aria-controls="src-hits"
+          aria-activedescendant={hits.length ? `src-hit-${selected}` : undefined}
           data-testid="source-search"
         />
       </div>
@@ -149,12 +154,13 @@
             account offers no source.{/if}
         </p>
       {:else}
-        <div class="list" role="listbox" aria-label="Sources" aria-busy={busy}>
+        <div class="list" id="src-hits" role="listbox" aria-label="Sources" aria-busy={busy}>
           {#each hits as hit, i (hit.view.id)}
-            {@const added = isAdded(binding, account, hit)}
+            {@const added = isAdded(binding, hitsAccount, hit)}
             <!-- svelte-ignore a11y_click_events_have_key_events (the search field drives the keyboard) -->
             <div
               class="row"
+              id="src-hit-{i}"
               class:selected={i === selected}
               class:added
               role="option"

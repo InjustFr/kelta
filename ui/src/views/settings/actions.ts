@@ -29,6 +29,7 @@ registerAction('settings.open', async (args) => {
       work_item_id: null,
     });
   } catch (err) {
+    tomlRequest = null;
     toasts.error(err, 'Could not open settings');
   }
 });

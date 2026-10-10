@@ -6,16 +6,18 @@ import { registerAction } from '$lib/actions';
 import type { ProjectPatch, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
-import { setTransport } from '$lib/ipc/transport';
+import { setTransport, type IpcTransport } from '$lib/ipc/transport';
 import { projects, settings } from '$lib/stores';
 
 import SourcePickerSheet from './SourcePickerSheet.svelte';
 
 let mock: MockControls;
+let transport: IpcTransport;
 
 beforeEach(async () => {
   const created = createMockTransport();
   mock = created.controls;
+  transport = created.transport;
   setTransport(created.transport);
   for (const [id, kind] of [
     ['jira-acme', 'jira'],
@@ -42,6 +44,31 @@ describe('SourcePickerSheet', () => {
     await waitFor(() => expect(labels()).toEqual(['SHOP board', 'SHOP board, current sprint']));
     const searches = mock.calls.filter((c) => c.cmd === 'tracker_sources').map((c) => c.args);
     expect(searches.at(-1)).toEqual({ account_id: 'jira-acme', query: 'board' });
+  });
+
+  it('drops an older search that answers after a newer one', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    setTransport({
+      ...transport,
+      invoke: async (cmd, args, opts) => {
+        const out = transport.invoke(cmd, args, opts);
+        if (cmd === 'tracker_sources' && (args as { query: string }).query === 'b') await held;
+        return out;
+      },
+    } as IpcTransport);
+    mount('shop');
+    await waitFor(() => expect(rows()).toHaveLength(4));
+    const input = screen.getByTestId('source-search');
+    await fireEvent.input(input, { target: { value: 'b' } });
+    await waitFor(() =>
+      expect(mock.calls.some((c) => (c.args as { query?: string })?.query === 'b')).toBe(true),
+    );
+    await fireEvent.input(input, { target: { value: 'board' } });
+    await waitFor(() => expect(labels()).toEqual(['SHOP board', 'SHOP board, current sprint']));
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(labels()).toEqual(['SHOP board', 'SHOP board, current sprint']);
   });
 
   it('adds the picked hit with who mine, then shows it as Added', async () => {

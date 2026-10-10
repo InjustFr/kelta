@@ -60,9 +60,11 @@ const ITERATION: Record<string, string> = {
   redmine: 'version',
 };
 
-/** What the provider calls its current iteration (SPEC decision 3); gitea has none. */
-export function iterationWord(kind: AccountKind | undefined): string | null {
-  return kind === 'gitea' ? null : (ITERATION[kind ?? ''] ?? 'iteration');
+/** What the provider calls its current iteration (SPEC decision 3); null where `current_iteration`
+ *  does nothing: gitea, GitHub repo views (only project_v2 has iterations), kind not loaded yet. */
+export function iterationWord(kind: AccountKind | undefined, v?: TrackerView): string | null {
+  if (!kind || kind === 'gitea' || (kind === 'github' && v && !v.project_v2)) return null;
+  return ITERATION[kind] ?? 'iteration';
 }
 
 const NOT_TRACKERS: readonly AccountKind[] = ['bitbucket', 'plugin_codehost'];

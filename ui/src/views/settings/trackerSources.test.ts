@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { dispatch } from '$lib/actions';
-import type { ProjectPatch } from '$lib/gen';
+import type { ProjectPatch, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -85,6 +85,10 @@ describe('Tracker block', () => {
     expect(iterationWord('linear')).toBe('cycle');
     expect(iterationWord('github')).toBe('iteration');
     expect(iterationWord('gitea')).toBeNull();
+    expect(iterationWord(undefined)).toBeNull();
+    const repoView = { project_v2: null } as TrackerView;
+    expect(iterationWord('github', repoView)).toBeNull();
+    expect(iterationWord('github', { project_v2: {} } as TrackerView)).toBe('iteration');
   });
 });
 
