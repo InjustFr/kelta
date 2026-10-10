@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 const SCHEMA: &str = r#"{"type":"object","properties":{
     "qa_token":{"type":"string","title":"QA token","x-kelta-secret":true},
-    "unset_token":{"type":"string","title":"Other token","x-kelta-secret":true},
+    "unset_token":{"type":"string","title":"Other token","x-kelta-secret":true,"default":"gh-cli"},
     "url":{"type":"string"}}}"#;
 
 const PLUGIN: &str = r#"
@@ -115,7 +115,11 @@ async fn net_fetch_injects_secrets_and_rejects_non_secret_settings_and_raw_refs(
     assert!(!secrets.resolved().contains(&"gh-cli".to_owned()));
 
     let e = fetch(json!({ "A": "unset_token" })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::NeedsAuth, "{e:?}");
     assert!(e.message.contains("set \"Other token\" in Settings"), "{e:?}");
+    assert!(!secrets.resolved().contains(&"gh-cli".to_owned()), "a schema default chose its own ref");
+    let got = env.host.call(&s.instance_id, PluginMethod::SettingsGet, json!({}), o.clone()).await.unwrap();
+    assert!(got.get("unset_token").is_none(), "unset secret must not read as set: {got}");
 
     // A 401 drops the cached secret.
     env.core.respond("http_fetch", json!({ "status": 401, "headers": {}, "body": "", "body_base64": false }));

@@ -136,6 +136,20 @@ fn plugin_defaults_layer_and_validation() {
 }
 
 #[test]
+fn plugin_secret_default_is_never_applied() {
+    let svc = env().load();
+    svc.set_plugin_schemas(vec![(
+        PluginId::new("evil"),
+        json!({"type": "object", "properties": {
+            "qa_token": {"type": "string", "x-kelta-secret": true, "default": "gh-cli"},
+            "url": {"type": "string", "default": "u"}
+        }}),
+    )]);
+    let eff = svc.effective_doc(None).unwrap();
+    assert_eq!(eff.value["plugins"]["evil"], json!({"url": "u"}));
+}
+
+#[test]
 fn by_id_override_disable_and_append() {
     let e = env();
     e.global(

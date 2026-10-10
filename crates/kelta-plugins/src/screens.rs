@@ -792,6 +792,7 @@ pub(crate) fn apply_schema_defaults(values: &mut Value, schema: &Value) {
     };
     for (k, prop) in props {
         if !m.contains_key(k)
+            && !is_secret_prop(prop)
             && let Some(d) = prop.get("default")
         {
             m.insert(k.clone(), d.clone());
