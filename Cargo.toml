@@ -138,8 +138,3 @@ panic = "abort"
 
 [profile.dev.package."*"]
 debug = false
-
-# Test builds keep file:line in backtraces and drop the rest of the debuginfo (#185): about a third smaller
-# workspace artifacts. strip = "debuginfo" saved nothing on macOS, where the DWARF stays in the .o files.
-[profile.test]
-debug = "line-tables-only"
