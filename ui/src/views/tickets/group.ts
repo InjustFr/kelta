@@ -2,6 +2,7 @@
 // source or none; sort within groups; status age.
 
 import type {
+  Column,
   Status,
   StatusCategory,
   Ticket,
@@ -142,12 +143,14 @@ export function sortTickets(items: readonly TicketItem[], sort: TicketSort): Tic
 /**
  * Groups in display order, items kept in input order. `sources` maps a view id to its label and gives
  * the source order (a ticket sits under its first view); `flow` classifies for the Flow grouping.
+ * `columns` (in board order) order the Status groups; statuses matching no column by name follow them.
  */
 export function groupTickets(
   items: readonly TicketItem[],
   by: GroupBy,
   sources: readonly { id: string; label: string }[] = [],
   flow: (item: TicketItem) => Flow | null = (i) => flowOf(i, { work: null, needsYou: false }, Date.now()),
+  columns: readonly Column[] = [],
 ): TicketGroup[] {
   if (by === 'none') return [{ id: 'all', label: 'All', category: null, items: [...items] }];
   const groups = new Map<string, TicketGroup & { order: number }>();
@@ -159,7 +162,13 @@ export function groupTickets(
       if (!f) continue;
       g = [f, FLOW_LABELS[f], f === 'done' ? 'done' : null, FLOWS.indexOf(f)];
     } else if (by === 'status') {
-      g = [t.status.name, t.status.name, t.status.category, GROUP_ORDER.indexOf(t.status.category)];
+      // By name only: a category match would slot "Open" into the board's Todo column.
+      const lower = t.status.name.toLowerCase();
+      const at = columns.findIndex(
+        (c) => c.name.toLowerCase() === lower || c.match_names.some((n) => n.toLowerCase() === lower),
+      );
+      const order = at >= 0 ? at : columns.length + GROUP_ORDER.indexOf(t.status.category);
+      g = [t.status.name, t.status.name, t.status.category, order];
     } else if (by === 'priority') {
       const r = t.priority_rank;
       g = [

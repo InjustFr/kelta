@@ -15,6 +15,7 @@ import type {
   JsonValue,
   KeltaError,
   Layer,
+  NextUp,
   Layout,
   ProjectInfo,
   ReviewDetail,
@@ -110,6 +111,8 @@ export interface MockState {
   plugins: (typeof samples.pluginInfo)[];
   /** Review notes per work item. */
   notes: Record<string, ReviewNote[]>;
+  /** Next up list and seen tickets (#145). */
+  nextUp: NextUp;
 }
 
 interface MockOptions {
@@ -195,6 +198,8 @@ function freshState(): MockState {
     pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
     notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
+    // Every fixture ticket seen but the last: one `New` ticket to groom.
+    nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
   };
 }
 
@@ -910,6 +915,21 @@ export function createMockTransport(options: MockOptions = {}): {
       if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
       const q = query.trim().toLowerCase();
       return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
+    },
+    next_up_list: () => clone(state.nextUp),
+    next_up_put: ({ item }) => {
+      const key = refKey(item.ticket);
+      const rest = state.nextUp.items.filter((i) => refKey(i.ticket) !== key);
+      state.nextUp.items = [...rest, { ...item, ticket: { ...item.ticket } }]; // args may be $state proxies
+      return null;
+    },
+    next_up_remove: ({ ticket }) => {
+      state.nextUp.items = state.nextUp.items.filter((i) => refKey(i.ticket) !== refKey(ticket));
+      return null;
+    },
+    ticket_seen: ({ tickets }) => {
+      for (const t of tickets) if (!state.nextUp.seen.includes(refKey(t))) state.nextUp.seen.push(refKey(t));
+      return null;
     },
     // ---- reviews ---------------------------------------------------------------------------
     review_list: ({ scope, kind }) => ({

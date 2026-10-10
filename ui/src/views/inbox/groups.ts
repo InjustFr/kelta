@@ -25,6 +25,12 @@ export interface NowInput {
   authored: readonly ReviewItem[];
   /** Tickets assigned to me, in tracker order. */
   tickets: readonly TicketItem[];
+  /** My Next up list, in its order (#145). */
+  nextUp?: readonly TicketItem[];
+  /** Ticket keys (`account:key`) left out of Up next: listed in Next up or snoozed. */
+  parked?: ReadonlySet<string>;
+  /** Ticket keys assigned to me I have not looked at yet (`New for you`). */
+  fresh?: ReadonlySet<string>;
 }
 
 export interface Section {
@@ -39,6 +45,8 @@ export interface Section {
 export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] = [
   { id: 'needs_you', label: 'Claude needs you', lamp: 'needs_input' },
   { id: 'to_review', label: 'Ready for review', lamp: 'done' },
+  { id: 'next_up', label: 'Next up', lamp: 'none' },
+  { id: 'new', label: 'New for you', lamp: 'none' },
   { id: 'fix', label: 'Fix', lamp: 'error' },
   { id: 'requests', label: 'Review requests', lamp: 'none' },
   { id: 'ship', label: 'Ship and clean up', lamp: 'none' },
@@ -77,7 +85,11 @@ const prKey = (r: ReviewItem): string =>
   `${r.review.ref.account}:${r.review.ref.repo}#${r.review.ref.number}`;
 const ticketKey = (t: TicketItem): string => `${t.ticket.ref.account}:${t.ticket.ref.key}`;
 
-/** Builds the seven sections; empty ones are dropped. */
+/** A row of the Next up section (`s` starts it, `S` the top ones, `J`/`K` reorder). */
+export const isNextUp = (row: NowRow): row is Extract<NowRow, { type: 'ticket' }> =>
+  row.type === 'ticket' && row.id.startsWith('n:');
+
+/** Builds the sections; empty ones are dropped. */
 export function nowSections(input: NowInput): Section[] {
   // `size` breaks ties: a smaller delta to review first.
   type Ranked = { row: NowRow; rank: number; at: string; size: number };
@@ -154,18 +166,24 @@ export function nowSections(input: NowInput): Section[] {
   const started = new Set(
     input.work.flatMap(({ item }) => (item.ticket ? [`${item.ticket.account}:${item.ticket.key}`] : [])),
   );
+  const open = (t: TicketItem): boolean => t.ticket.status.category !== 'done' && !started.has(ticketKey(t));
+  (input.nextUp ?? [])
+    .filter(open)
+    .forEach((t, i) =>
+      add('next_up', { type: 'ticket', id: `n:${ticketKey(t)}`, ticket: t }, 0, String(i).padStart(6, '0')),
+    );
   input.tickets
-    .filter((t) => t.ticket.status.category !== 'done' && !started.has(ticketKey(t)))
+    .filter((t) => open(t) && !input.parked?.has(ticketKey(t)))
     .forEach((t, i) =>
       add(
-        'up_next',
+        input.fresh?.has(ticketKey(t)) ? 'new' : 'up_next',
         { type: 'ticket', id: `t:${ticketKey(t)}`, ticket: t },
         t.ticket.status.category === 'in_progress' ? 0 : 1,
         String(i).padStart(6, '0'),
       ),
     );
 
-  // Oldest first, except In flight (latest activity first). Up next keeps tracker order (`at` = index).
+  // Oldest first, except In flight (latest activity first). Ticket sections keep their order (`at` = index).
   // Work items are aged by when Claude last asked or stopped (`claude_at`), else when they started.
   const newestFirst = new Set<NowSection>(['in_flight']);
   return SECTIONS.flatMap((s) => {

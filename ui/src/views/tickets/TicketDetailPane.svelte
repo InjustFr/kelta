@@ -8,6 +8,7 @@
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button, EmptyState, ErrorState } from '$lib/ui';
 
+  import { nextUp } from '../inbox/nextUp.svelte';
   import { isAuthError } from '../work/common';
   import Loading from '../work/shared/Loading.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -35,7 +36,11 @@
 
   $effect(() => {
     const r = ref;
-    untrack(() => void tickets.loadDetail(r));
+    untrack(() => {
+      void tickets.loadDetail(r);
+      // Opened: no longer New (#145).
+      nextUp.markSeen(r);
+    });
   });
 
   $effect(() => {

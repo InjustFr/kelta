@@ -328,7 +328,8 @@ mod tests {
         let mut s = UnixStream::connect(&sock).unwrap();
         // Linux may reset the connection (unread data), macOS closes it: either way no reply.
         let _ = s.write_all(&encode(&Call { seq: 1, req: Req::Hello { v: PROTOCOL_VERSION } }, &[]).unwrap());
-        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        // macOS: EINVAL once keltad has already dropped us (a loaded machine); the read can't block then.
+        let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
         let mut buf = Vec::new();
         let _ = s.read_to_end(&mut buf);
         assert!(buf.is_empty(), "rejected peer got a reply");

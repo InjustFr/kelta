@@ -52,6 +52,32 @@ describe('groupTickets', () => {
     expect(groupTickets(items, 'status').at(-1)?.category).toBe('done');
   });
 
+  it('orders status groups by board column, then unmatched by category then name', () => {
+    const col = (name: string, category: StatusCategory, order: number) => ({
+      id: name,
+      name,
+      category,
+      order,
+      match_names: [name],
+    });
+    const columns = [
+      col('Backlog', 'todo', 0),
+      col('qa', 'in_review', 1), // matched by name, case-insensitively
+      col('Done', 'done', 2),
+      col('Todo', 'todo', 3), // empty column: no group
+    ];
+    const withOpen = [...items, item('G', ['Open', 'todo'])];
+    expect(summary(groupTickets(withOpen, 'status', [], undefined, columns))).toEqual([
+      ['Backlog', ['A']],
+      ['QA', ['C']],
+      ['Done', ['B']],
+      ['In Progress', ['D']],
+      ['Code review', ['F']],
+      ['Open', ['G']], // not slotted into the Todo column by category
+      ['Blocked', ['E']],
+    ]);
+  });
+
   it('groups by assignee with Unassigned last', () => {
     expect(summary(groupTickets(items, 'assignee'))).toEqual([
       ['Ada', ['C', 'D']],

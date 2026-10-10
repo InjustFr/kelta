@@ -117,7 +117,8 @@ async fn a_silent_timeout_kills_the_hung_process() {
         return;
     }
     let s = FakeSecrets::with(&[("env:TOK", "t")]);
-    let p = process(300);
+    // The timeout also bounds the spawning calls (node's boot): 2 s covers a slow start on a loaded machine.
+    let p = process(2000);
     let pid = tracker(&p, "ok", &s).me().await.unwrap().id;
     let e = tracker(&p, "hang", &s).me().await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Timeout);

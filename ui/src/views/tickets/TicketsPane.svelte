@@ -216,7 +216,7 @@
   const projectIdForColumns = $derived(project?.tracker ? project.id : null);
   $effect(() => {
     const pid = projectIdForColumns;
-    if (pid && mode === 'board') untrack(() => void tickets.loadColumns(pid));
+    if (pid && (mode === 'board' || groupBy === 'status')) untrack(() => void tickets.loadColumns(pid));
   });
 
   const columnsState = $derived(project ? tickets.columns[project.id] : undefined);
@@ -254,11 +254,17 @@
   const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
   const sorted = $derived(sortTickets(shown, sort));
   const groups = $derived(
-    groupTickets(sorted, groupBy, views, (item) => {
-      const w = workOf(item);
-      // Durable Claude state (FLOW §2.3): a reply waiting on me counts, not only a live prompt.
-      return flowOf(item, { work: w, needsYou: phaseFor(item)?.section === 'needs_you' }, Date.now());
-    }),
+    groupTickets(
+      sorted,
+      groupBy,
+      views,
+      (item) => {
+        const w = workOf(item);
+        // Durable Claude state (FLOW §2.3): a reply waiting on me counts, not only a live prompt.
+        return flowOf(item, { work: w, needsYou: phaseFor(item)?.section === 'needs_you' }, Date.now());
+      },
+      columns,
+    ),
   );
   const rows = $derived.by<Row[]>(() => {
     if (groupBy === 'none') return sorted.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
@@ -413,7 +419,8 @@
 
   function refresh(): void {
     void tickets.load(scope, viewId, true, who);
-    if (projectIdForColumns && mode === 'board') void tickets.loadColumns(projectIdForColumns);
+    if (projectIdForColumns && (mode === 'board' || groupBy === 'status'))
+      void tickets.loadColumns(projectIdForColumns);
   }
 
   function openDetail(item: TicketItem): void {

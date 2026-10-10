@@ -77,6 +77,10 @@ pub const COMMANDS: &[&str] = &[
     "tracker_set_priority",
     "tracker_search",
     "tracker_sources",
+    "next_up_list",
+    "next_up_put",
+    "next_up_remove",
+    "ticket_seen",
     // reviews
     "review_list",
     "review_get",

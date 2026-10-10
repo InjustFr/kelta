@@ -38,6 +38,8 @@ import type {
   PluginInstallPreview,
   PluginMethod,
   PrDraft,
+  NextUp,
+  NextUpItem,
   ProjectDraft,
   ProjectId,
   ProjectInfo,
@@ -214,6 +216,12 @@ export interface Commands {
   tracker_set_priority: { args: { ticket: TicketRef; priority: string }; result: Ticket };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
+  /** My Next up list, snoozes and seen tickets (#145): Kelta-local. */
+  next_up_list: { args: NoArgs; result: NextUp };
+  next_up_put: { args: { item: NextUpItem }; result: null };
+  next_up_remove: { args: { ticket: TicketRef }; result: null };
+  /** Clears the tickets' `New` badge. */
+  ticket_seen: { args: { tickets: TicketRef[] }; result: null };
   // ---- reviews -----------------------------------------------------------------------------
   review_list: { args: { scope: Scope; kind: ReviewKind; refresh: boolean }; result: ReviewPage };
   review_get: { args: { review: ReviewRef }; result: ReviewDetail };
@@ -383,6 +391,10 @@ export const COMMAND_NAMES = [
   'tracker_set_priority',
   'tracker_search',
   'tracker_sources',
+  'next_up_list',
+  'next_up_put',
+  'next_up_remove',
+  'ticket_seen',
   'review_list',
   'review_get',
   'review_approve',
@@ -595,6 +607,10 @@ export const trackerPriorities = wrap('tracker_priorities');
 export const trackerSetPriority = wrap('tracker_set_priority');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
+export const nextUpList = wrap('next_up_list');
+export const nextUpPut = wrap('next_up_put');
+export const nextUpRemove = wrap('next_up_remove');
+export const ticketSeen = wrap('ticket_seen');
 
 // ---- reviews --------------------------------------------------------------------------------
 export const reviewList = wrap('review_list');

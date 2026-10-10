@@ -80,6 +80,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("pane.close", "Close pane", ["cmd+w"], ["ctrl+shift+w"], Some("x"), Global),
     // Mod+J / Mod+Shift+J belong to the jump queue (ticket #136).
     a!("tickets.open", "Open tickets", ["cmd+shift+b"], ["ctrl+shift+b"], Some("t"), Global),
+    a!("tickets.groom", "Groom tickets", [], [], None, Global),
     a!("reviews.open", "Open reviews", ["cmd+shift+r"], ["ctrl+shift+r"], Some("r"), Global),
     a!("attention.next", "Next waiting", ["cmd+j"], ["ctrl+shift+j"], Some("u"), Global),
     // Linux: Mod is ctrl+shift, so Mod+Shift+J does not exist there.

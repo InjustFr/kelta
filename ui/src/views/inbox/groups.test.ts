@@ -211,6 +211,23 @@ describe('nowSections', () => {
     expect(up.rows.slice(0, 2).map((r) => r.id)).toEqual(['t:jira:T-3', 't:jira:T-1']);
     expect([up.rows.length, up.more]).toEqual([10, 4]);
   });
+
+  it('Next up keeps my order and drops closed or started tickets; New and parked leave Up next', () => {
+    const started = entry('working', 'in_flight', { ticket: { account: 'jira', key: 'N-3', id: 'N-3' } });
+    const sections = nowSections({
+      ...empty,
+      work: [started],
+      tickets: [ticket('T-1', 'todo'), ticket('T-2', 'todo'), ticket('T-3', 'todo'), ticket('N-1', 'todo')],
+      nextUp: [ticket('N-2', 'todo'), ticket('N-1', 'todo'), ticket('N-0', 'done'), ticket('N-3', 'todo')],
+      parked: new Set(['jira:N-1', 'jira:T-3']),
+      fresh: new Set(['jira:T-2']),
+    });
+    const ids = (id: string) => sections.find((s) => s.id === id)?.rows.map((r) => r.id);
+    expect(sections.map((s) => s.id)).toEqual(['next_up', 'new', 'in_flight', 'up_next']);
+    expect(ids('next_up')).toEqual(['n:jira:N-2', 'n:jira:N-1']);
+    expect(ids('new')).toEqual(['t:jira:T-2']);
+    expect(ids('up_next')).toEqual(['t:jira:T-1']);
+  });
 });
 
 describe('header and badge', () => {

@@ -1,13 +1,15 @@
 // Now, fed from the stores: sections, header, freshness, row actions and Next waiting (FLOW §3).
 // Used by the Now pane, the rail tile (badge + tooltip) and `attention.next`.
 
-import type { KeltaError } from '$lib/gen';
-import { projects, reviews, sessions, tickets, work } from '$lib/stores';
+import type { KeltaError, TicketRef } from '$lib/gen';
+import { projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { hud } from '../../shell/hud.svelte';
 import { flushJump } from '../../shell/jumplist';
 import { revealSession } from '../../shell/nav';
 import { runPrimary } from '../work/actions';
+import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import { phaseNow, unfinishedWork } from '../work/live';
 import { goToWork, openFromNow, openReview } from '../work/nav';
 import { reviewLocally, startWorkOnTicket } from '../work/startWork';
@@ -20,18 +22,28 @@ import {
   type NowRow,
   type Section,
 } from './groups';
+import { loadPool, nextUp, ticketPool } from './nextUp.svelte';
 
 const ALL = { kind: 'all' } as const;
 /** Up next is my tickets across every source, whatever each view's own `who` says. */
 const MINE = 'mine' as const;
 
 export function currentSections(): Section[] {
+  const mine = tickets.items(ALL, null, MINE);
+  const pool = new Map(ticketPool().map((t) => [ticketKey(t.ticket.ref), t]));
+  const now = Date.now();
+  const keys = (pick: (ref: TicketRef) => boolean): Set<string> =>
+    new Set(mine.filter((t) => pick(t.ticket.ref)).map((t) => ticketKey(t.ticket.ref)));
   return nowSections({
     work: unfinishedWork().map((item) => ({ item, phase: phaseNow(item) })),
     sessions: sessions.all,
     requested: reviews.items(ALL, 'review_requested'),
     authored: reviews.items(ALL, 'authored'),
-    tickets: tickets.items(ALL, null, MINE),
+    tickets: mine,
+    // shortcut: a Next up ticket neither list has (a later page) is not shown until it loads.
+    nextUp: nextUp.ordered(now).flatMap((e) => pool.get(ticketKey(e.ticket)) ?? []),
+    parked: keys((ref) => nextUp.parked(ref, now)),
+    fresh: keys((ref) => nextUp.isNew(ref)),
   });
 }
 
@@ -83,12 +95,27 @@ export function asOf(): { at: string; ms: number; error: KeltaError | null } | n
  */
 export async function refreshNow(force = false): Promise<void> {
   await Promise.allSettled([
-    tickets.load(ALL, null, force, MINE),
+    loadPool(force),
     reviews.load(ALL, 'review_requested', force),
     reviews.load(ALL, 'authored', force),
     work.refreshStatus(),
     ...unfinishedWork().flatMap((w) => (w.review ? [reviews.loadDetail(w.review)] : [])),
   ]);
+  await nextUp.prune();
+}
+
+/** `S` on Next up: its top N through batch start (#141), N = the free Claude slots (all when uncapped). */
+export function startNextUp(rows: readonly NowRow[]): void {
+  const { live, max } = claudeSlots();
+  const n = startsNow(rows.length, live, max);
+  if (n === 0) {
+    toasts.info(`No free Claude slot (${live}/${max} live)`);
+    return;
+  }
+  batch.clear();
+  for (const r of rows.slice(0, n))
+    if (r.type === 'ticket') batch.toggle(r.ticket.ticket.ref, r.ticket.project_ids[0] ?? null);
+  ui.openSheet('start_batch');
 }
 
 function rowProject(ids: readonly string[]): string | null {
@@ -142,10 +169,13 @@ export async function nextWaiting(delta: 1 | -1 = 1): Promise<void> {
   const sections = currentSections();
   const queue = jumpQueue(sections, sessions.all);
   if (queue.length === 0) {
-    // shortcut: "queued · parked" and the Next up view wait on #145; Up next stands in for them.
-    const up = sections.find((s) => s.id === 'up_next');
+    const up = sections.find((s) => s.id === 'next_up') ?? sections.find((s) => s.id === 'up_next');
     const queued = up ? up.rows.length + up.more : 0;
-    if (queued) hud.show(`nothing waiting · ${queued} up next`, { action: 'inbox.open', label: 'Up next' });
+    if (up && queued)
+      hud.show(`nothing waiting · ${queued} ${up.label.toLowerCase()}`, {
+        action: 'inbox.open',
+        label: up.label,
+      });
     else hud.show('nothing waiting', { action: 'tickets.open', label: 'Tickets' });
     return;
   }
