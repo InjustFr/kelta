@@ -584,9 +584,9 @@ pub mod q {
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
              review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at,
              claude_message, delta_json, next_note, left_at, port_base, cost_usd, auto_finish, parked_at, nvim_kept,
-             run_json, ticket_source)
+             run_json, ticket_source, feedback_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
-             ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)
+             ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -601,7 +601,7 @@ pub mod q {
              cost_usd = excluded.cost_usd,
              auto_finish = excluded.auto_finish, parked_at = excluded.parked_at, nvim_kept = excluded.nvim_kept,
              run_json = excluded.run_json,
-             ticket_source = excluded.ticket_source",
+             ticket_source = excluded.ticket_source, feedback_at = excluded.feedback_at",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -638,6 +638,7 @@ pub mod q {
                 w.nvim_kept,
                 json_opt(&w.run)?,
                 w.ticket_source,
+                w.feedback_at,
             ],
         )
         .map_err(db_err)?;
@@ -656,7 +657,8 @@ pub mod q {
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
         claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, claude_message,
-        delta_json, next_note, left_at, port_base, cost_usd, auto_finish, parked_at, nvim_kept, run_json, ticket_source";
+        delta_json, next_note, left_at, port_base, cost_usd, auto_finish, parked_at, nvim_kept, run_json, ticket_source,
+        feedback_at";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -691,6 +693,7 @@ pub mod q {
             title: r.get(18)?,
             pr_title_needs_key: r.get(19)?,
             sent_threads: Vec::new(),
+            feedback_at: r.get(34)?,
             rebase: None,
             claude_message: r.get(23)?,
             delta: r.get::<_, Option<String>>(24)?.and_then(|d| serde_json::from_str(&d).ok()),

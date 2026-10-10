@@ -54,6 +54,7 @@ export type PhaseId =
   | 'remote_new'
   | 'changes_requested'
   | 'checks_failed'
+  | 'new_comments'
   | 'conflicts'
   | 'rebased'
   | 'unpushed'
@@ -308,6 +309,18 @@ function phaseRow(
       );
     }
   }
+  // Teammates commented since the last Fix with Claude (#208); unpushed work does not hide it.
+  const seen = item.feedback_at ? Date.parse(item.feedback_at) : -Infinity;
+  if (pr?.last_comment_at && Date.parse(pr.last_comment_at) > seen)
+    return p(
+      'new_comments',
+      'New comments',
+      plural(pr.unresolved_threads ?? 0, 'unresolved thread'),
+      'error',
+      'fix',
+      'Fix with Claude',
+      'fix',
+    );
   if (pr?.mergeable === false)
     return p(
       'conflicts',

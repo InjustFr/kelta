@@ -177,6 +177,7 @@ async fn work_store_round_trip() {
 
     assert!(!got.review_due && !got.claude_replied);
     assert_eq!(got.ticket_source, None, "an item without a source loads with none");
+    assert_eq!(got.feedback_at, None, "an item never sent feedback loads with none");
 
     let mut w2 = w.clone();
     w2.state = WorkState::Failed { step: "x".into(), message: "y".into() };
@@ -188,9 +189,11 @@ async fn work_store_round_trip() {
     w2.next_note = Some("check the retry path".into());
     w2.left_at = Some("2026-10-10T09:30:00Z".into());
     w2.ticket_source = Some("product".into());
+    w2.feedback_at = Some("2026-10-10T08:00:00Z".into());
     s.put_item(&w2).await.unwrap();
     let got = s.get_item(&w.id).await.unwrap().unwrap();
     assert_eq!(got.ticket_source.as_deref(), Some("product"));
+    assert_eq!(got.feedback_at.as_deref(), Some("2026-10-10T08:00:00Z"));
     assert_eq!((got.state.clone(), got.review_due, got.claude_replied), (w2.state.clone(), true, false));
     assert_eq!(got.claude_at, w2.claude_at);
     assert_eq!(

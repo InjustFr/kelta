@@ -128,6 +128,14 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub nudged_at: Option<String>,
+    /// Unresolved review threads (authored only; GitHub and GitLab).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub unresolved_threads: Option<u32>,
+    /// Newest last comment, not by me, of an unresolved thread (authored only; GitHub and GitLab).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub last_comment_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -281,6 +289,10 @@ pub struct FeedbackThread {
     /// The thread's comments, oldest first, as `author: body` Markdown.
     pub body_md: String,
     pub url: String,
+    /// When the last comment was left; `None` when it is mine (answered).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub last_comment_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -288,6 +300,9 @@ pub struct FeedbackReview {
     pub author: String,
     pub state: Option<MyReviewState>,
     pub body_md: String,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub submitted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -357,11 +372,13 @@ mod feedback_tests {
                 line: Some(3),
                 body_md: "bob: rename".into(),
                 url: "https://h/1".into(),
+                last_comment_at: None,
             }],
             reviews: vec![FeedbackReview {
                 author: "ann".into(),
                 state: Some(MyReviewState::ChangesRequested),
                 body_md: "close".into(),
+                submitted_at: None,
             }],
             failed_checks: vec![FailedCheck {
                 name: "test".into(),

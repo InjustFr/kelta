@@ -70,6 +70,7 @@ impl WorkService {
             claude_replied: false,
             claude_at: None,
             sent_threads: Vec::new(),
+            feedback_at: None,
             rebase: None,
             cost_usd: 0.0,
             claude_message: None,

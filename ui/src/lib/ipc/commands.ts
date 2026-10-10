@@ -269,9 +269,16 @@ export interface Commands {
   work_finish_merged: { args: { ids: WorkItemId[] }; result: FinishMergedReport };
   /** Startup / Now open: one host check per work-item PR missing from the open list. */
   work_check_prs: { args: NoArgs; result: null };
-  /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids. */
+  /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids,
+   *  `feedback_at` = newest comment time the Fix sheet showed (the watermark only moves forward). */
   work_send: {
-    args: { id: WorkItemId; prompt: string; files: SendFile[]; threads?: string[] | null };
+    args: {
+      id: WorkItemId;
+      prompt: string;
+      files: SendFile[];
+      threads?: string[] | null;
+      feedback_at?: string | null;
+    };
     result: WorkItem;
   };
   work_feedback: { args: { id: WorkItemId }; result: Feedback };

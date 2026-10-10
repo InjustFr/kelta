@@ -648,6 +648,11 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub sent_threads: Vec<String>,
+    /// Newest review comment time (host's RFC 3339) shown in the last Fix with Claude send: a comment
+    /// newer than it is new (#208). `None`: never sent, every unresolved thread awaiting me is new.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub feedback_at: Option<String>,
     /// Kelta-driven rebase in progress, or done and awaiting its force push.
     #[serde(default)]
     #[ts(optional = nullable)]

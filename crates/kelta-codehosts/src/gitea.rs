@@ -137,6 +137,8 @@ impl GiteaHost {
             waiting_since: None,
             author_since: None,
             nudged_at: None,
+            unresolved_threads: None,
+            last_comment_at: None,
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             mergeable: v.get("mergeable").and_then(Value::as_bool),
             labels: v
