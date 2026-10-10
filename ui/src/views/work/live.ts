@@ -2,6 +2,7 @@
 
 import type { Review, SessionInfo, WorkItem } from '$lib/gen';
 import { reviews, sessions, tickets, work } from '$lib/stores';
+import { reviewKey } from '$lib/stores/reducers';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { phaseOf, workKey, type Phase } from './phase';
@@ -24,6 +25,9 @@ export function claudeOf(item: WorkItem): SessionInfo | null {
 export function prOf(item: WorkItem): Review | null {
   if (item.review) {
     const r = item.review;
+    // Now open and focus refresh it (`CodeHost::get`): fresher than the polled lists.
+    const fresh = reviews.details[reviewKey(r)]?.data?.review;
+    if (fresh) return fresh;
     const all = [...reviews.items(ALL, 'review_requested'), ...reviews.items(ALL, 'authored')];
     return (
       all.find(

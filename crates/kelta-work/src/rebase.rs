@@ -290,6 +290,7 @@ impl WorkService {
                 _ => KeltaError::upstream(format!("git push failed (exit {code})")),
             });
         }
+        self.add_title_key(&env, &item, None).await;
         self.update(id, |w| {
             w.rebase = None;
             true

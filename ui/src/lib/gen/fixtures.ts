@@ -734,6 +734,7 @@ export const startWorkPlan: StartWorkPlan = {
 export const workItem: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
@@ -842,6 +843,7 @@ export const workItem: WorkItem = {
 export const workItemFailed: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
@@ -952,6 +954,7 @@ export const workItemFailed: WorkItem = {
 export const workItemMerged: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
@@ -1093,6 +1096,7 @@ export const gitStatus: GitStatus = {
 export const workItemRebaseStopped: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_at": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
@@ -3087,6 +3091,7 @@ export const uiEventWorkUpdated: UiEvent = {
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_at": null,
     "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",

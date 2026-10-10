@@ -579,6 +579,10 @@ pub struct WorkItem {
     /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
     #[serde(default)]
     pub claude_replied: bool,
+    /// When Claude last stopped or asked for input (RFC 3339), from hooks only; orders Now's rows.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub claude_at: Option<String>,
     /// Review thread ids handed to Claude by the last Fix with Claude (resolved on request).
     #[serde(default)]
     #[ts(as = "Option<Vec<String>>", optional)]

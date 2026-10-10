@@ -400,7 +400,7 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`. The hook-owned flags (`review_due`, `claude_replied`) are
+    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`) are
     /// never written here: `item` takes the stored ones, so a long operation's final save cannot
     /// undo a hook that arrived while it ran (FLOW §2.3). Only [`Self::update`] writes them.
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -409,6 +409,7 @@ impl WorkService {
             if let Some(cur) = self.store.get_item(&item.id).await? {
                 item.review_due = cur.review_due;
                 item.claude_replied = cur.claude_replied;
+                item.claude_at = cur.claude_at;
             }
             self.store.put_item(item).await?;
         }

@@ -84,6 +84,33 @@ describe('nowSections', () => {
     expect(sections[0]!.rows.map((r) => r.id)).toEqual(['s:s1']);
   });
 
+  it('orders work rows by when Claude asked or stopped, not when the item started', () => {
+    const old = entry('to_review', 'to_review', {
+      created_at: '2026-01-01T00:00:00Z',
+      claude_at: '2026-10-10T12:00:00Z',
+    });
+    const young = entry('to_review', 'to_review', {
+      created_at: '2026-10-01T00:00:00Z',
+      claude_at: '2026-10-10T09:00:00Z',
+    });
+    const rows = nowSections({ ...empty, work: [old, young] })[0]!.rows.map((r) => r.id);
+    expect(rows).toEqual([`w:${young.item.id}`, `w:${old.item.id}`]);
+  });
+
+  it('Review requests: a PR comes back as updated since my review; a reviewed one leaves', () => {
+    const head = 'b'.repeat(40);
+    const sections = nowSections({
+      ...empty,
+      requested: [
+        review(1),
+        review(2, { my_state: 'approved', head_sha: head, reviewed_head: 'a'.repeat(40) }),
+        review(3, { my_state: 'approved', head_sha: head, reviewed_head: head }),
+      ],
+    });
+    const rows = sections[0]!.rows.map((r) => (r.type === 'review' ? r.reason : ''));
+    expect(rows).toEqual(['Review requested', 'Updated since your review']);
+  });
+
   it('Fix: changes requested, checks failed, remote commits, conflicts, failed steps', () => {
     const sections = nowSections({
       ...empty,

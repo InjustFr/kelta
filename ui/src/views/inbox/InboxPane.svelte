@@ -153,7 +153,8 @@
           title: r.title,
           project: p.name ?? r.ref.repo,
           color: p.color,
-          reason: row.mine ? row.reason : r.author.name,
+          // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
+          reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
           meta: stat,
           age: age(r.updated_at),
           more: `${r.source_branch} into ${r.target_branch}${r.ci === 'failure' ? ', checks failed' : ''}`,

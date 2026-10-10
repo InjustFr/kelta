@@ -442,6 +442,19 @@ async fn feedback_refused_names_the_missing_scope() {
 }
 
 #[tokio::test]
+async fn update_title_patches_the_pull_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("PATCH"))
+        .and(path("/repos/acme/shop/pulls/101"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .mount(&server)
+        .await;
+    gh(&server).update_title(&rref("github-work", "acme/shop", 101), "SHOP-7: Speed up").await.unwrap();
+    let body = &bodies(&server, "PATCH", "/repos/acme/shop/pulls/101").await[0];
+    assert_eq!(body["title"], "SHOP-7: Speed up");
+}
+
+#[tokio::test]
 async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thread() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/user", 200, "github/user.json").await;

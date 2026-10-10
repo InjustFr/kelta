@@ -1012,6 +1012,7 @@ export function createMockTransport(options: MockOptions = {}): {
       w.pr_url = w.pr_url ?? `https://github.com/acme/mock/pull/${100 + state.work.indexOf(w)}`;
       w.state = { kind: 'pr_open' };
       w.review_due = false; // a UI Ship counts as review
+      w.pr_title_needs_key = false;
       void draft;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
@@ -1021,7 +1022,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const t = w.ticket && state.tickets.find((x) => sameRef(x.ticket.ref, w.ticket!))?.ticket;
       const pr = (state.settings.value as { work?: { pr?: { draft?: boolean } } }).work?.pr;
       return {
-        title: t ? `${t.ref.key}: ${t.title}` : w.branch,
+        title: t ? `${t.ref.key}: ${t.title}` : (w.title ?? w.branch),
         body: t ? `${t.url}` : '',
         draft: pr?.draft ?? false,
       };
@@ -1162,6 +1163,7 @@ export function createMockTransport(options: MockOptions = {}): {
         });
       }
       w.rebase = null;
+      w.pr_title_needs_key = false; // the backend renamed the PR with the ticket key
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
