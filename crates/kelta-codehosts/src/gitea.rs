@@ -110,6 +110,7 @@ impl GiteaHost {
             || upper.starts_with("WIP:")
             || upper.starts_with("[WIP]");
         Some(Review {
+            reviewed_head: None,
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(v, "html_url").unwrap_or("").to_owned(),
             author: v.get("user").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
@@ -318,6 +319,7 @@ impl CodeHost for GiteaHost {
             })
             .unwrap_or_default();
         Ok(ReviewDetail {
+            pending_comments: 0,
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
             reviewers,

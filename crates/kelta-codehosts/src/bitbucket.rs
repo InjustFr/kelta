@@ -136,6 +136,7 @@ impl BitbucketHost {
         };
         let mine = parts.iter().find(|p| p.pointer("/user/uuid").and_then(Value::as_str) == me);
         Some(Review {
+            reviewed_head: None,
             r#ref,
             url: v.pointer("/links/html/href").and_then(Value::as_str).unwrap_or("").to_owned(),
             author: v.get("author").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
@@ -356,6 +357,7 @@ impl CodeHost for BitbucketHost {
             })
             .unwrap_or_default();
         Ok(ReviewDetail {
+            pending_comments: 0,
             body_html: markdown::to_html(s(&pull, "description").unwrap_or("")),
             review,
             reviewers,
