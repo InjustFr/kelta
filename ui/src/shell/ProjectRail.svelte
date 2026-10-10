@@ -2,24 +2,57 @@
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
-  import type { ProjectInfo } from '$lib/gen';
-  import { attention, projects, reviews, sessions, tickets, toasts, ui, type GlobalView } from '$lib/stores';
+  import type { ProjectId, ProjectInfo, Tab, ToolInfo } from '$lib/gen';
+  import { allPanes, moveTab } from '$lib/layout';
+  import {
+    layout,
+    projects,
+    reviews,
+    sessions,
+    tickets,
+    toasts,
+    tools,
+    ui,
+    type GlobalView,
+  } from '$lib/stores';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { formatChord } from '$lib/ui/format';
 
-  import { readyByProject } from '../views/inbox/groups';
   import { nowSummary, refreshNow } from '../views/inbox/now';
   import { confirms } from './confirm.svelte';
-  import { attentionLabel, chordFor } from './labels';
-  import { activateProject, openView, projectAttention, railProjects, VIEW_NAMES } from './nav';
+  import { chordFor } from './labels';
+  import {
+    activateProject,
+    backgroundSessions,
+    currentTab,
+    focusedPane,
+    focusPaneById,
+    isToolTab,
+    liveSessionsOfTab,
+    openView,
+    paneTool,
+    railProjects,
+    railRows,
+    railTools,
+    railToolsOf,
+    requestCloseTab,
+    revealSession,
+    rowLabel,
+    selectRow,
+    tabAttention,
+    toolInstances,
+    toolLamp,
+    VIEW_NAMES,
+    workItemOfTab,
+    type ToolInstance,
+  } from './nav';
   import { peekHover, peekTarget } from './peek.svelte';
 
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
-  const home = $derived(rail.find((p) => p.builtin) ?? null);
 
   // Now's tile: badge = what waits on Louis (first four sections), tooltip = the split header.
   const now = $derived(nowSummary());
-  const ready = $derived(readyByProject(now.sections));
   // Tickets and Reviews counts are muted: the red badge stays on Now, so nothing is counted twice.
   const ALL = { kind: 'all' } as const;
   const mine = $derived(
@@ -27,31 +60,28 @@
   );
   const toReview = $derived(reviews.list(ALL, 'review_requested').data?.items.length ?? 0);
 
+  const toolsOf = $derived(railToolsOf());
+  const toolList = $derived(railTools());
+  // `project.goto.N` index of each row.
+  const index = $derived(new Map(railRows().map((r, i) => [r.tab.id, i + 1])));
+  $effect(() => {
+    if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
+  });
+
+  // The pane in front (no global view): marks the tool row or sub-line it belongs to.
+  const front = $derived(ui.view ? null : focusedPane());
+  const frontTab = $derived(ui.view ? null : currentTab());
+  const frontTool = $derived(front ? paneTool(front) : null);
+
   // Startup and window focus refresh Now's sources (no polling).
   onMount(() => void refreshNow());
 
   let menu = $state<{ project: ProjectInfo; x: number; y: number } | null>(null);
+  let rowMenu = $state<{ project: ProjectId; tab: Tab; x: number; y: number } | null>(null);
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
-
-  function glyph(p: ProjectInfo): string {
-    const icon = p.icon?.trim();
-    if (icon && !isIconName(icon)) return [...icon].slice(0, 2).join('');
-    return (p.name.trim()[0] ?? '?').toUpperCase();
-  }
-
-  function iconName(p: ProjectInfo): string | null {
-    if (p.builtin) return 'house';
-    const icon = p.icon?.trim();
-    return icon && isIconName(icon) ? icon : null;
-  }
-
-  function subLine(p: ProjectInfo): string {
-    const lvl = projectAttention(p.id);
-    const n = attention.forProject(p.id).needs_input_count;
-    if (lvl === 'needs_input' && n > 1) return `${n} need input`;
-    return attentionLabel(lvl) || (p.builtin ? 'Terminals in your home folder' : '');
-  }
+  let rowDrag = $state<{ project: ProjectId; tab: string } | null>(null);
+  let rowOver = $state<string | null>(null);
 
   function menuItems(p: ProjectInfo): MenuItem[] {
     const index = reorderable.findIndex((x) => x.id === p.id);
@@ -161,6 +191,65 @@
     e.preventDefault();
     menu = { project: p, x: e.clientX, y: e.clientY };
   }
+
+  /** The band's rows: the project's non-tool tabs, in tab order. */
+  function rowsOf(id: ProjectId): Tab[] {
+    return (layout.get(id)?.tabs ?? []).filter((t) => !isToolTab(t));
+  }
+
+  /** Moves a row to `target`'s place; rows move only inside their band. */
+  function moveRow(project: ProjectId, tabId: string, target: Tab | undefined): void {
+    const to = target ? (layout.get(project)?.tabs.indexOf(target) ?? -1) : -1;
+    if (to >= 0) layout.update(project, (l) => moveTab(l, tabId, to));
+  }
+
+  function rowMenuItems(project: ProjectId, tab: Tab): MenuItem[] {
+    const rows = rowsOf(project);
+    const index = rows.findIndex((t) => t.id === tab.id);
+    return [
+      { id: 'close', label: 'Close', icon: 'x' },
+      { id: 'up', label: 'Move up', icon: 'arrow-up', disabled: index <= 0, separator: true },
+      { id: 'down', label: 'Move down', icon: 'arrow-down', disabled: index >= rows.length - 1 },
+    ];
+  }
+
+  function onRowMenu(project: ProjectId, tab: Tab, id: string): void {
+    const rows = rowsOf(project);
+    const index = rows.findIndex((t) => t.id === tab.id);
+    if (id === 'close') void requestCloseTab(project, tab.id);
+    else moveRow(project, tab.id, rows[index + (id === 'up' ? -1 : 1)]);
+  }
+
+  function onRowDrop(project: ProjectId, target: Tab): void {
+    const from = rowDrag;
+    rowDrag = null;
+    rowOver = null;
+    if (from && from.project === project && from.tab !== target.id) moveRow(project, from.tab, target);
+  }
+
+  function rowIcon(tab: Tab): string {
+    if (tab.work_item_id) return 'git-branch';
+    if (liveSessionsOfTab(tab).some((s) => s.kind.type === 'claude')) return 'bot';
+    return allPanes(tab.root).some((p) => p.content.kind === 'terminal') ? 'terminal' : 'app-window';
+  }
+
+  function isFront(project: ProjectId, tabId: string): boolean {
+    return !ui.view && projects.activeId === project && layout.get(project)?.active_tab === tabId;
+  }
+
+  function instanceLabel(x: ToolInstance): string {
+    return workItemOfTab(x.tab)?.ticket?.key ?? projects.byId(x.project)?.name ?? x.project;
+  }
+
+  function focusInstance(x: ToolInstance): void {
+    void activateProject(x.project);
+    focusPaneById(x.project, x.tab.id, x.pane.id);
+  }
+
+  function toolHint(t: ToolInfo): string {
+    if (t.installed === false) return `${t.label}: not installed`;
+    return t.description ? `${t.label}: ${t.description}` : t.label;
+  }
 </script>
 
 <svelte:window onfocus={() => void refreshNow()} />
@@ -168,23 +257,6 @@
 {#snippet chord(id: string)}
   {@const c = chordFor(id)}
   {#if c}<span class="kbd" aria-hidden="true"><Kbd chord={c} /></span>{/if}
-{/snippet}
-
-{#snippet face(p: ProjectInfo)}
-  {@const lvl = projectAttention(p.id)}
-  {@const sub = subLine(p)}
-  <span class="tile" aria-hidden="true">
-    {#if iconName(p)}<Icon name={iconName(p) ?? ''} size={16} />{:else}<span class="glyph">{glyph(p)}</span
-      >{/if}
-  </span>
-  <span class="text">
-    <span class="name">{p.name}</span>
-    {#if sub}<span class="sub">{sub}</span>{/if}
-  </span>
-  {#if ready.get(p.id)}
-    <span class="ready k-num" title="Ready for review" data-testid="rail-ready">{ready.get(p.id)}</span>
-  {/if}
-  <span class="lamp-slot" aria-hidden="true"><Lamp level={lvl} /></span>
 {/snippet}
 
 <!-- A global view (SPEC §1): shown outside any project; the active project stays as it is. -->
@@ -208,6 +280,12 @@
       <span class="badge k-num" class:muted data-testid={`${id}-badge`}>{n > 99 ? '99+' : n}</span>
     {/if}
   </button>
+{/snippet}
+
+<!-- The muted `⌘N` / `⌥⌘N` index of a row, when that chord is bound. -->
+{#snippet digit(id: string, text: string)}
+  {@const c = chordFor(id)}
+  {#if c}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
 {/snippet}
 
 {#snippet more(p: ProjectInfo)}
@@ -239,7 +317,7 @@
 
   <div class="group">
     <div class="heading">
-      <h2>Projects</h2>
+      <h2>Open</h2>
       <Button
         variant="ghost"
         size="sm"
@@ -250,84 +328,195 @@
       >
     </div>
 
-    <ul class="projects">
-      {#each reorderable as p (p.id)}
-        {@const lvl = projectAttention(p.id)}
-        {@const active = p.active && !ui.view}
-        <li
-          class="row"
-          class:active
-          class:over={overId === p.id && dragId !== p.id}
+    <div class="scroll">
+      {#each rail as p (p.id)}
+        <section
+          class="band"
+          aria-label={p.name}
+          data-testid="rail-band"
+          data-project-id={p.id}
           style:--project-color={p.color ?? 'var(--k-border-strong)'}
         >
-          <button
-            type="button"
-            class="item project"
-            class:active
-            class:lit={lvl === 'needs_input'}
-            title={p.name}
-            aria-current={active ? 'page' : undefined}
-            data-testid="rail-project"
-            data-project-id={p.id}
-            data-attention={lvl}
-            use:peekHover={() => peekTarget(sessions.forProject(p.id))}
-            draggable="true"
-            onclick={() => activateProject(p.id)}
-            oncontextmenu={(e) => openMenu(e, p)}
-            ondragstart={(e) => {
-              dragId = p.id;
-              e.dataTransfer?.setData('text/plain', p.id);
-              if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-            }}
-            ondragover={(e) => {
-              if (!dragId) return;
-              e.preventDefault();
-              overId = p.id;
-            }}
-            ondragleave={() => (overId = null)}
-            ondrop={(e) => {
-              e.preventDefault();
-              void onDrop(p.id);
-            }}
-            ondragend={() => {
-              dragId = null;
-              overId = null;
-            }}
-          >
-            {@render face(p)}
-          </button>
-          {@render more(p)}
-        </li>
+          <!-- The caption: click = the project's last row, ⋯ / right-click = project menu, drag = reorder. -->
+          <div class="row caption-row" class:over={overId === p.id && dragId !== p.id}>
+            <button
+              type="button"
+              class="caption"
+              title={p.name}
+              data-testid="rail-project"
+              data-project-id={p.id}
+              draggable={!p.builtin}
+              onclick={() => activateProject(p.id)}
+              oncontextmenu={(e) => openMenu(e, p)}
+              ondragstart={(e) => {
+                dragId = p.id;
+                e.dataTransfer?.setData('text/plain', p.id);
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+              }}
+              ondragover={(e) => {
+                if (!dragId || p.builtin) return;
+                e.preventDefault();
+                overId = p.id;
+              }}
+              ondragleave={() => (overId = null)}
+              ondrop={(e) => {
+                e.preventDefault();
+                void onDrop(p.id);
+              }}
+              ondragend={() => {
+                dragId = null;
+                overId = null;
+              }}><span class="name">{p.name}</span></button
+            >
+            {@render more(p)}
+          </div>
+          <ul class="rows">
+            {#each rowsOf(p.id) as tab (tab.id)}
+              {@const lvl = tabAttention(tab)}
+              {@const active = isFront(p.id, tab.id)}
+              {@const label = rowLabel(tab)}
+              <li class="row" class:over={rowOver === tab.id && rowDrag?.tab !== tab.id}>
+                <button
+                  type="button"
+                  class="item tab-row"
+                  class:active
+                  class:lit={lvl === 'needs_input'}
+                  title={`${p.name} › ${label}`}
+                  aria-current={active ? 'page' : undefined}
+                  data-testid="rail-row"
+                  data-project-id={p.id}
+                  data-tab-id={tab.id}
+                  data-attention={lvl}
+                  use:peekHover={() => peekTarget(liveSessionsOfTab(tab))}
+                  draggable="true"
+                  onclick={() => selectRow(p.id, tab.id)}
+                  onauxclick={(e) => {
+                    if (e.button !== 1) return;
+                    e.preventDefault();
+                    void requestCloseTab(p.id, tab.id);
+                  }}
+                  onmousedown={(e) => {
+                    if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
+                  }}
+                  oncontextmenu={(e) => {
+                    e.preventDefault();
+                    rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
+                  }}
+                  ondragstart={(e) => {
+                    rowDrag = { project: p.id, tab: tab.id };
+                    e.dataTransfer?.setData('text/plain', tab.id);
+                  }}
+                  ondragover={(e) => {
+                    if (rowDrag?.project !== p.id) return;
+                    e.preventDefault();
+                    rowOver = tab.id;
+                  }}
+                  ondragleave={() => (rowOver = null)}
+                  ondrop={(e) => {
+                    e.preventDefault();
+                    onRowDrop(p.id, tab);
+                  }}
+                  ondragend={() => {
+                    rowDrag = null;
+                    rowOver = null;
+                  }}
+                >
+                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
+                  <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
+                  <span class="text"><span class="name">{label}</span></span>
+                  {@render digit(`project.goto.${index.get(tab.id)}`, `${index.get(tab.id)}`)}
+                </button>
+                <IconButton
+                  class="close"
+                  size="sm"
+                  icon="x"
+                  label={`Close ${label}`}
+                  onclick={() => void requestCloseTab(p.id, tab.id)}
+                />
+              </li>
+            {/each}
+            {#each backgroundSessions(p.id) as s (s.id)}
+              <li class="row">
+                <button
+                  type="button"
+                  class="item tab-row background"
+                  title={`${p.name} › ${s.name}: running in the background, click to show it`}
+                  data-testid="rail-background"
+                  data-session-id={s.id}
+                  onclick={() => void revealSession(s.id)}
+                >
+                  <span class="socket" aria-hidden="true"></span>
+                  <span class="kind" aria-hidden="true"
+                    ><Icon name={s.kind.type === 'claude' ? 'bot' : 'terminal'} size={14} /></span
+                  >
+                  <span class="text"><span class="name">{s.name} · background</span></span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
       {:else}
-        <li class="none">No projects yet</li>
+        <p class="none">No projects yet</p>
       {/each}
-    </ul>
+
+      {#if toolList.length > 0}
+        <section class="band tools" aria-label="Tools" data-testid="rail-tools">
+          <h2 class="tools-heading">Tools</h2>
+          <ul class="rows">
+            {#each toolList as t, i (t.id)}
+              {@const launchOnly = t.kind !== 'pty'}
+              {@const lvl = launchOnly ? 'none' : toolLamp(t.id)}
+              <!-- A `user` tool has one instance: its row is the way to it. -->
+              {@const instances = t.scope === 'user' ? [] : toolInstances(t.id)}
+              <li class="row">
+                <button
+                  type="button"
+                  class="item tool-row"
+                  class:active={frontTool === t.id && !!frontTab && isToolTab(frontTab)}
+                  class:missing={t.installed === false}
+                  title={toolHint(t)}
+                  data-testid="rail-tool"
+                  data-tool-id={t.id}
+                  data-attention={lvl}
+                  onclick={() => void dispatch('tools.open', { tool_id: t.id, focus_only: true })}
+                >
+                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
+                  <span class="kind" aria-hidden="true">
+                    {#if t.icon && isIconName(t.icon)}<Icon name={t.icon} size={14} />{:else}<span
+                        class="abbr">{t.label.slice(0, 2)}</span
+                      >{/if}
+                  </span>
+                  <span class="text"><span class="name">{t.label}</span></span>
+                  {@render digit(`tool.goto.${i + 1}`, `⌥${i + 1}`)}
+                  {#if launchOnly}<span class="launch" aria-hidden="true"
+                      ><Icon name="external-link" size={12} /></span
+                    >{/if}
+                </button>
+              </li>
+              {#each instances as x (x.pane.id)}
+                <li class="row">
+                  <button
+                    type="button"
+                    class="item instance"
+                    class:active={front?.id === x.pane.id && isFront(x.project, x.tab.id)}
+                    title={`${t.label} in ${projects.byId(x.project)?.name ?? x.project} › ${x.tab.title}`}
+                    data-testid="rail-tool-instance"
+                    data-tool-id={t.id}
+                    data-pane-id={x.pane.id}
+                    onclick={() => focusInstance(x)}
+                  >
+                    <span class="text"><span class="name">└ {instanceLabel(x)}</span></span>
+                  </button>
+                </li>
+              {/each}
+            {/each}
+          </ul>
+        </section>
+      {/if}
+    </div>
   </div>
 
   <div class="footer">
-    {#if home}
-      {@const lvl = projectAttention(home.id)}
-      {@const active = home.active && !ui.view}
-      <div class="row" class:active style:--project-color={home.color ?? 'var(--k-border-strong)'}>
-        <button
-          type="button"
-          class="item project home"
-          class:active
-          class:lit={lvl === 'needs_input'}
-          title={home.name}
-          aria-current={active ? 'page' : undefined}
-          data-testid="rail-project"
-          data-project-id={home.id}
-          data-attention={lvl}
-          use:peekHover={() => peekTarget(sessions.forProject(home.id))}
-          onclick={() => activateProject(home.id)}
-          oncontextmenu={(e) => openMenu(e, home)}
-        >
-          {@render face(home)}
-        </button>
-        {@render more(home)}
-      </div>
-    {/if}
     <button
       type="button"
       class="item settings"
@@ -341,6 +530,18 @@
     </button>
   </div>
 </nav>
+
+{#if rowMenu}
+  {@const target = rowMenu}
+  <Menu
+    items={rowMenuItems(target.project, target.tab)}
+    x={rowMenu.x}
+    y={rowMenu.y}
+    label="Row actions"
+    onselect={(id) => onRowMenu(target.project, target.tab, id)}
+    onclose={() => (rowMenu = null)}
+  />
+{/if}
 
 {#if menu}
   {@const target = menu.project}
@@ -406,7 +607,7 @@
     flex: none;
   }
 
-  /* Rows: tile | name over status word | lamp or "⋯". */
+  /* Global views (44px, name over status word); session and tool rows are 32px, one line. */
   .item {
     position: relative;
     display: flex;
@@ -431,7 +632,8 @@
   }
 
   .item:focus-visible,
-  .search:focus-visible {
+  .search:focus-visible,
+  .caption:focus-visible {
     outline: 2px solid var(--k-focus);
     outline-offset: -2px;
   }
@@ -444,20 +646,6 @@
     box-shadow: inset 3px 0 0 var(--k-accent);
   }
 
-  .project.active {
-    box-shadow: inset 3px 0 0 var(--project-color);
-  }
-
-  .project.active .name {
-    font-weight: var(--k-weight-strong);
-  }
-
-  /* Call light: a session waits on you here. Selected rows keep their face; the lamp and word speak. */
-  .project.lit:not(.active) {
-    --k-fg-subtle: var(--k-fg-muted); /* only fg and fg-muted read on lit (§4.4) */
-    background-color: var(--k-lit);
-  }
-
   .tile {
     display: inline-flex;
     align-items: center;
@@ -465,22 +653,7 @@
     flex: none;
     width: 28px;
     height: 28px;
-    border-radius: var(--k-radius);
-    background: color-mix(in oklab, var(--project-color) 28%, var(--k-well));
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--project-color) 55%, transparent);
-    color: var(--k-fg);
-  }
-
-  .tile.plain {
-    background: none;
-    box-shadow: none;
     color: var(--k-fg-chrome);
-  }
-
-  .glyph {
-    font-size: var(--k-font-size-sm);
-    font-weight: var(--k-weight-strong);
-    line-height: 1;
   }
 
   .text {
@@ -507,19 +680,6 @@
   .sub {
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-xs);
-  }
-
-  .ready {
-    flex: none;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--k-bg-selected);
-    color: var(--k-fg-muted);
-    font-size: var(--k-font-size-xs);
-    line-height: 18px;
-    text-align: center;
   }
 
   .badge {
@@ -568,17 +728,29 @@
     font-weight: var(--k-weight-medium);
   }
 
-  .projects {
+  .scroll {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-1);
+    gap: var(--k-space-2);
     flex: 1 1 auto;
     min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .band {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     margin: 0;
     padding: 0;
-    overflow-y: auto;
     list-style: none;
-    scrollbar-width: thin;
   }
 
   .row {
@@ -591,31 +763,142 @@
     box-shadow: 0 -2px 0 0 var(--k-accent);
   }
 
-  .lamp-slot {
+  /* Band caption: the project's name, its menu and its drag handle. No lamp: its rows carry them. */
+  .caption-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .caption {
+    flex: 1;
+    min-width: 0;
+    height: var(--k-control-height-sm);
+    padding: 0 var(--k-space-3);
+    border: none;
+    border-radius: var(--k-radius);
+    background: transparent;
+    color: var(--k-fg-muted);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .caption .name {
+    display: block;
+    font-size: var(--k-font-size-sm);
+  }
+
+  .caption:hover {
+    color: var(--k-fg);
+  }
+
+  .tools-heading {
+    padding: 0 var(--k-space-3);
+    line-height: var(--k-control-height-sm);
+  }
+
+  /* Rows: [lamp socket][glyph][title], the project colour bar on the left (full height when selected). */
+  .tab-row,
+  .tool-row,
+  .instance {
+    gap: var(--k-space-2);
+    height: var(--k-rail-item);
+    padding: 0 var(--k-space-2);
+  }
+
+  .tab-row {
+    box-shadow: inset 2px 0 0 color-mix(in oklab, var(--project-color) 55%, transparent);
+  }
+
+  .tab-row.active {
+    box-shadow: inset 3px 0 0 var(--project-color);
+  }
+
+  .tab-row.active .name,
+  .tool-row.active .name {
+    font-weight: var(--k-weight-strong);
+  }
+
+  /* Lit row (§6.2): a session here waits on you. The selected row keeps its face; the lamp speaks. */
+  .tab-row.lit:not(.active) {
+    --k-fg-subtle: var(--k-fg-muted); /* only fg and fg-muted read on lit (§4.4) */
+    background-color: var(--k-lit);
+  }
+
+  .tab-row .name,
+  .tool-row .name,
+  .instance .name {
+    font-size: var(--k-font-size-sm);
+  }
+
+  .background {
+    color: var(--k-fg-muted);
+  }
+
+  .socket {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 28px;
+    width: 10px;
   }
 
-  /* "⋯" shares the lamp's slot: it shows on hover, keyboard focus and the current row. */
-  .row :global(.more) {
+  .kind {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 16px;
+    color: var(--k-fg-chrome);
+  }
+
+  .abbr {
+    font-size: var(--k-font-size-xs);
+    font-weight: var(--k-weight-strong);
+  }
+
+  .index {
+    flex: none;
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
+  }
+
+  .launch {
+    display: inline-flex;
+    flex: none;
+    color: var(--k-fg-muted);
+  }
+
+  .missing {
+    opacity: 0.55;
+  }
+
+  .instance {
+    padding-left: calc(var(--k-space-2) * 2 + 10px);
+    color: var(--k-fg-muted);
+  }
+
+  /* "⋯" and "×" show on hover and keyboard focus. */
+  .row :global(.close) {
     position: absolute;
-    top: calc((var(--k-sidebar-row-height) - var(--k-control-height-sm)) / 2);
-    right: var(--k-space-3);
+    top: calc((var(--k-rail-item) - var(--k-control-height-sm)) / 2);
+    right: 2px;
     visibility: hidden;
   }
 
-  .row:is(:hover, :focus-within, .active) :global(.more) {
+  .caption-row :global(.more) {
+    visibility: hidden;
+  }
+
+  .row:is(:hover, :focus-within) :global(:is(.close, .more)) {
     visibility: visible;
   }
 
-  .row:is(:hover, :focus-within, .active) .lamp-slot {
+  .row:has(:global(.close)):is(:hover, :focus-within) .index {
     visibility: hidden;
   }
 
   .none {
+    margin: 0;
     padding: var(--k-space-3);
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-sm);
@@ -639,7 +922,8 @@
     color: var(--k-fg);
   }
 
-  /* Compact sidebar: a column of tiles with lamps. Labels stay in the accessibility tree. */
+  /* Compact sidebar: a coloured rule per project, one tile per row. Labels stay in the accessibility
+     tree and the tooltips. */
   @media (max-width: 1099px) {
     .rail {
       width: var(--k-rail-width-compact);
@@ -657,6 +941,13 @@
       padding: 0;
     }
 
+    .tab-row,
+    .tool-row {
+      gap: 2px;
+      height: 28px;
+      padding: 0 2px 0 4px;
+    }
+
     .heading {
       justify-content: center;
       padding-left: 0;
@@ -666,6 +957,9 @@
     .search-text,
     .kbd,
     h2,
+    .caption .name,
+    .launch,
+    .index,
     .heading :global(.label),
     .none {
       position: absolute;
@@ -676,24 +970,28 @@
       white-space: nowrap;
     }
 
-    .row :global(.more) {
-      display: none;
+    .caption {
+      position: relative;
+      height: 9px;
+      padding: 0;
     }
 
-    /* The corner lamp is the only state cue here: a bezel halo keeps it apart from the tile. */
-    .lamp-slot,
-    .row:is(:hover, :focus-within, .active) .lamp-slot {
+    .caption::before {
+      content: '';
       position: absolute;
-      top: 2px;
-      left: calc(50% + 6px);
-      width: auto;
-      padding: 2px;
-      border-radius: 50%;
-      background: var(--k-bezel);
-      visibility: visible;
+      inset: 4px var(--k-space-2) auto;
+      height: 1px;
+      background: var(--project-color);
     }
 
-    .lamp-slot:empty {
+    .tools {
+      padding-top: var(--k-space-2);
+      border-top: 1px solid var(--k-border);
+    }
+
+    .instance,
+    .row :global(.close),
+    .caption-row :global(.more) {
       display: none;
     }
 
@@ -711,11 +1009,6 @@
 
     .badge.muted {
       display: block;
-    }
-
-    /* Compact: the corner lamp is the only cue. */
-    .ready {
-      display: none;
     }
   }
 </style>

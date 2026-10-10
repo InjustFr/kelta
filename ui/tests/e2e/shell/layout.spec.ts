@@ -113,7 +113,7 @@ test.describe('layout', () => {
     expect(alive).toBe(4);
     // The last pane of the tab closes the tab.
     await dispatch(page, 'pane.close');
-    await expect(page.getByTestId('tab')).toHaveCount(2);
+    await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(2);
   });
 
   test('closed sessions stay in the palette and reopen in a new tab', async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe('layout', () => {
     await page.getByTestId('palette-input').fill('shop claude');
     await expect(page.getByTestId('palette-item').first()).toContainText('claude');
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('tab')).toHaveCount(4);
+    await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(4);
     await waitForAttached(page, 1);
   });
 
@@ -137,14 +137,14 @@ test.describe('layout', () => {
     await expect(panes(page).nth(0)).toHaveAttribute('data-focused', 'true');
   });
 
-  test('tabs: next/prev, middle click closes, live sessions ask first', async ({ page }) => {
+  test('rail rows: next/prev, middle click closes, live sessions ask first', async ({ page }) => {
     await boot(page);
-    const tabs = page.getByTestId('tab');
+    const tabs = page.locator('[data-testid="rail-row"][data-project-id="shop"]');
     await expect(tabs).toHaveCount(3);
     await dispatch(page, 'tab.next');
-    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-current', 'page');
     await dispatch(page, 'tab.prev');
-    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.nth(0)).toHaveAttribute('aria-current', 'page');
     // The Board tab has no process: it closes without a question.
     await tabs.nth(2).click({ button: 'middle' });
     await expect(tabs).toHaveCount(2);

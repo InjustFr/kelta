@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ui } from '$lib/stores';
+
 import { flushJump, JUMP_CAP, Jumplist, jumplist, navStep, noteFocus, SETTLE_MS } from './jumplist';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
@@ -54,5 +56,21 @@ describe('Jumplist', () => {
     expect(jumplist.at).toBe(1);
     navStep(-1);
     expect(jumplist.at).toBe(1);
+  });
+
+  it('a global view is an entry: the same view under any project is one entry, and back opens it', () => {
+    const j = new Jumplist();
+    const now = { project: 'p', tab: '', pane: '', view: 'now' as const };
+    j.record(now);
+    expect(j.record({ ...now, project: 'q' })).toBe(false);
+    j.record(loc(1));
+    expect(j.step(-1)).toEqual(now);
+
+    ui.view = null;
+    jumplist.list = [{ project: '', tab: '', pane: '', view: 'reviews' }, loc(1)];
+    jumplist.at = 1;
+    navStep(-1);
+    expect([ui.view, jumplist.at]).toEqual(['reviews', 0]);
+    ui.view = null;
   });
 });

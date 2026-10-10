@@ -11,7 +11,8 @@
     },
     "keybinding": null,
     "description": "Docker TUI",
-    "needs_project": false
+    "needs_project": false,
+    "scope": "work"
   },
   {
     "id": "lazygit",
@@ -25,7 +26,8 @@
     },
     "keybinding": "mod+g",
     "description": "Git TUI, opens files in the tab's nvim",
-    "needs_project": false
+    "needs_project": false,
+    "scope": "work"
   },
   {
     "id": "sl-web",
@@ -39,7 +41,8 @@
     },
     "keybinding": null,
     "description": "sl web (Interactive Smartlog)",
-    "needs_project": true
+    "needs_project": true,
+    "scope": "work"
   },
   {
     "id": "tools-pack/htop",
@@ -53,6 +56,7 @@
     },
     "keybinding": null,
     "description": null,
-    "needs_project": false
+    "needs_project": false,
+    "scope": "work"
   }
 ]

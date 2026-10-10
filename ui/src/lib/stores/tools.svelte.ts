@@ -12,6 +12,15 @@ export class ToolsStore {
     return this.byProject[projectId]?.data ?? [];
   }
 
+  /** A tool by id from any loaded list (tools are global, so every project lists the same ones). */
+  find(id: string): ToolInfo | undefined {
+    for (const slot of Object.values(this.byProject)) {
+      const t = slot.data?.find((x) => x.id === id);
+      if (t) return t;
+    }
+    return undefined;
+  }
+
   async load(projectId: ProjectId): Promise<Loadable<ToolInfo[]>> {
     const prev = this.byProject[projectId] ?? idle<ToolInfo[]>();
     this.byProject = { ...this.byProject, [projectId]: { ...prev, loading: true } };

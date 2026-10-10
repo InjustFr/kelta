@@ -137,7 +137,11 @@ export function actionItems(): PaletteItem[] {
   const keys = settings.value()?.keys ?? null;
   const platform = currentPlatform();
   return ACTIONS.filter(
-    (a) => a.context !== 'external' && !a.id.startsWith('project.goto.') && hasAction(a.id),
+    (a) =>
+      a.context !== 'external' &&
+      !a.id.startsWith('project.goto.') &&
+      !a.id.startsWith('tool.goto.') &&
+      hasAction(a.id),
   ).map((a) => ({
     id: `action:${a.id}`,
     group: 'Actions' as const,

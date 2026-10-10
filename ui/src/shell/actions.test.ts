@@ -70,8 +70,9 @@ describe('shell actions', () => {
     expect(ui.sheet?.key).toBe('session_new');
   });
 
-  it('project.goto.N, project.next and inbox.open navigate', async () => {
-    await dispatch('project.goto.2');
+  it('project.goto.N (rail row N), project.next and inbox.open navigate', async () => {
+    await layout.ensure('billing');
+    await dispatch('project.goto.4'); // shop's three rows, then billing's first
     expect(projects.activeId).toBe('billing');
     await dispatch('project.next');
     expect(projects.activeId).toBe('kelta-tools');
