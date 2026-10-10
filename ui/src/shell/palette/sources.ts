@@ -318,7 +318,7 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
     run,
   });
   return [
-    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref, hit.project_ids[0])),
+    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref)),
     verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
       ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
     ),

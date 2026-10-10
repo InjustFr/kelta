@@ -83,6 +83,12 @@ fn hash16(s: &str) -> String {
     d.iter().take(8).map(|b| format!("{b:02x}")).collect()
 }
 
+/// The source's tracker, or one of its views, uses `account`.
+pub(crate) fn uses_account(s: &Source, account: &AccountId) -> bool {
+    let b = &s.tracker;
+    &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
+}
+
 pub fn tickets_key(account: &AccountId, view: &TrackerView) -> String {
     let v = serde_json::to_string(view).unwrap_or_default();
     format!("tickets:{}", hash16(&format!("{account}\n{v}")))
@@ -805,14 +811,7 @@ impl Core {
     /// A project fed by a source whose binding or one of its views uses a ticket's account (active
     /// first, then open, then any).
     pub(crate) fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
-        let sources: Vec<Source> = self
-            .sources()
-            .into_iter()
-            .filter(|s| {
-                let b = &s.tracker;
-                &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
-            })
-            .collect();
+        let sources: Vec<Source> = self.sources().into_iter().filter(|s| uses_account(s, account)).collect();
         let all: Vec<Arc<ProjectConfig>> = self
             .project_configs()
             .into_iter()
@@ -852,7 +851,7 @@ impl Core {
     /// Jira/Redmine/GitLab/Linear workflows differ per project, issue type, team or role at the same status.
     pub async fn tracker_transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError> {
         self.rt.capture();
-        let status = self.cached_ticket(t).await.map(|x| x.status.id);
+        let status = self.cached_ticket(t).await.map(|(x, _)| x.status.id);
         let fresh = self.focused_interval();
         if let Some((s, at, list)) = self.feeds.transitions.lock().get(t)
             && *s == status
@@ -878,7 +877,7 @@ impl Core {
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let tracker = self.tracker_of(&t.account)?;
-        let from = self.cached_ticket(t).await.map(|x| x.status);
+        let from = self.cached_ticket(t).await.map(|(x, _)| x.status);
         let ticket = tracker.transition(t, transition_id, fields).await?;
         self.after_ticket_write(&ticket).await;
         self.publish_from(
@@ -1015,20 +1014,21 @@ impl Core {
         Ok(ticket)
     }
 
-    async fn cached_ticket(&self, t: &TicketRef) -> Option<Ticket> {
-        let keys: Vec<String> = self
+    /// A ticket from the cached view pages, with the sources of the view that lists it.
+    pub(crate) async fn cached_ticket(&self, t: &TicketRef) -> Option<(Ticket, Vec<String>)> {
+        let keys: Vec<(String, Vec<String>)> = self
             .feeds
             .views
             .lock()
             .values()
             .filter(|q| q.account == t.account)
-            .map(|q| q.cache_key.clone())
+            .map(|q| (q.cache_key.clone(), q.sources.clone()))
             .collect();
-        for k in keys {
+        for (k, sources) in keys {
             if let Some((page, _)) = self.cache_get::<Page<Ticket>>(&k).await
                 && let Some(x) = page.items.into_iter().find(|x| &x.r#ref == t)
             {
-                return Some(x);
+                return Some((x, sources));
             }
         }
         None

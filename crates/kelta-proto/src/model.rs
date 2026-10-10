@@ -679,6 +679,10 @@ pub struct WorkItem {
     /// Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
     #[serde(default)]
     pub nvim_kept: u32,
+    /// `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files
@@ -901,6 +905,10 @@ pub struct StartWorkPlan {
     /// `project_id` is only the active project: the sheet always shows so the user confirms it.
     #[serde(default)]
     pub project_guessed: bool,
+    /// `[[sources]]` id of the ticket, set by `Core::work_plan`; copied to the work item at start.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
     pub base: String,
     pub branch: String,
     pub branch_exists: Option<BranchExists>,

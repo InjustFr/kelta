@@ -139,7 +139,17 @@ impl WorkService {
 
     /// `work_plan`.
     pub async fn plan(&self, project: &ProjectId, source: WorkSource) -> Result<StartWorkPlan, KeltaError> {
-        self.build_plan(project, source).await
+        self.build_plan(project, source, None).await
+    }
+
+    /// `work_plan` with a source route's `repo` for a ticket, used when the plan stays in `project`.
+    pub async fn plan_with_repo(
+        &self,
+        project: &ProjectId,
+        source: WorkSource,
+        repo: Option<String>,
+    ) -> Result<StartWorkPlan, KeltaError> {
+        self.build_plan(project, source, repo).await
     }
 
     /// `work_start` (progress via `work.updated`).

@@ -318,6 +318,7 @@ pub fn work_item() -> WorkItem {
         auto_finish: false,
         parked_at: None,
         nvim_kept: 0,
+        ticket_source: None,
     }
 }
 
@@ -354,6 +355,7 @@ pub fn start_work_plan() -> StartWorkPlan {
         repo_choices: vec!["api".into(), "web".into()],
         project_choices: vec![ProjectId::new("shop")],
         project_guessed: false,
+        ticket_source: None,
         base: "main".into(),
         branch: "feat/SHOP-142-rate-limit-login".into(),
         branch_exists: None,

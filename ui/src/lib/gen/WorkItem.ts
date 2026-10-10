@@ -77,4 +77,8 @@ parked_at?: string | null,
 /**
  * Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
  */
-nvim_kept: number, };
+nvim_kept: number, 
+/**
+ * `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
+ */
+ticket_source?: string | null, };

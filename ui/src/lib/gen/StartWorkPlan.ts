@@ -18,7 +18,11 @@ project_choices: Array<ProjectId>,
 /**
  * `project_id` is only the active project: the sheet always shows so the user confirms it.
  */
-project_guessed: boolean, base: string, branch: string, branch_exists: BranchExists | null, worktree_path: string, template_id: string, claude: ClaudePlan, side_effects: SideEffects, 
+project_guessed: boolean, 
+/**
+ * `[[sources]]` id of the ticket, set by `Core::work_plan`; copied to the work item at start.
+ */
+ticket_source?: string | null, base: string, branch: string, branch_exists: BranchExists | null, worktree_path: string, template_id: string, claude: ClaudePlan, side_effects: SideEffects, 
 /**
  * Existing work item → the sheet becomes "Resume".
  */

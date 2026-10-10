@@ -8,7 +8,7 @@ use kelta_proto::model::{
     BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
     WorkItem, WorkSource, WorkState,
 };
-use kelta_proto::settings::{RepoRule, Settings};
+use kelta_proto::settings::Settings;
 use kelta_proto::tracker::{Ticket, TrackerKind};
 
 use crate::git;
@@ -108,35 +108,12 @@ pub fn add_review(c: &mut Ctx, r: &Review) {
     c.set("pr.title", r.title.clone());
 }
 
-/// `repo_rules` (first match wins) → primary → first.
-pub fn select_repo(
-    project: &ProjectInfo,
-    rules: &[RepoRule],
-    ticket: Option<&TicketSnap>,
-    remembered: Option<&str>,
-) -> Option<String> {
-    let exists = |id: &str| project.repos.iter().any(|r| r.id == id);
-    if let Some(id) = remembered.filter(|id| exists(id)) {
+/// The remembered repo (existing work item) → the source route's `hint` → primary → first; ids not
+/// in the project are skipped.
+pub fn select_repo(project: &ProjectInfo, hint: Option<&str>, remembered: Option<&str>) -> Option<String> {
+    let exists = |id: &&str| project.repos.iter().any(|r| r.id == *id);
+    if let Some(id) = remembered.filter(exists).or(hint.filter(exists)) {
         return Some(id.to_owned());
-    }
-    if let Some(t) = ticket {
-        let has_label = |l: &str| t.labels.iter().any(|x| x.eq_ignore_ascii_case(l));
-        for rule in rules {
-            let m = &rule.r#match;
-            if m.component.is_none() && m.label.is_none() && m.kind.is_none() {
-                continue;
-            }
-            // Tickets carry no component field: components are matched against labels.
-            let comp_ok = m.component.as_deref().is_none_or(has_label);
-            let label_ok = m.label.as_deref().is_none_or(has_label);
-            let kind_ok = m
-                .kind
-                .as_deref()
-                .is_none_or(|k| t.kind.as_deref().is_some_and(|tk| tk.eq_ignore_ascii_case(k)));
-            if comp_ok && label_ok && kind_ok && exists(&rule.repo) {
-                return Some(rule.repo.clone());
-            }
-        }
     }
     project.repos.iter().find(|r| r.primary).or_else(|| project.repos.first()).map(|r| r.id.clone())
 }
@@ -295,6 +272,7 @@ pub fn assemble(
         repo_choices: project.repos.iter().map(|r| r.id.clone()).collect(),
         project_choices: Vec::new(),
         project_guessed: false,
+        ticket_source: None,
         base,
         branch,
         branch_exists,
@@ -344,19 +322,16 @@ mod tests {
     use kelta_proto::samples;
 
     #[test]
-    fn repo_rules_and_types() {
+    fn repo_order_and_types() {
         let mut p = samples::project_info();
         let mut web = p.repos[0].clone();
         web.id = "web".into();
         web.primary = false;
         p.repos.push(web);
-        let rules = samples::tracker_binding().repo_rules;
-        let mut t =
-            TicketSnap { key: "SHOP-1".into(), labels: vec!["Frontend".into()], ..Default::default() };
-        assert_eq!(select_repo(&p, &rules, Some(&t), None).as_deref(), Some("web"));
-        t.labels.clear();
-        assert_eq!(select_repo(&p, &rules, Some(&t), None).as_deref(), Some("api"));
-        assert_eq!(select_repo(&p, &rules, Some(&t), Some("web")).as_deref(), Some("web"));
+        assert_eq!(select_repo(&p, Some("web"), None).as_deref(), Some("web"), "the route's repo");
+        assert_eq!(select_repo(&p, None, None).as_deref(), Some("api"), "else primary");
+        assert_eq!(select_repo(&p, Some("gone"), None).as_deref(), Some("api"), "a repo not in the project");
+        assert_eq!(select_repo(&p, Some("web"), Some("api")).as_deref(), Some("api"), "remembered first");
         let s = Settings::default();
         assert_eq!(type_for(&s, Some("Bug")), "fix");
         assert_eq!(type_for(&s, Some("Epic")), "chore");

@@ -71,8 +71,9 @@ describe('L9 actions', () => {
     selectTicket({ account: 'jira-acme', key: 'SHOP-151', id: '10151' }, 'shop');
     await dispatch('work.start');
     expect(ui.sheet?.key).toBe('start_work');
+    // the selection's project is the account's, no pick: the backend picks (SPEC §3.1)
     expect(mock.calls.filter((c) => c.cmd === 'work_plan').at(-1)?.args).toMatchObject({
-      project_id: 'shop',
+      project_id: null,
       source: { kind: 'ticket', ticket: { key: 'SHOP-151' } },
     });
   });
