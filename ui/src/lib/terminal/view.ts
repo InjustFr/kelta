@@ -23,7 +23,8 @@ import {
 
 import { fontStack, type TerminalConfig } from './config';
 import { AckBatcher, FrameHandler } from './frames';
-import { macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
+import { encodeKittyKey } from './kitty';
+import { baseCharacter, macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
 import { needsPasteConfirmation, sanitizePaste } from './paste';
 import { installQueryHandlers } from './queries';
 import { frames } from './raf';
@@ -103,6 +104,10 @@ export class TerminalView implements PoolView {
   #focused = false;
   #cfg: TerminalConfig;
   #disposers: (() => void)[] = [];
+  /** Kitty keyboard flags of the session (Keyboard frames; 0 = legacy encoding). */
+  #kittyFlags = 0;
+  /** Keys whose keydown a Kelta shortcut took: their keyup is not reported either. */
+  #consumed = new Set<string>();
 
   constructor(id: SessionId, deps: TerminalViewDeps) {
     this.id = id;
@@ -233,6 +238,12 @@ export class TerminalView implements PoolView {
       term: this.term,
       acks: this.#acks,
       onExit: (code) => this.#setState({ exited: true, exitCode: code }),
+      onSnapshot: () => {
+        this.#kittyFlags = 0;
+      },
+      onKeyboard: (flags) => {
+        this.#kittyFlags = flags;
+      },
       onData: (n) => (this.inflight += n),
     });
     this.inflight = 0;
@@ -443,9 +454,16 @@ export class TerminalView implements PoolView {
   #handleKey(event: KeyboardEvent): boolean {
     if (event.code === 'AltLeft') this.#leftOption = event.type === 'keydown';
     else if (event.code === 'AltRight') this.#rightOption = event.type === 'keydown';
+    if (event.type === 'keyup') {
+      if (!this.#consumed.delete(event.code)) this.#sendKitty(event);
+      return true;
+    }
     if (event.type !== 'keydown') return true;
 
-    if (this.#deps.onKey(event)) return false;
+    if (this.#deps.onKey(event)) {
+      this.#consumed.add(event.code);
+      return false;
+    }
 
     if (this.#state.exited && !event.ctrlKey && !event.altKey && !event.metaKey) {
       if (event.key === 'Enter') {
@@ -458,6 +476,11 @@ export class TerminalView implements PoolView {
         this.onRequest?.('close');
         return false;
       }
+    }
+
+    if (this.#sendKitty(event)) {
+      event.preventDefault();
+      return false;
     }
 
     const shiftEnter = shiftEnterFor(event, this.#cfg.shiftEnter, this.#deps.kindOf(this.id));
@@ -475,6 +498,44 @@ export class TerminalView implements PoolView {
         return false;
       }
     }
+    return true;
+  }
+
+  /** Encodes the key with the kitty keyboard protocol when the session enabled it; true = sent. */
+  #sendKitty(event: KeyboardEvent): boolean {
+    if (this.#kittyFlags === 0 || this.#state.exited || event.isComposing || event.keyCode === 229)
+      return false;
+    const macos = this.#deps.platform === 'macos';
+    // shortcut: Cmd stays the macOS app/menu layer (copy, paste, quit…), never reported as super.
+    if (macos && event.metaKey) return false;
+    const mode = this.#cfg.optionAsMeta;
+    const optionIsAlt =
+      !macos ||
+      mode === 'both' ||
+      (mode === 'left' && this.#leftOption) ||
+      (mode === 'right' && this.#rightOption);
+    // Option-as-Meta on macOS: report the physical key, not the character Option composed.
+    const key =
+      macos && event.altKey && optionIsAlt && (event.key.length === 1 || event.key === 'Dead')
+        ? (baseCharacter(event.code, event.shiftKey) ?? event.key)
+        : event.key;
+    const seq = encodeKittyKey(
+      {
+        type: event.type,
+        key,
+        code: event.code,
+        location: event.location,
+        repeat: event.repeat,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+      },
+      this.#kittyFlags,
+      optionIsAlt,
+    );
+    if (seq === null) return false;
+    this.#write(seq);
     return true;
   }
 

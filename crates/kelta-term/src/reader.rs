@@ -148,6 +148,7 @@ fn timers(
         let mut st = session.state.lock();
         if sync_due && st.model.sync_deadline().is_some_and(|d| now >= d) {
             st.model.flush_sync(&palette, &mut outs);
+            st.sync_keyboard(shared);
         }
         if ack_due && let Some(generation) = st.flow.check_deadline(now) {
             outs.push(Output::Event(TerminalEvent::AckTimeout { generation }));
@@ -172,6 +173,7 @@ fn process(session: &Session, shared: &Shared, chunk: &[u8], now: Instant) {
         if st.flow.on_data(chunk.len(), now) == DataAction::Send {
             st.send(frames::data(chunk), shared);
         }
+        st.sync_keyboard(shared);
         // The primary history cannot change while the alternate screen is active, and reading it
         // there swaps the grids.
         if !st.model.term().mode().contains(TermMode::ALT_SCREEN) && st.model.history_size() != st.history {

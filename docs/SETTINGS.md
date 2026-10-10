@@ -81,7 +81,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `osc52` | enum(off\|write\|read-write) | `write` | |
 | `bell` | enum(attention\|visual\|none) | `attention` | |
 | `shift_enter` | map<SessionKindName, enum(passthrough\|esc-cr\|newline)> | `{claude = "esc-cr", default = "passthrough"}` | |
-| `keyboard_protocol` | enum(legacy) | `legacy` | `kitty` added in v0.2 |
+| `keyboard_protocol` | enum(kitty\|legacy) | `kitty` | kitty keyboard protocol for programs that enable it (`CSI > u`); `legacy` = model ignores it. Applied live (switching to `legacy` clears the mode) |
 | `shell` | str | `""` | empty = `$SHELL` |
 | `env` | map<str,str> | `{}` | added to every session |
 | `minimum_contrast_ratio` | float | `1` | xterm option |

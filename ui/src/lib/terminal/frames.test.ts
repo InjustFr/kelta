@@ -1,7 +1,7 @@
 import { Terminal } from '@xterm/headless';
 import { describe, expect, it, vi } from 'vitest';
 
-import { FRAME_DATA, FRAME_EXIT, FRAME_SNAPSHOT } from '$lib/gen/constants';
+import { FRAME_DATA, FRAME_EXIT, FRAME_KEYBOARD, FRAME_SNAPSHOT } from '$lib/gen/constants';
 
 import { AckBatcher, decodeFrame, FrameHandler } from './frames';
 import { FrameScheduler, type FrameDriver } from './raf';
@@ -48,6 +48,7 @@ describe('decodeFrame', () => {
     expect(decodeFrame(exitFrame(0))).toEqual({ kind: 'exit', code: 0 });
     expect(decodeFrame(exitFrame(137))).toEqual({ kind: 'exit', code: 137 });
     expect(decodeFrame(exitFrame(-1))).toEqual({ kind: 'exit', code: -1 });
+    expect(decodeFrame(new Uint8Array([FRAME_KEYBOARD, 31]))).toEqual({ kind: 'keyboard', flags: 31 });
   });
 
   it('is little-endian and respects the byte offset of a subarray', () => {
@@ -60,6 +61,7 @@ describe('decodeFrame', () => {
     expect(decodeFrame(new Uint8Array(0)).kind).toBe('unknown');
     expect(decodeFrame(new Uint8Array([9, 1, 2])).kind).toBe('unknown');
     expect(decodeFrame(new Uint8Array([FRAME_EXIT, 1])).kind).toBe('exit'); // truncated: code -1
+    expect(decodeFrame(new Uint8Array([FRAME_KEYBOARD])).kind).toBe('unknown');
     const empty = decodeFrame(new Uint8Array([FRAME_DATA]));
     expect(empty.kind === 'data' && empty.bytes.length).toBe(0);
   });
