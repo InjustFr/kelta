@@ -383,14 +383,20 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 One row grammar for all three, so they read as one instrument:
 `lamp | id (mono 12, --k-fg-muted, 76px) | title (13, fills) | meta (11, right-aligned, tabular)`.
 
-- Rows 26px, no row borders, no zebra.
+- Rows `ROW_HEIGHT` (32px, `$lib/ui`), no row borders, no zebra.
 - Selected: `--k-bg-selected` plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
-- Tickets meta: assignee initials (20px circle on `--k-bezel`), priority (11), age (11, tabular).
+- Tickets meta, right to left of the title: PR chip, sprint chip (when not grouped by sprint), status chip (a button), age badge, source chip, assignee initials (20px circle on `--k-bezel`, hidden on Mine), updated (11, tabular).
+- Age badge: `7d` tabular text after 7 days in a non-done status, `--k-fg-subtle`; `--k-warn` text from 14, `--k-danger` text from 21. No fill, no border (a lamp must stay the only coloured shape). Its slot is reserved so titles and chips line up.
+- Sprint chip: flat chip (§6.11), name in `--k-fg-subtle`, `--k-fg-muted` for the active sprint.
+- Compact row actions (Move, pull request, Start) appear in the row on the selected row, on hover and on focus-within; they are icon buttons with a tooltip carrying the key, and take no space when hidden.
+- Multi-select: marked rows get `--k-bg-selected` and an accent lamp; `Esc` clears.
 - Reviews meta: `+214 −38` in mono tabular (`--k-ok` / `--k-danger`), checks lamp.
 - Inbox: grouped by lamp (needs input first) under 12/600 `--k-fg-muted` sentence-case headers that carry the lamp shape.
 - Toolbar 30px `--k-bezel-raised`: filter input left (most-used control), then Who tabs (Mine, Unassigned, Anyone, with tabular counts, omitted when unknown), then the source menu, the Group select and the list/board toggle on the right.
-- Tickets are grouped (Status by default, ordered in progress, in review, to do, unknown, done; Done collapsed) under 12/600 `--k-fg-muted` sentence-case headers with a tabular count, 26px. The status chip is flat text with a 2px left bar in the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`) and always shows the tracker's own status name. The PR chip is mono `#N` / `!N` with a CI lamp shape. The source chip appears only with more than one source and a grouping other than Source.
-- Move menu (`m`): the header is the ticket's workflow on one line of native status names in category order, the current one `--k-fg` 600 with its category bar, the rest `--k-fg-subtle`. Below, the legal transitions numbered `1`-`9` with the digit as a mono kbd hint on the right; the digit moves at once.
+- Tickets are grouped (Flow by default: Doing, Waiting, Ready, Backlog, Done in the last 7 days; Status orders in progress, in review, to do, unknown, done; Done collapsed) under 12/600 `--k-fg-muted` sentence-case headers with a tabular count, 26px. The status chip is flat text with a 2px left bar in the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`) and always shows the tracker's own status name. The PR chip is mono `#N` / `!N` with a CI lamp shape. The source chip appears only with more than one source and a grouping other than Source.
+- Doing header: turns `--k-warn` with a short note ("Above your limit of 3") when the count passes `tickets.wip_limit`; nothing else changes.
+- Split view: below ~720px pane width there is no detail column. Wider, the detail sits on the right (`--k-well`, §6.9) and the side with the keyboard shows a 2px `--k-focus` inset bar on its left edge.
+- StatusPicker (`m`, status chips, detail, work bar, palette): the header is the ticket's workflow on one line of native status names in category order, the current one `--k-fg` 600 with its category bar, the rest `--k-fg-subtle`. Below, the legal transitions numbered `1`-`9` with the digit as a mono kbd hint on the right; the digit moves at once. The same menu filters as you type, shows the tracker's message and Open in browser on an error, and with several tickets lists only the statuses they all share.
 - Source picker sheet (§6.7, `min(480px, 100vw)`, from the right): account Select, search input, rows of kind (12 muted), label (13), detail (11 muted); added hits read "Added".
 - No key shadows or per-row effects: rows live inside VirtualList and must stay cheap to paint.
 
@@ -400,7 +406,10 @@ One row grammar for all three, so they read as one instrument:
 - Section heads (Description, Discussion, Checks) 13/600.
 - `HtmlContent`: 13/1.5, `max-width: var(--k-measure)`, links `--k-accent` underlined, code/pre mono on `--k-bezel-raised` radius 2, blockquote 2px `--k-border-strong` left rule.
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
-- Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the move menu of §6.8. Actions: Start work (primary), Move, Assign to me / Unassign, Comment, Open in browser.
+- Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the StatusPicker of §6.8. Order: key, title, status, action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated), Pull request rows, description, comments with a compose box.
+- Pull request rows: one line each, `#N` chip, title filling, then CI lamp and review state in words; wraps under the title when narrow.
+- Action bar: ghost `sm` Buttons with the key as chord hint: Start / Resume work (primary), Move `m`, Open PR `p`, Assign to me `a` (Unassign `A` when assigned), Comment `c`, Copy branch `y`, Open in browser `o`. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
+- Embedded in the split view the detail drops the pane padding it would double, and shows the 2px `--k-focus` bar when it holds the keys.
 
 ### 6.10 Board
 
