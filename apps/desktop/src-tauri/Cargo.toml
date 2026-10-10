@@ -35,15 +35,12 @@ serde_json = { workspace = true }
 parking_lot = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-tracing-appender = { workspace = true }
-rustix = { workspace = true }
 libc = { workspace = true }
 time = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
-objc2-web-kit = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { workspace = true }

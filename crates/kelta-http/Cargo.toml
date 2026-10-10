@@ -26,7 +26,6 @@ base64 = { workspace = true }
 kelta-proto = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["test-util"] }
 wiremock = { workspace = true }
-insta = { workspace = true }
 
 [lints]
 workspace = true

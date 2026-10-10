@@ -37,10 +37,8 @@ globset = { workspace = true }
 regex = { workspace = true }
 parking_lot = { workspace = true }
 futures = { workspace = true }
-rustix = { workspace = true }
 libc = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { workspace = true }
