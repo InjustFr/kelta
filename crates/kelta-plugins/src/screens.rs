@@ -399,10 +399,7 @@ impl PluginHost {
                 let q: Q = p(method, params)?;
                 let project = self.screen_project(screen)?;
                 let tool = self.qualify_tool(&screen.plugin, &project, &q.tool_id);
-                to_value(
-                    self.open_tool(&project, &tool, TemplateCtx::default(), q.placement.unwrap_or_default())
-                        .await?,
-                )
+                to_value(self.open_tool(&project, &tool, TemplateCtx::default(), q.placement).await?)
             }
             PluginMethod::EventsSubscribe => {
                 #[derive(Deserialize)]

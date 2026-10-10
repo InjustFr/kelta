@@ -1462,7 +1462,7 @@ export function createMockTransport(options: MockOptions = {}): {
         ? { installed: false, version: null, install_hint: `brew install ${tool_id}` }
         : clone(samples.toolCheck);
     },
-    tool_open: ({ project_id, tool_id, placement }) => {
+    tool_open: ({ project_id, tool_id, placement, ctx }) => {
       const t = state.tools.find((x) => x.id === tool_id);
       if (!t) throw err('not_found', `tool ${tool_id} not found`);
       if (t.kind === 'web') {
@@ -1478,12 +1478,13 @@ export function createMockTransport(options: MockOptions = {}): {
         return { kind: 'web', instance_id, url: 'http://127.0.0.1:3011/', embed: 'auto' };
       }
       const s = spawn(project_id, { type: 'tool', tool_id }, t.label, null);
+      if (ctx.work_item_id) updateSession(session(s.id), { work_item_id: ctx.work_item_id });
       const next = openPane(layoutOf(project_id), {
         content: { kind: 'terminal', session_id: s.id },
         placement,
         focus: true,
         tab_title: t.label,
-        work_item_id: null,
+        work_item_id: ctx.work_item_id,
       }).layout;
       backendLayoutChange(project_id, next);
       return { kind: 'pty', session_id: s.id };
