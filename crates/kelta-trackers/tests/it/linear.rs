@@ -259,4 +259,8 @@ async fn sources_offer_teams_cycles_and_projects() {
     assert_eq!((hits[0].view.current_iteration, hits[3].view.project.as_deref()), (false, Some("Website")));
     let v = &gql_bodies(&server, "teams(filter").await[0]["variables"];
     assert_eq!(v["projects"], json!({"name": {"containsIgnoreCase": "e"}}));
+    assert_eq!(
+        v["teams"],
+        json!({"or": [{"name": {"containsIgnoreCase": "e"}}, {"key": {"containsIgnoreCase": "e"}}]})
+    );
 }

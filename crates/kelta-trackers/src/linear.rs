@@ -238,6 +238,7 @@ impl Tracker for LinearTracker {
             let m = |f: &str| json!({f: {"containsIgnoreCase": query}});
             (json!({"or": [m("name"), m("key")]}), m("name"))
         };
+        // shortcut: first page only, type-ahead reaches the rest; paginate if users hit the cap
         let d = self
             .gql(
                 "query($teams: TeamFilter, $projects: ProjectFilter) { \

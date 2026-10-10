@@ -510,10 +510,13 @@ impl Tracker for GitlabIssues {
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let mut req = HttpRequest::get(format!("{}/projects", self.api))
             .query("membership", "true")
+            .query("with_issues_enabled", "true")
+            .query("archived", "false")
             .query("order_by", "last_activity_at")
+            // shortcut: first page only, type-ahead reaches the rest; paginate if users hit the cap
             .query("per_page", "20");
         if !query.is_empty() {
-            req = req.query("search", query);
+            req = req.query("search", query).query("search_namespaces", "true");
         }
         let projects = self.json(req).await?.body;
         Ok(projects
