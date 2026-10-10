@@ -18,6 +18,7 @@
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
+  import { fileRoots, openFileLink } from './actions';
   import { activateProject, focusedPane, focusedSessionId } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
@@ -70,6 +71,8 @@
     kindOf: (id) => sessions.get(id)?.kind.type ?? 'shell',
     onKey: (event) => keyManager.handleKeyDown(event) === 'consumed',
     onError: (err, context) => toasts.error(err, context),
+    fileRoots,
+    openFile: (id, path, line, focusEditor) => void openFileLink(id, path, line, focusEditor),
   });
 
   $effect(() => {

@@ -7,7 +7,7 @@ import { setTransport } from '$lib/ipc/transport';
 import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
 import { terminalUi } from '$lib/terminal/ui.svelte';
 
-import './actions';
+import { openFileLink } from './actions';
 
 // Handlers owned by L2 (BUILD_PLAN §2.4).
 const OWNED = ACTIONS.map((a) => a.id).filter(
@@ -20,8 +20,12 @@ const OWNED = ACTIONS.map((a) => a.id).filter(
     id.startsWith('pane.') ||
     id === 'attention.next' ||
     id.startsWith('terminal.') ||
-    id === 'editor.send_selection',
+    id === 'editor.send_selection' ||
+    id === 'editor.quickfix_claude',
 );
+
+const CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
+const NVIM = '0199a6b2-0000-7000-8000-000000000002';
 
 let mock: MockControls;
 
@@ -95,6 +99,39 @@ describe('shell actions', () => {
     expect(call?.args).toEqual({
       editor_session: '0199a6b2-0000-7000-8000-000000000002',
       claude_session: '0199a6b2-0000-7000-8000-000000000001',
+    });
+  });
+
+  it("file links open in the tab's nvim, or the work item's nvim when the session has one", async () => {
+    await openFileLink(CLAUDE, '/w/src/a.rs', 42, false);
+    expect(mock.calls.find((c) => c.cmd === 'editor_open')?.args).toEqual({
+      target: { kind: 'session', id: NVIM },
+      path: '/w/src/a.rs',
+      line: 42,
+    });
+    // Another work item's nvim (same project) and a nvim in another project are never picked.
+    const claude = sessions.get(CLAUDE)!;
+    sessions.upsert({ ...claude, work_item_id: 'w-1' });
+    sessions.upsert({ ...sessions.get(NVIM)!, id: 'other-item', work_item_id: 'w-2' });
+    sessions.upsert({ ...sessions.get(NVIM)!, id: 'item-nvim', work_item_id: 'w-1' });
+    await openFileLink(CLAUDE, '/w/b.rs', 3, false);
+    expect(mock.calls.filter((c) => c.cmd === 'editor_open').at(-1)?.args).toMatchObject({
+      target: { kind: 'session', id: 'item-nvim' },
+      line: 3,
+    });
+  });
+
+  it('editor.quickfix_claude lists exactly the files Claude touched', async () => {
+    const claude = sessions.get(CLAUDE)!;
+    sessions.upsert({ ...claude, claude: { ...claude.claude!, files_touched: [] } });
+    await dispatch('editor.quickfix_claude');
+    expect(toasts.list.at(-1)?.toast.text).toContain('not touched');
+    const files = ['/w/src/a.rs', '/w/b.rs'];
+    sessions.upsert({ ...claude, claude: { ...claude.claude!, files_touched: files } });
+    await dispatch('editor.quickfix_claude');
+    expect(mock.calls.find((c) => c.cmd === 'editor_quickfix')?.args).toEqual({
+      target: { kind: 'session', id: NVIM },
+      files,
     });
   });
 });

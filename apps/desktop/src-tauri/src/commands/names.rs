@@ -105,6 +105,8 @@ pub const COMMANDS: &[&str] = &[
     "work_left",
     "editor_open",
     "editor_send_selection",
+    "editor_quickfix",
+    "fs_exists",
     // tools / plugins / triggers
     "tool_list",
     "tool_check",

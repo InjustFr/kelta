@@ -107,6 +107,8 @@
     "allow-work-left",
     "allow-editor-open",
     "allow-editor-send-selection",
+    "allow-editor-quickfix",
+    "allow-fs-exists",
     "allow-tool-list",
     "allow-tool-check",
     "allow-tool-open",

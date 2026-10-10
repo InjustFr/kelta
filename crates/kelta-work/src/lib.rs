@@ -347,6 +347,11 @@ impl WorkService {
         self.editor_diff_impl(target, old, proposed, close).await
     }
 
+    /// `editor_quickfix`: the files (relative to the editor's cwd) become nvim's quickfix list.
+    pub async fn editor_quickfix(&self, target: EditorTarget, files: &[PathBuf]) -> Result<(), KeltaError> {
+        self.editor_quickfix_impl(target, files).await
+    }
+
     /// `editor_send_selection`: `@path#Lx-y` into the Claude session.
     pub async fn send_selection(
         &self,

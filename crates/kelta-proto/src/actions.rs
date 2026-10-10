@@ -93,6 +93,7 @@ pub const ACTIONS: &[ActionMeta] = &[
         Some("@"),
         Editor
     ),
+    a!("editor.quickfix_claude", "Quickfix: files Claude touched", [], [], None, Global),
     a!("terminal.search", "Search terminal", ["cmd+f"], ["ctrl+shift+f"], Some("/"), Terminal),
     a!("terminal.copy", "Copy", ["cmd+c"], ["ctrl+shift+c"], Some("["), Terminal),
     a!("terminal.paste", "Paste", ["cmd+v"], ["ctrl+shift+v"], Some("]"), Terminal),
