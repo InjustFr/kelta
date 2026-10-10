@@ -581,6 +581,10 @@ impl CodeHost for GitlabHost {
         if published > 0 && body.trim().is_empty() {
             return Ok(());
         }
+        self.post_note(r, body).await
+    }
+
+    async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(())

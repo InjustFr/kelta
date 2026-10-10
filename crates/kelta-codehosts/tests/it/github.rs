@@ -630,6 +630,14 @@ async fn decisions_publish_the_pending_review_with_its_comments() {
         ]
     );
     assert_eq!(count(&server, "POST", "/repos/acme/shop/issues/101/comments").await, 0);
+    // a nudge ping is a plain comment: the pending review stays a draft
+    mount(&server, "POST", "/repos/acme/shop/issues/101/comments", 201, "github/review_posted.json").await;
+    h.post_note(&r, "ping").await.unwrap();
+    assert_eq!(count(&server, "POST", "/repos/acme/shop/pulls/101/reviews/9/events").await, 3);
+    assert_eq!(
+        bodies(&server, "POST", "/repos/acme/shop/issues/101/comments").await,
+        vec![json!({"body": "ping"})]
+    );
     // the pending review began on abc123: approving another head would approve unseen code
     let e = h.approve(&r, "newer").await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument);

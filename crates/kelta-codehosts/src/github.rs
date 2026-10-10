@@ -740,6 +740,10 @@ impl CodeHost for GithubHost {
         if let Some(p) = self.pending_review(r).await? {
             return self.publish(r, &p, "COMMENT", body).await;
         }
+        self.post_note(r, body).await
+    }
+
+    async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         // PR conversation comments live on the issue endpoint.
         let url = self.repo_url(&r.repo, &format!("/issues/{}/comments", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;

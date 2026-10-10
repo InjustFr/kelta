@@ -490,6 +490,11 @@ async fn decisions_publish_the_drafts_first_and_an_empty_comment_sends_no_note()
     h.comment(&r, "").await.unwrap();
     assert_eq!(count(&server, "POST", &format!("{MR}/draft_notes/bulk_publish")).await, 2);
     assert_eq!(count(&server, "POST", &format!("{MR}/notes")).await, 0);
+    // a nudge ping is a plain note: the drafts stay drafts
+    mount(&server, "POST", &format!("{MR}/notes"), 201, "gitlab/note.json").await;
+    h.post_note(&r, "ping").await.unwrap();
+    assert_eq!(count(&server, "POST", &format!("{MR}/draft_notes/bulk_publish")).await, 2);
+    assert_eq!(bodies(&server, "POST", &format!("{MR}/notes")).await, vec![json!({"body": "ping"})]);
 }
 
 #[tokio::test]

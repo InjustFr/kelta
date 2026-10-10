@@ -148,6 +148,10 @@ pub trait CodeHost: Send + Sync {
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+    /// A plain conversation comment that leaves my pending review / draft notes unpublished.
+    async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        self.comment(r, body).await
+    }
     /// Adds a line comment (new-side `line` of `path`) to my pending (draft) review, creating it.
     async fn add_pending_comment(
         &self,

@@ -1431,7 +1431,7 @@ impl Core {
         }
         let host = self.code_host_of(&r.account)?;
         match comment {
-            Some(body) => host.comment(r, body).await?,
+            Some(body) => host.post_note(r, body).await?,
             None if who.is_empty() => return Err(KeltaError::invalid("this pull request waits on nobody")),
             None => drop(host.rerequest_review(r, who).await?),
         }
