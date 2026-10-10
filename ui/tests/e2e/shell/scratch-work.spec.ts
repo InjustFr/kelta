@@ -30,7 +30,7 @@ test.describe('scratch work items', () => {
     expect(plan?.args?.source).toMatchObject({ kind: 'branch', name: '', task: TASK });
     const active = page.locator('[data-testid="rail-row"][aria-current="page"]');
     await expect(active).toContainText('wip Fix the login flake');
-    await expect(page.getByTestId('work-key')).toHaveText('wip');
+    await expect(page.getByTestId('context-key')).toHaveText('wip');
     const claude = await page.evaluate(() => {
       const k = window.__kelta!.stores;
       const item = k.work.all.find((w) => w.branch === 'wip/fix-the-login-flake');
@@ -69,8 +69,8 @@ test.describe('scratch work items', () => {
     await expect(page.getByTestId('toasts')).toContainText('Linked SHOP-151');
     const [link] = await callsOf(page, 'work_link');
     expect(link?.args).toMatchObject({ ticket: { key: 'SHOP-151' }, apply_side_effects: true });
-    await expect(page.getByTestId('work-header')).toContainText('SHOP-151');
-    await expect(page.getByTestId('work-header')).toContainText('wip/fix-the-login-flake');
+    await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
+    await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /wip\/fix-the-login-flake/);
   });
 
   test('Create ticket files a prefilled ticket and links it', async ({ page }) => {
@@ -83,6 +83,6 @@ test.describe('scratch work items', () => {
     await expect(page.getByTestId('toasts')).toContainText('Created and linked SHOP-');
     const [create] = await callsOf(page, 'work_create_ticket');
     expect(create?.args).toMatchObject({ title: 'Fix the login flake', apply_side_effects: true });
-    await expect(page.getByTestId('work-header')).toContainText('SHOP-');
+    await expect(page.getByTestId('context-key')).toContainText('SHOP-');
   });
 });

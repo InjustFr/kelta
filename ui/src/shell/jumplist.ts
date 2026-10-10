@@ -94,6 +94,24 @@ export function flushJump(): void {
   pending = null;
 }
 
+/** A place `nav.back` can still land on: a view, or a pane of an open project. */
+function alive(loc: JumpLoc): boolean {
+  if (loc.view) return true;
+  const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
+  return !!projects.byId(loc.project)?.open && !!tab && !!findPane(tab.root, loc.pane);
+}
+
+/** Where `nav.back` lands from `here`, without moving (the context bar's `‹` tooltip and return chip). */
+export function backTarget(here: JumpLoc | null): JumpLoc | null {
+  const past = jumplist.list.slice(0, jumplist.at + 1);
+  if (pending && !same(past.at(-1), pending)) past.push(pending);
+  for (let i = past.length - 1; i >= 0; i -= 1) {
+    const loc = past[i]!;
+    if (!(here && same(loc, here)) && alive(loc)) return loc;
+  }
+  return null;
+}
+
 /** `nav.back` / `nav.forward`: the previous / next place that still exists. */
 export function navStep(delta: 1 | -1): void {
   flushJump();
@@ -104,8 +122,7 @@ export function navStep(delta: 1 | -1): void {
       openView(loc.view);
       return;
     }
-    const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
-    if (!projects.byId(loc.project)?.open || !tab || !findPane(tab.root, loc.pane)) continue;
+    if (!alive(loc)) continue;
     save();
     void activateProject(loc.project);
     focusPaneById(loc.project, loc.tab, loc.pane);

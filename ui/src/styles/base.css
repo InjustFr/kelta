@@ -137,7 +137,7 @@ pre,
   display: flex;
   align-items: center;
   gap: var(--k-space-3);
-  height: var(--k-tabbar-height);
+  height: var(--k-toolbar-height);
   flex: none;
   padding: 0 var(--k-space-4);
   background: var(--k-bezel-raised);

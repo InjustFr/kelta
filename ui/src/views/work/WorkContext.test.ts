@@ -6,11 +6,11 @@ import type { PluginInfo, WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { layout, plugins, projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { layout, plugins, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
 import { workUi } from './ui.svelte';
-import WorkItemHeader from './WorkItemHeader.svelte';
+import WorkContext from './WorkContext.svelte';
 
 let mock: MockControls;
 
@@ -38,7 +38,7 @@ async function mountSheet(key: RegisteredSheetKey) {
 }
 
 function mountHeader(item: WorkItem) {
-  return render(WorkItemHeader, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
+  return render(WorkContext, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
 }
 
 const item = (i: number): WorkItem => mock.state.work[i] as WorkItem;
@@ -48,7 +48,7 @@ async function openMenu(): Promise<HTMLElement> {
   return screen.findByRole('menu', { name: 'Work' });
 }
 
-describe('work bar', () => {
+describe('context bar: work item segment', () => {
   it("the ticket's status chip opens the status picker and a digit moves the ticket", async () => {
     const w = item(0); // SHOP-142, In Progress
     mountHeader(w);
@@ -68,15 +68,16 @@ describe('work bar', () => {
     await waitFor(() => expect(chip.textContent).toContain('In review'));
   });
 
-  it('shows the phase, branch, ahead/behind and diffstat from work_status_all', async () => {
+  it('shows the phase, ahead/behind, and the branch and diffstat under ⎇, from work_status_all', async () => {
     const w = item(0);
     mountHeader(w);
-    expect(await screen.findByText(w.branch)).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId('ahead').textContent).toBe('↑2'));
     expect(screen.getByTestId('behind').textContent).toBe('↓1');
-    expect(screen.getByText('+41')).toBeTruthy();
-    expect(screen.getByText('Uncommitted changes')).toBeTruthy();
-    expect(screen.getByTestId('work-header').dataset.phase).toBe('working'); // Claude is working
+    const branch = screen.getByTestId('work-branch').title;
+    expect(branch).toContain(w.branch);
+    expect(branch).toMatch(/\+41 −\d+/);
+    expect(branch).toContain('Uncommitted changes');
+    expect(screen.getByTestId('context-work').dataset.phase).toBe('working'); // Claude is working
     expect(mock.calls.some((c) => c.cmd === 'work_status_all')).toBe(true);
     expect(mock.calls.some((c) => c.cmd === 'work_status')).toBe(false);
     await waitFor(() => expect(screen.getByRole('button', { name: /In progress/i })).toBeTruthy());
@@ -96,7 +97,7 @@ describe('work bar', () => {
   it('To review: the primary opens the delta zoomed in the work tab, R marks reviewed', async () => {
     const w = item(3); // SHOP-155, review_due
     mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('to_review'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('to_review'));
     await fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
     // No work tab for SHOP-155 in the fixtures: work_resume recreates it, the diff opens beside it.
@@ -119,6 +120,16 @@ describe('work bar', () => {
     mountHeader(w);
     await fireEvent.click(await screen.findByTestId('work-phase'));
     await waitFor(() => expect(findContent(layout.get('shop')!, (c) => c.kind === 'work_item')).toBeTruthy());
+  });
+
+  it('the PR chip shows the number and CI, and opens the PR (⌘. o)', async () => {
+    const w = item(2); // gh-12, PR #13
+    await reviews.load({ kind: 'all' }, 'authored', false);
+    mountHeader(w);
+    const chip = await screen.findByTestId('work-pr');
+    expect(chip.textContent).toContain('#13');
+    await fireEvent.click(chip);
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'open_external')).toBe(true));
   });
 
   it('work menu: every letter, letters never move, disabled entries say why', async () => {
@@ -213,7 +224,7 @@ describe('work bar', () => {
       draft: { title: 'My PR', draft: false },
     });
     // PR open with unpushed commits: the next action is Push (another lane's).
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('unpushed'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('unpushed'));
   });
 
   it('Shift+F finishes: lists the dirty files and only removes with Force', async () => {
@@ -246,10 +257,10 @@ describe('work bar', () => {
     const w = item(2); // PR open, Claude idle
     mountHeader(w);
     await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Rebase onto main/ }));
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebase_stopped'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('rebase_stopped'));
     expect(screen.getByRole('button', { name: 'Ask Claude to resolve' })).toBeTruthy();
     await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Continue rebase/ }));
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebased'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('rebased'));
     await fireEvent.click(screen.getByRole('button', { name: 'Force push…' }));
     // The dialog is a sheet entry: it is mounted by the sheet host, here we assert what it asks.
     const { ui } = await import('$lib/stores');
@@ -269,7 +280,7 @@ describe('work bar', () => {
     const claude = mock.state.sessions.find((x) => w.session_ids.includes(x.id) && x.kind.type === 'claude')!;
     claude.status = 'done'; // it was asking for permission: rebase would be refused
     mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('remote_new'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('remote_new'));
     expect(screen.queryByRole('button', { name: 'Force push…' })).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: `Rebase onto origin/${w.branch}` }));
     // The rebase onto the remote branch is followed by the normal rebase onto base (FLOW §4.4).
@@ -280,47 +291,19 @@ describe('work bar', () => {
           .map((c) => (c.args as { op: { onto: string } }).op.onto),
       ).toEqual(['remote_branch', 'base']),
     );
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).not.toBe('remote_new'));
+    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).not.toBe('remote_new'));
   });
 
   it('shows a placeholder for an unknown work item', async () => {
-    render(WorkItemHeader, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
+    render(WorkContext, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();
   });
-});
 
-describe('return strip', () => {
-  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
-
-  it('shows the next: note, the delta and the last message after 20 min away; x dismisses', async () => {
-    const w = { ...item(3), left_at: ago(45) }; // SHOP-155: note, message and delta in the fixtures
-    work.upsert(w);
+  it('a phase without a lamp keeps its label at narrow widths: the chip is never empty', async () => {
+    const w = mock.state.work.find((x) => x.state.kind === 'merged') as WorkItem;
     mountHeader(w);
-    const strip = await screen.findByTestId('return-brief');
-    await waitFor(() => expect(document.activeElement).toBe(strip)); // x / v reach it, not the pane
-    expect(strip.textContent).toContain('next: check the retry path against staging');
-    expect(strip.textContent).toMatch(/\+1890\/−122 since\s+you\s+reviewed/);
-    expect(strip.textContent).toContain('Added the retry wrapper');
-    await fireEvent.keyDown(strip, { key: 'v' });
-    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
-    await fireEvent.keyDown(strip, { key: 'x' });
-    await waitFor(() => expect(screen.queryByTestId('return-brief')).toBeNull());
-  });
-
-  it('not before the threshold, and never while Claude is working', async () => {
-    const recent = { ...item(3), left_at: ago(5) };
-    work.upsert(recent);
-    const { unmount } = mountHeader(recent);
-    await screen.findByTestId('work-header');
-    expect(screen.queryByTestId('return-brief')).toBeNull();
-    unmount();
-    // Leaving the item stamps when Louis left.
-    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_left')).toBe(true));
-
-    const busy = { ...item(0), left_at: ago(120), next_note: 'look at the cache' }; // Claude is working
-    work.upsert(busy);
-    mountHeader(busy);
-    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('working'));
-    expect(screen.queryByTestId('return-brief')).toBeNull();
+    const phase = await screen.findByTestId('work-phase');
+    await waitFor(() => expect(phase.textContent).toContain('Merged'));
+    expect(phase.querySelector('.phase-label')?.classList.contains('lampless')).toBe(true);
   });
 });

@@ -16,9 +16,8 @@
   import { Badge, Button, EmptyState, Icon } from '$lib/ui';
 
   import { stepLabel } from './common';
-  import WorkItemHeader from './WorkItemHeader.svelte';
 
-  let { projectId, tabId, content }: PaneProps<'work_item'> = $props();
+  let { content }: PaneProps<'work_item'> = $props();
 
   const item = $derived(work.get(content.id));
   const itemSessions = $derived(
@@ -121,7 +120,6 @@
       body="It was finished and removed, or it belongs to another project."
     />
   {:else}
-    <WorkItemHeader {projectId} {tabId} workItemId={content.id} />
     <div class="body">
       <dl class="facts">
         <dt>Branch</dt>

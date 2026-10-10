@@ -440,7 +440,7 @@ pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: 
 pub enum Placement { NewTab, SplitRight, SplitDown, ReplaceFocused, Focused /*focus existing pane with same content if any*/ }
 ```
 
-- Window = ProjectRail (Inbox, open projects, Home, "+") + active project workspace (TabBar + LayoutNode tree) + StatusBar.
+- Window = ProjectRail (Inbox, open projects, Home, "+") + active project workspace (LayoutNode tree) + StatusBar, under the ContextBar.
 - Only the active project workspace is mounted. A session is shown in **at most one pane**; opening it elsewhere moves it.
 - Layout is saved by the UI via `layout_save` debounced 500 ms after a change (timer exists only while dirty) with optimistic `rev` (stale rev → `Conflict`, UI refetches).
 - Project switch never touches processes; detached xterm instances go to the LRU (§9.4).
