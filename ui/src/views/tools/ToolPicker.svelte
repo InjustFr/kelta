@@ -15,6 +15,7 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
+  import { focusedWorkItem } from '../work/fixloop.svelte';
   import { openTool } from './actions';
 
   // `query`/`checks` seed the sheet when `tools.open` found the requested tool missing.
@@ -52,7 +53,9 @@
 
   async function open(t: ToolInfo): Promise<void> {
     if (!projectId) return;
-    const r = await openTool(projectId, t, {}, t.placement);
+    // The active tab's work item, as `tools.open` sends: only meaningful in the shown project.
+    const workItemId = projectId === projects.activeId ? focusedWorkItem() : null;
+    const r = await openTool(projectId, t, { work_item_id: workItemId });
     if (r === true) onclose();
     else if (r) checks = { ...checks, [t.id]: r };
   }

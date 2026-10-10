@@ -96,6 +96,25 @@ describe('tools.open', () => {
     expect(opens()).toHaveLength(2);
   });
 
+  it('picker sends the tab work item and refocuses like tools.open', async () => {
+    const { m, id, opens } = await inTab('W1');
+    const label = m.state.tools.find((t) => t.id === id)!.label;
+    const onclose = vi.fn();
+    const pick = async () => {
+      const { getByText, unmount } = render(ToolPicker, { onclose, projectId: 'shop' });
+      await fireEvent.click(getByText(label, { selector: '.label' }));
+      await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
+      unmount();
+      onclose.mockClear();
+      await Promise.all([sessions.load(), layout.load('shop')]);
+    };
+    await pick();
+    expect(opens()).toHaveLength(1);
+    expect(opens()[0].args).toMatchObject({ ctx: { work_item_id: 'W1' } });
+    await pick();
+    expect(opens()).toHaveLength(1);
+  });
+
   it('leaves Now and opens the tool in the active project', async () => {
     const { open, opens } = await inTab(null);
     ui.inboxActive = true;

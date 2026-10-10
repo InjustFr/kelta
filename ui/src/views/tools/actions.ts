@@ -20,22 +20,28 @@ export const EMPTY_CTX: TemplateCtx = {
 };
 
 /**
- * Opens a tool; the backend opens the pane (PTY session or web pane). Returns true when opened,
- * the failed check when the open failed because the binary is missing, false otherwise (toasted).
+ * Opens a tool with its placement; the backend opens the pane (PTY session or web pane). A running
+ * PTY instance of the same work item (`ctx.work_item_id`) gets focus instead of a second copy (web
+ * tools reopen). Returns true when opened or focused, the failed check when the open failed because
+ * the binary is missing, false otherwise (toasted).
  * Checks only after a failed open: `tool_check` has no project, so it may see another layer's def.
  */
 export async function openTool(
   projectId: ProjectId,
-  tool: Pick<ToolInfo, 'id' | 'label'>,
+  tool: Pick<ToolInfo, 'id' | 'label'> & { placement?: Placement },
   ctx: Partial<TemplateCtx>,
-  placement: Placement,
 ): Promise<true | false | ToolCheck> {
+  const at = liveToolPane(projectId, tool.id, ctx.work_item_id ?? null);
+  if (at) {
+    layout.update(projectId, (l) => focusPane(l, at.tabId, at.paneId));
+    return true;
+  }
   try {
     const handle = await toolOpen({
       project_id: projectId,
       tool_id: tool.id,
       ctx: { ...EMPTY_CTX, ...ctx },
-      placement,
+      placement: tool.placement ?? 'split_right',
     });
     rememberWebTool(handle, { toolId: tool.id, label: tool.label, projectId });
     return true;
@@ -77,18 +83,7 @@ registerAction('tools.open', async (args) => {
   const projectId = projects.activeId;
   const ctx = { work_item_id: focusedWorkItem(), ...(args?.ctx as Partial<TemplateCtx>) };
   const info = tools.list(projectId).find((t) => t.id === toolId);
-  // A running PTY tool of the same work item gets focus instead of a second copy (web tools reopen).
-  const at = liveToolPane(projectId, toolId, ctx.work_item_id ?? null);
-  if (at) {
-    layout.update(projectId, (l) => focusPane(l, at.tabId, at.paneId));
-    return;
-  }
-  const r = await openTool(
-    projectId,
-    { id: toolId, label: info?.label ?? toolId },
-    ctx,
-    info?.placement ?? 'split_right',
-  );
+  const r = await openTool(projectId, info ?? { id: toolId, label: toolId }, ctx);
   // A missing binary opens the picker on that tool with its install hint and "Check again".
   if (typeof r === 'object')
     ui.openSheet('tool_picker', { projectId, query: toolId, checks: { [toolId]: r } });
