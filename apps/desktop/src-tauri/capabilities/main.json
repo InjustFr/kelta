@@ -9,6 +9,9 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
     "core:window:allow-start-resize-dragging",
     "allow-app-info",
     "allow-app-ready",
@@ -58,6 +61,7 @@
     "allow-session-mark-seen",
     "allow-session-link",
     "allow-session-text-tail",
+    "allow-session-history-search",
     "allow-terminal-set-palette",
     "allow-tracker-list",
     "allow-tracker-get",

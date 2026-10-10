@@ -1,7 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,8 +17,16 @@ mod capture;
 
 fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
     let p = dir.join(name);
-    std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
-    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Written by a child `sh`, never by this process: a write fd opened here is inherited by
+    // whatever another test thread forks at that instant, and exec then fails with ETXTBSY (Linux).
+    let tmp = dir.join(format!(".{name}.src"));
+    std::fs::write(&tmp, format!("#!/bin/sh\n{body}\n")).unwrap();
+    let ok = std::process::Command::new("sh")
+        .args(["-c", "cat \"$1\" > \"$2\" && chmod 755 \"$2\"", "sh"])
+        .args([&tmp, &p])
+        .status()
+        .unwrap();
+    assert!(ok.success());
     p
 }
 

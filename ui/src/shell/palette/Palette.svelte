@@ -75,6 +75,7 @@
     icon: r.icon,
     kbd: r.kbd,
     group: r.group,
+    lamp: r.lamp,
   }))}
   {query}
   onquery={(q) => (query = q)}
@@ -82,5 +83,5 @@
   {onclose}
   busy={searching}
   testid="palette"
-  empty="No matching action, project, session or ticket"
+  empty={`Nothing matches "${query}".`}
 />

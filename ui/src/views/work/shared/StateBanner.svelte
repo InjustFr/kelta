@@ -34,7 +34,7 @@
       <div class="banner info" role="status">
         <Icon name="clock" size={14} />
         <span>
-          Showing cached data{fetchedAt ? ` · updated ${relativeTime(fetchedAt)}` : ''}
+          Showing cached data{fetchedAt ? `, updated ${relativeTime(fetchedAt)}` : ''}.
         </span>
         {#if onretry}<Button size="sm" variant="ghost" onclick={onretry}>Retry</Button>{/if}
       </div>
@@ -63,8 +63,7 @@
     gap: var(--k-space-2);
     padding: var(--k-space-1) var(--k-space-3);
     font-size: var(--k-font-size-sm);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-sunken);
+    background: var(--k-bezel-raised);
     color: var(--k-fg-muted);
   }
 

@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
 
   import { appInfo } from '$lib/ipc/commands';
+  import { IconButton } from '$lib/ui';
 
   type Dir = 'North' | 'South' | 'East' | 'West' | 'NorthEast' | 'NorthWest' | 'SouthEast' | 'SouthWest';
   const HANDLES: Dir[] = [
@@ -25,6 +26,11 @@
       .catch(() => {});
   });
 
+  async function win(op: 'minimize' | 'toggleMaximize' | 'close'): Promise<void> {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow()[op]();
+  }
+
   async function resize(e: PointerEvent, dir: Dir): Promise<void> {
     if (e.button !== 0) return;
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -33,8 +39,13 @@
 </script>
 
 {#if custom}
+  <!-- Undecorated window: a bezel drag strip with the only window controls (no system title bar). -->
   <div class="titlebar" data-tauri-drag-region data-testid="titlebar">
-    <span data-tauri-drag-region>Kelta</span>
+    <span class="controls">
+      <IconButton icon="minus" label="Minimize" size="sm" onclick={() => void win('minimize')} />
+      <IconButton icon="square" label="Maximize" size="sm" onclick={() => void win('toggleMaximize')} />
+      <IconButton icon="x" label="Close window" size="sm" onclick={() => void win('close')} />
+    </span>
   </div>
   {#each HANDLES as dir (dir)}
     <div class="handle {dir}" aria-hidden="true" onpointerdown={(e) => void resize(e, dir)}></div>
@@ -44,15 +55,18 @@
 <style>
   .titlebar {
     flex: none;
-    height: 28px;
+    height: var(--k-statusbar-height);
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: var(--k-bg-sunken);
-    border-bottom: 1px solid var(--k-border);
-    color: var(--k-fg-subtle);
-    font-size: var(--k-font-size-xs);
+    justify-content: flex-end;
+    padding: 0 var(--k-space-2);
+    background: var(--k-bezel);
     user-select: none;
+  }
+
+  .controls {
+    display: inline-flex;
+    gap: var(--k-space-1);
   }
   .handle {
     position: fixed;

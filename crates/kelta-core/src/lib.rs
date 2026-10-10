@@ -218,9 +218,12 @@ impl Core {
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => {
-                PtyTerminalHost::new_arc(login_env.clone(), TerminalLimits::from_settings(&settings.terminal))
-            }
+            None => Arc::new(PtyTerminalHost::with_history_dir(
+                login_env.clone(),
+                TerminalLimits::from_settings(&settings.terminal),
+                kelta_term::backend::default_backend(),
+                dirs.data.join("history"),
+            )),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?

@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]
@@ -60,6 +60,9 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `view_scrollback` | int (100..10000) | `1000` | xterm lines + snapshot history |
 | `max_live_views` | int (1..12) | `4` | hidden xterm instances kept (LRU) |
 | `memory_cap_mb` | int (32..2048) | `160` | total scrollback budget across sessions |
+| `history_log` | bool | `true` | append scrolled-off lines (plain text) to `<data>/history/` per session: search + restore (ARCH §9.6) |
+| `history_log_mb` | int (1..1024) | `16` | per-session log cap (two rotated halves) |
+| `history_log_total_mb` | int (16..65536) | `512` | cap of all session logs; oldest files deleted first |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |
 | `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click paste |

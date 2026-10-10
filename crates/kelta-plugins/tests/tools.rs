@@ -27,12 +27,40 @@ fn fake_server_main() {
         }
         use std::io::Write;
         let _ = std::io::stdout().flush();
-        let app = axum::Router::new().route(
-            "/",
-            axum::routing::get(|| async {
-                ([(axum::http::header::X_FRAME_OPTIONS, "SAMEORIGIN")], "fake tool")
-            }),
-        );
+        use axum::extract::ws::{Message, WebSocketUpgrade};
+        use axum::http::{StatusCode, header};
+        let app = axum::Router::new()
+            .route(
+                "/",
+                axum::routing::get(|| async {
+                    (
+                        [
+                            (header::X_FRAME_OPTIONS, "SAMEORIGIN"),
+                            (header::CONTENT_SECURITY_POLICY, "default-src 'self'; frame-ancestors 'self'"),
+                        ],
+                        "fake tool",
+                    )
+                }),
+            )
+            .route(
+                "/login",
+                axum::routing::get(move || async move {
+                    (
+                        [(header::LOCATION, format!("http://127.0.0.1:{port}/?token=s3cret"))],
+                        StatusCode::FOUND,
+                    )
+                }),
+            )
+            .route(
+                "/ws",
+                axum::routing::get(|ws: WebSocketUpgrade| async move {
+                    ws.on_upgrade(|mut socket| async move {
+                        while let Some(Ok(Message::Text(t))) = socket.recv().await {
+                            let _ = socket.send(Message::Text(format!("echo:{t}").into())).await;
+                        }
+                    })
+                }),
+            );
         axum::serve(l, app).await.unwrap();
     });
 }
@@ -340,4 +368,195 @@ async fn project_close_stops_project_web_tools() {
     env.host.on_event(&ev).await;
     assert_eq!(env.host.web_tools_running(), 0);
     tokio::time::sleep(Duration::from_millis(1)).await;
+}
+
+// ---- Gate W1 (BUILD_PLAN §6): web tool embedding from both webview origins ----------------------
+
+/// The page holding the tool's iframe: `tauri://localhost` (macOS), `http://tauri.localhost` (Linux).
+const WEBVIEW_ORIGINS: [&str; 2] = ["tauri://localhost", "http://tauri.localhost"];
+
+/// Raw `GET` (no client dependency) to `host` (`localhost` resolves to `::1` and/or `127.0.0.1`).
+async fn http_get(host: &str, port: u16, path: &str, extra_headers: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut s = tokio::net::TcpStream::connect((host, port)).await.unwrap();
+    s.write_all(
+        format!("GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra_headers}Connection: close\r\n\r\n")
+            .as_bytes(),
+    )
+    .await
+    .unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).await.unwrap();
+    out
+}
+
+/// `http://host:port/path?q` → (host, port, `/path?q`).
+fn split_url(url: &str) -> (String, u16, String) {
+    let rest = url.strip_prefix("http://").unwrap();
+    let (authority, path) = rest.split_at(rest.find('/').unwrap());
+    let (host, port) = authority.rsplit_once(':').unwrap();
+    (host.to_owned(), port.parse().unwrap(), path.to_owned())
+}
+
+/// Open a WebSocket the way a page framed at `http://host:port` does (path-absolute, own Origin),
+/// send `msg` and return the first text reply.
+async fn ws_roundtrip(host: &str, port: u16, path: &str, msg: &str) -> String {
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+    let mut req = format!("ws://{host}:{port}{path}").into_client_request().unwrap();
+    req.headers_mut().insert("origin", format!("http://{host}:{port}").parse().unwrap());
+    let stream = tokio::net::TcpStream::connect((host, port)).await.unwrap();
+    let (mut ws, resp) = tokio_tungstenite::client_async(req, stream).await.unwrap();
+    assert_eq!(resp.status(), 101);
+    ws.send(Message::Text(msg.into())).await.unwrap();
+    let reply = tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            match ws.next().await.unwrap().unwrap() {
+                Message::Text(t) => return t.as_str().to_owned(),
+                _ => continue,
+            }
+        }
+    })
+    .await
+    .expect("websocket reply");
+    let _ = ws.close(None).await;
+    reply
+}
+
+/// The framed page as the webview loads it: frame-blocking headers must be gone for either origin.
+async fn assert_frameable(host: &str, port: u16, path: &str) -> String {
+    let mut body = String::new();
+    for origin in WEBVIEW_ORIGINS {
+        let resp =
+            http_get(host, port, path, &format!("Referer: {origin}/\r\nSec-Fetch-Dest: iframe\r\n")).await;
+        assert!(resp.starts_with("HTTP/1.1 200"), "{origin}: {resp}");
+        let lower = resp.to_ascii_lowercase();
+        assert!(!lower.contains("x-frame-options"), "{origin}: {resp}");
+        assert!(!lower.contains("frame-ancestors"), "{origin}: {resp}");
+        body = resp;
+    }
+    body
+}
+
+#[tokio::test]
+async fn gate_w1_frame_blocking_tool_is_proxied_for_both_webview_origins() {
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(web_tool(
+            "fake",
+            &[("KELTA_FAKE_SERVER_PORT", "{port}")],
+            Ready::StdoutJson("url".into()),
+            10_000,
+        ));
+    });
+    let h =
+        env.host.tool_open(&shop(), &ToolId::new("fake"), TemplateCtx::default(), Placement::NewTab).await;
+    let ToolHandle::Web { instance_id, url, embed } = h.unwrap() else { panic!("expected a web handle") };
+    assert_eq!(embed, EmbedMode::Proxy, "X-Frame-Options + frame-ancestors → auto picks the proxy");
+    let (host, port, path) = split_url(&url);
+    assert_eq!(host, "127.0.0.1");
+    let page = assert_frameable(&host, port, &path).await;
+    assert!(page.to_ascii_lowercase().contains("content-security-policy: default-src 'self'"), "{page}");
+    assert!(page.ends_with("fake tool"));
+    for origin in WEBVIEW_ORIGINS {
+        // Kelta's own page (webview origin) without the instance id never reaches the tool.
+        let resp = http_get(&host, port, "/", &format!("Origin: {origin}\r\n")).await;
+        assert!(resp.starts_with("HTTP/1.1 404"), "{origin}: {resp}");
+    }
+    let resp = http_get(&host, port, &format!("/proxy/{instance_id}/login"), "").await;
+    assert!(resp.contains(&format!("location: /proxy/{instance_id}/?token=s3cret")), "{resp}");
+    assert_eq!(ws_roundtrip(&host, port, "/ws", "hi").await, "echo:hi");
+    assert_eq!(ws_roundtrip(&host, port, &format!("/proxy/{instance_id}/ws"), "ho").await, "echo:ho");
+    env.host.tool_close(&instance_id).await.unwrap();
+}
+
+/// Real Sapling ISL (`sl web`) with the documented tool definition, in a temp git repo: readiness,
+/// auto embed (ISL sends no frame-blocking header → plain iframe), and the same page + WebSocket
+/// through the proxy. Skipped when Sapling is not installed.
+#[tokio::test]
+async fn gate_w1_sapling_isl_embeds_via_iframe_and_proxy() {
+    let sapling = std::process::Command::new("sl")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("Sapling"));
+    if !sapling {
+        eprintln!("skipped: Sapling `sl` is not installed (https://sapling-scm.com)");
+        return;
+    }
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(kelta_proto::samples::isl_tool());
+        let mut proxied = kelta_proto::samples::isl_tool();
+        proxied.id = "isl-proxy".into();
+        proxied.embed = Some(EmbedMode::Proxy);
+        s.tools.push(proxied);
+    });
+    let repo = env.tmp.path().join("repo");
+    for args in [
+        &["init", "-q"][..],
+        &["-c", "user.name=k", "-c", "user.email=k@k", "commit", "-q", "--allow-empty", "-m", "init"],
+    ] {
+        assert!(std::process::Command::new("git").args(args).current_dir(&repo).status().unwrap().success());
+    }
+    // ISL's own wire format (its client serializes objects with `__rpcType`).
+    let heartbeat = r#"{"__rpcType":"object","type":"heartbeat","id":"isl-connection"}"#;
+
+    let h = env.host.tool_open(&shop(), &ToolId::new("isl"), TemplateCtx::default(), Placement::NewTab).await;
+    let ToolHandle::Web { instance_id, url, embed } = h.unwrap() else { panic!("expected a web handle") };
+    assert_eq!(embed, EmbedMode::Iframe, "ISL is frameable as is: {url}");
+    let (host, port, path) = split_url(&url);
+    assert!(path.contains("token="), "{url}");
+    let query = path.split_once('?').unwrap().1.to_owned();
+    assert!(assert_frameable(&host, port, &path).await.contains("Interactive Smartlog"));
+    assert!(ws_roundtrip(&host, port, &format!("/ws?{query}"), heartbeat).await.contains("heartbeat"));
+    let pids = env.host.web_tool_pids();
+    env.host.tool_close(&instance_id).await.unwrap();
+    let pid = rustix::process::Pid::from_raw(pids[0] as i32).unwrap();
+    assert!(common::wait_for(|| rustix::process::test_kill_process(pid).is_err()).await, "sl web stopped");
+
+    let h = env
+        .host
+        .tool_open(&shop(), &ToolId::new("isl-proxy"), TemplateCtx::default(), Placement::NewTab)
+        .await;
+    let ToolHandle::Web { instance_id, url, embed } = h.unwrap() else { panic!("expected a web handle") };
+    assert_eq!(embed, EmbedMode::Proxy);
+    let (host, port, path) = split_url(&url);
+    assert!(path.starts_with(&format!("/proxy/{instance_id}/?token=")), "{url}");
+    let page = assert_frameable(&host, port, &path).await;
+    assert!(page.contains("Interactive Smartlog"));
+    // Relative assets resolve under the proxy prefix; ISL's socket is path-absolute (`/ws`).
+    let asset = page.split("src=\"./").nth(1).unwrap().split('"').next().unwrap();
+    let resp = http_get(&host, port, &format!("/proxy/{instance_id}/{asset}"), "").await;
+    assert!(resp.starts_with("HTTP/1.1 200"), "{resp}");
+    let query = path.split_once('?').unwrap().1;
+    assert!(ws_roundtrip(&host, port, &format!("/ws?{query}"), heartbeat).await.contains("heartbeat"));
+    env.host.tool_close(&instance_id).await.unwrap();
+}
+
+/// A Dock-launched app has a bare PATH: web tools must be found and run through the login PATH,
+/// with the project env (regression for `launch_env` / `check_tool`).
+#[tokio::test]
+async fn web_tool_found_and_launched_through_login_path_with_project_env() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = common::Env::new().with_settings(|s| {
+        let mut t = sh_tool("fake", "", 5_000);
+        let start = t.start.as_mut().unwrap();
+        start.command = "kelta-fake-tool".into();
+        start.args.clear();
+        s.tools.push(t);
+        s.env.insert("KELTA_PROJECT_VAR".into(), "proj".into());
+    });
+    let bin_dir = env.tmp.path().join("login-bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let bin = bin_dir.join("kelta-fake-tool");
+    let script = "#!/bin/sh\necho \"{\\\"url\\\":\\\"http://127.0.0.1:9/?v=$KELTA_PROJECT_VAR&p=$PATH\\\"}\"\nexec /bin/sleep 30\n";
+    std::fs::write(&bin, script).unwrap();
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let id = ToolId::new("fake");
+    assert!(!env.host.tool_check(&id).await.unwrap().installed, "not on the dev PATH");
+
+    env.core.respond("login_path", serde_json::json!(bin_dir));
+    assert!(env.host.tool_check(&id).await.unwrap().installed, "found through the login PATH");
+    let h = env.host.tool_open(&shop(), &id, TemplateCtx::default(), Placement::NewTab).await.unwrap();
+    let ToolHandle::Web { instance_id, url, .. } = h else { panic!("expected a web handle") };
+    assert!(url.contains(&format!("?v=proj&p={}", bin_dir.display())), "{url}");
+    env.host.tool_close(&instance_id).await.unwrap();
 }

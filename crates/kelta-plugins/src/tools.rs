@@ -190,17 +190,20 @@ impl PluginHost {
         let r = self.find_tool_any(tool)?;
         let vars = self.build_vars(CtxSpec { plugin: r.plugin.as_deref(), ..Default::default() }).await;
         let hint = r.def.install_hint.clone();
+        // Same PATH the tool will launch with (see `launch_env`).
+        let path = self.core().and_then(|c| c.login_path()).or_else(|| std::env::var("PATH").ok());
         let result = match &r.def.check {
             Some(argv) => {
                 let argv: Vec<String> =
                     argv.iter().map(|a| vars.expand(a).unwrap_or_else(|_| a.clone())).collect();
                 self.check_tool_permission(&r, argv.first().map(String::as_str)).await?;
-                run_check(&argv, hint.clone()).await
+                run_check(&argv, path.as_deref(), hint.clone()).await
             }
             None => match Self::program_of(&r.def) {
                 Some(p) => {
                     let p = vars.expand(p).unwrap_or_else(|_| p.to_owned());
-                    let installed = which::which(&p).is_ok();
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    let installed = which::which_in(&p, path.as_deref(), cwd).is_ok();
                     ToolCheck { installed, version: None, install_hint: if installed { None } else { hint } }
                 }
                 None => ToolCheck { installed: true, version: None, install_hint: None },
@@ -261,6 +264,22 @@ impl PluginHost {
         env: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>, KeltaError> {
         env.iter().map(|(k, v)| Ok((k.clone(), vars.expand(v)?))).collect()
+    }
+
+    /// Env of a non-PTY child: project env, the tool's own env on top, and the login shell's PATH
+    /// when neither sets one (a Dock-launched Kelta has a bare PATH, so `sl`/`node` are not found).
+    fn launch_env(
+        &self,
+        project: &ProjectId,
+        vars: &Vars,
+        tool_env: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>, KeltaError> {
+        let mut env = Self::expand_env(vars, &self.settings(Some(project)).env)?;
+        env.extend(Self::expand_env(vars, tool_env)?);
+        if let Some(p) = self.core().and_then(|c| c.login_path()) {
+            env.entry("PATH".to_owned()).or_insert(p);
+        }
+        Ok(env)
     }
 
     async fn open_pty(
@@ -332,12 +351,7 @@ impl PluginHost {
             return Err(KeltaError::invalid(format!("tool `{}` has no command", r.id)));
         }
         self.check_tool_permission(r, Some(&command)).await?;
-        let mut env = Self::expand_env(vars, &self.settings(Some(project)).env)?;
-        env.extend(Self::expand_env(vars, &def.env)?);
-        // A Dock-launched Kelta has a bare PATH; use the login shell's, as pty tools do.
-        if let Some(p) = self.core().and_then(|c| c.login_path()) {
-            env.entry("PATH".to_owned()).or_insert(p);
-        }
+        let env = self.launch_env(project, vars, &def.env)?;
         let cwd = self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?;
         let mut child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env)
             .spawn()
@@ -431,7 +445,7 @@ impl PluginHost {
                     program,
                     args: vars.expand_all(&start.args)?,
                     cwd: cwd.clone(),
-                    env: Self::expand_env(&vars, &start.env)?,
+                    env: self.launch_env(project, &vars, &start.env)?,
                     ready: start.ready.clone(),
                     ready_timeout: Duration::from_millis(start.ready_timeout_ms.max(100)),
                     port,
@@ -607,12 +621,15 @@ impl PluginHost {
 }
 
 /// Run a `check` argv (5 s cap): exit 0 = installed; first output line = version.
-async fn run_check(argv: &[String], hint: Option<String>) -> ToolCheck {
+async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) -> ToolCheck {
     let Some((program, args)) = argv.split_first() else {
         return ToolCheck { installed: false, version: None, install_hint: hint };
     };
     let mut cmd = tokio::process::Command::new(program);
     cmd.args(args).stdin(std::process::Stdio::null()).kill_on_drop(true);
+    if let Some(p) = path {
+        cmd.env("PATH", p);
+    }
     // one-shot: tool_check deadline
     let out = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await;
     match out {
@@ -651,12 +668,15 @@ mod external_tests {
 
     #[tokio::test]
     async fn external_command_uses_env_path_for_lookup() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("kelta-ext-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let bin = dir.join("kelta-fake-tool");
-        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Written by a child `sh`: a write fd held here leaks into concurrent forks -> ETXTBSY (Linux).
+        let ok = std::process::Command::new("sh")
+            .args(["-c", "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && chmod 755 \"$1\"", "sh"])
+            .arg(dir.join("kelta-fake-tool"))
+            .status()
+            .unwrap();
+        assert!(ok.success());
         let env = BTreeMap::from([("PATH".to_owned(), dir.to_string_lossy().into_owned())]);
         let st = external_command("kelta-fake-tool", &[], &dir, &env).status().await.unwrap();
         assert!(st.success());

@@ -57,6 +57,7 @@ pub const COMMANDS: &[&str] = &[
     "session_mark_seen",
     "session_link",
     "session_text_tail",
+    "session_history_search",
     "terminal_set_palette",
     // tickets
     "tracker_list",
