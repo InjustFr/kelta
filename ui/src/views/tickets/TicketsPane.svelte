@@ -25,7 +25,6 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { sessionsLamp } from '../../shell/nav';
   import { openContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
@@ -256,11 +255,8 @@
   const groups = $derived(
     groupTickets(sorted, groupBy, views, (item) => {
       const w = workOf(item);
-      return flowOf(
-        item,
-        { work: w, needsYou: sessionsLamp(w?.session_ids ?? []) === 'needs_input' },
-        Date.now(),
-      );
+      // Durable Claude state (FLOW §2.3): a reply waiting on me counts, not only a live prompt.
+      return flowOf(item, { work: w, needsYou: phaseFor(item)?.section === 'needs_you' }, Date.now());
     }),
   );
   const rows = $derived.by<Row[]>(() => {
