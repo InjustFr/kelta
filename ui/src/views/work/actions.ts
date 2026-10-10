@@ -86,12 +86,11 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     key: 'p',
     label: (c) => (c.phase.id === 'rebased' ? 'Force push…' : hasPr(c) ? 'Push' : 'Ship'),
     blocked: (c) => (review(c) ? READ_ONLY : null),
-    // shortcut: Ship opens today's Create PR dialog; the ship-finish lane renames it.
     run: async ({ item, phase }) => {
       if (phase.id === 'rebased') return forcePushItem(item);
       if (item.pr_url !== null) return pushItem(item);
       await goToWork(item);
-      workUi.ship = item.id;
+      ui.openSheet('ship', { item });
     },
   },
   {
@@ -175,7 +174,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     blocked: () => null,
     run: async ({ item }) => {
       await goToWork(item);
-      workUi.finish = item.id;
+      ui.openSheet('finish', { item });
     },
   },
   // Primary-only actions (no letter of their own).
@@ -264,9 +263,13 @@ export function focusedWorkItem(): WorkItem | null {
   return id ? work.get(id) : null;
 }
 
-function onFocused(fn: (item: WorkItem) => void | Promise<void>): () => Promise<void> {
-  return async () => {
-    const item = focusedWorkItem();
+/** `args.id` names the item (palette, Now rows); default: the focused tab's. */
+function onFocused(
+  fn: (item: WorkItem) => void | Promise<void>,
+): (args?: Record<string, unknown>) => Promise<void> {
+  return async (args) => {
+    const id = args?.id as string | undefined;
+    const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
     else toasts.info('Focus a work item tab first');
   };
@@ -283,7 +286,7 @@ for (const a of WORK_ACTIONS)
       `work.${a.id}`,
       onFocused((item) => runWorkAction(a.id, item)),
     );
-registerAction('work.finish_merged', () => void toasts.info(`Finish all merged: ${NOT_YET}`));
+registerAction('work.finish_merged', () => ui.openSheet('finish_merged'));
 
 registerAction('work.start', async (args) => {
   const ticket = (args?.ticket as TicketRef | undefined) ?? selection.ticket;

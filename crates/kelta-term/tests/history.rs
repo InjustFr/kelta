@@ -13,7 +13,7 @@ use std::time::Duration;
 use common::*;
 use kelta_proto::api::TerminalHost;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{LoginEnv, TerminalLimits};
+use kelta_proto::term::TerminalLimits;
 use kelta_term::PtyTerminalHost;
 use kelta_term::backend::default_backend;
 
@@ -51,7 +51,7 @@ fn host(dir: &Path) -> PtyTerminalHost {
         history_log_total_mb: 16,
         ..TerminalLimits::default()
     };
-    PtyTerminalHost::with_history_dir(LoginEnv::inherited(), limits, default_backend(), dir.to_owned())
+    PtyTerminalHost::with_history_dir(limits, default_backend(), dir.to_owned())
 }
 
 fn run(h: &PtyTerminalHost, id: &str, script: &str) {

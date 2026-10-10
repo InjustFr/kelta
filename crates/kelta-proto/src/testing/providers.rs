@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::api::{CodeHost, Tracker};
 use crate::codehost::{
-    CodeHostKind, Feedback, MyReviewState, PrCreate, Review, ReviewDetail, ReviewQuery, ReviewRef,
+    CodeHostKind, Feedback, MyReviewState, PrCreate, PrState, Review, ReviewDetail, ReviewQuery, ReviewRef,
 };
 use crate::error::KeltaError;
 use crate::ids::AccountId;
@@ -310,6 +310,7 @@ impl FakeCodeHost {
                     .map(|review| ReviewDetail {
                         body_html: format!("<p>{}</p>", review.title),
                         review,
+                        state: PrState::Open,
                         reviewers: vec![],
                         checks: vec![],
                         files: vec![],
@@ -338,6 +339,13 @@ impl FakeCodeHost {
     pub fn set_head(&self, r: &ReviewRef, sha: &str) {
         if let Some(d) = self.reviews.lock().iter_mut().find(|d| &d.review.r#ref == r) {
             d.review.head_sha = sha.to_owned();
+        }
+    }
+
+    /// Simulate a merge / close on the host: the PR leaves the open lists.
+    pub fn set_state(&self, r: &ReviewRef, state: PrState) {
+        if let Some(d) = self.reviews.lock().iter_mut().find(|d| &d.review.r#ref == r) {
+            d.state = state;
         }
     }
 
@@ -405,6 +413,7 @@ impl CodeHost for FakeCodeHost {
             .reviews
             .lock()
             .iter()
+            .filter(|d| d.state == PrState::Open)
             .map(|d| d.review.clone())
             .filter(|r| r.kind == q.kind && (q.include_drafts || !r.draft))
             .collect())
@@ -471,6 +480,7 @@ impl CodeHost for FakeCodeHost {
         review.my_state = None;
         reviews.push(ReviewDetail {
             review: review.clone(),
+            state: PrState::Open,
             body_html: format!("<p>{}</p>", d.body),
             reviewers: vec![],
             checks: vec![],

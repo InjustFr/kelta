@@ -65,9 +65,8 @@ export interface Phase {
   section: NowSection;
 }
 
-// Fields other lanes add (merged/closed: ship-finish, decision_head and the reviewed head:
-// review-others). Optional and absent until those lanes land them.
-export type PhaseItem = Omit<WorkItem, 'state'> & { state: WorkItem['state'] | { kind: 'merged' } };
+// Fields review-others adds (decision_head, the reviewed head). Optional until that lane lands them.
+export type PhaseItem = WorkItem;
 export type PhaseGit = GitStatus;
 export type PhasePr = Review & {
   state?: 'open' | 'merged' | 'closed';
@@ -134,8 +133,10 @@ export function phaseOf(
     );
   if (claude?.status === 'working')
     return p('working', 'Claude working', '', 'working', null, '', 'in_flight');
-  if (st.kind === 'merged') return p('merged', 'Merged', prLabel, 'none', 'finish', 'Finish…', 'ship');
-  if (pr?.state === 'closed') return p('closed', 'PR closed', prLabel, 'none', 'finish', 'Finish…', 'ship');
+  if (st.kind === 'merged')
+    return p('merged', 'Merged', st.detail ?? prLabel, 'none', 'finish', 'Finish…', 'ship');
+  if (st.kind === 'pr_closed' || pr?.state === 'closed')
+    return p('closed', 'PR closed', prLabel, 'none', 'finish', 'Finish…', 'ship');
 
   if (item.kind === 'review') {
     if (pr && pr.my_state && pr.my_state !== 'pending') {

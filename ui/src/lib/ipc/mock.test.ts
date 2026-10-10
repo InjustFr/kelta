@@ -212,6 +212,8 @@ describe('mock transport', () => {
       work_retry_step: { id: work.id, step: 'persist' },
       work_create_pr: { id: work.id, draft: { title: null, body: null, draft: null } },
       work_status: { id: work.id },
+      work_pr_draft: { id: work.id },
+      work_finish_merged: { ids: [] },
       work_feedback: { id: withPr.id },
       work_rerequest_review: { id: withPr.id },
       work_rebase: { id: withPr.id, op: { kind: 'start', onto: 'base', no_fetch: false } },

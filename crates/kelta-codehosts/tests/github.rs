@@ -4,7 +4,7 @@ mod support;
 
 use std::time::Duration;
 
-use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind};
+use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind};
 use kelta_proto::error::ErrorCode;
 use serde_json::{Value, json};
 use support::*;
@@ -201,6 +201,7 @@ async fn detail_combines_reviews_checks_and_files() {
     mount_detail(&server, "github/pull.json", "github/reviews.json", "github/check_runs.json").await;
     let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
     assert_eq!(d.review.kind, ReviewKind::ReviewRequested);
+    assert_eq!(d.state, PrState::Open);
     assert_eq!(d.review.head_sha, "abc123");
     assert_eq!(d.review.ci, CiState::Pending, "one run still in progress");
     assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested));
@@ -249,6 +250,7 @@ async fn detail_of_my_approved_and_failing_pull_requests() {
     let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
     assert_eq!(d.review.kind, ReviewKind::Authored);
     assert_eq!(d.review.my_state, None);
+    assert_eq!(d.state, PrState::Merged, "merged_at set");
 }
 
 #[tokio::test]

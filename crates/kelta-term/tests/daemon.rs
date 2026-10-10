@@ -13,7 +13,7 @@ use std::time::Duration;
 use common::*;
 use kelta_proto::api::TerminalHost;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{KillSignal, LoginEnv, TerminalLimits};
+use kelta_proto::term::{KillSignal, TerminalLimits};
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::{self, DaemonTerminalHost};
 
@@ -21,7 +21,7 @@ const T: Duration = Duration::from_secs(20);
 
 fn start_daemon(sock: &Path) -> std::thread::JoinHandle<()> {
     let l = daemon::bind(sock).unwrap();
-    let host = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let host = PtyTerminalHost::new(TerminalLimits::default());
     std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)))
 }
 

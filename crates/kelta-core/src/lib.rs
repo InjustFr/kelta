@@ -52,7 +52,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
-    SessionInfo, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
+    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
@@ -186,7 +186,7 @@ pub struct Core {
 }
 
 /// `terminal.session_host`: keltad (sessions survive quit) or PTYs in this process.
-fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<dyn TerminalHost> {
+fn terminal_host(dirs: &Dirs, settings: &Settings) -> Arc<dyn TerminalHost> {
     let limits = TerminalLimits::from_settings(&settings.terminal);
     if settings.terminal.session_host == SessionHost::Daemon {
         // Launched from a stable copy: the AppImage mount (or an updated bundle) goes away on quit.
@@ -209,7 +209,6 @@ fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<
         }
     }
     Arc::new(PtyTerminalHost::with_history_dir(
-        login_env.clone(),
         limits,
         kelta_term::backend::default_backend(),
         dirs.data.join("history"),
@@ -255,7 +254,7 @@ impl Core {
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => terminal_host(&dirs, &settings, &login_env),
+            None => terminal_host(&dirs, &settings),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?
@@ -388,6 +387,15 @@ impl Core {
             if let Err(e) = self.work.startup().await {
                 tracing::warn!(error = %e, "work startup hook failed");
             }
+            // Merges and closes that happened while Kelta was closed (FLOW §3.6).
+            let weak = self.me.clone();
+            self.rt.spawn(async move {
+                if let Some(core) = weak.upgrade()
+                    && let Err(e) = core.check_work_prs().await
+                {
+                    tracing::warn!(error = %e.message, "work PR check failed");
+                }
+            });
             let probe =
                 ctl::probe_claude(self.login_env.clone(), self.cfg.effective(None).claude.clone()).await;
             *self.claude_ver.lock() = probe;
@@ -622,8 +630,13 @@ impl CoreApi for Core {
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
     }
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
-        self.work.create_pr(id, draft).await
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.create_pr(id, draft, origin).await
     }
     async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.work.feedback(id).await

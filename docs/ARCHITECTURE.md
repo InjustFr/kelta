@@ -130,7 +130,7 @@ keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the 
 - **`kelta-ctl start --task "<text>" [--project <id>]`** sends `CtlCommand::StartTask{task, project}`: core plans `WorkSource::Branch{name: "", task}` for the project (default: active), runs the start-work saga without a sheet and focuses the project. Same branch rule and refusals as New work item (`⇧⌘N`); a ticket key and `--task` together are a usage error.
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids. MCP tools: `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `get_review_feedback` (Markdown of `CoreApi::work_feedback` for the session's work item: unresolved threads with `path:line`, review summaries, failed checks with their log tail; the layout of the Fix with Claude sheet's `feedback.md`), `add_review_comment{path, line, body}` (line comment on the pending review of the PR under review in the session's review-kind work item, via `CodeHost::add_pending_comment`; published by the user's a / c / m in the review detail), `notify` (PLUGINS §8).
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
-- **Session daemon (`keltad`):** `<runtime>/keltad.sock` (0600 in the 0700 runtime dir, peer uid checked on both ends). Core launches it from the stable copy `<data>/bin/<version>/keltad` (`keltad --socket <path>`, stderr → `<logs>/keltad.log`); it binds, forks into its own session, and the launcher connects once the parent exits. Messages: `u32 len` + `u32 json_len` + JSON head + raw bytes (input, frames). Each session's events go to the client that spawned or last adopted it. On quit, sessions core would restore stay running (no SIGHUP); the others are killed and closed. On start, core `adopt`s every persisted session keltad still runs (Live, same hook token) before any Dormant respawn and kills the rest. keltad exits 30 s after it has no client and no running session (one-shot grace armed by the disconnect / exit, no polling).
+- **Session daemon (`keltad`):** `<runtime>/keltad.sock` (0600 in the 0700 runtime dir, peer uid checked on both ends). Core launches it from the stable copy `<data>/bin/<version>/keltad` (`keltad --socket <path> --history <data>/history`, stderr → `<logs>/keltad.log`); it binds, forks into its own session, and the launcher connects once the parent exits. Messages: `u32 len` + `u32 json_len` + JSON head + raw bytes (input, frames). Each session's events go to the client that spawned or last adopted it. With `session_host = daemon` the on-disk history log (§9.6) lives in keltad, written only when `--history` is given. Core closes every session it removes (`kill` on the exited session), so keltad drops its model and route. On quit, sessions core would restore stay running (no SIGHUP); the others are killed and closed. On start, core `adopt`s every persisted session keltad still runs (Live, same hook token) before any Dormant respawn and kills the rest. keltad exits 30 s after it has no client and no running session (one-shot grace armed by the disconnect / exit, no polling).
 - **Bundling:** `kelta-ctl` and `keltad` are added as `bundle.externalBin` only in the release config overlay `packaging/tauri.release.json` (`tauri build --config …`), so dev builds and `cargo clippy` never require the sidecar to exist.
 - **Background mode:** closing the window with `window.close_behavior = background` destroys the webview (WebKit processes exit) while core + PTYs keep running; `kelta`, Dock click or `kelta-ctl toggle` recreates it and views re-attach from snapshots.
 
@@ -285,7 +285,7 @@ pub trait SecretResolver: Send + Sync {
   async fn ticket_comment(&self, ticket: &TicketRef, markdown: &str, session: Option<&SessionId>) -> Result<(), KeltaError>;
   // work & editor (core delegates to kelta-work)
   async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
-  async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+  async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft, origin: ShipOrigin /*Ui|Mcp*/) -> Result<WorkItem, KeltaError>;
   async fn editor_open(&self, target: EditorTarget, path: &Path, line: Option<u32>) -> Result<(), KeltaError>;
   async fn editor_diff(&self, target: EditorTarget, old: &Path, proposed: &Path, close: bool) -> Result<(), KeltaError>; // IDE bridge openDiff, nvim RPC only (§8.5)
   // tools/plugins/bus/ui
@@ -379,12 +379,13 @@ pub enum WorkSource { Ticket{ ticket }, Review{ review }, Branch{ name, task: Op
 // review_due / claude_replied (FLOW §2.3): set only by kelta-work from a real `Stop` hook of the item's
 // Claude (changes = the worktree fingerprint — HEAD, tracked diff, untracked paths — moved since the last
 // `UserPromptSubmit` (kept in memory; after a restart: ahead of <remote>/<base> or dirty) → review_due, else
-// claude_replied; never for review checkouts; hooks of one session apply in order), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr`, Finish and
+// claude_replied; never for review checkouts; hooks of one session apply in order), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr` (`origin = ui`; MCP `create_pr` is `origin = mcp`), Finish and
 // `work_mark_reviewed`; claude_replied by Finish. Store writes: `save` never writes these two (it keeps the
 // stored values); `update(id, |w| ..)` re-loads under a write lock held only around load-modify-save and is
 // their only writer. Long operations (`create_pr`, `finish`) end with `update` of their own fields.
 // claude_uuid follows the session id of any hook of the item's Claude (/clear, in-Claude /resume).
-pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
+pub enum WorkState { Planned, Starting, Active, PrOpen, Merged{ detail: Option<String> /*"choose Done status" | failed move*/ },
+  PrClosed /*closed unmerged*/, Finished, Failed{ step: String, message: String } }
 ```
 
 ### 5.1 Layout model
@@ -499,8 +500,11 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |
 | `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
-| `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
-| `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
+| `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | Ship, `origin = ui` (clears `review_due`); MCP `create_pr` is `origin = mcp` (does not). `Conflict` while the item's Claude is `Working`/`NeedsInput` ("Claude is working in this worktree. Ship when it stops.", ui only), with no commits ahead of `<remote>/<base>` ("No commits ahead of main."), after a merge/close, or while another operation holds the item ("Claude is shipping this item." when it is Claude's MCP ship) |
+| `work_pr_draft` | `{id}` | `PrDraft` | the title / body / draft Ship would use (prefills the dialog) |
+| `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | for `Merged`/`PrClosed` items only an explicit `transition_to` moves the ticket; a clean merged branch is deleted with `-D` (squash merges) |
+| `work_finish_merged` | `{ids}` | `FinishMergedReport{finished: Vec<WorkItem>, skipped: Vec<SkippedItem{id, reason}>}` | finishes the listed items still `Merged` with clean worktrees (remove worktree + delete branch); dirty / unpushed ones and those waiting for a Done choice are skipped |
+| `work_check_prs` | `{}` | `()` | one `CodeHost::get` per unfinished item whose PR is missing from the authored open list; also run at startup (§8.4) |
 | `work_link` | `{id, ticket: TicketRef, apply_side_effects: bool}` | `WorkItem` | scratch (Branch) items only; becomes Ticket-kind, branch never renamed; side effects = `work.on_start`, plus `work.on_pr` when a PR exists (then `pr_title_needs_key`) |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, diverged, remote_new, files, insertions, deletions, missing}` (on demand, no fetch; ahead/behind and diffstat against `<remote>/<base>`, never the branch's upstream; diffstat from the merge base to the working tree, untracked files count in `files`; `missing` = worktree deleted outside Kelta; re-reads a recorded rebase). `diverged` = own rewrite: the recorded `remote_sha` is still the remote tip, is in `pre_head` and not in HEAD. `remote_new` = commits on `<remote>/<branch>` in neither HEAD nor `pre_head` | |
 | `work_status_all` | `{}` | `Map<WorkItemId, GitStatus>` for every unfinished item: one `git fetch <remote>` per repo first, at most every 5 min (UI: startup, window focus, Now open) | |
@@ -692,7 +696,7 @@ ADF → Markdown: tolerant recursive walker (unknown nodes render children, neve
   async fn me(&self) -> Result<User, KeltaError>;
   async fn changed_since_last(&self) -> Result<bool, KeltaError>;  // cheap gate; default Ok(true)
   async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;  // kind + include_team + include_drafts
-  async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
+  async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;  // ReviewDetail.state: PrState Open|Merged|Closed
   async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
   async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
   async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
@@ -743,6 +747,9 @@ One shared `reqwest::Client` (20 s timeout, pool idle 30 s, UA `kelta/<ver>`). P
 - Startup renders from `provider_cache` (SQLite) — no network before first paint.
 - Aggregation: `Scope::All` fans out over accounts referenced by open projects **plus all configured accounts** for reviews; de-dup by ref; items tagged with matching project ids; unmatched → `project_ids = []` (UI "Other" group).
 - `seen_reviews(account, repo, number, head_sha, first_seen)`: first poll after start/account creation fills silently; new key (or new head after my review) → `pr.review_requested`.
+- Authored PRs (FLOW §3.6): the authored query always includes drafts (`reviews.include_drafts` filters review requests only). Authored is also subscribed for every code-host account bound to a project with an unfinished work item whose PR is open, whatever panes are visible and notifications are on (core tracks those items from `work.updated`). An authored PR that leaves the open list gets one `get`: merged → `pr.merged`, closed → `pr.closed`. At startup and on `work_check_prs` (Now / Inbox open), every unfinished work item whose `pr_url` is missing from the authored open list gets the same `get`, so a merge while Kelta was closed lands as `Merged` on the next launch. Each PR's end is published once per process.
+- Branch join: an authored PR whose `(repo, source_branch)` is an `Active` work item's repo binding and branch becomes that item's PR (`pr_url`, `PrOpen`, `work.updated`, `work.on_pr` once), e.g. when Claude ran `gh pr create`.
+- kelta-work listens to `pr.merged` / `pr.closed` (idempotent per item): `Merged` plus the guarded `on_merge` move (SETTINGS `[work] on_merge`), or `PrClosed`. The move never guesses between Done statuses.
 
 ### 8.5 Claude IDE bridge (kelta-server `ide`, `claude.ide_bridge`, off by default)
 
