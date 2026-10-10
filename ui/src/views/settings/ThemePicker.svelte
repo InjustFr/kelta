@@ -1,14 +1,15 @@
 <script lang="ts">
   // Settings → General (global layer): one card grid per mode for `app.dark_theme` / `app.light_theme`.
   // Arrows only move focus; Enter, Space or a click writes the slot (no write per focused card).
+  // Import theme... converts a VS Code theme file (#231) and makes it the theme of its base slot.
   import { tick } from 'svelte';
 
-  import type { ThemeDef } from '$lib/gen';
+  import type { JsonValue, ThemeDef } from '$lib/gen';
   import { settings, toasts } from '$lib/stores';
   import { colors, type ThemeMode } from '$lib/terminal/theme';
   import { resolveTheme } from '$lib/theme';
   import { BUILTIN } from '$lib/theme/builtin';
-  import { Badge, Icon, IconButton } from '$lib/ui';
+  import { Badge, Button, Icon, IconButton } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
   import { useEditor } from './lib/editor.svelte';
@@ -43,10 +44,39 @@
     };
   }
 
-  async function write(path: string, value: string | null): Promise<boolean> {
+  async function write(
+    path: string,
+    value: JsonValue,
+    context = 'Could not change the theme',
+  ): Promise<boolean> {
     const ok = value === null ? await editor.reset(path) : await editor.set(path, value);
-    if (!ok) toasts.error(editor.errors[path] ?? 'write failed', 'Could not change the theme');
+    if (!ok) toasts.error(editor.errors[path] ?? 'write failed', context);
     return ok;
+  }
+
+  const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+  let fileInput = $state<HTMLInputElement>();
+
+  async function importTheme(file: File): Promise<void> {
+    const context = 'Could not import the theme';
+    if (file.size > MAX_IMPORT_BYTES) return void toasts.error('The file is larger than 5 MB', context);
+    const { fromVscode, themeId } = await import('$lib/theme/import/vscode');
+    const def = fromVscode(await file.text(), file.name);
+    if (def instanceof Error) return void toasts.error(def.message, context);
+    const id = themeId(def.name, file.name);
+    const existing = settings.value()?.themes?.[id];
+    if (existing) {
+      const answer = await confirms.ask({
+        title: `Replace "${existing.name}"?`,
+        body: `It will be overwritten by "${def.name}" in config.toml.`,
+        actions: [{ id: 'replace', label: 'Replace', variant: 'primary' }],
+      });
+      if (answer !== 'replace') return;
+    }
+    if (!(await write(joinPath(['themes', id]), def, context))) return;
+    if (!(await write(`app.${SLOT[def.base]}`, id, context))) return;
+    focused[def.base] = id;
+    toasts.info(`Imported ${def.name} (used in ${def.base} mode)`);
   }
 
   async function remove(id: string, def: ThemeDef, list: Element | null): Promise<void> {
@@ -144,6 +174,26 @@
       </div>
     </div>
   {/each}
+  <div class="import">
+    <Button icon="folder-open" onclick={() => fileInput?.click()}>Import theme...</Button>
+    <p class="help">
+      VS Code colour theme (.json). Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings'
+      exports the theme you use now.
+    </p>
+    <input
+      bind:this={fileInput}
+      type="file"
+      accept=".json,.jsonc"
+      hidden
+      data-testid="theme-import-input"
+      onchange={(e) => {
+        const input = e.currentTarget;
+        const file = input.files?.[0];
+        input.value = ''; // picking the same file again still fires change
+        if (file) void importTheme(file);
+      }}
+    />
+  </div>
 </div>
 
 <style>
@@ -165,6 +215,18 @@
   .hint {
     margin: 0 0 var(--k-space-2);
     color: var(--k-warn);
+  }
+
+  .import {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--k-space-2);
+  }
+
+  .help {
+    margin: 0;
+    color: var(--k-fg-muted);
   }
 
   .grid {
