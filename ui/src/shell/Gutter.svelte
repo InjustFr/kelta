@@ -96,25 +96,50 @@
     touch-action: none;
   }
 
-  /* 5px hit area around the 1px bezel gap left of the line. */
+  /* Hit area centred on the split line, which is the middle of the housing gap. */
   .gutter.row {
-    width: 5px;
-    margin-left: -3px;
+    width: var(--k-gutter-hit);
+    margin-left: calc(var(--k-gutter-hit) / -2);
     cursor: col-resize;
   }
 
   .gutter:not(.row) {
-    height: 5px;
-    margin-top: -3px;
+    height: var(--k-gutter-hit);
+    margin-top: calc(var(--k-gutter-hit) / -2);
     cursor: row-resize;
   }
 
-  .gutter:hover,
-  .gutter.dragging {
+  /* Always-visible grip: says "this edge moves" without hovering. */
+  .gutter::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 28px;
+    border-radius: 2px;
     background: var(--k-border-strong);
+    opacity: 0.7;
+    transform: translate(-50%, -50%);
+    transition:
+      background var(--k-duration) ease-out,
+      opacity var(--k-duration) ease-out;
+  }
+
+  .gutter:not(.row)::after {
+    width: 28px;
+    height: 4px;
+  }
+
+  .gutter:hover::after,
+  .gutter.dragging::after,
+  .gutter:focus-visible::after {
+    background: var(--k-accent);
+    opacity: 1;
   }
 
   .gutter:focus-visible {
-    outline-offset: -1px;
+    outline-offset: -2px;
+    border-radius: var(--k-radius-sm);
   }
 </style>

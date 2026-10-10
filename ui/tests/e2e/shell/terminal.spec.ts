@@ -192,8 +192,8 @@ test.describe('terminal pane', () => {
       });
     }, SESSIONS.shopClaude);
     const badge = page.getByTestId('hooks-badge').first();
-    await expect(badge).toContainText('status hooks inactive');
-    await expect(page.getByTestId('status-hooks')).toContainText('Hooks inactive');
+    await expect(badge).toContainText('Live status off');
+    await expect(page.getByTestId('status-hooks')).toContainText('Live status off');
     const tabs = await page.getByTestId('tab').count();
     await badge.getByRole('button', { name: 'Fix' }).click();
     await expect(page.getByTestId('tab')).toHaveCount(tabs + 1);

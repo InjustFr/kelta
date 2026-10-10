@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
 
   import { appInfo } from '$lib/ipc/commands';
+  import { projects, ui } from '$lib/stores';
   import { IconButton } from '$lib/ui';
 
   type Dir = 'North' | 'South' | 'East' | 'West' | 'NorthEast' | 'NorthWest' | 'SouthEast' | 'SouthWest';
@@ -19,6 +20,7 @@
   ];
 
   let custom = $state(false);
+  const title = $derived(ui.inboxActive ? 'Now' : (projects.active?.name ?? 'Kelta'));
 
   onMount(() => {
     appInfo()
@@ -41,6 +43,7 @@
 {#if custom}
   <!-- Undecorated window: a bezel drag strip with the only window controls (no system title bar). -->
   <div class="titlebar" data-tauri-drag-region data-testid="titlebar">
+    <span class="title" data-tauri-drag-region>{title}</span>
     <span class="controls">
       <IconButton icon="minus" label="Minimize" size="sm" onclick={() => void win('minimize')} />
       <IconButton icon="square" label="Maximize" size="sm" onclick={() => void win('toggleMaximize')} />
@@ -56,15 +59,28 @@
   .titlebar {
     flex: none;
     height: var(--k-statusbar-height);
-    display: flex;
+    /* Equal side columns keep the title centred on the window, not on the leftover space. */
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: flex-end;
     padding: 0 var(--k-space-2);
     background: var(--k-bezel);
     user-select: none;
   }
 
+  .title {
+    grid-column: 2;
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
   .controls {
+    grid-column: 3;
+    justify-self: end;
     display: inline-flex;
     gap: var(--k-space-1);
   }
