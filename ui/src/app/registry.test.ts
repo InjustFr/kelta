@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { paneComponent, paneRegistry, settingsSections, sheetRegistry, tabHeaderRegistry } from './registry';
 
-describe('registries', () => {
+// The first import compiles every lazy view: far over vitest's 5 s default on a loaded machine.
+describe('registries', { timeout: 60_000 }, () => {
   it('every pane kind except empty has a lazy view', async () => {
     const kinds = Object.keys(paneRegistry).sort();
     expect(kinds).toEqual(
