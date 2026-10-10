@@ -587,8 +587,8 @@ impl PluginHost {
         Ok(TicketRef { account: AccountId::new(account), key, id })
     }
 
-    /// Config `[[commands]]` + plugin `contributes.commands` (keybindings applied) + ticket/review
-    /// action buttons (`<plugin>/<id>`, `when = ticket|review`).
+    /// Config `[[commands]]` + plugin `contributes.commands` (keybindings applied) + ticket/review/work
+    /// actions (`<plugin>/<id>`, `when = ticket|review|work`) + one `<plugin>/open:<screen>` per screen.
     pub(crate) fn command_defs(&self, project: Option<&ProjectId>) -> Vec<CommandEntry> {
         let mut out: Vec<CommandEntry> = self
             .settings(project)
@@ -610,6 +610,7 @@ impl PluginHost {
             for (when, list) in [
                 (CommandWhen::Ticket, &m.contributes.ticket_actions),
                 (CommandWhen::Review, &m.contributes.review_actions),
+                (CommandWhen::Work, &m.contributes.work_actions),
             ] {
                 for b in list {
                     out.push(CommandEntry {
@@ -624,6 +625,24 @@ impl PluginHost {
                         plugin: Some(e.clone()),
                     });
                 }
+            }
+            // `Open <screen>` in the palette: the user opens it, as from the screen picker, so the
+            // plugin's grants do not apply (`plugin: None`); the explicit plugin keeps it to its own screens.
+            for s in &m.contributes.screens {
+                out.push(CommandEntry {
+                    def: CommandDef {
+                        id: format!("{}/open:{}", e.id, s.id),
+                        title: format!("Open {}", s.title),
+                        r#do: vec![ActionDef::OpenScreen {
+                            plugin: Some(e.id.to_string()),
+                            screen: s.id.clone(),
+                            params: None,
+                            placement: None,
+                        }],
+                        ..CommandDef::default()
+                    },
+                    plugin: None,
+                });
             }
         }
         out

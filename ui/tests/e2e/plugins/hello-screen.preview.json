@@ -53,6 +53,7 @@
       ],
       "ticket_actions": [],
       "review_actions": [],
+      "work_actions": [],
       "settings": {
         "schema": "settings.schema.json"
       }

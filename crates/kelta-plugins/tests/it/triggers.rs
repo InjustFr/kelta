@@ -508,3 +508,56 @@ do = [{ action = "toast", text = "{pr.number} {pr.head}" }]
     let kelta_proto::model::PaneContent::PluginScreen { params, .. } = req.content else { panic!() };
     assert_eq!(params, json!({ "ticket": w.ticket.unwrap().key, "work": w.id, "n": [1, w.branch] }));
 }
+
+#[tokio::test]
+async fn work_actions_and_open_screen_commands() {
+    let env = common::Env::new();
+    let m = common::manifest(
+        "acts",
+        &[],
+        r#"
+[[contributes.screens]]
+id = "s"
+title = "Stats"
+entry = "s.html"
+
+[[contributes.screens]]
+id = "g"
+title = "Global"
+entry = "g.html"
+scope = "global"
+
+[[contributes.work_actions]]
+id = "deploy"
+title = "Deploy"
+do = [{ action = "toast", text = "{branch} {worktree} {work.id} {project.id}" }]
+"#,
+    );
+    env.write_plugin("acts", &m, &[("s.html", "<p>s</p>"), ("g.html", "<p>g</p>")]);
+    let cmds = env.host.commands().await.unwrap();
+    let ids: Vec<_> = cmds.iter().filter(|c| c.id.starts_with("acts/")).map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, ["acts/deploy", "acts/open:s", "acts/open:g"]);
+    assert_eq!(cmds.iter().find(|c| c.id == "acts/open:s").unwrap().title, "Open Stats");
+
+    // The work menu's ctx: the work item and its project.
+    let w = kelta_proto::samples::work_item();
+    env.core.add_work_item(w.clone());
+    let mut ctx = TemplateCtx { work_item_id: Some(w.id.clone()), ..Default::default() };
+    ctx.extra.insert("project_id".into(), w.project_id.to_string());
+    env.host.command_run("acts/deploy", ctx).await.unwrap();
+    assert_eq!(
+        toasts(&env).pop().unwrap(),
+        format!("{} {} {} {}", w.branch, w.worktree.display(), w.id, w.project_id)
+    );
+
+    // `Open <screen>` is the user opening it: no `ui.open` grant needed, in the given project.
+    for (cmd, project) in [("acts/open:s", "shop"), ("acts/open:g", ProjectId::HOME)] {
+        let mut ctx = TemplateCtx::default();
+        ctx.extra.insert("project_id".into(), project.into());
+        env.host.command_run(cmd, ctx).await.unwrap();
+        assert_eq!(env.core.opened().pop().unwrap().0.as_str(), project);
+    }
+
+    env.host.enable(&PluginId::new("acts"), false).await.unwrap();
+    assert!(!env.host.commands().await.unwrap().iter().any(|c| c.id.starts_with("acts/")));
+}

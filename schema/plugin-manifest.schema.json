@@ -719,7 +719,8 @@
         "settings": null,
         "ticket_actions": [],
         "tools": [],
-        "triggers": []
+        "triggers": [],
+        "work_actions": []
       },
       "properties": {
         "commands": {
@@ -1357,6 +1358,7 @@
                   "terminal",
                   "ticket",
                   "review",
+                  "work",
                   "always",
                   null
                 ],
@@ -1394,7 +1396,7 @@
           "default": [],
           "items": {
             "additionalProperties": false,
-            "description": "Button on ticket/review detail panes.",
+            "description": "Button on ticket/review detail panes, row of the work menu.",
             "properties": {
               "do": {
                 "items": {
@@ -2201,7 +2203,7 @@
           "default": [],
           "items": {
             "additionalProperties": false,
-            "description": "Button on ticket/review detail panes.",
+            "description": "Button on ticket/review detail panes, row of the work menu.",
             "properties": {
               "do": {
                 "items": {
@@ -3822,6 +3824,632 @@
                 "type": "string"
               }
             },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "work_actions": {
+          "default": [],
+          "description": "Rows of the work menu (⌘.), after the built-ins.",
+          "items": {
+            "additionalProperties": false,
+            "description": "Button on ticket/review detail panes, row of the work menu.",
+            "properties": {
+              "do": {
+                "items": {
+                  "description": "Trigger/command action; serde tag `action` (PLUGINS §3.1).",
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "notify",
+                          "type": "string"
+                        },
+                        "body": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "urgency": {
+                          "default": null,
+                          "enum": [
+                            "low",
+                            "normal",
+                            "critical",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "title"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "toast",
+                          "type": "string"
+                        },
+                        "level": {
+                          "default": null,
+                          "enum": [
+                            "info",
+                            "warn",
+                            "error",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "text"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "run",
+                          "type": "string"
+                        },
+                        "args": {
+                          "default": [],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "command": {
+                          "type": "string"
+                        },
+                        "cwd": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "env": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "default": {},
+                          "type": "object"
+                        },
+                        "show": {
+                          "default": null,
+                          "enum": [
+                            "none",
+                            "toast_on_error",
+                            "pane",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stdin": {
+                          "default": null,
+                          "enum": [
+                            "event",
+                            "none",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "timeout_ms": {
+                          "default": null,
+                          "format": "uint64",
+                          "minimum": 0,
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "command"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "spawn_session",
+                          "type": "string"
+                        },
+                        "args": {
+                          "default": [],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "command": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "cwd": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "focus": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "placement": {
+                          "anyOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "enum": [
+                                    "new_tab",
+                                    "split_right",
+                                    "split_down",
+                                    "replace_focused"
+                                  ],
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "focused",
+                                  "description": "Focus an existing pane with the same content if any.",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "template": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "send_keys",
+                          "type": "string"
+                        },
+                        "bracketed": {
+                          "default": null,
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "session": {
+                          "description": "`\"{event.session_id}\"` | `\"claude\"` | `\"editor\"`.",
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "session",
+                        "text"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "open_tool",
+                          "type": "string"
+                        },
+                        "placement": {
+                          "anyOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "enum": [
+                                    "new_tab",
+                                    "split_right",
+                                    "split_down",
+                                    "replace_focused"
+                                  ],
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "focused",
+                                  "description": "Focus an existing pane with the same content if any.",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "tool": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "tool"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "open_screen",
+                          "type": "string"
+                        },
+                        "params": {
+                          "default": null
+                        },
+                        "placement": {
+                          "anyOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "enum": [
+                                    "new_tab",
+                                    "split_right",
+                                    "split_down",
+                                    "replace_focused"
+                                  ],
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "focused",
+                                  "description": "Focus an existing pane with the same content if any.",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "plugin": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "screen": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "screen"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "start_work",
+                          "type": "string"
+                        },
+                        "project": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ticket": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "ticket"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "transition_ticket",
+                          "type": "string"
+                        },
+                        "to_category": {
+                          "default": null,
+                          "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                          "enum": [
+                            "todo",
+                            "in_progress",
+                            "in_review",
+                            "done",
+                            "unknown",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "to_name": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "comment_ticket",
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "body"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "assign_ticket",
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "`\"me\"` | `\"none\"`.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "to"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "http",
+                          "type": "string"
+                        },
+                        "body": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "headers": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "default": {},
+                          "type": "object"
+                        },
+                        "method": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "secret_headers": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "properties": {
+                                  "format": {
+                                    "default": null,
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "setting": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "setting"
+                                ],
+                                "type": "object"
+                              }
+                            ],
+                            "description": "Value of a `secret_headers` entry (PLUGINS §3.1). In a plugin, a string names one of the\nplugin's own `x-kelta-secret` settings; in user config, it is a SecretRef. The header is\n`format` with `{secret}` replaced by the resolved value (default `{secret}`)."
+                          },
+                          "default": {},
+                          "type": "object"
+                        },
+                        "timeout_ms": {
+                          "default": null,
+                          "format": "uint64",
+                          "minimum": 0,
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "focus",
+                          "type": "string"
+                        },
+                        "project": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "session": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "set_attention",
+                          "type": "string"
+                        },
+                        "level": {
+                          "description": "Ordered; max-aggregated. Serialized as a string (`\"none\"`, `\"activity\"`, ...).",
+                          "enum": [
+                            "none",
+                            "activity",
+                            "done",
+                            "error",
+                            "needs_input"
+                          ],
+                          "type": "string"
+                        },
+                        "session": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "session",
+                        "level"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "prompt",
+                          "type": "string"
+                        },
+                        "no": {
+                          "default": [],
+                          "items": {
+                            "$ref": "#/$defs/ActionDef"
+                          },
+                          "type": "array"
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "yes": {
+                          "items": {
+                            "$ref": "#/$defs/ActionDef"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "text",
+                        "yes"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "const": "command",
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "id"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "do"
+            ],
             "type": "object"
           },
           "type": "array"
