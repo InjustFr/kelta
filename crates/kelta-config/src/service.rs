@@ -16,7 +16,7 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId};
 use kelta_proto::settings::{
     EffectiveSettings, Layer, ProjectConfig, REPO_EXEC_KEYS, RuntimeOverrides, Settings, SettingsDiff,
-    ValidationIssue,
+    Severity, ValidationIssue,
 };
 use parking_lot::{Mutex, RwLock};
 use serde_json::{Map, Value};
@@ -286,6 +286,7 @@ fn build_runtime(overrides: &RuntimeOverrides) -> (Value, Vec<ConfigIssue>) {
                                 message: format!("runtime override ignored: {}", b.message),
                                 line: None,
                                 col: None,
+                                severity: Severity::Error,
                             },
                         });
                     }
@@ -298,6 +299,7 @@ fn build_runtime(overrides: &RuntimeOverrides) -> (Value, Vec<ConfigIssue>) {
                     message: "runtime override ignored: invalid key".into(),
                     line: None,
                     col: None,
+                    severity: Severity::Error,
                 },
             }),
         }
@@ -494,6 +496,7 @@ impl ConfigService {
                     message: format!("cannot read file: {}", e.message),
                     line: None,
                     col: None,
+                    severity: Severity::Error,
                 }];
                 return f;
             }
@@ -543,28 +546,11 @@ impl ConfigService {
             (wrapped, raw)
         } else {
             let mut value = parsed.value.clone();
-            // `tools` is personal: a repo or project file's tools are reported and ignored, the rest
-            // still applies (a failed migration must not make the project vanish).
-            let personal =
-                kind != FileKind::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some();
-            let mut warnings = Vec::new();
-            if personal {
-                warnings.push(RawIssue::new(
-                    &["tools".to_owned()],
-                    if kind == FileKind::Repo {
-                        validate::REPO_TOOLS_PERSONAL
-                    } else {
-                        validate::PROJECT_TOOLS_GLOBAL
-                    },
-                ));
-            }
-            let raw = if kind == FileKind::Project {
-                validate::lenient_project_color(&mut value, stem, &mut warnings)
-            } else {
-                validate::layer_issues(kind.layer(), &value, stem)
-            };
+            // `tools` is personal and a project colour cosmetic: reported and ignored, the rest still
+            // applies (a failed migration must not make the project vanish).
+            let (raw, warnings) = validate::lenient_issues(kind.layer(), &mut value, stem);
             if raw.is_empty() && !warnings.is_empty() {
-                let issues = validate::position(&text, Some(&parsed), warnings);
+                let issues = validate::position_warnings(&text, Some(&parsed), warnings);
                 return FileLayer { path: path.to_owned(), exists, text, hash, value, valid: true, issues };
             }
             (value, raw)
@@ -800,6 +786,7 @@ impl ConfigService {
                                 .into(),
                             line: None,
                             col: None,
+                            severity: Severity::Error,
                         });
                     }
                     self.try_project(&plugin_defaults, &gv, &file, &repos, &cfg)

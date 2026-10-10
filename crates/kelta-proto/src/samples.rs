@@ -1182,6 +1182,7 @@ pub fn all() -> Vec<Fixture> {
                 message: "must be ≤ 40".into(),
                 line: Some(12),
                 col: Some(13),
+                severity: Severity::Error,
             }]
         ),
         fx!(

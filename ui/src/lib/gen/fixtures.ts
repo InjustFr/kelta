@@ -1817,7 +1817,8 @@ export const validationIssues: ValidationIssue[] = [
     "col": 13,
     "line": 12,
     "message": "must be ≤ 40",
-    "path": "terminal.font_size"
+    "path": "terminal.font_size",
+    "severity": "error"
   }
 ];
 
