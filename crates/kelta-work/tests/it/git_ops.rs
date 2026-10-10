@@ -204,7 +204,8 @@ async fn git_timeout_kills_hanging_fetch() {
     let fx = Fx::new();
     git(&fx.repo, &["config", "remote.origin.uploadpack", "sleep 30; git-upload-pack"]);
     let t0 = Instant::now();
-    let e = kelta_work::git::fetch(&fx.repo, "origin", &["main"], Duration::from_secs(1)).await.unwrap_err();
+    let e =
+        kelta_work::git::fetch(&fx.repo, "origin", &["main"], Duration::from_millis(200)).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Timeout, "{e:?}");
     assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
 

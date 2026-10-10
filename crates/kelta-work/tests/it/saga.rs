@@ -195,34 +195,40 @@ async fn start_work_end_to_end() {
 #[tokio::test]
 async fn crash_after_every_step_resumes_without_duplicates() {
     need_git!();
-    for step in WORK_STEPS {
-        let fx = Fx::new();
-        let w = fx.service();
-        let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
-        w.set_crash_after(Some(step));
-        let err = w.start(plan).await.unwrap_err();
-        assert!(err.message.contains("simulated crash"), "{step}: {err:?}");
-        drop(w);
-        let items = fx.store_items().await;
-        assert_eq!(items.len(), 1, "{step}");
-        let expect = if *step == "persist" { WorkState::Active } else { WorkState::Starting };
-        assert_eq!(items[0].state, expect, "{step}");
+    // Each step gets its own fixture; the replays are independent, so they run concurrently.
+    let fxs: Vec<Fx> = std::thread::scope(|s| {
+        let hs: Vec<_> = WORK_STEPS.iter().map(|_| s.spawn(Fx::new)).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    futures::future::join_all(WORK_STEPS.iter().zip(&fxs).map(|(step, fx)| crash_and_resume(step, fx))).await;
+}
 
-        // "Restart": a fresh service over the same store/core resumes the saga.
-        let w2 = fx.service();
-        let done = w2.resume(&items[0].id).await.unwrap();
-        assert_eq!(done.state, WorkState::Active, "{step}: {:?}", done.steps);
-        assert!(done.steps.iter().all(|s| s.status == StepStatus::Done), "{step}: {:?}", done.steps);
-        assert_eq!(fx.worktree_count(), 2, "{step}: one worktree");
-        assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), 1, "{step}: one claude");
-        assert_eq!(fx.spawned_of(|k| matches!(k, SessionKind::Editor { .. })).len(), 1, "{step}: one editor");
-        let t = fx.tracker.calls();
-        let count = |p: &str| t.iter().filter(|c| c.starts_with(p)).count();
-        assert_eq!(count("assign:"), 1, "{step}: {t:?}");
-        assert_eq!(count("transition:"), 1, "{step}: {t:?}");
-        let new_tabs = fx.core.opened().iter().filter(|(_, r)| r.placement == Placement::NewTab).count();
-        assert_eq!(new_tabs, 1, "{step}: one tab");
-    }
+async fn crash_and_resume(step: &str, fx: &Fx) {
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    w.set_crash_after(Some(step));
+    let err = w.start(plan).await.unwrap_err();
+    assert!(err.message.contains("simulated crash"), "{step}: {err:?}");
+    drop(w);
+    let items = fx.store_items().await;
+    assert_eq!(items.len(), 1, "{step}");
+    let expect = if step == "persist" { WorkState::Active } else { WorkState::Starting };
+    assert_eq!(items[0].state, expect, "{step}");
+
+    // "Restart": a fresh service over the same store/core resumes the saga.
+    let w2 = fx.service();
+    let done = w2.resume(&items[0].id).await.unwrap();
+    assert_eq!(done.state, WorkState::Active, "{step}: {:?}", done.steps);
+    assert!(done.steps.iter().all(|s| s.status == StepStatus::Done), "{step}: {:?}", done.steps);
+    assert_eq!(fx.worktree_count(), 2, "{step}: one worktree");
+    assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), 1, "{step}: one claude");
+    assert_eq!(fx.spawned_of(|k| matches!(k, SessionKind::Editor { .. })).len(), 1, "{step}: one editor");
+    let t = fx.tracker.calls();
+    let count = |p: &str| t.iter().filter(|c| c.starts_with(p)).count();
+    assert_eq!(count("assign:"), 1, "{step}: {t:?}");
+    assert_eq!(count("transition:"), 1, "{step}: {t:?}");
+    let new_tabs = fx.core.opened().iter().filter(|(_, r)| r.placement == Placement::NewTab).count();
+    assert_eq!(new_tabs, 1, "{step}: one tab");
 }
 
 impl Fx {
@@ -258,7 +264,7 @@ async fn startup_marks_interrupted_sagas_failed_then_retry() {
 }
 
 #[tokio::test]
-async fn collision_suffix_and_reuse() {
+async fn collision_suffix() {
     need_git!();
     let fx = Fx::new();
     git(&fx.repo, &["branch", "feat/SHOP-141-add-login-form"]);
@@ -273,8 +279,11 @@ async fn collision_suffix_and_reuse() {
     assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
     assert_eq!(item.branch, "feat/SHOP-141-add-login-form-2");
     assert!(item.worktree.to_string_lossy().ends_with("SHOP-141-add-login-form-2"));
+}
 
-    // Reuse: the existing branch gets its own worktree.
+#[tokio::test]
+async fn collision_reuse_gives_the_existing_branch_its_own_worktree() {
+    need_git!();
     let fx = Fx::new();
     git(&fx.repo, &["branch", "feat/SHOP-141-add-login-form"]);
     let w = fx.service();
@@ -282,8 +291,11 @@ async fn collision_suffix_and_reuse() {
     let item = w.start(plan).await.unwrap();
     assert_eq!(item.branch, "feat/SHOP-141-add-login-form");
     assert_eq!(git(&item.worktree, &["rev-parse", "--abbrev-ref", "HEAD"]), "feat/SHOP-141-add-login-form");
+}
 
-    // A branch already checked out in another worktree → that worktree is reused.
+#[tokio::test]
+async fn collision_with_a_checked_out_branch_reuses_its_worktree() {
+    need_git!();
     let fx = Fx::new();
     let other = fx.tmp.path().join("elsewhere");
     git(
