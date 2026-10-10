@@ -131,6 +131,10 @@ pub trait Tracker: Send + Sync {
     async fn sources(&self, _query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         Err(KeltaError::unsupported("this tracker cannot list sources"))
     }
+    /// First page of `view`'s tickets matching the free `text`, searched by the provider (not the cache).
+    async fn search(&self, _view: &TrackerView, _text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot search"))
+    }
 }
 
 #[async_trait]

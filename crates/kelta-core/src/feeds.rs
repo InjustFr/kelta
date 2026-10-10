@@ -403,7 +403,6 @@ impl Core {
         let mut out: Vec<TicketQuery> = Vec::new();
         for p in projects {
             let Some(b) = &p.tracker else { continue };
-            // shortcut: first page per source, add per-source Load more when needed
             // an unknown view id (source removed or renamed) falls back to the union
             let views: Vec<TrackerView> = match view_id.and_then(|v| b.views.iter().find(|x| x.id == v)) {
                 Some(v) => vec![v.clone()],
@@ -565,27 +564,50 @@ impl Core {
             return Ok(TicketPage::default());
         }
         let single = queries.len() == 1;
-        let cursor = if single { cursor } else { None };
-        let results = futures::future::join_all(
-            queries.iter().map(|q| self.load_ticket_query(q, cursor.clone(), refresh)),
-        )
+        // Several queries page together: their cursor is one provider cursor per query (cache key → cursor).
+        let cursors: Option<BTreeMap<String, Cursor>> = match cursor.clone().filter(|_| !single) {
+            None => None,
+            Some(Cursor::Token(t)) => Some(
+                serde_json::from_str(&t)
+                    .map_err(|_| KeltaError::invalid("tickets cursor of another list"))?,
+            ),
+            Some(_) => return Err(KeltaError::invalid("tickets cursor of another list")),
+        };
+        let queries: Vec<TicketQuery> = match &cursors {
+            Some(m) => queries.into_iter().filter(|q| m.contains_key(&q.cache_key)).collect(),
+            None => queries,
+        };
+        let results = futures::future::join_all(queries.iter().map(|q| {
+            let c = match &cursors {
+                Some(m) => m.get(&q.cache_key).cloned(),
+                None => cursor.clone().filter(|_| single),
+            };
+            self.load_ticket_query(q, c, refresh)
+        }))
         .await;
         let mut pages = Vec::new();
         let mut stale = false;
         let mut errors = Vec::new();
-        let mut next = None;
+        let mut nexts = BTreeMap::new();
         for (q, (page, s, e)) in queries.iter().zip(results) {
             stale |= s;
             if let Some(e) = e {
                 errors.push(e);
             }
             if let Some(p) = page {
-                if single {
-                    next = p.next.clone();
+                if let Some(n) = p.next {
+                    nexts.insert(q.cache_key.clone(), n);
                 }
                 pages.push((p.items, q.projects.clone(), q.view.id.clone()));
             }
         }
+        let next = if single || nexts.is_empty() {
+            nexts.into_values().next()
+        } else {
+            Some(Cursor::Token(
+                serde_json::to_string(&nexts).map_err(|e| KeltaError::internal(e.to_string()))?,
+            ))
+        };
         let work = self.work_by_ticket().await;
         let reviews = self.cached_reviews().await;
         let mut items = merge_tickets(pages, &work);
@@ -595,45 +617,68 @@ impl Core {
         Ok(TicketPage { items, next, stale, errors })
     }
 
-    /// `tracker_search` over the (cached) lists of a scope.
+    /// `tracker_search`: each list query of a scope searched by its tracker. A tracker that cannot search
+    /// (or fails to) and an empty `text` fall back to the cached first page, filtered by key and title.
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
-        let page = self.tracker_list(scope.clone(), None, None, None, false).await?;
-        let needle = text.trim().to_lowercase();
-        let hits: Vec<TicketItem> = page
-            .items
-            .into_iter()
-            .filter(|i| {
-                needle.is_empty()
-                    || i.ticket.r#ref.key.to_lowercase().contains(&needle)
-                    || i.ticket.title.to_lowercase().contains(&needle)
-            })
-            .take(50)
-            .collect();
-        // a key outside every list (someone else's or nobody's ticket): resolve it by GET on each account
+        self.rt.capture();
+        if let Scope::Project { id } = &scope
+            && !self.project_exists(id)
+        {
+            return Err(KeltaError::not_found(format!("project {id}")));
+        }
         let key = text.trim();
-        if !hits.is_empty()
+        let needle = key.to_lowercase();
+        let queries = self.ticket_queries(&scope, None, None);
+        let found = futures::future::join_all(queries.iter().map(|q| async {
+            if !key.is_empty()
+                && let Ok(t) = self.tracker_of(&q.account)
+                && let Ok(items) = t.search(&q.view, key).await
+            {
+                return items;
+            }
+            let (page, _, _) = self.load_ticket_query(q, None, false).await;
+            let hit = |t: &Ticket| {
+                t.r#ref.key.to_lowercase().contains(&needle) || t.title.to_lowercase().contains(&needle)
+            };
+            page.map(|p| p.items).unwrap_or_default().into_iter().filter(hit).collect()
+        }))
+        .await;
+        let pages =
+            queries.iter().zip(found).map(|(q, items)| (items, q.projects.clone(), q.view.id.clone()));
+        let work = self.work_by_ticket().await;
+        let reviews = self.cached_reviews().await;
+        let mut hits = merge_tickets(pages.collect(), &work);
+        hits.truncate(50);
+        for i in &mut hits {
+            self.enrich(i, &work, &reviews);
+        }
+        // a key outside every list (someone else's or nobody's ticket): resolve it by GET on each account
+        if hits.iter().any(|h| h.ticket.r#ref.key.eq_ignore_ascii_case(key))
             || !key.contains(|c: char| c.is_ascii_digit())
             || key.contains(char::is_whitespace)
         {
             return Ok(hits);
         }
         let mut tried: Vec<AccountId> = Vec::new();
-        for q in self.ticket_queries(&scope, None, None) {
+        for q in queries {
             if tried.contains(&q.account) {
                 continue;
             }
             tried.push(q.account.clone());
             let probe = TicketRef { account: q.account, key: key.into(), id: key.into() };
             if let Ok(d) = self.tracker_get(&probe).await {
-                let work = self.work_by_ticket().await;
-                return Ok(vec![TicketItem {
-                    work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
-                    ticket: d.ticket,
-                    project_ids: q.projects,
-                    prs: d.prs,
-                    caps: d.caps,
-                    ..TicketItem::default()
-                }]);
+                hits.insert(
+                    0,
+                    TicketItem {
+                        work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
+                        ticket: d.ticket,
+                        project_ids: q.projects,
+                        prs: d.prs,
+                        caps: d.caps,
+                        ..TicketItem::default()
+                    },
+                );
+                break;
             }
         }
         Ok(hits)

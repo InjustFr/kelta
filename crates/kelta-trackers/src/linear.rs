@@ -183,6 +183,47 @@ impl LinearTracker {
         }
         self.ticket_from(&r["issue"]).ok_or_else(|| KeltaError::upstream("linear issueUpdate without issue"))
     }
+
+    /// `list`, narrowed to the tickets matching `text` when set.
+    async fn issues(
+        &self,
+        view: &TrackerView,
+        cursor: Option<Cursor>,
+        text: Option<&str>,
+    ) -> Result<Page<Ticket>, KeltaError> {
+        // `After("<pages fetched>:<endCursor>")` keeps the page cap across calls.
+        let (pages, after) = match cursor {
+            None => (0, None),
+            Some(Cursor::After(c)) => {
+                let (n, after) = c.split_once(':').ok_or_else(|| KeltaError::invalid("bad linear cursor"))?;
+                (
+                    n.parse::<u32>().map_err(|_| KeltaError::invalid("bad linear cursor"))?,
+                    Some(after.to_owned()),
+                )
+            }
+            Some(_) => return Err(KeltaError::invalid("linear expects an after cursor")),
+        };
+        let q = format!(
+            "query($filter: IssueFilter, $first: Int, $after: String) {{ issues(filter: $filter, first: $first, \
+             after: $after, orderBy: updatedAt) {{ nodes {{ {ISSUE} }} pageInfo {{ hasNextPage endCursor }} }} }}"
+        );
+        let mut filter = filter_of(view);
+        if let Some(t) = text {
+            let m = |f: &str| json!({f: {"containsIgnoreCase": t}});
+            filter["or"] = json!([m("title"), m("description")]);
+        }
+        let d = self.gql(&q, json!({"filter": filter, "first": PAGE_SIZE, "after": after})).await?;
+        let issues = &d["issues"];
+        let items = issues["nodes"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|i| self.ticket_from(i)).collect())
+            .unwrap_or_default();
+        let next = issues["pageInfo"]["endCursor"]
+            .as_str()
+            .filter(|_| issues["pageInfo"]["hasNextPage"].as_bool() == Some(true) && pages + 1 < MAX_PAGES)
+            .map(|c| Cursor::After(format!("{}:{c}", pages + 1)));
+        Ok(Page { items, next })
+    }
 }
 
 fn states_of(nodes: &Value) -> Vec<Value> {
@@ -221,33 +262,11 @@ impl Tracker for LinearTracker {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        // `After("<pages fetched>:<endCursor>")` keeps the page cap across calls.
-        let (pages, after) = match cursor {
-            None => (0, None),
-            Some(Cursor::After(c)) => {
-                let (n, after) = c.split_once(':').ok_or_else(|| KeltaError::invalid("bad linear cursor"))?;
-                (
-                    n.parse::<u32>().map_err(|_| KeltaError::invalid("bad linear cursor"))?,
-                    Some(after.to_owned()),
-                )
-            }
-            Some(_) => return Err(KeltaError::invalid("linear expects an after cursor")),
-        };
-        let q = format!(
-            "query($filter: IssueFilter, $first: Int, $after: String) {{ issues(filter: $filter, first: $first, \
-             after: $after, orderBy: updatedAt) {{ nodes {{ {ISSUE} }} pageInfo {{ hasNextPage endCursor }} }} }}"
-        );
-        let d = self.gql(&q, json!({"filter": filter_of(view), "first": PAGE_SIZE, "after": after})).await?;
-        let issues = &d["issues"];
-        let items = issues["nodes"]
-            .as_array()
-            .map(|a| a.iter().filter_map(|i| self.ticket_from(i)).collect())
-            .unwrap_or_default();
-        let next = issues["pageInfo"]["endCursor"]
-            .as_str()
-            .filter(|_| issues["pageInfo"]["hasNextPage"].as_bool() == Some(true) && pages + 1 < MAX_PAGES)
-            .map(|c| Cursor::After(format!("{}:{c}", pages + 1)));
-        Ok(Page { items, next })
+        self.issues(view, cursor, None).await
+    }
+
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        Ok(self.issues(view, None, Some(text)).await?.items)
     }
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {

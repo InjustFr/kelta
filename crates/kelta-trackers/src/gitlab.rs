@@ -292,6 +292,73 @@ impl GitlabIssues {
         let v = self.json(HttpRequest::put(self.issue_url(project, iid, "")).json(body)).await?.body;
         self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))
     }
+
+    /// `list`, narrowed to the tickets matching `text` when set.
+    async fn issues(
+        &self,
+        view: &TrackerView,
+        cursor: Option<Cursor>,
+        text: Option<&str>,
+    ) -> Result<Page<Ticket>, KeltaError> {
+        self.remember_view(view);
+        let page = match cursor {
+            None => 1,
+            Some(Cursor::Page(p)) => p.max(1),
+            Some(_) => return Err(KeltaError::invalid("gitlab issues expect a page cursor")),
+        };
+        let url = match view.project.as_deref().filter(|p| !p.is_empty()) {
+            Some(p) => format!("{}/projects/{}/issues", self.api, percent_encode(p)),
+            None => format!("{}/issues", self.api),
+        };
+        // `who` wins over the legacy `scope`.
+        let (scope, unassigned) = match view.who {
+            Some(Who::Mine) => ("assigned_to_me", false),
+            Some(Who::Unassigned) => ("all", true),
+            Some(Who::Anyone) => ("all", false),
+            None if view.scope.as_deref() == Some("all") => ("all", false),
+            None => ("assigned_to_me", false),
+        };
+        let mut req = HttpRequest::get(url)
+            .query("scope", scope)
+            .query("state", state_param(view))
+            .query("order_by", "updated_at")
+            .query("sort", "desc")
+            .query("per_page", PER_PAGE.to_string())
+            .query("page", page.to_string());
+        if unassigned {
+            req = req.query("assignee_id", "None");
+        }
+        if let Some(t) = text {
+            req = req.query("search", t);
+        }
+        if view.current_iteration {
+            // Free tier has no iterations: a milestone is the timebox. REST's `milestone_id=Started` uses the
+            // legacy rule (start date set and past, due date ignored), so a project picks its own milestone.
+            match view.project.as_deref().filter(|p| !p.is_empty()) {
+                Some(p) => {
+                    let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
+                    let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
+                    match current_milestone(&ms, &today()) {
+                        Some(title) => req = req.query("milestone", title),
+                        None => return Ok(Page { items: vec![], next: None }),
+                    }
+                }
+                // shortcut: legacy `Started` semantics without a project, pick per project when views need it.
+                None => req = req.query("milestone_id", "Started"),
+            }
+        }
+        if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
+            req = req.query("labels", l.join(","));
+        }
+        let resp = self.json(req.with_etag()).await?;
+        let items: Vec<Ticket> = resp
+            .body
+            .as_array()
+            .map(|a| a.iter().filter_map(|i| self.ticket_from(i)).collect())
+            .unwrap_or_default();
+        let has_next = resp.headers.get("x-next-page").is_some_and(|v| !v.trim().is_empty());
+        Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
+    }
 }
 
 fn state_param(view: &TrackerView) -> &'static str {
@@ -329,61 +396,11 @@ impl Tracker for GitlabIssues {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        self.remember_view(view);
-        let page = match cursor {
-            None => 1,
-            Some(Cursor::Page(p)) => p.max(1),
-            Some(_) => return Err(KeltaError::invalid("gitlab issues expect a page cursor")),
-        };
-        let url = match view.project.as_deref().filter(|p| !p.is_empty()) {
-            Some(p) => format!("{}/projects/{}/issues", self.api, percent_encode(p)),
-            None => format!("{}/issues", self.api),
-        };
-        // `who` wins over the legacy `scope`.
-        let (scope, unassigned) = match view.who {
-            Some(Who::Mine) => ("assigned_to_me", false),
-            Some(Who::Unassigned) => ("all", true),
-            Some(Who::Anyone) => ("all", false),
-            None if view.scope.as_deref() == Some("all") => ("all", false),
-            None => ("assigned_to_me", false),
-        };
-        let mut req = HttpRequest::get(url)
-            .query("scope", scope)
-            .query("state", state_param(view))
-            .query("order_by", "updated_at")
-            .query("sort", "desc")
-            .query("per_page", PER_PAGE.to_string())
-            .query("page", page.to_string());
-        if unassigned {
-            req = req.query("assignee_id", "None");
-        }
-        if view.current_iteration {
-            // Free tier has no iterations: a milestone is the timebox. REST's `milestone_id=Started` uses the
-            // legacy rule (start date set and past, due date ignored), so a project picks its own milestone.
-            match view.project.as_deref().filter(|p| !p.is_empty()) {
-                Some(p) => {
-                    let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
-                    let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
-                    match current_milestone(&ms, &today()) {
-                        Some(title) => req = req.query("milestone", title),
-                        None => return Ok(Page { items: vec![], next: None }),
-                    }
-                }
-                // shortcut: legacy `Started` semantics without a project, pick per project when views need it.
-                None => req = req.query("milestone_id", "Started"),
-            }
-        }
-        if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
-            req = req.query("labels", l.join(","));
-        }
-        let resp = self.json(req.with_etag()).await?;
-        let items: Vec<Ticket> = resp
-            .body
-            .as_array()
-            .map(|a| a.iter().filter_map(|i| self.ticket_from(i)).collect())
-            .unwrap_or_default();
-        let has_next = resp.headers.get("x-next-page").is_some_and(|v| !v.trim().is_empty());
-        Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
+        self.issues(view, cursor, None).await
+    }
+
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        Ok(self.issues(view, None, Some(text)).await?.items)
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
