@@ -193,7 +193,7 @@ describe('TicketsPane states', () => {
     await waitFor(() => expect(card(container, 'SHOP-151')).toBeNull());
     expect(card(container, 'SHOP-155')).not.toBeNull();
     await fireEvent.input(filter, { target: { value: 'zzzz' } });
-    expect(await screen.findByText('No ticket matches the filter')).toBeTruthy();
+    expect(await screen.findByText('No tickets match "zzzz".')).toBeTruthy();
   });
 
   it('shows the error state with a retry when nothing could be loaded', async () => {
@@ -224,7 +224,7 @@ describe('TicketsPane states', () => {
         focused: true,
       },
     });
-    expect(await screen.findByText('No tracker bound')).toBeTruthy();
+    expect(await screen.findByText(/^No tracker bound to/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Bind a tracker' })).toBeTruthy();
   });
 });

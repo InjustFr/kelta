@@ -118,7 +118,7 @@
             <td>{r.trigger_id}</td>
             <td><code>{r.event}</code></td>
             <td class={r.ok ? 'ok' : 'bad'}>{r.ok ? 'ok' : 'failed'}</td>
-            <td class="muted">{r.detail ?? ''}{r.depth ? ` · depth ${r.depth}` : ''}</td>
+            <td class="muted">{r.detail ?? ''}{r.depth ? `, depth ${r.depth}` : ''}</td>
           </tr>
         {/each}
       </tbody>

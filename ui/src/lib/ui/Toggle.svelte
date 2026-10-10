@@ -37,11 +37,12 @@
 
   .track {
     position: relative;
-    width: 30px;
-    height: 18px;
-    border-radius: 9px;
-    background: var(--k-border-strong);
-    transition: background var(--k-duration);
+    width: 28px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--k-bezel);
+    box-shadow: inset 0 0 0 1px var(--k-border-strong);
+    transition: background var(--k-duration) ease-out;
     flex: none;
   }
 
@@ -49,19 +50,33 @@
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: #fff;
-    transition: transform var(--k-duration);
+    background: var(--k-well);
+    box-shadow: 0 0 0 1px var(--k-border-strong);
+    transition: transform var(--k-duration) ease-out;
   }
 
   input:checked + .track {
     background: var(--k-accent);
+    box-shadow: none;
   }
 
   input:checked + .track .thumb {
     transform: translateX(12px);
+    box-shadow: none;
+  }
+
+  /* Notch on the on side, so state is not shown by colour alone. */
+  input:checked + .track .thumb::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 5.5px;
+    width: 1px;
+    height: 6px;
+    background: var(--k-accent);
   }
 
   input:focus-visible + .track {

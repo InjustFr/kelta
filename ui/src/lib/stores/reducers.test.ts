@@ -5,6 +5,7 @@ import type { ProjectInfo, SessionInfo, UiEvent } from '$lib/gen';
 
 import {
   attentionFromProjects,
+  lampOf,
   maxAttention,
   nextNeedingInput,
   reduceAccounts,
@@ -33,6 +34,14 @@ const session = (id: string, extra: Partial<SessionInfo> = {}): SessionInfo => (
 });
 
 describe('helpers', () => {
+  it('lampOf ranks working below needs_input and error, above done', () => {
+    expect(lampOf('needs_input', true)).toBe('needs_input');
+    expect(lampOf('error', true)).toBe('error');
+    expect(lampOf('done', true)).toBe('working');
+    expect(lampOf('none', true)).toBe('working');
+    expect(lampOf('done', false)).toBe('done');
+  });
+
   it('maxAttention follows the enum order', () => {
     expect(maxAttention([])).toBe('none');
     expect(maxAttention(['activity', 'done'])).toBe('done');

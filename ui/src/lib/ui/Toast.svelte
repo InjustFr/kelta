@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Toast } from '$lib/gen';
 
-  import Icon from './Icon.svelte';
   import IconButton from './IconButton.svelte';
 
   interface Props {
@@ -12,14 +11,10 @@
   }
 
   let { toast, ondismiss, onaction }: Props = $props();
-
-  const icon = $derived(
-    toast.level === 'error' ? 'circle-alert' : toast.level === 'warn' ? 'triangle-alert' : 'info',
-  );
 </script>
 
 <div class="k-toast {toast.level}" role={toast.level === 'error' ? 'alert' : 'status'}>
-  <Icon name={icon} size={16} />
+  <span class="mark" aria-hidden="true"></span>
   <p class="text k-selectable">{toast.text}</p>
   {#if toast.action && onaction}
     <button type="button" class="action" onclick={() => toast.action && onaction?.(toast.action)}>
@@ -36,32 +31,31 @@
     gap: var(--k-space-3);
     width: 360px;
     max-width: calc(100vw - 32px);
-    padding: var(--k-space-3) var(--k-space-3) var(--k-space-3) var(--k-space-4);
-    border: 1px solid var(--k-border);
-    border-left: 3px solid var(--k-info);
-    border-radius: var(--k-radius);
-    background: var(--k-bg-elev);
+    padding: var(--k-space-2) var(--k-space-2) var(--k-space-2) var(--k-space-4);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
   }
 
-  .warn {
-    border-left-color: var(--k-warn);
+  /* Lamp shapes: info = dot, warn and error = diamond. */
+  .mark {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--k-info);
   }
 
-  .error {
-    border-left-color: var(--k-danger);
+  .warn .mark,
+  .error .mark {
+    border-radius: 0;
+    transform: rotate(45deg);
+    background: var(--k-warn);
   }
 
-  .info :global(.k-icon) {
-    color: var(--k-info);
-  }
-
-  .warn :global(.k-icon:first-child) {
-    color: var(--k-warn);
-  }
-
-  .error :global(.k-icon:first-child) {
-    color: var(--k-danger);
+  .error .mark {
+    background: var(--k-danger);
   }
 
   .text {
@@ -71,10 +65,16 @@
   }
 
   .action {
+    height: var(--k-control-height);
+    padding: 0 var(--k-space-3);
     border: none;
+    border-radius: var(--k-radius);
     background: transparent;
     color: var(--k-accent);
-    font-weight: 600;
     cursor: pointer;
+  }
+
+  .action:hover {
+    background: var(--k-bg-hover);
   }
 </style>

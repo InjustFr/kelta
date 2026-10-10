@@ -91,10 +91,10 @@
     max-height: 60vh;
     overflow: auto;
     padding: var(--k-space-3) var(--k-space-4);
-    border: 1px solid var(--k-border);
     border-radius: var(--k-radius-lg);
-    background: var(--k-bg-elev);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
     font-size: var(--k-font-size-sm);
   }
 
