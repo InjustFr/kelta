@@ -14,7 +14,7 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, JiraFlavor, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket,
+    Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
     TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
@@ -29,8 +29,38 @@ use crate::common::{
 /// Cloud `search/jql` is cut after this many pages even if the server keeps returning tokens.
 pub const MAX_CLOUD_PAGES: u32 = 20;
 const PAGE_SIZE: u32 = 50;
-const LIST_FIELDS: &[&str] =
-    &["summary", "status", "issuetype", "assignee", "labels", "priority", "updated", "project", "parent"];
+const LIST_FIELDS: &[&str] = &[
+    "summary",
+    "status",
+    "issuetype",
+    "assignee",
+    "labels",
+    "priority",
+    "updated",
+    "project",
+    "parent",
+    "statuscategorychangedate",
+    "duedate",
+    "timeoriginalestimate",
+];
+
+/// Instance-specific ids, discovered once: the sprint and story-point custom fields (`GET /field`) and
+/// the priority ids in rank order, highest first (`GET /priority`).
+#[derive(Default)]
+struct Lookups {
+    sprint: Option<String>,
+    points: Option<String>,
+    priorities: Vec<String>,
+}
+
+impl Lookups {
+    /// `LIST_FIELDS` plus the discovered custom fields.
+    fn fields(&self) -> Vec<&str> {
+        let mut f = LIST_FIELDS.to_vec();
+        f.extend(self.sprint.as_deref().into_iter().chain(self.points.as_deref()));
+        f
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavor {
@@ -46,6 +76,7 @@ pub struct JiraTracker {
     explicit: Option<AuthScheme>,
     basic_user: Option<String>,
     flavor: OnceCell<Flavor>,
+    lookups: OnceCell<Lookups>,
     me: Mutex<Option<User>>,
 }
 
@@ -82,6 +113,7 @@ impl JiraTracker {
             configured: account.flavor,
             base,
             flavor: OnceCell::new(),
+            lookups: OnceCell::new(),
             me: Mutex::new(None),
         })
     }
@@ -176,7 +208,45 @@ impl JiraTracker {
         Status { id: v.get("id").and_then(idstr).unwrap_or_default(), name, category }
     }
 
-    fn ticket_from(&self, account: &AccountId, v: &Value) -> Result<Ticket, KeltaError> {
+    /// Custom field ids and priority ranks; only an unreachable server is an error, a refusal just means "none".
+    async fn lookups(&self, api: &Api) -> Result<&Lookups, KeltaError> {
+        self.lookups
+            .get_or_try_init(|| async {
+                let soft = |r: Result<Value, KeltaError>| match r {
+                    Err(e)
+                        if matches!(
+                            e.code,
+                            ErrorCode::Network | ErrorCode::Timeout | ErrorCode::RateLimited
+                        ) =>
+                    {
+                        Err(e)
+                    }
+                    r => Ok(r.unwrap_or_default()),
+                };
+                let fields = soft(api.json(HttpRequest::get(api.url("/field"))).await)?;
+                let prios = soft(api.json(HttpRequest::get(api.url("/priority"))).await)?;
+                let by = |pred: &dyn Fn(&Value) -> bool| {
+                    fields.as_array()?.iter().find(|f| pred(f)).and_then(|f| s(f, "id")).map(str::to_owned)
+                };
+                Ok(Lookups {
+                    sprint: by(&|f| {
+                        f.pointer("/schema/custom").and_then(Value::as_str)
+                            == Some("com.pyxis.greenhopper.jira:gh-sprint")
+                    }),
+                    points: by(&|f| {
+                        matches!(s(f, "name"), Some("Story Points" | "Story point estimate"))
+                            && f.pointer("/schema/type").and_then(Value::as_str) == Some("number")
+                    }),
+                    priorities: prios
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|p| p.get("id").and_then(idstr)).collect())
+                        .unwrap_or_default(),
+                })
+            })
+            .await
+    }
+
+    fn ticket_from(&self, account: &AccountId, v: &Value, lk: &Lookups) -> Result<Ticket, KeltaError> {
         let key = s(v, "key").ok_or_else(|| KeltaError::upstream("jira issue without key"))?;
         let f = v.get("fields").unwrap_or(&Value::Null);
         Ok(Ticket {
@@ -197,8 +267,21 @@ impl JiraTracker {
                 .unwrap_or_default(),
             priority: f.get("priority").and_then(|p| s(p, "name")).map(str::to_owned),
             updated_at: normalize_time(s(f, "updated").unwrap_or("")),
+            priority_rank: f
+                .pointer("/priority/id")
+                .and_then(idstr)
+                .and_then(|id| lk.priorities.iter().position(|p| *p == id))
+                .and_then(|i| u8::try_from(i).ok()),
+            status_since: s(f, "statuscategorychangedate").map(normalize_time),
+            sprint: lk.sprint.as_deref().and_then(|id| f.get(id)).and_then(sprint_from),
+            estimate: lk
+                .points
+                .as_deref()
+                .and_then(|id| f.get(id)?.as_f64())
+                .map(|p| format!("{p} pts"))
+                .or_else(|| f.get("timeoriginalestimate")?.as_u64().map(duration)),
+            due: s(f, "duedate").map(str::to_owned),
             project_hint: f.get("project").and_then(|p| s(p, "key")).map(str::to_owned),
-            ..Default::default()
         })
     }
 
@@ -207,13 +290,14 @@ impl JiraTracker {
     }
 
     async fn fetch_ticket(&self, api: &Api, key: &str) -> Result<Ticket, KeltaError> {
+        let lk = self.lookups(api).await?;
         let v = api
             .json(
                 HttpRequest::get(api.url(&format!("/issue/{}", percent_encode(key))))
-                    .query("fields", LIST_FIELDS.join(",")),
+                    .query("fields", lk.fields().join(",")),
             )
             .await?;
-        self.ticket_from(self.account(), &v)
+        self.ticket_from(self.account(), &v, lk)
     }
 
     /// Cloud cursor: `"<pages fetched>:<nextPageToken>"` so the 20-page cap survives across calls.
@@ -329,6 +413,44 @@ pub(crate) fn normalize_time(t: &str) -> String {
     t.to_owned()
 }
 
+/// `2h`, `2h 30m`, `45m`.
+fn duration(secs: u64) -> String {
+    let (h, m) = (secs / 3600, secs % 3600 / 60);
+    match (h, m) {
+        (0, m) => format!("{m}m"),
+        (h, 0) => format!("{h}h"),
+        (h, m) => format!("{h}h {m}m"),
+    }
+}
+
+/// The sprint field is a list: the active sprint, else the latest. Cloud and recent DC send objects,
+/// older DC strings like `...Sprint@1f[id=12,state=ACTIVE,name=Sprint 12,endDate=2026-10-20T10:00:00.000Z,...]`.
+/// shortcut: a sprint name containing a comma is cut in the string form, drop when old DC is unsupported.
+fn sprint_from(v: &Value) -> Option<Sprint> {
+    let all: Vec<Sprint> = v.as_array()?.iter().filter_map(one_sprint).collect();
+    let i = all.iter().position(|s| s.active).unwrap_or(all.len().saturating_sub(1));
+    all.into_iter().nth(i)
+}
+
+fn one_sprint(v: &Value) -> Option<Sprint> {
+    let (id, name, state, end) = match v.as_str() {
+        None => (v.get("id").and_then(idstr)?, s(v, "name")?, s(v, "state")?, s(v, "endDate")),
+        Some(str_form) => {
+            let kv = |k: &str| {
+                let rest = str_form.split_once('[')?.1;
+                rest.split(',').find_map(|p| p.strip_prefix(k)?.strip_prefix('='))
+            };
+            (kv("id")?.to_owned(), kv("name")?, kv("state")?, kv("endDate").filter(|d| *d != "<null>"))
+        }
+    };
+    Some(Sprint {
+        id,
+        name: name.to_owned(),
+        active: state.eq_ignore_ascii_case("active"),
+        ends_at: end.map(normalize_time),
+    })
+}
+
 #[async_trait]
 impl Tracker for JiraTracker {
     fn kind(&self) -> TrackerKind {
@@ -358,6 +480,7 @@ impl Tracker for JiraTracker {
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
         let api = self.api().await?;
+        let lk = self.lookups(&api).await?;
         let jql = compose_jql(&self.base_jql(view).await?, view.who, view.current_iteration);
         if split_order_by(&jql).0.is_empty() {
             return Err(KeltaError::invalid(format!(
@@ -370,12 +493,12 @@ impl Tracker for JiraTracker {
             Flavor::Cloud => {
                 let (done, token) = Self::decode_cloud_cursor(cursor)?;
                 // The first request never carries `nextPageToken` (not even null).
-                let mut body = json!({"jql": jql, "fields": LIST_FIELDS, "maxResults": PAGE_SIZE});
+                let mut body = json!({"jql": jql, "fields": lk.fields(), "maxResults": PAGE_SIZE});
                 if let Some(t) = &token {
                     body["nextPageToken"] = json!(t);
                 }
                 let v = api.json(HttpRequest::post(api.url("/search/jql")).json(body)).await?;
-                let items = self.tickets_from(&v)?;
+                let items = self.tickets_from(&v, lk)?;
                 let pages = done + 1;
                 let next = s(&v, "nextPageToken")
                     .filter(|t| !t.is_empty())
@@ -394,9 +517,9 @@ impl Tracker for JiraTracker {
                     Some(_) => return Err(KeltaError::invalid("jira dc expects an offset cursor")),
                 };
                 let body =
-                    json!({"jql": jql, "fields": LIST_FIELDS, "startAt": start, "maxResults": PAGE_SIZE});
+                    json!({"jql": jql, "fields": lk.fields(), "startAt": start, "maxResults": PAGE_SIZE});
                 let v = api.json(HttpRequest::post(api.url("/search")).json(body)).await?;
-                let items = self.tickets_from(&v)?;
+                let items = self.tickets_from(&v, lk)?;
                 let total = v.get("total").and_then(Value::as_u64).unwrap_or(0);
                 let end = start as u64 + items.len() as u64;
                 let next = (!items.is_empty() && end < total).then_some(Cursor::Offset(end as u32));
@@ -407,7 +530,8 @@ impl Tracker for JiraTracker {
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         let api = self.api().await?;
-        let mut fields: Vec<&str> = LIST_FIELDS.to_vec();
+        let lk = self.lookups(&api).await?;
+        let mut fields = lk.fields();
         fields.extend(["description", "comment"]);
         let v = api
             .json(
@@ -416,7 +540,7 @@ impl Tracker for JiraTracker {
                     .query("expand", "renderedFields"),
             )
             .await?;
-        let ticket = self.ticket_from(&t.account, &v)?;
+        let ticket = self.ticket_from(&t.account, &v, lk)?;
         let desc = v.pointer("/fields/description").unwrap_or(&Value::Null);
         let (body_md, body_html, body_format) = match api.flavor {
             Flavor::Cloud => {
@@ -711,10 +835,10 @@ impl JiraTracker {
         Ok(format!("{cond} ORDER BY updated DESC"))
     }
 
-    fn tickets_from(&self, v: &Value) -> Result<Vec<Ticket>, KeltaError> {
+    fn tickets_from(&self, v: &Value, lk: &Lookups) -> Result<Vec<Ticket>, KeltaError> {
         Ok(v.get("issues")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|i| self.ticket_from(self.account(), i).ok()).collect())
+            .map(|a| a.iter().filter_map(|i| self.ticket_from(self.account(), i, lk).ok()).collect())
             .unwrap_or_default())
     }
 

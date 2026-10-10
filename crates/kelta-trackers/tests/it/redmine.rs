@@ -359,3 +359,81 @@ async fn mount_json(server: &MockServer, p: &str, body: serde_json::Value) {
         .mount(server)
         .await;
 }
+
+async fn mount_priorities(server: &MockServer) {
+    mount_json(
+        server,
+        "/enumerations/issue_priorities.json",
+        json!({"issue_priorities": [
+            {"id": 1, "name": "Low"}, {"id": 2, "name": "Normal"}, {"id": 3, "name": "High"}, {"id": 4, "name": "Urgent"}
+        ]}),
+    )
+    .await;
+}
+
+fn issue(id: u64, extra: serde_json::Value) -> serde_json::Value {
+    let mut i = json!({
+        "id": id, "subject": "S", "status": {"id": 1, "name": "New"}, "priority": {"id": 4, "name": "Urgent"},
+        "updated_on": "2026-09-30T08:30:00Z",
+    });
+    i.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    i
+}
+
+#[tokio::test]
+async fn tickets_carry_rank_status_date_estimate_due_and_resolved_sprint() {
+    let server = MockServer::start().await;
+    mount_priorities(&server).await;
+    let v = |id: u64, name: &str, status: &str, due: serde_json::Value| json!({"version": {"id": id, "name": name, "status": status, "due_date": due}});
+    mount_json(&server, "/versions/1.json", v(1, "v1", "open", json!("2999-01-01"))).await;
+    mount_json(&server, "/versions/2.json", v(2, "v2", "open", json!("2000-01-01"))).await;
+    mount_json(&server, "/versions/3.json", v(3, "v3", "closed", json!("2999-01-01"))).await;
+    mount_json(&server, "/versions/4.json", v(4, "v4", "open", json!(null))).await;
+    let with = |id, ver: u64| {
+        issue(
+            id,
+            json!({"fixed_version": {"id": ver, "name": format!("v{ver}")}, "priority": {"id": 1, "name": "Low"}}),
+        )
+    };
+    let first = issue(
+        10,
+        json!({"fixed_version": {"id": 1, "name": "v1"}, "estimated_hours": 2.5, "due_date": "2026-10-14"}),
+    );
+    mount_json(
+        &server,
+        "/issues.json",
+        json!({"issues": [first, with(11, 1), with(12, 2), with(13, 3), with(14, 4), issue(15, json!({}))],
+               "total_count": 6}),
+    )
+    .await;
+    let items = rm(&server, json!({})).list(&view("v"), None).await.unwrap().items;
+    let t = &items[0];
+    assert_eq!(t.priority_rank, Some(0), "Urgent is the last position: highest");
+    assert_eq!(items[1].priority_rank, Some(3), "Low is the first position: lowest");
+    assert_eq!(t.status_since.as_deref(), Some("2026-09-30T08:30:00Z"));
+    assert_eq!((t.estimate.as_deref(), t.due.as_deref()), (Some("2.5h"), Some("2026-10-14")));
+    let sp = t.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("1", "v1", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2999-01-01"));
+    let active: Vec<bool> = items[1..5].iter().map(|i| i.sprint.as_ref().unwrap().active).collect();
+    assert_eq!(
+        active,
+        [true, false, false, true],
+        "open and future/undated is current; past or closed is not"
+    );
+    assert_eq!(items[3].sprint.as_ref().unwrap().ends_at.as_deref(), Some("2999-01-01"));
+    assert!(items[5].sprint.is_none() && items[5].estimate.is_none() && items[5].due.is_none());
+    // One lookup per distinct version, not per issue.
+    assert_eq!(count(&server, "GET", "/versions/1.json").await, 1);
+}
+
+#[tokio::test]
+async fn a_failed_priority_or_version_lookup_leaves_rank_and_an_inactive_sprint() {
+    let server = MockServer::start().await;
+    let i = issue(10, json!({"fixed_version": {"id": 1, "name": "v1"}}));
+    mount_json(&server, "/issues.json", json!({"issues": [i], "total_count": 1})).await;
+    let t = rm(&server, json!({})).list(&view("v"), None).await.unwrap().items.remove(0);
+    assert_eq!(t.priority_rank, None);
+    let sp = t.sprint.unwrap();
+    assert_eq!((sp.name.as_str(), sp.active, sp.ends_at), ("v1", false, None));
+}

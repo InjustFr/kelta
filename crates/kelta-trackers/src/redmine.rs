@@ -10,8 +10,8 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, TextFormat, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -29,6 +29,8 @@ pub struct RedmineTracker {
     format: TextFormat,
     /// `/issue_statuses.json`: id → (name, is_closed); fetched once, used for categories.
     statuses: Mutex<Option<Vec<(String, String, bool)>>>,
+    /// `/enumerations/issue_priorities.json` ids, lowest priority first (the server's position order).
+    priorities: Mutex<Option<Vec<String>>>,
     me: Mutex<Option<User>>,
 }
 
@@ -50,6 +52,7 @@ impl RedmineTracker {
             auth,
             format: account.text_format,
             statuses: Mutex::new(None),
+            priorities: Mutex::new(None),
             me: Mutex::new(None),
         })
     }
@@ -109,6 +112,42 @@ impl RedmineTracker {
         }
     }
 
+    /// Load the priority order once (failures are ignored: no rank).
+    async fn ensure_priorities(&self) {
+        if self.priorities.lock().is_some() {
+            return;
+        }
+        let url = format!("{}/enumerations/issue_priorities.json", self.base);
+        if let Ok(v) = self.json(HttpRequest::get(url)).await {
+            let ids = v.get("issue_priorities").and_then(Value::as_array);
+            *self.priorities.lock() =
+                ids.map(|a| a.iter().filter_map(|p| p.get("id").and_then(idstr)).collect());
+        }
+    }
+
+    /// An issue only carries `fixed_version` `{id, name}`: whether it is current and when it ends come from
+    /// `/versions/{id}.json`, once per distinct version (a failed lookup keeps the sprint as inactive).
+    async fn resolve_sprints(&self, tickets: &mut [Ticket]) {
+        let today = today();
+        let mut seen: Vec<(String, bool, Option<String>)> = Vec::new();
+        for id in tickets.iter().filter_map(|t| t.sprint.as_ref().map(|s| s.id.clone())) {
+            if seen.iter().any(|(i, _, _)| *i == id) {
+                continue;
+            }
+            let v = self.json(HttpRequest::get(format!("{}/versions/{id}.json", self.base))).await;
+            let v = v.ok().and_then(|v| v.get("version").cloned()).unwrap_or_default();
+            let due = s(&v, "due_date").map(str::to_owned);
+            let active =
+                s(&v, "status") == Some("open") && due.as_deref().is_none_or(|d| d >= today.as_str());
+            seen.push((id, active, due));
+        }
+        for sp in tickets.iter_mut().filter_map(|t| t.sprint.as_mut()) {
+            if let Some((_, active, due)) = seen.iter().find(|(i, _, _)| *i == sp.id) {
+                (sp.active, sp.ends_at) = (*active, due.clone());
+            }
+        }
+    }
+
     fn status_from(&self, v: &Value) -> Status {
         let id = v.get("id").and_then(idstr).unwrap_or_default();
         let name = s(v, "name").unwrap_or("").to_owned();
@@ -152,8 +191,23 @@ impl RedmineTracker {
             labels: Vec::new(),
             priority: issue.pointer("/priority/name").and_then(Value::as_str).map(str::to_owned),
             updated_at: s(issue, "updated_on").unwrap_or("").to_owned(),
+            // Redmine keeps no status-change date on the issue: the last update is the closest.
+            status_since: s(issue, "updated_on").map(str::to_owned),
+            priority_rank: issue.pointer("/priority/id").and_then(idstr).and_then(|id| {
+                let l = self.priorities.lock();
+                let l = l.as_ref()?;
+                u8::try_from(l.len().checked_sub(1)?.checked_sub(l.iter().position(|p| *p == id)?)?).ok()
+            }),
+            sprint: issue.get("fixed_version").and_then(|v| {
+                Some(Sprint {
+                    id: v.get("id").and_then(idstr)?,
+                    name: s(v, "name")?.to_owned(),
+                    ..Default::default()
+                })
+            }),
+            estimate: issue.get("estimated_hours").and_then(Value::as_f64).map(|h| format!("{h}h")),
+            due: s(issue, "due_date").map(str::to_owned),
             project_hint: issue.pointer("/project/id").and_then(idstr),
-            ..Default::default()
         })
     }
 
@@ -172,6 +226,15 @@ impl RedmineTracker {
         }
         let v = self.json(req).await?;
         v.get("issue").cloned().ok_or_else(|| KeltaError::upstream("redmine response without `issue`"))
+    }
+
+    /// The issue as a full ticket (rank and sprint resolved) after a change.
+    async fn refetch(&self, id: &str) -> Result<Ticket, KeltaError> {
+        self.ensure_priorities().await;
+        let mut ticket = [self.ticket_from(&self.fetch_issue(id, None).await?)?];
+        self.resolve_sprints(&mut ticket).await;
+        let [ticket] = ticket;
+        Ok(ticket)
     }
 
     async fn put_issue(&self, id: &str, issue: Value) -> Result<(), KeltaError> {
@@ -199,6 +262,11 @@ fn current_version(versions: &Value, today: &str) -> Option<String> {
         .map(|(_, v)| v)
         .or_else(|| open.iter().find(|v| s(v, "due_date").is_none()))
         .and_then(|v| v.get("id").and_then(idstr))
+}
+
+fn today() -> String {
+    let d = time::OffsetDateTime::now_utc().date();
+    format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day())
 }
 
 /// `422 {"errors": ["Subject cannot be blank"]}` → readable message + `detail.errors`.
@@ -258,6 +326,7 @@ impl Tracker for RedmineTracker {
             Some(_) => return Err(KeltaError::invalid("redmine expects an offset cursor")),
         };
         self.ensure_statuses().await;
+        self.ensure_priorities().await;
         let mut req = HttpRequest::get(format!("{}/issues.json", self.base))
             .query("sort", "updated_on:desc")
             .query("limit", PAGE_SIZE.to_string())
@@ -270,9 +339,7 @@ impl Tracker for RedmineTracker {
             && let Some(p) = &view.project_id
         {
             let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
-            let today = time::OffsetDateTime::now_utc().date();
-            let today = format!("{:04}-{:02}-{:02}", today.year(), u8::from(today.month()), today.day());
-            version = current_version(&v, &today);
+            version = current_version(&v, &today());
         }
         // A saved query ignores short filters like `fixed_version_id`: it is applied to what comes back.
         if let Some(id) = version.clone().filter(|_| view.query_id.is_none()) {
@@ -316,6 +383,7 @@ impl Tracker for RedmineTracker {
                     .collect()
             })
             .unwrap_or_default();
+        self.resolve_sprints(&mut items).await;
         if view.query_id.is_some() {
             match view.who {
                 Some(Who::Mine) => {
@@ -334,8 +402,11 @@ impl Tracker for RedmineTracker {
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.ensure_statuses().await;
+        self.ensure_priorities().await;
         let issue = self.fetch_issue(&t.id, Some("journals,allowed_statuses")).await?;
-        let ticket = self.ticket_from(&issue)?;
+        let mut ticket = [self.ticket_from(&issue)?];
+        self.resolve_sprints(&mut ticket).await;
+        let [ticket] = ticket;
         let raw = s(&issue, "description").unwrap_or("").to_owned();
         let comments: Vec<_> = issue
             .get("journals")
@@ -432,7 +503,7 @@ impl Tracker for RedmineTracker {
             }
         }
         self.put_issue(&t.id, issue).await?;
-        self.ticket_from(&self.fetch_issue(&t.id, None).await?)
+        self.refetch(&t.id).await
     }
 
     async fn comment(&self, t: &TicketRef, markdown: &str) -> Result<(), KeltaError> {
@@ -453,7 +524,7 @@ impl Tracker for RedmineTracker {
             Assignee::None => json!(""),
         };
         self.put_issue(&t.id, json!({ "assigned_to_id": id })).await?;
-        self.ticket_from(&self.fetch_issue(&t.id, None).await?)
+        self.refetch(&t.id).await
     }
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {

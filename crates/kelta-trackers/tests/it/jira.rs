@@ -559,3 +559,127 @@ async fn sources_survive_a_site_without_jira_software_and_data_center_filters_pr
         Some("project = OPS AND statusCategory != Done ORDER BY updated DESC")
     );
 }
+
+async fn mount_get(server: &MockServer, p: &str, body: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(p))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(server)
+        .await;
+}
+
+async fn mount_lookups(server: &MockServer, v: u8) {
+    mount_get(
+        server,
+        &format!("/rest/api/{v}/field"),
+        json!([
+            {"id": "summary", "name": "Summary", "schema": {"type": "string"}},
+            {"id": "customfield_10020", "name": "Sprint",
+             "schema": {"type": "array", "custom": "com.pyxis.greenhopper.jira:gh-sprint"}},
+            {"id": "customfield_10016", "name": "Story point estimate", "schema": {"type": "number"}},
+        ]),
+    )
+    .await;
+    mount_get(
+        server,
+        &format!("/rest/api/{v}/priority"),
+        json!([{"id": "1", "name": "Highest"}, {"id": "2", "name": "High"}, {"id": "3", "name": "Medium"}]),
+    )
+    .await;
+}
+
+fn issue(extra: serde_json::Value) -> serde_json::Value {
+    let mut fields = json!({
+        "summary": "S", "status": {"id": "1", "name": "To Do"}, "updated": "2026-09-30T10:15:00.000+0200",
+        "priority": {"id": "2", "name": "High"},
+    });
+    fields.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    json!({"id": "1", "key": "SHOP-1", "fields": fields})
+}
+
+#[tokio::test]
+async fn cloud_tickets_carry_rank_status_date_sprint_estimate_and_due() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 3).await;
+    let sprints = json!([
+        {"id": 7, "name": "Sprint 7", "state": "closed", "endDate": "2026-09-01T00:00:00.000Z"},
+        {"id": 8, "name": "Sprint 8", "state": "active", "endDate": "2026-10-20T10:00:00.000+0200"},
+        {"id": 9, "name": "Sprint 9", "state": "future"},
+    ]);
+    let full = issue(json!({
+        "statuscategorychangedate": "2026-09-28T09:00:00.000+0200", "duedate": "2026-10-14",
+        "customfield_10020": sprints, "customfield_10016": 5.0, "timeoriginalestimate": 7200,
+    }));
+    let bare = issue(json!({"priority": {"id": "99", "name": "Custom"}, "timeoriginalestimate": 5400}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [full, bare]})))
+        .mount(&server)
+        .await;
+    let page = cloud(&server).list(&jql_view(), None).await.unwrap();
+    let t = &page.items[0];
+    assert_eq!(t.priority_rank, Some(1));
+    assert_eq!(t.status_since.as_deref(), Some("2026-09-28T09:00:00.000+02:00"));
+    let sp = t.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("8", "Sprint 8", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-20T10:00:00.000+02:00"));
+    assert_eq!(t.estimate.as_deref(), Some("5 pts"), "story points win over the time estimate");
+    assert_eq!(t.due.as_deref(), Some("2026-10-14"));
+    let b = &page.items[1];
+    assert_eq!(
+        (b.priority_rank, b.status_since.clone(), b.sprint.clone(), b.due.clone()),
+        (None, None, None, None)
+    );
+    assert_eq!(b.estimate.as_deref(), Some("1h 30m"));
+    // Only the needed fields are requested, custom ones included; the lookups run once.
+    let req = &bodies(&server, "POST", "/rest/api/3/search/jql").await[0];
+    let asked: Vec<&str> = req["fields"].as_array().unwrap().iter().filter_map(|f| f.as_str()).collect();
+    for f in [
+        "statuscategorychangedate",
+        "duedate",
+        "timeoriginalestimate",
+        "customfield_10020",
+        "customfield_10016",
+    ] {
+        assert!(asked.contains(&f), "{f} not requested: {asked:?}");
+    }
+    cloud(&server).list(&jql_view(), None).await.unwrap();
+}
+
+#[tokio::test]
+async fn sprint_without_active_state_is_the_latest_and_inactive() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 3).await;
+    let i = issue(json!({"customfield_10020": [
+        {"id": 7, "name": "Sprint 7", "state": "closed"}, {"id": 8, "name": "Sprint 8", "state": "closed"}]}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [i]})))
+        .mount(&server)
+        .await;
+    let sp = cloud(&server).list(&jql_view(), None).await.unwrap().items[0].sprint.clone().unwrap();
+    assert_eq!((sp.id.as_str(), sp.active, sp.ends_at), ("8", false, None));
+}
+
+#[tokio::test]
+async fn dc_reads_the_legacy_string_sprint_and_a_refused_field_lookup_just_drops_the_extras() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 2).await;
+    let legacy = "com.atlassian.greenhopper.service.sprint.Sprint@1f[id=12,rapidViewId=3,state=ACTIVE,\
+                  name=Sprint 12,startDate=2026-10-06T08:00:00.000Z,endDate=2026-10-20T08:00:00.000Z,sequence=12]";
+    let i = issue(json!({"customfield_10020": [legacy]}));
+    mount_get(&server, "/rest/api/2/issue/SHOP-1", i).await;
+    let t = dc(&server).get(&tref("jira-dc", "SHOP-1", "1")).await.unwrap().ticket;
+    let sp = t.sprint.unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("12", "Sprint 12", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-20T08:00:00.000Z"));
+    assert_eq!(t.priority_rank, Some(1));
+
+    // Lookups refused (403): the ticket still loads, without the discovered fields.
+    let server = MockServer::start().await;
+    Mock::given(path("/rest/api/2/field")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    Mock::given(path("/rest/api/2/priority")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    mount_get(&server, "/rest/api/2/issue/SHOP-1", issue(json!({"duedate": "2026-10-14"}))).await;
+    let t = dc(&server).get(&tref("jira-dc", "SHOP-1", "1")).await.unwrap().ticket;
+    assert_eq!((t.priority_rank, t.sprint, t.due.as_deref()), (None, None, Some("2026-10-14")));
+}
