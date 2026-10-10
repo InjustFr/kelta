@@ -435,13 +435,14 @@ pub mod q {
         c.execute("DELETE FROM next_up WHERE ticket_key = ?1", [ticket_key(t)]).map(|_| ()).map_err(db_err)
     }
 
-    pub fn ticket_seen(c: &Connection, t: &TicketRef) -> R<()> {
-        c.execute(
-            "INSERT OR IGNORE INTO seen_tickets (ticket_key, at) VALUES (?1, ?2)",
-            params![ticket_key(t), kelta_proto::now_rfc3339()],
-        )
-        .map(|_| ())
-        .map_err(db_err)
+    pub fn ticket_seen(c: &mut Connection, ts: &[TicketRef]) -> R<()> {
+        let tx = c.transaction().map_err(db_err)?;
+        let at = kelta_proto::now_rfc3339();
+        for t in ts {
+            tx.execute("INSERT OR IGNORE INTO seen_tickets (ticket_key, at) VALUES (?1, ?2)", params![ticket_key(t), at])
+                .map_err(db_err)?;
+        }
+        tx.commit().map_err(db_err)
     }
 
     pub fn seen_review_key(r: &ReviewRef) -> (String, String, u64) {

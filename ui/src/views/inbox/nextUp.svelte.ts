@@ -68,6 +68,7 @@ export async function loadPool(force = false): Promise<void> {
     tickets.load(ALL, null, force, 'unassigned'),
     nextUp.load(),
   ]);
+  await nextUp.baseline();
 }
 
 const started = (t: TicketItem): boolean => work.forTicket(t.ticket.ref) !== null;
@@ -153,7 +154,21 @@ class NextUpStore {
     const key = ticketKey(ref);
     if (key in this.seen) return;
     this.seen = { ...this.seen, [key]: true };
-    ticketSeen({ ticket: ref }).catch((err) => toasts.error(err, `Marking ${ref.key} seen`));
+    ticketSeen({ tickets: [ref] }).catch((err) => toasts.error(err, `Marking ${ref.key} seen`));
+  }
+
+  /**
+   * First run (nothing seen yet): every ticket already loaded counts as seen, so `New` means
+   * assigned since then, not everything open on the day of the upgrade.
+   */
+  async baseline(): Promise<void> {
+    const mine = tickets.list(ALL, null, 'mine');
+    if (!this.loaded || Object.keys(this.seen).length || !mine.data || mine.error) return;
+    // shortcut: with no ticket loaded yet no baseline is set, so the first ones to arrive later count as seen.
+    const refs = ticketPool().map((t) => t.ticket.ref);
+    if (!refs.length) return;
+    this.seen = Object.fromEntries(refs.map((r) => [ticketKey(r), true]));
+    await ticketSeen({ tickets: refs }).catch((err) => toasts.error(err, 'Marking tickets seen'));
   }
 
   /**

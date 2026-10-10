@@ -898,8 +898,8 @@ export function createMockTransport(options: MockOptions = {}): {
       state.nextUp.items = state.nextUp.items.filter((i) => refKey(i.ticket) !== refKey(ticket));
       return null;
     },
-    ticket_seen: ({ ticket }) => {
-      if (!state.nextUp.seen.includes(refKey(ticket))) state.nextUp.seen.push(refKey(ticket));
+    ticket_seen: ({ tickets }) => {
+      for (const t of tickets) if (!state.nextUp.seen.includes(refKey(t))) state.nextUp.seen.push(refKey(t));
       return null;
     },
     // ---- reviews ---------------------------------------------------------------------------

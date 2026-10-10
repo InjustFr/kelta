@@ -63,8 +63,8 @@ async fn next_up_keeps_its_order_snoozes_and_seen_marks_across_a_restart() {
         // Re-rank (J/K) is an upsert.
         let moved = it("A-1", Some(0.25), None);
         s.call(move |c| q::next_up_put(c, &moved)).await.unwrap();
-        s.call(move |c| q::ticket_seen(c, &t("A-2"))).await.unwrap();
-        s.call(move |c| q::ticket_seen(c, &t("A-2"))).await.unwrap();
+        s.call(move |c| q::ticket_seen(c, &[t("A-2")])).await.unwrap();
+        s.call(move |c| q::ticket_seen(c, &[t("A-2"), t("A-2")])).await.unwrap();
     }
     let s = Store::open(&db).unwrap();
     let got = s.call(|c| q::next_up(c)).await.unwrap();

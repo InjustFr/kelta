@@ -1455,8 +1455,8 @@ impl Core {
         self.store.call(move |c| q::next_up_remove(c, &ticket)).await
     }
 
-    pub async fn ticket_seen(&self, ticket: TicketRef) -> Result<(), KeltaError> {
-        self.store.call(move |c| q::ticket_seen(c, &ticket)).await
+    pub async fn ticket_seen(&self, tickets: Vec<TicketRef>) -> Result<(), KeltaError> {
+        self.store.call(move |c| q::ticket_seen(c, &tickets)).await
     }
 
     // =========================================================================================

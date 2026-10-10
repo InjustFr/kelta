@@ -216,8 +216,8 @@ export interface Commands {
   next_up_list: { args: NoArgs; result: NextUp };
   next_up_put: { args: { item: NextUpItem }; result: null };
   next_up_remove: { args: { ticket: TicketRef }; result: null };
-  /** Clears the ticket's `New` badge. */
-  ticket_seen: { args: { ticket: TicketRef }; result: null };
+  /** Clears the tickets' `New` badge. */
+  ticket_seen: { args: { tickets: TicketRef[] }; result: null };
   // ---- reviews -----------------------------------------------------------------------------
   review_list: { args: { scope: Scope; kind: ReviewKind; refresh: boolean }; result: ReviewPage };
   review_get: { args: { review: ReviewRef }; result: ReviewDetail };

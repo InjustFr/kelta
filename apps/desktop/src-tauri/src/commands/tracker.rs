@@ -103,8 +103,8 @@ pub async fn next_up_remove(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Re
     core.next_up_remove(ticket).await
 }
 
-/// Clears the ticket's `New` badge.
+/// Clears the tickets' `New` badge.
 #[tauri::command(rename_all = "snake_case")]
-pub async fn ticket_seen(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Res<()> {
-    core.ticket_seen(ticket).await
+pub async fn ticket_seen(core: State<'_, Arc<Core>>, tickets: Vec<TicketRef>) -> Res<()> {
+    core.ticket_seen(tickets).await
 }

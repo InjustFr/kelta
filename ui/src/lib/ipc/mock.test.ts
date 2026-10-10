@@ -235,7 +235,7 @@ describe('mock transport', () => {
       tracker_sources: { account_id: 'jira-acme', query: '' },
       next_up_put: { item: { project_id: 'shop', ticket, rank: 1, snoozed_until: null } },
       next_up_remove: { ticket },
-      ticket_seen: { ticket },
+      ticket_seen: { tickets: [ticket] },
       review_list: { scope: { kind: 'all' }, kind: 'authored', refresh: false },
       review_get: { review: review.ref },
       review_approve: { review: review.ref, head_sha: review.head_sha },
