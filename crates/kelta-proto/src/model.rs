@@ -788,12 +788,13 @@ pub const PORT_BLOCK: u16 = 10;
 impl WorkItem {
     /// `claim_ticket` of `self` against `held`, an unfinished item of the same ticket: an orphaned
     /// claim, or one of the same run (equal `run_id`s; lanes of one orchestrator share a session),
-    /// is taken over (same id, the new run's worktree); anything else wins and comes back as `Err`.
+    /// is taken over (same id, the new run's worktree); so is a `blocked` or `failed` one, whose lane
+    /// has ended. Anything else wins and comes back as `Err`.
     pub fn claim_over(self, held: Option<WorkItem>) -> Result<WorkItem, Box<WorkItem>> {
         let Some(mut h) = held else { return Ok(self) };
         let new = self.run.as_ref();
         let take = h.run.as_ref().is_some_and(|r| {
-            r.state == RunState::Orphaned
+            matches!(r.state, RunState::Orphaned | RunState::Blocked | RunState::Failed)
                 || (r.run_id.is_some() && r.run_id == new.and_then(|n| n.run_id.clone()))
         });
         if !take {

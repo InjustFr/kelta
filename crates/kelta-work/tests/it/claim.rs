@@ -94,6 +94,12 @@ async fn lanes_of_one_session_conflict_but_a_lane_re_claims_its_own() {
     let again = w.claim(&p, t, Some(wt), None, lane("lane-1")).await.unwrap();
     assert_eq!(again.id, a.id);
     assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
+    // A blocked lane has ended: a later lane (resumed board run) takes the claim over.
+    w.report("SHOP-142", None, RunState::Blocked, None, None).await.unwrap();
+    let t = samples::ticket_ref();
+    let taken = w.claim(&p, t, None, None, lane("lane-3")).await.unwrap();
+    assert_eq!(taken.id, a.id);
+    assert_eq!(taken.run.unwrap().state, RunState::Running);
 }
 
 #[tokio::test]
