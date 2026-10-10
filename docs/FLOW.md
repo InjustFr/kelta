@@ -70,6 +70,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
 | 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (n threads) / Checks failed (names: the first 3, then `+n`; GitHub only) | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
+| 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads) | error | Fix with Claude | Fix |
 | 12 | PR `mergeable = false` | Conflicts with {base} (n behind) | error | Rebase | Fix |
 | 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
 | 14 | PR exists, `unpushed` | Unpushed (n commits) | none | Push | Ship and clean up |
@@ -262,18 +263,20 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 
 ### 4.2 Flow 2: feedback into the previous Claude conversation
 
-Trigger: a changes-requested review (GitLab: unresolved blocking discussions) or a failed check on my PR's head. The item moves to **Fix** (row 11) as soon as the authored poll sees it; a notification already exists.
+Trigger: a changes-requested review (GitLab: unresolved blocking discussions) or a failed check on my PR's head (row 11), or new comments (row 11a, #208). The item moves to **Fix** as soon as the authored poll sees it; a notification already exists for the first two.
+
+New comments: the authored poll reports per PR its unresolved threads and `last_comment_at`, the newest last comment of an unresolved thread that is not mine (GitHub: a `Threads` fragment in the authored search only; GitLab: `/discussions` per MR, fetched again only when `(updated_at, user_notes_count)` moved). A thread I (or Claude, through my token) replied to last is answered. `WorkItem.feedback_at` is the watermark: the newest comment or review time the sheet showed at the last send. Times are compared as instants. PRs without a work item never get this row (nothing would clear it); Bitbucket and Gitea report nothing.
 
 1. `⌘0`, the item is at or near the top of Fix. `Enter` (or `f`; or `⌘.` `f` from the work tab). On a **Checks failed** row `Enter` is `fix_checks`, **Send failures to Claude**: no sheet, `work_feedback` is read, only its failed checks go to `feedback.md` with `claude.prompt_templates.checks`, and step 3 runs at once ("Sent 2 failed checks to Claude."). With no failed check left it sends nothing: "No failed check on #142 any more." `f` still opens the sheet.
 2. **Fix with Claude** sheet (`FixSheet.svelte`, mockup `f3-fix-sheet.png`):
-   - `work_feedback` lists unresolved review threads (author, `path:line`, body), review summaries with a body, and failed checks (check runs and legacy commit statuses) with the last 80 log lines, cleaned of ANSI sequences, GitLab section markers, `\r` overwrites and GitHub timestamps, a GitHub log cut after its last `##[error]` line. All checked by default; `j`/`k` + `Space` toggle (§7.1).
+   - `work_feedback` lists unresolved review threads (author, `path:line`, body), review summaries with a body, and failed checks (check runs and legacy commit statuses) with the last 80 log lines, cleaned of ANSI sequences, GitLab section markers, `\r` overwrites and GitHub timestamps, a GitHub log cut after its last `##[error]` line. Threads and reviews newer than `feedback_at` (all of them while it is unset) and every failed check are checked; older threads and reviews, and threads I answered last, are listed unchecked under **Seen before** in their group. `j`/`k` + `Space` toggle (§7.1).
    - Prompt from `claude.prompt_templates.feedback` (`checks` when the feedback is failed checks only), editable, focused.
    - Footer names the conversation that will be resumed ("Resumes conversation 3f2a91c0 from 2d ago").
-3. `⌘↵`: Kelta writes the checked items to `feedback.md` **next to `ticket.md` in the item's private Claude run dir** (`files::write_private`, outside the worktree, so the tree stays clean and nothing gets committed), remembers the sent thread ids on the item, and calls `work_send` with a prompt that names the file by absolute path:
+3. `⌘↵`: Kelta writes the checked items to `feedback.md` **next to `ticket.md` in the item's private Claude run dir** (`files::write_private`, outside the worktree, so the tree stays clean and nothing gets committed), remembers the sent thread ids on the item, and calls `work_send` with a prompt that names the file by absolute path and `feedback_at` = the newest time over every entry shown, checked or not (the watermark never moves back; a deliberately unchecked thread stays quiet until someone replies to it):
    - Claude live, hooks active, `status` Done or `WaitingUser` (idle): the prompt is pasted (bracketed) and submitted.
    - Claude dead or tab closed: the tab is recreated (`work_resume`) and Claude starts as `claude --resume <claude_uuid> -- "<prompt>"`. If `--resume` is refused, the `--continue` fallback carries the same prompt.
-   - Claude `Working` or `NeedsInput` (hooks): the button reads **Send when Claude stops**; the prompt is held and pasted at Claude's next `Stop` ("Claude is working: it gets your message when it stops."), a second send is appended to it. Kelta never types into a permission prompt.
-   - Claude live but hooks inactive (status is a guess): never refused; the brief is written and the prompt is copied to the clipboard: "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." The sheet still offers [Fix hooks] [Copy prompt].
+   - Claude `Working` or `NeedsInput` (hooks): `⌘↵` stays enabled and the footer reads "Claude is working: it gets this when it stops."; the prompt is held and pasted at Claude's next `Stop` ("Claude is working: it gets your message when it stops."), a second send is appended to it. Kelta never types into a permission prompt.
+   - Claude live but hooks inactive (status is a guess): never refused; the brief is written and the prompt is copied to the clipboard: "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." The sheet's button reads **Copy for Claude** and it still offers [Fix hooks] [Copy prompt].
    - Every `work_send` caller (the sheet, `fix_checks`, Ask Claude to resolve, Ask Claude to commit) works this way; the sent thread ids are stored at send time, also when held.
    ![Fix with Claude sheet](images/flow/f3-fix-sheet.png)
 
@@ -464,7 +467,7 @@ Commands (`work_*`, all in `commands/work.rs`):
 - `work_diff{id}` → opens the diff editor pane in the item's tab (merge base to working tree).
 - `work_mark_reviewed{id}`.
 - `work_feedback{id}` → `Feedback`.
-- `work_send{id, prompt, files: Vec<(name, content)>}` → writes the files to the private run dir, then resumes or pastes into the item's Claude; `Conflict` when status is `Working`/`NeedsInput`, or when the session is live with `status_source != Hook`.
+- `work_send{id, prompt, files: Vec<(name, content)>, threads?, feedback_at?}` → writes the files to the private run dir, then resumes, pastes, holds until the next `Stop` (`Working`/`NeedsInput`) or copies to the clipboard (live with `status_source != Hook`); never refused for Claude's state. Stores `threads` and moves `feedback_at` forward (`max(old, new)` as instants).
 - `work_rebase{id, op: start{onto: base|remote_branch}|continue|abort}`.
 - `work_push{id, force: bool}` → force uses the recorded `remote_sha` lease plus `--force-if-includes`, refused unless `diverged`; any push refused while Claude is `Working`/`NeedsInput`.
 - `work_create_pr{…, origin: ui|mcp}`; only `ui` clears `review_due`, `mcp` sets it.

@@ -15,10 +15,18 @@
               "originalLine": 42,
               "comments": {
                 "nodes": [
-                  { "author": { "login": "erin" }, "body": "Reset the counter on success.", "url": "https://github.com/acme/shop/pull/101#discussion_r1" },
-                  { "author": { "login": "louis" }, "body": "Will do.", "url": "https://github.com/acme/shop/pull/101#discussion_r2" }
+                  { "author": { "login": "erin" }, "body": "Reset the counter on success.", "url": "https://github.com/acme/shop/pull/101#discussion_r1", "createdAt": "2026-10-01T09:00:00Z" },
+                  { "author": { "login": "louis" }, "body": "Will do.", "url": "https://github.com/acme/shop/pull/101#discussion_r2", "createdAt": "2026-10-01T10:00:00Z" }
                 ]
               }
+            },
+            {
+              "id": "PRRT_new",
+              "isResolved": false,
+              "path": "src/main.rs",
+              "line": 9,
+              "originalLine": 9,
+              "comments": { "nodes": [ { "author": { "login": "zed" }, "body": "Why?", "url": "https://github.com/acme/shop/pull/101#discussion_r4", "createdAt": "2026-10-02T09:00:00Z" } ] }
             },
             {
               "id": "PRRT_done",
@@ -32,7 +40,7 @@
         },
         "latestReviews": {
           "nodes": [
-            { "state": "CHANGES_REQUESTED", "body": "Close, two things to fix.", "author": { "login": "erin" } },
+            { "state": "CHANGES_REQUESTED", "body": "Close, two things to fix.", "submittedAt": "2026-10-01T08:00:00Z", "author": { "login": "erin" } },
             { "state": "COMMENTED", "body": "", "author": { "login": "zed" } },
             { "state": "COMMENTED", "body": "Self note", "author": { "login": "louis" } }
           ]

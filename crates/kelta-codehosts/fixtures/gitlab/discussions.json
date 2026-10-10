@@ -2,14 +2,21 @@
   {
     "id": "d-open",
     "notes": [
-      { "id": 301, "system": false, "resolvable": true, "resolved": false, "body": "Use a constant here.", "author": { "username": "zed" },
+      { "id": 301, "system": false, "resolvable": true, "resolved": false, "body": "Use a constant here.", "author": { "username": "zed" }, "created_at": "2026-10-01T09:00:00.000Z",
         "position": { "new_path": "a.rs", "old_path": "a.rs", "new_line": 12, "old_line": null } },
-      { "id": 302, "system": false, "resolvable": true, "resolved": false, "body": "Agreed.", "author": { "username": "louis" } }
+      { "id": 302, "system": false, "resolvable": true, "resolved": false, "body": "Agreed.", "author": { "username": "louis" }, "created_at": "2026-10-01T10:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "d-new",
+    "notes": [
+      { "id": 306, "system": false, "resolvable": true, "resolved": false, "body": "And here?", "author": { "username": "zed" }, "created_at": "2026-10-02T09:00:00.000+02:00" },
+      { "id": 307, "system": true, "resolvable": false, "body": "changed this line", "author": { "username": "louis" }, "created_at": "2026-10-02T09:30:00.000Z" }
     ]
   },
   {
     "id": "d-done",
-    "notes": [ { "id": 303, "system": false, "resolvable": true, "resolved": true, "body": "Fixed.", "author": { "username": "zed" } } ]
+    "notes": [ { "id": 303, "system": false, "resolvable": true, "resolved": true, "body": "Fixed.", "author": { "username": "zed" }, "created_at": "2026-10-03T09:00:00.000Z" } ]
   },
   {
     "id": "d-chat",

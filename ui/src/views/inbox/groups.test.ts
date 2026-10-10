@@ -153,6 +153,22 @@ describe('nowSections', () => {
     ]);
   });
 
+  it('New comments: a work item lands in Fix first; a PR without a work item does not', () => {
+    const sections = nowSections({
+      ...empty,
+      work: [entry('conflicts', 'fix'), entry('new_comments', 'fix')],
+      authored: [review(12, { last_comment_at: '2026-10-10T09:00:00Z', unresolved_threads: 2 })],
+    });
+    const fix = sections.find((s) => s.id === 'fix')!;
+    expect(fix.rows.map((r) => (r.type === 'work' ? r.phase.id : r.id))).toEqual([
+      'new_comments',
+      'conflicts',
+    ]);
+    // No watermark to clear it: it keeps today's rows (In review here).
+    expect(fix.rows.some((r) => r.id.includes('#12'))).toBe(false);
+    expect(sections.find((s) => s.id === 'in_flight')!.rows.some((r) => r.id.includes('#12'))).toBe(true);
+  });
+
   it('Ship: approved, unpushed, ready, merged; In flight: working, in review, idle', () => {
     const sections = nowSections({
       ...empty,

@@ -1425,7 +1425,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const s = spawn(w.project_id, { type: 'editor', adapter: 'nvim' }, 'diff', w.worktree);
       return updateSession(session(s.id), { work_item_id: w.id });
     },
-    work_send: ({ id, prompt, files, threads }) => {
+    work_send: ({ id, prompt, files, threads, feedback_at }) => {
       const w = work(id);
       if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
       const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
@@ -1443,6 +1443,8 @@ export function createMockTransport(options: MockOptions = {}): {
         updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
       }
       if (threads) w.sent_threads = [...threads];
+      if (feedback_at && !(Date.parse(w.feedback_at ?? '') >= Date.parse(feedback_at)))
+        w.feedback_at = feedback_at;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },

@@ -101,6 +101,7 @@ impl WorkService {
         prompt: &str,
         sent: Vec<SendFile>,
         threads: Option<Vec<String>>,
+        feedback_at: Option<String>,
     ) -> Result<WorkItem, KeltaError> {
         if prompt.trim().is_empty() {
             return Err(KeltaError::invalid("the prompt is empty"));
@@ -153,16 +154,18 @@ impl WorkService {
         } else {
             self.deliver_prompt(id, &text).await?;
         }
-        match threads {
-            Some(t) => {
-                self.update(id, |w| {
-                    w.sent_threads = t;
-                    true
-                })
-                .await
-            }
-            None => self.load(id).await,
+        if threads.is_none() && feedback_at.is_none() {
+            return self.load(id).await;
         }
+        self.update(id, |w| {
+            if let Some(t) = threads {
+                w.sent_threads = t;
+            }
+            // The watermark never moves back: an older sheet sent late keeps the newer one.
+            w.feedback_at = kelta_proto::later_rfc3339(w.feedback_at.take(), feedback_at);
+            true
+        })
+        .await
     }
 
     /// Code host + PR of a work item (its review ref, or its bound repo + `pr_url`).

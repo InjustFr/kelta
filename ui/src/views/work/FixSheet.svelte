@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Fix with Claude (FLOW §4.2): the PR's review feedback, all checked, an editable prompt, and one
-  // `⌘↵` that writes feedback.md to the private run dir and resumes the item's previous Claude.
+  // Fix with Claude (FLOW §4.2): the PR's review feedback, what is new since the last send checked,
+  // an editable prompt, and one `⌘↵` that writes feedback.md to the private run dir and resumes the
+  // item's previous Claude (held until its Stop while it works).
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -15,6 +16,8 @@
   import {
     feedbackEntries,
     feedbackMarkdown,
+    isNew,
+    newestAt,
     prLabel,
     promptTemplate,
     rememberReviewers,
@@ -46,6 +49,8 @@
   let loadError = $state<KeltaError | null>(null);
   let withoutFeedback = $state(false);
   let checked = $state<Record<string, boolean>>({});
+  /** New since the last send, fixed at load: the rest lists under "Seen before". */
+  let fresh = $state<Record<string, boolean>>({});
   let prompt = $state(untrack(() => promptTemplate('feedback')));
   let sending = $state(false);
   let sendError = $state<string | null>(null);
@@ -61,7 +66,16 @@
         ['check', 'Failed checks'],
       ] as const
     )
-      .map(([kind, label]) => ({ kind, label, rows: entries.filter((e) => e.kind === kind) }))
+      .map(([kind, label]) => {
+        const rows = entries.filter((e) => e.kind === kind);
+        return {
+          kind,
+          label,
+          rows,
+          news: rows.filter((e) => fresh[e.key]),
+          seen: rows.filter((e) => !fresh[e.key]),
+        };
+      })
       .filter((g) => g.rows.length > 0),
   );
   const ready = $derived((feedback !== null || withoutFeedback) && !sending);
@@ -76,7 +90,9 @@
       const fb = await ipc.workFeedback({ id });
       feedback = fb;
       const all = feedbackEntries(fb);
-      checked = Object.fromEntries(all.map((e) => [e.key, true]));
+      const since = untrack(() => item?.feedback_at);
+      fresh = Object.fromEntries(all.map((e) => [e.key, isNew(e, since)]));
+      checked = { ...fresh };
       if (all.length > 0 && all.every((e) => e.kind === 'check') && prompt === promptTemplate('feedback'))
         prompt = promptTemplate('checks');
       rememberReviewers(id, fb);
@@ -93,7 +109,9 @@
       const files = feedback ? [{ name: 'feedback.md', content: feedbackMarkdown(chosen) }] : [];
       const threads = chosen.flatMap((e) => (e.threadId ? [e.threadId] : []));
       const deferred = sendDeferred(id);
-      work.upsert(await ipc.workSend({ id, prompt, files, threads }));
+      // Every entry shown, ticked or not: a deliberately unticked thread does not nag again.
+      const feedback_at = newestAt(entries);
+      work.upsert(await ipc.workSend({ id, prompt, files, threads, feedback_at }));
       void work.refreshStatus();
       if (!deferred)
         toasts.info(`Sent ${chosen.length} feedback item${chosen.length === 1 ? '' : 's'} to Claude.`);
@@ -172,21 +190,28 @@
         {:else}
           {#each groups as g (g.kind)}
             <h3>{g.label} <span class="k-num">{g.rows.length}</span></h3>
-            <ul>
-              {#each g.rows as e (e.key)}
-                <li class:off={!checked[e.key]}>
-                  <label>
-                    <input type="checkbox" bind:checked={checked[e.key]} data-testid="fix-item" />
-                    <span class="title">{e.title}</span>
-                  </label>
-                  {#if e.kind === 'check'}
-                    <pre class="body log">{e.text}</pre>
-                  {:else}
-                    <p class="body">{e.text}</p>
-                  {/if}
-                </li>
-              {/each}
-            </ul>
+            {#snippet rows(list: FeedbackEntry[])}
+              <ul>
+                {#each list as e (e.key)}
+                  <li class:off={!checked[e.key]}>
+                    <label>
+                      <input type="checkbox" bind:checked={checked[e.key]} data-testid="fix-item" />
+                      <span class="title">{e.title}</span>
+                    </label>
+                    {#if e.kind === 'check'}
+                      <pre class="body log">{e.text}</pre>
+                    {:else}
+                      <p class="body">{e.text}</p>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/snippet}
+            {@render rows(g.news)}
+            {#if g.seen.length > 0}
+              <h4>Seen before</h4>
+              {@render rows(g.seen)}
+            {/if}
           {/each}
         {/if}
       </section>
@@ -213,7 +238,9 @@
 
     {#snippet actions()}
       <span class="resumes" data-testid="fix-resumes">
-        {#if item?.claude_uuid}
+        {#if busy}
+          Claude is working: it gets this when it stops.
+        {:else if item?.claude_uuid}
           Resumes conversation <code>{item.claude_uuid.slice(0, 8)}</code>{age(item.created_at)}
         {/if}
       </span>
@@ -223,7 +250,7 @@
         disabled={!ready}
         loading={sending}
         chord={submitChord}
-        onclick={() => void send()}>{busy ? 'Send when Claude stops' : 'Send to Claude'}</Button
+        onclick={() => void send()}>{hooksInactive ? 'Copy for Claude' : 'Send to Claude'}</Button
       >
     {/snippet}
   </Sheet>
@@ -247,6 +274,13 @@
     font-size: var(--k-font-size-sm);
     font-weight: 600;
     color: var(--k-fg-muted);
+  }
+
+  h4 {
+    margin: var(--k-space-2) 0 var(--k-space-1);
+    font-size: var(--k-font-size-xs);
+    font-weight: 600;
+    color: var(--k-fg-subtle);
   }
 
   ul {
