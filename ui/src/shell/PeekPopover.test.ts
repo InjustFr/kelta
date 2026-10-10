@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, sessions } from '$lib/stores';
 
-import { peek, peekWaiting } from './peek.svelte';
+import { HOVER_MS, peek, peekHover, peekWaiting } from './peek.svelte';
 import PeekPopover from './PeekPopover.svelte';
 
 const ASKING = '0199a6b2-0000-7000-8000-000000000005'; // billing Claude, needs_input
@@ -92,5 +92,20 @@ describe('PeekPopover', () => {
     await waitFor(() => expect(screen.getByTestId('peek-tail').textContent).not.toBe(''));
     expect(screen.getByTestId('peek-resume')).toBeTruthy();
     expect(screen.queryByTestId('peek-reply')).toBeNull();
+  });
+
+  it('a hover over another anchor does not swap a popover that holds the keyboard', () => {
+    vi.useFakeTimers();
+    try {
+      peek.open(ASKING, null, true);
+      const anchor = document.createElement('div');
+      const action = peekHover(anchor, () => DORMANT);
+      anchor.dispatchEvent(new MouseEvent('mouseenter'));
+      vi.advanceTimersByTime(HOVER_MS);
+      expect(peek.id).toBe(ASKING);
+      action.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

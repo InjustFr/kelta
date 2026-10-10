@@ -11,6 +11,8 @@
   import { detectMenu } from './peekMenu';
 
   const TAIL_LINES = 15;
+  /** Full popover: 15 tail lines, preview, a 3-option menu, reply and footer. */
+  const PEEK_HEIGHT = 500;
 
   let root = $state<HTMLElement>();
   let input = $state<HTMLInputElement>();
@@ -23,7 +25,7 @@
   const menu = $derived(live && s?.status === 'needs_input' ? detectMenu(tail) : null);
   const style = $derived.by(() => {
     if (!peek.at) return `left: calc(50% - ${PEEK_WIDTH / 2}px); top: 48px;`;
-    const top = Math.max(8, Math.min(peek.at.y, window.innerHeight - 380));
+    const top = Math.max(8, Math.min(peek.at.y, window.innerHeight - PEEK_HEIGHT - 8));
     return `left: ${peek.at.x}px; top: ${top}px;`;
   });
 
@@ -159,6 +161,8 @@
     z-index: var(--k-z-menu);
     width: 480px;
     max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow: auto;
     display: flex;
     flex-direction: column;
     gap: var(--k-space-3);

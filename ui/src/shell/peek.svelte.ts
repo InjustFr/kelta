@@ -112,7 +112,8 @@ export function peekHover(node: HTMLElement, target: () => SessionId | null) {
     // one-shot: hover intent
     timer = setTimeout(() => {
       const id = get();
-      if (id) peek.open(id, node.getBoundingClientRect(), false);
+      // The popover holds the keyboard: a stray hover must not swap the session under a typed reply.
+      if (id && !peek.focused) peek.open(id, node.getBoundingClientRect(), false);
     }, HOVER_MS);
   };
   const leave = (): void => {
