@@ -230,15 +230,26 @@ pub fn detect(
                 Some(("github", AccountKind::Github))
             } else if host.contains("gitlab") {
                 Some(("gitlab", AccountKind::Gitlab))
+            } else if host == "bitbucket.org" {
+                Some(("bitbucket", AccountKind::Bitbucket))
+            } else if host.contains("gitea") || host.contains("forgejo") || host == "codeberg.org" {
+                Some(("gitea", AccountKind::Gitea))
             } else {
                 None
             };
-            let account = account_for_host(accounts, &[AccountKind::Github, AccountKind::Gitlab], &host);
+            let account = account_for_host(
+                accounts,
+                &[AccountKind::Github, AccountKind::Gitlab, AccountKind::Bitbucket, AccountKind::Gitea],
+                &host,
+            );
             let kind_name = match (&kind, &account) {
                 (Some((k, _)), _) => Some((*k).to_owned()),
-                (None, Some(a)) => accounts
-                    .get(a)
-                    .map(|c| if c.kind == AccountKind::Gitlab { "gitlab".into() } else { "github".into() }),
+                (None, Some(a)) => accounts.get(a).map(|c| match c.kind {
+                    AccountKind::Gitlab => "gitlab".into(),
+                    AccountKind::Bitbucket => "bitbucket".into(),
+                    AccountKind::Gitea => "gitea".into(),
+                    _ => "github".into(),
+                }),
                 _ => None,
             };
             if let Some(k) = kind_name {
@@ -259,10 +270,11 @@ pub fn detect(
                         key: Some(rpath.clone()),
                         account: account.clone(),
                     });
-                } else if k == "gitlab" {
+                } else if k == "gitlab" || k == "gitea" {
+                    let label = if k == "gitlab" { "GitLab" } else { "Gitea" };
                     tracker_hints.push(TrackerHint {
-                        kind: "gitlab".into(),
-                        reason: format!("{rpath} is hosted on {host} (GitLab Issues)"),
+                        kind: k.clone(),
+                        reason: format!("{rpath} is hosted on {host} ({label} Issues)"),
                         key: Some(rpath.clone()),
                         account: account.clone(),
                     });

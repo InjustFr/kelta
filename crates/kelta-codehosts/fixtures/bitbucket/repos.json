@@ -1,0 +1,11 @@
+{
+  "pagelen": 50,
+  "page": 1,
+  "values": [
+    {
+      "type": "repository",
+      "full_name": "acme/shop",
+      "slug": "shop"
+    }
+  ]
+}

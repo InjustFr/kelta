@@ -1,0 +1,50 @@
+[
+  {
+    "id": 9007,
+    "number": 7,
+    "title": "SHOP-142 Add rate limiter",
+    "state": "open",
+    "html_url": "https://git.acme.example/acme/shop/pulls/7",
+    "user": {
+      "id": 2,
+      "login": "dave",
+      "full_name": "Dave R",
+      "avatar_url": "https://git.acme.example/avatars/2"
+    },
+    "updated_at": "2026-10-08T09:12:44Z",
+    "pull_request": {
+      "merged": false,
+      "draft": false
+    },
+    "repository": {
+      "id": 5,
+      "name": "shop",
+      "owner": "acme",
+      "full_name": "acme/shop"
+    }
+  },
+  {
+    "id": 9009,
+    "number": 9,
+    "title": "WIP: spike new header",
+    "state": "open",
+    "html_url": "https://git.acme.example/acme/web/pulls/9",
+    "user": {
+      "id": 2,
+      "login": "dave",
+      "full_name": "Dave R",
+      "avatar_url": "https://git.acme.example/avatars/2"
+    },
+    "updated_at": "2026-10-08T09:12:44Z",
+    "pull_request": {
+      "merged": false,
+      "draft": false
+    },
+    "repository": {
+      "id": 5,
+      "name": "web",
+      "owner": "acme",
+      "full_name": "acme/web"
+    }
+  }
+]

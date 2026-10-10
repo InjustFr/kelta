@@ -14,6 +14,7 @@ pub enum TrackerKind {
     Redmine,
     GithubIssues,
     GitlabIssues,
+    GiteaIssues,
     Linear,
 }
 

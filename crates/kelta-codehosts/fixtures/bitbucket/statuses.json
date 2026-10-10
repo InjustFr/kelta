@@ -1,0 +1,24 @@
+{
+  "pagelen": 10,
+  "page": 1,
+  "values": [
+    {
+      "key": "build",
+      "name": "Build",
+      "state": "SUCCESSFUL",
+      "url": "https://ci.acme.example/1"
+    },
+    {
+      "key": "test",
+      "name": "Tests",
+      "state": "FAILED",
+      "url": "https://ci.acme.example/2"
+    },
+    {
+      "key": "lint",
+      "name": "Lint",
+      "state": "INPROGRESS",
+      "url": "https://ci.acme.example/3"
+    }
+  ]
+}

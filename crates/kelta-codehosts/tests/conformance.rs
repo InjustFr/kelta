@@ -1,4 +1,4 @@
-//! One conformance harness, run against every code-host provider (GitHub, GitLab).
+//! One conformance harness, run against every code-host provider (GitHub, GitLab, Gitea, Bitbucket).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -23,6 +23,10 @@ struct Case {
     kind_str: &'static str,
     /// Repo used for create / find_for_branch.
     repo: &'static str,
+    /// Start of the fetch refspec of review `#{n}` (the rest is `:<local branch>`).
+    refspec: &'static str,
+    /// The provider has a cheap change gate (`changed_since_last`); without one it always says yes.
+    gate: bool,
     mock_ok: Mocks,
 }
 
@@ -76,6 +80,51 @@ mocks!(gitlab_mocks, |s| {
         .await;
 });
 
+mocks!(gitea_mocks, |s| {
+    mount(s, "GET", "/api/v1/user", 200, "gitea/user.json").await;
+    mount(s, "GET", "/api/v1/repos/issues/search", 200, "gitea/search_pulls.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/pulls/7", 200, "gitea/pull_7.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/web/pulls/9", 200, "gitea/pull_9.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/pulls/7/reviews", 200, "gitea/reviews.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/pulls/7/files", 200, "gitea/files.json").await;
+    mount(
+        s,
+        "GET",
+        "/api/v1/repos/acme/shop/commits/abc1230000000000000000000000000000000000/status",
+        200,
+        "gitea/status.json",
+    )
+    .await;
+    mount(s, "POST", "/api/v1/repos/acme/shop/pulls/7/reviews", 200, "gitea/reviews_approved_by_me.json")
+        .await;
+    ok(s, "POST", "/api/v1/repos/acme/shop/issues/7/comments", 201).await;
+    mount(s, "POST", "/api/v1/repos/acme/shop/pulls", 201, "gitea/pull_created.json").await;
+    mount(s, "GET", "/api/v1/repos/acme/shop/pulls", 200, "gitea/pulls_open.json").await;
+});
+
+mocks!(bitbucket_mocks, |s| {
+    mount(s, "GET", "/user", 200, "bitbucket/user.json").await;
+    mount(s, "GET", "/user/workspaces", 200, "bitbucket/workspaces.json").await;
+    mount(
+        s,
+        "GET",
+        "/workspaces/acme/pullrequests/%7B470c176d-3574-44ea-bb41-89e8638bcca4%7D",
+        200,
+        "bitbucket/prs.json",
+    )
+    .await;
+    mount(s, "GET", "/repositories/acme", 200, "bitbucket/repos.json").await;
+    let pr = "/repositories/acme/shop/pullrequests";
+    mount(s, "GET", pr, 200, "bitbucket/prs.json").await;
+    mount(s, "GET", &format!("{pr}/7"), 200, "bitbucket/pr_7.json").await;
+    mount(s, "GET", &format!("{pr}/7/statuses"), 200, "bitbucket/statuses.json").await;
+    mount(s, "GET", &format!("{pr}/7/diffstat"), 200, "bitbucket/diffstat.json").await;
+    ok(s, "POST", &format!("{pr}/7/approve"), 200).await;
+    ok(s, "POST", &format!("{pr}/7/comments"), 201).await;
+    ok(s, "POST", &format!("{pr}/7/request-changes"), 200).await;
+    mount(s, "POST", pr, 201, "bitbucket/pr_7.json").await;
+});
+
 fn cases() -> Vec<Case> {
     vec![
         Case {
@@ -84,6 +133,8 @@ fn cases() -> Vec<Case> {
             account_id: "github-work",
             kind_str: "github",
             repo: "acme/shop",
+            refspec: "pull/{n}/head:",
+            gate: true,
             mock_ok: github_mocks,
         },
         Case {
@@ -92,7 +143,30 @@ fn cases() -> Vec<Case> {
             account_id: "gitlab-acme",
             kind_str: "gitlab",
             repo: "grp/sub/proj",
+            refspec: "merge-requests/{n}/head:",
+            gate: true,
             mock_ok: gitlab_mocks,
+        },
+        Case {
+            name: "gitea",
+            kind: CodeHostKind::Gitea,
+            account_id: "gitea-main",
+            kind_str: "gitea",
+            repo: "acme/shop",
+            refspec: "pull/{n}/head:",
+            gate: false,
+            mock_ok: gitea_mocks,
+        },
+        Case {
+            name: "bitbucket",
+            kind: CodeHostKind::Bitbucket,
+            account_id: "bitbucket-acme",
+            kind_str: "bitbucket",
+            repo: "acme/shop",
+            // no PR refs on Bitbucket Cloud: the source branch of the listed review is fetched
+            refspec: "feature/SHOP-142-limiter:",
+            gate: false,
+            mock_ok: bitbucket_mocks,
         },
     ]
 }
@@ -173,12 +247,8 @@ async fn every_code_host_honours_the_contract() {
         assert!(found.is_some(), "{n}: find_for_branch");
 
         let spec = h.fetch_refspec(&first.r#ref, "kelta/review-1");
-        assert!(
-            spec.contains(&first.r#ref.number.to_string())
-                && spec.ends_with(":kelta/review-1")
-                && spec.contains("/head:"),
-            "{n}: {spec}"
-        );
+        let want = case.refspec.replace("{n}", &first.r#ref.number.to_string());
+        assert!(spec.starts_with(&want) && spec.ends_with(":kelta/review-1"), "{n}: {spec}");
     }
 }
 
@@ -186,14 +256,28 @@ async fn every_code_host_honours_the_contract() {
 fn every_code_host_resolves_remotes_of_its_own_host_only() {
     let github = host("github-work", "github", "https://api.github.com");
     let gitlab = host("gitlab-acme", "gitlab", "https://gitlab.acme.example");
+    let gitea = host("gitea-main", "gitea", "https://git.acme.example");
+    let bitbucket = host("bitbucket-acme", "bitbucket", "https://api.bitbucket.org/2.0");
     assert_eq!(github.repo_from_remote("git@github.com:acme/shop.git").as_deref(), Some("acme/shop"));
     assert_eq!(
         gitlab.repo_from_remote("git@GITLAB.acme.example:grp/sub/proj.git").as_deref(),
         Some("grp/sub/proj")
     );
+    assert_eq!(
+        gitea.repo_from_remote("ssh://git@git.acme.example:2222/acme/shop.git").as_deref(),
+        Some("acme/shop")
+    );
+    assert_eq!(gitea.repo_from_remote("https://git.acme.example/acme/shop/").as_deref(), Some("acme/shop"));
+    assert_eq!(gitea.repo_from_remote("https://git.acme.example/acme"), None);
+    assert_eq!(bitbucket.repo_from_remote("git@bitbucket.org:acme/shop.git").as_deref(), Some("acme/shop"));
+    assert_eq!(
+        bitbucket.repo_from_remote("https://louis@bitbucket.org/acme/shop.git").as_deref(),
+        Some("acme/shop")
+    );
+    assert_eq!(bitbucket.repo_from_remote("git@github.com:acme/shop.git"), None);
     assert_eq!(github.repo_from_remote("git@gitlab.acme.example:grp/proj.git"), None);
     assert_eq!(gitlab.repo_from_remote("git@github.com:acme/shop.git"), None);
-    for h in [&github, &gitlab] {
+    for h in [&github, &gitlab, &gitea, &bitbucket] {
         assert_eq!(h.repo_from_remote("/local/path"), None);
         assert_eq!(h.repo_from_remote(""), None);
     }
@@ -222,7 +306,11 @@ async fn every_code_host_maps_401_to_needs_auth() {
         assert_eq!(err_code(h.request_changes(&r, "x").await), ErrorCode::NeedsAuth, "{n}: request_changes");
         assert_eq!(err_code(h.create(&create_req(case.repo)).await), ErrorCode::NeedsAuth, "{n}: create");
         assert_eq!(err_code(h.find_for_branch(case.repo, "b").await), ErrorCode::NeedsAuth, "{n}: find");
-        assert_eq!(err_code(h.changed_since_last().await), ErrorCode::NeedsAuth, "{n}: gate");
+        if case.gate {
+            assert_eq!(err_code(h.changed_since_last().await), ErrorCode::NeedsAuth, "{n}: gate");
+        } else {
+            assert!(h.changed_since_last().await.unwrap(), "{n}: no gate means always changed");
+        }
     }
 }
 

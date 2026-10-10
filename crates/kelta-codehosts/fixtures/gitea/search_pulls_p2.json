@@ -1,0 +1,26 @@
+[
+  {
+    "id": 9011,
+    "number": 11,
+    "title": "SHOP-150 Cache headers",
+    "state": "open",
+    "html_url": "https://git.acme.example/acme/shop/pulls/11",
+    "user": {
+      "id": 2,
+      "login": "dave",
+      "full_name": "Dave R",
+      "avatar_url": "https://git.acme.example/avatars/2"
+    },
+    "updated_at": "2026-10-08T09:12:44Z",
+    "pull_request": {
+      "merged": false,
+      "draft": false
+    },
+    "repository": {
+      "id": 5,
+      "name": "shop",
+      "owner": "acme",
+      "full_name": "acme/shop"
+    }
+  }
+]

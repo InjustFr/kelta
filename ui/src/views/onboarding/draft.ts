@@ -103,6 +103,7 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
     case 'github':
       return { ...base, repo: hint };
     case 'gitlab':
+    case 'gitea':
       return { ...base, project: hint, scope: 'assigned_to_me' };
     case 'linear':
       return { ...base, team: hint, scope: 'assigned_to_me' };
