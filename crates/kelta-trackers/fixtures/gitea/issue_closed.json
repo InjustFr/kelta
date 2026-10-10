@@ -41,5 +41,6 @@
     "name": "shop",
     "owner": "acme",
     "full_name": "acme/shop"
-  }
+  },
+  "closed_at": "2026-10-08T09:10:00Z"
 }

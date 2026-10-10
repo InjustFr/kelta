@@ -246,7 +246,7 @@ impl PluginHost {
                         .cloned()
                         .ok_or_else(|| KeltaError::invalid("the tracker binding has no views"))?,
                 };
-                let tracker = core.tracker_for(&binding.account).await?;
+                let tracker = core.tracker_for(view.account.as_ref().unwrap_or(&binding.account)).await?;
                 let page = tracker.list(&view, q.cursor).await?;
                 to_value(TicketPage {
                     items: page
@@ -256,6 +256,9 @@ impl PluginHost {
                             ticket,
                             project_ids: vec![pid.clone()],
                             work_item_id: None,
+                            view_ids: vec![view.id.clone()],
+                            caps: tracker.caps(),
+                            ..TicketItem::default()
                         })
                         .collect(),
                     next: page.next,

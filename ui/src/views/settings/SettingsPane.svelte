@@ -18,6 +18,7 @@
   import { currentPlatform } from '$lib/ui/format';
   import { untrack, type Component } from 'svelte';
 
+  import { takeTomlRequest } from './actions';
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
@@ -27,9 +28,10 @@
 
   let { projectId, content }: PaneProps<'settings'> = $props();
 
+  const tomlProject = takeTomlRequest();
   const initialTarget = () => ({
-    layer: 'global' as const,
-    projectId: projectId !== 'home' ? projectId : null,
+    layer: tomlProject ? ('project' as const) : ('global' as const),
+    projectId: tomlProject ?? (projectId !== 'home' ? projectId : null),
   });
   const editor = provideEditor(new SettingsEditor(initialTarget()));
   const platform = currentPlatform();
@@ -37,7 +39,7 @@
 
   let sectionId = $state<string>('general');
   let query = $state('');
-  let editRaw = $state(false);
+  let editRaw = $state(tomlProject !== null);
   let Active = $state<Component<SettingsSectionProps> | null>(null);
   let sectionLoading = $state(false);
   let layerIssues = $state<ValidationIssue[]>([]);

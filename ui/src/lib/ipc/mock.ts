@@ -19,9 +19,12 @@ import type {
   ProjectInfo,
   ReviewDetail,
   ReviewItem,
+  ReviewNote,
+  ReviewNotes,
   ScreenInstanceId,
   SessionInfo,
   SessionKind,
+  SourceHit,
   StatusCategory,
   Ticket,
   TicketDetail,
@@ -40,6 +43,7 @@ import type { CommandArgs, CommandName, CommandResult } from './commands';
 import layoutsJson from './mock/fixtures/layouts.json';
 import projectsJson from './mock/fixtures/projects.json';
 import reviewsJson from './mock/fixtures/reviews.json';
+import sourcesJson from './mock/fixtures/sources.json';
 import sessionsJson from './mock/fixtures/sessions.json';
 import ticketsJson from './mock/fixtures/tickets.json';
 import toolsJson from './mock/fixtures/tools.json';
@@ -57,6 +61,8 @@ const FIXTURES = {
   work: workJson as unknown as WorkItem[],
   git: workStatusJson as Record<string, GitStatus>,
   tools: toolsJson as unknown as ToolInfo[],
+  /** `tracker_sources` hits per account; absent account = provider without discovery. */
+  sources: sourcesJson as unknown as Record<string, SourceHit[]>,
 };
 
 export const MOCK_FIXTURES: Readonly<typeof FIXTURES> = FIXTURES;
@@ -102,6 +108,8 @@ export interface MockState {
   /** Pending (draft) review line comments per `repo#number`. */
   pending: Record<string, number>;
   plugins: (typeof samples.pluginInfo)[];
+  /** Review notes per work item. */
+  notes: Record<string, ReviewNote[]>;
 }
 
 interface MockOptions {
@@ -118,6 +126,9 @@ function err(code: KeltaError['code'], message: string, detail: JsonValue | null
   return { code, message, detail, retry_after_ms: null };
 }
 
+/** The mock's signed-in user (`Assignee::Me`, `who: mine`). */
+const ME = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
+
 const CATEGORY_NAMES: Record<StatusCategory, string> = {
   todo: 'To do',
   in_progress: 'In progress',
@@ -126,12 +137,47 @@ const CATEGORY_NAMES: Record<StatusCategory, string> = {
   unknown: 'Unknown',
 };
 
+function sampleNotes(id: string): ReviewNote[] {
+  const note = (
+    n: number,
+    path: string,
+    line: number,
+    body: string,
+    st: ReviewNote['state'],
+  ): ReviewNote => ({
+    id: n,
+    work_item_id: id,
+    path,
+    line_start: line,
+    line_end: line + 2,
+    body,
+    source: 'nvim',
+    ext_ref: null,
+    state: st,
+    sent_at: st === 'open' ? null : '2026-01-01T10:00:00Z',
+  });
+  return [
+    note(1, 'src/checkout/rate_limit.rs', 10, 'use the existing backoff helper', 'open'),
+    note(2, 'src/checkout/mod.rs', 3, 'name this after the ticket', 'untouched'),
+  ];
+}
+
+/** The fixtures' `status_since` are written as of this instant; shifted to now so ages stay 3/10/16/25 days. */
+const FIXTURE_NOW = Date.parse('2026-10-10T12:00:00Z');
+
+function rebaseAges(items: TicketItem[]): TicketItem[] {
+  const shift = Date.now() - FIXTURE_NOW;
+  for (const { ticket: t } of items)
+    if (t.status_since) t.status_since = new Date(Date.parse(t.status_since) + shift).toISOString();
+  return items;
+}
+
 function freshState(): MockState {
   return {
     projects: clone(FIXTURES.projects),
     sessions: clone(FIXTURES.sessions),
     layouts: clone(FIXTURES.layouts),
-    tickets: clone(FIXTURES.tickets),
+    tickets: rebaseAges(clone(FIXTURES.tickets)),
     reviews: clone(FIXTURES.reviews),
     work: clone(FIXTURES.work),
     git: clone(FIXTURES.git),
@@ -142,6 +188,7 @@ function freshState(): MockState {
     remoteNew: {},
     pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
+    notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
   };
 }
 
@@ -157,7 +204,7 @@ const FINISH_MERGED: FinishOpts = {
   transition_to: null,
 };
 
-function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
+function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
   const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
   return {
     ticket: t,
@@ -177,6 +224,8 @@ function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
       })),
     ],
     parent: null,
+    prs,
+    caps,
   };
 }
 
@@ -198,16 +247,41 @@ function defaultColumns(): Column[] {
   }));
 }
 
+// Native status names per tracker, so transition sets differ across accounts (multi-select `m`).
+const NATIVE_STATUSES: Record<string, [StatusCategory, string][]> = {
+  'redmine-corp': [
+    ['todo', 'New'],
+    ['in_progress', 'In Progress'],
+    ['done', 'Resolved'],
+  ],
+  'jira-acme': [
+    ['todo', CATEGORY_NAMES.todo],
+    ['in_progress', CATEGORY_NAMES.in_progress],
+    ['in_review', CATEGORY_NAMES.in_review],
+    ['done', CATEGORY_NAMES.done],
+    ['in_progress', 'Blocked'],
+  ],
+};
+
 function transitionsFor(t: Ticket): Transition[] {
   const cats: StatusCategory[] = ['todo', 'in_progress', 'in_review', 'done'];
-  return cats
-    .filter((c) => c !== t.status.category)
-    .map((category) => ({
-      id: `to-${category}`,
-      name: CATEGORY_NAMES[category],
-      to: { id: `st-${category}`, name: CATEGORY_NAMES[category], category },
-      needs_fields: category === 'done' && t.ref.account === 'jira-acme',
-    }));
+  const native =
+    NATIVE_STATUSES[t.ref.account] ?? cats.map((c): [StatusCategory, string] => [c, CATEGORY_NAMES[c]]);
+  return native
+    .filter(
+      ([c, name]) =>
+        name !== t.status.name &&
+        (c !== t.status.category || name === 'Blocked' || t.status.name === 'Blocked'),
+    )
+    .map(([category, name]) => {
+      const id = name === 'Blocked' ? 'to-blocked' : `to-${category}`;
+      return {
+        id,
+        name,
+        to: { id: `st-${id.slice(3)}`, name, category },
+        needs_fields: category === 'done' && t.ref.account === 'jira-acme',
+      };
+    });
 }
 
 function setPath(root: JsonValue, path: string, value: JsonValue | undefined): JsonValue {
@@ -301,6 +375,11 @@ export function createMockTransport(options: MockOptions = {}): {
     if (!w) throw err('not_found', `work item not found: ${id}`);
     return w;
   };
+  const notesOf = (id: string): ReviewNotes => ({
+    worktree: work(id).worktree,
+    notes: clone(state.notes[id] ?? []),
+    since: null,
+  });
   // A recorded rebase awaiting its force push is "diverged"; `remoteNew` drives "Remote has new commits".
   const gitOf = (w: WorkItem): GitStatus => {
     const base = clone(state.git[w.id] ?? samples.gitStatus);
@@ -350,6 +429,7 @@ export function createMockTransport(options: MockOptions = {}): {
       ...item.ticket,
       status: { id: `st-${category}`, name: name ?? CATEGORY_NAMES[category], category },
       updated_at: new Date().toISOString(),
+      status_since: new Date().toISOString(),
     };
     const scopes = item.project_ids.map((id) => ({ kind: 'project' as const, id }));
     for (const scope of [...scopes, { kind: 'all' as const }]) emit({ type: 'tickets.changed', scope });
@@ -695,11 +775,28 @@ export function createMockTransport(options: MockOptions = {}): {
         .slice(0, limit),
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
-    tracker_list: ({ scope, view_id, cursor }) => {
-      const items =
-        scope.kind === 'all' ? state.tickets : state.tickets.filter((t) => t.project_ids.includes(scope.id));
+    tracker_list: ({ scope, view_id, cursor, who }) => {
+      // the view the core would query for this ticket's project (`view_id`, else the first)
+      const viewOf = (t: TicketItem) => {
+        const pid = scope.kind === 'all' ? t.project_ids[0] : scope.id;
+        const views = state.projects.find((p) => p.id === pid)?.tracker?.views ?? [];
+        return views.find((v) => v.id === view_id) ?? views[0];
+      };
+      const items = state.tickets
+        .filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))
+        .map((t) => ({ item: t, view: viewOf(t) }))
+        .filter(({ item, view }) => {
+          const w = who ?? view?.who;
+          return w === 'mine'
+            ? item.ticket.assignee?.id === ME.id
+            : w === 'unassigned'
+              ? !item.ticket.assignee
+              : true;
+        })
+        .map(({ item, view }) => ({ ...item, view_ids: view ? [view.id] : [] }));
+      // `view_id` null = the union of the views (WP2), which keeps done tickets
       const filtered =
-        view_id === 'sprint'
+        view_id === 'sprint' || view_id == null
           ? items
           : items.filter((t) => t.ticket.status.category !== 'done' || view_id === 'all');
       const pageSize = 50;
@@ -714,7 +811,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     tracker_get: ({ ticket }) => {
       const item = ticketItem(ticket);
-      return ticketDetailFor(clone(item.ticket), state.comments[refKey(ticket)] ?? []);
+      return ticketDetailFor(clone(item), state.comments[refKey(ticket)] ?? []);
     },
     tracker_columns: ({ project_id }) => {
       const p = project(project_id);
@@ -732,6 +829,10 @@ export function createMockTransport(options: MockOptions = {}): {
     tracker_transition: ({ ticket, transition_id, fields }) => {
       const t = transitionsFor(ticketItem(ticket).ticket).find((x) => x.id === transition_id);
       if (!t) throw err('not_found', `transition ${transition_id} not available`);
+      // The tracker refuses this one (workflow rule): the StatusPicker's error path.
+      if (ticket.account === 'redmine-corp' && ticket.key === '4567' && t.to.category === 'done') {
+        throw err('conflict', 'Redmine: status transition not allowed (422)');
+      }
       if (t.needs_fields && !fields) {
         throw err('needs_fields', `${t.name} requires fields`, {
           fields: [{ id: 'resolution', name: 'Resolution', required: true }],
@@ -739,9 +840,9 @@ export function createMockTransport(options: MockOptions = {}): {
       }
       return updateTicket(ticket, t.to.category, t.to.name);
     },
-    tracker_move: ({ ticket, column_id }) => {
+    tracker_move: ({ ticket, column_id, project_id }) => {
       const item = ticketItem(ticket);
-      const projectId = item.project_ids[0];
+      const projectId = project_id ?? item.project_ids[0];
       const columns = projectId ? handlers.tracker_columns({ project_id: projectId }) : defaultColumns();
       const col = (columns as Column[]).find((c) => c.id === column_id);
       if (!col) throw err('not_found', `column ${column_id} not found`);
@@ -749,18 +850,19 @@ export function createMockTransport(options: MockOptions = {}): {
       return updateTicket(ticket, col.category, col.name);
     },
     tracker_comment: ({ ticket, markdown }) => {
-      ticketItem(ticket);
+      if (!ticketItem(ticket).caps.comment) throw err('unsupported', `${ticket.account} cannot comment`);
       const key = refKey(ticket);
       state.comments[key] = [...(state.comments[key] ?? []), markdown];
       return null;
     },
     tracker_assign: ({ ticket, assignee }) => {
       const item = ticketItem(ticket);
+      if (!item.caps.assign) throw err('unsupported', `${ticket.account} cannot assign`);
       item.ticket.assignee =
         assignee.kind === 'none'
           ? null
           : assignee.kind === 'me'
-            ? { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null }
+            ? { ...ME }
             : { id: assignee.id, name: assignee.id, login: null, avatar_url: null };
       return clone(item.ticket);
     },
@@ -773,6 +875,12 @@ export function createMockTransport(options: MockOptions = {}): {
             (t.ticket.ref.key.toLowerCase().includes(q) || t.ticket.title.toLowerCase().includes(q)),
         ),
       );
+    },
+    tracker_sources: ({ account_id, query }) => {
+      const hits = FIXTURES.sources[account_id];
+      if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
+      const q = query.trim().toLowerCase();
+      return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
     },
     // ---- reviews ---------------------------------------------------------------------------
     review_list: ({ scope, kind }) => ({
@@ -818,6 +926,14 @@ export function createMockTransport(options: MockOptions = {}): {
       item.review.my_state = 'changes_requested';
       item.review.reviewed_head = item.review.head_sha;
       delete state.pending[prKey(review)];
+      return null;
+    },
+    review_nudge: ({ review }) => {
+      const item = reviewItem(review);
+      const last = item.review.nudged_at ? Date.parse(item.review.nudged_at) : 0;
+      if (Date.now() - last < 24 * 3600_000) throw err('invalid_argument', 'already nudged in the last 24 h');
+      item.review.nudged_at = new Date().toISOString();
+      emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
       return null;
     },
     // ---- work ------------------------------------------------------------------------------
@@ -1205,6 +1321,22 @@ export function createMockTransport(options: MockOptions = {}): {
       w.state = { kind: 'queued', pos: pos - 1 };
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
+    },
+    work_notes: ({ id }) => notesOf(id),
+    work_note_resolve: ({ id, note }) => {
+      const n = (state.notes[id] ?? []).find((x) => x.id === note);
+      if (!n) throw err('not_found', `note ${note}`);
+      n.state = 'resolved';
+      emit({ type: 'work.updated', work: clone(work(id)) });
+      return notesOf(id);
+    },
+    work_notes_send: ({ id }) => {
+      const open = (state.notes[id] ?? []).filter((n) => n.state === 'open' || n.state === 'untouched');
+      if (open.length === 0) throw err('invalid_argument', 'no open review notes');
+      const now = new Date().toISOString();
+      for (const n of open) Object.assign(n, { state: 'sent', sent_at: now });
+      emit({ type: 'work.updated', work: clone(work(id)) });
+      return notesOf(id);
     },
     work_arm_merge: ({ id }) => {
       const w = work(id);

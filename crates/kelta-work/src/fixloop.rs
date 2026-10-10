@@ -31,7 +31,7 @@ pub(crate) fn claude_of(core: &Arc<dyn CoreApi>, item: &WorkItem, j: &Journal) -
         .filter(|s| s.lifecycle != Lifecycle::Exited)
 }
 
-fn busy(s: &SessionInfo) -> bool {
+pub(crate) fn busy(s: &SessionInfo) -> bool {
     s.lifecycle == Lifecycle::Live && matches!(s.status, SessionStatus::Working | SessionStatus::NeedsInput)
 }
 
@@ -178,7 +178,7 @@ impl WorkService {
             return Err(KeltaError::conflict("Review checkout: read-only"));
         }
         let (host, r) = self.pr_of(&item).await?;
-        host.rerequest_review(&r).await
+        host.rerequest_review(&r, &[]).await
     }
 
     /// `work_arm_merge` (`Some(method)`) / `work_disarm_merge` (`None`): the host's native auto-merge;

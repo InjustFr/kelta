@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::api::Tracker;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -49,6 +49,17 @@ async fn list_assigned_pages_and_filters_by_project() {
         (t.status.category, t.priority.as_deref(), t.assignee.as_ref().map(|u| u.id.as_str())),
         (StatusCategory::Todo, Some("high"), Some("louis"))
     );
+
+    // workbench fields: priority label, milestone as sprint (open + undated/future = active), dates
+    assert_eq!((t.priority_rank, t.status_since.as_deref()), (Some(1), Some("2026-10-08T09:12:44Z")));
+    let sp = t.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("7", "Sprint 4", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2999-01-31"));
+    assert_eq!(t.due.as_deref(), Some("2026-10-20"), "the issue's own due date wins over the milestone's");
+    let past = &p1.items[1];
+    assert_eq!(past.priority_rank, Some(0), "P0 beats priority/high");
+    assert_eq!(past.sprint.as_ref().map(|s| s.active), Some(false), "overdue milestone is not current");
+    assert_eq!(past.due.as_deref(), Some("2020-01-31"), "no issue due date: the milestone's");
 
     v.project = Some("acme/shop".into());
     let filtered = h.list(&v, None).await.unwrap();
@@ -106,6 +117,8 @@ async fn close_and_reopen_patch_the_state() {
     assert_eq!((ts[0].id.as_str(), ts[0].to.category), ("close", StatusCategory::Done));
     let moved = h.transition(&r(), "close", None).await.unwrap();
     assert_eq!(moved.status.category, StatusCategory::Done);
+    assert_eq!(moved.status_since.as_deref(), Some("2026-10-08T09:10:00Z"), "closed issues use closed_at");
+    assert!(moved.sprint.is_none() && moved.due.is_none());
     h.transition(&r(), "reopen", None).await.unwrap();
     let b = bodies(&server, "PATCH", ISSUE).await;
     assert_eq!((&b[0], &b[1]), (&json!({"state": "closed"}), &json!({"state": "open"})));
@@ -140,4 +153,61 @@ fn bitbucket_has_no_tracker_and_gitea_needs_a_base_url() {
         TrackerFactory.tracker(&no_url, http("g"), secrets()).err().unwrap().code,
         ErrorCode::InvalidArgument
     );
+}
+
+#[tokio::test]
+async fn who_picks_assigned_all_or_client_side_unassigned() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v1/repos/acme/shop/issues", 200, "gitea/issues_p1.json").await;
+    mount(&server, "GET", "/api/v1/repos/issues/search", 200, "gitea/issues_p1.json").await;
+    let h = gt(&server);
+    let mut v = view("v");
+    v.project = Some("acme/shop".into());
+    v.scope = Some("all".into()); // ignored once `who` is set
+    v.who = Some(Who::Mine);
+    assert_eq!(h.list(&v, None).await.unwrap().items.len(), 1);
+    v.who = Some(Who::Anyone);
+    assert_eq!(h.list(&v, None).await.unwrap().items.len(), 1);
+    v.who = Some(Who::Unassigned);
+    assert!(h.list(&v, None).await.unwrap().items.is_empty(), "both fixture issues are assigned");
+    let urls: Vec<_> = server.received_requests().await.unwrap().iter().map(|r| r.url.to_string()).collect();
+    assert!(urls[0].contains("/repos/issues/search?") && urls[0].contains("assigned=true"));
+    assert!(urls[1].contains("/repos/acme/shop/issues?") && !urls[1].contains("assigned"));
+}
+
+#[tokio::test]
+async fn unassigned_keeps_only_issues_without_assignees() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v1/repos/acme/shop/issues", 200, "gitea/issues_p2.json").await;
+    let mut v = view("v");
+    v.project = Some("acme/shop".into());
+    v.who = Some(Who::Unassigned);
+    let page = gt(&server).list(&v, None).await.unwrap();
+    assert_eq!(page.items[0].r#ref.key, "acme/shop#14");
+    v.project = None;
+    assert_eq!(gt(&server).list(&v, None).await.unwrap_err().code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn sources_search_repositories() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/repos/search"))
+        .and(query_param("q", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitea/repos_search.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let hits = gt(&server).sources(" shop ").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    let h = &hits[0];
+    assert_eq!(
+        (h.kind.as_str(), h.label.as_str(), h.detail.as_deref()),
+        ("repo", "acme/shop", Some("The storefront"))
+    );
+    assert_eq!(
+        (h.view.id.as_str(), h.view.project.as_deref(), h.view.who),
+        ("gitea:repo:acme/shop", Some("acme/shop"), Some(Who::Mine))
+    );
+    assert_eq!(hits[1].detail, None, "empty descriptions are dropped");
 }

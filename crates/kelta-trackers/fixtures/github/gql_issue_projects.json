@@ -25,8 +25,15 @@
                   {
                     "name": "P1",
                     "field": {
-                      "name": "Priority"
+                      "name": "Priority",
+                      "options": [{"name": "P0"}, {"name": "P1"}]
                     }
+                  },
+                  {
+                    "iterationId": "it1",
+                    "title": "Sprint 7",
+                    "startDate": "2020-01-01",
+                    "duration": 14
                   }
                 ]
               }

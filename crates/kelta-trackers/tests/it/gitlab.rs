@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::TrackerBinding;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -295,4 +295,123 @@ async fn unauthorized_and_keys() {
     // a base_url that already ends in /api/v4 works too
     let t2 = tracker("gitlab-acme", "gitlab", &format!("{}/api/v4", server.uri()), json!({}));
     assert_eq!(t2.me().await.unwrap_err().code, ErrorCode::NeedsAuth);
+}
+
+async fn issue_queries(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.url.path().ends_with("/issues"))
+        .map(|r| r.url.query().unwrap_or("").to_owned())
+        .collect()
+}
+
+#[tokio::test]
+async fn who_picks_the_scope_and_the_unassigned_filter_and_overrides_legacy_scope() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/issues", 200, "gitlab/issues_p1.json").await;
+    let t = gl(&server);
+    for (who, legacy) in
+        [(Who::Mine, "all"), (Who::Unassigned, "assigned_to_me"), (Who::Anyone, "assigned_to_me")]
+    {
+        let mut v = view("v");
+        v.who = Some(who);
+        v.scope = Some(legacy.into());
+        t.list(&v, None).await.unwrap();
+    }
+    let q = issue_queries(&server).await;
+    assert!(q[0].contains("scope=assigned_to_me") && !q[0].contains("assignee_id"), "{}", q[0]);
+    assert!(q[1].contains("scope=all") && q[1].contains("assignee_id=None"), "{}", q[1]);
+    assert!(q[2].contains("scope=all") && !q[2].contains("assignee_id"), "{}", q[2]);
+}
+
+#[tokio::test]
+async fn current_iteration_filters_on_the_current_milestone() {
+    let server = MockServer::start().await;
+    let ms = r#"[{"title":"v1.0","due_date":"2000-01-01"},{"title":"Later","due_date":"2999-12-31"},
+        {"title":"Sprint 42","due_date":"2999-01-01"},{"title":"Backlog","due_date":null}]"#;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/milestones"))
+        .and(query_param("state", "active"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(ms))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
+        .and(query_param("scope", "all"))
+        .and(query_param("milestone", "Sprint 42"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issues_p2.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut v = view("proj");
+    v.project = Some("grp/sub/proj".into());
+    v.who = Some(Who::Anyone);
+    v.current_iteration = true;
+    gl(&server).list(&v, None).await.unwrap();
+    // and without the flag no milestone filter is sent
+    v.current_iteration = false;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .mount(&server)
+        .await;
+    gl(&server).list(&v, None).await.unwrap();
+    assert!(!issue_queries(&server).await[1].contains("milestone_id"));
+}
+
+#[tokio::test]
+async fn sources_lists_member_projects_as_mine_views() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v4/projects"))
+        .and(query_param("membership", "true"))
+        .and(query_param("search", "pro"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/projects.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let hits = gl(&server).sources("pro").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    let h = &hits[0];
+    assert_eq!(
+        (h.kind.as_str(), h.label.as_str(), h.detail.as_deref()),
+        ("project", "grp/sub/proj", Some("The shop"))
+    );
+    assert_eq!(h.view.id, "project-grp/sub/proj");
+    assert_eq!(h.view.project.as_deref(), Some("grp/sub/proj"));
+    assert_eq!(h.view.who, Some(Who::Mine));
+    assert_ne!(hits[0].view.id, hits[1].view.id);
+    assert!(hits[1].detail.is_none(), "empty description is no detail");
+}
+
+#[tokio::test]
+async fn planning_fields_come_from_iteration_milestone_labels_and_time_stats() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/issues", 200, "gitlab/issues_planning.json").await;
+    let items = gl(&server).list(&view("mine"), None).await.unwrap().items;
+    let [a, b, c, d, e] = &items[..] else { panic!("five issues") };
+    // priority_rank: bare P1, scoped name, scoped number, scoped name (a bare `high` label is not a priority), none
+    assert_eq!([a, b, c, d, e].map(|t| t.priority_rank), [Some(1), Some(3), Some(0), Some(0), None]);
+    // sprint: iteration wins over milestone; open milestone inside its dates is active; expired and closed are not
+    let sp = a.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("5", "Sprint 7", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-19"));
+    let sp = b.sprint.as_ref().unwrap();
+    assert_eq!((sp.name.as_str(), sp.active, sp.ends_at.as_deref()), ("v1", true, Some("2999-12-31")));
+    assert!(!c.sprint.as_ref().unwrap().active, "expired milestone");
+    let sp = d.sprint.as_ref().unwrap();
+    assert_eq!(
+        (sp.name.as_str(), sp.active),
+        ("2026-09-01 – 2026-09-14", false),
+        "closed untitled iteration named by dates"
+    );
+    assert!(!e.sprint.as_ref().unwrap().active, "undated open milestone is not the current sprint");
+    // estimate: time estimate wins over weight, weight is the fallback
+    assert_eq!(
+        [a, b, c, d, e].map(|t| t.estimate.as_deref()),
+        [Some("1h 30m"), Some("5"), Some("2h"), None, None]
+    );
+    assert_eq!([a, b, c, d, e].map(|t| t.due.as_deref()), [Some("2026-10-14"), None, None, None, None]);
+    // status_since: closing date for closed issues, else updated_at
+    assert_eq!(c.status_since.as_deref(), Some("2026-10-02T10:00:00.000Z"));
+    assert_eq!(a.status_since.as_deref(), Some(a.updated_at.as_str()));
 }

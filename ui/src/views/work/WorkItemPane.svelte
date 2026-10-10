@@ -2,7 +2,16 @@
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
-  import { openExternal, workResume, workRetryStep } from '$lib/ipc/commands';
+  import type { ReviewNote, ReviewNotes } from '$lib/gen';
+  import {
+    editorOpen,
+    openExternal,
+    workNoteResolve,
+    workNotes,
+    workNotesSend,
+    workResume,
+    workRetryStep,
+  } from '$lib/ipc/commands';
   import { sessions, toasts, work } from '$lib/stores';
   import { Badge, Button, EmptyState, Icon } from '$lib/ui';
 
@@ -21,6 +30,61 @@
   $effect(() => {
     if (!work.loaded) untrack(() => void work.load().catch(() => {}));
   });
+
+  // Review notes (#133): re-read on every `work.updated` of the item (nvim adds, Stop judges).
+  let notes = $state<ReviewNotes | null>(null);
+  $effect(() => {
+    if (!item) return;
+    const id = item.id;
+    untrack(() =>
+      workNotes({ id }).then(
+        (n) => {
+          if (content.id === id) notes = n;
+        },
+        () => {},
+      ),
+    );
+  });
+  const shownNotes = $derived(notes?.notes.filter((n) => n.state !== 'resolved') ?? []);
+  const openNotes = $derived(shownNotes.filter((n) => n.state === 'open' || n.state === 'untouched').length);
+
+  async function sendNotes(): Promise<void> {
+    busy = 'notes';
+    try {
+      notes = await workNotesSend({ id: content.id });
+    } catch (err) {
+      toasts.error(err, 'Send review notes');
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function resolveNote(n: ReviewNote): Promise<void> {
+    try {
+      notes = await workNoteResolve({ id: content.id, note: n.id });
+    } catch (err) {
+      toasts.error(err, 'Resolve note');
+    }
+  }
+
+  function jumpTo(n: ReviewNote): void {
+    editorOpen({ target: { kind: 'work_item', id: content.id }, path: n.path, line: n.line_start }).catch(
+      (err) => toasts.error(err, 'Open in editor'),
+    );
+  }
+
+  // `s` sends the open notes, `x` resolves and `e` opens the focused one in nvim.
+  function noteKey(e: KeyboardEvent, n: ReviewNote): void {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 's') void sendNotes();
+    else if (e.key === 'x') void resolveNote(n);
+    else if (e.key === 'e') jumpTo(n);
+    else return;
+    e.preventDefault();
+  }
+
+  const anchor = (n: ReviewNote): string =>
+    `${n.path}#L${n.line_start}${n.line_end > n.line_start ? `-${n.line_end}` : ''}`;
 
   async function resume(): Promise<void> {
     busy = 'resume';
@@ -108,6 +172,43 @@
         {/each}
       </ol>
 
+      {#if shownNotes.length > 0}
+        <h2>
+          Review notes
+          {#if notes?.since}
+            <small>+{notes.since.insertions}/−{notes.since.deletions} since feedback</small>
+          {/if}
+        </h2>
+        <ul class="notes" aria-label="Review notes" aria-keyshortcuts="s x e">
+          {#each shownNotes as n (n.id)}
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+            <li tabindex="0" data-state={n.state} onkeydown={(e) => noteKey(e, n)}>
+              <input type="checkbox" aria-label="Resolve note" onchange={() => void resolveNote(n)} />
+              <button type="button" class="link" title="Open in editor (e)" onclick={() => jumpTo(n)}>
+                <code>{anchor(n)}</code>
+              </button>
+              <span class="body">{n.body}</span>
+              {#if n.state !== 'open'}
+                <Badge tone={n.state === 'untouched' ? 'warn' : n.state === 'touched' ? 'ok' : 'neutral'}
+                  >{n.state}</Badge
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <p class="muted">
+          Touched / untouched is a heuristic: a change within 5 lines of the note after Claude's next stop.
+          Keys: <kbd>s</kbd> send, <kbd>x</kbd> resolve, <kbd>e</kbd> open in editor.
+        </p>
+        <Button
+          icon="send"
+          disabled={openNotes === 0}
+          loading={busy === 'notes'}
+          onclick={() => void sendNotes()}
+          >Send {openNotes} open {openNotes === 1 ? 'note' : 'notes'} to Claude</Button
+        >
+      {/if}
+
       <h2>Sessions</h2>
       {#if itemSessions.length === 0}
         <p class="muted">No sessions are attached to this work item.</p>
@@ -172,6 +273,7 @@
   }
 
   .steps,
+  .notes,
   .sessions {
     display: flex;
     flex-direction: column;
@@ -182,6 +284,7 @@
   }
 
   .steps li,
+  .notes li,
   .sessions li {
     display: flex;
     align-items: center;
@@ -198,6 +301,16 @@
 
   .steps [data-status='pending'] {
     color: var(--k-fg-subtle);
+  }
+
+  .notes .body {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .notes [data-state='untouched'] .body {
+    color: var(--k-warn);
   }
 
   small,

@@ -170,6 +170,23 @@ pub async fn work_set_note(
     core.work().set_note(&id, note).await
 }
 
+/// Review notes of the item (#133), with `+N/−M since feedback`.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_notes(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<ReviewNotes> {
+    core.work().notes(&id).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_note_resolve(core: State<'_, Arc<Core>>, id: WorkItemId, note: i64) -> Res<ReviewNotes> {
+    core.work().note_resolve(&id, note).await
+}
+
+/// The open notes in one message to the item's Claude (held while it works).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_notes_send(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<ReviewNotes> {
+    core.work().notes_send(&id).await
+}
+
 /// Louis left the item's tab (the return strip's clock).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_left(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {

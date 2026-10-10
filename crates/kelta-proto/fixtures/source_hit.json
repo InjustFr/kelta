@@ -1,0 +1,26 @@
+{
+  "detail": "Scrum",
+  "kind": "board",
+  "label": "SHOP board",
+  "view": {
+    "account": "jira-acme",
+    "assigned_to": null,
+    "board_id": 12,
+    "current_iteration": true,
+    "id": "board-12",
+    "jql": "project = SHOP",
+    "label": "SHOP board",
+    "labels": null,
+    "project": null,
+    "project_id": null,
+    "project_v2": null,
+    "query_id": null,
+    "repo": null,
+    "scope": null,
+    "search": null,
+    "status": null,
+    "team": null,
+    "who": "mine",
+    "workflow_scope": null
+  }
+}

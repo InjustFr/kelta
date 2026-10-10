@@ -75,12 +75,12 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         OpenPaneRequest, PaneRef, WorkKind, WorkState, StepStatus, WorkStepStatus, WorkItem,
         WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, FinishOpts,
         GitStatus, EditorTarget, TemplateCtx, RebaseState, RebaseOnto, RebaseOp, SendFile,
-        FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta,
+        FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta, NoteState, ReviewNote, ReviewNotes,
         // tracker / codehost
         TrackerKind, TrackerCaps, User, TicketRef, StatusCategory, Status, Ticket, BodyFormat,
         Comment, TicketDetail, Transition, Column, Cursor, Page<Ticket>, Assignee, AccountError,
-        TicketItem, TicketPage, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
-        ReviewKind, Review, ReviewQuery, Reviewer, CiCheck, FileChange, ReviewDetail, PrState, PrCreate,
+        TicketItem, TicketPage, Who, TicketGroupBy, TicketSort, Sprint, SourceHit, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
+        ReviewKind, Review, ReviewQuery, Reviewer, CiCheck, FileChange, ReviewDetail, PrState, PrSource, PrLink, PrCreate,
         PrDraft, MergeMethod, ReviewItem, ReviewPage, Feedback, FeedbackThread, FeedbackReview, FailedCheck,
         // ext
         ToolKind, EmbedMode, WebLifecycle, Ready, StopSpec, WebStart, ToolDef, ToolSource,

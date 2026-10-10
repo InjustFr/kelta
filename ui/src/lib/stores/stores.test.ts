@@ -198,6 +198,27 @@ describe('TicketsStore', () => {
     expect(store.items({ kind: 'all' }).some((t) => t.project_ids.length === 0)).toBe(true);
   });
 
+  it('keeps one list per who and sends it', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'shop' };
+    await store.load(scope, null, false, 'unassigned');
+    expect(mock.calls.at(-1)!.args).toMatchObject({ who: 'unassigned' });
+    expect(store.items(scope, null, 'unassigned').map((t) => t.ticket.ref.key)).toEqual(['SHOP-155']);
+    expect(store.list(scope, null).data).toBeNull();
+    await store.load(scope);
+    expect(store.items(scope).length).toBeGreaterThan(1);
+  });
+
+  it('move passes the project whose columns resolve it', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'shop' };
+    await store.load(scope);
+    const cols = (await store.loadColumns('shop')).data!;
+    const ticket = store.items(scope)[0]!.ticket;
+    await store.move(ticket, cols[0]!, 'shop');
+    expect(mock.calls.at(-1)).toMatchObject({ cmd: 'tracker_move', args: { project_id: 'shop' } });
+  });
+
   it('moves optimistically and rolls back on error', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'project' as const, id: 'shop' };
@@ -232,6 +253,16 @@ describe('TicketsStore', () => {
     await flush();
     await flush();
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
+  });
+
+  it('ignores reviews.changed (no tracker reload per review poll)', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'billing' };
+    await store.load(scope, 'mine');
+    const before = mock.calls.filter((c) => c.cmd === 'tracker_list').length;
+    store.apply({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
+    await flush();
+    expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before);
   });
 
   it('loadMore skips tickets already in the list', async () => {
@@ -297,7 +328,7 @@ describe('WorkStore', () => {
   it('loads work items and finds them by ticket/session', async () => {
     const store = new WorkStore();
     await store.load();
-    expect(store.all).toHaveLength(8);
+    expect(store.all).toHaveLength(9);
     const w = store.all[0]!;
     expect(store.forTicket(w.ticket!)?.id).toBe(w.id);
     expect(store.forSession(w.session_ids[0]!)?.id).toBe(w.id);

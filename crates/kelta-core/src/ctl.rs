@@ -282,7 +282,25 @@ impl Core {
                     .and_then(|p| p.tracker.clone())
                     .ok_or_else(|| KeltaError::invalid(format!("project {project} has no tracker")))?;
                 let key = ticket_key(&ticket);
-                let tref = TicketRef { account: binding.account, key: key.clone(), id: key };
+                // A bare key: the first of the project's accounts (binding's first) that has it, by GET,
+                // so unassigned or unlisted tickets resolve too; none answers → the binding's account.
+                let mut accounts = vec![binding.account.clone()];
+                for a in binding.views.iter().filter_map(|v| v.account.clone()) {
+                    if !accounts.contains(&a) {
+                        accounts.push(a);
+                    }
+                }
+                let mut tref = None;
+                if accounts.len() > 1 {
+                    for account in accounts {
+                        let probe = TicketRef { account, key: key.clone(), id: key.clone() };
+                        if let Ok(d) = self.tracker_get(&probe).await {
+                            tref = Some(d.ticket.r#ref);
+                            break;
+                        }
+                    }
+                }
+                let tref = tref.unwrap_or(TicketRef { account: binding.account, key: key.clone(), id: key });
                 let plan = self.work.plan(&project, WorkSource::Ticket { ticket: tref }).await?;
                 if self.cfg.effective(Some(&project)).work.plan_preview {
                     self.emit(UiEvent::CtlCommand {
@@ -348,6 +366,18 @@ impl Core {
                 let target = self.editor_target_for(&file).await?;
                 self.work.editor_open(target, &file, line).await?;
                 Ok(Value::Null)
+            }
+            CtlCommand::NoteAdd { session, path, line_start, line_end, body } => Ok(serde_json::to_value(
+                self.work.note_add(&session, &path, (line_start, line_end), &body).await?,
+            )?),
+            CtlCommand::NoteList { session } => {
+                Ok(serde_json::to_value(self.work.notes_of_session(&session).await?)?)
+            }
+            CtlCommand::NoteSend { session } => {
+                Ok(serde_json::to_value(self.work.notes_send_of_session(&session).await?)?)
+            }
+            CtlCommand::NoteResolve { session, note } => {
+                Ok(serde_json::to_value(self.work.note_resolve_of_session(&session, note).await?)?)
             }
             CtlCommand::Version => Ok(json!({ "version": kelta_proto::VERSION })),
         }

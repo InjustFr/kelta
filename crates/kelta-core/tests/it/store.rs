@@ -5,7 +5,7 @@ use std::path::Path;
 use kelta_core::store::{Store, migrations, q};
 use kelta_proto::api::{GrantStore, TrustStore, WorkStore};
 use kelta_proto::ids::{PluginId, SessionId, WorkItemId};
-use kelta_proto::model::{StepStatus, WorkState};
+use kelta_proto::model::{NoteState, ReviewNote, StepStatus, WorkState};
 use kelta_proto::store::{SCHEMA_VERSION, TriggerLogRow, tables};
 
 #[tokio::test]
@@ -37,6 +37,44 @@ async fn migrations_from_empty_and_idempotent() {
     // migrate again explicitly: still one version row
     let v = s.call(|c| migrations::migrate(c).map_err(kelta_core::store::db_err)).await.unwrap();
     assert_eq!(v, SCHEMA_VERSION);
+}
+
+#[tokio::test]
+async fn notes_survive_a_restart_and_go_with_their_item() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let w = kelta_proto::samples::work_item();
+    let note = |path: &str, line: u32| ReviewNote {
+        id: 0,
+        work_item_id: w.id.clone(),
+        path: path.into(),
+        line_start: line,
+        line_end: line + 2,
+        body: format!("fix {path}"),
+        source: "nvim".into(),
+        ext_ref: None,
+        state: NoteState::Open,
+        sent_at: None,
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        s.put_item(&w).await.unwrap();
+        let b = s.put_note(&note("src/b.rs", 3)).await.unwrap();
+        let a = s.put_note(&note("src/a.rs", 10)).await.unwrap();
+        assert_ne!(a, b);
+        let mut sent = s.notes(&w.id).await.unwrap()[0].clone();
+        (sent.state, sent.sent_at) = (NoteState::Untouched, Some("t".into()));
+        assert_eq!(s.put_note(&sent).await.unwrap(), a);
+    }
+    let s = Store::open(&db).unwrap();
+    let got = s.notes(&w.id).await.unwrap();
+    assert_eq!(got.iter().map(|n| n.path.as_str()).collect::<Vec<_>>(), ["src/a.rs", "src/b.rs"]);
+    assert_eq!(
+        (got[0].state, got[0].sent_at.as_deref(), got[0].line_end),
+        (NoteState::Untouched, Some("t"), 12)
+    );
+    s.delete_item(&w.id).await.unwrap();
+    assert!(s.notes(&w.id).await.unwrap().is_empty());
 }
 
 #[tokio::test]

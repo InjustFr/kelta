@@ -32,7 +32,7 @@ export interface Section {
   label: string;
   lamp: Lamp;
   rows: NowRow[];
-  /** Rows left out by the cap (Up next shows 10, then "Show all on Board"). */
+  /** Rows left out by the cap (Up next shows 10, then "Show all"). */
   more: number;
 }
 

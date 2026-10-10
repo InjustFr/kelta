@@ -156,8 +156,35 @@ const V9: &str = r#"
 ALTER TABLE work_items ADD COLUMN auto_finish INTEGER NOT NULL DEFAULT 0;
 "#;
 
+/// v10: review notes (#133), `ReviewNote`.
+const V10: &str = r#"
+CREATE TABLE IF NOT EXISTS notes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_item  TEXT NOT NULL,
+  path       TEXT NOT NULL,
+  line_start INTEGER NOT NULL,
+  line_end   INTEGER NOT NULL,
+  body       TEXT NOT NULL,
+  source     TEXT NOT NULL,
+  ext_ref    TEXT,
+  state      TEXT NOT NULL,
+  sent_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS notes_work_item ON notes(work_item);
+"#;
+
+/// v11: when I last nudged the reviewers of a PR of mine (#209; one nudge per 24 h).
+const V11: &str = r#"
+CREATE TABLE IF NOT EXISTS nudges (
+  repo   TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  at     TEXT NOT NULL,
+  PRIMARY KEY (repo, number)
+);
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

@@ -255,8 +255,10 @@
     ],
     "include_drafts": false,
     "include_team_requests": true,
+    "nudge_template": "{reviewers} friendly ping: this is waiting on your review.",
     "repos_allow": [],
     "repos_deny": [],
+    "sla_hours": 24,
     "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
   },
   "session_templates": [
@@ -398,6 +400,9 @@
       "default": "passthrough"
     },
     "view_scrollback": 1000
+  },
+  "tickets": {
+    "wip_limit": 3
   },
   "tools": [],
   "triggers": [],

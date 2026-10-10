@@ -44,6 +44,7 @@ import type {
   ProjectPatch,
   RebaseOp,
   ReviewDetail,
+  ReviewNotes,
   ReviewKind,
   ReviewPage,
   ReviewRef,
@@ -55,6 +56,7 @@ import type {
   SessionId,
   SendFile,
   SessionInfo,
+  SourceHit,
   SpawnRequest,
   StartWorkPlan,
   SubscribeResult,
@@ -79,6 +81,7 @@ import type {
   WorkItem,
   WorkItemId,
   WorkSource,
+  Who,
 } from '$lib/gen';
 
 import { getTransport, toIpcError, type IpcChannel } from './transport';
@@ -183,7 +186,13 @@ export interface Commands {
   terminal_set_palette: { args: { palette: TerminalPalette }; result: null };
   // ---- tickets -----------------------------------------------------------------------------
   tracker_list: {
-    args: { scope: Scope; view_id?: string | null; cursor?: Cursor | null; refresh: boolean };
+    args: {
+      scope: Scope;
+      view_id?: string | null;
+      cursor?: Cursor | null;
+      refresh: boolean;
+      who?: Who | null;
+    };
     result: TicketPage;
   };
   tracker_get: { args: { ticket: TicketRef }; result: TicketDetail };
@@ -193,16 +202,22 @@ export interface Commands {
     args: { ticket: TicketRef; transition_id: string; fields?: JsonValue | null };
     result: Ticket;
   };
-  tracker_move: { args: { ticket: TicketRef; column_id: string }; result: Ticket };
+  tracker_move: {
+    args: { ticket: TicketRef; column_id: string; project_id?: ProjectId | null };
+    result: Ticket;
+  };
   tracker_comment: { args: { ticket: TicketRef; markdown: string }; result: null };
   tracker_assign: { args: { ticket: TicketRef; assignee: Assignee }; result: Ticket };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
+  tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
   // ---- reviews -----------------------------------------------------------------------------
   review_list: { args: { scope: Scope; kind: ReviewKind; refresh: boolean }; result: ReviewPage };
   review_get: { args: { review: ReviewRef }; result: ReviewDetail };
   review_approve: { args: { review: ReviewRef; head_sha: string }; result: null };
   review_comment: { args: { review: ReviewRef; body: string }; result: null };
   review_request_changes: { args: { review: ReviewRef; body: string }; result: null };
+  /** My PR: re-request `who` (its `waiting_on`; `comment` null) or post `comment`; refused for 24 h after a nudge. */
+  review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
   // ---- work --------------------------------------------------------------------------------
   work_plan: { args: { project_id: ProjectId; source: WorkSource }; result: StartWorkPlan };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };
@@ -242,6 +257,11 @@ export interface Commands {
   work_start_now: { args: { id: WorkItemId }; result: WorkItem };
   /** The queued item starts next. */
   work_queue_front: { args: { id: WorkItemId }; result: WorkItem };
+  /** Review notes (#133) with `+N/−M since feedback`. */
+  work_notes: { args: { id: WorkItemId }; result: ReviewNotes };
+  work_note_resolve: { args: { id: WorkItemId; note: number }; result: ReviewNotes };
+  /** The open notes in one message to the item's Claude (held while it works). */
+  work_notes_send: { args: { id: WorkItemId }; result: ReviewNotes };
   /** Merge when ready: the host's auto-merge, then Finish once merged (`auto_finish`). */
   work_arm_merge: { args: { id: WorkItemId; method: MergeMethod }; result: WorkItem };
   work_disarm_merge: { args: { id: WorkItemId }; result: WorkItem };
@@ -348,11 +368,13 @@ export const COMMAND_NAMES = [
   'tracker_comment',
   'tracker_assign',
   'tracker_search',
+  'tracker_sources',
   'review_list',
   'review_get',
   'review_approve',
   'review_comment',
   'review_request_changes',
+  'review_nudge',
   'work_plan',
   'work_start',
   'work_list',
@@ -378,6 +400,9 @@ export const COMMAND_NAMES = [
   'work_left',
   'work_start_now',
   'work_queue_front',
+  'work_notes',
+  'work_note_resolve',
+  'work_notes_send',
   'work_arm_merge',
   'work_disarm_merge',
   'editor_open',
@@ -550,6 +575,7 @@ export const trackerMove = wrap('tracker_move');
 export const trackerComment = wrap('tracker_comment');
 export const trackerAssign = wrap('tracker_assign');
 export const trackerSearch = wrap('tracker_search');
+export const trackerSources = wrap('tracker_sources');
 
 // ---- reviews --------------------------------------------------------------------------------
 export const reviewList = wrap('review_list');
@@ -557,6 +583,7 @@ export const reviewGet = wrap('review_get');
 export const reviewApprove = wrap('review_approve');
 export const reviewComment = wrap('review_comment');
 export const reviewRequestChanges = wrap('review_request_changes');
+export const reviewNudge = wrap('review_nudge');
 
 // ---- work -----------------------------------------------------------------------------------
 export const workPlan = wrap('work_plan');
@@ -584,6 +611,9 @@ export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
 export const workStartNow = wrap('work_start_now');
 export const workQueueFront = wrap('work_queue_front');
+export const workNotes = wrap('work_notes');
+export const workNoteResolve = wrap('work_note_resolve');
+export const workNotesSend = wrap('work_notes_send');
 export const workArmMerge = wrap('work_arm_merge');
 export const workDisarmMerge = wrap('work_disarm_merge');
 export const editorOpen = wrap('editor_open');

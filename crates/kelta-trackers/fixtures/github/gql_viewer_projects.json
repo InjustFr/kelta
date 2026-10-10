@@ -1,0 +1,13 @@
+{
+  "data": {
+    "viewer": {
+      "projectsV2": {
+        "nodes": [
+          {"number": 5, "title": "Roadmap", "closed": false, "owner": {"login": "acme"}},
+          {"number": 2, "title": "Old board", "closed": true, "owner": {"login": "acme"}},
+          {"number": 9, "title": "Personal", "closed": false, "owner": {"login": "louis"}}
+        ]
+      }
+    }
+  }
+}

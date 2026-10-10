@@ -9,4 +9,12 @@ ticket_key_regex: string, repos_allow: Array<string>, repos_deny: Array<string>,
  * Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
  * and `-diff` attributes.
  */
-ignore_globs: Array<string>, };
+ignore_globs: Array<string>, 
+/**
+ * Hours a PR of mine may wait on a reviewer before its chip turns amber.
+ */
+sla_hours: number, 
+/**
+ * Comment ping of the nudge action (`n` on my PR); `{reviewers}` = `@anna @bob`.
+ */
+nudge_template: string, };

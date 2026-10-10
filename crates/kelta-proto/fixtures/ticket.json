@@ -5,22 +5,32 @@
     "login": "ada",
     "name": "Ada Lovelace"
   },
+  "due": "2026-10-15",
+  "estimate": "3",
   "kind": "Story",
   "labels": [
     "api"
   ],
   "priority": "High",
+  "priority_rank": 1,
   "project_hint": "SHOP",
   "ref": {
     "account": "jira-acme",
     "id": "10142",
     "key": "SHOP-142"
   },
+  "sprint": {
+    "active": true,
+    "ends_at": "2026-10-16",
+    "id": "42",
+    "name": "SHOP Sprint 12"
+  },
   "status": {
     "category": "in_progress",
     "id": "3",
     "name": "In Progress"
   },
+  "status_since": "2026-10-09T12:00:00Z",
   "title": "Rate-limit login",
   "updated_at": "2026-10-09T12:00:00Z",
   "url": "https://acme.atlassian.net/browse/SHOP-142"

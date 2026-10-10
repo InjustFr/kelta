@@ -96,6 +96,13 @@ vim.fn.setqflist({}, ' ', { title = title, items = items })
 return #items
 "#;
 
+/// `nvim_exec_lua` body: re-place the review note signs from a `ReviewNotes` JSON (`kelta.lua`).
+pub const LUA_NOTES: &str = r#"
+local json = ...
+if _G.KeltaNotes then _G.KeltaNotes.apply(vim.json.decode(json)) end
+return true
+"#;
+
 /// `nvim_exec_lua` body: `:wall | mksession! <file>`.
 pub const LUA_MKSESSION: &str = r#"
 local file = ...

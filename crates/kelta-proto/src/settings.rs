@@ -16,7 +16,7 @@ use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
 use crate::secret::SecretRef;
-use crate::tracker::StatusCategory;
+use crate::tracker::{StatusCategory, Who};
 
 /// Configuration layer (low → high precedence).
 #[derive(
@@ -76,6 +76,8 @@ pub struct Settings {
     pub ports: PortsSettings,
     #[schemars(extend("x-kelta-category" = "Reviews", "x-kelta-order" = 10))]
     pub reviews: ReviewsSettings,
+    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
+    pub tickets: TicketsSettings,
     #[schemars(extend("x-kelta-category" = "Tools", "x-kelta-order" = 13))]
     pub web: WebSettings,
     #[schemars(extend("x-kelta-category" = "Performance", "x-kelta-order" = 16))]
@@ -1080,6 +1082,10 @@ pub struct ReviewsSettings {
     /// Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
     /// and `-diff` attributes.
     pub ignore_globs: Vec<String>,
+    /// Hours a PR of mine may wait on a reviewer before its chip turns amber.
+    pub sla_hours: u32,
+    /// Comment ping of the nudge action (`n` on my PR); `{reviewers}` = `@anna @bob`.
+    pub nudge_template: String,
 }
 
 impl Default for ReviewsSettings {
@@ -1093,6 +1099,8 @@ impl Default for ReviewsSettings {
             ignore_globs: ["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]
                 .map(String::from)
                 .to_vec(),
+            sla_hours: 24,
+            nudge_template: "{reviewers} friendly ping: this is waiting on your review.".into(),
         }
     }
 }
@@ -1108,6 +1116,19 @@ pub struct PortsSettings {
 impl Default for PortsSettings {
     fn default() -> Self {
         Self { range: "20000-29999".into() }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct TicketsSettings {
+    /// Soft WIP limit: the Doing group header warns above it; blocks nothing.
+    pub wip_limit: u32,
+}
+
+impl Default for TicketsSettings {
+    fn default() -> Self {
+        Self { wip_limit: 3 }
     }
 }
 
@@ -1388,6 +1409,7 @@ impl Default for Settings {
             work: WorkSettings::default(),
             ports: PortsSettings::default(),
             reviews: ReviewsSettings::default(),
+            tickets: TicketsSettings::default(),
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),
@@ -1493,6 +1515,12 @@ pub struct TrackerView {
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,
+    /// Whose tickets; `None` = the provider fields above decide.
+    pub who: Option<Who>,
+    /// Only the current sprint / cycle / iteration (providers that support it).
+    pub current_iteration: bool,
+    /// Account of this view; `None` = the binding's account.
+    pub account: Option<AccountId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]

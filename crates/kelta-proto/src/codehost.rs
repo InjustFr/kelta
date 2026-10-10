@@ -98,13 +98,22 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub decision_head: Option<String>,
-    /// When my review was requested (review requests only); `None`: the UI ages the row by `updated_at`.
+    /// When my review was requested (review requests only), or since when my PR waits on
+    /// `waiting_on` (authored); `None`: the UI ages the row by `updated_at`.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub requested_at: Option<String>,
     /// I am the last required reviewer: my approval unblocks the author (review requests only).
     #[serde(default)]
     pub blocking: bool,
+    /// Reviewers my PR waits on (authored only): asked and not reviewed since, or who requested
+    /// changes before my last push.
+    #[serde(default)]
+    pub waiting_on: Vec<String>,
+    /// My last nudge from Kelta (authored only, `nudges` table; core-filled).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub nudged_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -191,6 +200,34 @@ pub struct PrDraft {
     pub body: Option<String>,
     #[serde(default)]
     pub draft: Option<bool>,
+}
+
+/// Where a ticket's PR link came from (TICKETS.md T1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PrSource {
+    /// The `pr_url` of the ticket's work item.
+    WorkItem,
+    /// A polled review feed whose `linked_tickets` name the ticket.
+    KeyMatch,
+}
+
+/// A PR linked to a ticket (`TicketItem.prs`, `TicketDetail.prs`), built from data already polled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PrLink {
+    pub url: String,
+    /// Code-host account when the repo is bound (opens Kelta's review detail); `None` → browser only.
+    pub account: Option<AccountId>,
+    pub repo: String,
+    pub number: u64,
+    /// Empty when the PR is not in a polled feed.
+    pub title: String,
+    pub branch: String,
+    pub state: PrState,
+    pub draft: bool,
+    pub ci: CiState,
+    pub review: Option<ReviewDecision>,
+    pub source: PrSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

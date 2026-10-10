@@ -207,6 +207,8 @@ impl GitlabHost {
             deletions: None,
             requested_at: None,
             blocking: false,
+            waiting_on: Vec::new(),
+            nudged_at: None,
             title,
         })
     }
@@ -265,6 +267,30 @@ impl GitlabHost {
             }
             (review.additions, review.deletions) = (Some(a), Some(d));
         }
+    }
+
+    /// My MR: reviewers who have not reviewed yet (`/reviewers` state) and since when they were
+    /// asked. Best effort, like `request_state`.
+    // shortcut: a `requested_changes` reviewer counts again only once re-requested (GitLab keeps the
+    // state across pushes and `/reviewers` has no review time); compare with the push time if it matters.
+    async fn waiting_state(&self, review: &mut Review) {
+        let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
+        let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
+        let pending: Vec<(String, Option<String>)> = r
+            .body
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|x| !matches!(s(x, "state"), Some("reviewed" | "requested_changes" | "approved")))
+            .filter_map(|x| {
+                Some((
+                    x.pointer("/user/username")?.as_str()?.to_owned(),
+                    s(x, "created_at").map(str::to_owned),
+                ))
+            })
+            .collect();
+        review.requested_at = pending.iter().filter_map(|(_, t)| t.clone()).min();
+        review.waiting_on = pending.into_iter().map(|(u, _)| u).collect();
     }
 
     fn project_url(&self, repo: &str, tail: &str) -> String {
@@ -408,6 +434,8 @@ impl CodeHost for GitlabHost {
             self.diff_sizes.lock().retain(|(repo, n, sha), _| {
                 list.iter().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
             });
+        } else {
+            futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
         }
         Ok(list)
     }
@@ -553,6 +581,10 @@ impl CodeHost for GitlabHost {
         if published > 0 && body.trim().is_empty() {
             return Ok(());
         }
+        self.post_note(r, body).await
+    }
+
+    async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(())
@@ -724,17 +756,20 @@ impl CodeHost for GitlabHost {
         Ok(Feedback { threads, reviews: Vec::new(), failed_checks, reviewers })
     }
 
-    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
-        let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
-        let me = self.me().await?;
-        let logins: Vec<String> = mr
-            .get("reviewers")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|u| s(u, "username").map(str::to_owned))
-            .filter(|u| Some(u) != me.login.as_ref())
-            .collect();
+    async fn rerequest_review(&self, r: &ReviewRef, who: &[String]) -> Result<Vec<String>, KeltaError> {
+        let logins: Vec<String> = if !who.is_empty() {
+            who.to_vec()
+        } else {
+            let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+            let me = self.me().await?;
+            mr.get("reviewers")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|u| s(u, "username").map(str::to_owned))
+                .filter(|u| Some(u) != me.login.as_ref())
+                .collect()
+        };
         if logins.is_empty() {
             return Err(KeltaError::invalid("this merge request has no reviewers"));
         }

@@ -13,7 +13,7 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   accounts: ['accounts'],
   claude: ['claude'],
   editors: ['editor'],
-  worktree: ['worktree', 'work', 'session_templates'],
+  worktree: ['worktree', 'work', 'tickets', 'session_templates'],
   reviews: ['reviews'],
   polling: ['polling'],
   notifications: ['notifications'],
@@ -40,7 +40,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   notifications: 'Desktop notifications and quiet hours.',
   performance: 'Memory use and web view behaviour.',
   tools: 'Programs like lazygit that open inside Kelta in their own pane.',
-  projects: 'Folders Kelta manages, with their repositories and tracker.',
+  projects: 'Folders Kelta manages, with their repositories and ticket sources.',
 };
 
 /** Visible section title; the registry label stays for ids and tests. */

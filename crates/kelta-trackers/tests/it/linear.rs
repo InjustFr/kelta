@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::TrackerBinding;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -206,4 +206,94 @@ async fn auth_errors_and_rate_limits() {
     let e = lin(&limited).me().await.unwrap_err();
     assert_eq!(e.code, ErrorCode::RateLimited);
     assert!(e.retry_after_ms.unwrap() > 3_000_000);
+}
+
+#[tokio::test]
+async fn who_and_current_cycle_shape_the_filter() {
+    let server = MockServer::start().await;
+    linear_mocks(&server).await;
+    let t = lin(&server);
+    for (who, legacy) in
+        [(Who::Mine, "all"), (Who::Unassigned, "assigned_to_me"), (Who::Anyone, "assigned_to_me")]
+    {
+        let mut v = view("v");
+        v.who = Some(who);
+        v.scope = Some(legacy.into());
+        v.current_iteration = who == Who::Anyone;
+        t.list(&v, None).await.unwrap();
+    }
+    let f: Vec<_> = gql_bodies(&server, "issues(filter")
+        .await
+        .into_iter()
+        .map(|b| b["variables"]["filter"].clone())
+        .collect();
+    assert_eq!(f[0]["assignee"], json!({"isMe": {"eq": true}}));
+    assert_eq!(f[1]["assignee"], json!({"null": true}));
+    assert!(f[0].get("cycle").is_none() && f[1].get("cycle").is_none());
+    assert!(f[2].get("assignee").is_none());
+    assert_eq!(f[2]["cycle"], json!({"isActive": {"eq": true}}));
+}
+
+#[tokio::test]
+async fn sources_offer_teams_cycles_and_projects() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("teams(filter"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("linear/sources.json")))
+        .mount(&server)
+        .await;
+    let hits = lin(&server).sources("e").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        [
+            ("team", "team-ENG", "Engineering"),
+            ("cycle", "team-ENG-cycle", "Engineering current cycle"),
+            ("team", "team-OPS", "Operations"),
+            ("project", "project-prj-1", "Website"),
+        ],
+        "no cycle variant for a team without cycles"
+    );
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+    assert_eq!((hits[1].view.team.as_deref(), hits[1].view.current_iteration), (Some("ENG"), true));
+    assert_eq!((hits[0].view.current_iteration, hits[3].view.project.as_deref()), (false, Some("Website")));
+    let v = &gql_bodies(&server, "teams(filter").await[0]["variables"];
+    assert_eq!(v["projects"], json!({"name": {"containsIgnoreCase": "e"}}));
+    assert_eq!(
+        v["teams"],
+        json!({"or": [{"name": {"containsIgnoreCase": "e"}}, {"key": {"containsIgnoreCase": "e"}}]})
+    );
+}
+
+#[tokio::test]
+async fn planning_fields_map_priority_cycle_estimate_due_and_start() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("linear/issues_planning.json")))
+        .mount(&server)
+        .await;
+    let items = lin(&server).list(&view("mine"), None).await.unwrap().items;
+    let [a, b, c, d] = &items[..] else { panic!("four issues") };
+    // urgent → 0, low → 3, medium → 2, none → None
+    assert_eq!([a, b, c, d].map(|t| t.priority_rank), [Some(0), Some(3), Some(2), None]);
+    let cy = a.sprint.as_ref().unwrap();
+    assert_eq!((cy.id.as_str(), cy.name.as_str(), cy.active), ("cyc-1", "Sprint 12", true));
+    assert_eq!(cy.ends_at.as_deref(), Some("2026-10-16T00:00:00.000Z"));
+    let cy = b.sprint.as_ref().unwrap();
+    assert_eq!((cy.name.as_str(), cy.active), ("Cycle 11", false), "unnamed cycle falls back to its number");
+    assert!(c.sprint.is_none() && d.sprint.is_none());
+    assert_eq!([a, b, c, d].map(|t| t.estimate.as_deref()), [Some("3"), Some("2.5"), None, None]);
+    assert_eq!([a, b, c, d].map(|t| t.due.as_deref()), [Some("2026-10-14"), None, None, None]);
+    // startedAt only for a started state; otherwise (unstarted, or started without it) updatedAt
+    assert_eq!(a.status_since.as_deref(), Some("2026-10-02T09:00:00.000Z"));
+    for t in [b, c, d] {
+        assert_eq!(t.status_since.as_deref(), Some("2026-10-05T08:00:00.000Z"));
+    }
+    let q = &gql_bodies(&server, "issues(filter").await[0]["query"];
+    assert!(
+        ["priority ", "estimate", "dueDate", "startedAt", "cycle {"]
+            .iter()
+            .all(|f| q.as_str().unwrap().contains(f))
+    );
 }

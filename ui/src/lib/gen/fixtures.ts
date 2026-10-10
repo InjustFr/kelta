@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishMergedReport, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishMergedReport, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SourceHit, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -159,8 +159,10 @@ export const projectInfo: ProjectInfo = {
     },
     "views": [
       {
+        "account": null,
         "assigned_to": null,
         "board_id": null,
+        "current_iteration": false,
         "id": "mine",
         "jql": "project = SHOP AND assignee = currentUser()",
         "label": "My open",
@@ -174,6 +176,7 @@ export const projectInfo: ProjectInfo = {
         "search": null,
         "status": null,
         "team": null,
+        "who": null,
         "workflow_scope": null
       }
     ]
@@ -270,13 +273,17 @@ export const layout: Layout = {
       "id": "tab-2",
       "root": {
         "content": {
+          "group": "sprint",
           "kind": "tickets",
           "mode": "board",
+          "person": "5b10ac8d82e05b22cc7d4ef5",
           "scope": {
             "id": "shop",
             "kind": "project"
           },
-          "view_id": "mine"
+          "sort": "age",
+          "view_id": "mine",
+          "who": "mine"
         },
         "id": "pane-3",
         "type": "pane"
@@ -455,8 +462,30 @@ export const ticketPage: TicketPage = {
   ],
   "items": [
     {
+      "caps": {
+        "assign": true,
+        "board_columns": true,
+        "comment": true,
+        "projects_v2": false,
+        "transitions_need_fetch": true
+      },
       "project_ids": [
         "shop"
+      ],
+      "prs": [
+        {
+          "account": "github-acme",
+          "branch": "feat/SHOP-142-rate-limit-login",
+          "ci": "pending",
+          "draft": false,
+          "number": 90,
+          "repo": "acme/shop-api",
+          "review": "review_required",
+          "source": "work_item",
+          "state": "open",
+          "title": "SHOP-142: Rate-limit login",
+          "url": "https://github.com/acme/shop-api/pull/90"
+        }
       ],
       "ticket": {
         "assignee": {
@@ -465,26 +494,39 @@ export const ticketPage: TicketPage = {
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "due": "2026-10-15",
+        "estimate": "3",
         "kind": "Story",
         "labels": [
           "api"
         ],
         "priority": "High",
+        "priority_rank": 1,
         "project_hint": "SHOP",
         "ref": {
           "account": "jira-acme",
           "id": "10142",
           "key": "SHOP-142"
         },
+        "sprint": {
+          "active": true,
+          "ends_at": "2026-10-16",
+          "id": "42",
+          "name": "SHOP Sprint 12"
+        },
         "status": {
           "category": "in_progress",
           "id": "3",
           "name": "In Progress"
         },
+        "status_since": "2026-10-09T12:00:00Z",
         "title": "Rate-limit login",
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://acme.atlassian.net/browse/SHOP-142"
       },
+      "view_ids": [
+        "mine"
+      ],
       "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
     }
   ],
@@ -502,31 +544,75 @@ export const ticket: Ticket = {
     "login": "ada",
     "name": "Ada Lovelace"
   },
+  "due": "2026-10-15",
+  "estimate": "3",
   "kind": "Story",
   "labels": [
     "api"
   ],
   "priority": "High",
+  "priority_rank": 1,
   "project_hint": "SHOP",
   "ref": {
     "account": "jira-acme",
     "id": "10142",
     "key": "SHOP-142"
   },
+  "sprint": {
+    "active": true,
+    "ends_at": "2026-10-16",
+    "id": "42",
+    "name": "SHOP Sprint 12"
+  },
   "status": {
     "category": "in_progress",
     "id": "3",
     "name": "In Progress"
   },
+  "status_since": "2026-10-09T12:00:00Z",
   "title": "Rate-limit login",
   "updated_at": "2026-10-09T12:00:00Z",
   "url": "https://acme.atlassian.net/browse/SHOP-142"
+};
+
+export const sourceHit: SourceHit = {
+  "detail": "Scrum",
+  "kind": "board",
+  "label": "SHOP board",
+  "view": {
+    "account": "jira-acme",
+    "assigned_to": null,
+    "board_id": 12,
+    "current_iteration": true,
+    "id": "board-12",
+    "jql": "project = SHOP",
+    "label": "SHOP board",
+    "labels": null,
+    "project": null,
+    "project_id": null,
+    "project_v2": null,
+    "query_id": null,
+    "repo": null,
+    "scope": null,
+    "search": null,
+    "status": null,
+    "team": null,
+    "who": "mine",
+    "workflow_scope": null
+  }
 };
 
 export const ticketDetail: TicketDetail = {
   "body_format": "adf",
   "body_html": "<p>Limit login attempts to <strong>5/min</strong>.</p>",
   "body_md": "Limit login attempts to **5/min**.",
+  "caps": {
+    "assign": false,
+    "board_columns": false,
+    "comment": false,
+    "projects_v2": false,
+    "transitions_need_fetch": false
+  },
   "comments": [
     {
       "author": {
@@ -540,6 +626,7 @@ export const ticketDetail: TicketDetail = {
     }
   ],
   "parent": null,
+  "prs": [],
   "ticket": {
     "assignee": {
       "avatar_url": null,
@@ -547,22 +634,32 @@ export const ticketDetail: TicketDetail = {
       "login": "ada",
       "name": "Ada Lovelace"
     },
+    "due": "2026-10-15",
+    "estimate": "3",
     "kind": "Story",
     "labels": [
       "api"
     ],
     "priority": "High",
+    "priority_rank": 1,
     "project_hint": "SHOP",
     "ref": {
       "account": "jira-acme",
       "id": "10142",
       "key": "SHOP-142"
     },
+    "sprint": {
+      "active": true,
+      "ends_at": "2026-10-16",
+      "id": "42",
+      "name": "SHOP Sprint 12"
+    },
     "status": {
       "category": "in_progress",
       "id": "3",
       "name": "In Progress"
     },
+    "status_since": "2026-10-09T12:00:00Z",
     "title": "Rate-limit login",
     "updated_at": "2026-10-09T12:00:00Z",
     "url": "https://acme.atlassian.net/browse/SHOP-142"
@@ -628,6 +725,7 @@ export const reviewPage: ReviewPage = {
         ],
         "mergeable": true,
         "my_state": "pending",
+        "nudged_at": null,
         "ref": {
           "account": "github-work",
           "number": 87,
@@ -639,7 +737,8 @@ export const reviewPage: ReviewPage = {
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
         "updated_at": "2026-10-09T12:00:00Z",
-        "url": "https://github.com/acme/shop-api/pull/87"
+        "url": "https://github.com/acme/shop-api/pull/87",
+        "waiting_on": []
       }
     }
   ],
@@ -685,6 +784,7 @@ export const reviewDetail: ReviewDetail = {
     ],
     "mergeable": true,
     "my_state": "pending",
+    "nudged_at": null,
     "ref": {
       "account": "github-work",
       "number": 87,
@@ -696,7 +796,8 @@ export const reviewDetail: ReviewDetail = {
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
     "updated_at": "2026-10-09T12:00:00Z",
-    "url": "https://github.com/acme/shop-api/pull/87"
+    "url": "https://github.com/acme/shop-api/pull/87",
+    "waiting_on": []
   },
   "reviewers": [
     {
@@ -1914,8 +2015,10 @@ export const settingsDefault: Settings = {
     ],
     "include_drafts": false,
     "include_team_requests": true,
+    "nudge_template": "{reviewers} friendly ping: this is waiting on your review.",
     "repos_allow": [],
     "repos_deny": [],
+    "sla_hours": 24,
     "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
   },
   "session_templates": [
@@ -2057,6 +2160,9 @@ export const settingsDefault: Settings = {
       "default": "passthrough"
     },
     "view_scrollback": 1000
+  },
+  "tickets": {
+    "wip_limit": 3
   },
   "tools": [],
   "triggers": [],
@@ -3171,8 +3277,10 @@ export const uiEventProjectUpdated: UiEvent = {
       },
       "views": [
         {
+          "account": null,
           "assigned_to": null,
           "board_id": null,
+          "current_iteration": false,
           "id": "mine",
           "jql": "project = SHOP AND assignee = currentUser()",
           "label": "My open",
@@ -3186,6 +3294,7 @@ export const uiEventProjectUpdated: UiEvent = {
           "search": null,
           "status": null,
           "team": null,
+          "who": null,
           "workflow_scope": null
         }
       ]
@@ -3243,13 +3352,17 @@ export const uiEventLayoutChanged: UiEvent = {
         "id": "tab-2",
         "root": {
           "content": {
+            "group": "sprint",
             "kind": "tickets",
             "mode": "board",
+            "person": "5b10ac8d82e05b22cc7d4ef5",
             "scope": {
               "id": "shop",
               "kind": "project"
             },
-            "view_id": "mine"
+            "sort": "age",
+            "view_id": "mine",
+            "who": "mine"
           },
           "id": "pane-3",
           "type": "pane"
@@ -3500,6 +3613,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "terminal_palette": terminalPalette,
   "ticket_page": ticketPage,
   "ticket": ticket,
+  "source_hit": sourceHit,
   "ticket_detail": ticketDetail,
   "columns": columns,
   "transitions": transitions,

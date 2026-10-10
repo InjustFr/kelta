@@ -8,12 +8,14 @@ import type { CommandDef, ProjectId, SessionInfo, TicketItem } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
-import { plugins, projects, reviews, sessions, settings, tools } from '$lib/stores';
+import { trackerAssign } from '$lib/ipc/commands';
+import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools, ui } from '$lib/stores';
 import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
+import { startWorkOnTicket } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
 import { activateProject, focusedPane, openContent, revealSession } from '../nav';
@@ -228,23 +230,70 @@ export function reviewItems(): PaletteItem[] {
   return out;
 }
 
+/** Verbs are offered on the best hits only: 4 rows for each of 20 hits would bury everything else. */
+const VERB_HITS = 3;
+
+function openTicket(hit: TicketItem): void {
+  const project = hit.project_ids[0] ?? projects.activeId;
+  if (project)
+    void openContent(project, {
+      content: { kind: 'ticket_detail', ticket: hit.ticket.ref },
+      placement: 'new_tab',
+    });
+}
+
+function ticketVerbs(hit: TicketItem): PaletteItem[] {
+  const { ref, url } = hit.ticket;
+  const id = `ticket:${ref.account}:${ref.key}`;
+  const project = hit.project_ids[0] ?? projects.activeId;
+  const detail = hit.ticket.title;
+  const verb = (name: string, label: string, icon: string, run: () => void | Promise<void>): PaletteItem => ({
+    id: `${id}:${name}`,
+    group: 'Tickets',
+    label,
+    detail,
+    icon,
+    run,
+  });
+  return [
+    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref, project)),
+    verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
+      ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
+    ),
+    // A tracker that cannot assign from Kelta (caps) offers no assign verb.
+    ...(hit.caps.assign
+      ? [
+          verb('assign', `Assign ${ref.key} to me`, 'user', async () => {
+            try {
+              tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: 'me' } }));
+              toasts.info(`${ref.key} assigned to you`);
+            } catch (err) {
+              toasts.error(err, `Assigning ${ref.key}`);
+            }
+          }),
+        ]
+      : []),
+    verb(
+      'browser',
+      `Open ${ref.key} in browser`,
+      'external-link',
+      () => void dispatch('tickets.open_in_browser', { url }),
+    ),
+  ];
+}
+
 export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
-  return hits.map((hit) => ({
-    id: `ticket:${hit.ticket.ref.account}:${hit.ticket.ref.key}`,
-    group: 'Tickets' as const,
-    label: `${hit.ticket.ref.key} ${hit.ticket.title}`,
-    detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(SEP),
-    icon: 'ticket',
-    run: () => {
-      const project = hit.project_ids[0] ?? projects.activeId;
-      if (project) {
-        void openContent(project, {
-          content: { kind: 'ticket_detail', ticket: hit.ticket.ref },
-          placement: 'new_tab',
-        });
-      }
+  return hits.flatMap((hit, i) => [
+    {
+      id: `ticket:${hit.ticket.ref.account}:${hit.ticket.ref.key}`,
+      group: 'Tickets' as const,
+      label: `${hit.ticket.ref.key} ${hit.ticket.title}`,
+      detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(SEP),
+      icon: 'ticket',
+      run: () => openTicket(hit),
     },
-  }));
+    ...(i < VERB_HITS ? ticketVerbs(hit) : []),
+  ]);
 }
 
 /** Every synchronous item, in display order. */

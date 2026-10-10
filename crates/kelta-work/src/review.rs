@@ -1,6 +1,6 @@
 //! Ready for review (#134): every `Stop` snapshots the worktree to `refs/kelta/wi/<id>/last`,
 //! Mark reviewed copies it to `refs/kelta/wi/<id>/reviewed`, and the delta between the two is what
-//! Louis has not looked at yet. Both refs go on Finish and on the startup prune.
+//! Louis has not looked at yet. Both refs (and `notes`, review notes) go on Finish and on the startup prune.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -106,7 +106,7 @@ async fn generated_paths(
 
 /// Deletes the `last` / `reviewed` refs of `id` (Finish), so their objects can be collected.
 pub(crate) async fn delete_refs(repo: &Path, id: &WorkItemId) {
-    for name in ["last", "reviewed"] {
+    for name in ["last", "reviewed", "notes"] {
         let _ = git::run(repo, &["update-ref", "-d", &wi_ref(id, name)], LOCAL_TIMEOUT).await;
     }
 }

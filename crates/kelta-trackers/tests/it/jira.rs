@@ -2,10 +2,10 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{ColumnSpec, TrackerBinding};
-use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory};
+use kelta_proto::settings::{ColumnSpec, TrackerBinding, TrackerView};
+use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory, Who};
 use serde_json::json;
-use wiremock::matchers::{body_partial_json, header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn cloud(server: &MockServer) -> std::sync::Arc<dyn kelta_proto::api::Tracker> {
@@ -422,4 +422,313 @@ async fn caps_and_keys() {
     let r = tref("jira-acme", "SHOP-142", "10142");
     assert_eq!(t.branch_key(&r), "SHOP-142");
     assert_eq!(t.browser_url(&r), format!("{}/browse/SHOP-142", server.uri()));
+}
+
+async fn jql_sent(
+    t: &std::sync::Arc<dyn kelta_proto::api::Tracker>,
+    server: &MockServer,
+    v: &TrackerView,
+) -> String {
+    t.list(v, None).await.unwrap();
+    let all = bodies(server, "POST", "/rest/api/3/search/jql").await;
+    all.last().unwrap()["jql"].as_str().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn who_and_iteration_compose_the_jql_and_none_keeps_the_legacy_one() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    let t = cloud(&server);
+    let mut v = view("v");
+    v.jql = Some("project = SHOP ORDER BY rank".into());
+    assert_eq!(jql_sent(&t, &server, &v).await, "project = SHOP ORDER BY rank");
+    v.who = Some(Who::Mine);
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = SHOP) AND assignee = currentUser() ORDER BY rank"
+    );
+    v.who = Some(Who::Unassigned);
+    assert_eq!(jql_sent(&t, &server, &v).await, "(project = SHOP) AND assignee is EMPTY ORDER BY rank");
+    v.who = Some(Who::Anyone);
+    v.current_iteration = true;
+    assert_eq!(jql_sent(&t, &server, &v).await, "(project = SHOP) AND sprint in openSprints() ORDER BY rank");
+}
+
+#[tokio::test]
+async fn a_view_without_jql_gets_a_default_from_its_project_or_board_or_who() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    mount(&server, "GET", "/rest/agile/1.0/board/7/configuration", 200, "jira/board_config.json").await;
+    let t = cloud(&server);
+    let mut v = view("v");
+    v.project_id = Some("SHOP".into());
+    v.who = Some(Who::Mine);
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = \"SHOP\" AND statusCategory != Done) AND assignee = currentUser() ORDER BY updated DESC"
+    );
+    let mut b = view("b");
+    b.board_id = Some(7);
+    b.who = Some(Who::Unassigned);
+    assert_eq!(
+        jql_sent(&t, &server, &b).await,
+        "(filter = 10010 AND statusCategory != Done) AND assignee is EMPTY ORDER BY updated DESC"
+    );
+    // `closed` (the core's recently-done fetch) flips the open clause, defaults and source JQL alike.
+    v.status = Some("closed".into());
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = \"SHOP\" AND statusCategory = Done) AND assignee = currentUser() ORDER BY updated DESC"
+    );
+    let src = TrackerView {
+        jql: Some("project = SHOP AND statusCategory != Done ORDER BY updated DESC".into()),
+        status: Some("closed".into()),
+        ..view("s")
+    };
+    assert_eq!(
+        jql_sent(&t, &server, &src).await,
+        "project = SHOP AND statusCategory = Done ORDER BY updated DESC"
+    );
+    let mut m = view("m");
+    m.who = Some(Who::Mine);
+    assert_eq!(jql_sent(&t, &server, &m).await, "assignee = currentUser() ORDER BY updated DESC");
+    // Nothing bounds the search: still an error, as before.
+    for bare in [view("n"), TrackerView { who: Some(Who::Anyone), ..view("a") }] {
+        assert_eq!(t.list(&bare, None).await.unwrap_err().code, ErrorCode::InvalidArgument);
+    }
+}
+
+#[tokio::test]
+async fn sources_offer_projects_boards_sprints_and_favourite_filters() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/project/search"))
+        .and(query_param("query", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"values": [
+            {"key": "SHOP", "name": "Shop"}
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/agile/1.0/board"))
+        .and(query_param("name", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"values": [
+            {"id": 7, "name": "SHOP board", "type": "scrum"},
+            {"id": 8, "name": "SHOP flow", "type": "kanban"}
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/filter/favourite"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id": "10", "name": "Shop hot bugs", "jql": "priority = Highest"},
+            {"id": "11", "name": "Other", "jql": "x = y"}
+        ])))
+        .mount(&server)
+        .await;
+    let hits = cloud(&server).sources(" Shop ").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("project", "jira-acme-project-SHOP", "Shop"),
+            ("board", "jira-acme-board-7", "SHOP board"),
+            ("sprint", "jira-acme-board-7-sprint", "SHOP board (current sprint)"),
+            ("board", "jira-acme-board-8", "SHOP flow"),
+            ("filter", "jira-acme-filter-10", "Shop hot bugs"),
+        ]
+    );
+    assert_eq!(
+        hits[0].view.jql.as_deref(),
+        Some("project = SHOP AND statusCategory != Done ORDER BY updated DESC")
+    );
+    assert_eq!((hits[1].view.board_id, hits[1].view.current_iteration), (Some(7), false));
+    assert_eq!((hits[2].view.board_id, hits[2].view.current_iteration), (Some(7), true));
+    assert_eq!(
+        hits[4].view.jql.as_deref(),
+        Some("filter = 10 AND statusCategory != Done ORDER BY updated DESC")
+    );
+    assert_eq!(hits[4].detail.as_deref(), Some("priority = Highest"));
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+}
+
+#[tokio::test]
+async fn sources_survive_a_site_without_jira_software_and_data_center_filters_projects_locally() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/2/project"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"key": "SHOP", "name": "Shop"}, {"key": "OPS", "name": "Operations"}
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(path("/rest/agile/1.0/board")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    Mock::given(path("/rest/api/2/filter/favourite"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    let hits = dc(&server).sources("ops").await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(
+        hits[0].view.jql.as_deref(),
+        Some("project = OPS AND statusCategory != Done ORDER BY updated DESC")
+    );
+}
+
+async fn mount_get(server: &MockServer, p: &str, body: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(p))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(server)
+        .await;
+}
+
+async fn mount_lookups(server: &MockServer, v: u8) {
+    mount_get(
+        server,
+        &format!("/rest/api/{v}/field"),
+        json!([
+            {"id": "summary", "name": "Summary", "schema": {"type": "string"}},
+            {"id": "customfield_10020", "name": "Sprint",
+             "schema": {"type": "array", "custom": "com.pyxis.greenhopper.jira:gh-sprint"}},
+            {"id": "customfield_10016", "name": "Story point estimate", "schema": {"type": "number"}},
+        ]),
+    )
+    .await;
+    mount_get(
+        server,
+        &format!("/rest/api/{v}/priority"),
+        json!([{"id": "1", "name": "Highest"}, {"id": "2", "name": "High"}, {"id": "3", "name": "Medium"}]),
+    )
+    .await;
+}
+
+fn issue(extra: serde_json::Value) -> serde_json::Value {
+    let mut fields = json!({
+        "summary": "S", "status": {"id": "1", "name": "To Do"}, "updated": "2026-09-30T10:15:00.000+0200",
+        "priority": {"id": "2", "name": "High"},
+    });
+    fields.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    json!({"id": "1", "key": "SHOP-1", "fields": fields})
+}
+
+#[tokio::test]
+async fn cloud_tickets_carry_rank_status_date_sprint_estimate_and_due() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 3).await;
+    let sprints = json!([
+        {"id": 7, "name": "Sprint 7", "state": "closed", "endDate": "2026-09-01T00:00:00.000Z"},
+        {"id": 8, "name": "Sprint 8", "state": "active", "endDate": "2026-10-20T10:00:00.000+0200"},
+        {"id": 9, "name": "Sprint 9", "state": "future"},
+    ]);
+    let full = issue(json!({
+        "statuscategorychangedate": "2026-09-28T09:00:00.000+0200", "duedate": "2026-10-14",
+        "customfield_10020": sprints, "customfield_10016": 5.0, "timeoriginalestimate": 7200,
+    }));
+    let bare = issue(json!({"priority": {"id": "99", "name": "Custom"}, "timeoriginalestimate": 5400}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [full, bare]})))
+        .mount(&server)
+        .await;
+    let page = cloud(&server).list(&jql_view(), None).await.unwrap();
+    let t = &page.items[0];
+    assert_eq!(t.priority_rank, Some(1));
+    assert_eq!(t.status_since.as_deref(), Some("2026-09-28T09:00:00.000+02:00"));
+    let sp = t.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("8", "Sprint 8", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-20T10:00:00.000+02:00"));
+    assert_eq!(t.estimate.as_deref(), Some("5 pts"), "story points win over the time estimate");
+    assert_eq!(t.due.as_deref(), Some("2026-10-14"));
+    let b = &page.items[1];
+    assert_eq!(
+        (b.priority_rank, b.status_since.clone(), b.sprint.clone(), b.due.clone()),
+        (None, None, None, None)
+    );
+    assert_eq!(b.estimate.as_deref(), Some("1h 30m"));
+    // Only the needed fields are requested, custom ones included; the lookups run once.
+    let req = &bodies(&server, "POST", "/rest/api/3/search/jql").await[0];
+    let asked: Vec<&str> = req["fields"].as_array().unwrap().iter().filter_map(|f| f.as_str()).collect();
+    for f in [
+        "statuscategorychangedate",
+        "duedate",
+        "timeoriginalestimate",
+        "customfield_10020",
+        "customfield_10016",
+    ] {
+        assert!(asked.contains(&f), "{f} not requested: {asked:?}");
+    }
+    cloud(&server).list(&jql_view(), None).await.unwrap();
+}
+
+#[tokio::test]
+async fn sprint_without_active_state_is_the_latest_and_inactive() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 3).await;
+    let i = issue(json!({"customfield_10020": [
+        {"id": 7, "name": "Sprint 7", "state": "closed"}, {"id": 8, "name": "Sprint 8", "state": "closed"}]}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [i]})))
+        .mount(&server)
+        .await;
+    let sp = cloud(&server).list(&jql_view(), None).await.unwrap().items[0].sprint.clone().unwrap();
+    assert_eq!((sp.id.as_str(), sp.active, sp.ends_at), ("8", false, None));
+}
+
+#[tokio::test]
+async fn dc_reads_the_legacy_string_sprint_and_a_refused_field_lookup_just_drops_the_extras() {
+    let server = MockServer::start().await;
+    mount_lookups(&server, 2).await;
+    let legacy = "com.atlassian.greenhopper.service.sprint.Sprint@1f[id=12,rapidViewId=3,state=ACTIVE,\
+                  name=Sprint 12,startDate=2026-10-06T08:00:00.000Z,endDate=2026-10-20T08:00:00.000Z,sequence=12]";
+    let i = issue(json!({"customfield_10020": [legacy]}));
+    mount_get(&server, "/rest/api/2/issue/SHOP-1", i).await;
+    let t = dc(&server).get(&tref("jira-dc", "SHOP-1", "1")).await.unwrap().ticket;
+    let sp = t.sprint.unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("12", "Sprint 12", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-20T08:00:00.000Z"));
+    assert_eq!(t.priority_rank, Some(1));
+
+    // Lookups refused (403): the ticket still loads, without the discovered fields.
+    let server = MockServer::start().await;
+    Mock::given(path("/rest/api/2/field")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    Mock::given(path("/rest/api/2/priority")).respond_with(ResponseTemplate::new(403)).mount(&server).await;
+    mount_get(&server, "/rest/api/2/issue/SHOP-1", issue(json!({"duedate": "2026-10-14"}))).await;
+    let t = dc(&server).get(&tref("jira-dc", "SHOP-1", "1")).await.unwrap().ticket;
+    assert_eq!((t.priority_rank, t.sprint, t.due.as_deref()), (None, None, Some("2026-10-14")));
+}
+
+#[tokio::test]
+async fn a_server_error_on_lookups_is_retried_and_either_story_points_field_counts() {
+    let server = MockServer::start().await;
+    Mock::given(path("/rest/api/3/field"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    mount_get(
+        &server,
+        "/rest/api/3/field",
+        json!([
+            {"id": "customfield_10020", "name": "Sprint",
+             "schema": {"type": "array", "custom": "com.pyxis.greenhopper.jira:gh-sprint"}},
+            {"id": "customfield_10016", "name": "Story Points", "schema": {"type": "number"}},
+            {"id": "customfield_10017", "name": "Story point estimate", "schema": {"type": "number"}},
+        ]),
+    )
+    .await;
+    mount_get(&server, "/rest/api/3/priority", json!([{"id": "2", "name": "High"}])).await;
+    let i = issue(
+        json!({"customfield_10017": 3.0, "customfield_10020": [{"id": 1, "name": "S1", "state": "active"}]}),
+    );
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [i]})))
+        .mount(&server)
+        .await;
+    let p = cloud(&server);
+    assert!(p.list(&jql_view(), None).await.is_err());
+    let t = p.list(&jql_view(), None).await.unwrap().items.remove(0);
+    assert_eq!((t.sprint.is_some(), t.estimate.as_deref()), (true, Some("3 pts")));
 }

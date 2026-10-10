@@ -10,8 +10,9 @@ Open source (MIT). Desktop app built with Tauri v2, Svelte 5 and Rust. macOS 13+
 
 ## Features
 
-- Take a ticket (Jira, Redmine, GitHub Issues, GitLab Issues, Gitea/Forgejo Issues, Linear), build it in a git worktree with Claude
-  Code and nvim side by side.
+- Work your tickets without opening the tracker (Jira, Redmine, GitHub Issues, GitLab Issues, Gitea/Forgejo Issues, Linear): pick
+  one or several sources, see Mine, Unassigned or Anyone, move status to status, and start a ticket in a git worktree with
+  Claude Code and nvim side by side.
 - Review the pull requests and merge requests you are asked to review (GitHub, GitLab, Bitbucket Cloud, Gitea/Forgejo).
 - Several projects in one window. Switching never stops a session.
 - Tools (lazygit, lazydocker, `sl web`), triggers and plugins. See [docs/user](docs/user) and

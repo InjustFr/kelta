@@ -15,8 +15,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -26,7 +26,83 @@ use crate::common::{
 };
 
 const PER_PAGE: u32 = 50;
+
+/// The current milestone among active ones: the earliest `due_date >= today`, else an undated one.
+/// ISO dates compare as strings.
+fn current_milestone(milestones: &Value, today: &str) -> Option<String> {
+    let all = milestones.as_array()?;
+    all.iter()
+        .filter_map(|m| Some((s(m, "due_date").filter(|d| *d >= today)?, m)))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, m)| m)
+        .or_else(|| all.iter().find(|m| s(m, "due_date").is_none()))
+        .and_then(|m| s(m, "title"))
+        .map(str::to_owned)
+}
 const DEFAULT_SCOPE: &str = "workflow";
+
+fn today() -> String {
+    let d = time::OffsetDateTime::now_utc().date();
+    format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day())
+}
+
+/// Priority rank from `priority::<0-3|critical|urgent|high|medium|low|p0-p3>` or a bare `P0`-`P3` label.
+fn priority_rank(labels: &[String]) -> Option<u8> {
+    const RANKS: [&[&str]; 4] = [
+        &["p0", "0", "critical", "urgent"],
+        &["p1", "1", "high"],
+        &["p2", "2", "medium"],
+        &["p3", "3", "low"],
+    ];
+    labels.iter().find_map(|l| {
+        let l = l.to_ascii_lowercase();
+        let scoped = l.strip_prefix("priority::");
+        let v = scoped.unwrap_or(&l);
+        if scoped.is_none() && !(v.len() == 2 && v.starts_with('p')) {
+            return None;
+        }
+        RANKS.iter().position(|r| r.contains(&v)).map(|i| i as u8)
+    })
+}
+
+/// `time_stats.time_estimate` seconds as `1h 30m`, else the issue weight. shortcut: no days, GitLab's `1d` is 8h.
+fn estimate(v: &Value) -> Option<String> {
+    let secs = v.pointer("/time_stats/time_estimate").and_then(Value::as_u64).filter(|s| *s > 0);
+    match secs {
+        Some(s) => Some(match (s / 3600, s % 3600 / 60) {
+            (0, m) => format!("{m}m"),
+            (h, 0) => format!("{h}h"),
+            (h, m) => format!("{h}h {m}m"),
+        }),
+        None => v.get("weight").and_then(idstr),
+    }
+}
+
+/// The issue's iteration, else its milestone. A milestone is active when open and today is inside its dates.
+fn sprint(v: &Value, today: &str) -> Option<Sprint> {
+    let (obj, is_iteration) = match (v.get("iteration"), v.get("milestone")) {
+        (Some(i), _) if !i.is_null() => (i, true),
+        (_, Some(m)) if !m.is_null() => (m, false),
+        _ => return None,
+    };
+    let in_dates =
+        s(obj, "start_date").is_none_or(|d| d <= today) && s(obj, "due_date").is_none_or(|d| d >= today);
+    let active = match (is_iteration, obj.get("state")) {
+        (true, Some(Value::Number(n))) => n.as_u64() == Some(2),
+        // Undated milestones (release versions) are never "the current sprint".
+        (false, Some(Value::String(st))) => st == "active" && s(obj, "due_date").is_some() && in_dates,
+        _ => in_dates,
+    };
+    Some(Sprint {
+        id: obj.get("id").and_then(idstr)?,
+        // Cadence iterations have `title: null`: name them by their dates.
+        name: s(obj, "title").map(str::to_owned).unwrap_or_else(|| {
+            format!("{} – {}", s(obj, "start_date").unwrap_or("?"), s(obj, "due_date").unwrap_or("?"))
+        }),
+        active,
+        ends_at: s(obj, "due_date").map(str::to_owned),
+    })
+}
 
 pub struct GitlabIssues {
     api: String,
@@ -154,9 +230,15 @@ impl GitlabIssues {
             kind: s(v, "issue_type").or_else(|| s(v, "type")).map(str::to_owned),
             assignee,
             priority: labels.iter().find_map(|l| l.strip_prefix("priority::").map(str::to_owned)),
+            priority_rank: priority_rank(&labels),
             labels,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(project),
+            // shortcut: no status-change date without a resource_label_events request per issue; closed_at, else updated_at. Fetch events if age badges prove wrong.
+            status_since: s(v, "closed_at").or_else(|| s(v, "updated_at")).map(str::to_owned),
+            sprint: sprint(v, &today()),
+            estimate: estimate(v),
+            due: s(v, "due_date").map(str::to_owned),
         })
     }
 
@@ -257,7 +339,14 @@ impl Tracker for GitlabIssues {
             Some(p) => format!("{}/projects/{}/issues", self.api, percent_encode(p)),
             None => format!("{}/issues", self.api),
         };
-        let scope = if view.scope.as_deref() == Some("all") { "all" } else { "assigned_to_me" };
+        // `who` wins over the legacy `scope`.
+        let (scope, unassigned) = match view.who {
+            Some(Who::Mine) => ("assigned_to_me", false),
+            Some(Who::Unassigned) => ("all", true),
+            Some(Who::Anyone) => ("all", false),
+            None if view.scope.as_deref() == Some("all") => ("all", false),
+            None => ("assigned_to_me", false),
+        };
         let mut req = HttpRequest::get(url)
             .query("scope", scope)
             .query("state", state_param(view))
@@ -265,6 +354,25 @@ impl Tracker for GitlabIssues {
             .query("sort", "desc")
             .query("per_page", PER_PAGE.to_string())
             .query("page", page.to_string());
+        if unassigned {
+            req = req.query("assignee_id", "None");
+        }
+        if view.current_iteration {
+            // Free tier has no iterations: a milestone is the timebox. REST's `milestone_id=Started` uses the
+            // legacy rule (start date set and past, due date ignored), so a project picks its own milestone.
+            match view.project.as_deref().filter(|p| !p.is_empty()) {
+                Some(p) => {
+                    let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
+                    let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
+                    match current_milestone(&ms, &today()) {
+                        Some(title) => req = req.query("milestone", title),
+                        None => return Ok(Page { items: vec![], next: None }),
+                    }
+                }
+                // shortcut: legacy `Started` semantics without a project, pick per project when views need it.
+                None => req = req.query("milestone_id", "Started"),
+            }
+        }
         if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
             req = req.query("labels", l.join(","));
         }
@@ -317,6 +425,8 @@ impl Tracker for GitlabIssues {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            prs: Vec::new(),
+            caps: Default::default(),
         })
     }
 
@@ -491,6 +601,42 @@ impl Tracker for GitlabIssues {
             Assignee::None => vec![],
         };
         self.put(&project, iid, json!({"assignee_ids": ids})).await
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let mut req = HttpRequest::get(format!("{}/projects", self.api))
+            .query("membership", "true")
+            .query("with_issues_enabled", "true")
+            .query("archived", "false")
+            .query("order_by", "last_activity_at")
+            // shortcut: first page only, type-ahead reaches the rest; paginate if users hit the cap
+            .query("per_page", "20");
+        if !query.is_empty() {
+            req = req.query("search", query).query("search_namespaces", "true");
+        }
+        let projects = self.json(req).await?.body;
+        Ok(projects
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|p| {
+                        let path = s(p, "path_with_namespace").filter(|p| !p.is_empty())?;
+                        Some(SourceHit {
+                            kind: "project".into(),
+                            label: path.to_owned(),
+                            detail: s(p, "description").filter(|d| !d.is_empty()).map(str::to_owned),
+                            view: TrackerView {
+                                id: format!("project-{path}"),
+                                label: path.to_owned(),
+                                project: Some(path.to_owned()),
+                                who: Some(Who::Mine),
+                                ..TrackerView::default()
+                            },
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     fn browser_url(&self, t: &TicketRef) -> String {

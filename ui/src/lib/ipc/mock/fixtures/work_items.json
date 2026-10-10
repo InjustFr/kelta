@@ -821,5 +821,107 @@
     "claude_replied": false,
     "title": null,
     "pr_title_needs_key": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a009",
+    "project_id": "kelta-tools",
+    "kind": "ticket",
+    "ticket": {
+      "account": "github-oss",
+      "key": "#15",
+      "id": "I_kwDOAbc015"
+    },
+    "review": null,
+    "repo_id": "tools",
+    "worktree": "/Users/ada/oss/kelta-tools.worktrees/gh-15",
+    "branch": "fix/gh-15-missing-config-dir",
+    "base": "main",
+    "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0019",
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": null,
+    "state": {
+      "kind": "active"
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "skipped",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-09T09:00:00Z",
+    "review_due": false,
+    "claude_replied": false,
+    "title": null,
+    "pr_title_needs_key": false
   }
 ]
