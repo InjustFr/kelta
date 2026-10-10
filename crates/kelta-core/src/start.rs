@@ -425,6 +425,11 @@ mod tests {
         };
         assert_eq!(id(&[]).as_deref(), Some("product"), "first in config order");
         assert_eq!(id(&["tech-lead"]).as_deref(), Some("tech-lead"), "the one whose views list it");
+        assert_eq!(
+            id(&["tech-lead", "product"]).as_deref(),
+            Some("product"),
+            "several list it: config order"
+        );
         assert_eq!(source_of(&sources, &AccountId::new("nobody"), &[]).map(|s| &s.id), None);
     }
 

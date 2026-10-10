@@ -1014,7 +1014,8 @@ impl Core {
         Ok(ticket)
     }
 
-    /// A ticket from the cached view pages, with the sources of the view that lists it.
+    /// A ticket from the cached view pages, with the sources of every view that lists it (the views
+    /// are a map: only the union is stable, the page returned is the first found).
     pub(crate) async fn cached_ticket(&self, t: &TicketRef) -> Option<(Ticket, Vec<String>)> {
         let keys: Vec<(String, Vec<String>)> = self
             .feeds
@@ -1024,14 +1025,15 @@ impl Core {
             .filter(|q| q.account == t.account)
             .map(|q| (q.cache_key.clone(), q.sources.clone()))
             .collect();
+        let mut found: Option<(Ticket, Vec<String>)> = None;
         for (k, sources) in keys {
             if let Some((page, _)) = self.cache_get::<Page<Ticket>>(&k).await
                 && let Some(x) = page.items.into_iter().find(|x| &x.r#ref == t)
             {
-                return Some((x, sources));
+                found.get_or_insert_with(|| (x, Vec::new())).1.extend(sources);
             }
         }
-        None
+        found
     }
 
     /// After a write, before its bus event: patch cached pages and notify views (the event's
