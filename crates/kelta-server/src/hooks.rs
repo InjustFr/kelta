@@ -35,6 +35,7 @@ pub fn map(payload: &HookPayload) -> Option<StatusChange> {
         preview: None,
         file_edited: None,
         raw_event: event.to_owned(),
+        session_uuid: payload.session_id.clone().filter(|u| !u.is_empty()),
     };
     match event {
         names::SESSION_START => Some(change(SessionStatus::Running)),

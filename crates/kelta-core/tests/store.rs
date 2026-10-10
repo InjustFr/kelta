@@ -77,6 +77,24 @@ async fn work_store_round_trip() {
 }
 
 #[tokio::test]
+async fn corrupt_work_row_is_skipped_by_list_only() {
+    let s = Store::open_in_memory().unwrap();
+    let good = kelta_proto::samples::work_item();
+    let bad = kelta_proto::model::WorkItem { id: WorkItemId::new("bad"), ..good.clone() };
+    s.put_item(&good).await.unwrap();
+    s.put_item(&bad).await.unwrap();
+    s.call(|c| {
+        c.execute("UPDATE work_items SET state_json = '{\"kind\":\"from_the_future\"}' WHERE id = 'bad'", [])
+            .map_err(kelta_core::store::db_err)
+    })
+    .await
+    .unwrap();
+    let ids: Vec<WorkItemId> = s.list_items(None).await.unwrap().into_iter().map(|w| w.id).collect();
+    assert_eq!(ids, [good.id]);
+    assert!(s.get_item(&WorkItemId::new("bad")).await.is_err(), "a direct read still reports it");
+}
+
+#[tokio::test]
 async fn grant_and_trust_stores() {
     let s = Store::open_in_memory().unwrap();
     let p = PluginId::new("tools-pack");

@@ -137,7 +137,8 @@ async fn upgrade(State(cx): State<Arc<Cx>>, headers: HeaderMap, ws: WebSocketUpg
 }
 
 /// Pending `openDiff` calls of one connection by `tab_name`; dropping a sender resolves it.
-type Diffs = Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>;
+/// Pending `openDiff`s by tab; `None` once the connection closed (a late `openDiff` must not park).
+type Diffs = Arc<Mutex<Option<HashMap<String, oneshot::Sender<()>>>>>;
 
 async fn serve(cx: Arc<Cx>, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
@@ -149,7 +150,7 @@ async fn serve(cx: Arc<Cx>, socket: WebSocket) {
             }
         }
     });
-    let diffs = Diffs::default();
+    let diffs: Diffs = Arc::new(Mutex::new(Some(HashMap::new())));
     while let Some(Ok(msg)) = stream.next().await {
         let text = match msg {
             Message::Text(t) => t,
@@ -164,8 +165,8 @@ async fn serve(cx: Arc<Cx>, socket: WebSocket) {
             }
         });
     }
-    // Disconnect: pending diffs resolve as rejected.
-    diffs.lock().clear();
+    // Disconnect: pending diffs resolve as rejected, later ones are rejected at once.
+    *diffs.lock() = None;
 }
 
 async fn handle(cx: &Cx, diffs: &Diffs, text: &str) -> Option<Value> {
@@ -263,11 +264,13 @@ async fn call(cx: &Cx, core: &Arc<dyn CoreApi>, diffs: &Diffs, name: &str, args:
             (Err(e), _) | (_, Err(e)) => Err(e),
         },
         "close_tab" => {
-            diffs.lock().remove(arg("tab_name").unwrap_or_default());
+            if let Some(m) = diffs.lock().as_mut() {
+                m.remove(arg("tab_name").unwrap_or_default());
+            }
             Ok(vec!["TAB_CLOSED".into()])
         }
         "closeAllDiffTabs" => {
-            let n = std::mem::take(&mut *diffs.lock()).len();
+            let n = diffs.lock().as_mut().map_or(0, |m| std::mem::take(m).len());
             Ok(vec![format!("CLOSED_{n}_DIFF_TABS")])
         }
         "getWorkspaceFolders" => {
@@ -341,10 +344,16 @@ async fn open_diff(
     }
     // Registered first: a `close_tab` racing the editor call still resolves this diff.
     let (tx, rx) = oneshot::channel();
-    diffs.lock().insert(tab.to_owned(), tx);
+    let parked = diffs.lock().as_mut().map(|m| m.insert(tab.to_owned(), tx)).is_some();
+    if !parked {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Ok(vec!["DIFF_REJECTED".into(), tab.to_owned()]);
+    }
     let target = mcp::editor_target(core, &cx.sid);
     if let Err(e) = core.editor_diff(target.clone(), &old, &proposed, false).await {
-        diffs.lock().remove(tab);
+        if let Some(m) = diffs.lock().as_mut() {
+            m.remove(tab);
+        }
         let _ = std::fs::remove_dir_all(&dir);
         return Err(e.message);
     }
@@ -356,4 +365,28 @@ async fn open_diff(
 
 fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?.write_all(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn open_diff_after_disconnect_does_not_park() {
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = kelta_proto::testing::FakeCore::new();
+        let core: Arc<dyn CoreApi> = fake.clone();
+        let cx = Cx {
+            core: Arc::downgrade(&core),
+            sid: SessionId::new("s"),
+            token: String::new(),
+            folders: Vec::new(),
+            scratch: tmp.path().join("ide"),
+        };
+        let disconnected: Diffs = Arc::new(Mutex::new(None));
+        let out = open_diff(&cx, &core, &disconnected, "/a.rs", "/a.rs", "x", "t").await;
+        assert_eq!(out.unwrap(), ["DIFF_REJECTED", "t"]);
+        assert_eq!(std::fs::read_dir(&cx.scratch).unwrap().count(), 0, "staged copy removed");
+        assert!(fake.calls().iter().all(|c| c.method != "editor_diff"), "no diff left open");
+    }
 }

@@ -457,7 +457,8 @@ async fn review_locally() {
     assert!(item.worktree.join("feature.txt").exists(), "worktree at the PR head");
     let shell = fx.spawned_of(|k| *k == SessionKind::Shell);
     assert_eq!(shell.len(), 1);
-    assert_eq!(fx.core.written_text(&shell[0].id), "git diff --stat origin/main...HEAD\r");
+    // shell commands quote placeholders: a PR's base branch name cannot run as shell code
+    assert_eq!(fx.core.written_text(&shell[0].id), "git diff --stat origin/'main'...HEAD\r");
     // No tracker side effects for reviews.
     assert!(fx.tracker.calls().is_empty());
     let placements: Vec<Placement> = fx.core.opened().iter().map(|(_, r)| r.placement).collect();

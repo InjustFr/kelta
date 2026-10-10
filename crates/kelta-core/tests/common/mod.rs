@@ -335,3 +335,13 @@ pub async fn settle() {
         tokio::task::yield_now().await;
     }
 }
+
+/// One request over the ctl socket (the path `kelta-ctl` takes in production).
+pub async fn ctl_send(sock: &Path, req: serde_json::Value) -> serde_json::Value {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let mut s = tokio::net::UnixStream::connect(sock).await.unwrap();
+    s.write_all(format!("{req}\n").as_bytes()).await.unwrap();
+    let mut line = String::new();
+    tokio::io::BufReader::new(s).read_line(&mut line).await.unwrap();
+    serde_json::from_str(&line).unwrap()
+}

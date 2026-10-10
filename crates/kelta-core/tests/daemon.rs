@@ -139,6 +139,7 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
         preview: None,
         file_edited: None,
         raw_event: "t".into(),
+        session_uuid: None,
     };
     core.session_apply_hook(&claude.id, working).await.unwrap();
     assert!(core.quit_needs_confirm(), "restore_mode none: quit kills the working Claude");

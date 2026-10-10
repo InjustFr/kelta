@@ -267,6 +267,8 @@ impl Core {
                 }
             }
         };
+        // Repo trust lives in SQLite (D10): load it before anything reads the repo layers.
+        futures::executor::block_on(config.set_trust_store(store.clone()));
         let (bus, _) = broadcast::channel(BUS_CAPACITY);
         let http = HttpClient::new(&kelta_http::default_user_agent());
         let trackers: Arc<dyn ProviderFactory> =

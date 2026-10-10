@@ -13,7 +13,6 @@ use kelta_core::status::{Heuristic, NotifyKind, SessState, apply_heuristic, appl
 use kelta_proto::api::CoreApi;
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::events::UiEvent;
-use kelta_proto::hooks::HookPayload;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{
@@ -31,7 +30,7 @@ fn st(status: S, attention: A, seen: bool, visible: bool) -> SessState {
 }
 
 fn ch(status: S) -> StatusChange {
-    StatusChange { status, preview: None, file_edited: None, raw_event: "t".into() }
+    StatusChange { status, preview: None, file_edited: None, raw_event: "t".into(), session_uuid: None }
 }
 
 #[test]
@@ -268,45 +267,50 @@ async fn hooks_inactive_falls_back_to_heuristics() {
 }
 
 #[tokio::test]
-async fn ctl_hook_checks_the_token() {
+async fn ctl_hook_through_the_server() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let sock = h.core.server().start_ctl().await.unwrap();
     let s = h.core.session_spawn(claude_req()).await.unwrap();
     let token = h.term.with_session(&s.id, |x| x.spec.env["KELTA_HOOK_TOKEN"].clone()).unwrap();
-    let payload = |name: &str| HookPayload {
-        hook_event_name: name.into(),
-        session_id: Some("claude-uuid-2".into()),
-        ..HookPayload::default()
-    };
+    let hook = |token: &str, payload: serde_json::Value| serde_json::json!({ "v": 1, "cmd": "hook", "session": s.id, "token": token, "payload": payload });
     let mut rx = h.core.subscribe();
-    let bad = h
-        .core
-        .ctl(CtlCommand::Hook {
-            session: s.id.clone(),
-            token: "nope".into(),
-            payload: Box::new(payload("PermissionRequest")),
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(bad.code, kelta_proto::ErrorCode::PermissionDenied);
-    h.core
-        .ctl(CtlCommand::Hook {
-            session: s.id.clone(),
-            token,
-            payload: Box::new(payload("PermissionRequest")),
-        })
-        .await
-        .unwrap();
+    let bad =
+        ctl_send(&sock, hook("nope", serde_json::json!({ "hook_event_name": "PermissionRequest" }))).await;
+    assert_eq!(bad["ok"], false, "{bad}");
+    // `/clear` starts a new Claude conversation: the resume uuid must follow it.
+    let r = ctl_send(
+        &sock,
+        hook(
+            &token,
+            serde_json::json!({ "hook_event_name": "PermissionRequest", "session_id": "claude-uuid-2" }),
+        ),
+    )
+    .await;
+    assert_eq!(r["ok"], true, "{r}");
     let info = h.core.session_get(&s.id).unwrap();
     assert_eq!(info.status, S::NeedsInput);
     assert_eq!(info.claude.unwrap().session_uuid, "claude-uuid-2");
-    let ev = loop {
+    let edit = serde_json::json!({
+        "hook_event_name": "PostToolUse",
+        "session_id": "claude-uuid-2",
+        "tool_name": "Edit",
+        "tool_input": { "file_path": "/x/a.rs" },
+    });
+    assert_eq!(ctl_send(&sock, hook(&token, edit)).await["ok"], true);
+    h.core.publish(kelta_proto::events::BusEvent::new("custom.end", serde_json::json!({})));
+    let (mut hooks, mut edits) = (Vec::new(), Vec::new());
+    loop {
         let ev = rx.recv().await.unwrap();
-        if ev.name == "claude.hook" {
-            break ev;
+        match ev.name.as_str() {
+            "claude.hook" => hooks.push(ev.payload["event"].clone()),
+            "claude.file_edited" => edits.push(ev.payload),
+            "custom.end" => break,
+            _ => {}
         }
-    };
-    assert_eq!(ev.payload["event"], "PermissionRequest");
+    }
+    assert_eq!(hooks, ["PermissionRequest", "PostToolUse"]);
+    assert_eq!(edits, [serde_json::json!({ "path": "/x/a.rs", "tool": "Edit" })], "one event per edit");
     // only custom.* can be emitted
     assert!(
         h.core

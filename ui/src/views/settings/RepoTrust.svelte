@@ -21,11 +21,18 @@
 
   const doc = $derived(editor.doc);
 
+  // Trust is bound to the text shown in the dialog: the core refuses it if the file changed since.
+  async function sha256(text: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
   async function setTrust(trust: boolean): Promise<void> {
-    if (!editor.projectId || !editor.repoId) return;
+    if (!editor.projectId || !editor.repoId || !doc) return;
     busy = true;
     try {
-      await ipc.repoTrust({ project_id: editor.projectId, repo_id: editor.repoId, trust });
+      const hash = trust ? await sha256(doc.text) : undefined;
+      await ipc.repoTrust({ project_id: editor.projectId, repo_id: editor.repoId, trust, sha256: hash });
       reviewing = false;
       await editor.load();
       toasts.info(trust ? 'Repo config trusted' : 'Trust revoked');

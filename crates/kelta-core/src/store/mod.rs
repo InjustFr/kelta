@@ -592,7 +592,18 @@ pub mod q {
             .map_err(db_err)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(db_err)?;
-        raws.into_iter().map(|r| finish_work(c, r)).collect()
+        // One undecodable row (older/newer build) must not hide every work item.
+        Ok(raws
+            .into_iter()
+            .filter_map(|r| {
+                let id = r.0.id.clone();
+                finish_work(c, r)
+                    .inspect_err(
+                        |e| tracing::warn!(work_item = %id, error = %e, "skipping unreadable work item"),
+                    )
+                    .ok()
+            })
+            .collect())
     }
 
     pub fn work_delete(c: &Connection, id: &WorkItemId) -> R<()> {

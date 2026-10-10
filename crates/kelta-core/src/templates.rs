@@ -14,18 +14,10 @@ use kelta_proto::model::{
     SpawnRequest, TemplateCtx,
 };
 use kelta_proto::settings::{ClaudeSettings, EditorPreset, Settings, TemplateNode};
+use kelta_work::template::{Ctx, Mode, render, render_shell};
 
 use crate::Core;
 use crate::layout;
-
-/// Render `{name}` placeholders.
-pub fn render(t: &str, vars: &BTreeMap<&str, String>) -> String {
-    let mut out = t.to_owned();
-    for (k, v) in vars {
-        out = out.replace(&format!("{{{k}}}"), v);
-    }
-    out
-}
 
 /// The hooks Kelta registers for a Claude session (PLUGINS §8) + `claude.extra_hooks`.
 pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Value>) -> serde_json::Value {
@@ -157,7 +149,7 @@ impl Core {
         ctx: &TemplateCtx,
         s: &Settings,
         template_id: &str,
-        vars: &BTreeMap<&str, String>,
+        vars: &Ctx,
     ) -> Result<Option<(PaneContent, Option<SessionInfo>)>, KeltaError> {
         let TemplateNode::Session { session, name, profile, command } = leaf else { return Ok(None) };
         let base = SpawnRequest {
@@ -179,10 +171,13 @@ impl Core {
         let term = |i: &SessionInfo| PaneContent::Terminal { session_id: i.id.clone() };
         match session.as_str() {
             "shell" => {
+                let line = match command.as_deref().filter(|c| !c.trim().is_empty()) {
+                    Some(c) => Some(render_shell(c, vars, Mode::Strict)?),
+                    None => None,
+                };
                 let info = self.spawn_session(base).await?;
-                if let Some(c) = command.as_deref().filter(|c| !c.trim().is_empty()) {
-                    let line = format!("{}\r", render(c, vars));
-                    let _ = self.write_session(&info.id, line.as_bytes());
+                if let Some(line) = line {
+                    let _ = self.write_session(&info.id, format!("{line}\r").as_bytes());
                 }
                 Ok(Some((term(&info), Some(info))))
             }
@@ -202,7 +197,10 @@ impl Core {
                 let hooks = claude_hooks_settings(&self.dirs.stable_ctl(), &s.claude.extra_hooks);
                 write_private(&file, &serde_json::to_string_pretty(&hooks)?)?;
                 let uuid = uuid::Uuid::new_v4().to_string();
-                let prompt = s.claude.prompt_templates.get("standalone").map(|t| render(t, vars));
+                let prompt = match s.claude.prompt_templates.get("standalone") {
+                    Some(t) => Some(render(t, vars, Mode::Lenient)?),
+                    None => None,
+                };
                 let args = claude_args(&s.claude, profile.as_deref(), &uuid, &file, prompt.as_deref());
                 let req = SpawnRequest {
                     id: None,
@@ -223,12 +221,12 @@ impl Core {
                 let id = self.fresh_session_id();
                 let run = self.dirs.session_runtime(&id.sid8());
                 let mut v = vars.clone();
-                v.insert("sock", run.join("nvim.sock").to_string_lossy().into_owned());
-                v.insert("path", ".".into());
-                v.insert("sid8", id.sid8());
-                let mut args: Vec<String> = preset.args.iter().map(|a| render(a, &v)).collect();
+                v.set("sock", run.join("nvim.sock").to_string_lossy());
+                v.set("path", ".");
+                v.set("sid8", id.sid8());
+                let mut args = kelta_work::editor::render_args(&preset.args, &v)?;
                 if template_id == s.work.review_template {
-                    args.extend(s.editor.review_args.iter().map(|a| render(a, &v)));
+                    args.extend(kelta_work::editor::render_args(&s.editor.review_args, &v)?);
                 }
                 if preset.external {
                     let mut cmd = tokio::process::Command::new(&preset.command);
@@ -310,15 +308,19 @@ impl Core {
                 .or_else(|| p.repos.iter().find(|x| x.primary).cloned())
                 .or_else(|| p.repos.first().cloned())
         });
-        let mut vars: BTreeMap<&str, String> = BTreeMap::new();
-        vars.insert("cwd", cwd.to_string_lossy().into_owned());
-        vars.insert("project", project.to_string());
-        vars.insert("base", repo.as_ref().map(|r| r.base.clone()).unwrap_or_else(|| "main".into()));
-        vars.insert("repo", repo.as_ref().map(|r| r.id.clone()).unwrap_or_default());
-        vars.insert("task", String::new()); // plain sessions have no task: `{task}` renders empty
+        let repo_id = repo.as_ref().map(|r| r.id.clone()).unwrap_or_default();
+        let mut vars = Ctx::new()
+            .with("cwd", cwd.to_string_lossy())
+            .with("project", project.to_string())
+            .with("project.id", project.to_string())
+            .with("base", repo.as_ref().map(|r| r.base.clone()).unwrap_or_else(|| "main".into()))
+            .with("repo", repo_id.clone())
+            .with("repo.id", repo_id)
+            .with("task", ""); // plain sessions have no task: `{task}` renders empty
         for (k, v) in &ctx.extra {
-            if let Some(key) = ["key", "title", "url"].iter().find(|x| *x == k) {
-                vars.insert(key, v.clone());
+            if ["key", "title", "url"].contains(&k.as_str()) {
+                vars.set(k, v.clone());
+                vars.set(&format!("ticket.{k}"), v.clone());
             }
         }
 

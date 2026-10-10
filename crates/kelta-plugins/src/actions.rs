@@ -478,6 +478,7 @@ impl PluginHost {
                         preview: None,
                         file_edited: None,
                         raw_event: format!("trigger:{}", cx.key),
+                        session_uuid: None,
                     },
                 )
                 .await?;

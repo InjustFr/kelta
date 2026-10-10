@@ -13,27 +13,13 @@ use kelta_proto::ext::{ProxiedRequest, ProxiedResponse};
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::ToolVersion;
 use kelta_proto::model::{EditorTarget, Lifecycle, Placement, SessionKind, TemplateCtx, WorkSource};
-use kelta_proto::settings::{ClaudeSettings, TrustInfo};
+use kelta_proto::settings::ClaudeSettings;
 use kelta_proto::term::LoginEnv;
 use kelta_proto::tracker::TicketRef;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::Core;
 use crate::store::q;
-
-/// Constant-time string comparison (hook tokens).
-pub fn ct_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
-}
-
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
-}
 
 /// Ticket key from a key or a browser URL (`…/browse/SHOP-1`, `…/issues/12`).
 pub fn ticket_key(input: &str) -> String {
@@ -254,36 +240,8 @@ impl Core {
     /// Dispatch of ctl socket commands.
     pub(crate) async fn dispatch_ctl(&self, cmd: CtlCommand) -> Result<Value, KeltaError> {
         match cmd {
-            CtlCommand::Hook { session, token, payload } => {
-                let expected = self
-                    .sessions
-                    .lock()
-                    .get(&session)
-                    .map(|e| e.hook_token.clone())
-                    .ok_or_else(|| KeltaError::not_found(format!("session {session}")))?;
-                if !ct_eq(&expected, &token) {
-                    return Err(KeltaError::permission_denied("hook token"));
-                }
-                if let Some(u) = payload.session_id.as_deref().filter(|u| !u.is_empty()) {
-                    self.learn_claude_uuid(&session, u);
-                }
-                let project = self.sessions.lock().get(&session).map(|e| e.info.project_id.clone());
-                let matcher = payload.notification_type.clone().or_else(|| payload.tool_name.clone());
-                let mut ev = BusEvent::new(
-                    bus::CLAUDE_HOOK,
-                    json!({ "event": payload.hook_event_name, "matcher_value": matcher, "payload": &*payload }),
-                )
-                .with_session(session.clone());
-                if let Some(p) = project {
-                    ev = ev.with_project(p);
-                }
-                self.publish_ev(ev);
-                let change = kelta_server::hooks::map(&payload);
-                if let Some(c) = change {
-                    self.apply_hook(&session, c)?;
-                }
-                Ok(json!({ "ok": true }))
-            }
+            // kelta-server authenticates and ingests hooks itself (`hooks::ingest`).
+            CtlCommand::Hook { .. } => Err(KeltaError::invalid("hooks go through the ctl server")),
             CtlCommand::Toggle | CtlCommand::Palette | CtlCommand::PluginInstall { .. } => {
                 self.emit(UiEvent::CtlCommand { cmd });
                 Ok(Value::Null)
@@ -371,16 +329,18 @@ impl Core {
                 self.publish_ev(BusEvent::new(name, payload));
                 Ok(Value::Null)
             }
-            CtlCommand::Trust { repo } => {
-                let home = self.home_dir();
-                let repo = crate::projects::repo_path(&repo.to_string_lossy(), &home);
-                let file = repo.join(".kelta").join("config.toml");
-                let data = std::fs::read(&file)
-                    .map_err(|e| KeltaError::not_found(format!("{}: {e}", file.display())))?;
-                let hash = sha256_hex(&data);
-                let (f, h) = (file.clone(), hash.clone());
-                self.store.call(move |c| q::set_trust(c, &f, Some(&h))).await?;
-                Ok(serde_json::to_value(TrustInfo { path: file, hash, trusted: true })?)
+            CtlCommand::Trust { repo, sha256 } => {
+                let repo = crate::projects::repo_path(&repo.to_string_lossy(), &self.home_dir());
+                // Trust is keyed by the project TOML's path: match canonically (`..`, symlinks).
+                let canon = |p: &std::path::Path| std::fs::canonicalize(p).ok();
+                let want = canon(&repo.join(".kelta").join("config.toml"));
+                let file = self
+                    .config
+                    .repo_config_paths()
+                    .into_iter()
+                    .find(|p| want.is_some() && canon(p) == want)
+                    .ok_or_else(|| KeltaError::not_found("not a repo of any project"))?;
+                Ok(serde_json::to_value(self.config.trust_file(&file, Some(&sha256)).await?)?)
             }
             CtlCommand::EditorOpen { file, line } => {
                 let home = self.home_dir();
@@ -435,9 +395,6 @@ mod tests {
 
     #[test]
     fn helpers() {
-        assert!(ct_eq("abc", "abc"));
-        assert!(!ct_eq("abc", "abd"));
-        assert!(!ct_eq("abc", "ab"));
         assert_eq!(ticket_key("SHOP-1"), "SHOP-1");
         assert_eq!(ticket_key("https://acme.atlassian.net/browse/SHOP-142?x=1"), "SHOP-142");
         assert_eq!(b64_decode(&b64_encode(b"hello world!?")).unwrap(), b"hello world!?".to_vec());

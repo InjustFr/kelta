@@ -52,6 +52,7 @@ async fn fake_core_sessions_and_bus() {
             preview: None,
             file_edited: None,
             raw_event: "UserPromptSubmit".into(),
+            session_uuid: None,
         },
     )
     .await
