@@ -208,7 +208,7 @@ impl CodeHost for GiteaHost {
             match r {
                 Ok(r) if q.include_drafts || !r.draft => out.push(r),
                 Ok(_) => {}
-                Err(e) if e.code == ErrorCode::NeedsAuth => return Err(e),
+                Err(e) if matches!(e.code, ErrorCode::NeedsAuth | ErrorCode::RateLimited) => return Err(e),
                 Err(e) => tracing::debug!(%repo, n, code = %e.code, "gitea pull request skipped"),
             }
         }
@@ -327,7 +327,11 @@ impl CodeHost for GiteaHost {
     }
 
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
-        // A moved head is rejected by the server (`commit_id` mismatch) and surfaces as an error.
+        // The server only marks a mismatched `commit_id` review stale and still records it: check here.
+        let pull = self.json(HttpRequest::get(self.pulls(&r.repo, &format!("/{}", r.number))?)).await?.body;
+        if pull.pointer("/head/sha").and_then(Value::as_str) != Some(head_sha) {
+            return Err(KeltaError::conflict("the pull request head changed; refresh and review again"));
+        }
         self.review_post(r, json!({"event": "APPROVED", "commit_id": head_sha})).await
     }
 

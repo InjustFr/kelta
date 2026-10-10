@@ -118,6 +118,7 @@ async fn approve_and_request_changes_are_reviews_and_comment_is_an_issue_comment
     let server = MockServer::start().await;
     let reviews = "/api/v1/repos/acme/shop/pulls/7/reviews";
     mount(&server, "POST", reviews, 200, "gitea/reviews_approved_by_me.json").await;
+    common(&server).await;
     Mock::given(method("POST"))
         .and(path("/api/v1/repos/acme/shop/issues/7/comments"))
         .respond_with(ResponseTemplate::new(201).set_body_string("{}"))
@@ -125,11 +126,11 @@ async fn approve_and_request_changes_are_reviews_and_comment_is_an_issue_comment
         .await;
     let h = gt(&server);
     let r = rref("gitea-main", "acme/shop", 7);
-    h.approve(&r, "abc123").await.unwrap();
+    h.approve(&r, "abc1230000000000000000000000000000000000").await.unwrap();
     h.request_changes(&r, "please fix").await.unwrap();
     h.comment(&r, "hi").await.unwrap();
     let b = bodies(&server, "POST", reviews).await;
-    assert_eq!(b[0], json!({"event": "APPROVED", "commit_id": "abc123"}));
+    assert_eq!(b[0], json!({"event": "APPROVED", "commit_id": "abc1230000000000000000000000000000000000"}));
     assert_eq!(b[1], json!({"event": "REQUEST_CHANGES", "body": "please fix"}));
     assert_eq!(
         bodies(&server, "POST", "/api/v1/repos/acme/shop/issues/7/comments").await[0],
@@ -186,4 +187,13 @@ fn base_url_is_required_and_api_suffix_tolerated() {
     assert_eq!(make(acc(json!({}))).err().unwrap().code, ErrorCode::InvalidArgument);
     let h = make(acc(json!({"base_url": "https://git.acme.example/api/v1/"}))).unwrap();
     assert_eq!(h.repo_from_remote("git@git.acme.example:a/b.git").as_deref(), Some("a/b"));
+}
+
+#[tokio::test]
+async fn approve_with_a_stale_head_is_a_conflict_and_posts_nothing() {
+    let server = MockServer::start().await;
+    common(&server).await;
+    let err = gt(&server).approve(&rref("gitea-main", "acme/shop", 7), "old").await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Conflict);
+    assert_eq!(count(&server, "POST", "/api/v1/repos/acme/shop/pulls/7/reviews").await, 0);
 }

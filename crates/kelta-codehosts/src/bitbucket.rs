@@ -6,8 +6,8 @@
 //! requests from `reviewers.uuid` queries on the workspace's recently updated repositories.
 //! shortcut: per workspace only the 50 most recently updated repositories are scanned for review
 //! requests and a list shows no CI (one extra request per PR); upgrade when either is missed.
-//! shortcut: approve cannot be guarded by a head sha (the API has none) and PR refs are not
-//! exposed, so "review locally" fetches the source branch (forks are not supported).
+//! shortcut: PR refs are not exposed, so "review locally" fetches the source branch (forks are
+//! not supported).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -209,7 +209,7 @@ impl BitbucketHost {
         for r in results {
             match r {
                 Ok(v) => out.extend(v),
-                Err(e) if e.code == ErrorCode::NeedsAuth => return Err(e),
+                Err(e) if matches!(e.code, ErrorCode::NeedsAuth | ErrorCode::RateLimited) => return Err(e),
                 Err(e) => tracing::debug!(code = %e.code, "bitbucket repository skipped"),
             }
         }
@@ -364,7 +364,12 @@ impl CodeHost for BitbucketHost {
         })
     }
 
-    async fn approve(&self, r: &ReviewRef, _head_sha: &str) -> Result<(), KeltaError> {
+    async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        // The approve endpoint has no head guard: compare here (a small race remains).
+        let pull = self.json(HttpRequest::get(self.pr_url(&r.repo, &format!("/{}", r.number))?)).await?.body;
+        if pull.pointer("/source/commit/hash").and_then(Value::as_str) != Some(head_sha) {
+            return Err(KeltaError::conflict("the pull request head changed; refresh and review again"));
+        }
         self.auth
             .send_text(HttpRequest::post(self.pr_url(&r.repo, &format!("/{}/approve", r.number))?))
             .await?;

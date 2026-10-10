@@ -127,6 +127,16 @@ async fn detail_rolls_up_statuses_and_sums_the_diffstat() {
 }
 
 #[tokio::test]
+async fn a_rate_limited_repository_fails_the_whole_review_poll() {
+    let server = MockServer::start().await;
+    common(&server).await;
+    mount(&server, "GET", "/repositories/acme", 200, "bitbucket/repos.json").await;
+    mount(&server, "GET", "/repositories/acme/shop/pullrequests", 429, "bitbucket/prs.json").await;
+    let err = bb(&server).list_reviews(&query(ReviewKind::ReviewRequested, true, true)).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::RateLimited);
+}
+
+#[tokio::test]
 async fn request_changes_comments_first_then_flags_the_pr_and_refspec_is_the_source_branch() {
     let server = MockServer::start().await;
     let pr = "/repositories/acme/shop/pullrequests/7";
@@ -138,6 +148,7 @@ async fn request_changes_comments_first_then_flags_the_pr_and_refspec_is_the_sou
             .await;
     }
     mount(&server, "GET", "/repositories/acme/shop/pullrequests", 200, "bitbucket/prs.json").await;
+    mount(&server, "GET", pr, 200, "bitbucket/pr_7.json").await;
     let h = bb(&server);
     let r = rref("bitbucket-acme", "acme/shop", 7);
     h.request_changes(&r, "please fix").await.unwrap();
@@ -146,7 +157,10 @@ async fn request_changes_comments_first_then_flags_the_pr_and_refspec_is_the_sou
         json!({"content": {"raw": "please fix"}})
     );
     assert_eq!(count(&server, "POST", &format!("{pr}/request-changes")).await, 1);
-    h.approve(&r, "ignored").await.unwrap();
+    assert_eq!(h.approve(&r, "old").await.unwrap_err().code, ErrorCode::Conflict);
+    assert_eq!(count(&server, "POST", &format!("{pr}/approve")).await, 0);
+    h.approve(&r, "abc123def456").await.unwrap();
+    assert_eq!(count(&server, "POST", &format!("{pr}/approve")).await, 1);
 
     // never listed in this process: no ref to fetch
     assert!(h.fetch_refspec(&r, "kelta/pr-7").starts_with("pull-requests/7/"));
