@@ -27,7 +27,7 @@ import {
   toggleZoomFocused,
 } from './nav';
 import { navStep } from './jumplist';
-import { peekWaiting } from './peek.svelte';
+import { peek, peekWaiting } from './peek.svelte';
 import { restartApp } from './updates.svelte';
 
 function focusedView(): TerminalView | null {
@@ -163,6 +163,13 @@ registerAction('pane.close', () => closeFocusedPane());
 registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting(1));
 registerAction('attention.prev', async () => (await import('../views/inbox/now')).nextWaiting(-1));
 registerAction('attention.peek', () => peekWaiting());
+// Toast actions of a started workflow run (#233).
+registerAction('session.reveal', async (args) => {
+  if (typeof args?.session_id === 'string') await revealSession(args.session_id);
+});
+registerAction('session.peek', (args) => {
+  if (typeof args?.session_id === 'string') peek.open(args.session_id, null, true);
+});
 registerAction('nav.back', () => navStep(-1));
 registerAction('nav.forward', () => navStep(1));
 registerAction('terminal.search', () => {
