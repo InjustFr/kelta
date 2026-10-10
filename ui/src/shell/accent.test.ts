@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { settingsDefault } from '$lib/gen/fixtures';
+import { resolveTheme } from '$lib/theme';
+
 import { oklch, projectAccent } from './accent';
 
 describe('project accent', () => {
@@ -38,5 +41,21 @@ describe('project accent', () => {
   it('drops colours the browser cannot parse', () => {
     expect(projectAccent('bleu')).toBeNull();
     expect(projectAccent('#12345')).toBeNull();
+  });
+
+  it('takes the theme accent only without a project colour, through the same red/grey rules', () => {
+    // Shell: projectAccent(project colour) ?? projectAccent(theme accent)
+    const shell = (project: string | null, ui: string) => {
+      const s = {
+        ...settingsDefault,
+        app: { ...settingsDefault.app, dark_theme: 'x' },
+        themes: { x: { name: 'X', base: 'dark' as const, ui: { accent: ui }, terminal: {} } },
+      } as unknown as typeof settingsDefault;
+      return projectAccent(project) ?? projectAccent(resolveTheme(s, 'dark').accent);
+    };
+    expect(shell('#3e7cb1', '#268bd2')).toBe('#3e7cb1');
+    expect(shell(null, '#268BD2')).toBe('#268bd2');
+    expect(shell(null, '#dc322f')).toBeNull();
+    expect(shell(null, '#808080')).toBeNull();
   });
 });

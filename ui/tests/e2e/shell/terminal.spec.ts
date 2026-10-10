@@ -230,6 +230,56 @@ test.describe('terminal pane', () => {
       .toBe('#121519');
   });
 
+  test('a selected theme recolours chrome, open terminals and the palette live', async ({ page }) => {
+    await boot(page);
+    const set = (path: string, value: unknown) =>
+      page.evaluate(
+        async ([path, value]) => {
+          const { settingsSet } = await import(/* @vite-ignore */ '/src/lib/ipc/commands.ts' as string);
+          await settingsSet({ layer: 'global', path, value });
+        },
+        [path, value] as const,
+      );
+    const lastPalette = async () =>
+      ((await callsOf(page, 'terminal_set_palette')).at(-1)!.args as { palette: { background: string } })
+        .palette.background;
+    const css = (name: string) =>
+      page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+    const inline = () => page.evaluate(() => document.documentElement.style.cssText);
+    const viewBg = () =>
+      page.evaluate(async (id) => {
+        const { terminalPool } = await import(/* @vite-ignore */ '/src/lib/terminal/index.ts' as string);
+        const view = terminalPool.get(id) as unknown as {
+          term: { options: { theme: { background: string } } };
+        };
+        return view.term.options.theme.background;
+      }, SESSIONS.shopClaude);
+    await set('app.theme', 'dark');
+    await expect.poll(lastPalette).toBe('#121519');
+    const bezel = await css('--k-bezel');
+    const before = await inline();
+
+    await set('themes.x', {
+      name: 'X',
+      base: 'dark',
+      ui: { well: '#002B36', fg: '#93a1a1' },
+      terminal: {},
+    });
+    await set('app.dark_theme', 'x');
+    await expect.poll(lastPalette).toBe('#002b36');
+    expect(await css('--k-well')).toBe('#002b36');
+    expect(await css('--k-term-bg')).toBe('#002b36');
+    expect(await css('--k-fg')).toBe('#93a1a1');
+    expect(await css('--k-bezel')).toBe(bezel); // unset tokens keep the Bezel value
+    await expect.poll(viewBg).toBe('#002b36');
+
+    await set('app.dark_theme', 'bezel-dark');
+    await expect.poll(lastPalette).toBe('#121519');
+    expect(await inline()).toBe(before); // every inline var the theme set is gone
+    expect(await css('--k-well')).toBe('#121519');
+    await expect.poll(viewBg).toBe('#121519');
+  });
+
   test('welcome pane lists the environment checks', async ({ page }) => {
     await boot(page);
     await openPane(page, { kind: 'welcome' });

@@ -2,7 +2,7 @@
 
 import type { CursorStyle, OptionAsMeta, Renderer, ShiftEnter, TerminalSettings } from '$lib/gen';
 
-import type { ThemeMode } from './theme';
+import type { Colors, ThemeMode } from './theme';
 
 export interface TerminalConfig {
   fontFamily: string;
@@ -20,7 +20,7 @@ export interface TerminalConfig {
   confirmMultilinePaste: boolean;
   shiftEnter: Record<string, ShiftEnter>;
   minimumContrastRatio: number;
-  theme: ThemeMode;
+  theme: ThemeMode | Colors;
 }
 
 export const DEFAULT_CONFIG: TerminalConfig = {
@@ -41,7 +41,10 @@ export const DEFAULT_CONFIG: TerminalConfig = {
   theme: 'dark',
 };
 
-export function configFromSettings(t: TerminalSettings | undefined, theme: ThemeMode): TerminalConfig {
+export function configFromSettings(
+  t: TerminalSettings | undefined,
+  theme: ThemeMode | Colors,
+): TerminalConfig {
   if (!t) return { ...DEFAULT_CONFIG, theme };
   return {
     fontFamily: t.font_family,

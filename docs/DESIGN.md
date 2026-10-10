@@ -293,7 +293,7 @@ Rules:
 
 ## 5. Terminal palette
 
-`src/lib/terminal/theme.ts` is the source of truth (Rust needs `#rrggbb`). Tokens mirror bg / fg / cursor / selection; a unit test asserts that `--k-term-bg` and `--k-term-fg` in tokens.css equal theme.ts. `terminal_set_palette` re-push on theme change is unchanged.
+`src/lib/terminal/theme.ts` holds the Bezel base palettes and is their source of truth (Rust needs `#rrggbb`). Tokens mirror bg / fg / cursor / selection; a unit test asserts that `--k-term-bg` and `--k-term-fg` in tokens.css equal theme.ts. A selected theme (`app.dark_theme` / `app.light_theme`, SETTINGS `[themes.<id>]`) is resolved by `src/lib/theme`: it overrides `--k-*` tokens inline on `<html>` and hands its terminal colours to xterm and `terminal_set_palette` in place of the base palette. `terminal_set_palette` re-push on theme change is unchanged.
 
 | | fg | bg | cursor | selection |
 |---|---|---|---|---|
@@ -464,6 +464,7 @@ One row grammar for all three, so they read as one instrument:
 - **No serif reading voice** (Spine rejected). A bundled serif breaks the "no fonts" rule's spirit and system serifs on Linux are uneven at small sizes; Spine's 68-72ch measure and label/value meta grid were kept because they help reading without a font.
 - **No key shadows or press travel** (Faceplate rejected). Paint cost on WebKitGTK and a skeuomorphic look that competes with terminal content. Kept only the toggle notch and kbd styling.
 - **Ink accent rejected** (Faceplate). Removing hue from focus and selection loses the project-at-a-glance signal and makes links ambiguous.
+- **Partial themes over Bezel.** A theme overrides only the tokens it names (chrome surfaces, text, borders, status colours, terminal colours) on top of the Bezel base of its mode; lamps, swatches, hover/overlay tints and `*_fg` stay Bezel so the lamp shape and contrast rules hold. A theme's accent is only the `--k-project` fallback for projects without a colour, so the project hue stays the accent.
 - **Neutral terminal cursor.** Project-hued or amber cursors would force a palette re-push on every project switch and clash with nvim themes.
 - **No pane borders.** A 1px bezel gap separates panes with less ink and gives terminals every pixel.
 - **Mono only for pasteable strings, no middle dots, no uppercase.** Each mark encodes data; template chrome is gone.

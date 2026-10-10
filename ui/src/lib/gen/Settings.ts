@@ -16,6 +16,7 @@ import type { PortsSettings } from "./PortsSettings";
 import type { ReviewsSettings } from "./ReviewsSettings";
 import type { SessionTemplate } from "./SessionTemplate";
 import type { TerminalSettings } from "./TerminalSettings";
+import type { ThemeDef } from "./ThemeDef";
 import type { TicketsSettings } from "./TicketsSettings";
 import type { ToolDef } from "./ToolDef";
 import type { TriggerDef } from "./TriggerDef";
@@ -31,4 +32,8 @@ export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSet
 /**
  * Environment added to every session of the project (project/repo files).
  */
-env: { [key in string]: string }, };
+env: { [key in string]: string }, 
+/**
+ * User colour themes, named by `app.dark_theme` / `app.light_theme` (a built-in id is overridden).
+ */
+themes: { [key in string]: ThemeDef }, };
