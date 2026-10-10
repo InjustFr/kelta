@@ -977,6 +977,19 @@ impl Tracker for GithubIssues {
             .ok_or_else(|| KeltaError::upstream("issue response without repository"))
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let repo = common::create_in(project, "repo", project.repo.as_deref())?;
+        let v = self
+            .rest(
+                HttpRequest::post(format!("{}/repos/{repo}/issues", self.api))
+                    .json(json!({"title": title, "body": body_md})),
+            )
+            .await?
+            .body;
+        self.ticket_from_rest(&v, None)
+            .ok_or_else(|| KeltaError::upstream("issue response without repository"))
+    }
+
     fn browser_url(&self, t: &TicketRef) -> String {
         match split_repo_number(&t.key) {
             Ok((repo, n)) => format!(

@@ -194,6 +194,13 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     run: async ({ item }) => ui.openSheet('link_ticket', { id: item.id }),
   },
   {
+    id: 'create_ticket',
+    key: 'T',
+    label: () => 'Create ticket…',
+    blocked: (c) => (c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
+    run: async ({ item }) => ui.openSheet('create_ticket', { id: item.id }),
+  },
+  {
     id: 'open_ticket',
     key: 't',
     label: () => 'Open ticket',

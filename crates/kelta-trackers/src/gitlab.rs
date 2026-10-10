@@ -603,6 +603,16 @@ impl Tracker for GitlabIssues {
         self.put(&project, iid, json!({"assignee_ids": ids})).await
     }
 
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let p = common::create_in(project, "project", project.project.as_deref())?;
+        let url = format!("{}/projects/{}/issues", self.api, percent_encode(p));
+        let v = self
+            .json(HttpRequest::post(url).json(json!({"title": title, "description": body_md})))
+            .await?
+            .body;
+        self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))
+    }
+
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let mut req = HttpRequest::get(format!("{}/projects", self.api))
             .query("membership", "true")

@@ -133,10 +133,11 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
 | `attention.next` ("Next waiting": walks the first four sections of Now, any project, cycling) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
 | `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
-| `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
+| `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.create_ticket`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
 | `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
 | `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |
+| `work.create_ticket` (Create ticket… for the focused scratch item: file it in the project tracker, then link it; palette only) | — | — | — |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `editor.quickfix_claude` (palette "Quickfix: files Claude touched": the focused tab's Claude `files_touched` become its nvim's quickfix list, `]q` / `[q`) | unbound | unbound | |
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |

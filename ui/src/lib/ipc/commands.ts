@@ -245,6 +245,11 @@ export interface Commands {
   work_rebase: { args: { id: WorkItemId; op: RebaseOp }; result: WorkItem };
   work_push: { args: { id: WorkItemId; force: boolean }; result: WorkItem };
   work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
+  /** Files a ticket in the project tracker's view `view_id`, then links it like `work_link`. */
+  work_create_ticket: {
+    args: { id: WorkItemId; view_id: string; title: string; body_md: string; apply_side_effects: boolean };
+    result: WorkItem;
+  };
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
   /** Spawns the review diff session; the UI places it zoomed in the work tab. */
@@ -389,6 +394,7 @@ export const COMMAND_NAMES = [
   'work_rebase',
   'work_push',
   'work_link',
+  'work_create_ticket',
   'work_status_all',
   'work_diff',
   'work_mark_reviewed',
@@ -598,6 +604,7 @@ export const workResolveSentThreads = wrap('work_resolve_sent_threads');
 export const workRebase = wrap('work_rebase');
 export const workPush = wrap('work_push');
 export const workLink = wrap('work_link');
+export const workCreateTicket = wrap('work_create_ticket');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');

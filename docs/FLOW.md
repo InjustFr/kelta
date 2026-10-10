@@ -144,6 +144,7 @@ No status strip segment: the work bar is always visible above the focused tab's 
 | `s` | Skip step | only in Failed |
 | `g` | Go to Claude | focuses the Claude pane; resumes it if dormant |
 | `l` | Link to ticket… | scratch items only |
+| `⇧T` | Create ticket… | scratch items only |
 | `t` / `o` | Open ticket / Open PR on the host | |
 | `⇧F` | Finish… | always confirmed |
 
@@ -220,7 +221,7 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 - New group **Work items**: every unfinished work item, `[lamp] KEY title` with the phase label as meta. Matches key, title, branch. `Enter` goes to it (`work_resume` recreates a closed tab and resumes Claude).
 - Session rows that belong to a work item are named `KEY claude`, `KEY nvim` instead of three identical `claude` rows.
-- New commands: New work item, Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Finish (focused item), Finish all merged, Run last toast action.
+- New commands: New work item, Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Create ticket / Finish (focused item), Finish all merged, Run last toast action.
 
 ### 3.6 Freshness
 
@@ -300,6 +301,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 2. `⌘↵`: same saga as ticket work minus tracker steps (`WorkSource::Branch{name, task}`). The work tab opens focused, Claude starts on the task.
 3. From here it is a normal work item: To review, Ship (PR title = item title, body includes the task text), Fix, Rebase, Finish.
 4. **Link to ticket** later (`⌘.` `l`, or palette): ticket picker over `tracker_search`, then `work_link`. The item becomes ticket-kind; the branch is never renamed. A checkbox (default on) applies `on_start` (assign me, move to In Progress), and if a PR exists, `on_pr` (move to In Review, comment the PR URL) and the ticket key is added to the PR title on the next Ship/Push only if the PR title has no key yet.
+5. **Create ticket** (`⌘.` `⇧T`, or palette), next to Link to ticket when no ticket exists yet: title, body (task and diffstat) prefilled from the item and editable, plus the tracker source to file it in when the project has several; `work_create_ticket` creates it, then links it as in step 4.
 
 `⌘T` (New session) stays the way to open a plain session with no branch. Its sheet gets one line: "Want a branch and a PR? New work item ⇧⌘N". Promoting a running plain session into a work item is not offered (§11.2).
 

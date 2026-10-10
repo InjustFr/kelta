@@ -6,6 +6,7 @@ export type SheetKey =
   | 'start_work'
   | 'work_new'
   | 'link_ticket'
+  | 'create_ticket'
   | 'onboarding'
   | 'project_new'
   | 'plugin_install'

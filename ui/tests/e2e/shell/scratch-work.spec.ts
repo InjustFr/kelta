@@ -72,4 +72,17 @@ test.describe('scratch work items', () => {
     await expect(page.getByTestId('work-header')).toContainText('SHOP-151');
     await expect(page.getByTestId('work-header')).toContainText('wip/fix-the-login-flake');
   });
+
+  test('Create ticket files a prefilled ticket and links it', async ({ page }) => {
+    await boot(page, 'macos');
+    await newWorkItem(page);
+    await dispatch(page, 'work.create_ticket');
+    const sheet = page.getByTestId('create-ticket');
+    await expect(sheet.getByLabel('Title')).toHaveValue('Fix the login flake');
+    await page.getByTestId('create-ticket-submit').click();
+    await expect(page.getByTestId('toasts')).toContainText('Created and linked SHOP-');
+    const [create] = await callsOf(page, 'work_create_ticket');
+    expect(create?.args).toMatchObject({ title: 'Fix the login flake', apply_side_effects: true });
+    await expect(page.getByTestId('work-header')).toContainText('SHOP-');
+  });
 });

@@ -652,6 +652,32 @@ async fn scratch_item_from_a_task() {
 }
 
 #[tokio::test]
+async fn create_ticket_files_then_links_a_scratch_item() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let a = w.start(w.plan(&project(), scratch("Explore caching")).await.unwrap()).await.unwrap();
+    // Refused before the tracker is called: no orphan ticket.
+    let e = w.create_ticket(&a.id, "nope", "Explore caching", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotFound);
+    let e = w.create_ticket(&a.id, "mine", "  ", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+    assert!(fx.tracker.calls().is_empty(), "{:?}", fx.tracker.calls());
+
+    let linked = w.create_ticket(&a.id, "mine", " Explore caching ", "The task", false).await.unwrap();
+    let key = linked.ticket.as_ref().map(|t| t.key.clone()).unwrap();
+    assert_eq!(linked.kind, kelta_proto::model::WorkKind::Ticket);
+    assert_eq!(linked.branch, "wip/explore-caching");
+    let created = fx.tracker.ticket(&key).unwrap();
+    assert_eq!((created.ticket.title.as_str(), created.body_md.as_str()), ("Explore caching", "The task"));
+    assert_eq!(fx.tracker.calls(), vec!["create:mine".to_owned(), format!("get:{key}")]);
+    // Already linked: refused before creating a second ticket.
+    let e = w.create_ticket(&a.id, "mine", "Again", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert_eq!(fx.tracker.calls().len(), 2);
+}
+
+#[tokio::test]
 async fn link_scratch_item_to_a_ticket() {
     need_git!();
     use kelta_proto::api::{CodeHost, WorkStore};
