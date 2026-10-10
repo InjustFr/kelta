@@ -239,14 +239,22 @@ async fn authored_changes_emit_pr_events() {
     assert!(bus_names(&mut rx).iter().all(|ev| !ev.name.starts_with("pr.")));
     {
         let mut l = e.host.reviews.lock();
-        l[0].ci = CiState::Failure;
+        l[0].ci = CiState::Error;
         l[0].decision = Some(kelta_proto::codehost::ReviewDecision::Approved);
     }
     e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
-    let names: Vec<String> =
-        bus_names(&mut rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect();
-    assert_eq!(names, vec!["pr.ci_changed", "pr.approved", "pr.updated"]);
-    assert_eq!(e.h.ui.notifications().len(), 2, "ci failed + approved");
+    let pr_names = |rx: &mut _| -> Vec<String> {
+        bus_names(rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect()
+    };
+    assert_eq!(pr_names(&mut rx), vec!["pr.ci_changed", "pr.approved", "pr.updated"]);
+    assert_eq!(e.h.ui.notifications().len(), 2, "ci failed (errored rollup) + approved");
+    e.host.reviews.lock()[0].ci = CiState::Failure;
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(pr_names(&mut rx), vec!["pr.ci_changed", "pr.updated"]);
+    assert_eq!(e.h.ui.notifications().len(), 3, "error → failure notifies again");
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert!(pr_names(&mut rx).is_empty(), "failure → failure on the same head publishes nothing");
+    assert_eq!(e.h.ui.notifications().len(), 3);
 }
 
 #[tokio::test]

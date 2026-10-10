@@ -69,7 +69,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
 | 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
-| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (n threads) / Checks failed (names) | error | Fix with Claude | Fix |
+| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (n threads) / Checks failed (names: the first 3, then `+n`; GitHub only) | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
 | 12 | PR `mergeable = false` | Conflicts with {base} (n behind) | error | Rebase | Fix |
 | 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
 | 14 | PR exists, `unpushed` | Unpushed (n commits) | none | Push | Ship and clean up |
@@ -262,16 +262,17 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 
 Trigger: a changes-requested review (GitLab: unresolved blocking discussions) or a failed check on my PR's head. The item moves to **Fix** (row 11) as soon as the authored poll sees it; a notification already exists.
 
-1. `⌘0`, the item is at or near the top of Fix. `Enter` (or `f`; or `⌘.` `f` from the work tab).
+1. `⌘0`, the item is at or near the top of Fix. `Enter` (or `f`; or `⌘.` `f` from the work tab). On a **Checks failed** row `Enter` is `fix_checks`, **Send failures to Claude**: no sheet, `work_feedback` is read, only its failed checks go to `feedback.md` with `claude.prompt_templates.checks`, and step 3 runs at once ("Sent 2 failed checks to Claude."). With no failed check left it sends nothing: "No failed check on #142 any more." `f` still opens the sheet.
 2. **Fix with Claude** sheet (`FixSheet.svelte`, mockup `f3-fix-sheet.png`):
-   - `work_feedback` lists unresolved review threads (author, `path:line`, body), review summaries with a body, and failed checks with the last 40 log lines. All checked by default; `j`/`k` + `Space` toggle (§7.1).
-   - Prompt from `claude.prompt_templates.feedback`, editable, focused.
+   - `work_feedback` lists unresolved review threads (author, `path:line`, body), review summaries with a body, and failed checks (check runs and legacy commit statuses) with the last 80 log lines, cleaned of ANSI sequences, GitLab section markers, `\r` overwrites and GitHub timestamps, a GitHub log cut after its last `##[error]` line. All checked by default; `j`/`k` + `Space` toggle (§7.1).
+   - Prompt from `claude.prompt_templates.feedback` (`checks` when the feedback is failed checks only), editable, focused.
    - Footer names the conversation that will be resumed ("Resumes conversation 3f2a91c0 from 2d ago").
 3. `⌘↵`: Kelta writes the checked items to `feedback.md` **next to `ticket.md` in the item's private Claude run dir** (`files::write_private`, outside the worktree, so the tree stays clean and nothing gets committed), remembers the sent thread ids on the item, and calls `work_send` with a prompt that names the file by absolute path:
    - Claude live, hooks active, `status` Done or `WaitingUser` (idle): the prompt is pasted (bracketed) and submitted.
    - Claude dead or tab closed: the tab is recreated (`work_resume`) and Claude starts as `claude --resume <claude_uuid> -- "<prompt>"`. If `--resume` is refused, the `--continue` fallback carries the same prompt.
-   - Claude `Working` or `NeedsInput`: the send button is disabled with "Claude is busy; send when it stops." Kelta never types into a permission prompt.
-   - Claude live but hooks inactive (status is a guess): refused with "Kelta can't tell whether Claude is idle (status hooks inactive)." [Fix hooks] [Copy prompt].
+   - Claude `Working` or `NeedsInput` (hooks): the button reads **Send when Claude stops**; the prompt is held and pasted at Claude's next `Stop` ("Claude is working: it gets your message when it stops."), a second send is appended to it. Kelta never types into a permission prompt.
+   - Claude live but hooks inactive (status is a guess): never refused; the brief is written and the prompt is copied to the clipboard: "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." The sheet still offers [Fix hooks] [Copy prompt].
+   - Every `work_send` caller (the sheet, `fix_checks`, Ask Claude to resolve, Ask Claude to commit) works this way; the sent thread ids are stored at send time, also when held.
    ![Fix with Claude sheet](images/flow/f3-fix-sheet.png)
 
 4. Claude fixes and stops: `review_due` → To review (row 8 wins over row 11, §2.2). Review, then `⌘.` `Enter` = Push (row 14, no confirmation for a plain push). The push toast offers **Re-request review from {reviewers}** (one CodeHost call) and **Resolve sent threads** (the ids remembered in step 3); `⇧⌘O` runs the first. The item moves to In flight ("In review") until the reviewer reacts.
@@ -403,8 +404,8 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Situation | Where | Message and actions |
 |---|---|---|
 | Start step failed | work bar, Fix row | "Failed at tracker side effects: Redmine has no transition to In Progress." [Retry `Enter`] [Skip step `s`] |
-| Status hooks inactive | work bar | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, sending to a live Claude refused |
-| Claude busy when sending feedback or conflicts | sheet button disabled | "Claude is busy; send when it stops." |
+| Status hooks inactive | work bar | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard |
+| Claude busy when sending feedback or conflicts | toast | "Claude is working: it gets your message when it stops." (held until its `Stop`) |
 | Claude busy on Ship / Push / Rebase | toast | "Claude is working in this worktree. {Action} when it stops." |
 | Claude's MCP ship in progress | toast | "Claude is shipping this item." |
 | Previous conversation gone (`--resume` exits fast) | toast | existing fallback to `--continue`, now with the same prompt, then: "Previous conversation not found; Claude continued the latest one in this worktree with your prompt." |
