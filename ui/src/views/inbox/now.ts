@@ -146,15 +146,14 @@ export async function goToRow(row: NowRow): Promise<void> {
 /** `Enter`: the row's next action. */
 export async function enterRow(row: NowRow): Promise<void> {
   if (row.type === 'work') await runPrimary(row.item);
-  else if (row.type === 'ticket')
-    await startWorkOnTicket(row.ticket.ticket.ref, rowProject(row.ticket.project_ids));
+  else if (row.type === 'ticket') await startWorkOnTicket(row.ticket.ticket.ref, row.ticket.project_ids[0]);
   // shortcut: a PR of mine without a work item opens its review until Fix with Claude adopts it.
   else await goToRow(row);
 }
 
 /** `s` on a Review requests row. */
 export function reviewRowLocally(row: Extract<NowRow, { type: 'review' }>): void {
-  void reviewLocally(row.review.review.ref, rowProject(row.review.project_ids));
+  void reviewLocally(row.review.review.ref, row.review.project_ids[0]);
 }
 
 let lastJump: string | null = null;

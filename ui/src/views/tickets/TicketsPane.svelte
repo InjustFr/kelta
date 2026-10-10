@@ -343,7 +343,7 @@
 
   $effect(() => {
     if (!focused || !cur) return;
-    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? home);
+    selectTicket(cur.ticket.ref, cur.project_ids[0] ?? null);
     return () => selectTicket(null, null);
   });
 
@@ -451,7 +451,7 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? home, { preview });
+    void startWorkOnTicket(item.ticket.ref, item.project_ids[0], { preview });
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -543,7 +543,7 @@
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     // #141: Mod+Enter starts the marked tickets; Space marks on the board only (the list's Space splits).
     const mark =
-      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? home } : null;
+      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? null } : null;
     if (!side?.contains(target) && batchKey(e, mark)) {
       e.preventDefault();
       return;

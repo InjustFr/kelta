@@ -184,6 +184,14 @@ describe('TicketDetail', () => {
     );
   });
 
+  it('s on a project-less ticket does not pass the pane project as the caller', async () => {
+    render(TicketDetail, { props: { item: itemOf('#88'), projectId: 'shop', embedded: true } });
+    const root = screen.getByTestId('ticket-detail');
+    await fireEvent.keyDown(root, { key: 's' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(true));
+    expect(mock.calls.find((c) => c.cmd === 'work_plan')!.args).toMatchObject({ project_id: null });
+  });
+
   it('c focuses the comment box', async () => {
     const root = mount('SHOP-151');
     await fireEvent.keyDown(root, { key: 'c' });

@@ -195,6 +195,40 @@ async fn start_work_end_to_end() {
 }
 
 #[tokio::test]
+async fn ticket_with_work_item_in_a_removed_project_plans_in_the_requested_one() {
+    need_git!();
+    let fx = Fx::new();
+    let mut other = samples::project_info();
+    other.id = kelta_proto::ids::ProjectId::new("other");
+    other.repos[0].path = fx.repo.clone();
+    fx.core.add_project(other.clone());
+    let w = fx.service();
+    w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    fx.core.remove_project(&project());
+    let plan = w.plan(&other.id, ticket("SHOP-141")).await.unwrap();
+    assert_eq!(plan.project_id, other.id);
+    assert!(plan.existing.is_none());
+}
+
+#[tokio::test]
+async fn ticket_with_work_item_in_another_project_resumes_there() {
+    need_git!();
+    let fx = Fx::new();
+    let mut other = samples::project_info();
+    other.id = kelta_proto::ids::ProjectId::new("other");
+    other.repos[0].path = fx.repo.clone();
+    fx.core.add_project(other.clone());
+    let w = fx.service();
+    let item = w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    let worktrees = fx.worktree_count();
+    let again = w.plan(&other.id, ticket("SHOP-141")).await.unwrap();
+    assert_eq!(again.project_id, project());
+    assert_eq!(again.existing.as_ref(), Some(&item.id));
+    assert_eq!(w.start(again).await.unwrap().id, item.id);
+    assert_eq!(fx.worktree_count(), worktrees);
+}
+
+#[tokio::test]
 async fn crash_after_every_step_resumes_without_duplicates() {
     need_git!();
     // Each step gets its own fixture; the replays are independent, so they run concurrently.

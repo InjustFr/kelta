@@ -12,6 +12,7 @@ import { activateProject } from '../../shell/nav';
 import { globalContent } from '../work/nav';
 import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
+import { batch } from '../work/batch.svelte';
 import { selection } from '../work/selection.svelte';
 import TicketsPane from './TicketsPane.svelte';
 
@@ -209,6 +210,17 @@ describe('TicketsPane board', () => {
     await fireEvent.keyDown(menu, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
     await waitFor(() => expect(laneOf(container, 'SHOP-151')).toBe('in_progress'));
+  });
+
+  it('board: marking a project-less ticket does not borrow the pane project', async () => {
+    batch.clear();
+    const { container } = mountBoard();
+    await ready(container, 'SHOP-151');
+    // a ticket whose source maps to no project, as the backend lists them
+    for (const l of Object.values(tickets.lists))
+      for (const i of l.data?.items ?? []) if (i.ticket.ref.key === 'SHOP-151') i.project_ids = [];
+    await press(' ');
+    expect(batch.list.map((m) => [m.ref.key, m.projectId])).toEqual([['SHOP-151', null]]);
   });
 });
 

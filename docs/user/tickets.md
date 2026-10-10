@@ -151,7 +151,15 @@ Dragging a card on the board and `Shift+Left` / `Shift+Right` still move by colu
 
 `s` opens the plan sheet (branch, repo, template) and starts on `Enter`; `S` skips the sheet. Kelta creates the
 worktree, opens Claude and nvim, assigns the ticket to you and moves it to in progress (see `status_map`). Starting
-again resumes. The row then shows the pull request and its CI state once one exists.
+again resumes, in whichever project the work item lives. The row then shows the pull request and its CI state once
+one exists.
+
+The session runs in a project you can pick: the sheet's first field is **Project** when several open projects have a
+repository. Kelta proposes the ticket's source project, else the project you last used for a ticket of that tracker
+account, else a project bound to that account. With none of these it proposes the active project, always shows the
+sheet (even with `S`) and remembers your pick for the next ticket of that account. Switching project re-plans the
+branch, worktree and side effects for it. Batch start has one Project field: "Usual project for each ticket" skips a
+ticket with no usual project (start it with `s`), or pick one project for all.
 
 ## Your workflow
 

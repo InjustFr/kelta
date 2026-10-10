@@ -7,6 +7,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, projects, toasts, work } from '$lib/stores';
 
+import { refines } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
 
 let mock: MockControls;
@@ -176,5 +177,50 @@ describe('StartWorkSheet resume and progress', () => {
     expect(await screen.findByText('vetoed by trigger: freeze')).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByLabelText('Branch')).toBeTruthy();
+  });
+});
+
+describe('StartWorkSheet project', () => {
+  it('re-plans in the project picked and starts there', async () => {
+    const { onclose } = await mountSheet();
+    const select = screen.getByLabelText('Project') as HTMLSelectElement;
+    expect(select.value).toBe('shop');
+    expect(screen.queryByTestId('project-guess')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByLabelText('Branch'));
+    await fireEvent.change(select, { target: { value: 'billing' } });
+    await waitFor(() =>
+      expect(
+        mock.calls.some(
+          (c) => c.cmd === 'work_plan' && (c.args as { project_id: string }).project_id === 'billing',
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(screen.queryByLabelText('Repository')).toBeNull());
+    await fireEvent.click(start());
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(sentPlan().project_id).toBe('billing');
+    expect(sentPlan().repo_id).toBe('core');
+  });
+
+  it('keeps the refine acceptance criteria after switching project', async () => {
+    refines[`${ticket.account}:${ticket.key}`] = {
+      running: false,
+      text: '## Acceptance criteria\n- it works',
+      posted: false,
+    };
+    await mountSheet();
+    await fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'billing' } });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Prompt') as HTMLTextAreaElement).value).toContain('- it works'),
+    );
+    delete refines[`${ticket.account}:${ticket.key}`];
+  });
+
+  it('focuses a guessed project and says Kelta will remember it', async () => {
+    const plan = await workPlan({ project_id: null, source: { kind: 'ticket', ticket } });
+    expect(plan.project_guessed).toBe(true);
+    render(StartWorkSheet, { props: { plan, onclose: vi.fn() } });
+    expect(screen.getByTestId('project-guess').textContent).toMatch(/No usual project for jira-acme tickets/);
+    expect(document.activeElement).toBe(screen.getByLabelText('Project'));
   });
 });

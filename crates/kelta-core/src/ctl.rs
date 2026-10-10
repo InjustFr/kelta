@@ -10,7 +10,6 @@ use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ext::{ProxiedRequest, ProxiedResponse};
-use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::ToolVersion;
 use kelta_proto::model::{EditorTarget, Lifecycle, Placement, SessionKind, TemplateCtx, WorkSource};
 use kelta_proto::settings::ClaudeSettings;
@@ -275,25 +274,38 @@ impl Core {
                 self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id } });
                 Ok(serde_json::to_value(info)?)
             }
-            CtlCommand::Start { ticket, project } => {
-                let project = match project {
-                    Some(p) => p,
-                    None => self.default_tracker_project()?,
+            CtlCommand::Start { ticket, project, .. } => {
+                // A bare key: the first tracker account (the given project's, else every project's, the
+                // active one's first) that has it, by GET, so unassigned or unlisted tickets resolve too;
+                // none answers → the first account.
+                let configs = match &project {
+                    Some(p) => vec![
+                        self.cfg.project(p).ok_or_else(|| KeltaError::not_found(format!("project {p}")))?,
+                    ],
+                    None => {
+                        let active = self.active_project();
+                        let mut all = self.project_configs();
+                        all.sort_by_key(|p| p.id != active);
+                        all
+                    }
                 };
-                let binding = self
-                    .cfg
-                    .project(&project)
-                    .and_then(|p| p.tracker.clone())
-                    .ok_or_else(|| KeltaError::invalid(format!("project {project} has no tracker")))?;
-                let key = ticket_key(&ticket);
-                // A bare key: the first of the project's accounts (binding's first) that has it, by GET,
-                // so unassigned or unlisted tickets resolve too; none answers → the binding's account.
-                let mut accounts = vec![binding.account.clone()];
-                for a in binding.views.iter().filter_map(|v| v.account.clone()) {
-                    if !accounts.contains(&a) {
-                        accounts.push(a);
+                let mut accounts = Vec::new();
+                for b in configs.iter().filter_map(|p| p.tracker.as_ref()) {
+                    for a in
+                        std::iter::once(&b.account).chain(b.views.iter().filter_map(|v| v.account.as_ref()))
+                    {
+                        if !accounts.contains(a) {
+                            accounts.push(a.clone());
+                        }
                     }
                 }
+                let Some(first) = accounts.first().cloned() else {
+                    return Err(KeltaError::invalid(match &project {
+                        Some(p) => format!("project {p} has no tracker"),
+                        None => "no project with a tracker; pass --project".into(),
+                    }));
+                };
+                let key = ticket_key(&ticket);
                 let mut tref = None;
                 if accounts.len() > 1 {
                     for account in accounts {
@@ -304,11 +316,23 @@ impl Core {
                         }
                     }
                 }
-                let tref = tref.unwrap_or(TicketRef { account: binding.account, key: key.clone(), id: key });
-                let plan = self.work.plan(&project, WorkSource::Ticket { ticket: tref }).await?;
-                if self.cfg.effective(Some(&project)).work.plan_preview {
+                let tref = tref.unwrap_or(TicketRef { account: first, key: key.clone(), id: key });
+                let asked = project.clone();
+                let plan = self.work_plan(project, WorkSource::Ticket { ticket: tref.clone() }).await?;
+                // An explicit --project that cannot host the start is an error, not a silent switch.
+                if let Some(p) = asked.filter(|p| plan.existing.is_none() && *p != plan.project_id) {
+                    return Err(KeltaError::invalid(format!("project {p} is closed or has no repository")));
+                }
+                let project = plan.project_id.clone();
+                // A guessed project is confirmed in the sheet, as with `plan_preview`.
+                if plan.project_guessed || self.cfg.effective(Some(&project)).work.plan_preview {
                     self.emit(UiEvent::CtlCommand {
-                        cmd: CtlCommand::Start { ticket, project: Some(project.clone()) },
+                        cmd: CtlCommand::Start {
+                            ticket,
+                            // A guess stays unset so the sheet's re-plan keeps its guess hint.
+                            project: if plan.project_guessed { None } else { Some(project.clone()) },
+                            resolved: Some(tref),
+                        },
                     });
                     self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
                     Ok(serde_json::to_value(plan)?)
@@ -385,22 +409,6 @@ impl Core {
             }
             CtlCommand::Version => Ok(json!({ "version": kelta_proto::VERSION })),
         }
-    }
-
-    fn default_tracker_project(&self) -> Result<ProjectId, KeltaError> {
-        let active = self.active_project();
-        let with_tracker: Vec<ProjectId> =
-            self.project_configs().iter().filter(|p| p.tracker.is_some()).map(|p| p.id.clone()).collect();
-        if with_tracker.contains(&active) {
-            return Ok(active);
-        }
-        let open = self.open_projects();
-        with_tracker
-            .iter()
-            .find(|p| open.contains(p))
-            .or(with_tracker.first())
-            .cloned()
-            .ok_or_else(|| KeltaError::invalid("no project with a tracker; pass --project"))
     }
 
     /// A work item whose worktree holds `file`, else the newest live editor of the active project.

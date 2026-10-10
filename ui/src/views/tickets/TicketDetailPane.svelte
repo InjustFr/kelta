@@ -24,7 +24,7 @@
   const item = $derived<TicketItem | null>(
     detail && {
       ticket: detail.ticket,
-      project_ids: [projectId],
+      project_ids: [],
       work_item_id: null,
       view_ids: [],
       prs: detail.prs,
@@ -45,7 +45,8 @@
 
   $effect(() => {
     if (!focused) return;
-    selectTicket(ref, projectId);
+    // A standalone ticket has no project of its own: start work must not default to the pane's (SPEC §3.1).
+    selectTicket(ref, null);
     return () => selectTicket(null, null);
   });
 
