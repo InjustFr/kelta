@@ -108,6 +108,8 @@
     "allow-work-notes",
     "allow-work-note-resolve",
     "allow-work-notes-send",
+    "allow-work-arm-merge",
+    "allow-work-disarm-merge",
     "allow-editor-open",
     "allow-editor-send-selection",
     "allow-editor-quickfix",

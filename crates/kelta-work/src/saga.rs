@@ -468,6 +468,7 @@ impl WorkService {
             left_at: None,
             port_base,
             cost_usd: 0.0,
+            auto_finish: false,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;

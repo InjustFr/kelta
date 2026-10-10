@@ -4,11 +4,11 @@
 use std::sync::Arc;
 
 use kelta_proto::api::{CodeHost, CoreApi};
-use kelta_proto::codehost::{Feedback, ReviewRef};
+use kelta_proto::codehost::{Feedback, MergeMethod, ReviewRef};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::WorkItemId;
 use kelta_proto::model::{
-    Lifecycle, SendFile, SessionInfo, SessionKind, SessionStatus, StatusSource, WorkItem, WorkKind,
+    Lifecycle, SendFile, SessionInfo, SessionKind, SessionStatus, StatusSource, WorkItem, WorkKind, WorkState,
 };
 
 use crate::saga::{Env, Journal};
@@ -179,6 +179,29 @@ impl WorkService {
         }
         let (host, r) = self.pr_of(&item).await?;
         host.rerequest_review(&r).await
+    }
+
+    /// `work_arm_merge` (`Some(method)`) / `work_disarm_merge` (`None`): the host's native auto-merge;
+    /// a refusal carries the host's message and leaves `auto_finish` as it was.
+    pub(crate) async fn arm_merge_impl(
+        &self,
+        id: &WorkItemId,
+        method: Option<MergeMethod>,
+    ) -> Result<WorkItem, KeltaError> {
+        let item = self.load(id).await?;
+        if item.kind == WorkKind::Review {
+            return Err(KeltaError::conflict("Review checkout: not your pull request"));
+        }
+        if item.state != WorkState::PrOpen {
+            return Err(KeltaError::conflict("only an open pull request can be merged when ready"));
+        }
+        let (host, r) = self.pr_of(&item).await?;
+        match method {
+            Some(m) => host.arm_auto_merge(&r, m).await?,
+            None => host.disarm_auto_merge(&r).await?,
+        }
+        let on = method.is_some();
+        self.update(id, |w| std::mem::replace(&mut w.auto_finish, on) != on).await
     }
 
     pub(crate) async fn resolve_sent_impl(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {

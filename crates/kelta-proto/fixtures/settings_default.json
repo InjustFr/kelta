@@ -433,6 +433,7 @@
     "pr": {
       "body_template": "{ticket.url}\n\n{closes}",
       "draft": false,
+      "merge_method": "squash",
       "title_template": "{ticket.key}: {ticket.title}"
     },
     "return_brief_after_mins": 20,

@@ -110,6 +110,7 @@
           meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
         if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
+        if (item.auto_finish) meta.push('armed');
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
@@ -190,7 +191,7 @@
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
           reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
           meta: stat,
-          age: age(r.updated_at),
+          age: age((!row.mine && r.requested_at) || r.updated_at),
           more: `${r.source_branch} into ${r.target_branch}${r.ci === 'failure' ? ', checks failed' : ''}`,
           actions: [
             { key: 'enter', label: 'Open review' },

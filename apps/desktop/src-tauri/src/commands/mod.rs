@@ -189,6 +189,8 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_notes,
         work::work_note_resolve,
         work::work_notes_send,
+        work::work_arm_merge,
+        work::work_disarm_merge,
         editor::editor_open,
         editor::editor_send_selection,
         editor::editor_quickfix,

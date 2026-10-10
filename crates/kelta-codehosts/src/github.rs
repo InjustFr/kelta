@@ -15,8 +15,8 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackReview, FeedbackThread, FileChange,
-    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
-    ReviewRef, Reviewer,
+    MergeMethod, MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind,
+    ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -36,7 +36,8 @@ const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
-latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } }";
+latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
+timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
 
 /// Unresolved threads (filtered client side: the connection has no `isResolved` argument), the
 /// latest review per reviewer and the head commit (FLOW §4.2).
@@ -46,6 +47,17 @@ comments(first:30){ nodes{ author{ login } body url } } } } latestReviews(first:
 
 const RESOLVE_THREAD: &str =
     "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
+
+const PR_ID: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ id mergeStateStatus } } }";
+
+const ARM_AUTO_MERGE: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
+enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }";
+
+const MERGE_PR: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
+mergePullRequest(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }";
+
+const DISARM_AUTO_MERGE: &str =
+    "mutation($id:ID!){ disablePullRequestAutoMerge(input:{pullRequestId:$id}){ clientMutationId } }";
 
 #[derive(Default)]
 struct Gate {
@@ -142,6 +154,11 @@ impl GithubHost {
             (_, Some("COMMENTED")) => Some(MyReviewState::Commented),
             (_, _) => Some(MyReviewState::Pending),
         };
+        let decision = decision_from(s(n, "reviewDecision"));
+        let (requested_at, blocking) = match kind {
+            ReviewKind::Authored => (None, false),
+            ReviewKind::ReviewRequested => request_state(n, me, decision),
+        };
         Some(Review {
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(n, "url").unwrap_or("").to_owned(),
@@ -153,7 +170,7 @@ impl GithubHost {
             ci: ci_from_rollup(
                 n.pointer("/commits/nodes/0/commit/statusCheckRollup/state").and_then(Value::as_str),
             ),
-            decision: decision_from(s(n, "reviewDecision")),
+            decision,
             my_state,
             mergeable: mergeable_from(s(n, "mergeable")),
             reviewed_head,
@@ -177,6 +194,8 @@ impl GithubHost {
                 })
                 .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
                 .map(str::to_owned),
+            requested_at,
+            blocking,
             title,
         })
     }
@@ -211,6 +230,8 @@ impl GithubHost {
             additions: v.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
             decision_head: None,
+            requested_at: None,
+            blocking: false,
             title,
         })
     }
@@ -278,6 +299,35 @@ fn decision_from(state: Option<&str>) -> Option<ReviewDecision> {
         Some("REVIEW_REQUIRED") => Some(ReviewDecision::ReviewRequired),
         _ => None,
     }
+}
+
+/// When my review was last requested, and whether I am the last required reviewer: the review is
+/// required and every other user asked has reviewed since their latest request.
+// shortcut: team requests and removed requests are ignored (no extra GraphQL field); add
+// `reviewRequests` if a pending team request must keep a PR out of the blocking band.
+fn request_state(n: &Value, me: &str, decision: Option<ReviewDecision>) -> (Option<String>, bool) {
+    let nodes = |p: &str| n.pointer(p).and_then(Value::as_array).cloned().unwrap_or_default();
+    let login = |v: &Value, p: &str| v.pointer(p).and_then(Value::as_str).map(str::to_owned);
+    let mut asked: Vec<(String, String)> = Vec::new(); // (login, latest request)
+    for e in nodes("/timelineItems/nodes") {
+        let (Some(who), Some(at)) = (login(&e, "/requestedReviewer/login"), s(&e, "createdAt")) else {
+            continue;
+        };
+        match asked.iter_mut().find(|(l, _)| *l == who) {
+            Some((_, t)) if t.as_str() < at => *t = at.to_owned(),
+            Some(_) => {}
+            None => asked.push((who, at.to_owned())),
+        }
+    }
+    let reviews = nodes("/latestOpinionatedReviews/nodes");
+    let reviewed_since = |who: &str, at: &str| {
+        reviews.iter().any(|r| {
+            login(r, "/author/login").as_deref() == Some(who) && s(r, "submittedAt").is_some_and(|t| t > at)
+        })
+    };
+    let requested_at = asked.iter().find(|(l, _)| l == me).map(|(_, t)| t.clone());
+    let others_pending = asked.iter().any(|(l, t)| l != me && !reviewed_since(l, t));
+    (requested_at, decision == Some(ReviewDecision::ReviewRequired) && !others_pending)
 }
 
 fn mergeable_from(state: Option<&str>) -> Option<bool> {
@@ -834,6 +884,23 @@ impl CodeHost for GithubHost {
         Ok(())
     }
 
+    async fn arm_auto_merge(&self, r: &ReviewRef, method: MergeMethod) -> Result<(), KeltaError> {
+        let m = match method {
+            MergeMethod::Squash => "SQUASH",
+            MergeMethod::Merge => "MERGE",
+            MergeMethod::Rebase => "REBASE",
+        };
+        let (id, state) = self.pr_node(r).await?;
+        // GitHub refuses auto-merge on a PR that is already mergeable ("clean status"): merge it now.
+        let q = if state.as_deref() == Some("CLEAN") { MERGE_PR } else { ARM_AUTO_MERGE };
+        graphql(&self.auth, &self.graphql, q, json!({ "id": id, "m": m })).await.map(|_| ())
+    }
+
+    async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
+        let (id, _) = self.pr_node(r).await?;
+        graphql(&self.auth, &self.graphql, DISARM_AUTO_MERGE, json!({ "id": id })).await.map(|_| ())
+    }
+
     fn repo_from_remote(&self, url: &str) -> Option<String> {
         let (host, path) = parse_remote(url)?;
         if !host_matches(&host, &self.web_host) {
@@ -846,6 +913,21 @@ impl CodeHost for GithubHost {
 }
 
 impl GithubHost {
+    /// Node id and `mergeStateStatus` of a pull request.
+    async fn pr_node(&self, r: &ReviewRef) -> Result<(String, Option<String>), KeltaError> {
+        let (owner, name) = r.repo.split_once('/').unwrap_or((r.repo.as_str(), ""));
+        let vars = json!({ "o": owner, "n": name, "num": r.number });
+        let data = graphql(&self.auth, &self.graphql, PR_ID, vars).await?;
+        let state = data
+            .pointer("/repository/pullRequest/mergeStateStatus")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        data.pointer("/repository/pullRequest/id")
+            .and_then(Value::as_str)
+            .map(|id| (id.to_owned(), state))
+            .ok_or_else(|| KeltaError::not_found(format!("pull request {}#{}", r.repo, r.number)))
+    }
+
     async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
@@ -864,5 +946,27 @@ impl GithubHost {
     /// Browser base URL (`https://github.com`, GHE web root).
     pub fn web_url(&self) -> &str {
         &self.web
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn another_reviewer_asked_after_their_review_keeps_me_off_the_blocking_band() {
+        let n = json!({
+            "timelineItems": { "nodes": [
+                { "createdAt": "2026-09-28T08:00:00Z", "requestedReviewer": { "login": "louis" } },
+                { "createdAt": "2026-09-29T08:00:00Z", "requestedReviewer": { "login": "bob" } },
+            ] },
+            "latestOpinionatedReviews": { "nodes": [
+                { "state": "CHANGES_REQUESTED", "submittedAt": "2026-09-28T12:00:00Z", "author": { "login": "bob" } },
+            ] },
+        });
+        let required = Some(ReviewDecision::ReviewRequired);
+        assert_eq!(request_state(&n, "louis", required), (Some("2026-09-28T08:00:00Z".into()), false));
+        assert!(!request_state(&n, "bob", required).1, "louis never reviewed: still pending");
+        assert!(!request_state(&n, "louis", Some(ReviewDecision::Approved)).1);
     }
 }

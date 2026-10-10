@@ -168,7 +168,7 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Claude needs you | needs input | sessions with `status = NeedsInput` (work items and plain sessions); work items with `claude_replied` | longest waiting first | Go to Claude |
 | Ready for review | done | work items with `review_due` (an empty delta never lands here) | oldest wait first, so nothing rots; the smaller delta first on ties | Review changes |
 | Fix | error | my work items in phase rows 1, 3, 10, 11, 12; my PRs without a work item that have changes requested or failing checks | changes requested, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
-| Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | oldest first | Open review |
+| Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | blocking first (I am the last required reviewer), then oldest request first | Open review |
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
 | In flight | working ring when Claude works | everything else that is mine and unfinished | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
 | Up next | none | tickets assigned to me, not Done, with no unfinished work item; in-progress first, then tracker order; 10 max, then "Show all on Board" | | Start work |
@@ -361,7 +361,7 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 
 ### 4.7 Reviewing other people's PRs
 
-- **Review requests** in Now, oldest first; a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
+- **Review requests** in Now, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
 - `Enter`: the review detail opens in the project's Reviews tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
 - `o` in Now: open on the host.
 - `s` (Now or detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.

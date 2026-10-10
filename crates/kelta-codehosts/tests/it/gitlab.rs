@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::codehost::{
-    CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind, ReviewQuery,
+    CiState, MergeMethod, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind, ReviewQuery,
 };
 use kelta_proto::error::ErrorCode;
 use serde_json::json;
@@ -32,8 +32,41 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/mrs_review.json")))
         .mount(&server)
         .await;
+    // !8: I was asked on 09-29 and mine is the one approval left; !9 has neither endpoint (best effort).
+    let reply = |body: serde_json::Value| ResponseTemplate::new(200).set_body_json(body);
+    let mr8 = "/api/v4/projects/grp%2Fother/merge_requests/8";
+    Mock::given(path(format!("{mr8}/reviewers")))
+        .respond_with(reply(json!([
+            { "user": { "id": 43, "username": "zed" }, "state": "reviewed", "created_at": "2026-09-28T10:00:00Z" },
+            { "user": { "id": 42, "username": "louis" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(path(format!("{mr8}/approvals")))
+        .respond_with(reply(json!({
+            "approvals_left": 1,
+            "approved_by": [{ "user": { "id": 43 } }],
+            "approvers": [],
+            "suggested_approvers": [{ "id": 42, "username": "louis" }],
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(path(format!("{mr8}/changes")))
+        .respond_with(reply(
+            json!({ "changes": [{ "new_path": "a.rs", "diff": "@@ -1 +1,2 @@\n-x\n+y\n+z\n" }] }),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
     let h = gl(&server);
     let list = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!((list[0].additions, list[0].deletions), (Some(2), Some(1)), "size from /changes");
+    assert_eq!(list[1].additions, None, "no /changes: no size");
+    assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-29T10:00:00Z"));
+    assert!(list[0].blocking, "one approval left and I am an approver");
+    assert!(list[1].requested_at.is_none() && !list[1].blocking);
+    let again = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!(again[0].additions, Some(2), "same head: size from cache, /changes fetched once");
     let q = &queries(&server, "GET", "/api/v4/merge_requests").await[0];
     assert!(q.contains("updated_after=20"), "{q}");
     assert!(!q.contains("wip="));
@@ -447,4 +480,43 @@ async fn decisions_publish_the_drafts_first_and_an_empty_comment_sends_no_note()
     h.comment(&r, "").await.unwrap();
     assert_eq!(count(&server, "POST", &format!("{MR}/draft_notes/bulk_publish")).await, 2);
     assert_eq!(count(&server, "POST", &format!("{MR}/notes")).await, 0);
+}
+
+#[tokio::test]
+async fn arm_sets_merge_when_pipeline_succeeds_and_disarm_cancels_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("{MR}/merge")))
+        .and(query_param("merge_when_pipeline_succeeds", "true"))
+        .and(query_param("squash", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("{MR}/cancel_merge_when_pipeline_succeeds")))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (h, r) = (gl(&server), rref("gitlab-acme", "grp/other", 8));
+    h.arm_auto_merge(&r, MergeMethod::Squash).await.unwrap();
+    h.disarm_auto_merge(&r).await.unwrap();
+    let e = h.arm_auto_merge(&r, MergeMethod::Rebase).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn a_refused_arm_carries_gitlabs_message() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("{MR}/merge")))
+        .respond_with(ResponseTemplate::new(405).set_body_string(r#"{"message":"405 Method Not Allowed"}"#))
+        .mount(&server)
+        .await;
+    let e = gl(&server)
+        .arm_auto_merge(&rref("gitlab-acme", "grp/other", 8), MergeMethod::Merge)
+        .await
+        .unwrap_err();
+    assert!(e.message.contains("405 Method Not Allowed"), "{}", e.message);
 }

@@ -37,7 +37,7 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use kelta_proto::api::{CoreApi, WorkStore};
-use kelta_proto::codehost::{Feedback, PrDraft, Review};
+use kelta_proto::codehost::{Feedback, MergeMethod, PrDraft, Review};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, bus};
@@ -262,6 +262,17 @@ impl WorkService {
     /// `work_rerequest_review` → the logins asked again.
     pub async fn rerequest_review(&self, id: &WorkItemId) -> Result<Vec<String>, KeltaError> {
         self.rerequest_impl(id).await
+    }
+
+    /// `work_arm_merge`: the host merges the PR when ready, then the merge runs Finish (`auto_finish`).
+    pub async fn arm_merge(&self, id: &WorkItemId, method: MergeMethod) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        self.arm_merge_impl(id, Some(method)).await
+    }
+
+    /// `work_disarm_merge`.
+    pub async fn disarm_merge(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.arm_merge_impl(id, None).await
     }
 
     /// `work_resolve_sent_threads`: resolve the threads the last Fix with Claude handed over.

@@ -3,9 +3,9 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, ReviewItem, ReviewKind } from '$lib/gen';
+  import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { projects, reviews, toasts } from '$lib/stores';
+  import { projects, reviews, toasts, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -20,6 +20,7 @@
     relativeTime,
   } from '$lib/ui';
 
+  import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
@@ -133,6 +134,17 @@
     void openContent(projectId, { kind: 'review_detail', review: item.review.ref });
   }
 
+  /** My PR's work item (by `pr_url`), for Merge when ready. */
+  function workOf(item: ReviewItem): WorkItem | null {
+    return work.all.find((w) => w.pr_url === item.review.url && w.state.kind !== 'finished') ?? null;
+  }
+
+  function mergeWhenReady(item: ReviewItem): void {
+    const w = item.review.kind === 'authored' ? workOf(item) : null;
+    if (w) void runWorkAction('merge', w);
+    else toasts.info('Merge when ready: only for my PRs with a work item');
+  }
+
   function browse(item: ReviewItem): void {
     openExternal({ url: item.review.url }).catch((err) => toasts.error(err, 'Open in browser'));
   }
@@ -167,6 +179,9 @@
         break;
       case 'o':
         if (item) browse(item);
+        break;
+      case 'M':
+        if (item) mergeWhenReady(item);
         break;
       case 's':
         if (item) void reviewLocally(item.review.ref, item.project_ids[0] ?? projectId);
@@ -292,6 +307,7 @@
                 <span class="k-row-tail">
                   {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
                   {#if rv.draft}<Badge>draft</Badge>{/if}
+                  {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
                   {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
                   {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
                   {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
@@ -321,6 +337,7 @@
       ['/', 'Filter'],
       ['s', 'Review locally'],
       ['o', 'Open in browser'],
+      ['shift+m', 'Merge when ready'],
       ['shift+r', 'Refresh'],
     ]}
   />

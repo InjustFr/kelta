@@ -106,6 +106,8 @@ pub const COMMANDS: &[&str] = &[
     "work_notes",
     "work_note_resolve",
     "work_notes_send",
+    "work_arm_merge",
+    "work_disarm_merge",
     "editor_open",
     "editor_send_selection",
     "editor_quickfix",

@@ -45,7 +45,41 @@
             ]
           },
           "latestOpinionatedReviews": {
-            "nodes": []
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "submittedAt": "2026-09-29T10:00:00Z",
+                "author": {
+                  "login": "bob"
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "nodes": [
+              {
+                "createdAt": "2026-09-28T08:00:00Z",
+                "requestedReviewer": {
+                  "login": "bob"
+                }
+              },
+              {
+                "createdAt": "2026-09-28T09:00:00Z",
+                "requestedReviewer": {
+                  "login": "louis"
+                }
+              },
+              {
+                "createdAt": "2026-09-29T08:00:00Z",
+                "requestedReviewer": {
+                  "login": "louis"
+                }
+              },
+              {
+                "createdAt": "2026-09-29T09:00:00Z",
+                "requestedReviewer": {}
+              }
+            ]
           }
         },
         {

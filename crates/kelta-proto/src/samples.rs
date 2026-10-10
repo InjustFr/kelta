@@ -116,6 +116,8 @@ pub fn review() -> Review {
         additions: Some(120),
         deletions: Some(14),
         decision_head: None,
+        requested_at: None,
+        blocking: false,
     }
 }
 
@@ -297,6 +299,7 @@ pub fn work_item() -> WorkItem {
         left_at: None,
         port_base: Some(20140),
         cost_usd: 3.5,
+        auto_finish: false,
     }
 }
 

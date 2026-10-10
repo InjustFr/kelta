@@ -82,7 +82,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Shift+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveCount(17);
+  await expect(menu.getByRole('menuitem')).toHaveCount(18);
   await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveAttribute(
     'title',
     'Only while a rebase is stopped',

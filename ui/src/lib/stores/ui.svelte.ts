@@ -14,6 +14,7 @@ export type SheetKey =
   | 'ship'
   | 'finish'
   | 'finish_merged'
+  | 'merge'
   | 'fix'
   | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';

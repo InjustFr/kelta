@@ -67,6 +67,7 @@ export type RegisteredSheetKey =
   | 'ship'
   | 'finish'
   | 'finish_merged'
+  | 'merge'
   | 'fix'
   | 'work_dialog';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
@@ -80,6 +81,7 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   ship: () => import('../views/work/ShipDialog.svelte'),
   finish: () => import('../views/work/FinishDialog.svelte'),
   finish_merged: () => import('../views/work/FinishMergedDialog.svelte'),
+  merge: () => import('../views/work/MergeDialog.svelte'),
   fix: () => import('../views/work/FixSheet.svelte'),
   work_dialog: () => import('../views/work/WorkDialog.svelte'),
 };

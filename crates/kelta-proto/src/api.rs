@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use crate::codehost::ReviewItem;
 use crate::codehost::{
     CodeHostKind, Feedback, PrCreate, PrDraft, Review, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
 };
+use crate::codehost::{MergeMethod, ReviewItem};
 use crate::ctl::CtlCommand;
 use crate::error::KeltaError;
 use crate::events::{BusEvent, Notification, Toast, UiEvent};
@@ -174,6 +174,13 @@ pub trait CodeHost: Send + Sync {
     /// Resolve review threads by id (`FeedbackThread::id`).
     async fn resolve_threads(&self, _r: &ReviewRef, _ids: &[String]) -> Result<(), KeltaError> {
         Err(KeltaError::unsupported("this code host cannot resolve threads"))
+    }
+    /// Native auto-merge: the host merges once approvals and checks pass.
+    async fn arm_auto_merge(&self, _r: &ReviewRef, _method: MergeMethod) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot merge when ready"))
+    }
+    async fn disarm_auto_merge(&self, _r: &ReviewRef) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot merge when ready"))
     }
 }
 

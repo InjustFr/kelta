@@ -514,6 +514,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_mark_reviewed` | `{id}` | `WorkItem` (clears `review_due` and `delta`; `refs/kelta/wi/<id>/reviewed` = `last`) | |
 | `work_set_note` | `{id, note: Option<String>}` | `WorkItem` (`next_note`; blank clears) | |
 | `work_left` | `{id}` | `WorkItem` (`left_at` = now; the return strip's clock) | |
+| `work_arm_merge` | `{id, method: MergeMethod /*squash|merge|rebase*/}` | `WorkItem` (`auto_finish`) | host auto-merge (GitHub `enablePullRequestAutoMerge`, GitLab `merge_when_pipeline_succeeds`); refusal = host message. On `pr.merged` the item runs Finish once; a dirty/unpushed worktree is kept and the item flagged (`Merged.detail`) |
+| `work_disarm_merge` | `{id}` | `WorkItem` | |
 | `work_send` | `{id, prompt, files: Vec<SendFile{name, content}>, threads?: Vec<String>}` | `WorkItem` | files (`name.md`, not `ticket.md`/`context.md`) go to the item's private Claude run dir, never the worktree; `prompt` is rendered (`{file}`, `{pr.url}`, `{onto}`…) then pasted (bracketed + Enter) into a live Claude whose hook status is `Done`/`WaitingUser`, or passed to `claude --resume <uuid> -- <prompt>` (dead / closed tab / dormant; the `--continue` fallback keeps it). `Conflict{reason: claude_busy}` while `Working`/`NeedsInput`/`Running`, `Conflict{reason: hooks_inactive}` when the live session's status is not from hooks. `threads` → `WorkItem.sent_threads` |
 | `work_feedback` | `{id}` | `Feedback{threads, reviews, failed_checks, reviewers}` (`CodeHost::feedback` of the item's PR) | |
 | `work_rerequest_review` | `{id}` | `Vec<String>` (logins asked again) | |
@@ -729,7 +731,8 @@ pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, sour
   ci: CiState /*Success|Failure|Pending|Error|None*/, decision: Option<ReviewDecision /*Approved|ChangesRequested|ReviewRequired*/>,
   my_state: Option<MyReviewState /*Pending|Approved|ChangesRequested|Commented*/>, mergeable: Option<bool>,
   labels: Vec<String>, kind: ReviewKind /*ReviewRequested|Authored*/, updated_at: String, linked_tickets: Vec<String>,
-  additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/ }
+  additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/,
+  requested_at: Option<String> /*when my review was requested*/, blocking: bool /*I am the last required reviewer*/ }
 pub struct Feedback { threads: Vec<FeedbackThread{id, author, path?, line?, body_md, url}>,
   reviews: Vec<FeedbackReview{author, state?, body_md}>, failed_checks: Vec<FailedCheck{name, url?, log_tail?}>, reviewers: Vec<String> }
 ```

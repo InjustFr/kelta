@@ -151,8 +151,13 @@ const V8: &str = r#"
 ALTER TABLE work_items ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0;
 "#;
 
-/// v9: review notes (#133), `ReviewNote`.
+/// v9: armed merge (`WorkItem.auto_finish`, #143).
 const V9: &str = r#"
+ALTER TABLE work_items ADD COLUMN auto_finish INTEGER NOT NULL DEFAULT 0;
+"#;
+
+/// v9: review notes (#133), `ReviewNote`.
+const V10: &str = r#"
 CREATE TABLE IF NOT EXISTS notes (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   work_item  TEXT NOT NULL,
@@ -169,7 +174,7 @@ CREATE INDEX IF NOT EXISTS notes_work_item ON notes(work_item);
 "#;
 
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

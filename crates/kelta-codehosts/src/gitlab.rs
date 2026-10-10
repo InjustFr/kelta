@@ -5,6 +5,7 @@
 //! `Conflict`). Request changes is a note (+ unapprove). Gate: pending `review_requested` todos
 //! (count + max id).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,8 +13,9 @@ use kelta_http::util::{percent_encode, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MyReviewState,
-    PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MergeMethod,
+    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
+    ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -29,6 +31,9 @@ use crate::common::{MAX_LOGS, feedback_error, host_matches, linked_tickets, log_
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
 const PER_PAGE: &str = "100";
+
+/// `(repo, iid, head sha)`.
+type DiffKey = (String, u64, String);
 
 #[derive(Default)]
 struct TodoGate {
@@ -47,6 +52,9 @@ pub struct GitlabHost {
     /// Major version from `GET /version` (cached; `None` = not fetched or unknown).
     major: Mutex<Option<u32>>,
     gate: Mutex<TodoGate>,
+    /// Requested MRs' `(additions, deletions)` by `(repo, iid, head sha)`: a diff only changes
+    /// with its head, so `/changes` (the full diff) is fetched once per head, not every poll.
+    diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
 }
 
 impl GitlabHost {
@@ -77,6 +85,7 @@ impl GitlabHost {
             me: Mutex::new(None),
             major: Mutex::new(None),
             gate: Mutex::new(TodoGate::default()),
+            diff_sizes: Mutex::new(HashMap::new()),
         })
     }
 
@@ -196,8 +205,66 @@ impl GitlabHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: None,
             deletions: None,
+            requested_at: None,
+            blocking: false,
             title,
         })
+    }
+
+    /// Review requests: when I was asked (`/reviewers`), whether mine is the last approval
+    /// missing (`/approvals`: one left and I am an approver) and the diff size (`/changes`, the
+    /// list has none). Best effort, like the detail.
+    async fn request_state(&self, review: &mut Review, me: &User) {
+        let url = self.mr_url(&review.r#ref.repo, &format!("/{}", review.r#ref.number));
+        let key = (review.r#ref.repo.clone(), review.r#ref.number, review.head_sha.clone());
+        let cached = self.diff_sizes.lock().get(&key).copied();
+        let (reviewers, approvals, changes) = tokio::join!(
+            self.json(HttpRequest::get(format!("{url}/reviewers"))),
+            self.json(HttpRequest::get(format!("{url}/approvals"))),
+            async {
+                match cached {
+                    Some(_) => None,
+                    None => self.json(HttpRequest::get(format!("{url}/changes"))).await.ok(),
+                }
+            },
+        );
+        // `approvers` / `approved_by` / `/reviewers` wrap the user, `suggested_approvers` does not.
+        let is_me = |x: &Value| {
+            x.get("user").unwrap_or(x).get("id").and_then(Value::as_u64).map(|i| i.to_string())
+                == Some(me.id.clone())
+        };
+        let list = |v: &Value, k: &str| v.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
+        if let Ok(r) = reviewers {
+            review.requested_at = r
+                .body
+                .as_array()
+                .and_then(|a| a.iter().find(|x| is_me(x)))
+                .and_then(|x| s(x, "created_at"))
+                .map(str::to_owned);
+        }
+        if let Ok(a) = approvals {
+            let a = a.body;
+            review.blocking = a.get("approvals_left").and_then(Value::as_u64) == Some(1)
+                && !list(&a, "approved_by").iter().any(is_me)
+                && (list(&a, "approvers").iter().any(is_me)
+                    || list(&a, "suggested_approvers").iter().any(is_me));
+        }
+        // shortcut: GitLab truncates huge diffs (`overflow`), so a very large MR reads smaller; upgrade via `/diffs` paging if it matters.
+        let size = cached.or_else(|| {
+            let files = changes?.body.get("changes")?.as_array()?.clone();
+            Some(
+                files
+                    .iter()
+                    .map(|c| diff_counts(s(c, "diff").unwrap_or("")))
+                    .fold((0, 0), |x, y| (x.0 + y.0, x.1 + y.1)),
+            )
+        });
+        if let Some((a, d)) = size {
+            if !key.2.is_empty() {
+                self.diff_sizes.lock().insert(key, (a, d));
+            }
+            (review.additions, review.deletions) = (Some(a), Some(d));
+        }
     }
 
     fn project_url(&self, repo: &str, tail: &str) -> String {
@@ -324,7 +391,7 @@ impl CodeHost for GitlabHost {
         }
         let resp = self.json(req.with_etag()).await?;
         self.gate.lock().pending = false;
-        Ok(resp
+        let mut list: Vec<Review> = resp
             .body
             .as_array()
             .map(|a| {
@@ -333,7 +400,16 @@ impl CodeHost for GitlabHost {
                     .filter(|r| q.include_drafts || !r.draft)
                     .collect()
             })
-            .unwrap_or_default())
+            .unwrap_or_default();
+        if q.kind == ReviewKind::ReviewRequested {
+            let me = self.me().await?;
+            futures::future::join_all(list.iter_mut().map(|r| self.request_state(r, &me))).await;
+            // Bounded by the current list: closed or re-pushed MRs drop out.
+            self.diff_sizes.lock().retain(|(repo, n, sha), _| {
+                list.iter().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
+            });
+        }
+        Ok(list)
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -672,6 +748,25 @@ impl CodeHost for GitlabHost {
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(logins)
+    }
+
+    async fn arm_auto_merge(&self, r: &ReviewRef, method: MergeMethod) -> Result<(), KeltaError> {
+        // The merge commit vs fast-forward choice is a project setting on GitLab; only squash is per MR.
+        if method == MergeMethod::Rebase {
+            return Err(KeltaError::invalid(
+                "GitLab sets rebase merges in the project settings: choose squash or merge",
+            ));
+        }
+        let url = self.mr_url(&r.repo, &format!("/{}/merge", r.number));
+        let req = HttpRequest::put(url)
+            .query("merge_when_pipeline_succeeds", "true")
+            .query("squash", if method == MergeMethod::Squash { "true" } else { "false" });
+        self.auth.send_text(req).await.map(|_| ())
+    }
+
+    async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/cancel_merge_when_pipeline_succeeds", r.number));
+        self.auth.send_text(HttpRequest::post(url)).await.map(|_| ())
     }
 
     async fn resolve_threads(&self, r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError> {

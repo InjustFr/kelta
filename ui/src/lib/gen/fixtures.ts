@@ -614,6 +614,7 @@ export const reviewPage: ReviewPage = {
           "login": "bob",
           "name": "Bob"
         },
+        "blocking": false,
         "ci": "success",
         "decision": "review_required",
         "decision_head": null,
@@ -632,6 +633,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "requested_at": null,
         "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
@@ -669,6 +671,7 @@ export const reviewDetail: ReviewDetail = {
       "login": "bob",
       "name": "Bob"
     },
+    "blocking": false,
     "ci": "success",
     "decision": "review_required",
     "decision_head": null,
@@ -687,6 +690,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "requested_at": null,
     "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
@@ -748,6 +752,7 @@ export const startWorkPlan: StartWorkPlan = {
 };
 
 export const workItem: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -863,6 +868,7 @@ export const workItem: WorkItem = {
 };
 
 export const workItemFailed: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -980,6 +986,7 @@ export const workItemFailed: WorkItem = {
 };
 
 export const workItemMerged: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -1128,6 +1135,7 @@ export const gitStatus: GitStatus = {
 };
 
 export const workItemRebaseStopped: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -2084,6 +2092,7 @@ export const settingsDefault: Settings = {
     "pr": {
       "body_template": "{ticket.url}\n\n{closes}",
       "draft": false,
+      "merge_method": "squash",
       "title_template": "{ticket.key}: {ticket.title}"
     },
     "return_brief_after_mins": 20,
@@ -3278,6 +3287,7 @@ export const uiEventReviewsChanged: UiEvent = {
 export const uiEventWorkUpdated: UiEvent = {
   "type": "work.updated",
   "work": {
+    "auto_finish": false,
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
     "claude_at": null,

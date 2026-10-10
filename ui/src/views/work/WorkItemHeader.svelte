@@ -7,7 +7,7 @@
   import { sessions, settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
-  import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { Badge, Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
   import { itemCost, overBudget, usd } from '../../shell/usage';
@@ -200,6 +200,11 @@
     {#if item.port_base != null}
       <span class="group ports" title="KELTA_PORT … KELTA_PORT_9" data-testid="work-ports"
         >ports {item.port_base}–{item.port_base + 9}</span
+      >
+    {/if}
+    {#if item.auto_finish}
+      <span class="group" title="Merges when ready, then finishes (M to disarm)" data-testid="work-armed"
+        ><Badge tone="accent">armed</Badge></span
       >
     {/if}
     {#if git && !git.missing}

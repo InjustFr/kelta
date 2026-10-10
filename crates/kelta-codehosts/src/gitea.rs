@@ -129,6 +129,8 @@ impl GiteaHost {
             ci: CiState::None,
             decision: None,
             decision_head: None,
+            requested_at: None,
+            blocking: false,
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             mergeable: v.get("mergeable").and_then(Value::as_bool),
             labels: v
