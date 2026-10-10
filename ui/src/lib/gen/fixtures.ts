@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishMergedReport, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SourceHit, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, Feedback, FinishMergedReport, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, RebaseOp, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SourceHit, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, UpdateStatus, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -40,6 +40,17 @@ export const appInfo: AppInfo = {
   "runtime_dir": "/tmp/kelta-501",
   "safe_graphics": false,
   "version": "0.1.0"
+};
+
+export const updateStatus: UpdateStatus = {
+  "channel": "nightly",
+  "checked_at": "2026-10-11T12:42:00Z",
+  "current": "0.1.0-nightly.202610101230",
+  "restart_needs_confirm": false,
+  "state": {
+    "type": "ready",
+    "version": "0.1.0-nightly.202610111230"
+  }
 };
 
 export const perfSnapshot: PerfSnapshot = {
@@ -494,6 +505,7 @@ export const ticketPage: TicketPage = {
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -512,6 +524,7 @@ export const ticketPage: TicketPage = {
           "id": "10142",
           "key": "SHOP-142"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -531,6 +544,7 @@ export const ticketPage: TicketPage = {
       "view_ids": [
         "mine"
       ],
+      "waiting": [],
       "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
     }
   ],
@@ -544,6 +558,7 @@ export const ticketPage: TicketPage = {
 export const ticket: Ticket = {
   "assignee": {
     "avatar_url": null,
+    "email": null,
     "id": "5b10ac8d82e05b22cc7d4ef5",
     "login": "ada",
     "name": "Ada Lovelace"
@@ -562,6 +577,7 @@ export const ticket: Ticket = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "reporter": null,
   "sprint": {
     "active": true,
     "ends_at": "2026-10-16",
@@ -634,6 +650,7 @@ export const ticketDetail: TicketDetail = {
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -652,6 +669,7 @@ export const ticketDetail: TicketDetail = {
           "id": "10143",
           "key": "SHOP-143"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -669,6 +687,7 @@ export const ticketDetail: TicketDetail = {
         "url": "https://acme.atlassian.net/browse/SHOP-143"
       },
       "view_ids": [],
+      "waiting": [],
       "work_item_id": null
     }
   ],
@@ -676,6 +695,7 @@ export const ticketDetail: TicketDetail = {
     {
       "author": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"
@@ -689,6 +709,7 @@ export const ticketDetail: TicketDetail = {
   "ticket": {
     "assignee": {
       "avatar_url": null,
+      "email": null,
       "id": "5b10ac8d82e05b22cc7d4ef5",
       "login": "ada",
       "name": "Ada Lovelace"
@@ -707,6 +728,7 @@ export const ticketDetail: TicketDetail = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "reporter": null,
     "sprint": {
       "active": true,
       "ends_at": "2026-10-16",
@@ -766,10 +788,13 @@ export const reviewPage: ReviewPage = {
         "additions": 120,
         "author": {
           "avatar_url": null,
+          "email": null,
           "id": "bob",
           "login": "bob",
           "name": "Bob"
         },
+        "author_since": null,
+        "author_to_act": false,
         "blocking": false,
         "ci": "success",
         "decision": "review_required",
@@ -798,8 +823,10 @@ export const reviewPage: ReviewPage = {
         "title": "SHOP-140: Cache product prices",
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://github.com/acme/shop-api/pull/87",
-        "waiting_on": []
-      }
+        "waiting_on": [],
+        "waiting_since": null
+      },
+      "waiting": []
     }
   ],
   "stale": true
@@ -826,10 +853,13 @@ export const reviewDetail: ReviewDetail = {
     "additions": 120,
     "author": {
       "avatar_url": null,
+      "email": null,
       "id": "bob",
       "login": "bob",
       "name": "Bob"
     },
+    "author_since": null,
+    "author_to_act": false,
     "blocking": false,
     "ci": "success",
     "decision": "review_required",
@@ -858,13 +888,15 @@ export const reviewDetail: ReviewDetail = {
     "title": "SHOP-140: Cache product prices",
     "updated_at": "2026-10-09T12:00:00Z",
     "url": "https://github.com/acme/shop-api/pull/87",
-    "waiting_on": []
+    "waiting_on": [],
+    "waiting_since": null
   },
   "reviewers": [
     {
       "state": "pending",
       "user": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"
@@ -1843,6 +1875,7 @@ export const accountTestResult: AccountTestResult = {
   "ok": true,
   "user": {
     "avatar_url": null,
+    "email": null,
     "id": "5b10ac8d82e05b22cc7d4ef5",
     "login": "ada",
     "name": "Ada Lovelace"
@@ -1857,7 +1890,8 @@ export const settingsDefault: Settings = {
     "light_theme": "bezel-light",
     "log_level": "info",
     "restore_mode": "lazy",
-    "theme": "system"
+    "theme": "system",
+    "updates": true
   },
   "claude": {
     "allowed_tools": [
@@ -3719,6 +3753,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "kelta_error": keltaError,
   "kelta_error_needs_fields": keltaErrorNeedsFields,
   "app_info": appInfo,
+  "update_status": updateStatus,
   "perf_snapshot": perfSnapshot,
   "diagnostics": diagnostics,
   "project_info": projectInfo,

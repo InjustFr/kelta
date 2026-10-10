@@ -47,6 +47,7 @@ async fn list_pages_with_offset_and_sends_the_api_key_header() {
     assert_eq!(p1.items[1].status.category, StatusCategory::InProgress);
     assert_eq!(a.kind.as_deref(), Some("Bug"));
     assert_eq!(a.assignee.as_ref().unwrap().name, "Louis Duprat");
+    assert_eq!(a.reporter.as_ref().unwrap().name, "Carol Client");
     assert_eq!(a.url, format!("{}/issues/4567", server.uri()));
     let p2 = t.list(&view("mine"), p1.next).await.unwrap();
     assert_eq!(p2.items.len(), 1);

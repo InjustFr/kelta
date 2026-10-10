@@ -72,7 +72,8 @@
       "comment": true,
       "transitions_need_fetch": true,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -120,7 +121,8 @@
       "comment": true,
       "transitions_need_fetch": true,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -163,7 +165,8 @@
       "comment": true,
       "transitions_need_fetch": true,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -238,7 +241,8 @@
       "comment": true,
       "transitions_need_fetch": true,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -300,7 +304,8 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -362,7 +367,8 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -410,7 +416,8 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -472,7 +479,8 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": true
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -515,7 +523,8 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": true
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -563,7 +572,8 @@
       "comment": false,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -606,7 +616,8 @@
       "comment": false,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -654,7 +665,8 @@
       "comment": true,
       "transitions_need_fetch": true,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   },
   {
     "ticket": {
@@ -697,6 +709,7 @@
       "comment": true,
       "transitions_need_fetch": false,
       "projects_v2": false
-    }
+    },
+    "waiting": []
   }
 ]

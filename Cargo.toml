@@ -37,6 +37,7 @@ tauri-build = { version = "=2.7.1" }
 tauri-plugin-notification = { version = "=2.5.1" }
 tauri-plugin-opener = { version = "=2.7.0" }
 tauri-plugin-single-instance = { version = "=2.5.2" }
+tauri-plugin-updater = { version = "=2.13.3" }
 
 # ---- async / OS --------------------------------------------------------------
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "macros", "net", "process", "sync", "time", "io-util", "fs", "signal"] }

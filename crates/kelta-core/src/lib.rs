@@ -31,6 +31,7 @@ pub mod spawn_env;
 mod start;
 pub mod status;
 pub mod store;
+pub mod team;
 pub mod templates;
 mod workflows;
 

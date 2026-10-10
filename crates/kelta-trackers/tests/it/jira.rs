@@ -143,6 +143,9 @@ async fn cloud_ticket_mapping() {
     assert_eq!(t.project_hint.as_deref(), Some("SHOP"));
     assert_eq!(t.updated_at, "2026-09-30T10:15:00.000+02:00");
     assert_eq!(t.assignee.as_ref().unwrap().name, "Louis Duprat");
+    assert_eq!(t.assignee.as_ref().unwrap().email.as_deref(), Some("louis@acme.test"));
+    let rep = t.reporter.as_ref().unwrap();
+    assert_eq!((rep.name.as_str(), rep.email.as_deref()), ("Anna Reporter", Some("anna@acme.test")));
     assert_eq!(t.url, format!("{}/browse/SHOP-142", server.uri()));
     // "In Review" is "indeterminate" in Jira: promoted to InReview by name.
     assert_eq!(page.items[1].status.category, StatusCategory::InReview);

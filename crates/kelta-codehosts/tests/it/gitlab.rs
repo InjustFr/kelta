@@ -37,7 +37,7 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
     let mr8 = "/api/v4/projects/grp%2Fother/merge_requests/8";
     Mock::given(path(format!("{mr8}/reviewers")))
         .respond_with(reply(json!([
-            { "user": { "id": 43, "username": "zed" }, "state": "reviewed", "created_at": "2026-09-28T10:00:00Z" },
+            { "user": { "id": 43, "username": "zed" }, "state": "requested_changes", "created_at": "2026-09-28T10:00:00Z" },
             { "user": { "id": 42, "username": "louis" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
         ])))
         .mount(&server)
@@ -64,6 +64,9 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
     assert_eq!(list[1].additions, None, "no /changes: no size");
     assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-29T10:00:00Z"));
     assert!(list[0].blocking, "one approval left and I am an approver");
+    assert_eq!(list[0].waiting_on, ["louis"], "request rows carry who is still asked");
+    assert!(list[0].author_to_act && !list[1].author_to_act, "zed requested changes");
+    assert_eq!(list[0].waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"), "when louis was asked");
     assert!(list[1].requested_at.is_none() && !list[1].blocking);
     let again = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
     assert_eq!(again[0].additions, Some(2), "same head: size from cache, /changes fetched once");

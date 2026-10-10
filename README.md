@@ -83,6 +83,10 @@ maintainer's Mac). Expect rough edges; if no build is listed yet, [build from so
 
 The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached.
 
+Kelta updates itself: it installs each new nightly in the background and a banner offers **Restart** (sessions
+kept by keltad keep running). See Settings → General → Updates. A `.deb` install never updates itself: apt owns
+the files, so install the new `.deb` from the Releases page.
+
 **macOS.** Open the dmg and drag Kelta to Applications. The app is not signed: right-click it and choose
 **Open** the first time, or remove the quarantine flag:
 

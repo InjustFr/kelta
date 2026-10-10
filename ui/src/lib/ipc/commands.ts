@@ -41,6 +41,7 @@ import type {
   PrDraft,
   NextUp,
   NextUpItem,
+  Person,
   ProjectDraft,
   ProjectId,
   ProjectInfo,
@@ -80,6 +81,7 @@ import type {
   TriggerRun,
   TrustInfo,
   UiEvent,
+  UpdateStatus,
   User,
   ValidationIssue,
   WorkflowInfo,
@@ -120,6 +122,11 @@ export interface Commands {
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
   claude_mcp_remove: { args: NoArgs; result: null };
+  app_update_status: { args: NoArgs; result: UpdateStatus };
+  /** Checks now and installs what it finds (resolves once done). */
+  app_update_check: { args: NoArgs; result: UpdateStatus };
+  /** Restarts through the normal quit (keltad keeps the kept sessions). */
+  app_restart: { args: NoArgs; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -229,6 +236,8 @@ export interface Commands {
   workflow_run: { args: { ticket: TicketRef; workflow: string }; result: SessionInfo };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
+  /** The scope's team: people in its cached tickets and PRs, identities merged (cache only, #240). */
+  team_people: { args: { scope: Scope }; result: Person[] };
   /** My Next up list, snoozes and seen tickets (#145): Kelta-local. */
   next_up_list: { args: NoArgs; result: NextUp };
   next_up_put: { args: { item: NextUpItem }; result: null };
@@ -351,6 +360,9 @@ export const COMMAND_NAMES = [
   'claude_mcp_status',
   'claude_mcp_install',
   'claude_mcp_remove',
+  'app_update_status',
+  'app_update_check',
+  'app_restart',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -412,6 +424,7 @@ export const COMMAND_NAMES = [
   'workflow_run',
   'tracker_search',
   'tracker_sources',
+  'team_people',
   'next_up_list',
   'next_up_put',
   'next_up_remove',
@@ -527,6 +540,9 @@ export const notifyTest = wrap('notify_test');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
+export const appUpdateStatus = wrap('app_update_status');
+export const appUpdateCheck = wrap('app_update_check');
+export const appRestart = wrap('app_restart');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {
@@ -635,6 +651,7 @@ export const workflowsList = wrap('workflows_list');
 export const workflowRun = wrap('workflow_run');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
+export const teamPeople = wrap('team_people');
 export const nextUpList = wrap('next_up_list');
 export const nextUpPut = wrap('next_up_put');
 export const nextUpRemove = wrap('next_up_remove');

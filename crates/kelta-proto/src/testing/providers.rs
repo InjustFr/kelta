@@ -324,7 +324,7 @@ impl Tracker for FakeTracker {
             d.ticket.assignee = match who {
                 Assignee::Me => Some(me),
                 Assignee::User { id } => {
-                    Some(User { id: id.clone(), name: id, login: None, avatar_url: None })
+                    Some(User { id: id.clone(), name: id, login: None, avatar_url: None, email: None })
                 }
                 Assignee::None => None,
             }

@@ -247,6 +247,7 @@ describe('mock transport', () => {
       workflow_run: { ticket: s.tickets[1]!.ticket.ref, workflow: 'kelta-ticket-pass' },
       tracker_search: { scope: { kind: 'all' }, text: 'rate' },
       tracker_sources: { account_id: 'jira-acme', query: '' },
+      team_people: { scope: { kind: 'all' } },
       next_up_put: { item: { project_id: 'shop', ticket, rank: 1, snoozed_until: null } },
       next_up_remove: { ticket },
       ticket_seen: { tickets: [ticket] },

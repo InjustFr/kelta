@@ -35,6 +35,47 @@ pub struct AppInfo {
     pub decorations: crate::settings::Decorations,
 }
 
+/// Update channel, from the running version: `-nightly.` → nightly, else release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateChannel {
+    Nightly,
+    Release,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UpdateState {
+    Idle,
+    Checking,
+    Downloading,
+    /// Installed; the next start runs it.
+    Ready {
+        version: String,
+    },
+    UpToDate,
+    Failed {
+        message: String,
+    },
+    /// This build never updates itself (dev build, package manager install, app not in a writable place).
+    Unsupported {
+        reason: String,
+    },
+}
+
+/// `app_update_status` / `app_update_check` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct UpdateStatus {
+    /// Running version.
+    pub current: String,
+    pub channel: UpdateChannel,
+    pub state: UpdateState,
+    /// End of the last check, RFC 3339.
+    pub checked_at: Option<String>,
+    /// A restart would stop a working Claude session (same rule as the quit confirmation).
+    pub restart_needs_confirm: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcRole {

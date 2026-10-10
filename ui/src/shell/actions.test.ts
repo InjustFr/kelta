@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch, hasAction } from '$lib/actions';
 import { ACTIONS } from '$lib/gen/actions';
@@ -8,6 +8,7 @@ import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
 import { terminalUi } from '$lib/terminal/ui.svelte';
 
 import { openFileLink } from './actions';
+import { confirms } from './confirm.svelte';
 
 // Handlers owned by L2 (BUILD_PLAN §2.4).
 const OWNED = ACTIONS.map((a) => a.id).filter(
@@ -22,7 +23,8 @@ const OWNED = ACTIONS.map((a) => a.id).filter(
     id.startsWith('nav.') ||
     id.startsWith('terminal.') ||
     id === 'editor.send_selection' ||
-    id === 'editor.quickfix_claude',
+    id === 'editor.quickfix_claude' ||
+    id === 'app.restart',
 );
 
 const CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
@@ -135,5 +137,25 @@ describe('shell actions', () => {
       target: { kind: 'session', id: NVIM },
       files,
     });
+  });
+
+  it('app.restart asks first only when a working Claude session would stop', async () => {
+    const restarts = () => mock.calls.filter((c) => c.cmd === 'app_restart').length;
+    await dispatch('app.restart');
+    expect(confirms.current).toBeNull();
+    expect(restarts()).toBe(1);
+
+    mock.state.update.restart_needs_confirm = true;
+    const cancelled = dispatch('app.restart');
+    await vi.waitFor(() => expect(confirms.current?.body).toContain('will stop'));
+    confirms.answer(null);
+    await cancelled;
+    expect(restarts()).toBe(1);
+
+    const confirmed = dispatch('app.restart');
+    await vi.waitFor(() => expect(confirms.current).not.toBeNull());
+    confirms.answer('restart');
+    await confirmed;
+    expect(restarts()).toBe(2);
   });
 });

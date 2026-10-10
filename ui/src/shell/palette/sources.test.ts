@@ -290,6 +290,7 @@ describe('palette sources', () => {
           transitions_need_fetch: false,
           projects_v2: false,
         },
+        waiting: [],
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });

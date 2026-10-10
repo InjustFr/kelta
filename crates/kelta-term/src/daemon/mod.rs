@@ -195,6 +195,11 @@ pub fn peer_uid(fd: impl AsFd) -> io::Result<u32> {
     }
 }
 
+/// Where keltad writes its pid (after forking) for the app that has to replace it.
+pub fn pidfile(sock: &std::path::Path) -> PathBuf {
+    sock.with_extension("pid")
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

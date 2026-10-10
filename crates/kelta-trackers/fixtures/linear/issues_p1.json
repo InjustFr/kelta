@@ -20,6 +20,11 @@
             "displayName": "louis",
             "avatarUrl": "https://example.test/a.png"
           },
+          "creator": {
+            "id": "user-2",
+            "name": "Anna Reporter",
+            "displayName": "anna"
+          },
           "labels": {
             "nodes": [
               {

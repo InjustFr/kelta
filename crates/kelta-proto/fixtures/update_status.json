@@ -1,0 +1,10 @@
+{
+  "channel": "nightly",
+  "checked_at": "2026-10-11T12:42:00Z",
+  "current": "0.1.0-nightly.202610101230",
+  "restart_needs_confirm": false,
+  "state": {
+    "type": "ready",
+    "version": "0.1.0-nightly.202610111230"
+  }
+}

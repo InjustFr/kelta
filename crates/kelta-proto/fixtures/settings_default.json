@@ -6,7 +6,8 @@
     "light_theme": "bezel-light",
     "log_level": "info",
     "restore_mode": "lazy",
-    "theme": "system"
+    "theme": "system",
+    "updates": true
   },
   "claude": {
     "allowed_tools": [
