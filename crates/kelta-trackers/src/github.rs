@@ -1,6 +1,7 @@
 //! GitHub Issues (REST) with Projects v2 moves (GraphQL).
 //!
 //! Lists: `/issues?filter=assigned`, `/repos/{r}/issues`, `/search/issues` (ETag on every GET).
+//! Each page then takes its issues' Projects v2 Status from one batched GraphQL `nodes(ids:)` call.
 //! Moves: without a project, open/closed. With a Projects v2 item, the Status single-select
 //! field and its option ids are resolved **by name** at runtime and cached per project; nothing is
 //! hard-coded.
@@ -50,6 +51,18 @@ macro_rules! field_value_fragments {
     };
 }
 
+/// `projectItems` of an issue: ids, owner and field values (shared by `issue_projects` and the list enrichment).
+/// `$first` caps the items per issue: GitHub prices a query from its `first` limits.
+macro_rules! project_items {
+    ($first:literal) => {
+        concat!(
+            "projectItems(first:", $first, "){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:30){ nodes{ ",
+            field_value_fragments!(),
+            " } } } }"
+        )
+    };
+}
+
 /// One Projects v2 item of an issue.
 #[derive(Debug, Clone)]
 struct ItemInfo {
@@ -75,6 +88,8 @@ pub struct GithubIssues {
     me: Mutex<Option<User>>,
     /// project node id → Status field (cached for the provider's lifetime).
     fields: Mutex<HashMap<String, FieldMeta>>,
+    /// repo (lower-case) → the board (owner, number) its listed issues were seen on.
+    boards: Mutex<HashMap<String, (String, u32)>>,
     /// (owner lower-case, project number) → configured status field name.
     status_fields: Mutex<HashMap<(String, u32), String>>,
 }
@@ -197,6 +212,7 @@ impl GithubIssues {
             auth,
             me: Mutex::new(None),
             fields: Mutex::new(HashMap::new()),
+            boards: Mutex::new(HashMap::new()),
             status_fields: Mutex::new(HashMap::new()),
         })
     }
@@ -400,9 +416,9 @@ impl GithubIssues {
     /// Projects v2 items of an issue (ids and current Status value; no field metadata).
     async fn issue_projects(&self, repo: &str, number: u64) -> Result<IssueProjects, KeltaError> {
         const Q: &str = concat!(
-            "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state projectItems(first:20){ nodes{ id project{ id number owner{ ... on Organization{ login } ... on User{ login } } } fieldValues(first:30){ nodes{ ",
-            field_value_fragments!(),
-            " } } } } } } }"
+            "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state ",
+            project_items!(20),
+            " } } }"
         );
         let (owner, name) =
             repo.split_once('/').ok_or_else(|| KeltaError::invalid(format!("bad repo: {repo}")))?;
@@ -411,10 +427,16 @@ impl GithubIssues {
             .pointer("/repository/issue")
             .filter(|v| !v.is_null())
             .ok_or_else(|| KeltaError::not_found(format!("{repo}#{number}")))?;
-        let nodes =
-            issue.pointer("/projectItems/nodes").and_then(Value::as_array).cloned().unwrap_or_default();
-        let items = nodes
-            .iter()
+        Ok(IssueProjects { open: s(issue, "state") != Some("CLOSED"), items: self.items_of(issue) })
+    }
+
+    /// The Projects v2 items of an issue node (selected with `project_items!`).
+    fn items_of(&self, issue: &Value) -> Vec<ItemInfo> {
+        issue
+            .pointer("/projectItems/nodes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
             .filter_map(|n| {
                 let owner =
                     n.pointer("/project/owner/login").and_then(Value::as_str).unwrap_or("").to_owned();
@@ -445,8 +467,59 @@ impl GithubIssues {
                         .unwrap_or_default(),
                 })
             })
+            .collect()
+    }
+
+    /// The board item that gives an issue its Status: a configured `project_v2` source's board,
+    /// else the first. shortcut: "configured" = any project_v2 view seen by this account, not only this project's.
+    fn pick_item(&self, items: Vec<ItemInfo>) -> Option<ItemInfo> {
+        let known = self.status_fields.lock();
+        let at = items.iter().position(|i| known.contains_key(&(i.owner.to_ascii_lowercase(), i.number)));
+        drop(known);
+        items.into_iter().nth(at.unwrap_or(0))
+    }
+
+    /// REST issues as tickets with their board Status and fields, from ONE GraphQL call over the
+    /// issues' node ids (they may span repos). Runs on every poll, a 304 included: a board move does not
+    /// change the REST ETag. No project scope or a failed call: the plain Open/Closed tickets.
+    /// `closed_only`: skip the call, a closed issue is "Closed" whatever its board says.
+    async fn with_boards(&self, issues: &[Value], closed_only: bool) -> Vec<Ticket> {
+        // 5 items per issue keeps a 50-issue page at ~3 rate-limit points (20 would be ~11).
+        const Q: &str =
+            concat!("query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id ", project_items!(5), " } } }");
+        let ids: Vec<&str> = issues
+            .iter()
+            .filter(|i| i.get("pull_request").is_none())
+            .filter_map(|i| s(i, "node_id"))
             .collect();
-        Ok(IssueProjects { open: s(issue, "state") != Some("CLOSED"), items })
+        let mut by_id: HashMap<String, ItemInfo> = HashMap::new();
+        if !closed_only
+            && !ids.is_empty()
+            && let Ok(d) = self.gql(Q, json!({"ids": ids})).await
+        {
+            for n in d.get("nodes").and_then(Value::as_array).into_iter().flatten() {
+                if let (Some(id), Some(item)) = (s(n, "id"), self.pick_item(self.items_of(n))) {
+                    by_id.insert(id.to_owned(), item);
+                }
+            }
+        }
+        let today = today();
+        let mut boards = self.boards.lock();
+        issues
+            .iter()
+            .filter_map(|i| {
+                let item = s(i, "node_id").and_then(|id| by_id.get(id));
+                let mut t = self.ticket_from_rest(i, item.and_then(|x| x.current.as_deref()))?;
+                let board = item.map(|x| (x.owner.clone(), x.number));
+                if let Some(x) = item {
+                    apply_project_fields(&mut t, &x.vals, &today);
+                }
+                if let Some(b) = board {
+                    boards.insert(t.project_hint.clone().unwrap_or_default().to_ascii_lowercase(), b);
+                }
+                Some(t)
+            })
+            .collect()
     }
 
     /// Status field of a project, resolved by name once and cached.
@@ -528,12 +601,51 @@ impl GithubIssues {
     /// priority, estimate), so assign / open / close / get never strip them. `None` = a pull request.
     async fn ticket_with_board(&self, repo: &str, number: u64, v: &Value) -> Option<Ticket> {
         // No project, or a token without project scope: the plain issue.
-        let item = self.issue_projects(repo, number).await.ok().and_then(|p| p.items.into_iter().next());
+        let item = self.issue_projects(repo, number).await.ok().and_then(|p| self.pick_item(p.items));
         let mut t = self.ticket_from_rest(v, item.as_ref().and_then(|i| i.current.as_deref()))?;
         if let Some(i) = &item {
             apply_project_fields(&mut t, &i.vals, &today());
         }
         Some(t)
+    }
+
+    /// The options of a board's status field, in board order.
+    async fn board_columns(
+        &self,
+        owner: &str,
+        number: u32,
+        status_field: &str,
+    ) -> Result<Vec<Column>, KeltaError> {
+        const Q: &str = "query($owner:String!,$number:Int!){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ id fields(first:50){ nodes{ ... on ProjectV2SingleSelectField { id name options{ id name } } } } } } } }";
+        let data = self.gql(Q, json!({"owner": owner, "number": number})).await?;
+        let field = data
+            .pointer("/repositoryOwner/projectV2/fields/nodes")
+            .and_then(Value::as_array)
+            .and_then(|fs| {
+                fs.iter().find(|f| s(f, "name").is_some_and(|n| n.eq_ignore_ascii_case(status_field)))
+            })
+            .ok_or_else(|| {
+                KeltaError::not_found(format!("project #{number} has no `{status_field}` field"))
+            })?;
+        Ok(field
+            .get("options")
+            .and_then(Value::as_array)
+            .map(|o| {
+                o.iter()
+                    .enumerate()
+                    .filter_map(|(i, x)| {
+                        let name = s(x, "name")?.to_owned();
+                        Some(Column {
+                            id: s(x, "id").unwrap_or(&name).to_owned(),
+                            category: category_from_name(&name),
+                            order: i as u32,
+                            match_names: vec![name.clone()],
+                            name,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     fn page_cursor(c: Option<Cursor>) -> Result<u32, KeltaError> {
@@ -664,10 +776,7 @@ impl Tracker for GithubIssues {
         } else {
             resp.body.get("items").cloned().unwrap_or(Value::Null)
         };
-        let items: Vec<Ticket> = list
-            .as_array()
-            .map(|a| a.iter().filter_map(|i| self.ticket_from_rest(i, None)).collect())
-            .unwrap_or_default();
+        let items = self.with_boards(list.as_array().map_or(&[][..], Vec::as_slice), state == "closed").await;
         let has_next = link_rel(&resp.headers, "next").is_some();
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
     }
@@ -872,36 +981,27 @@ impl Tracker for GithubIssues {
             return Ok(c);
         }
         if let Some(p) = b.views.iter().find_map(|v| v.project_v2.as_ref()) {
-            const Q: &str = "query($owner:String!,$number:Int!){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ id fields(first:50){ nodes{ ... on ProjectV2SingleSelectField { id name options{ id name } } } } } } } }";
-            let data = self.gql(Q, json!({"owner": p.owner, "number": p.number})).await?;
-            let field = data
-                .pointer("/repositoryOwner/projectV2/fields/nodes")
-                .and_then(Value::as_array)
-                .and_then(|fs| {
-                    fs.iter().find(|f| s(f, "name").is_some_and(|n| n.eq_ignore_ascii_case(&p.status_field)))
-                })
-                .ok_or_else(|| {
-                    KeltaError::not_found(format!("project #{} has no `{}` field", p.number, p.status_field))
-                })?;
-            return Ok(field
-                .get("options")
-                .and_then(Value::as_array)
-                .map(|o| {
-                    o.iter()
-                        .enumerate()
-                        .filter_map(|(i, x)| {
-                            let name = s(x, "name")?.to_owned();
-                            Some(Column {
-                                id: s(x, "id").unwrap_or(&name).to_owned(),
-                                category: category_from_name(&name),
-                                order: i as u32,
-                                match_names: vec![name.clone()],
-                                name,
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default());
+            return self.board_columns(&p.owner, p.number, &p.status_field).await;
+        }
+        // A repo source: the board its issues sit on (learnt by listing it once), else Open/Closed.
+        let repo_view = b.views.iter().find(|v| {
+            v.repo.as_deref().is_some_and(|r| !r.is_empty())
+                && v.account.as_ref().is_none_or(|a| a == self.account())
+        });
+        if let Some(v) = repo_view {
+            let repo = v.repo.as_deref().unwrap_or("").to_ascii_lowercase();
+            // No board seen yet (or none at all): list once more; a no-board repo pays this per pane open.
+            if !self.boards.lock().contains_key(&repo) {
+                let _ = self.list(v, None).await;
+            }
+            let board = self.boards.lock().get(&repo).cloned();
+            if let Some((owner, number)) = board
+                && let Ok(c) =
+                    self.board_columns(&owner, number, &self.status_field_name(&owner, number)).await
+                && !c.is_empty()
+            {
+                return Ok(c);
+            }
         }
         Ok(vec![
             Column {

@@ -2,6 +2,7 @@
   {
     "id": 1012,
     "number": 12,
+    "node_id": "I_12",
     "title": "Cart total wrong",
     "state": "open",
     "html_url": "https://github.com/acme/shop/issues/12",
@@ -29,6 +30,7 @@
   {
     "id": 1014,
     "number": 14,
+    "node_id": "I_14",
     "title": "Add coupon field",
     "state": "open",
     "html_url": "https://github.com/acme/shop/issues/14",

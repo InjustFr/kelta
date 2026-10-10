@@ -2,6 +2,7 @@
   {
     "id": 1012,
     "number": 12,
+    "node_id": "I_12",
     "title": "Cart total wrong",
     "state": "open",
     "html_url": "https://github.com/acme/shop/issues/12",
@@ -29,6 +30,7 @@
   {
     "id": 1013,
     "number": 13,
+    "node_id": "I_13",
     "title": "Fix cart total (PR)",
     "state": "open",
     "html_url": "https://github.com/acme/shop/issues/13",
@@ -59,6 +61,7 @@
   {
     "id": 1007,
     "number": 7,
+    "node_id": "I_7",
     "title": "Dark mode flicker",
     "state": "open",
     "html_url": "https://github.com/acme/web/issues/7",

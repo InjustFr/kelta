@@ -110,6 +110,7 @@ async fn repo_views_filter_by_state_and_assignee() {
     let page = gh(&server).list(&v, None).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.next.is_none());
+    assert!(bodies(&server, "POST", "/graphql").await.is_empty(), "closed lists skip the board lookup");
 }
 
 #[tokio::test]
@@ -599,4 +600,146 @@ async fn search_turns_a_repo_view_into_an_issue_search() {
     let mut v = view("repo");
     v.repo = Some("acme/shop".into());
     assert_eq!(gh(&server).search(&v, "login").await.unwrap().len(), 2);
+}
+
+fn repo_view() -> kelta_proto::settings::TrackerView {
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    v
+}
+
+/// The repo list (issues_repo.json) plus a closed #15 that the board still has in "In Review".
+async fn mount_repo_list(server: &MockServer) {
+    let mut issues = fixture("github/issues_repo.json");
+    let mut closed = issues[0].clone();
+    closed["number"] = json!(15);
+    closed["id"] = json!(1015);
+    closed["node_id"] = json!("I_15");
+    closed["state"] = json!("closed");
+    issues.as_array_mut().unwrap().push(closed);
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/issues"))
+        .respond_with(ResponseTemplate::new(200).insert_header("etag", "\"etag-r\"").set_body_json(issues))
+        .mount(server)
+        .await;
+}
+
+async fn gql_nodes(server: &MockServer, fixture_name: &str, times: u64) {
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("nodes(ids"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text(fixture_name)))
+        .up_to_n_times(times)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn repo_lists_take_the_status_from_the_board_in_one_request() {
+    let server = MockServer::start().await;
+    mount_repo_list(&server).await;
+    gql_nodes(&server, "github/gql_nodes_projects.json", u64::MAX).await;
+    let t = gh(&server);
+    let page = t.list(&repo_view(), None).await.unwrap();
+    let st: Vec<_> = page.items.iter().map(|t| (t.status.name.as_str(), t.status.category)).collect();
+    assert_eq!(
+        st,
+        vec![
+            ("In Progress", StatusCategory::InProgress),
+            ("Open", StatusCategory::Todo),
+            ("Closed", StatusCategory::Done), // closing wins over the board's "In Review"
+        ]
+    );
+    assert_eq!(page.items[0].priority.as_deref(), Some("P1"));
+    let gql_bodies = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(gql_bodies.len(), 1, "one enrichment request per page, not one per issue");
+    assert_eq!(gql_bodies[0]["variables"]["ids"], json!(["I_12", "I_14", "I_15"]));
+    // ~3 rate-limit points per page: few items per issue
+    assert!(gql_bodies[0]["query"].as_str().unwrap().contains("projectItems(first:5)"));
+
+    // the detail (`get`) agrees with the list
+    gql(&server, "repository(owner", "github/gql_issue_projects.json").await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12/comments", 200, "github/comments_last.json").await;
+    let d = t.get(&r()).await.unwrap();
+    assert_eq!(d.ticket.status, page.items[0].status);
+    assert_eq!(d.ticket.priority, page.items[0].priority);
+}
+
+#[tokio::test]
+async fn repo_lists_without_project_scope_stay_open_and_closed() {
+    let server = MockServer::start().await;
+    mount_repo_list(&server).await;
+    gql_nodes(&server, "github/gql_insufficient_scopes.json", u64::MAX).await;
+    let page = gh(&server).list(&repo_view(), None).await.unwrap();
+    let st: Vec<_> = page.items.iter().map(|t| t.status.name.as_str()).collect();
+    assert_eq!(st, vec!["Open", "Open", "Closed"]);
+    // and columns fall back to open / closed
+    let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
+    let cols = gh(&server).columns(&b).await.unwrap();
+    assert_eq!(cols.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["open", "closed"]);
+}
+
+#[tokio::test]
+async fn a_board_move_shows_at_the_next_poll_even_on_a_304() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/issues"))
+        .and(header("if-none-match", "\"etag-1\""))
+        .respond_with(ResponseTemplate::new(304))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/issues"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("etag", "\"etag-1\"")
+                .set_body_string(fixture_text("github/issues_repo.json")),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    gql_nodes(&server, "github/gql_nodes_projects.json", 1).await;
+    gql_nodes(&server, "github/gql_nodes_moved.json", 1).await;
+    let t = gh(&server);
+    let a = t.list(&repo_view(), None).await.unwrap();
+    let b = t.list(&repo_view(), None).await.unwrap();
+    assert_eq!(a.items[0].status.name, "In Progress");
+    assert_eq!(b.items[0].status.name, "In Review", "the 304 still re-reads the board");
+    assert_eq!(b.items[0].status.category, StatusCategory::InReview);
+    assert_eq!(bodies(&server, "POST", "/graphql").await.len(), 2);
+}
+
+#[tokio::test]
+async fn repo_columns_follow_the_board_its_issues_sit_on() {
+    let server = MockServer::start().await;
+    mount_repo_list(&server).await;
+    gql_nodes(&server, "github/gql_nodes_projects.json", u64::MAX).await;
+    gql(&server, "projectV2(number", "github/gql_columns.json").await;
+    let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
+    // columns before any list: the provider lists the repo once to find the board
+    let cols = gh(&server).columns(&b).await.unwrap();
+    assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["Todo", "In Progress", "Done"]);
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(
+        (b[1]["variables"]["owner"].as_str(), b[1]["variables"]["number"].as_u64()),
+        (Some("acme"), Some(5))
+    );
+}
+
+#[tokio::test]
+async fn repo_columns_still_find_the_board_after_a_no_board_list() {
+    let server = MockServer::start().await;
+    mount_repo_list(&server).await;
+    gql_nodes(&server, "github/gql_nodes_no_projects.json", 1).await; // the untriaged tab lands first
+    gql_nodes(&server, "github/gql_nodes_projects.json", u64::MAX).await;
+    gql(&server, "projectV2(number", "github/gql_columns.json").await;
+    let t = gh(&server);
+    let mut v = repo_view();
+    v.who = Some(Who::Unassigned);
+    t.list(&v, None).await.unwrap();
+    let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
+    let cols = t.columns(&b).await.unwrap();
+    assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["Todo", "In Progress", "Done"]);
 }
