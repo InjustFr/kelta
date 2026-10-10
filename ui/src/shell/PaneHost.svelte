@@ -9,7 +9,7 @@
   import { prompts } from './confirm.svelte';
   import EmptyPane from './EmptyPane.svelte';
   import { lazyComponents } from './lazy.svelte';
-  import { paneIcon, paneTitle, statusLabel } from './labels';
+  import { chordFor, paneIcon, paneTitle, statusLabel } from './labels';
   import {
     closePaneAndStop,
     closePaneById,
@@ -40,6 +40,7 @@
     session?.kind.type === 'claude' && session.lifecycle === 'live' && session.claude?.hooks_active === false,
   );
   const status = $derived(session ? statusLabel(session.status) : '');
+  const level = $derived(session ? lampOf(session.attention, session.status === 'working') : 'none');
 
   let menu = $state<{ x: number; y: number } | null>(null);
   let boundaryKey = $state(0);
@@ -58,14 +59,19 @@
 
   function menuItems(): MenuItem[] {
     const items: MenuItem[] = [
-      { id: 'right', label: 'Split right', icon: 'columns-2' },
-      { id: 'down', label: 'Split down', icon: 'rows-2' },
-      { id: 'zoom', label: zoomed ? 'Unzoom' : 'Zoom', icon: zoomed ? 'minimize-2' : 'maximize-2' },
+      { id: 'right', label: 'Split right', icon: 'columns-2', kbd: chordFor('pane.split_right') },
+      { id: 'down', label: 'Split down', icon: 'rows-2', kbd: chordFor('pane.split_down') },
+      {
+        id: 'zoom',
+        label: zoomed ? 'Unzoom' : 'Zoom',
+        icon: zoomed ? 'minimize-2' : 'maximize-2',
+        kbd: chordFor('pane.zoom'),
+      },
     ];
     if (session) {
       items.push({ id: 'rename', label: 'Rename session…', icon: 'pencil', separator: true });
     }
-    items.push({ id: 'close', label: 'Close pane', icon: 'x', separator: true });
+    items.push({ id: 'close', label: 'Close pane', icon: 'x', separator: true, kbd: chordFor('pane.close') });
     if (session) {
       items.push({ id: 'stop', label: 'Stop session and close', icon: 'square', danger: true });
     }
@@ -136,6 +142,7 @@
 >
   <section class="pane" class:focused aria-label={paneTitle(content, session)}>
     <header
+      class:asks={level === 'needs_input'}
       oncontextmenu={(e) => {
         e.preventDefault();
         focus();
@@ -143,44 +150,60 @@
       }}
       ondblclick={toggleZoomFocused}
     >
-      <Icon name={paneIcon(content, session)} size={13} />
+      <Icon name={paneIcon(content, session)} size={16} />
       <span class="title" data-testid="pane-title">{paneTitle(content, session)}</span>
-      {#if session}
-        <Lamp level={lampOf(session.attention, session.status === 'working')} />
-        {#if status}<span class="status" data-testid="pane-status">{status}</span>{/if}
+      {#if status}
+        <span class="status" data-testid="pane-status"
+          >{#if level !== 'none'}<Lamp {level} label={status} />{:else}{status}{/if}</span
+        >
       {/if}
       {#if hooksInactive}
         <span class="hooks" data-testid="hooks-badge"
-          ><Badge tone="warn" title="Claude status hooks are not reporting">status hooks inactive</Badge>
-          <button
-            type="button"
-            class="fix"
+          ><Badge
+            tone="warn"
+            title="Kelta can't tell when Claude is working or waiting. Fix installs the Claude Code status hooks."
+            >Live status off</Badge
+          >
+          <Button
+            size="sm"
+            variant="secondary"
             onclick={() => openContent(projectId, { content: { kind: 'diagnostics' }, placement: 'new_tab' })}
-            >Fix</button
+            >Fix</Button
           ></span
         >
       {/if}
       <span class="spacer"></span>
-      <IconButton
-        icon={zoomed ? 'minimize-2' : 'maximize-2'}
-        label={zoomed ? 'Unzoom pane' : 'Zoom pane'}
-        size="sm"
-        onclick={() => {
-          focus();
-          toggleZoomFocused();
-        }}
-      />
-      <IconButton
-        icon="ellipsis"
-        label="Pane menu"
-        size="sm"
-        onclick={(e) => {
-          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          focus();
-          menu = { x: r.left, y: r.bottom + 2 };
-        }}
-      />
-      <IconButton icon="x" label="Close pane" size="sm" onclick={close} data-testid="pane-close" />
+      <span class="controls">
+        <IconButton
+          icon={zoomed ? 'minimize-2' : 'maximize-2'}
+          label={zoomed ? 'Unzoom pane' : 'Zoom pane'}
+          chord={chordFor('pane.zoom')}
+          size="sm"
+          onclick={() => {
+            focus();
+            toggleZoomFocused();
+          }}
+        />
+        <IconButton
+          icon="ellipsis"
+          label="Pane menu"
+          size="sm"
+          onclick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            focus();
+            menu = { x: r.left, y: r.bottom + 2 };
+          }}
+        />
+        <span class="divider" aria-hidden="true"></span>
+        <IconButton
+          icon="x"
+          label="Close pane"
+          chord={chordFor('pane.close')}
+          size="sm"
+          onclick={close}
+          data-testid="pane-close"
+        />
+      </span>
     </header>
     <div class="body">
       {#key boundaryKey}
@@ -236,8 +259,9 @@
 <style>
   .slot {
     position: absolute;
-    /* The bezel shows through a 1px gap right and below each pane: panes have no borders. */
-    padding: 0 var(--k-gap) var(--k-gap) 0;
+    /* Half the housing gap on every side: two neighbours make one full gap, and the padding sits
+       inside the pane box so a zoomed pane still spans the area. */
+    padding: calc(var(--k-gap) / 2);
     min-width: 0;
     min-height: 0;
   }
@@ -246,38 +270,51 @@
     display: none;
   }
 
+  /* A screen set into the housing: rounded rim, accent ring when focused. */
   .pane {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
     min-width: 0;
+    border-radius: var(--k-radius-screen);
     background: var(--k-well);
+    box-shadow: 0 0 0 1px var(--k-border);
     overflow: hidden;
   }
 
-  /* Header and terminal read as one screen; the focused pane gets an accent tick on top. */
+  .pane.focused {
+    box-shadow: 0 0 0 2px var(--k-accent);
+  }
+
   header {
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
     height: var(--k-pane-header-height);
     flex: none;
-    padding: 0 var(--k-space-2) 0 var(--k-space-3);
-    background: var(--k-well);
-    color: var(--k-fg-subtle);
+    padding: 0 6px 0 10px;
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-chrome);
     font-size: var(--k-font-size-sm);
   }
 
   .pane.focused header {
+    background: var(--k-bg-selected);
     color: var(--k-fg);
-    box-shadow: inset 0 2px 0 var(--k-accent);
+  }
+
+  /* Call light (section 4.4): only while unfocused; focused keeps the selected tint. */
+  .pane:not(.focused) header.asks {
+    background: var(--k-lit);
+    color: var(--k-fg);
   }
 
   .title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: var(--k-weight-medium);
   }
 
   .pane.focused .title {
@@ -285,7 +322,10 @@
   }
 
   .status {
-    color: var(--k-fg-subtle);
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    color: var(--k-fg-muted);
     white-space: nowrap;
   }
 
@@ -296,15 +336,21 @@
   .hooks {
     display: inline-flex;
     align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
+    flex: none;
   }
 
-  .fix {
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--k-accent);
-    cursor: pointer;
+  .controls {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+
+  .divider {
+    width: 1px;
+    height: 16px;
+    margin: 0 var(--k-space-3);
+    background: var(--k-border);
   }
 
   .body {

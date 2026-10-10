@@ -31,14 +31,18 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   'linux-graphics':
     'Workarounds applied before the web view starts. They need a restart; `kelta --safe-graphics` enables all of them for one launch.',
   claude: 'How Kelta launches Claude Code. Binary, extra arguments and extra hooks run commands.',
-  editors: 'Editor presets used when Kelta opens files. Presets merge by id across layers.',
-  worktree: 'Worktree locations, branch naming, setup commands and what happens on PR and merge.',
+  editors:
+    'Editors Kelta can open files in. A preset set here replaces the one with the same name from a broader level.',
+  worktree:
+    'Branch folders (git worktrees) let each work item have its own copy of the code. Choose where they live, how branches are named, and what runs on PR and merge.',
   reviews: 'Which pull / merge requests appear in the review lists.',
-  polling:
-    'How often providers are refreshed. Intervals are owned by the scheduler; nothing polls while idle.',
+  polling: 'How often Kelta checks your tracker and code host for changes.',
   notifications: 'Desktop notifications and quiet hours.',
-  performance: 'Memory HUD and web view behaviour.',
-  tools:
-    'Buttons in the tool strip. Embedded tools (kind pty) open in a pane next to the current one; external ones launch beside Kelta. Pick Global or a project in the layer selector.',
+  performance: 'Memory use and web view behaviour.',
+  tools: 'Programs like lazygit that open inside Kelta in their own pane.',
   projects: 'Environment variables added to every session (project and repo files may add more).',
 };
+
+/** Visible section title; the registry label stays for ids and tests. */
+export const sectionLabel = (s: { id: string; label: string }): string =>
+  s.id === 'worktree' ? 'Branch folders' : s.label;

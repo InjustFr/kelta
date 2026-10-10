@@ -9,6 +9,7 @@
   import { terminalPool } from '$lib/terminal';
   import { terminalUi } from '$lib/terminal/ui.svelte';
   import type { TerminalView, ViewState } from '$lib/terminal/view';
+  import { dispatch } from '$lib/actions';
   import { Button, currentPlatform, EmptyState, ErrorState, Menu, type MenuItem } from '$lib/ui';
 
   import SearchBar from './SearchBar.svelte';
@@ -203,6 +204,11 @@
         onretry={retryAttach}
       >
         {#snippet actions()}
+          {#if viewState.error?.code === 'not_found'}
+            <Button icon="settings" onclick={() => void dispatch('settings.open', { section: 'editors' })}
+              >Open editor settings</Button
+            >
+          {/if}
           <Button
             icon="activity"
             onclick={() => openContent(projectId, { content: { kind: 'diagnostics' }, placement: 'new_tab' })}

@@ -123,7 +123,7 @@ export class TerminalView implements PoolView {
     this.host.dataset.terminal = '';
     this.host.dataset.session = id;
     this.host.dataset.kind = deps.kindOf(id);
-    this.host.style.cssText = 'position:absolute;inset:4px 4px 2px 6px;';
+    this.host.style.cssText = 'position:absolute;inset:6px 6px 4px 8px;';
 
     this.term = new Terminal({
       allowProposedApi: true,

@@ -8,7 +8,7 @@
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { projects, reviews, tickets, toasts, work } from '$lib/stores';
-  import { Button, EmptyState, ErrorState, IconButton, Kbd, Lamp, VirtualList, relativeTime } from '$lib/ui';
+  import { Button, EmptyState, ErrorState, Kbd, Lamp, ROW_HEIGHT, VirtualList, relativeTime } from '$lib/ui';
 
   import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
   import { isAuthError } from '../work/common';
@@ -23,7 +23,6 @@
 
   let { focused }: PaneProps<'inbox'> = $props();
 
-  const ROW_HEIGHT = 26;
   const ALL = { kind: 'all' } as const;
 
   $effect(() => {
@@ -344,23 +343,25 @@
 >
   <header class="bar">
     <span class="title">Now</span>
+    <span class="subtitle">Everything waiting on you, across projects</span>
     <span class="split" data-testid="now-header" title={summary.header}>
       {#each summary.parts as part (part)}<span>{part}</span>{/each}
     </span>
-    {#if stale}<span class="asof" data-testid="now-asof">as of {stale.at}</span>{/if}
+    {#if stale}<span class="asof" data-testid="now-asof">Updated {relativeTime(stale.ms)}</span>{/if}
     <span class="spacer"></span>
-    {#if filtering || filter}
-      <input
-        bind:this={filterEl}
-        bind:value={filter}
-        class="filter"
-        placeholder="Filter id, title, project, branch"
-        aria-label="Filter"
-        onkeydown={onFilterKey}
-        onblur={() => (filtering = false)}
-      />
-    {/if}
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <input
+      bind:this={filterEl}
+      bind:value={filter}
+      class="k-filter"
+      placeholder="Filter"
+      aria-label="Filter Now"
+      onfocus={() => (filtering = true)}
+      onkeydown={onFilterKey}
+      onblur={() => (filtering = false)}
+    />
+    <Button variant="ghost" size="sm" icon="refresh-cw" onclick={refresh}
+      >Refresh<span aria-hidden="true"> <Kbd chord="r" /></span></Button
+    >
   </header>
 
   {#if loading}
@@ -369,7 +370,7 @@
     <ErrorState error={firstError} title="Could not load Now" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open settings'}
+          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -378,8 +379,10 @@
     {#if lines.length === 0}
       <EmptyState
         icon="inbox"
-        title={filter ? `Nothing matches "${filter}".` : 'Nothing waiting and nothing up next.'}
-        body=""
+        title={filter ? `Nothing matches "${filter}".` : 'Nothing needs you right now'}
+        body={filter
+          ? ''
+          : 'Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.'}
       >
         {#snippet actions()}
           {#if filter}<Button onclick={() => (filter = '')}>Clear filter</Button>{:else}<Button
@@ -438,8 +441,13 @@
     {/if}
   {/if}
 
-  <footer class="hints" aria-hidden="true">
-    j/k move, Enter next action, g go, o open on host, / filter, R refresh
+  <footer class="hints">
+    <span><Kbd chord="j" /><Kbd chord="k" /> Move</span>
+    <span><Kbd chord="enter" /> Next action</span>
+    <span><Kbd chord="g" /> Go to</span>
+    <span><Kbd chord="o" /> Open in browser</span>
+    <span><Kbd chord="/" /> Filter</span>
+    <span><Kbd chord="r" /> Refresh</span>
   </footer>
 </div>
 
@@ -462,7 +470,7 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-4);
-    min-height: 30px;
+    min-height: var(--k-tabbar-height);
     padding: 0 var(--k-space-3);
     border-bottom: 1px solid var(--k-border);
     background: var(--k-bg-elev);
@@ -483,6 +491,12 @@
     white-space: nowrap;
   }
 
+  .subtitle {
+    flex: none;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
   .asof {
     font-size: var(--k-font-size-xs);
     color: var(--k-warn);
@@ -490,18 +504,6 @@
 
   .spacer {
     flex: 1;
-  }
-
-  .filter {
-    width: 220px;
-    height: 22px;
-    padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    background: var(--k-bg);
-    color: var(--k-fg);
-    font-family: var(--k-font-mono);
-    font-size: var(--k-font-size-sm);
   }
 
   .list {
@@ -580,7 +582,7 @@
 
   .proj {
     flex: none;
-    font-size: 11px;
+    font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
   }
 
@@ -637,6 +639,10 @@
   }
 
   .hints {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-space-2) var(--k-space-5);
     padding: var(--k-space-1) var(--k-space-3);
     border-top: 1px solid var(--k-border);
     font-size: var(--k-font-size-xs);

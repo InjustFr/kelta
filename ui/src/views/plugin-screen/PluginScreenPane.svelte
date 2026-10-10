@@ -19,6 +19,7 @@
   // Primitive copies so layout.changed (new content objects) does not reopen the screen.
   const pluginId = $derived(content.plugin_id);
   const screenId = $derived(content.screen_id);
+  const pluginName = $derived(plugins.plugins.data?.find((p) => p.id === pluginId)?.name ?? pluginId);
   const paramsJson = $derived(JSON.stringify(content.params ?? null));
   const def = $derived(
     plugins.plugins.data
@@ -118,7 +119,10 @@
 
 <div class="screen" data-pane-kind={content.kind} data-plugin={pluginId}>
   {#if error}
-    <ErrorState {error} title={`Plugin screen ${pluginId}/${screenId} failed`}>
+    <ErrorState
+      error={{ ...error, message: `${pluginId}/${screenId}: ${error.message}` }}
+      title={`${pluginName} screen failed`}
+    >
       {#snippet actions()}
         <Button icon="refresh-cw" onclick={() => reloads++}>Reload screen</Button>
         <Button variant="danger" onclick={disable}>Disable plugin</Button>

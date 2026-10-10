@@ -1,11 +1,11 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { ProjectId, Tab, ToolInfo } from '$lib/gen';
-  import { activeTab, allPanes, moveTab, paneSession } from '$lib/layout';
-  import { layout, toasts, tools, ui } from '$lib/stores';
-  import { Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { activeTab, moveTab } from '$lib/layout';
+  import { layout, projects, toasts, tools, ui } from '$lib/stores';
+  import { Button, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
-  import ToolStrip from './ToolStrip.svelte';
+  import { chordFor } from './labels';
   import { requestCloseTab, selectTab, tabAttention } from './nav';
 
   interface Props {
@@ -18,6 +18,7 @@
   const tabs = $derived(current?.tabs ?? []);
   const active = $derived(current ? activeTab(current) : null);
   const toolList = $derived(tools.list(projectId));
+  const projectName = $derived(projects.byId(projectId)?.name ?? '');
 
   let tabMenu = $state<{ tab: Tab; x: number; y: number } | null>(null);
   let plusMenu = $state<{ x: number; y: number } | null>(null);
@@ -47,16 +48,18 @@
 
   function plusItems(): MenuItem[] {
     const items: MenuItem[] = [
-      { id: 'session', label: 'New session…', icon: 'square-terminal' },
-      { id: 'tickets', label: 'Tickets', icon: 'ticket', separator: true },
-      { id: 'reviews', label: 'Reviews', icon: 'git-pull-request' },
+      { id: 'session', label: 'New session…', icon: 'square-terminal', kbd: chordFor('session.new') },
+      { id: 'tickets', label: 'Tickets', icon: 'ticket', kbd: chordFor('tickets.open') },
+      { id: 'reviews', label: 'Reviews', icon: 'git-pull-request', kbd: chordFor('reviews.open') },
     ];
     toolList.slice(0, 12).forEach((t: ToolInfo, i) => {
       items.push({
         id: `tool:${t.id}`,
         label: t.label,
         icon: t.icon ?? 'wrench',
+        kbd: t.keybinding ?? undefined,
         disabled: t.installed === false,
+        title: t.installed === false ? 'Not installed' : undefined,
         separator: i === 0,
       });
     });
@@ -92,6 +95,7 @@
 </script>
 
 <div class="tabbar" role="tablist" aria-label="Tabs" data-testid="tabbar">
+  {#if projectName}<span class="project-name">{projectName}</span>{/if}
   {#each tabs as tab (tab.id)}
     {@const level = tabAttention(tab)}
     <div
@@ -110,6 +114,9 @@
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           selectTab(projectId, tab.id);
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          void requestCloseTab(projectId, tab.id);
         }
       }}
       onauxclick={(e) => onAux(e, tab)}
@@ -140,10 +147,8 @@
       }}
     >
       <span class="lamp-slot"><Lamp {level} /></span>
-      {#if tab.work_item_id}<Icon name="git-branch" size={12} />{/if}
-      <span class="title" class:session={tab.work_item_id || allPanes(tab.root).some((p) => paneSession(p))}
-        >{tab.title}</span
-      >
+      {#if tab.work_item_id}<Icon name="git-branch" size={14} />{/if}
+      <span class="title">{tab.title}</span>
       <button
         type="button"
         class="close"
@@ -154,24 +159,21 @@
           void requestCloseTab(projectId, tab.id);
         }}
       >
-        <Icon name="x" size={12} />
+        <Icon name="x" size={14} />
       </button>
     </div>
   {/each}
-  <button
-    type="button"
+  <Button
+    variant="ghost"
+    size="sm"
+    icon="plus"
     class="plus"
-    aria-label="New tab"
-    title="New tab"
     data-testid="tab-plus"
     onclick={(e) => {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
       plusMenu = { x: r.left, y: r.bottom + 2 };
-    }}
+    }}>New tab</Button
   >
-    <Icon name="plus" size={15} />
-  </button>
-  <ToolStrip {projectId} />
 </div>
 
 {#if tabMenu}
@@ -199,30 +201,57 @@
 <style>
   .tabbar {
     display: flex;
-    align-items: stretch;
+    align-items: center;
+    gap: var(--k-space-2);
     height: var(--k-tabbar-height);
     flex: none;
-    padding: 0 var(--k-space-2);
-    background: var(--k-bezel-raised);
+    padding: 0 var(--k-space-3);
+    background: var(--k-bezel);
     font-size: var(--k-font-size-sm);
     overflow-x: auto;
-    scrollbar-width: none;
+    /* The thin bar is the overflow indicator. */
+    scrollbar-width: thin;
+  }
+
+  /* Only when the sidebar is compact and no longer names the project. */
+  .project-name {
+    display: none;
+    flex: none;
+    padding-right: var(--k-space-4);
+    margin-right: var(--k-space-2);
+    border-right: 1px solid var(--k-border);
+    font-size: var(--k-font-size-lg);
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1099px) {
+    .project-name {
+      display: inline-block;
+    }
   }
 
   .tab {
     display: inline-flex;
     align-items: center;
-    gap: var(--k-space-2);
-    max-width: 220px;
-    padding: 0 var(--k-space-2) 0 var(--k-space-3);
-    box-shadow: inset 0 -2px 0 transparent;
+    gap: var(--k-space-3);
+    flex: none;
+    height: var(--k-control-height);
+    max-width: 240px;
+    padding: 0 6px 0 var(--k-space-4);
+    border-radius: var(--k-radius);
     color: var(--k-fg-chrome);
+    font-weight: var(--k-weight-medium);
     white-space: nowrap;
     cursor: pointer;
-    transition: color var(--k-duration) ease-out;
+    transition:
+      background var(--k-duration) ease-out,
+      color var(--k-duration) ease-out;
   }
 
   .tab:hover {
+    background: var(--k-bg-hover);
     color: var(--k-fg);
   }
 
@@ -230,21 +259,16 @@
     outline-offset: -2px;
   }
 
-  .tab.active {
-    box-shadow: inset 0 -2px 0 var(--k-accent);
-    color: var(--k-fg);
-    font-weight: var(--k-weight-strong);
-  }
-
-  /* Claude waiting: a top edge that stays visible even when the tab is half scrolled out. */
+  /* Call light (§4.4): only while not selected; the lamp carries it on the active tab. */
   .tab.asks {
-    box-shadow: inset 0 2px 0 var(--k-lamp-needs-input);
+    background: var(--k-lit);
+    color: var(--k-fg);
   }
 
-  .tab.asks.active {
-    box-shadow:
-      inset 0 2px 0 var(--k-lamp-needs-input),
-      inset 0 -2px 0 var(--k-accent);
+  .tab.active {
+    background: var(--k-well);
+    box-shadow: 0 0 0 1px var(--k-border);
+    color: var(--k-fg);
   }
 
   .tab.over {
@@ -256,7 +280,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 10px;
+    width: 12px;
     flex: none;
   }
 
@@ -265,16 +289,16 @@
     text-overflow: ellipsis;
   }
 
-  /* Session tabs (session / branch) in mono, view tabs in the UI face (DESIGN §6.3). */
-  .title.session {
-    font-family: var(--k-font-mono);
-  }
-
   .close {
     display: inline-flex;
-    padding: 2px;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
     border: none;
-    border-radius: var(--k-radius-sm);
+    border-radius: 4px;
     background: transparent;
     color: inherit;
     visibility: hidden;
@@ -282,7 +306,7 @@
   }
 
   .tab:hover .close,
-  .tab:focus-visible .close,
+  .tab:focus-within .close,
   .tab.active .close {
     visibility: visible;
   }
@@ -291,20 +315,8 @@
     background: var(--k-bg-active);
   }
 
-  .plus {
-    align-self: center;
-    display: inline-flex;
-    padding: 4px;
-    margin-left: var(--k-space-2);
-    border: none;
-    border-radius: var(--k-radius);
-    background: transparent;
+  .tabbar :global(.plus) {
+    flex: none;
     color: var(--k-fg-chrome);
-    cursor: pointer;
-  }
-
-  .plus:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
   }
 </style>

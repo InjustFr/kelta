@@ -125,17 +125,14 @@
         hint="Becomes projects/&lt;id&gt;.toml."
       />
 
-      <div class="row">
-        <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
-        <input
-          class="icon"
-          aria-label="Icon (1-2 characters)"
-          placeholder="Icon"
-          maxlength="2"
-          value={draft.icon ?? ''}
-          oninput={(e) => draft && (draft.icon = e.currentTarget.value || null)}
-        />
-      </div>
+      <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
+      <TextInput
+        label="Initial (optional)"
+        hint="One or two letters shown in the sidebar. Leave empty to use the first letter of the name."
+        maxlength={2}
+        value={draft.icon ?? ''}
+        oninput={(e) => draft && (draft.icon = e.currentTarget.value || null)}
+      />
 
       <fieldset>
         <legend>Repositories</legend>
@@ -272,16 +269,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--k-space-3);
-  }
-
-  .row {
-    display: flex;
-    gap: var(--k-space-3);
-    align-items: center;
-  }
-
-  .icon {
-    width: 56px;
   }
 
   .hint {

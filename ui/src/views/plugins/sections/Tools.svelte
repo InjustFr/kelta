@@ -5,7 +5,7 @@
   import type { SettingsSectionProps } from '$app/registry';
   import type { ToolCheck } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
-  import { projects, tools } from '$lib/stores';
+  import { projects, tools, ui } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -37,7 +37,7 @@
 <SectionForm sectionId="tools" {...props}>
   {#snippet after()}
     <section data-layer={layer} class="tools">
-      <h2>Installed check</h2>
+      <h2>Check if installed</h2>
       <p class="muted">Tools in the strip, from config files or plugins.</p>
       {#if !pid}
         <EmptyState icon="folder" title="No project selected" />
@@ -46,7 +46,15 @@
       {:else if !slot?.data}
         <Spinner />
       {:else if slot.data.length === 0}
-        <EmptyState icon="wrench" title="No tools configured" />
+        <EmptyState
+          icon="wrench"
+          title="No tools yet"
+          body="Tools are programs like lazygit that open in their own pane. Install a plugin that adds some."
+        >
+          {#snippet actions()}
+            <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
+          {/snippet}
+        </EmptyState>
       {:else}
         <table>
           <tbody>

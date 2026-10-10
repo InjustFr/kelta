@@ -55,7 +55,7 @@ describe('work bar', () => {
     await waitFor(() => expect(screen.getByTestId('ahead').textContent).toBe('↑2'));
     expect(screen.getByTestId('behind').textContent).toBe('↓1');
     expect(screen.getByText('+41')).toBeTruthy();
-    expect(screen.getByText('dirty')).toBeTruthy();
+    expect(screen.getByText('Uncommitted changes')).toBeTruthy();
     expect(screen.getByTestId('work-header').dataset.phase).toBe('working'); // Claude is working
     expect(mock.calls.some((c) => c.cmd === 'work_status_all')).toBe(true);
     expect(mock.calls.some((c) => c.cmd === 'work_status')).toBe(false);

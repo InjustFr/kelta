@@ -276,7 +276,7 @@
 
   .log {
     font-family: var(--k-font-mono);
-    font-size: 11px;
+    font-size: var(--k-font-size-xs);
   }
 
   .muted {

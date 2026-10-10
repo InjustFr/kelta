@@ -14,10 +14,11 @@
     EmptyState,
     ErrorState,
     Icon,
-    IconButton,
+    Kbd,
     Lamp,
     Menu,
     Tabs,
+    ROW_HEIGHT,
     VirtualList,
     relativeTime,
     type MenuItem,
@@ -37,7 +38,6 @@
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
-  const ROW_HEIGHT = 26;
   const move = new MoveController();
 
   // ---- scope, view and mode -----------------------------------------------------------------
@@ -395,7 +395,9 @@
         onchange={setMode}
       />
     {/if}
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <Button variant="ghost" size="sm" icon="refresh-cw" onclick={refresh}
+      >Refresh<span aria-hidden="true"> <Kbd chord="r" /></span></Button
+    >
   </header>
 
   {#if noTracker}
@@ -417,7 +419,7 @@
           >
         {:else}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
-            >Open settings</Button
+            >Open account settings</Button
           >
         {/if}
       {/snippet}
@@ -431,7 +433,11 @@
       onretry={refresh}
     />
     {#if items.length === 0}
-      <EmptyState icon="ticket" title={`Nothing assigned to you in ${viewLabel}.`}>
+      <EmptyState
+        icon="ticket"
+        title={`Nothing assigned to you in ${viewLabel}.`}
+        body="Switch view to see other tickets, or refresh."
+      >
         {#snippet actions()}
           {#if views.length > 1}
             <Button
@@ -674,7 +680,7 @@
 
   /* Fixed to chip height on every card so titles line up across lanes. */
   .card-row.first {
-    height: 18px;
+    height: 20px;
   }
 
   .key {

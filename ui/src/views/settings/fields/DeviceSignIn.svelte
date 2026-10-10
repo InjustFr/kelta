@@ -112,7 +112,7 @@
   /* The one thing to read across to the browser: large mono, digits and dash evenly spaced. */
   .code {
     font-family: var(--k-font-mono);
-    font-size: 18px;
+    font-size: var(--k-font-size-xl);
     line-height: 23px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;

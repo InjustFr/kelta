@@ -417,7 +417,7 @@
     align-items: center;
     gap: var(--k-space-1);
     padding: 0 var(--k-space-1) 0 var(--k-space-3);
-    height: 22px;
+    height: var(--k-control-height-sm);
     border-radius: 11px;
     background: var(--k-bg-sunken);
     font-family: var(--k-font-mono);
@@ -425,7 +425,7 @@
   }
 
   .chip-input {
-    height: 22px;
+    height: var(--k-control-height-sm);
     min-width: 90px;
     padding: 0 var(--k-space-3);
     border: 1px dashed var(--k-border-strong);

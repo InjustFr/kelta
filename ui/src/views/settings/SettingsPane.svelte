@@ -22,7 +22,7 @@
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
   import { leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
-  import { SECTION_ROOTS } from './lib/sections';
+  import { SECTION_ROOTS, sectionLabel } from './lib/sections';
   import RepoTrust from './RepoTrust.svelte';
 
   let { projectId, content }: PaneProps<'settings'> = $props();
@@ -189,13 +189,16 @@
     <Button
       size="sm"
       icon="file-code"
-      variant={editRaw ? 'primary' : 'secondary'}
+      variant={editRaw ? 'primary' : 'ghost'}
       onclick={() => (editRaw = !editRaw)}
       data-testid="edit-toml-toggle"
     >
       {editRaw ? 'Back to form' : 'Edit TOML'}
     </Button>
   </header>
+  <p class="layer-help">
+    Global applies everywhere. Project and Repo override it for one project or one repository.
+  </p>
 
   {#if settingsStore.pendingRestart.length > 0}
     <div class="banner warn" role="status" data-testid="restart-banner">
@@ -241,7 +244,7 @@
           }}
         >
           <Icon name={s.icon} size={14} />
-          {s.label}
+          {sectionLabel(s)}
         </button>
       {/each}
     </nav>
@@ -265,7 +268,7 @@
           {/if}
         </section>
       {:else}
-        <h2>{section?.label}</h2>
+        <h2>{section ? sectionLabel(section) : ''}</h2>
         {#if sectionLoading && !Active}
           <Spinner size={16} />
         {:else if Active}
@@ -278,6 +281,14 @@
 </div>
 
 <style>
+  .layer-help {
+    margin: 0;
+    padding: var(--k-space-2) var(--k-space-4);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+    border-bottom: 1px solid var(--k-border);
+  }
+
   .pane {
     display: flex;
     flex-direction: column;
@@ -324,7 +335,7 @@
     gap: var(--k-space-2);
     margin-left: auto;
     padding: 0 var(--k-space-3);
-    height: 22px;
+    height: var(--k-control-height-sm);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
     background: var(--k-well);
