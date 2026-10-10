@@ -80,6 +80,8 @@ pub const COMMANDS: &[&str] = &[
     "tracker_priorities",
     "tracker_set_priority",
     "tracker_refine",
+    "workflows_list",
+    "workflow_run",
     "tracker_search",
     "tracker_sources",
     "next_up_list",

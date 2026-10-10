@@ -812,6 +812,10 @@ impl Default for ClaudeSettings {
                 ),
                 ("standalone".to_owned(), "{task}".to_owned()),
                 (
+                    "workflow".to_owned(),
+                    "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}.".to_owned(),
+                ),
+                (
                     "feedback".to_owned(),
                     "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.".to_owned(),
                 ),

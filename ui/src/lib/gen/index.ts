@@ -285,5 +285,7 @@ export type * from './WorkSettings';
 export type * from './WorkSource';
 export type * from './WorkState';
 export type * from './WorkStepStatus';
+export type * from './WorkflowInfo';
+export type * from './WorkflowSource';
 export type * from './WorktreeSettings';
 export type * from './serde_json/JsonValue';

@@ -87,6 +87,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
+| `w` | run a saved Claude workflow on the ticket, in the background |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |
@@ -193,6 +194,11 @@ to order and colour them.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
+- **Hand a ticket to a workflow**: `w` lists your saved Claude Code workflows (`.claude/workflows/*.js` in the
+  project's main repository, then `~/.claude/workflows/`). Pick one and Kelta claims the ticket for it, then starts
+  Claude in a new tab that stays in the background, told to run that workflow on the ticket. The row shows the
+  workflow and its phase (`kelta-ticket-pass · Starting`) as it reports progress; the toast's **Open** shows the
+  session and **Peek** its last lines. A ticket someone is already working on is refused.
 
 ## Tickets from any Claude session
 

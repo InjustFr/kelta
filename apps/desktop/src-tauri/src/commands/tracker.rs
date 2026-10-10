@@ -106,6 +106,20 @@ pub async fn tracker_refine(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn workflows_list(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Res<Vec<WorkflowInfo>> {
+    core.workflows_list(&ticket).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn workflow_run(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    workflow: String,
+) -> Res<SessionInfo> {
+    core.workflow_run(ticket, &workflow).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_search(core: State<'_, Arc<Core>>, scope: Scope, text: String) -> Res<Vec<TicketItem>> {
     core.tracker_search(scope, &text).await
 }
