@@ -18,3 +18,10 @@ pub async fn layout_get(core: State<'_, Arc<Core>>, project_id: ProjectId) -> Re
 pub async fn layout_save(core: State<'_, Arc<Core>>, layout: Layout) -> Res<LayoutSaveResult> {
     core.layout_save(layout)
 }
+
+/// The rail's global view (`null` = a project): polled like a visible pane.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn ui_set_global_view(core: State<'_, Arc<Core>>, content: Option<PaneContent>) -> Res<()> {
+    core.ui_set_global_view(content);
+    Ok(())
+}

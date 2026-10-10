@@ -19,13 +19,13 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 └──┴ StatusBar: project · branch · session status · hooks ok · 142 MB ┘
 ```
 
-- **ProjectRail** (48 px, left): Inbox (badge = review requests + needs-input count across projects), open projects (icon/letter, colour, attention dot: red needs input, amber error, green done-unseen, blue activity), Home (built-in project rooted at `~`, for unrelated work; no tracker), `+` (open/create project). Drag to reorder; right-click: close, settings, remove.
+- **ProjectRail** (48 px, left): three **global views** above the projects, in the order of the loop (pick a ticket, work, review): **Tickets** (every open project's ticket sources; muted count of my tickets not Done, `12 mine`), **Now** (red badge = review requests + needs-input count across projects, the only red count), **Reviews** (every code-host account's review requests and my PRs; muted `2 to review`). A global view renders outside any project and does not change the active project; project rows lose their active style while one is shown. Anything it opens (ticket detail, PR detail, `p`, review locally, start work) leaves it for the item's first project, else the active one; a split or a pane opened from it first shows the active project. Kelta reopens on the last place, a global view or a project. Then the open projects (icon/letter, colour, attention dot: red needs input, amber error, green done-unseen, blue activity), Home (built-in project rooted at `~`, for unrelated work; no tracker), `+` (open/create project). Drag to reorder; right-click: close, settings, remove.
 - **Switching projects** never stops or pauses sessions; attention keeps updating on the rail. Target ≤ 50 ms warm.
 - **TabBar**: tabs per project (ticket tabs titled `KEY title`, plain tabs, view tabs). Tab dot = max attention of its sessions. Middle-click closes (confirm if a live process remains).
 - **Panes** contain: terminal, web tool, plugin screen, Tickets (list/board), Ticket detail, Reviews, Review detail, Inbox, WorkItem, Settings, Diagnostics, Welcome. Drag the gutter to resize; zoom a pane; close a pane (terminal sessions keep running as **background sessions** listed in the palette and the project's session list unless killed).
 - **Command palette** (fuzzy): actions, projects, sessions across all projects (with status), tickets (cached), PRs, tools, plugin commands, settings sections.
 - **Project switcher**: fuzzy list of configured projects (open or not); Enter opens/activates.
-- **StatusBar**: active project, branch of the focused session's cwd (read on focus, no polling), focused session status, hooks health, optional perf HUD (Kelta memory, separately from child processes).
+- **StatusBar**: active project (a global view: no branch or session), branch of the focused session's cwd (read on focus, no polling), focused session status, hooks health, optional perf HUD (Kelta memory, separately from child processes).
 
 ## 2. Projects (multi-project)
 
@@ -124,15 +124,16 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
 | `project.goto.1..9` | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
 | `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
-| `project.next` / `project.prev` | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
+| `project.next` / `project.prev` (from a global view: first / last project) | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
 | `tab.next` / `tab.prev` | Cmd+Shift+] / [ | Ctrl+Shift+] / [ | `n` / `N` |
 | `session.new` | Cmd+T | Ctrl+Shift+T | `c` |
 | `pane.split_right` / `pane.split_down` | Cmd+D / Cmd+Shift+D | Ctrl+Shift+E / Ctrl+Shift+O | `%` / `"` |
 | `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | (prefix only) | `h j k l` / arrows |
 | `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Z | `z` |
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
-| `tickets.open` | Cmd+Shift+B | Ctrl+Shift+B | `t` |
-| `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
+| `tickets.open` (the Tickets view; with `project_id`, that project's Tickets tab) | Cmd+Shift+B | Ctrl+Shift+B | `t` |
+| `tickets.board` ("Open project board": the active project's Tickets tab as a board; palette only) | — | — | — |
+| `reviews.open` (the Reviews view; with `project_id`, that project's Reviews tab) | Cmd+Shift+R | Ctrl+Shift+R | `r` |
 | `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
 | `attention.peek` ("Peek waiting session": popover with the last 15 lines, a detected permission menu as `1`/`2`/`3` buttons and a reply field; `Tab` next needs-input session, `Mod+Enter` go to it, `Esc` back; also on hovering a rail row, a tab lamp or a Now row) | Cmd+Shift+Y | Ctrl+Shift+Y | `y` |
 | `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |
@@ -159,7 +160,8 @@ Terminal key handling: programs that enable the kitty keyboard protocol get kitt
 |---|---|
 | First run | Welcome/onboarding: detects `claude`, `nvim`, `git`, `gh`, `glab`, versions (Claude ≥ `claude.min_version`), secret backend and notification daemon; buttons "Create project from folder", "Add account". |
 | No projects | Home project only + "Create project from folder". |
-| Project without tracker | Tickets pane: "No tracker bound — Bind a tracker" (opens project settings). |
+| Project without tracker | Tickets pane: "No ticket source for this project." + Add source. |
+| No ticket source in any open project | Tickets view: "No ticket source yet." + Add source (source picker of the active project; hidden on Home). |
 | No accounts | Accounts wizard CTA. |
 | Account `NeedsAuth` (401) | Banner on affected panes + rail warning; "Re-authenticate" opens account settings; polling paused. |
 | Rate-limited | Stale data + "rate limited, retrying at hh:mm". |

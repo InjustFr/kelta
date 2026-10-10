@@ -4,6 +4,12 @@ The Tickets pane is a list, not a board: one row per ticket, grouped by flow (wh
 someone, what is ready), with the keyboard doing most of the work. A detail column on the right follows the
 selection. Board mode stays available with the list/board toggle.
 
+**Tickets** on the rail (`Cmd+Shift+B`) shows this list across every open project, outside any project: each row
+carries its project's name, Mine is the default, and its tab, grouping, sort and person come back after a restart.
+Opening a ticket, its PR or its work from there switches to the ticket's project. The board needs one project's
+columns: palette **Open project board** opens the active project's Tickets tab as a board (the `+` menu of the tab
+bar opens the project's own Tickets tab).
+
 ## Sources
 
 A source is a place tickets come from: a Jira board or filter, a Redmine project or query, a GitHub repo or

@@ -129,6 +129,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         // layout
         layout::layout_get,
         layout::layout_save,
+        layout::ui_set_global_view,
         // sessions
         session::session_spawn,
         session::session_spawn_template,

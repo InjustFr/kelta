@@ -35,7 +35,7 @@ import {
   type Direction,
   type PaneNode,
 } from '$lib/layout';
-import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
+import { layout, projects, sessions, toasts, ui, work, type GlobalView } from '$lib/stores';
 import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
 
@@ -67,17 +67,18 @@ export function visibleSessions(projectId: ProjectId): SessionId[] {
 }
 
 /**
- * Makes `id` the active project. The local state flips synchronously (the shell re-renders in the
+ * Makes `id` the active project, leaving a global view: the one way out of Tickets, Now and Reviews
+ * (a no-op when `id` is already shown, so callers can always call it). The local state flips synchronously (the shell re-renders in the
  * same task: pooled terminal views are re-parented, nothing is killed or re-attached); the backend
  * confirms afterwards. Records the `kelta.project_switch` performance measure.
  */
 export async function activateProject(id: ProjectId): Promise<void> {
   const target = projects.byId(id);
   if (!target) return;
-  const alreadyActive = projects.activeId === id && !ui.inboxActive;
+  const alreadyActive = projects.activeId === id && ui.view === null;
   if (alreadyActive) return;
   if (typeof performance !== 'undefined') performance.mark('kelta.switch.start');
-  ui.inboxActive = false;
+  ui.view = null;
   terminalPool.protect(visibleSessions(id));
   const pending = projects.activate(id);
   void layout.ensure(id).catch(() => {});
@@ -102,15 +103,40 @@ export function gotoProjectIndex(n: number): void {
 export function cycleProject(delta: 1 | -1): void {
   const rail = railProjects();
   if (rail.length === 0) return;
-  const at = ui.inboxActive ? -1 : rail.findIndex((p) => p.id === projects.activeId);
+  // From a global view: next is the first project, previous the last.
+  const at = ui.view ? (delta > 0 ? -1 : 0) : rail.findIndex((p) => p.id === projects.activeId);
   const next = rail[(at + delta + rail.length) % rail.length];
   if (next) void activateProject(next.id);
 }
 
-export function openInbox(): void {
-  ui.inboxActive = true;
+export const VIEW_NAMES: Record<GlobalView, string> = { tickets: 'Tickets', now: 'Now', reviews: 'Reviews' };
+
+/** Shows a global view on the rail; the active project stays as it is underneath. */
+export function openView(view: GlobalView): void {
+  ui.view = view;
   // Merges / closes missed while Kelta was closed or the poll was off (FLOW §3.6).
-  workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));
+  if (view === 'now') workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));
+}
+
+const PLACE = 'kelta.place';
+
+/** The global view Kelta was showing when it closed (`null` = a project). */
+export function savedPlace(): GlobalView | null {
+  try {
+    const v = localStorage.getItem(PLACE);
+    return v === 'tickets' || v === 'now' || v === 'reviews' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePlace(view: GlobalView | null): void {
+  try {
+    if (view) localStorage.setItem(PLACE, view);
+    else localStorage.removeItem(PLACE);
+  } catch {
+    // storage blocked: Kelta reopens on the active project
+  }
 }
 
 // ---- focus helpers --------------------------------------------------------------------------
@@ -214,6 +240,8 @@ export async function openContent(
 
 /** Splits the focused pane; the new pane is a shell in the same working directory. */
 export async function splitFocused(dir: SplitDir): Promise<void> {
+  // From a global view the split lands in the active project: show it first.
+  if (projects.activeId) await activateProject(projects.activeId);
   const projectId = projects.activeId;
   const tab = currentTab();
   const from = focusedPane();

@@ -124,7 +124,7 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
 
   // Someone pushes to #309 while Now is closed; opening Now asks the host again (`review_get`).
   await page.evaluate(() => {
-    window.__kelta!.stores.ui.inboxActive = false;
+    window.__kelta!.stores.ui.view = null;
     const pr = window.__keltaMock!.state.reviews.find((r) => r.review.ref.number === 309)!;
     pr.review.head_sha = '3'.repeat(40);
   });

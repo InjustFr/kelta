@@ -1,9 +1,9 @@
 // Opening panes from the work views: reuses an existing pane showing the same thing, else opens
-// one per the requested placement. Every action that leaves Now closes it and focuses the target
-// in its project (FLOW §3.3, bug B1).
+// one per the requested placement. Every action that leaves a global view (Tickets, Now, Reviews)
+// closes it and focuses the target in its project (FLOW §3.3, bug B1).
 
 import type { PaneContent, Placement, ProjectId, SessionInfo, WorkItem, WorkItemId } from '$lib/gen';
-import { workResume } from '$lib/ipc/commands';
+import { uiSetGlobalView, workResume } from '$lib/ipc/commands';
 import {
   activateTab,
   allPanes,
@@ -15,7 +15,7 @@ import {
   splitPane,
   updateTab,
 } from '$lib/layout';
-import { layout, toasts, work } from '$lib/stores';
+import { GLOBAL, layout, projects, toasts, ui, work, type GlobalView } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 
@@ -29,12 +29,20 @@ export interface OpenOptions {
   replace?: boolean;
 }
 
-/** Focuses the existing pane for `content` or opens a new one. Resolves false when no layout. */
+/**
+ * Focuses the existing pane for `content` or opens a new one. Resolves false when no layout. From a
+ * global view the project comes to the front first, in a new tab: never a hidden pane.
+ */
 export async function openContent(
   projectId: ProjectId,
   content: PaneContent,
   opts: OpenOptions = {},
 ): Promise<boolean> {
+  if (ui.view !== null) {
+    await activateProject(projectId);
+    if (ui.view !== null) return false; // unknown project: stay in the view
+    opts = { placement: 'new_tab', ...opts };
+  }
   try {
     await layout.ensure(projectId);
   } catch {
@@ -61,6 +69,63 @@ export async function openContent(
     work_item_id: opts.workItemId ?? null,
   });
   return true;
+}
+
+/**
+ * Opens `content` from a pane of `projectId`. A global view's pane (`GLOBAL`) opens it in the item's
+ * first project, else the active one, never in the sentinel.
+ */
+export async function openFrom(
+  projectId: ProjectId,
+  itemProjects: readonly ProjectId[],
+  content: PaneContent,
+): Promise<boolean> {
+  const target = projectId === GLOBAL ? (itemProjects[0] ?? projects.activeId) : projectId;
+  return target ? openContent(target, content) : false;
+}
+
+const ALL = { kind: 'all' } as const;
+const TICKETS_VIEW = 'kelta.view.tickets';
+type TicketsContent = Extract<PaneContent, { kind: 'tickets' }>;
+type TicketsState = Partial<Omit<TicketsContent, 'kind' | 'scope' | 'mode'>>;
+
+function savedTickets(): TicketsState {
+  try {
+    return JSON.parse(localStorage.getItem(TICKETS_VIEW) ?? '{}') as TicketsState;
+  } catch {
+    return {};
+  }
+}
+
+const ticketsContent = (s: TicketsState): PaneContent => ({
+  kind: 'tickets',
+  scope: ALL,
+  view_id: null,
+  who: 'mine',
+  ...s,
+  mode: 'list',
+});
+
+/** The pane a global view shows; the Tickets view (list only) seeds its saved state. */
+export function globalContent(view: GlobalView): PaneContent {
+  if (view === 'now') return { kind: 'inbox' };
+  if (view === 'reviews') return { kind: 'reviews', scope: ALL };
+  return ticketsContent(savedTickets());
+}
+
+/**
+ * Saves the Tickets view's who/group/sort/person/source and polls what it now shows.
+ * shortcut: the contract has no ui_state command, so it lives in this webview's storage; add one if
+ * it must follow Louis across machines.
+ */
+export function saveTicketsView(patch: TicketsState): void {
+  const next = { ...savedTickets(), ...patch };
+  try {
+    localStorage.setItem(TICKETS_VIEW, JSON.stringify(next));
+  } catch {
+    // storage blocked: the state lasts until the view closes
+  }
+  uiSetGlobalView({ content: ticketsContent(next) }).catch(() => {});
 }
 
 /** Leaves Now and opens `content` in its project, in a new tab or the one already showing it. */
