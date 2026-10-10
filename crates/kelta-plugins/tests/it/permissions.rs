@@ -257,13 +257,16 @@ async fn secret_settings_are_masked_and_not_settable_by_the_plugin() {
     });
     let m = format!(
         "{}{SCREEN}\n[contributes.settings]\nschema = \"s.json\"\n",
-        common::manifest("cfg", &[], "")
+        common::manifest("cfg", &["settings.read"], "")
     );
     env.write_plugin("cfg", &m, &[("index.html", "x"), ("s.json", schema)]);
     let s = env.host.screen_open(&PluginId::new("cfg"), "main", None, Value::Null).await.unwrap();
     let o = origin(&s.instance_id);
     let v = env.host.call(&s.instance_id, PluginMethod::SettingsGet, json!({}), o.clone()).await.unwrap();
     assert_eq!(v, json!({ "qa_token": "***" }), "set secret masked, unset one omitted");
+    env.host.grant(&PluginId::new("cfg"), vec!["settings.read".into()]).await.unwrap();
+    let v = env.host.call(&s.instance_id, PluginMethod::SettingsGet, json!({}), o.clone()).await.unwrap();
+    assert!(!v["$effective"]["plugins"]["cfg"].as_object().unwrap().contains_key("qa_token"));
     let e = env
         .host
         .call(&s.instance_id, PluginMethod::SettingsSet, json!({ "key": "qa_token", "value": "env:X" }), o)

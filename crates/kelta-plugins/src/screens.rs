@@ -457,7 +457,7 @@ impl PluginHost {
                 if granted.has(&Permission::SettingsRead)
                     && let Value::Object(m) = &mut values
                 {
-                    m.insert("$effective".into(), non_secret_settings(&settings));
+                    m.insert("$effective".into(), non_secret_settings(&settings, &self.registry()));
                 }
                 Ok(values)
             }
@@ -805,7 +805,7 @@ pub(crate) fn is_secret_prop(prop: &Value) -> bool {
 }
 
 /// `settings.get`: a set secret key reads `"***"`, an unset one is omitted.
-fn mask_secrets(values: &mut Value, schema: &Value) {
+pub(crate) fn mask_secrets(values: &mut Value, schema: &Value) {
     let (Some(props), Value::Object(m)) = (schema.get("properties").and_then(Value::as_object), values)
     else {
         return;
@@ -822,10 +822,10 @@ fn mask_secrets(values: &mut Value, schema: &Value) {
     }
 }
 
-/// Effective settings without secrets (`settings.read`): accounts' secret refs, every `env`,
+/// Effective settings without secrets (`settings.read`): accounts' secret refs, plugin `x-kelta-secret` settings, every `env`,
 /// `headers` and `secret_headers` map (tools, triggers, terminal, project), and tool URLs marked
 /// `url_is_secret`.
-fn non_secret_settings(s: &kelta_proto::settings::Settings) -> Value {
+fn non_secret_settings(s: &kelta_proto::settings::Settings, reg: &crate::registry::Registry) -> Value {
     fn scrub(v: &mut Value) {
         match v {
             Value::Object(o) => {
@@ -849,5 +849,14 @@ fn non_secret_settings(s: &kelta_proto::settings::Settings) -> Value {
         }
     }
     scrub(&mut v);
+    // Plugin-declared secrets (`x-kelta-secret`): drop the SecretRef of every plugin.
+    for e in &reg.entries {
+        let props = e.settings_schema.as_ref().and_then(|s| s.get("properties")).and_then(Value::as_object);
+        if let (Some(props), Some(Value::Object(ns))) =
+            (props, v.pointer_mut(&format!("/plugins/{}", e.id.as_str())))
+        {
+            ns.retain(|k, _| !props.get(k).is_some_and(is_secret_prop));
+        }
+    }
     v
 }
