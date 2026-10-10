@@ -57,6 +57,11 @@ async fn assigned_list_drops_pull_requests_and_follows_link_headers() {
     assert_eq!(t.assignee.as_ref().unwrap().id, "louis");
     assert_eq!(t.project_hint.as_deref(), Some("acme/shop"));
     assert_eq!(page.items[1].r#ref.key, "acme/web#7");
+    assert_eq!((t.priority_rank, t.due.as_deref(), t.sprint.is_none()), (None, None, true));
+    // labels P2 and `priority: high` → best rank wins; milestone due date; no closed_at → updated_at
+    let w = &page.items[1];
+    assert_eq!((w.priority_rank, w.due.as_deref()), (Some(1), Some("2026-10-14")));
+    assert_eq!(w.status_since.as_deref(), Some("2026-09-30T09:00:00Z"));
 }
 
 #[tokio::test]
@@ -136,6 +141,20 @@ async fn project_v2_views_take_the_status_from_the_board() {
     assert_eq!(page.items[0].status.category, StatusCategory::InProgress);
     assert_eq!(page.items[0].kind.as_deref(), Some("Bug"));
     assert_eq!(page.items[1].status.category, StatusCategory::Done);
+    // Priority = position of the option in the board's single-select, not its name
+    let (a, b) = (&page.items[0], &page.items[1]);
+    assert_eq!((a.priority.as_deref(), a.priority_rank), (Some("High"), Some(1)));
+    assert_eq!((b.priority.as_deref(), b.priority_rank), (None, None));
+    // Iteration field: the window around now is active, a finished one is not
+    let (sa, sb) = (a.sprint.as_ref().unwrap(), b.sprint.as_ref().unwrap());
+    assert_eq!((sa.id.as_str(), sa.name.as_str(), sa.active), ("it_now", "Sprint 9", true));
+    assert_eq!((sb.id.as_str(), sb.active, sb.ends_at.as_deref()), ("it_old", false, Some("2020-01-14")));
+    // Number field named Estimate/Points only; other number fields are ignored
+    assert_eq!((a.estimate.as_deref(), b.estimate.as_deref()), (Some("5"), Some("2.5")));
+    // milestone due date; closed issues enter their status at closedAt
+    assert_eq!((a.due.as_deref(), b.due.as_deref()), (Some("2026-10-31"), None));
+    assert_eq!(a.status_since.as_deref(), Some("2026-09-30T09:00:00Z"));
+    assert_eq!(b.status_since.as_deref(), Some("2026-08-02T10:00:00Z"));
     assert_eq!(page.next, Some(Cursor::After("CUR1".into())));
     // the cursor goes back as the `after` variable
     gh(&server).list(&project_view(), page.next).await.unwrap();

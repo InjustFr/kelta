@@ -50,6 +50,17 @@ async fn list_assigned_pages_and_filters_by_project() {
         (StatusCategory::Todo, Some("high"), Some("louis"))
     );
 
+    // workbench fields: priority label, milestone as sprint (open + undated/future = active), dates
+    assert_eq!((t.priority_rank, t.status_since.as_deref()), (Some(1), Some("2026-10-08T09:12:44Z")));
+    let sp = t.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("7", "Sprint 4", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2999-01-31"));
+    assert_eq!(t.due.as_deref(), Some("2026-10-20"), "the issue's own due date wins over the milestone's");
+    let past = &p1.items[1];
+    assert_eq!(past.priority_rank, Some(0), "P0 beats priority/high");
+    assert_eq!(past.sprint.as_ref().map(|s| s.active), Some(false), "overdue milestone is not current");
+    assert_eq!(past.due.as_deref(), Some("2020-01-31"), "no issue due date: the milestone's");
+
     v.project = Some("acme/shop".into());
     let filtered = h.list(&v, None).await.unwrap();
     assert_eq!(filtered.items.len(), 1);
@@ -106,6 +117,8 @@ async fn close_and_reopen_patch_the_state() {
     assert_eq!((ts[0].id.as_str(), ts[0].to.category), ("close", StatusCategory::Done));
     let moved = h.transition(&r(), "close", None).await.unwrap();
     assert_eq!(moved.status.category, StatusCategory::Done);
+    assert_eq!(moved.status_since.as_deref(), Some("2026-10-08T09:10:00Z"), "closed issues use closed_at");
+    assert!(moved.sprint.is_none() && moved.due.is_none());
     h.transition(&r(), "reopen", None).await.unwrap();
     let b = bodies(&server, "PATCH", ISSUE).await;
     assert_eq!((&b[0], &b[1]), (&json!({"state": "closed"}), &json!({"state": "open"})));

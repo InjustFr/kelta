@@ -15,13 +15,14 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 use crate::common::{self, COMMENT_LIMIT, columns_from_binding, idstr, last_n, s, split_repo_number};
+use crate::github::{date_of, labels_rank, today};
 
 const PER_PAGE: u32 = 50;
 
@@ -94,6 +95,18 @@ impl GiteaIssues {
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
             .unwrap_or_default();
+        let updated_at = s(v, "updated_at").unwrap_or("").to_owned();
+        // A milestone is the sprint: active while open and not past its due date (or undated).
+        let milestone_due = v.pointer("/milestone/due_on").and_then(Value::as_str).and_then(date_of);
+        let sprint = v.get("milestone").filter(|m| !m.is_null()).and_then(|m| {
+            Some(Sprint {
+                id: m.get("id").and_then(idstr)?,
+                name: s(m, "title")?.to_owned(),
+                active: s(m, "state") != Some("closed")
+                    && milestone_due.as_deref().is_none_or(|d| d >= today().as_str()),
+                ends_at: milestone_due.clone(),
+            })
+        });
         Some(Ticket {
             r#ref: TicketRef {
                 account: self.account().clone(),
@@ -112,8 +125,17 @@ impl GiteaIssues {
                 .or_else(|| v.get("assignees").and_then(|a| a.get(0)))
                 .and_then(Self::user_from),
             priority: labels.iter().find_map(|l| l.strip_prefix("priority/").map(str::to_owned)),
+            priority_rank: labels_rank(&labels),
             labels,
-            updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
+            // A closed issue entered its status when it closed.
+            status_since: Some(
+                s(v, "closed_at")
+                    .filter(|_| s(v, "state") == Some("closed"))
+                    .map_or(updated_at.clone(), str::to_owned),
+            ),
+            updated_at,
+            sprint,
+            due: s(v, "due_date").and_then(date_of).or(milestone_due),
             project_hint: Some(repo.to_owned()),
             ..Default::default()
         })

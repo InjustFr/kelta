@@ -42,7 +42,14 @@
       "name": "shop",
       "owner": "acme",
       "full_name": "acme/shop"
-    }
+    },
+    "milestone": {
+      "id": 7,
+      "title": "Sprint 4",
+      "state": "open",
+      "due_on": "2999-01-31T00:00:00Z"
+    },
+    "due_date": "2026-10-20T00:00:00Z"
   },
   {
     "id": 1013,
@@ -79,6 +86,10 @@
       {
         "id": 2,
         "name": "priority/high"
+      },
+      {
+        "id": 3,
+        "name": "P0"
       }
     ],
     "updated_at": "2026-10-08T09:12:44Z",
@@ -87,6 +98,12 @@
       "name": "other",
       "owner": "acme",
       "full_name": "acme/other"
+    },
+    "milestone": {
+      "id": 6,
+      "title": "Sprint 3",
+      "state": "open",
+      "due_on": "2020-01-31T00:00:00Z"
     }
   }
 ]

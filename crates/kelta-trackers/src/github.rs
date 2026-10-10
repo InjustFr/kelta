@@ -17,8 +17,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, ProjectV2Ref, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -69,6 +69,90 @@ pub struct GithubIssues {
     fields: Mutex<HashMap<String, FieldMeta>>,
     /// (owner lower-case, project number) → configured status field name.
     status_fields: Mutex<HashMap<(String, u32), String>>,
+}
+
+/// Rank (0 = highest) of a priority label: `P0`..`P9`, or `priority` + `critical|high|medium|low`
+/// after any of `: / - _` or a space. A bare word like `high` is not a priority (too generic).
+pub(crate) fn label_rank(label: &str) -> Option<u8> {
+    let l = label.trim().to_ascii_lowercase();
+    let (v, prefixed) = match l.strip_prefix("priority") {
+        Some(r) => (r.trim_start_matches([':', '/', '-', '_', ' ']), true),
+        None => (l.as_str(), false),
+    };
+    if let Some(n) = v.strip_prefix('p').and_then(|n| n.parse::<u8>().ok()) {
+        return Some(n);
+    }
+    match (prefixed, v) {
+        (true, "critical" | "urgent" | "blocker" | "highest") => Some(0),
+        (true, "high") => Some(1),
+        (true, "medium" | "normal") => Some(2),
+        (true, "low") => Some(3),
+        (true, "lowest") => Some(4),
+        _ => None,
+    }
+}
+
+/// Highest-priority rank among a ticket's labels.
+pub(crate) fn labels_rank<'a>(labels: impl IntoIterator<Item = &'a String>) -> Option<u8> {
+    labels.into_iter().filter_map(|l| label_rank(l)).min()
+}
+
+/// Today (UTC) as `YYYY-MM-DD`.
+pub(crate) fn today() -> String {
+    time::OffsetDateTime::now_utc().date().to_string()
+}
+
+/// `YYYY-MM-DD` plus `days`; `None` on a malformed date.
+fn add_days(date: &str, days: i64) -> Option<String> {
+    let mut p = date.get(..10)?.split('-');
+    let (y, m, d) = (p.next()?.parse().ok()?, p.next()?.parse::<u8>().ok()?, p.next()?.parse().ok()?);
+    let d = time::Date::from_calendar_date(y, time::Month::try_from(m).ok()?, d).ok()?;
+    Some(d.checked_add(time::Duration::days(days))?.to_string())
+}
+
+/// Date part of an RFC 3339 timestamp (`due_on`, `due_date`).
+pub(crate) fn date_of(ts: &str) -> Option<String> {
+    Some(ts.get(..10)?.to_owned())
+}
+
+/// Iteration value of a Projects v2 item → sprint; active while `today` is inside the window.
+fn iteration_sprint(v: &Value, today: &str) -> Option<Sprint> {
+    let start = s(v, "startDate")?;
+    let end = add_days(start, v.get("duration").and_then(Value::as_i64)? - 1)?;
+    Some(Sprint {
+        id: s(v, "iterationId").unwrap_or(start).to_owned(),
+        name: s(v, "title")?.to_owned(),
+        active: start <= today && today <= end.as_str(),
+        ends_at: Some(end),
+    })
+}
+
+/// Priority (option order), sprint and estimate from the field values of a Projects v2 item.
+/// shortcut: first iteration field wins and number fields are matched by name (Estimate, Points, Story points).
+fn apply_project_fields(t: &mut Ticket, vals: &[Value], today: &str) {
+    for fv in vals {
+        if let Some(opt) = s(fv, "name") {
+            let field = fv.get("field");
+            if field.and_then(|f| s(f, "name")).is_some_and(|n| n.eq_ignore_ascii_case("priority")) {
+                t.priority = Some(opt.to_owned());
+                t.priority_rank = field
+                    .and_then(|f| f.get("options"))
+                    .and_then(Value::as_array)
+                    .and_then(|o| o.iter().position(|x| s(x, "name") == Some(opt)))
+                    .and_then(|i| u8::try_from(i).ok())
+                    .or(t.priority_rank);
+            }
+        } else if fv.get("startDate").is_some() {
+            t.sprint = t.sprint.take().or_else(|| iteration_sprint(fv, today));
+        } else if let Some(n) = fv.get("number").and_then(Value::as_f64) {
+            let named = fv.pointer("/field/name").and_then(Value::as_str).is_some_and(|f| {
+                ["estimate", "points", "story points"].iter().any(|w| f.eq_ignore_ascii_case(w))
+            });
+            if named && t.estimate.is_none() {
+                t.estimate = Some(if n.fract() == 0.0 { format!("{}", n as i64) } else { n.to_string() });
+            }
+        }
+    }
 }
 
 /// `https://api.github.com` → `https://github.com`; GHE `https://h/api/v3` → `https://h`.
@@ -180,6 +264,14 @@ impl GithubIssues {
             .filter(|a| !a.is_null())
             .or_else(|| v.get("assignees").and_then(|a| a.get(0)))
             .and_then(Self::user_from);
+        let labels: Vec<String> = v
+            .get("labels")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter().filter_map(|l| l.as_str().or_else(|| s(l, "name")).map(str::to_owned)).collect()
+            })
+            .unwrap_or_default();
+        let updated_at = s(v, "updated_at").unwrap_or("").to_owned();
         Some(Ticket {
             r#ref: TicketRef {
                 account: self.account().clone(),
@@ -193,15 +285,17 @@ impl GithubIssues {
             status: Self::status_for(s(v, "state") != Some("closed"), project_status),
             kind: v.pointer("/type/name").and_then(Value::as_str).map(str::to_owned),
             assignee,
-            labels: v
-                .get("labels")
-                .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter().filter_map(|l| l.as_str().or_else(|| s(l, "name")).map(str::to_owned)).collect()
-                })
-                .unwrap_or_default(),
+            priority_rank: labels_rank(&labels),
+            labels,
             priority: None,
-            updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
+            // A closed issue entered its status when it closed.
+            status_since: Some(
+                s(v, "closed_at")
+                    .filter(|_| s(v, "state") == Some("closed"))
+                    .map_or(updated_at.clone(), str::to_owned),
+            ),
+            updated_at,
+            due: v.pointer("/milestone/due_on").and_then(Value::as_str).and_then(date_of),
             project_hint: Some(repo),
             ..Default::default()
         })
@@ -223,18 +317,19 @@ impl GithubIssues {
         after: Option<String>,
         filter: Option<String>,
     ) -> Result<Page<Ticket>, KeltaError> {
-        const Q: &str = "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:20){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name } } } } } content{ ... on Issue { id databaseId number title url state updatedAt repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }";
+        const Q: &str = "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name options{ name } } } } ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration } ... on ProjectV2ItemFieldNumberValue { number field{ ... on ProjectV2Field{ name } } } } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }";
         let data = self
             .gql(Q, json!({"owner": p.owner, "number": p.number, "after": after, "query": filter}))
             .await?;
         let items = data.pointer("/repositoryOwner/projectV2/items");
         let nodes = items.and_then(|i| i.get("nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
+        let today = today();
         let mut out = Vec::new();
         for n in &nodes {
             let Some(c) = n.get("content").filter(|c| c.get("number").is_some()) else { continue };
-            let status = n
-                .pointer("/fieldValues/nodes")
-                .and_then(Value::as_array)
+            let vals =
+                n.pointer("/fieldValues/nodes").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            let status = Some(vals)
                 .and_then(|vals| {
                     vals.iter().find(|fv| {
                         fv.pointer("/field/name")
@@ -250,7 +345,14 @@ impl GithubIssues {
             if repo.is_empty() {
                 continue;
             }
-            out.push(Ticket {
+            let labels: Vec<String> = c
+                .pointer("/labels/nodes")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
+                .unwrap_or_default();
+            let updated_at = s(c, "updatedAt").unwrap_or("").to_owned();
+            let closed = s(c, "state") == Some("CLOSED");
+            let mut t = Ticket {
                 r#ref: TicketRef {
                     account: self.account().clone(),
                     key: format!("{repo}#{number}"),
@@ -258,19 +360,22 @@ impl GithubIssues {
                 },
                 title: s(c, "title").unwrap_or("").to_owned(),
                 url: s(c, "url").unwrap_or("").to_owned(),
-                status: Self::status_for(s(c, "state") != Some("CLOSED"), status.as_deref()),
+                status: Self::status_for(!closed, status.as_deref()),
                 kind: c.pointer("/issueType/name").and_then(Value::as_str).map(str::to_owned),
                 assignee: c.pointer("/assignees/nodes/0").and_then(Self::user_from),
-                labels: c
-                    .pointer("/labels/nodes")
-                    .and_then(Value::as_array)
-                    .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
-                    .unwrap_or_default(),
+                priority_rank: labels_rank(&labels),
+                labels,
                 priority: None,
-                updated_at: s(c, "updatedAt").unwrap_or("").to_owned(),
+                status_since: Some(
+                    s(c, "closedAt").filter(|_| closed).map_or(updated_at.clone(), str::to_owned),
+                ),
+                updated_at,
+                due: c.pointer("/milestone/dueOn").and_then(Value::as_str).and_then(date_of),
                 project_hint: Some(repo),
                 ..Default::default()
-            });
+            };
+            apply_project_fields(&mut t, vals, &today);
+            out.push(t);
         }
         let has_next =
             items.and_then(|i| i.pointer("/pageInfo/hasNextPage")).and_then(Value::as_bool) == Some(true);
@@ -862,5 +967,30 @@ mod tests {
         assert_eq!(graphql_url("https://api.github.com"), "https://api.github.com/graphql");
         assert_eq!(web_base("https://ghe.acme.example/api/v3"), "https://ghe.acme.example");
         assert_eq!(graphql_url("https://ghe.acme.example/api/v3"), "https://ghe.acme.example/api/graphql");
+    }
+
+    #[test]
+    fn priority_labels_rank_from_zero() {
+        let rank = |l: &str| label_rank(l);
+        assert_eq!(
+            ["P0", "p1", "priority:high", "Priority/Critical", "priority: medium", "priority-low"].map(rank),
+            [Some(0), Some(1), Some(1), Some(0), Some(2), Some(3)]
+        );
+        assert_eq!(["high", "bug", "pr", "priority:whenever"].map(rank), [None; 4]);
+        assert_eq!(labels_rank(&["P3".to_owned(), "priority:high".to_owned()]), Some(1));
+    }
+
+    #[test]
+    fn iteration_is_active_through_its_last_day() {
+        let it = json!({"iterationId": "i", "title": "S1", "startDate": "2026-10-01", "duration": 14});
+        let at = |today| iteration_sprint(&it, today).unwrap();
+        assert_eq!(at("2026-10-01").ends_at.as_deref(), Some("2026-10-14"));
+        assert!(!at("2026-09-30").active && at("2026-10-01").active && at("2026-10-14").active);
+        assert!(!at("2026-10-15").active);
+        assert_eq!(add_days("2026-12-30", 3).as_deref(), Some("2027-01-02"));
+        assert!(
+            iteration_sprint(&json!({"title": "x", "startDate": "oops", "duration": 3}), "2026-10-01")
+                .is_none()
+        );
     }
 }
