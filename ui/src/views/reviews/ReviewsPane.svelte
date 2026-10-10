@@ -12,10 +12,11 @@
     Button,
     EmptyState,
     ErrorState,
-    IconButton,
+    Kbd,
     Lamp,
     Select,
     Toggle,
+    ROW_HEIGHT,
     VirtualList,
     relativeTime,
   } from '$lib/ui';
@@ -29,7 +30,6 @@
 
   let { projectId, content, focused }: PaneProps<'reviews'> = $props();
 
-  const ROW_HEIGHT = 26;
   const scope = $derived(content.scope);
   const kinds: { kind: ReviewKind; label: string }[] = [
     { kind: 'review_requested', label: 'Review requested' },
@@ -228,7 +228,9 @@
       />
     {/if}
     <Toggle label="Drafts" bind:checked={includeDrafts} />
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <Button variant="ghost" size="sm" icon="refresh-cw" onclick={refresh}
+      >Refresh<span aria-hidden="true"> <Kbd chord="r" /></span></Button
+    >
   </header>
 
   {#if bothLoading && noData}
@@ -237,7 +239,7 @@
     <ErrorState error={firstError} title="Could not load reviews" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open settings'}
+          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -250,7 +252,11 @@
       onretry={refresh}
     />
     {#if totalItems === 0}
-      <EmptyState icon="git-pull-request" title="No review requests.">
+      <EmptyState
+        icon="git-pull-request"
+        title="No review requests."
+        body="Pull requests where you are a requested reviewer show up here."
+      >
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}

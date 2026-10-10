@@ -121,7 +121,7 @@ describe('Now', () => {
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: '/' });
-    const input = await screen.findByLabelText('Filter');
+    const input = await screen.findByLabelText('Filter Now');
     await fireEvent.input(input, { target: { value: 'retry-queue' } });
     await waitFor(() => expect(container.querySelectorAll('.row[data-row]')).toHaveLength(1));
   });

@@ -109,7 +109,9 @@
     }}
     {onkeydown}
   >
-    <p class="lede">A branch, a worktree and a Claude session. No ticket needed; you can link one later.</p>
+    <p class="lede">
+      Its own branch in a separate folder, with Claude ready to start. You can link a ticket later.
+    </p>
     <TextInput
       label="What should Claude do?"
       bind:value={task}

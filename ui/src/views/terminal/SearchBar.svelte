@@ -80,7 +80,7 @@
 
   input {
     width: 180px;
-    height: 24px;
+    height: var(--k-control-height-sm);
     padding: 0 var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius-sm);
