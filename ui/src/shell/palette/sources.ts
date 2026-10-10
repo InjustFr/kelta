@@ -137,7 +137,11 @@ export function actionItems(): PaletteItem[] {
   const keys = settings.value()?.keys ?? null;
   const platform = currentPlatform();
   return ACTIONS.filter(
-    (a) => a.context !== 'external' && !a.id.startsWith('project.goto.') && hasAction(a.id),
+    (a) =>
+      a.context !== 'external' &&
+      !a.id.startsWith('project.goto.') &&
+      !a.id.startsWith('tool.goto.') &&
+      hasAction(a.id),
   ).map((a) => ({
     id: `action:${a.id}`,
     group: 'Actions' as const,
@@ -318,7 +322,7 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
     run,
   });
   return [
-    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref, hit.project_ids[0])),
+    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref)),
     verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
       ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
     ),

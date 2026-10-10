@@ -1070,21 +1070,42 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     // ---- work ------------------------------------------------------------------------------
     work_plan: ({ project_id: asked, source }) => {
-      // Simplified SPEC §3.1: the existing item's project, else the caller's, else the active one (a guess).
+      // Simplified SPEC §3.1: the existing item, the caller's pick, a route, the last pick for the
+      // source, the source's projects (a guess when several), the active one (a guess). The mock's
+      // source of a ticket is its account; the projects whose tracker uses it are the ones it feeds.
       const choices = state.projects.filter((x) => x.open && x.id !== 'home' && x.repos.length > 0);
       const ref = source.kind === 'ticket' ? source.ticket : null;
       const owner = ref
         ? state.work.find((w) => w.ticket && sameRef(w.ticket, ref) && w.state.kind !== 'finished')
         : undefined;
-      const guessed = source.kind === 'ticket' && !owner && asked === null;
+      const fed = ref ? choices.filter((x) => x.tracker?.account === ref.account) : [];
+      const t = ref ? ticketItem(ref).ticket : null;
+      const has = (l: string | null) => !l || !!t?.labels.some((x) => x.toLowerCase() === l.toLowerCase());
+      const route = fed
+        .flatMap((x) => (x.tracker?.repo_rules ?? []).map((r) => ({ project: x.id, ...r })))
+        .find(({ match: m }) => {
+          const kindOk = !m.type || t?.kind?.toLowerCase() === m.type.toLowerCase();
+          return !!(m.component || m.label || m.type) && has(m.component) && has(m.label) && kindOk;
+        });
+      const last = ref
+        ? state.work
+            .filter((w) => (w.ticket_source ?? w.ticket?.account) === ref.account)
+            .filter((w) => choices.some((x) => x.id === w.project_id))
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]?.project_id
+        : undefined;
+      const usual = asked ?? route?.project ?? last ?? (fed.length === 1 ? fed[0]?.id : undefined);
+      const guessed = source.kind === 'ticket' && !owner && !usual;
       const project_id =
         owner?.project_id ??
-        asked ??
-        (choices.find((x) => x.active) ?? choices[0] ?? state.projects[0])?.id ??
+        usual ??
+        (fed[0] ?? choices.find((x) => x.active) ?? choices[0] ?? state.projects[0])?.id ??
         'home';
       const p = project(project_id);
       const plan = clone(samples.startWorkPlan);
-      const repo = p.repos.find((r) => r.primary) ?? p.repos[0];
+      const repo =
+        p.repos.find((r) => route?.project === project_id && r.id === route.repo) ??
+        p.repos.find((r) => r.primary) ??
+        p.repos[0];
       let slug: string;
       if (source.kind === 'ticket') {
         const t = ticketItem(source.ticket);
@@ -1127,8 +1148,12 @@ export function createMockTransport(options: MockOptions = {}): {
         source,
         repo_id: existing?.repo_id ?? repoPick?.id ?? plan.repo_id,
         repo_choices: p.repos.map((r) => r.id),
-        project_choices: source.kind === 'branch' ? [] : choices.map((x) => x.id),
+        project_choices:
+          source.kind === 'branch'
+            ? []
+            : [...fed, ...choices.filter((x) => !fed.includes(x))].map((x) => x.id),
         project_guessed: guessed,
+        ticket_source: ref && fed.length ? ref.account : null,
         // An existing item shows its own branch and worktree, not a new plan's (B5).
         branch: existing?.branch ?? branch,
         worktree_path:
@@ -1190,6 +1215,7 @@ export function createMockTransport(options: MockOptions = {}): {
         claude_replied: false,
         auto_finish: false,
         nvim_kept: 0,
+        ticket_source: plan.ticket_source ?? null,
       };
       // Like the saga: sessions run in the worktree, bound to the item, in a new active tab that
       // carries the item (B5); the UI brings the project to the front once work_start returns.

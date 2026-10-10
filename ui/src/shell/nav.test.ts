@@ -15,10 +15,11 @@ import {
   cycleProject,
   cycleTab,
   focusedSessionId,
-  gotoProjectIndex,
+  gotoRailRow,
   openContent,
   openView,
   railProjects,
+  railRows,
   requestCloseTab,
   revealSession,
   savedPlace,
@@ -67,11 +68,41 @@ describe('projects', () => {
     expect(performance.getEntriesByName('kelta.project_switch').length).toBeGreaterThan(0);
   });
 
-  it('goto and cycling follow the rail order and wrap around', async () => {
-    gotoProjectIndex(2);
-    expect(projects.activeId).toBe('billing');
-    gotoProjectIndex(9); // no such project: unchanged
-    expect(projects.activeId).toBe('billing');
+  it('rail rows: goto N counts rows across bands, tab next/prev walk them and wrap around', async () => {
+    await Promise.all(['billing', 'kelta-tools', 'home'].map((id) => layout.ensure(id)));
+    expect(railRows().map((r) => r.tab.id)).toEqual([
+      'shop-t1',
+      'shop-t2',
+      'shop-t3',
+      'billing-t1',
+      'billing-t2',
+      'kt-t1',
+      'kt-t2',
+      'home-t1',
+      'home-t2',
+    ]);
+    const at = () => [projects.activeId, currentTab()!.id];
+    gotoRailRow(5);
+    expect(at()).toEqual(['billing', 'billing-t2']);
+    gotoRailRow(10); // no such row: unchanged
+    expect(at()).toEqual(['billing', 'billing-t2']);
+    cycleTab(1);
+    expect(at()).toEqual(['kelta-tools', 'kt-t1']);
+    cycleTab(-1);
+    expect(at()).toEqual(['billing', 'billing-t2']);
+    gotoRailRow(9);
+    cycleTab(1);
+    expect(at()).toEqual(['shop', 'shop-t1']);
+    cycleTab(-1);
+    expect(at()).toEqual(['home', 'home-t2']);
+    // From a global view the next row is the first one.
+    openView('now');
+    cycleTab(1);
+    expect([ui.view, ...at()]).toEqual([null, 'shop', 'shop-t1']);
+  });
+
+  it('project cycling follows the rail order and wraps around', async () => {
+    await activateProject('billing');
     cycleProject(1);
     expect(projects.activeId).toBe('kelta-tools');
     cycleProject(1);

@@ -912,6 +912,7 @@ export const startWorkPlan: StartWorkPlan = {
     }
   },
   "template_id": "claude+editor",
+  "ticket_source": null,
   "worktree_path": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -941,6 +942,7 @@ export const workItem: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1029,6 +1031,7 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1059,6 +1062,7 @@ export const workItemFailed: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1149,6 +1153,7 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1179,6 +1184,7 @@ export const workItemMerged: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1268,6 +1274,7 @@ export const workItemMerged: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1339,6 +1346,7 @@ export const workItemRebaseStopped: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [
     "PRRT_kwDOA1"
   ],
@@ -1429,6 +1437,7 @@ export const workItemRebaseStopped: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1491,6 +1500,7 @@ export const toolInfos: ToolInfo[] = [
     "label": "Docker",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "user",
     "source": {
       "kind": "layer",
       "layer": "global"
@@ -1506,6 +1516,7 @@ export const toolInfos: ToolInfo[] = [
     "label": "Kubernetes",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "work",
     "source": {
       "kind": "plugin",
       "plugin_id": "tools-pack"
@@ -2439,6 +2450,7 @@ export const toolDef: ToolDef = {
   "label": "Sapling ISL",
   "lifecycle": "on_close",
   "placement": "split_right",
+  "scope": "work",
   "scrollback": null,
   "start": {
     "args": [
@@ -3526,6 +3538,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "repo_id": "api",
     "review": null,
     "review_due": false,
+    "run": null,
     "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -3614,6 +3627,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "ticket_source": null,
     "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }

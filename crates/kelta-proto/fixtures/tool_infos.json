@@ -9,6 +9,7 @@
     "label": "Docker",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "user",
     "source": {
       "kind": "layer",
       "layer": "global"
@@ -24,6 +25,7 @@
     "label": "Kubernetes",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "work",
     "source": {
       "kind": "plugin",
       "plugin_id": "tools-pack"

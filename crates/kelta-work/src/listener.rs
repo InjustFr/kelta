@@ -2,7 +2,8 @@
 //! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
 //! `pr.merged` / `pr.closed` → Merged / PrClosed work items (FLOW §4.6).
 //! (`editor.follow_claude_edits`), `claude.hook` → work item signals (FLOW §2.3),
-//! `session.exited` → release the HTTP consumer of a Claude session and start queued work (#141).
+//! `session.exited` → release the HTTP consumer of a Claude session, start queued work (#141) and
+//! orphan the session's running ticket claims (#235).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -97,9 +98,15 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                 last_hook.insert(key, task);
             }
             bus::SESSION_EXITED => {
-                if let Some(sid) = &ev.session_id {
-                    last_hook.remove(sid);
-                    svc.on_session_exited(sid);
+                if let Some(sid) = ev.session_id.clone() {
+                    last_hook.remove(&sid);
+                    svc.on_session_exited(&sid);
+                    let svc = svc.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = svc.orphan_claims(Some(&sid)).await {
+                            tracing::warn!(error = %e.message, "orphaning claims failed");
+                        }
+                    });
                 }
                 // A Claude slot may have freed.
                 svc.kick_queue();

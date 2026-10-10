@@ -127,7 +127,11 @@
   $effect(() => {
     // Every focus change, wherever it came from; `nav.back` landing on an entry records nothing.
     const project = projects.activeId;
-    const tab = ui.view ? null : currentTab();
+    if (ui.view) {
+      noteFocus({ project: project ?? '', tab: '', pane: '', view: ui.view });
+      return;
+    }
+    const tab = currentTab();
     const pane = tab ? focusedPane() : null;
     if (project && tab && pane) noteFocus({ project, tab: tab.id, pane: pane.id });
   });

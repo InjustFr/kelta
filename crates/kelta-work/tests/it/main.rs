@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
 
+mod claim;
 mod claude_files;
 mod common;
 mod fix_loop;

@@ -4,7 +4,7 @@
 //! (proto cannot depend on kelta-http without a cycle). See `docs/contract-requests/S0.md`.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -24,8 +24,8 @@ use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
 use crate::ipc::WindowState;
 use crate::model::{
     AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, ReviewNote,
-    Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem,
-    WorkStepStatus,
+    RunClaim, RunState, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx,
+    WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -342,6 +342,33 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<WorkItem, KeltaError>;
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
+    /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
+    /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
+    async fn work_claim(
+        &self,
+        _project: &ProjectId,
+        _ticket: TicketRef,
+        _worktree: Option<PathBuf>,
+        _branch: Option<String>,
+        _run: RunClaim,
+    ) -> Result<WorkItem, KeltaError> {
+        Err(KeltaError::unsupported("work_claim"))
+    }
+    /// MCP `report_progress`: the live claim on ticket `key`; `None` keeps the phase / note / sha.
+    async fn work_report(
+        &self,
+        _key: &str,
+        _phase: Option<String>,
+        _state: RunState,
+        _note: Option<String>,
+        _sha: Option<String>,
+    ) -> Result<WorkItem, KeltaError> {
+        Err(KeltaError::unsupported("work_report"))
+    }
+    /// MCP `release_ticket`: finishes the claimed item without touching its worktree or branch.
+    async fn work_release(&self, _key: &str, _sha: Option<String>) -> Result<WorkItem, KeltaError> {
+        Err(KeltaError::unsupported("work_release"))
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,
@@ -420,6 +447,22 @@ pub trait WorkStore: Send + Sync {
     async fn notes(&self, id: &WorkItemId) -> Result<Vec<ReviewNote>, KeltaError>;
     /// Insert (`id` 0) or update a note; returns its id.
     async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError>;
+    /// `claim_ticket` in one step (#235): puts `item` per [`WorkItem::claim_over`] against the unfinished
+    /// item of its ticket; `Ok(Err(holder))` when that item holds the ticket.
+    async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError>;
+}
+
+/// The unfinished item of `item`'s ticket, other than `item` itself (`WorkStore::claim_item`).
+pub fn claim_holder<'a>(items: impl IntoIterator<Item = &'a WorkItem>, item: &WorkItem) -> Option<WorkItem> {
+    let t = item.ticket.as_ref()?;
+    items
+        .into_iter()
+        .find(|w| {
+            w.id != item.id
+                && w.state != crate::model::WorkState::Finished
+                && w.ticket.as_ref().is_some_and(|x| x.account == t.account && x.key == t.key)
+        })
+        .cloned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

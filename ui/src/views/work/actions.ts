@@ -388,8 +388,8 @@ registerAction('work.start', async (args) => {
     toasts.info('Select a ticket to start work');
     return;
   }
-  const projectId = (args?.project_id as string | undefined) ?? selection.projectId;
-  await startWorkOnTicket(ticket, projectId);
+  // Only an explicit pick (a trigger's project_id): the backend picks the default (SPEC §3.1).
+  await startWorkOnTicket(ticket, args?.project_id as string | undefined);
 });
 
 // Preloaded: ⇧⌘N then typing at once must not lose the first keys to the focused terminal.

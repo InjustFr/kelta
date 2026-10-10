@@ -11,7 +11,8 @@ use kelta_proto::api::Tracker;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::events::UiEvent;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::Scope;
+use kelta_proto::model::{Scope, WorkSource};
+use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, RepoMatch, Settings, Source, SourceRoute, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
@@ -190,6 +191,41 @@ async fn project_info_tracker_is_the_first_source_binding() {
     assert_eq!(shop.repo_rules[0].repo, "main");
     let blog = h.core.project_info(&ProjectId::new("blog")).unwrap().tracker.unwrap();
     assert!(blog.repo_rules.is_empty(), "routes of another project stay out");
+}
+
+#[tokio::test]
+async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::defaults();
+    s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    // blog listed first (the source's projects lead the choices) and the route sends Stories there.
+    let mut product = source("product", &["blog", "shop"], vec![view("mine", "assignee = currentUser()")]);
+    product.routes = vec![SourceRoute {
+        r#match: RepoMatch { kind: Some("Story".into()), ..RepoMatch::default() },
+        project: "blog".into(),
+        repo: "main".into(),
+    }];
+    s.sources = vec![product];
+    let factory = Arc::new(Factory::default());
+    factory
+        .trackers
+        .lock()
+        .insert(AccountId::new("jira-acme"), Arc::new(FakeTracker::new()) as Arc<dyn Tracker>);
+    let cfg = MemConfig::new(s, vec![project("shop", tmp.path()), project("blog", tmp.path())]);
+    let h = start_in(tmp.path(), cfg, FakeTerminalHost::new(), factory);
+    for p in ["shop", "blog"] {
+        h.core.project_open(&ProjectId::new(p)).unwrap();
+    }
+    // Uncached ticket: the route comes from the tracker.
+    let ticket = kelta_proto::tracker::TicketRef {
+        key: "SHOP-141".into(),
+        id: "10141".into(),
+        ..samples::ticket_ref()
+    };
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }).await.unwrap();
+    assert_eq!(plan.ticket_source.as_deref(), Some("product"));
+    assert_eq!(plan.project_id, ProjectId::new("blog"));
+    assert_eq!(plan.project_choices, [ProjectId::new("blog"), ProjectId::new("shop")]);
 }
 
 // ---- startup migration on a real config dir -----------------------------------------------

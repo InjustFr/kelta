@@ -163,6 +163,7 @@ impl PluginHost {
                 keybinding: r.def.keybinding.clone(),
                 description: r.def.description.clone(),
                 placement: r.def.placement,
+                scope: r.def.scope,
                 source: r.source,
                 id: r.id,
             })

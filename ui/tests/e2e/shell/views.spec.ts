@@ -13,7 +13,7 @@ test('Tickets and Reviews show from the rail, leave for the item project and com
   await page.getByTestId('rail-tickets').click();
   await expect(host).toHaveAttribute('data-view', 'tickets');
   await expect(page.getByTestId('rail-tickets')).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('[data-testid="rail-project"][aria-current="page"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="rail-row"][aria-current="page"]')).toHaveCount(0);
   const pane = host.getByTestId('tickets-pane');
   await expect(pane.locator('[data-key]').first()).toBeVisible();
   expect(await activeProject(page)).toBe('shop');
