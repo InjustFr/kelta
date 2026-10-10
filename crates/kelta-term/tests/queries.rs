@@ -12,7 +12,7 @@ use std::time::Duration;
 use common::*;
 use kelta_proto::api::TerminalHost;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{LoginEnv, SWALLOWED_QUERIES, TerminalLimits};
+use kelta_proto::term::{SWALLOWED_QUERIES, TerminalLimits};
 use kelta_term::PtyTerminalHost;
 use kelta_term::backend::{PortablePty, PtyBackend, RustixPty};
 use kelta_term::model::{Output, TermModel};
@@ -133,7 +133,7 @@ fn pty_child_reads_each_reply_exactly_once() {
     let backends: Vec<Arc<dyn PtyBackend>> = vec![Arc::new(PortablePty), Arc::new(RustixPty)];
     for b in backends {
         let name = b.name();
-        let h = PtyTerminalHost::with_backend(LoginEnv::inherited(), TerminalLimits::default(), b);
+        let h = PtyTerminalHost::with_backend(TerminalLimits::default(), b);
         let dir = tempfile::tempdir().unwrap();
         let q = dir.path().join("q.bin");
         let out = dir.path().join("out.bin");

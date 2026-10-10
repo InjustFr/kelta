@@ -184,7 +184,7 @@ pub struct Core {
 }
 
 /// `terminal.session_host`: keltad (sessions survive quit) or PTYs in this process.
-fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<dyn TerminalHost> {
+fn terminal_host(dirs: &Dirs, settings: &Settings) -> Arc<dyn TerminalHost> {
     let limits = TerminalLimits::from_settings(&settings.terminal);
     if settings.terminal.session_host == SessionHost::Daemon {
         // Launched from a stable copy: the AppImage mount (or an updated bundle) goes away on quit.
@@ -207,7 +207,6 @@ fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<
         }
     }
     Arc::new(PtyTerminalHost::with_history_dir(
-        login_env.clone(),
         limits,
         kelta_term::backend::default_backend(),
         dirs.data.join("history"),
@@ -253,7 +252,7 @@ impl Core {
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => terminal_host(&dirs, &settings, &login_env),
+            None => terminal_host(&dirs, &settings),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?

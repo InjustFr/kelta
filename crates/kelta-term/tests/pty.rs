@@ -13,7 +13,7 @@ use common::*;
 use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::ids::SessionId;
 use kelta_proto::term::{
-    ClipboardKind, HIGH_WATERMARK, KillSignal, LoginEnv, TerminalEvent, TerminalLimits, TerminalPalette,
+    ClipboardKind, HIGH_WATERMARK, KillSignal, TerminalEvent, TerminalLimits, TerminalPalette,
 };
 use kelta_term::PtyTerminalHost;
 use kelta_term::backend::{PortablePty, PtyBackend, RustixPty};
@@ -40,10 +40,7 @@ impl std::ops::Deref for Host {
 }
 
 fn host(b: Arc<dyn PtyBackend>) -> Host {
-    Host(
-        PtyTerminalHost::with_backend(LoginEnv::inherited(), TerminalLimits::default(), b),
-        Watchdog::arm(WATCHDOG),
-    )
+    Host(PtyTerminalHost::with_backend(TerminalLimits::default(), b), Watchdog::arm(WATCHDOG))
 }
 
 fn sh(host: &PtyTerminalHost, id: &str, script: &str) -> Arc<Events> {
@@ -460,7 +457,7 @@ fn acked_views_never_time_out() {
 fn scrollback_cap_shrinks_least_recently_viewed() {
     // 1 MiB cap; 4 sessions × 3000 lines × 80 cols × 24 B ≈ 5.5 MiB → trimmed to 500 lines.
     let limits = TerminalLimits { memory_cap_mb: 1, ..TerminalLimits::default() };
-    let h = PtyTerminalHost::with_backend(LoginEnv::inherited(), limits, Arc::new(PortablePty));
+    let h = PtyTerminalHost::with_backend(limits, Arc::new(PortablePty));
     let mut evs = Vec::new();
     for i in 0..4 {
         let id = format!("cap{i}");
