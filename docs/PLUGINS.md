@@ -332,6 +332,7 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `prs.read` / `prs.write` | review list/get / approve, comment, request changes |
 | `sessions.read` / `sessions.spawn` / `sessions.write` | list sessions / spawn sessions & tools / set attention |
 | `terminal.write` | send text into sessions (`send_keys`) |
+| `work.read` | list/get work items: branches, worktrees, linked tickets and PRs (separate from `sessions.read`: it exposes paths and branch names) |
 | `events:<glob>` | receive bus events matching the glob (e.g. `events:ticket.*`) |
 | `settings.read` | read own namespace always allowed; this adds non-secret effective settings |
 | `ui.open` | open panes/screens, focus |
@@ -396,14 +397,15 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 |---|---|---|
 | `app.info` | `{}` → `{version, platform, theme}` | — |
 | `projects.current` / `projects.list` | `{}` → `ProjectInfo` / `[ProjectInfo]` | `projects.read` |
-| `tickets.list` | `{scope: "project"\|"all", view_id?, cursor?}` → `TicketPage` | `tickets.read` |
-| `tickets.get` / `tickets.transitions` / `tickets.columns` | `{ticket}` / `{ticket}` / `{}` | `tickets.read` |
-| `tickets.transition` / `tickets.comment` / `tickets.assign` | `{ticket, transition_id}` / `{ticket, markdown}` / `{ticket, assignee}` | `tickets.write` |
-| `reviews.list` / `reviews.get` | `{scope, kind}` / `{review}` | `prs.read` |
+| `tickets.list` | `{scope: "project"\|"all", view_id?, cursor?}` → `TicketPage`: Kelta's Tickets list (union of the project's views, or `view_id`), items with `work_item_id`, `prs`, `caps`. `"all"` only for `scope = global` screens; a project screen always gets its project | `tickets.read` |
+| `tickets.get` / `tickets.transitions` / `tickets.columns` | `{ticket}` → `TicketDetail` (with `prs`, `caps`) / `{ticket}` / `{}` | `tickets.read` |
+| `tickets.transition` / `tickets.comment` / `tickets.assign` | `{ticket, transition_id}` / `{ticket, markdown}` / `{ticket, assignee}`; through core: Kelta's Tickets list refreshes, `ticket.transitioned` / `ticket.commented` / `ticket.assigned` fire | `tickets.write` |
+| `reviews.list` / `reviews.get` | `{scope, kind: "review_requested"\|"authored"}` (`authored` = your own PRs) / `{review}` | `prs.read` |
 | `reviews.approve` / `reviews.comment` / `reviews.request_changes` | | `prs.write` |
 | `sessions.list` | `{project?}` → `[SessionInfo]` | `sessions.read` |
 | `sessions.spawn` | `{template? \| command, args?, cwd?, placement?}` → `SessionInfo` | `sessions.spawn` (+ `exec:<cmd>` for command) |
 | `sessions.send_text` | `{session_id, text, bracketed?}` | `terminal.write` |
+| `work.list` / `work.get` | `{project?}` → `[WorkItem]` (default the screen's project; `project: null` = all, global screens only) / `{id}` → `WorkItem` (`NotFound` for another project's item on a project screen). Without `claude_uuid`, `nvim_socket`, `claude_message`, `next_note`, `sent_threads`. A ticket's item: match `item.ticket.key`, or `work_item_id` from `tickets.list` | `work.read` |
 | `tools.open` | `{tool_id, placement?}` | `sessions.spawn` |
 | `events.subscribe` / `events.unsubscribe` | `{names: [glob]}` | `events:<glob>` covering each |
 | `settings.get` | `{}` → own namespace values (+ effective non-secret settings with `settings.read`) | — / `settings.read` |
@@ -418,7 +420,7 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 
-SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
+SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.work.list/get`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
 
 Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 

@@ -675,6 +675,8 @@ pub enum Permission {
     SessionsSpawn,
     SessionsWrite,
     TerminalWrite,
+    /// Work items: branches, worktrees, linked tickets and PRs.
+    WorkRead,
     /// `events:<glob>`
     Events(String),
     SettingsRead,
@@ -703,6 +705,7 @@ impl Permission {
             "sessions.spawn" => Self::SessionsSpawn,
             "sessions.write" => Self::SessionsWrite,
             "terminal.write" => Self::TerminalWrite,
+            "work.read" => Self::WorkRead,
             "settings.read" => Self::SettingsRead,
             "ui.open" => Self::UiOpen,
             "notify" => Self::Notify,
@@ -736,6 +739,7 @@ impl Permission {
             Self::SessionsSpawn => "Open terminal sessions and tools".into(),
             Self::SessionsWrite => "Change session attention state".into(),
             Self::TerminalWrite => "Type text into your terminal sessions".into(),
+            Self::WorkRead => "See your work items: branches, worktrees, linked tickets and PRs".into(),
             Self::Events(g) => format!("Receive app events matching `{g}`"),
             Self::SettingsRead => "Read your (non-secret) settings".into(),
             Self::UiOpen => "Open panes and screens, change focus".into(),
@@ -763,6 +767,7 @@ impl std::fmt::Display for Permission {
             Self::SessionsSpawn => f.write_str("sessions.spawn"),
             Self::SessionsWrite => f.write_str("sessions.write"),
             Self::TerminalWrite => f.write_str("terminal.write"),
+            Self::WorkRead => f.write_str("work.read"),
             Self::Events(g) => write!(f, "events:{g}"),
             Self::SettingsRead => f.write_str("settings.read"),
             Self::UiOpen => f.write_str("ui.open"),
@@ -832,6 +837,10 @@ pub enum PluginMethod {
     SessionsSpawn,
     #[serde(rename = "sessions.send_text")]
     SessionsSendText,
+    #[serde(rename = "work.list")]
+    WorkList,
+    #[serde(rename = "work.get")]
+    WorkGet,
     #[serde(rename = "tools.open")]
     ToolsOpen,
     #[serde(rename = "events.subscribe")]
@@ -896,6 +905,8 @@ impl PluginMethod {
         Self::SessionsList,
         Self::SessionsSpawn,
         Self::SessionsSendText,
+        Self::WorkList,
+        Self::WorkGet,
         Self::ToolsOpen,
         Self::EventsSubscribe,
         Self::EventsUnsubscribe,
@@ -929,6 +940,7 @@ impl PluginMethod {
                 Static(Permission::PrsWrite)
             }
             Self::SessionsList => Static(Permission::SessionsRead),
+            Self::WorkList | Self::WorkGet => Static(Permission::WorkRead),
             Self::SessionsSpawn | Self::EventsSubscribe | Self::NetFetch | Self::SettingsGet => Dynamic,
             Self::EventsUnsubscribe => Free,
             Self::SessionsSendText => Static(Permission::TerminalWrite),
@@ -1039,6 +1051,6 @@ mod tests {
     #[test]
     fn method_names() {
         assert_eq!(serde_json::to_string(&PluginMethod::TicketsList).unwrap(), "\"tickets.list\"");
-        assert_eq!(PluginMethod::ALL.len(), 33);
+        assert_eq!(PluginMethod::ALL.len(), 35);
     }
 }
