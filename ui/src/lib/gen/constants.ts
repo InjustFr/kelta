@@ -71,6 +71,8 @@ export const PLUGIN_METHODS = [
   "sessions.list",
   "sessions.spawn",
   "sessions.send_text",
+  "work.list",
+  "work.get",
   "tools.open",
   "events.subscribe",
   "events.unsubscribe",

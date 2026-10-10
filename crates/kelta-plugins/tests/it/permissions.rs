@@ -18,6 +18,7 @@ const ALL_PERMS: &[&str] = &[
     "sessions.spawn",
     "sessions.write",
     "terminal.write",
+    "work.read",
     "events:session.*",
     "settings.read",
     "ui.open",
