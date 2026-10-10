@@ -9,6 +9,7 @@
   import { reviewKey } from '$lib/stores/reducers';
   import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp } from '$lib/ui';
 
+  import { reviewCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
   import Loading from '../work/shared/Loading.svelte';
@@ -233,20 +234,7 @@
           </Button>
         {/if}
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
-        <PluginActions
-          kind="review"
-          size="md"
-          ctx={{
-            review: ref,
-            extra: {
-              project_id: projectId,
-              'pr.head': rv.source_branch,
-              'pr.base': rv.target_branch,
-              'pr.title': rv.title,
-              'pr.url': rv.url,
-            },
-          }}
-        />
+        <PluginActions kind="review" size="md" ctx={reviewCtx(rv, projectId)} />
       </div>
     </header>
 

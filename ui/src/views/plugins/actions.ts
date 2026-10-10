@@ -1,11 +1,11 @@
 // `plugin.command.<id>` (palette, keybindings, ticket/review actions): runs a contributed command in
 // the backend, where its actions are permission-checked against the plugin's grants.
 
-import type { ActionDef, TemplateCtx, WorkItem } from '$lib/gen';
+import type { ActionDef, ProjectId, Review, TemplateCtx, TicketRef, WorkItem, WorkItemId } from '$lib/gen';
 import { dispatch, registerAction } from '$lib/actions';
 import { commandRun } from '$lib/ipc/commands';
 import '$lib/plugin-host/boot.svelte';
-import { plugins, projects, settings, toasts } from '$lib/stores';
+import { plugins, projects, settings, toasts, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 import { EMPTY_CTX } from '../tools/actions';
@@ -39,6 +39,32 @@ export function workCtx(w: WorkItem): Partial<TemplateCtx> {
     review: w.review,
     repo_id: w.repo_id,
     extra: { project_id: w.project_id },
+  };
+}
+
+/** A ticket action's ctx: the ticket, its work item (`{branch}`, `{worktree}`) and the project the work runs in. */
+export function ticketCtx(
+  ref: TicketRef,
+  workItemId: WorkItemId | null,
+  projectIds: ProjectId[],
+  projectId: ProjectId | null,
+): Partial<TemplateCtx> {
+  const project_id =
+    (workItemId ? work.get(workItemId)?.project_id : undefined) ?? projectIds[0] ?? projectId ?? undefined;
+  return { ticket: ref, work_item_id: workItemId, extra: project_id ? { project_id } : {} };
+}
+
+/** A review action's ctx: the review, its project and the `{pr.*}` vars. */
+export function reviewCtx(rv: Review, projectId: ProjectId | null): Partial<TemplateCtx> {
+  return {
+    review: rv.ref,
+    extra: {
+      ...(projectId ? { project_id: projectId } : {}),
+      'pr.head': rv.source_branch,
+      'pr.base': rv.target_branch,
+      'pr.title': rv.title,
+      'pr.url': rv.url,
+    },
   };
 }
 

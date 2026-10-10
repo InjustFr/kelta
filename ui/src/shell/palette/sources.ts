@@ -9,11 +9,22 @@ import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
-import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools, ui } from '$lib/stores';
-import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
+import {
+  plugins,
+  projects,
+  reviews,
+  sessions,
+  settings,
+  tickets,
+  toasts,
+  tools,
+  ui,
+  work,
+} from '$lib/stores';
+import { attentionRank, lampOf, reviewKey, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
-import { workCtx } from '../../views/plugins/actions';
+import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
 import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
@@ -164,9 +175,14 @@ function commandCtx(cmd: CommandDef): Partial<TemplateCtx> | null {
     case 'terminal':
       return pane !== null && paneSession(pane) !== null ? {} : null;
     case 'ticket':
-      return content?.kind === 'ticket_detail' ? { ticket: content.ticket } : null;
-    case 'review':
-      return content?.kind === 'review_detail' ? { review: content.review } : null;
+      if (content?.kind !== 'ticket_detail') return null;
+      return ticketCtx(content.ticket, work.forTicket(content.ticket)?.id ?? null, [], projects.activeId);
+    case 'review': {
+      if (content?.kind !== 'review_detail') return null;
+      // The pane's own review once loaded; its ref alone before (no `{pr.*}` yet).
+      const rv = reviews.details[reviewKey(content.review)]?.data?.review;
+      return rv ? reviewCtx(rv, projects.activeId) : { review: content.review };
+    }
     case 'work': {
       const w = focusedWorkItem();
       return w ? workCtx(w) : null;
