@@ -107,7 +107,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         KillSignal, ClipboardKind, TerminalPalette, TerminalLimits, HistoryHit, SessionTermStats,
         TerminalStats, LoginEnvSource, LoginEnv,
         // ipc
-        ToolVersion, AppInfo, ProcRole, ProcMem, SessionMem, PerfSnapshot, CheckStatus, Check,
+        ToolVersion, AppInfo, UpdateChannel, UpdateState, UpdateStatus, ProcRole, ProcMem, SessionMem, PerfSnapshot, CheckStatus, Check,
         Diagnostics, WindowState, SubscribeResult, LayoutSaveResult, AccountTestResult,
     );
     if let Some(e) = v.error {

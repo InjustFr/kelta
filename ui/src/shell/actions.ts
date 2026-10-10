@@ -1,6 +1,6 @@
 // Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, tab.*,
 // session.new, pane.*, attention.*, nav.*, terminal.*, editor.send_selection, editor.quickfix_claude, and the
-// terminal file links. Loaded eagerly by main.ts.
+// terminal file links, app.restart. Loaded eagerly by main.ts.
 
 import { registerAction } from '$lib/actions';
 import type { SessionId, SessionInfo, Tab } from '$lib/gen';
@@ -28,6 +28,7 @@ import {
 } from './nav';
 import { navStep } from './jumplist';
 import { peekWaiting } from './peek.svelte';
+import { restartApp } from './updates.svelte';
 
 function focusedView(): TerminalView | null {
   const id = focusedSessionId();
@@ -176,6 +177,14 @@ registerAction('terminal.paste', async () => {
 });
 registerAction('editor.send_selection', () => sendSelection());
 registerAction('editor.quickfix_claude', () => quickfixClaude());
+// Update banner Restart, also in the palette: asks first when a working Claude session would stop.
+registerAction('app.restart', async () => {
+  try {
+    await restartApp();
+  } catch (err) {
+    toasts.error(err, 'Restarting failed');
+  }
+});
 
 /** Toast action of the Linux renderer probe: switches `terminal.renderer`. */
 registerAction('terminal.set_renderer', async (args) => {

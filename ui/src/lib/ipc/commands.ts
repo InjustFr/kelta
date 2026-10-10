@@ -80,6 +80,7 @@ import type {
   TriggerRun,
   TrustInfo,
   UiEvent,
+  UpdateStatus,
   User,
   ValidationIssue,
   WorkItem,
@@ -119,6 +120,11 @@ export interface Commands {
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
   claude_mcp_remove: { args: NoArgs; result: null };
+  app_update_status: { args: NoArgs; result: UpdateStatus };
+  /** Checks now and installs what it finds (resolves once done). */
+  app_update_check: { args: NoArgs; result: UpdateStatus };
+  /** Restarts through the normal quit (keltad keeps the kept sessions). */
+  app_restart: { args: NoArgs; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -346,6 +352,9 @@ export const COMMAND_NAMES = [
   'claude_mcp_status',
   'claude_mcp_install',
   'claude_mcp_remove',
+  'app_update_status',
+  'app_update_check',
+  'app_restart',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -520,6 +529,9 @@ export const notifyTest = wrap('notify_test');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
+export const appUpdateStatus = wrap('app_update_status');
+export const appUpdateCheck = wrap('app_update_check');
+export const appRestart = wrap('app_restart');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {

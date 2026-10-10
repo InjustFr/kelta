@@ -34,6 +34,7 @@ import type {
   ToolInfo,
   Transition,
   UiEvent,
+  UpdateStatus,
   WorkItem,
   WorkStepStatus,
 } from '$lib/gen';
@@ -113,6 +114,8 @@ export interface MockState {
   notes: Record<string, ReviewNote[]>;
   /** Next up list and seen tickets (#145). */
   nextUp: NextUp;
+  /** `app_update_status`; `app_update_check` stamps `checked_at`. */
+  update: UpdateStatus;
 }
 
 interface MockOptions {
@@ -200,6 +203,7 @@ function freshState(): MockState {
     notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
+    update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
 
@@ -525,6 +529,12 @@ export function createMockTransport(options: MockOptions = {}): {
       claudeMcp = false;
       return null;
     },
+    app_update_status: () => clone(state.update),
+    app_update_check: () => {
+      state.update.checked_at = new Date().toISOString();
+      return clone(state.update);
+    },
+    app_restart: () => null,
     // ---- settings --------------------------------------------------------------------------
     settings_schema: async () => {
       const schema = await import('../../../../schema/settings.schema.json');

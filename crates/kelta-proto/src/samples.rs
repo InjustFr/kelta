@@ -651,6 +651,17 @@ pub fn all() -> Vec<Fixture> {
             }
         ),
         fx!(
+            "update_status",
+            UpdateStatus,
+            UpdateStatus {
+                current: "0.1.0-nightly.202610101230".into(),
+                channel: UpdateChannel::Nightly,
+                state: UpdateState::Ready { version: "0.1.0-nightly.202610111230".into() },
+                checked_at: Some("2026-10-11T12:42:00Z".into()),
+                restart_needs_confirm: false,
+            }
+        ),
+        fx!(
             "perf_snapshot",
             PerfSnapshot,
             PerfSnapshot {

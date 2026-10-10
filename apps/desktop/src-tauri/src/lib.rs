@@ -77,6 +77,11 @@ pub fn run() -> ExitCode {
             window::on_second_instance(app, argv, cwd);
         }));
     }
+    let ctx = context();
+    // Only the release overlay configures `plugins.updater`: dev and debug builds never update.
+    if platform::update::enabled(ctx.config(), cfg!(debug_assertions)) {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
     let app = builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -101,7 +106,7 @@ pub fn run() -> ExitCode {
         })
         .on_window_event(window::on_window_event)
         .invoke_handler(commands::handler())
-        .build(context());
+        .build(ctx);
 
     match app {
         Ok(app) => {

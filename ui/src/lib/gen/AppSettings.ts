@@ -19,4 +19,8 @@ dark_theme: string,
 /**
  * Theme id used in light mode (`bezel-light` or a `[themes.<id>]` with `base = "light"`).
  */
-light_theme: string, };
+light_theme: string, 
+/**
+ * Check for updates automatically (on start and on focus, at most every 6 h); "Check now" works either way.
+ */
+updates: boolean, };
