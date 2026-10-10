@@ -272,7 +272,7 @@ layout = { session = "shell" }
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
 
-Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
 
 ```toml
 [[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),
