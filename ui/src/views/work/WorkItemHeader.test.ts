@@ -126,7 +126,7 @@ describe('work bar', () => {
     const entries = within(menu).getAllByRole('menuitem');
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
     const labels = entries.map(label);
-    expect(labels.length).toBe(19); // primary + v ⇧V p ⇧R f r c a n s b g l ⇧T t o ⇧M ⇧F
+    expect(labels.length).toBe(20); // primary + v ⇧V p ⇧R f r c a n s b g l ⇧T t o ⇧M ⇧P ⇧F (⇧T create_ticket from main, ⇧P park)
     const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
     expect(cont.getAttribute('aria-disabled')).toBe('true');
     expect(cont.title).toBe('Only while a rebase is stopped');

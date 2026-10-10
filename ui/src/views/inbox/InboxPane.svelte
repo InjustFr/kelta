@@ -106,6 +106,7 @@
     a: 'rebase_abort',
     n: 'conflicts',
     s: 'skip_step',
+    P: 'park',
   };
 
   function view(row: NowRow): View {
@@ -122,6 +123,10 @@
         else if (pr) meta.push(`#${pr.ref.number}`);
         if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
         if (item.auto_finish) meta.push('armed');
+        if (phase.lamp === 'parked' && item.parked_at)
+          meta.push(`parked ${age(item.parked_at).replace(/ ago$/, '')}`);
+        if (item.nvim_kept)
+          meta.push(`nvim kept: ${item.nvim_kept} unsaved buffer${item.nvim_kept === 1 ? '' : 's'}`);
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),

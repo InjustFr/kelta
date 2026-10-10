@@ -224,3 +224,37 @@ async fn service_editor_quickfix_lists_the_files() {
     assert_eq!(names.len(), 2);
     assert!(names[0].ends_with("w/src/a.rs") && names[1].ends_with("w/b.rs"), "{names:?}");
 }
+
+#[tokio::test]
+async fn park_editor_keeps_an_nvim_with_unsaved_buffers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("w");
+    std::fs::create_dir_all(&dir).unwrap();
+    let Some(nvim) = start_nvim(&dir).await else { return };
+    std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+    let core = FakeCore::new();
+    core.add_project(samples::project_info());
+    let editor = session("ed", SessionKind::Editor { adapter: "nvim".into() }, &dir, Some(&nvim.sock));
+    core.insert_session(editor.clone());
+    let weak: Weak<dyn CoreApi> = Arc::downgrade(&(core.clone() as Arc<dyn CoreApi>));
+    let dirs = Dirs::under(&tmp.path().join("k"));
+    let w = WorkService::new(weak, Arc::new(MemWorkStore::new()), dirs.clone());
+    let item = samples::work_item();
+    let saved = dirs.data.join("sessions").join("ed.vim");
+
+    let mut c = NvimClient::connect(&nvim.sock).await.unwrap();
+    c.edit(&dir.join("a.txt"), None, true).await.unwrap();
+    c.command("normal! ggOunsaved").await.unwrap();
+    assert_eq!(w.park_editor(&item, &editor).await.unwrap(), 1, "one modified buffer: nvim kept");
+    assert!(!saved.exists(), "a kept nvim saves nothing");
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\n", "never written behind Louis");
+
+    c.command("write").await.unwrap();
+    assert_eq!(w.park_editor(&item, &editor).await.unwrap(), 0);
+    assert!(std::fs::read_to_string(&saved).unwrap().contains("a.txt"), "session saved for the resume");
+
+    // Not checkable (no socket): an error, so the caller keeps it.
+    let blind =
+        session("bl", SessionKind::Editor { adapter: "nvim".into() }, &dir, Some(&dir.join("gone.sock")));
+    assert!(w.park_editor(&item, &blind).await.is_err());
+}

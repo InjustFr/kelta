@@ -275,3 +275,21 @@ describe('delta chip', () => {
     expect(testsMissing({ ...d, files: 0 })).toBe(false);
   });
 });
+
+describe('phaseOf: parked (#142)', () => {
+  const parked = item({ review_due: true, parked_at: '2026-10-10T08:00:00Z' });
+  const dormant = { ...claude('unknown'), lifecycle: 'dormant' } as typeof samples.sessionInfo;
+
+  it('keeps the phase, the quiet lamp turns parked', () => {
+    const got = phaseOf(parked, dormant, null, null);
+    expect([got.id, got.lamp]).toEqual(['to_review', 'parked']);
+    expect(maxLamp(['none', 'parked'])).toBe('parked');
+    expect(maxLamp(['parked', 'activity'])).toBe('activity');
+  });
+
+  it('a louder lamp or a running Claude wins', () => {
+    const failed = item({ parked_at: parked.parked_at, state: { kind: 'failed', step: 'x', message: 'y' } });
+    expect(phaseOf(failed, dormant, null, null).lamp).toBe('error');
+    expect(phaseOf(parked, claude('done'), null, null).lamp).toBe('done');
+  });
+});

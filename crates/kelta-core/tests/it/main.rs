@@ -5,6 +5,7 @@ mod daemon;
 mod feeds;
 mod layout;
 mod oauth;
+mod park;
 mod projects;
 mod real_claude;
 mod restore;

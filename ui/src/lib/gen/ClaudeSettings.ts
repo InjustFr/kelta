@@ -51,4 +51,8 @@ max_live: number,
 /**
  * Hold the queue while the 5h rate-limit usage (%) is at or above this; none = never hold.
  */
-queue_hold_pct: number | null, };
+queue_hold_pct: number | null, 
+/**
+ * Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).
+ */
+auto_park_after_mins: number, };

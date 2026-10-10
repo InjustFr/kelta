@@ -224,6 +224,12 @@ impl NvimClient {
         Ok(Selection { path: s("path"), l1: num("l1"), l2: num("l2"), text: s("text") })
     }
 
+    /// Modified buffers (`getbufinfo({'bufmodified': 1})`): Park keeps an nvim that has any.
+    pub async fn unsaved(&mut self) -> Result<u32, KeltaError> {
+        let v = self.call("nvim_eval", vec![Value::from("len(getbufinfo({'bufmodified': 1}))")]).await?;
+        v.as_u64().map(|n| n as u32).ok_or_else(|| rpc_err(format!("unexpected getbufinfo reply {v}")))
+    }
+
     pub async fn mksession(&mut self, file: &Path) -> Result<(), KeltaError> {
         self.exec_lua(LUA_MKSESSION, vec![Value::from(file.to_string_lossy().as_ref())]).await.map(|_| ())
     }
