@@ -13,8 +13,8 @@ use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{ProjectDraft, ProjectPatch, RepoDraft};
 use kelta_proto::schema::SCHEMA_BASE_URL;
 use kelta_proto::settings::{
-    EffectiveSettings, Layer, LayerDoc, ProjectConfig, Source, SourceRoute, TrackerBinding, TrustInfo,
-    ValidationIssue, sources_from_trackers,
+    EffectiveSettings, Layer, LayerDoc, ProjectConfig, Severity, Source, SourceRoute, TrackerBinding,
+    TrustInfo, ValidationIssue, sources_from_trackers,
 };
 use serde_json::{Value, json};
 use toml_edit::DocumentMut;
@@ -37,6 +37,22 @@ fn ensure_newline(mut s: String) -> String {
         s.push('\n');
     }
     s
+}
+
+/// Only hand-written files are lenient about the colour: an IPC caller gets an error, nothing is written.
+fn check_color(color: Option<&str>) -> Result<(), KeltaError> {
+    match color {
+        Some(c)
+            if !validate::schema_issues(
+                Layer::Project,
+                &json!({"project": {"id": "x", "name": "x", "color": c}}),
+            )
+            .is_empty() =>
+        {
+            Err(KeltaError::invalid(validate::PROJECT_COLOR))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn issues_error(file: &Path, issues: &[ValidationIssue]) -> KeltaError {
@@ -255,14 +271,9 @@ impl ConfigService {
             Ok(p) => p,
             Err(issue) => return Ok(vec![issue]),
         };
-        // same lenient reading as the load path: a bad project colour is dropped, not a blocking error
-        // (the warning has no channel to the UI yet: ValidationIssue carries no severity)
+        // same lenient reading as the load path: warnings are reported, never blocking
         let mut value = parsed.value.clone();
-        let mut raw = if layer == Layer::Project {
-            validate::lenient_project_color(&mut value, None, &mut Vec::new())
-        } else {
-            validate::layer_issues(layer, &value, None)
-        };
+        let (mut raw, warnings) = validate::lenient_issues(layer, &mut value, None);
         if raw.is_empty() {
             let inner = self.inner.read();
             let pd = inner.plugin_defaults.clone();
@@ -288,7 +299,9 @@ impl ConfigService {
                 raw.extend(e);
             }
         }
-        Ok(validate::position(text, Some(&parsed), raw))
+        let mut out = validate::position(text, Some(&parsed), raw);
+        out.extend(validate::position_warnings(text, Some(&parsed), warnings));
+        Ok(out)
     }
 
     // -----------------------------------------------------------------------------------------
@@ -348,6 +361,7 @@ impl ConfigService {
                         ),
                         line,
                         col,
+                        severity: Severity::Error,
                     }],
                 ))
             }
@@ -474,6 +488,7 @@ impl ConfigService {
                 "`{id}` is not a valid project id (use [a-z0-9-], 1-40 chars; `home` and `inbox` are reserved)"
             )));
         }
+        check_color(draft.color.as_deref())?;
         let path = self.dirs.projects_dir().join(format!("{id}.toml"));
         let g = self.gate.lock();
         if path.exists() || self.inner.read().projects.contains_key(&id) {
@@ -522,6 +537,7 @@ impl ConfigService {
         id: &ProjectId,
         patch: &ProjectPatch,
     ) -> Result<Arc<ProjectConfig>, KeltaError> {
+        check_color(patch.color.as_deref())?;
         let target = self.resolve_target(Layer::Project, Some(id), None)?;
         let g = self.gate.lock();
         let mut doc = self.read_doc(&target)?;

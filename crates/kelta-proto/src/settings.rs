@@ -1917,6 +1917,17 @@ pub struct ValidationIssue {
     pub message: String,
     pub line: Option<u32>,
     pub col: Option<u32>,
+    /// A warning never blocks loading or saving the file.
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    #[default]
+    Error,
+    Warning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
