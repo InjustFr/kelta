@@ -25,13 +25,14 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { sessionsLamp } from '../../shell/nav';
   import { openContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { startWorkOnTicket } from '../work/startWork';
+  import { runPrimary } from '../work/actions';
+  import { phaseNow } from '../work/live';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusChip from './StatusChip.svelte';
@@ -254,11 +255,8 @@
   const groups = $derived(
     groupTickets(sorted, groupBy, views, (item) => {
       const w = workOf(item);
-      return flowOf(
-        item,
-        { work: w, needsYou: sessionsLamp(w?.session_ids ?? []) === 'needs_input' },
-        Date.now(),
-      );
+      // Durable Claude state (FLOW §2.3): a reply waiting on me counts, not only a live prompt.
+      return flowOf(item, { work: w, needsYou: phaseFor(item)?.section === 'needs_you' }, Date.now());
     }),
   );
   const rows = $derived.by<Row[]>(() => {
@@ -288,6 +286,15 @@
   const workOf = (item: TicketItem) =>
     work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
   const prOf = (item: TicketItem) => mainPr(item.prs);
+  const liveWork = (item: TicketItem) => {
+    const w = workOf(item);
+    return w?.state.kind === 'finished' ? null : w;
+  };
+  /** The work item's phase (FLOW §2.2), as Now shows it. */
+  const phaseFor = (item: TicketItem) => {
+    const w = liveWork(item);
+    return w ? phaseNow(w) : null;
+  };
 
   // ---- selection ----------------------------------------------------------------------------
   let selKey = $state<string | null>(null);
@@ -577,7 +584,12 @@
         if (e.shiftKey) {
           if (item) openDetail(item);
         } else if (selRow?.kind === 'group') toggleGroup(selRow);
-        else if (item) void focusDetail(item);
+        else if (item) {
+          const w = liveWork(item);
+          // Detail closed and work under way: the phase's next step, as in Now.
+          if (w && !splitShown) void runPrimary(w);
+          else void focusDetail(item);
+        }
         break;
       case ' ':
         if (mode !== 'list') return;
@@ -597,6 +609,9 @@
         if (project?.tracker) openSourceMenu();
         break;
       case 'g':
+        if (item) void focusDetail(item);
+        break;
+      case 'G':
         setGroup(groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'flow');
         break;
       case 'R':
@@ -858,6 +873,7 @@
                 {@const t = item.ticket}
                 {@const pr = prOf(item)}
                 {@const isPicked = picked.includes(r.key)}
+                {@const phase = phaseFor(item)}
                 {@const age = ageLevel(t, Date.now())}
                 <button
                   type="button"
@@ -876,7 +892,8 @@
                 >
                   <span class="k-row-lamp"
                     >{#if isPicked}<Icon name="check" size={12} />{:else}<Lamp
-                        level={sessionsLamp(workOf(item)?.session_ids ?? [])}
+                        level={phase?.lamp ?? 'none'}
+                        title={phase?.label}
                       />{/if}</span
                   >
                   <span class="k-row-key">{t.ref.key}</span>
@@ -904,6 +921,7 @@
                     ></span
                   >
                   <span class="meta">
+                    {#if phase}<span class="k-row-meta" data-phase={phase.id}>{phase.label}</span>{/if}
                     {#if pr}<span class="pr" data-pr
                         ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
                           ><PrChip {pr} /></RowButton
@@ -999,7 +1017,7 @@
                 >
                   <span class="card-row first">
                     <span class="key">{item.ticket.ref.key}</span>
-                    <Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} />
+                    <Lamp level={phaseFor(item)?.lamp ?? 'none'} title={phaseFor(item)?.label} />
                     {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
@@ -1040,7 +1058,8 @@
     hints={[
       ['j k', 'Move'],
       ['space', 'Split'],
-      ['enter', 'Open'],
+      ['enter', 'Next step, else open'],
+      ['g', 'Open detail'],
       ['shift+enter', 'Own pane'],
       ['1 2 3', 'Who'],
       ['/', 'Filter'],
@@ -1051,7 +1070,7 @@
       ['a shift+a', 'Assign me, unassign'],
       ['s shift+s', 'Start work, start now'],
       ['v', 'Source'],
-      ['g', 'Group'],
+      ['shift+g', 'Group'],
       ['c', 'Comment'],
       ['o', 'Open in browser'],
       ['shift+r', 'Refresh'],

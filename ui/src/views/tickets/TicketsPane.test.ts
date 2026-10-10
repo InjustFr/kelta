@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sheetRegistry } from '$app/registry';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
@@ -8,8 +8,15 @@ import { setTransport } from '$lib/ipc/transport';
 import type { PaneContent } from '$lib/gen';
 import { layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
+import type * as workActions from '../work/actions';
+import { runPrimary } from '../work/actions';
 import { selection } from '../work/selection.svelte';
 import TicketsPane from './TicketsPane.svelte';
+
+vi.mock('../work/actions', async (orig) => ({
+  ...(await orig<typeof workActions>()),
+  runPrimary: vi.fn(async () => {}),
+}));
 
 let mock: MockControls;
 
@@ -302,22 +309,22 @@ describe('TicketsPane workbench', () => {
     await waitFor(() => expect(card(container, 'SHOP-120')).not.toBeNull());
   });
 
-  it('groups by flow by default, cycles the grouping with g, and keeps Done collapsed', async () => {
+  it('groups by flow by default, cycles the grouping with Shift+g, and keeps Done collapsed', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
     expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
-    await press('g');
+    await press('G');
     expect(groupNames(container)).toEqual(['Blocked 1', 'In Progress 1', 'In Review 1', 'To Do 2']);
-    await press('g');
+    await press('G');
     expect(groupNames(container)).toEqual(['High 2', 'Medium 2', 'Low 1']);
-    await press('g');
+    await press('G');
     expect(groupNames(container)).toEqual(['SHOP Sprint 12 4', 'SHOP Sprint 13 1']);
-    await press('g');
+    await press('G');
     await waitFor(() =>
       expect(groupNames(container)).toEqual(['Ada Lovelace 3', 'Bob Martin 1', 'Unassigned 1']),
     );
-    await press('g'); // source
-    await press('g'); // none
+    await press('G'); // source
+    await press('G'); // none
     await waitFor(() => expect(groupNames(container)).toEqual([]));
     expect(card(container, 'SHOP-151')).not.toBeNull();
   });
@@ -458,7 +465,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     inLayout();
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    await press('g');
+    await press('G');
     await fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'key' } });
     expect(savedContent()).toMatchObject({ group: 'status', sort: 'key' });
   });
@@ -519,7 +526,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     await press('f');
     await press('j'); // not a chord: j moves on
     expect(row(container, 'SHOP-155')).not.toBeNull();
-    for (let i = 0; i < 3; i++) await press('g'); // sprint
+    for (let i = 0; i < 3; i++) await press('G'); // sprint
     await waitFor(() => expect(container.querySelector('[data-group="SHOP Sprint 12"]')).toBeNull());
     expect(row(container, 'SHOP-142').querySelector('.sprint')).toBeNull();
   });
@@ -708,5 +715,24 @@ describe('TicketsPane split view', () => {
     expect(detail()).toBeNull();
     await press(' ');
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
+  });
+
+  it('a row with work shows its phase; Enter runs the next step with the detail closed, g opens it', async () => {
+    await work.load();
+    const w = work.forTicket({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })!;
+    work.upsert({ ...w, review_due: true });
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-142');
+    expect(row(container, 'SHOP-142').querySelector('[data-phase]')?.textContent).toBe('To review');
+    expect(row(container, 'SHOP-151').querySelector('[data-phase]')).toBeNull();
+    await press('Enter'); // detail shown: Enter focuses it
+    await waitFor(() => expect(document.activeElement).toBe(detail()));
+    await fireEvent.keyDown(detail()!, { key: 'Escape' });
+    await press(' ');
+    expect(detail()).toBeNull();
+    await press('Enter');
+    expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
+    await press('g');
+    await waitFor(() => expect(document.activeElement).toBe(detail()));
   });
 });
