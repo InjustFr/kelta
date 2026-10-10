@@ -44,6 +44,9 @@ fn main() -> ExitCode {
     // SAFETY: plain syscall; detaches from the app's session and process group.
     unsafe { libc::setsid() };
     let _ = std::env::set_current_dir("/");
+    // Peer credentials name the pre-fork parent; this is the pid an app replacing us must signal.
+    let pidfile = daemon::pidfile(&sock);
+    let _ = std::fs::write(&pidfile, std::process::id().to_string());
     tracing_subscriber::fmt().with_ansi(false).with_writer(std::io::stderr).init();
     tracing::info!(socket = %sock.display(), pid = std::process::id(), "keltad started");
     // Spawn specs carry the complete environment.
@@ -53,5 +56,6 @@ fn main() -> ExitCode {
         None => PtyTerminalHost::new(limits),
     };
     daemon::serve(listener, host, IDLE_GRACE);
+    let _ = std::fs::remove_file(&pidfile);
     ExitCode::SUCCESS
 }

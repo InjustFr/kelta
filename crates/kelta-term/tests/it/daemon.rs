@@ -133,8 +133,12 @@ fn launches_the_keltad_binary() {
 
 const FAKE_SOCK_ENV: &str = "KELTA_TEST_FAKE_KELTAD_SOCK";
 
-/// Not a test: the keltad of another protocol `refused_hello_replaces_the_old_keltad` runs in a
-/// child process (it gets SIGTERM). Refuses every Hello and keeps the connection open.
+/// Set (with `FAKE_SOCK_ENV`) when the fake keltad should write its pidfile like a current keltad.
+const FAKE_PIDFILE_ENV: &str = "KELTA_TEST_FAKE_KELTAD_PIDFILE";
+
+/// Not a test: the keltad of another protocol `refused_hello_replaces_the_old_keltad` runs as a
+/// process named `keltad`. Like keltad.rs: binds, forks (the parent exits), setsid. Refuses every
+/// Hello and keeps the connection open.
 #[test]
 #[ignore = "child process of refused_hello_replaces_the_old_keltad"]
 fn fake_old_keltad() {
@@ -143,6 +147,18 @@ fn fake_old_keltad() {
     use std::io::Write;
     let Some(sock) = std::env::var_os(FAKE_SOCK_ENV) else { return };
     let l = daemon::bind(Path::new(&sock)).unwrap();
+    // SAFETY: run with --test-threads=1, so no other thread exists; the child only does plain Rust.
+    match unsafe { libc::fork() } {
+        0 => {}
+        _ => return,
+    }
+    // SAFETY: plain syscall.
+    unsafe { libc::setsid() };
+    let pid = std::process::id().to_string();
+    std::fs::write(Path::new(&sock).with_extension("old"), &pid).unwrap();
+    if std::env::var_os(FAKE_PIDFILE_ENV).is_some() {
+        std::fs::write(daemon::pidfile(Path::new(&sock)), &pid).unwrap();
+    }
     let mut open = Vec::new();
     for mut s in l.incoming().map_while(Result::ok) {
         // The test's readiness probe connects and leaves without a message.
@@ -155,27 +171,52 @@ fn fake_old_keltad() {
     }
 }
 
-#[test]
-fn refused_hello_replaces_the_old_keltad() {
-    use std::os::unix::process::ExitStatusExt;
+fn replaces_the_old_keltad(pidfile: bool) {
     let tmp = tempfile::tempdir().unwrap();
     let sock = tmp.path().join("run/keltad.sock");
     let log = tmp.path().join("logs/keltad.log");
-    let mut old = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["daemon::fake_old_keltad", "--exact", "--ignored", "--nocapture"])
-        .env(FAKE_SOCK_ENV, &sock)
-        .spawn()
-        .unwrap();
+    // The app only signals a process named keltad.
+    let fake = tmp.path().join("keltad");
+    std::os::unix::fs::symlink(std::env::current_exe().unwrap(), &fake).unwrap();
+    let mut cmd = std::process::Command::new(&fake);
+    cmd.args(["daemon::fake_old_keltad", "--exact", "--ignored", "--test-threads=1"])
+        .env(FAKE_SOCK_ENV, &sock);
+    if pidfile {
+        cmd.env(FAKE_PIDFILE_ENV, "1");
+    }
+    assert!(cmd.stdout(std::process::Stdio::null()).status().unwrap().success());
     wait_until(T, || std::os::unix::net::UnixStream::connect(&sock).ok()).expect("fake keltad listening");
+    // The listener is a forked child: peer credentials name the exited parent.
+    // The child writes its pid files after the parent returned.
+    let ready = || std::fs::read_to_string(daemon::pidfile(&sock)).ok().filter(|t| !t.is_empty());
+    let old_pid = if pidfile {
+        wait_until(T, ready).expect("pidfile").parse::<i32>().unwrap()
+    } else {
+        wait_until(T, || std::fs::read_to_string(sock.with_extension("old")).ok().filter(|t| !t.is_empty()))
+            .expect("pid")
+            .parse::<i32>()
+            .unwrap()
+    };
 
     let exe = Path::new(env!("CARGO_BIN_EXE_keltad"));
     let h = DaemonTerminalHost::connect_or_launch(&sock, exe, &log, &log.with_extension("history")).unwrap();
     // The old keltad was stopped, not left running beside the new one.
-    let status = old.wait().unwrap();
-    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    // SAFETY: signal 0 only probes.
+    assert!(wait_until(T, || (unsafe { libc::kill(old_pid, 0) } != 0).then_some(())).is_some());
     // The new keltad answers.
     let ev = Arc::new(Events::default());
     h.spawn(spec("s5", "/bin/sh", &["-c", "exit 3"], 80, 24, ev.clone())).unwrap();
     assert_eq!(ev.wait_exit(T), (Some(3), None));
     assert!(std::fs::read_to_string(&log).unwrap().contains("keltad started"));
+}
+
+#[test]
+fn refused_hello_replaces_the_old_keltad() {
+    replaces_the_old_keltad(true);
+}
+
+/// A keltad installed before the pidfile existed: found through the socket it holds.
+#[test]
+fn refused_hello_replaces_an_old_keltad_without_pidfile() {
+    replaces_the_old_keltad(false);
 }

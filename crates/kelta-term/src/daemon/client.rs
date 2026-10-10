@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_pid, peer_uid, read_msg};
+use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_uid, pidfile, read_msg};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long a replaced keltad gets to close its socket after SIGTERM.
@@ -142,10 +142,30 @@ fn hello(s: &UnixStream) -> Result<(), KeltaError> {
     }
 }
 
-/// SIGTERM the keltad on the other end of `s`, then wait (bounded) until it closes the socket.
-fn stop_peer(s: &UnixStream) -> Result<(), KeltaError> {
-    let pid = rustix::process::Pid::from_raw(peer_pid(s)?)
-        .ok_or_else(|| KeltaError::internal("keltad peer pid unknown"))?;
+/// Pid of the keltad serving `sock`. Peer credentials are no use: keltad listens before it forks,
+/// so they name the dead parent. It writes its own pid next to the socket; keltads from before
+/// that are found by whoever holds the socket (lsof). Either way the process must be a keltad
+/// (a stale pidfile may name a reused pid).
+fn keltad_pid(sock: &Path) -> Option<i32> {
+    let from_file = std::fs::read_to_string(pidfile(sock)).ok().and_then(|t| t.trim().parse().ok());
+    let from_lsof = || {
+        let out = Command::new("lsof").arg("-t").arg("--").arg(sock).output().ok()?;
+        String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.trim().parse().ok()).find(is_keltad)
+    };
+    from_file.filter(is_keltad).or_else(from_lsof)
+}
+
+fn is_keltad(pid: &i32) -> bool {
+    let out = Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output();
+    *pid != std::process::id() as i32
+        && out.is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim().ends_with("keltad"))
+}
+
+/// SIGTERM the keltad serving `sock`, then wait (bounded) until it closes `s`.
+fn stop_peer(sock: &Path, s: &UnixStream) -> Result<(), KeltaError> {
+    let pid = keltad_pid(sock)
+        .and_then(rustix::process::Pid::from_raw)
+        .ok_or_else(|| KeltaError::internal("cannot find the pid of the old keltad"))?;
     rustix::process::kill_process(pid, rustix::process::Signal::TERM).map_err(std::io::Error::from)?;
     s.set_read_timeout(Some(STOP_TIMEOUT))?;
     let mut buf = [0u8; 256];
@@ -244,7 +264,7 @@ impl DaemonTerminalHost {
                 return Err(e);
             }
             tracing::warn!(error = %e, "replacing a keltad of another protocol");
-            stop_peer(&s)?;
+            stop_peer(&self.sock, &s)?;
             let _ = std::fs::remove_file(&self.sock);
             s = self.dial()?;
             hello(&s)?;

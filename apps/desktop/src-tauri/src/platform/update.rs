@@ -11,7 +11,7 @@ use kelta_proto::api::SettingsSource;
 use kelta_proto::ipc::{UpdateChannel, UpdateState, UpdateStatus};
 use parking_lot::Mutex;
 use semver::Version;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 const NIGHTLY_URL: &str = "https://github.com/InjustFr/kelta/releases/download/nightly/latest.json";
@@ -145,6 +145,8 @@ pub async fn check_and_install(app: &AppHandle) {
         time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).ok();
     drop(inner);
     RUNNING.store(false, Ordering::SeqCst);
+    // The banner reads the status when told: a background check ends after its first read.
+    let _ = app.emit("kelta://update", ());
 }
 
 async fn install(app: &AppHandle) -> tauri_plugin_updater::Result<Option<String>> {

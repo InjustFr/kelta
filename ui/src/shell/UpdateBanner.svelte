@@ -1,6 +1,7 @@
 <script lang="ts">
   // Slim banner above the workspace while an installed update waits for a restart (#74). Not a toast:
   // it stays until Restart, or Later for this session. Kelta never restarts by itself.
+  import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
@@ -9,12 +10,15 @@
   import { updates } from './updates.svelte';
 
   onMount(() => {
-    // shortcut: read on start and on focus only, so an update a focus check installs shows on the
-    // next focus; push a UiEvent if that lag matters.
     const refresh = (): void => void updates.refresh().catch(() => {});
     refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    // The background check finishes after the first read: the backend says when (no Tauri in the mock).
+    const unlisten = listen('kelta://update', refresh).catch(() => () => {});
+    return () => {
+      window.removeEventListener('focus', refresh);
+      void unlisten.then((off) => off());
+    };
   });
 </script>
 

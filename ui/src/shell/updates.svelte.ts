@@ -1,5 +1,6 @@
 // In-app updates (#74): the status shared by the restart banner and Settings → General, and the
-// `app.restart` action. No UiEvent: the status is read on start, on window focus and after Check now.
+// `app.restart` action. No UiEvent: the status is read on start, on window focus, on the
+// backend's `kelta://update` event and after Check now.
 
 import type { UpdateChannel, UpdateStatus } from '$lib/gen';
 import { appRestart, appUpdateCheck, appUpdateStatus } from '$lib/ipc/commands';
