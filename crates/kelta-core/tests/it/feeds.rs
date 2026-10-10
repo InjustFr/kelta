@@ -13,10 +13,10 @@ use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
-use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings};
+use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
-use kelta_proto::tracker::{Assignee, StatusCategory, Who};
+use kelta_proto::tracker::{Assignee, StatusCategory, TicketRef, Who};
 
 fn settings() -> Settings {
     let mut s = Settings::defaults();
@@ -48,6 +48,7 @@ struct Env {
     h: H,
     tracker: Arc<FakeTracker>,
     host: Arc<ListHost>,
+    factory: Arc<Factory>,
 }
 
 fn env(root: &std::path::Path, reviews: Vec<Review>) -> Env {
@@ -59,10 +60,11 @@ fn env_with(root: &std::path::Path, host: Arc<ListHost>) -> Env {
     let factory = Arc::new(Factory::default());
     factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker.clone() as Arc<dyn Tracker>);
     factory.hosts.lock().insert(AccountId::new("github-work"), host.clone() as Arc<dyn CodeHost>);
-    let h = start_in(root, MemConfig::new(settings(), projects(root)), FakeTerminalHost::new(), factory);
+    let h =
+        start_in(root, MemConfig::new(settings(), projects(root)), FakeTerminalHost::new(), factory.clone());
     h.core.project_open(&ProjectId::new("shop")).unwrap();
     h.core.project_open(&ProjectId::new("blog")).unwrap();
-    Env { h, tracker, host }
+    Env { h, tracker, host, factory }
 }
 
 fn bus_names(rx: &mut tokio::sync::broadcast::Receiver<BusEvent>) -> Vec<BusEvent> {
@@ -312,10 +314,15 @@ async fn tracker_move_resolves_columns() {
     // names win over categories
     let moved = e.h.core.tracker_move(&t, "named", None).await.unwrap();
     assert_eq!(moved.status.name, "In Review");
-    let moved = e.h.core.tracker_move(&t, "todo", None).await.unwrap();
-    // an explicit project picks its own columns (blog has no `late`)
+    // two projects on one account: an explicit project picks its own columns (blog has no
+    // `late`; shop has no provider column `3` = In Progress)
     let err = e.h.core.tracker_move(&t, "late", Some(&ProjectId::new("blog"))).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
+    assert_eq!(e.h.core.tracker_move(&t, "3", None).await.unwrap_err().code, ErrorCode::NotFound);
+    let blog = Some(ProjectId::new("blog"));
+    let started = e.h.core.tracker_move(&t, "3", blog.as_ref()).await.unwrap();
+    assert_eq!(started.status.category, StatusCategory::InProgress);
+    let moved = e.h.core.tracker_move(&t, "todo", None).await.unwrap();
     assert_eq!(moved.status.category, StatusCategory::Todo);
     assert!(bus_names(&mut rx).iter().any(|ev| ev.name == "ticket.transitioned"));
     // blog (no override) uses the provider's columns
@@ -480,4 +487,121 @@ async fn approving_in_kelta_stamps_the_reviewed_head_hosts_do_not_report() {
     assert_eq!(e.h.core.review_get(&r).await.unwrap().review.reviewed_head, Some(head.clone()));
     let page = e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
     assert_eq!(page.items[0].review.reviewed_head, Some(head));
+}
+
+/// shop: views `mine` + `sprint` on jira-acme (same tickets) and `team` on linear-team; blog: `mine`.
+fn union_env(root: &std::path::Path) -> (Env, AccountId) {
+    let e = env(root, vec![]);
+    let linear = AccountId::new("linear-team");
+    // same key as a jira ticket (kept apart: dedup is per account) + one only linear has
+    let tickets = [("SHOP-141", "SHOP-141"), ("SHOP-142", "TEAM-7")].map(|(k, as_key)| {
+        let mut d = e.tracker.ticket(k).unwrap();
+        d.ticket.r#ref = TicketRef { account: linear.clone(), key: as_key.into(), id: as_key.into() };
+        d
+    });
+    e.factory.trackers.lock().insert(linear.clone(), Arc::new(FakeTracker::with_tickets(tickets.to_vec())));
+    e.h.cfg.update(|s| {
+        s.accounts.insert(linear.clone(), account(AccountKind::Linear));
+    });
+    {
+        let mut ps = e.h.cfg.projects.write();
+        let mut shop = (*ps[0]).clone();
+        let b = shop.tracker.as_mut().unwrap();
+        let mine = b.views[0].clone();
+        b.views.push(TrackerView {
+            id: "sprint".into(),
+            jql: Some("sprint in openSprints()".into()),
+            ..mine
+        });
+        b.views.push(TrackerView {
+            id: "team".into(),
+            account: Some(linear.clone()),
+            ..TrackerView::default()
+        });
+        ps[0] = Arc::new(shop);
+    }
+    (e, linear)
+}
+
+#[tokio::test]
+async fn union_of_views_dedups_across_views_and_accounts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (e, linear) = union_env(tmp.path());
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
+    let mut lists: Vec<String> = e.tracker.calls().into_iter().filter(|c| c.starts_with("list:")).collect();
+    lists.sort();
+    assert_eq!(lists, ["list:mine", "list:sprint"], "blog shares shop's `mine` query");
+    let got: Vec<(&str, &str, Vec<&str>, Vec<&str>)> = page
+        .items
+        .iter()
+        .map(|i| {
+            (
+                i.ticket.r#ref.account.as_str(),
+                i.ticket.r#ref.key.as_str(),
+                i.project_ids.iter().map(|p| p.as_str()).collect(),
+                i.view_ids.iter().map(String::as_str).collect(),
+            )
+        })
+        .collect();
+    let jira = |k| ("jira-acme", k, vec!["shop", "blog"], vec!["mine", "sprint"]);
+    let lin = |k| ("linear-team", k, vec!["shop"], vec!["team"]);
+    assert_eq!(got, [jira("SHOP-141"), jira("SHOP-142"), jira("SHOP-143"), lin("SHOP-141"), lin("TEAM-7")]);
+    assert!(page.next.is_none() && page.errors.is_empty());
+    // an explicit view stays a single query
+    let shop = Scope::Project { id: "shop".into() };
+    let team = e.h.core.tracker_list(shop.clone(), Some("team".into()), None, None, true).await.unwrap();
+    assert!(team.items.iter().all(|i| i.ticket.r#ref.account == linear && i.view_ids == ["team"]));
+    // who overrides every view of the union, under its own cache keys
+    let keys = |who| -> Vec<String> {
+        e.h.core.ticket_queries(&shop, None, who).into_iter().map(|q| q.cache_key).collect()
+    };
+    let mine = e.h.core.ticket_queries(&shop, None, Some(Who::Mine));
+    assert_eq!(mine.len(), 3);
+    assert!(mine.iter().all(|q| q.view.who == Some(Who::Mine)));
+    assert!(keys(None).iter().all(|k| !keys(Some(Who::Mine)).contains(k)));
+    // `kelta start <bare key>` finds the account whose view lists the key
+    use kelta_proto::ctl::CtlCommand;
+    for (key, account) in [("SHOP-143", "jira-acme"), ("TEAM-7", "linear-team")] {
+        let plan = e.h.core.ctl(CtlCommand::Start { ticket: key.into(), project: Some("shop".into()) }).await;
+        let plan = plan.unwrap();
+        assert_eq!(plan["source"]["ticket"]["account"], account, "{plan}");
+    }
+}
+
+#[tokio::test]
+async fn visible_list_refreshes_after_a_saga_transition() {
+    use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, TicketsMode};
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let shop = Scope::Project { id: "shop".into() };
+    e.h.core.project_activate(&ProjectId::new("shop")).unwrap();
+    let content =
+        PaneContent::Tickets { scope: shop.clone(), view_id: None, mode: TicketsMode::List, who: None };
+    let req = OpenPaneRequest {
+        content,
+        placement: Placement::NewTab,
+        focus: true,
+        tab_title: None,
+        work_item_id: None,
+    };
+    e.h.core.layout_open(&ProjectId::new("shop"), req).await.unwrap();
+    e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap();
+    // the saga moves the ticket through the provider itself, then publishes the bus event
+    let t = e.tracker.ticket("SHOP-141").unwrap().ticket.r#ref;
+    let moved = e.tracker.transition(&t, "t3", None).await.unwrap();
+    e.h.core.publish(BusEvent::new(
+        bus::TICKET_TRANSITIONED,
+        serde_json::json!({ "ticket": t, "to": moved.status }),
+    ));
+    let status = || async {
+        let page = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
+        page.items.into_iter().find(|i| i.ticket.r#ref == t).unwrap().ticket.status.category
+    };
+    for _ in 0..200 {
+        if status().await == StatusCategory::InProgress {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("the cached list still shows {:?}", status().await);
 }

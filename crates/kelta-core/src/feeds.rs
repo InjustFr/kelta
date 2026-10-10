@@ -306,7 +306,8 @@ impl Core {
     // Tickets
     // =========================================================================================
 
-    /// The list queries behind a scope (one per distinct `(account, view)`). `who` overrides `view.who`.
+    /// The list queries behind a scope (one per distinct `(account, view)`). `view_id` None = every
+    /// view of each project (the union). `who` overrides `view.who`.
     pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
         let projects: Vec<Arc<ProjectConfig>> = match scope {
             Scope::Project { id } => self.cfg.project(id).into_iter().collect(),
@@ -318,20 +319,29 @@ impl Core {
         let mut out: Vec<TicketQuery> = Vec::new();
         for p in projects {
             let Some(b) = &p.tracker else { continue };
-            let mut view = match view_id {
-                Some(v) => b.views.iter().find(|x| x.id == v).or(b.views.first()),
-                None => b.views.first(),
+            // shortcut: first page per source, add per-source Load more when needed
+            let mut views: Vec<TrackerView> = match view_id {
+                Some(v) => {
+                    b.views.iter().find(|x| x.id == v).or(b.views.first()).cloned().into_iter().collect()
+                }
+                None => b.views.clone(),
+            };
+            if views.is_empty() {
+                views.push(default_view());
             }
-            .cloned()
-            .unwrap_or_else(default_view);
-            if who.is_some() {
-                view.who = who;
-            }
-            let account = view.account.clone().unwrap_or_else(|| b.account.clone());
-            let key = tickets_key(&account, &view);
-            match out.iter_mut().find(|q| q.cache_key == key) {
-                Some(q) => q.projects.push(p.id.clone()),
-                None => out.push(TicketQuery { account, view, projects: vec![p.id.clone()], cache_key: key }),
+            for mut view in views {
+                if who.is_some() {
+                    view.who = who;
+                }
+                let account = view.account.clone().unwrap_or_else(|| b.account.clone());
+                let key = tickets_key(&account, &view);
+                match out.iter_mut().find(|q| q.cache_key == key) {
+                    Some(q) if !q.projects.contains(&p.id) => q.projects.push(p.id.clone()),
+                    Some(_) => {}
+                    None => {
+                        out.push(TicketQuery { account, view, projects: vec![p.id.clone()], cache_key: key })
+                    }
+                }
             }
         }
         let mut views = self.feeds.views.lock();
@@ -568,6 +578,7 @@ impl Core {
         let tracker = self.tracker_of(&t.account)?;
         let from = self.cached_ticket(t).await.map(|x| x.status);
         let ticket = tracker.transition(t, transition_id, fields).await?;
+        self.after_ticket_write(&ticket).await;
         self.publish_from(
             session,
             BusEvent::new(
@@ -575,7 +586,6 @@ impl Core {
                 serde_json::json!({ "ticket": t, "from": from, "to": ticket.status }),
             ),
         );
-        self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
 
@@ -660,11 +670,11 @@ impl Core {
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let ticket = self.tracker_of(&t.account)?.assign(t, who.clone()).await?;
+        self.after_ticket_write(&ticket).await;
         self.publish_ev(BusEvent::new(
             bus::TICKET_ASSIGNED,
             serde_json::json!({ "ticket": t, "assignee": who }),
         ));
-        self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
 
@@ -687,7 +697,8 @@ impl Core {
         None
     }
 
-    /// After a write: patch cached pages, notify views, refresh the account soon.
+    /// After a write, before its bus event: patch cached pages and notify views (the event's
+    /// [`Core::on_ticket_written`] refreshes the account; patching first keeps that fetch last).
     async fn after_ticket_write(&self, ticket: &Ticket) {
         let queries: Vec<TicketQuery> =
             self.feeds.views.lock().values().filter(|q| q.account == ticket.r#ref.account).cloned().collect();
@@ -706,7 +717,16 @@ impl Core {
             projects.extend(q.projects.clone());
         }
         self.emit_tickets_changed(&projects);
-        self.scheduler.kick(Some(ticket.r#ref.account.clone()));
+    }
+
+    /// `ticket.transitioned` / `ticket.assigned` from anywhere (`tracker_*`, the work saga,
+    /// plugins): refresh the account's subscribed lists now instead of at the next poll.
+    pub(crate) fn on_ticket_written(&self, payload: &serde_json::Value) {
+        // a `TicketRef`, or a whole `Ticket` (plugin actions)
+        let t = payload.get("ticket").map(|v| v.get("ref").unwrap_or(v));
+        if let Some(Ok(t)) = t.cloned().map(serde_json::from_value::<TicketRef>) {
+            self.scheduler.kick(Some(t.account));
+        }
     }
 
     // =========================================================================================
@@ -1255,7 +1275,8 @@ impl Core {
                 }
                 PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
                 PaneContent::Inbox => {
-                    tickets(&Scope::All, None, None, &mut want);
+                    // Now reads `tracker_list(All, None, Mine)`: poll that cache key
+                    tickets(&Scope::All, None, Some(Who::Mine), &mut want);
                     reviews(self.review_accounts(&Scope::All), &both, &mut want);
                 }
                 _ => {}

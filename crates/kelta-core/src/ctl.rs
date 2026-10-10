@@ -12,7 +12,7 @@ use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ext::{ProxiedRequest, ProxiedResponse};
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::ToolVersion;
-use kelta_proto::model::{EditorTarget, Lifecycle, Placement, SessionKind, TemplateCtx, WorkSource};
+use kelta_proto::model::{EditorTarget, Lifecycle, Placement, Scope, SessionKind, TemplateCtx, WorkSource};
 use kelta_proto::settings::ClaudeSettings;
 use kelta_proto::term::LoginEnv;
 use kelta_proto::tracker::TicketRef;
@@ -282,7 +282,23 @@ impl Core {
                     .and_then(|p| p.tracker.clone())
                     .ok_or_else(|| KeltaError::invalid(format!("project {project} has no tracker")))?;
                 let key = ticket_key(&ticket);
-                let tref = TicketRef { account: binding.account, key: key.clone(), id: key };
+                // A bare key on a project whose views span accounts: the project's (cached) union
+                // list knows the owning account; unlisted keys fall back to the binding's.
+                let multi =
+                    binding.views.iter().any(|v| v.account.as_ref().is_some_and(|a| a != &binding.account));
+                let listed = if multi {
+                    let page =
+                        self.tracker_list(Scope::Project { id: project.clone() }, None, None, None, false);
+                    page.await.ok().and_then(|p| {
+                        p.items.into_iter().find(|i| i.ticket.r#ref.key.eq_ignore_ascii_case(&key))
+                    })
+                } else {
+                    None
+                };
+                let tref = match listed {
+                    Some(i) => i.ticket.r#ref,
+                    None => TicketRef { account: binding.account, key: key.clone(), id: key },
+                };
                 let plan = self.work.plan(&project, WorkSource::Ticket { ticket: tref }).await?;
                 if self.cfg.effective(Some(&project)).work.plan_preview {
                     self.emit(UiEvent::CtlCommand {
