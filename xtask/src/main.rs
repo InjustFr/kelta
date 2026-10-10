@@ -341,6 +341,7 @@ fn gen_constants() -> Result<String> {
     let _ = writeln!(s, "export const FRAME_DATA = {};", term::FRAME_DATA);
     let _ = writeln!(s, "export const FRAME_SNAPSHOT = {};", term::FRAME_SNAPSHOT);
     let _ = writeln!(s, "export const FRAME_EXIT = {};", term::FRAME_EXIT);
+    let _ = writeln!(s, "export const FRAME_KEYBOARD = {};", term::FRAME_KEYBOARD);
     let _ = writeln!(s, "export const HIGH_WATERMARK = {};", term::HIGH_WATERMARK);
     let _ = writeln!(s, "export const LOW_WATERMARK = {};\n", term::LOW_WATERMARK);
     let _ = writeln!(s, "export const KELTA_API_VERSION = {};", js(&ext::KELTA_API_VERSION)?);

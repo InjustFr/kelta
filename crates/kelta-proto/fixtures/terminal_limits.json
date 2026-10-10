@@ -1,4 +1,5 @@
 {
+  "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,

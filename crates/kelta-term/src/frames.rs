@@ -1,9 +1,10 @@
 //! Terminal channel frame codec (ARCHITECTURE §6.1).
 //!
 //! First byte = tag, little-endian payloads:
-//! `0x01` Data (raw PTY bytes), `0x02` Snapshot (ANSI repaint), `0x03` Exit (`i32`, `-1` = signal).
+//! `0x01` Data (raw PTY bytes), `0x02` Snapshot (ANSI repaint), `0x03` Exit (`i32`, `-1` = signal),
+//! `0x04` Keyboard (`u8` kitty keyboard flags).
 
-use kelta_proto::term::{FRAME_DATA, FRAME_EXIT, FRAME_SNAPSHOT};
+use kelta_proto::term::{FRAME_DATA, FRAME_EXIT, FRAME_KEYBOARD, FRAME_SNAPSHOT};
 
 /// A decoded frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +12,7 @@ pub enum Frame<'a> {
     Data(&'a [u8]),
     Snapshot(&'a [u8]),
     Exit(i32),
+    Keyboard(u8),
 }
 
 /// `0x01` + raw bytes.
@@ -44,6 +46,11 @@ pub fn exit(code: i32) -> Vec<u8> {
     v
 }
 
+/// `0x04` + kitty keyboard flags.
+pub fn keyboard(flags: u8) -> Vec<u8> {
+    vec![FRAME_KEYBOARD, flags]
+}
+
 /// The payload length a view acknowledges for this frame (Data and Snapshot only).
 pub fn ack_len(frame: &[u8]) -> u32 {
     match frame.first() {
@@ -62,6 +69,10 @@ pub fn decode(frame: &[u8]) -> Option<Frame<'_>> {
             let bytes: [u8; 4] = payload.try_into().ok()?;
             Some(Frame::Exit(i32::from_le_bytes(bytes)))
         }
+        FRAME_KEYBOARD => match payload {
+            [flags] => Some(Frame::Keyboard(*flags)),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -77,6 +88,7 @@ mod tests {
         assert_eq!(decode(&exit(0)), Some(Frame::Exit(0)));
         assert_eq!(decode(&exit(-1)), Some(Frame::Exit(-1)));
         assert_eq!(decode(&exit(i32::MAX)), Some(Frame::Exit(i32::MAX)));
+        assert_eq!(decode(&keyboard(31)), Some(Frame::Keyboard(31)));
     }
 
     #[test]
@@ -96,6 +108,7 @@ mod tests {
         assert_eq!(decode(&[]), None);
         assert_eq!(decode(&[0x03, 1, 2]), None);
         assert_eq!(decode(&[0x09, 1]), None);
+        assert_eq!(decode(&[0x04]), None);
     }
 
     #[test]
@@ -103,6 +116,7 @@ mod tests {
         assert_eq!(ack_len(&data(&[0u8; 100])), 100);
         assert_eq!(ack_len(&snapshot(b"abc")), 3);
         assert_eq!(ack_len(&exit(1)), 0);
+        assert_eq!(ack_len(&keyboard(1)), 0);
         assert_eq!(ack_len(&[]), 0);
         let mut buf = snapshot_buffer(4);
         buf.extend_from_slice(b"abcd");

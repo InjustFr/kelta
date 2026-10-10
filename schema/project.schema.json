@@ -3086,7 +3086,7 @@
         "env": {},
         "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
         "font_size": 13.0,
-        "keyboard_protocol": "legacy",
+        "keyboard_protocol": "kitty",
         "letter_spacing": 0.0,
         "line_height": 1.15,
         "max_live_views": 4,
@@ -3165,8 +3165,9 @@
           "type": "number"
         },
         "keyboard_protocol": {
-          "default": "legacy",
+          "default": "kitty",
           "enum": [
+            "kitty",
             "legacy"
           ],
           "type": "string"

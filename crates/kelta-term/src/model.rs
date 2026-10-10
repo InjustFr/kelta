@@ -25,6 +25,8 @@ use crate::prescan::{OscScanner, Tail};
 
 /// Maximum depth of the title stack (alacritty's own limit).
 const TITLE_STACK_MAX_DEPTH: usize = 4096;
+/// Maximum depth of each kitty keyboard mode stack (alacritty's own limit).
+const KEYBOARD_STACK_MAX_DEPTH: usize = 4096;
 /// urxvt mouse encoding (`?1015`), which alacritty does not track.
 const URXVT_MOUSE: u16 = 1015;
 
@@ -80,6 +82,9 @@ pub struct Shadow {
     pub title_stack: Vec<Option<String>>,
     pub urxvt_mouse: bool,
     pub last_char: Option<char>,
+    /// Kitty keyboard stack depths `[active screen, inactive screen]` (alacritty swaps its stacks
+    /// with the screens).
+    pub keyboard_depth: [usize; 2],
 }
 
 impl Shadow {
@@ -92,6 +97,7 @@ impl Shadow {
             title_stack: Vec::new(),
             urxvt_mouse: false,
             last_char: None,
+            keyboard_depth: [0; 2],
         }
     }
 
@@ -111,6 +117,17 @@ impl Shadowed<'_> {
     fn reset_region(&mut self) {
         self.shadow.scroll_top = 0;
         self.shadow.scroll_bottom = self.term.screen_lines();
+    }
+
+    fn alt_screen(&self) -> bool {
+        self.term.mode().contains(TermMode::ALT_SCREEN)
+    }
+
+    /// The screen switched: alacritty swapped its keyboard mode stacks too.
+    fn screen_switched(&mut self, was_alt: bool) {
+        if self.alt_screen() != was_alt {
+            self.shadow.keyboard_depth.swap(0, 1);
+        }
     }
 }
 
@@ -300,7 +317,9 @@ impl Handler for Shadowed<'_> {
             PrivateMode::Named(NamedPrivateMode::ColumnMode) => self.reset_region(),
             _ => {}
         }
-        self.term.set_private_mode(mode)
+        let was_alt = self.alt_screen();
+        self.term.set_private_mode(mode);
+        self.screen_switched(was_alt);
     }
     fn unset_private_mode(&mut self, mode: PrivateMode) {
         match mode {
@@ -308,7 +327,9 @@ impl Handler for Shadowed<'_> {
             PrivateMode::Named(NamedPrivateMode::ColumnMode) => self.reset_region(),
             _ => {}
         }
-        self.term.unset_private_mode(mode)
+        let was_alt = self.alt_screen();
+        self.term.unset_private_mode(mode);
+        self.screen_switched(was_alt);
     }
     #[inline]
     fn report_private_mode(&mut self, mode: PrivateMode) {
@@ -398,12 +419,17 @@ impl Handler for Shadowed<'_> {
     fn report_keyboard_mode(&mut self) {
         self.term.report_keyboard_mode()
     }
-    #[inline]
     fn push_keyboard_mode(&mut self, mode: KeyboardModes) {
+        // alacritty 0.26 evicts from the *title* stack when the keyboard stack is full, which
+        // panics when that one is empty: a program could kill the reader. Drop such pushes instead.
+        if self.shadow.keyboard_depth[0] >= KEYBOARD_STACK_MAX_DEPTH {
+            return;
+        }
+        self.shadow.keyboard_depth[0] += 1;
         self.term.push_keyboard_mode(mode)
     }
-    #[inline]
     fn pop_keyboard_modes(&mut self, to_pop: u16) {
+        self.shadow.keyboard_depth[0] = self.shadow.keyboard_depth[0].saturating_sub(usize::from(to_pop));
         self.term.pop_keyboard_modes(to_pop)
     }
     #[inline]
@@ -442,26 +468,29 @@ pub struct TermModel {
     osc: OscScanner,
     tail: Tail,
     history_limit: usize,
+    kitty_keyboard: bool,
 }
 
-/// Model configuration (D7: kitty keyboard off; OSC 52 copy only).
-fn config(history: usize) -> Config {
-    Config { scrolling_history: history, kitty_keyboard: false, osc52: Osc52::OnlyCopy, ..Config::default() }
+/// Model configuration (D7: kitty keyboard per `terminal.keyboard_protocol`; OSC 52 copy only).
+fn config(history: usize, kitty_keyboard: bool) -> Config {
+    Config { scrolling_history: history, kitty_keyboard, osc52: Osc52::OnlyCopy, ..Config::default() }
 }
 
 impl TermModel {
+    /// A model with the kitty keyboard protocol on (the `terminal.keyboard_protocol` default).
     pub fn new(cols: u16, rows: u16, history: usize) -> Self {
         let size = Size::new(cols, rows);
         let listener = Listener::default();
         let events = listener.events.clone();
         Self {
-            term: Term::new(config(history), &size, listener),
+            term: Term::new(config(history, true), &size, listener),
             processor: Processor::new(),
             shadow: Shadow::new(size.rows),
             events,
             osc: OscScanner::new(),
             tail: Tail::new(),
             history_limit: history,
+            kitty_keyboard: true,
         }
     }
 
@@ -565,10 +594,31 @@ impl TermModel {
             return;
         }
         self.history_limit = lines;
-        self.term.set_options(config(lines));
+        self.apply_config();
+        self.release_cache();
+    }
+
+    /// Turn the kitty keyboard protocol on or off; turning it off clears the mode stacks.
+    pub fn set_kitty_keyboard(&mut self, on: bool) {
+        if on == self.kitty_keyboard {
+            return;
+        }
+        self.kitty_keyboard = on;
+        self.apply_config();
+        self.shadow.keyboard_depth = [0; 2];
+    }
+
+    fn apply_config(&mut self) {
+        self.term.set_options(config(self.history_limit, self.kitty_keyboard));
         // `set_options` re-announces the title; that is not a change.
         self.events.lock().clear();
-        self.release_cache();
+    }
+
+    /// Kitty keyboard flags of the active screen (the `CSI ? u` value, 0 = legacy encoding).
+    pub fn keyboard_flags(&self) -> u8 {
+        let kitty = self.term.mode().intersection(TermMode::KITTY_KEYBOARD_PROTOCOL);
+        // TermMode keeps the five flags contiguous, in protocol order, from DISAMBIGUATE_ESC_CODES.
+        (kitty.bits() >> TermMode::DISAMBIGUATE_ESC_CODES.bits().trailing_zeros()) as u8
     }
 
     /// Free rows alacritty pre-allocated beyond the used history (it grows in steps of 1000 rows).
@@ -771,10 +821,52 @@ mod tests {
     }
 
     #[test]
-    fn kitty_keyboard_is_off() {
+    fn kitty_keyboard_push_pop_query() {
         let mut m = TermModel::new(80, 24, 100);
+        assert_eq!(replies(&mut m, b"\x1b[?u"), vec!["\x1b[?0u"]);
+        assert_eq!(m.keyboard_flags(), 0);
+        assert_eq!(replies(&mut m, b"\x1b[>1u\x1b[?u"), vec!["\x1b[?1u"]);
+        assert_eq!(m.keyboard_flags(), 1);
+        // Push all five flags, then set (`=`) replaces the top entry.
+        assert_eq!(replies(&mut m, b"\x1b[>31u\x1b[?u"), vec!["\x1b[?31u"]);
+        assert_eq!(m.keyboard_flags(), 31);
+        m.feed(b"\x1b[=3;1u");
+        assert_eq!(m.keyboard_flags(), 3);
+        // Main and alternate screens keep separate stacks.
+        m.feed(b"\x1b[?1049h");
+        assert_eq!(m.keyboard_flags(), 0);
+        m.feed(b"\x1b[>8u");
+        assert_eq!(m.keyboard_flags(), 8);
+        // Back on the main screen alacritty reloads the stack top (`=` does not rewrite it).
+        m.feed(b"\x1b[?1049l");
+        assert_eq!(m.keyboard_flags(), 31);
+        assert_eq!(replies(&mut m, b"\x1b[<u\x1b[?u"), vec!["\x1b[?1u"]);
+        assert_eq!(replies(&mut m, b"\x1b[<5u\x1b[?u"), vec!["\x1b[?0u"]);
+        // RIS clears every stack.
+        m.feed(b"\x1b[>1u\x1bc");
+        assert_eq!(m.keyboard_flags(), 0);
+    }
+
+    #[test]
+    fn legacy_keyboard_ignores_kitty_and_clears_on_switch() {
+        let mut m = TermModel::new(80, 24, 100);
+        m.feed(b"\x1b[>1u");
+        m.set_kitty_keyboard(false);
+        assert_eq!(m.keyboard_flags(), 0);
         assert!(replies(&mut m, b"\x1b[>1u\x1b[?u").is_empty());
-        assert!(!m.term().mode().intersects(TermMode::KITTY_KEYBOARD_PROTOCOL));
+        assert_eq!(m.keyboard_flags(), 0);
+        m.set_kitty_keyboard(true);
+        assert_eq!(replies(&mut m, b"\x1b[?u"), vec!["\x1b[?0u"]);
+    }
+
+    #[test]
+    fn kitty_stack_overflow_does_not_panic() {
+        // alacritty would evict from the empty title stack on the 4097th push.
+        let mut m = TermModel::new(80, 24, 100);
+        m.feed(&b"\x1b[>1u".repeat(KEYBOARD_STACK_MAX_DEPTH + 10));
+        m.feed(b"\x1b[?1049h\x1b[>2u\x1b[?1049l\x1b[<4096u");
+        assert_eq!(m.keyboard_flags(), 0);
+        assert_eq!(m.shadow().keyboard_depth, [0, 1]);
     }
 
     #[test]

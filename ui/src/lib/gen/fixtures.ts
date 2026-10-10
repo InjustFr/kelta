@@ -1655,7 +1655,7 @@ export const settingsDefault: Settings = {
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
-    "keyboard_protocol": "legacy",
+    "keyboard_protocol": "kitty",
     "letter_spacing": 0.0,
     "line_height": 1.15,
     "max_live_views": 4,
@@ -2200,6 +2200,7 @@ export const terminalStats: TerminalStats = {
 };
 
 export const terminalLimits: TerminalLimits = {
+  "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,

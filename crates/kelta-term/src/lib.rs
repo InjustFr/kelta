@@ -6,8 +6,8 @@
 //!   environment, new session + process group.
 //! - `reader`: one thread per PTY (256 KiB stack): `poll` with the DEC 2026 sync deadline and the
 //!   ack watchdog, 64 KiB reads, EAGAIN input queue.
-//! - [`model`]: headless `alacritty_terminal::Term` (kitty keyboard off) answering terminal
-//!   queries, events for core, OSC 7/9/777 pre-scan ([`prescan`]).
+//! - [`model`]: headless `alacritty_terminal::Term` answering terminal queries (kitty keyboard per
+//!   `terminal.keyboard_protocol`), events for core, OSC 7/9/777 pre-scan ([`prescan`]).
 //! - [`snapshot`]: ANSI repaint for (re-)attaching views; [`flow`]: HIGH/LOW watermarks.
 //! - [`login_env`]: login environment resolution (`resolve_login_env`).
 //!
@@ -35,6 +35,7 @@ use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
+use kelta_proto::settings::KeyboardProtocol;
 use kelta_proto::term::{
     KillSignal, LoginEnv, PtySpawnSpec, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
 };
@@ -166,7 +167,8 @@ impl TerminalHost for PtyTerminalHost {
             }
         };
         let master = Arc::new(child.master);
-        let model = TermModel::new(cols, rows, self.history_for(&spec));
+        let mut model = TermModel::new(cols, rows, self.history_for(&spec));
+        model.set_kitty_keyboard(self.shared.limits.lock().keyboard_protocol == KeyboardProtocol::Kitty);
         let session = Arc::new(Session::new(
             spec.id.clone(),
             spec.kind.clone(),
@@ -315,6 +317,8 @@ impl TerminalHost for PtyTerminalHost {
             let lines = limits.scrollback.for_kind(s.kind.name()) as usize;
             let mut st = s.state.lock();
             st.model.set_history_limit(lines);
+            st.model.set_kitty_keyboard(limits.keyboard_protocol == KeyboardProtocol::Kitty);
+            st.sync_keyboard(&self.shared);
             st.refresh_memory(&self.shared);
         }
         self.shared.enforce_budget();

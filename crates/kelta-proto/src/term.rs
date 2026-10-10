@@ -10,7 +10,7 @@ use ts_rs::TS;
 use crate::api::TerminalEvents;
 use crate::ids::SessionId;
 use crate::model::SessionKind;
-use crate::settings::ScrollbackSettings;
+use crate::settings::{KeyboardProtocol, ScrollbackSettings};
 
 // ---- frames (§6.1) ------------------------------------------------------------------------------
 
@@ -20,6 +20,9 @@ pub const FRAME_DATA: u8 = 0x01;
 pub const FRAME_SNAPSHOT: u8 = 0x02;
 /// `i32` LE exit code (`-1` = signal) → exit banner.
 pub const FRAME_EXIT: u8 = 0x03;
+/// `u8` kitty keyboard flags of the active screen; sent when they change and after a Snapshot
+/// when non-zero (a Snapshot resets them to 0 in the view). Not acknowledged.
+pub const FRAME_KEYBOARD: u8 = 0x04;
 
 /// Flow control: stop sending Data frames above this many unacked bytes.
 pub const HIGH_WATERMARK: u32 = 256 * 1024;
@@ -118,6 +121,7 @@ pub const SWALLOWED_QUERIES: &[TerminalQuery] = &[
     csi("DECRQM", Some("?"), Some("$"), "p", &[]),
     csi("DECRQM_ANSI", None, Some("$"), "p", &[]),
     csi("XTWINOPS_CHARS", None, None, "t", &[18]),
+    csi("KITTY_KEYBOARD", Some("?"), None, "u", &[]),
     osc("OSC4_PALETTE", 4),
     osc("OSC10_FG", 10),
     osc("OSC11_BG", 11),
@@ -203,18 +207,24 @@ impl Default for TerminalPalette {
     }
 }
 
-/// Scrollback per kind + global memory cap (§9.5).
+/// Scrollback per kind + global memory cap (§9.5), and the keyboard protocol of the models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 pub struct TerminalLimits {
     pub scrollback: ScrollbackSettings,
     pub memory_cap_mb: u32,
     /// History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
     pub view_scrollback: u32,
+    pub keyboard_protocol: KeyboardProtocol,
 }
 
 impl TerminalLimits {
     pub fn from_settings(t: &crate::settings::TerminalSettings) -> Self {
-        Self { scrollback: t.scrollback, memory_cap_mb: t.memory_cap_mb, view_scrollback: t.view_scrollback }
+        Self {
+            scrollback: t.scrollback,
+            memory_cap_mb: t.memory_cap_mb,
+            view_scrollback: t.view_scrollback,
+            keyboard_protocol: t.keyboard_protocol,
+        }
     }
 }
 

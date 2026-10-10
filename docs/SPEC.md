@@ -118,7 +118,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 
 In-view single keys (only when a list/board has focus, never in terminals): `j/k` move, `Enter` open, `/` filter, `R` refresh, `m` move ticket, `a` assign me, `c` comment, `o` open in browser, `s` start work.
 
-Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in Claude Code); passthrough elsewhere. macOS Option-as-Meta: `both` default (`left`, `right`, `none`). Copy-on-select off (Linux: selection always goes to PRIMARY; middle-click pastes PRIMARY). Paste uses bracketed paste when the app enabled `?2004`; multi-line paste into a shell prompt without bracketed paste asks for confirmation (`terminal.confirm_multiline_paste`).
+Terminal key handling: programs that enable the kitty keyboard protocol get kitty-encoded keys (`terminal.keyboard_protocol`, default `kitty`; Shift+Enter → `CSI 13;2u`). Otherwise Shift+Enter in Claude sessions sends `ESC CR` (newline in Claude Code); passthrough elsewhere. macOS Option-as-Meta: `both` default (`left`, `right`, `none`). Copy-on-select off (Linux: selection always goes to PRIMARY; middle-click pastes PRIMARY). Paste uses bracketed paste when the app enabled `?2004`; multi-line paste into a shell prompt without bracketed paste asks for confirmation (`terminal.confirm_multiline_paste`).
 
 ## 5. Empty, loading and error states (each pane must implement)
 
@@ -149,7 +149,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, on-disk scrollback history log, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, on-disk scrollback history log, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

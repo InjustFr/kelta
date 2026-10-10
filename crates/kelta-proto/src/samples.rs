@@ -1131,7 +1131,8 @@ pub fn all() -> Vec<Fixture> {
             TerminalLimits {
                 scrollback: ScrollbackSettings::default(),
                 memory_cap_mb: 160,
-                view_scrollback: 1000
+                view_scrollback: 1000,
+                keyboard_protocol: KeyboardProtocol::Kitty,
             }
         ),
         fx!(

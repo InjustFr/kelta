@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use common::*;
 use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::ids::SessionId;
+use kelta_proto::settings::KeyboardProtocol;
 use kelta_proto::term::{
     ClipboardKind, HIGH_WATERMARK, KillSignal, LoginEnv, TerminalEvent, TerminalLimits, TerminalPalette,
 };
@@ -382,6 +383,79 @@ fn attach_detach_generations_and_exit_banner() {
     assert_eq!(frames::decode(&fc[1]), Some(Frame::Exit(7)));
     assert!(g3.generation > g2.generation);
     assert!(h.write(&id, b"x").is_err(), "writing to an exited session");
+}
+
+#[test]
+fn kitty_keyboard_flags_reach_the_view() {
+    let h = host(Arc::new(PortablePty));
+    let id = SessionId::new("kbd");
+    let ev = sh(
+        &h,
+        "kbd",
+        "read a; printf '\\033[>1u'; echo pushed; read b; printf '\\033[<u'; echo popped; read c",
+    );
+    let kbd = |frames: Vec<Vec<u8>>| -> Vec<u8> {
+        frames
+            .iter()
+            .filter_map(|f| match frames::decode(f) {
+                Some(Frame::Keyboard(k)) => Some(k),
+                _ => None,
+            })
+            .collect()
+    };
+    let view = Frames::default();
+    h.attach(&id, 80, 24, Box::new(view.clone())).unwrap();
+    h.write(&id, b"\n").unwrap();
+    wait_text(&h, "kbd", "pushed");
+    assert_eq!(kbd(view.take()), vec![1], "one frame when the flags change");
+    // A re-attached view gets the flags right after its snapshot.
+    let again = Frames::default();
+    h.attach(&id, 80, 24, Box::new(again.clone())).unwrap();
+    let f = again.take();
+    assert!(matches!(frames::decode(&f[0]), Some(Frame::Snapshot(_))));
+    assert_eq!(frames::decode(&f[1]), Some(Frame::Keyboard(1)));
+    // Switching the setting to legacy clears the mode; the pop that follows changes nothing.
+    h.set_limits(TerminalLimits { keyboard_protocol: KeyboardProtocol::Legacy, ..TerminalLimits::default() });
+    assert_eq!(kbd(again.take()), vec![0]);
+    h.write(&id, b"\n").unwrap();
+    wait_text(&h, "kbd", "popped");
+    assert!(kbd(again.take()).is_empty());
+    h.write(&id, b"\n").unwrap();
+    assert_eq!(ev.wait_exit(T), (Some(0), None));
+}
+
+/// Opt-in: the real `claude` CLI, with an empty temporary HOME (it stops at onboarding, no API
+/// call), asks `CSI ? u`, gets the model's answer and pushes kitty flags, which reach the view:
+///   KELTA_REAL_CLAUDE=1 cargo test -p kelta-term --test pty real_claude -- --nocapture
+#[test]
+fn real_claude_enables_kitty_keyboard() {
+    let Some(claude) = std::env::var_os("KELTA_REAL_CLAUDE").and_then(|_| {
+        std::env::var_os("HOME")
+            .map(|h| std::path::Path::new(&h).join(".local/bin/claude"))
+            .filter(|p| p.is_file())
+    }) else {
+        return;
+    };
+    let h = host(Arc::new(PortablePty));
+    let home = tempfile::tempdir().unwrap();
+    let ev = Arc::new(Events::default());
+    let mut spec = spec("claude", claude.to_str().unwrap(), &[], 100, 30, ev);
+    spec.env.insert("HOME".into(), home.path().display().to_string());
+    h.spawn(spec).unwrap();
+    let id = SessionId::new("claude");
+    let view = Frames::default();
+    h.attach(&id, 100, 30, Box::new(view.clone())).unwrap();
+    let mut seen = Vec::new();
+    let flags = wait_until(T, || {
+        seen.extend(view.take());
+        seen.iter().rev().find_map(|f| match frames::decode(f) {
+            Some(Frame::Keyboard(k)) if k != 0 => Some(k),
+            _ => None,
+        })
+    });
+    println!("claude kitty flags: {flags:?}");
+    h.kill(&id, KillSignal::Kill).unwrap();
+    assert!(flags.is_some_and(|k| k & 1 == 1), "claude did not enable kitty disambiguation");
 }
 
 #[test]

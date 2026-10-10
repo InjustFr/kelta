@@ -5,6 +5,7 @@
 export const FRAME_DATA = 1;
 export const FRAME_SNAPSHOT = 2;
 export const FRAME_EXIT = 3;
+export const FRAME_KEYBOARD = 4;
 export const HIGH_WATERMARK = 262144;
 export const LOW_WATERMARK = 65536;
 
