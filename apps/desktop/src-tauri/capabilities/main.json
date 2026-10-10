@@ -38,6 +38,7 @@
     "allow-secret-unlock",
     "allow-oauth-device-start",
     "allow-oauth-device-finish",
+    "allow-oauth-device-cancel",
     "allow-account-test",
     "allow-project-list",
     "allow-project-detect",

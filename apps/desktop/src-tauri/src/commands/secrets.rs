@@ -52,3 +52,10 @@ pub async fn oauth_device_start(
 pub async fn oauth_device_finish(core: State<'_, Arc<Core>>, user_code: String) -> Res<()> {
     core.oauth_device_finish(&user_code).await
 }
+
+/// Stop a sign-in the user walked away from: its pending `oauth_device_finish` ends `cancelled`.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn oauth_device_cancel(core: State<'_, Arc<Core>>, user_code: String) -> Res<()> {
+    core.oauth_device_cancel(&user_code);
+    Ok(())
+}

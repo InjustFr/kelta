@@ -125,6 +125,7 @@ export interface Commands {
     result: OAuthDevicePrompt;
   };
   oauth_device_finish: { args: { user_code: string }; result: null };
+  oauth_device_cancel: { args: { user_code: string }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -284,6 +285,7 @@ export const COMMAND_NAMES = [
   'secret_unlock',
   'oauth_device_start',
   'oauth_device_finish',
+  'oauth_device_cancel',
   'account_test',
   'project_list',
   'project_detect',
@@ -435,6 +437,7 @@ export const secretBackendsStatus = wrap('secret_backends_status');
 export const secretUnlock = wrap('secret_unlock');
 export const oauthDeviceStart = wrap('oauth_device_start');
 export const oauthDeviceFinish = wrap('oauth_device_finish');
+export const oauthDeviceCancel = wrap('oauth_device_cancel');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------
