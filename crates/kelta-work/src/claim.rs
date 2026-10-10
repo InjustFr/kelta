@@ -157,9 +157,10 @@ impl WorkService {
             };
             let gone = match sid {
                 Some(s) => *s == owner,
+                // Boot already adopted daemon sessions as Live: a Dormant or Exited owner has no workflow running.
                 None => core
                     .session_get(&owner)
-                    .is_none_or(|s| s.lifecycle == kelta_proto::model::Lifecycle::Exited),
+                    .is_none_or(|s| s.lifecycle != kelta_proto::model::Lifecycle::Live),
             };
             if gone && w.state != WorkState::Finished {
                 self.update(&w.id, |w| {

@@ -7,7 +7,7 @@ use crate::common::{Fx, git, has_git, project};
 use kelta_proto::api::WorkStore;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::{SessionId, WorkItemId};
-use kelta_proto::model::{RunClaim, RunState, SessionInfo, WorkState};
+use kelta_proto::model::{Lifecycle, RunClaim, RunState, SessionInfo, WorkState};
 use kelta_proto::samples;
 
 fn run(sid: &str) -> RunClaim {
@@ -192,4 +192,28 @@ async fn exited_session_orphans_its_running_claims_and_a_new_claim_takes_over() 
     assert_eq!(again.id, item.id, "same work item");
     let r = again.run.unwrap();
     assert_eq!((r.state, r.session_id), (RunState::Running, Some(SessionId::new("orch-b"))));
+}
+
+#[tokio::test]
+async fn startup_orphans_claims_of_dormant_or_missing_sessions_but_not_live_ones() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
+
+    w.startup().await.unwrap();
+    assert_eq!(run_state(&fx, &item.id).await, RunState::Running, "live owner keeps its claim");
+
+    // Kelta quit: after relaunch the owner is restored Dormant, its workflow is dead.
+    fx.core.insert_session(SessionInfo {
+        id: SessionId::new("orch-a"),
+        lifecycle: Lifecycle::Dormant,
+        ..samples::session_info()
+    });
+    w.startup().await.unwrap();
+    assert_eq!(run_state(&fx, &item.id).await, RunState::Orphaned);
 }
