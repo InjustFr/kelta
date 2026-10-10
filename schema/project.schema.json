@@ -936,6 +936,8 @@
         "ide_bridge": false,
         "max_live": 4,
         "mcp": true,
+        "mcp_board_writes": true,
+        "mcp_offer": true,
         "min_version": "2.1.200",
         "profiles": {
           "default": {
@@ -1047,6 +1049,19 @@
           "default": true,
           "description": "Kelta MCP server for Claude sessions.",
           "type": "boolean"
+        },
+        "mcp_board_writes": {
+          "default": true,
+          "description": "Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.",
+          "type": "boolean"
+        },
+        "mcp_offer": {
+          "default": true,
+          "description": "At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.",
+          "type": "boolean",
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "min_version": {
           "default": "2.1.200",

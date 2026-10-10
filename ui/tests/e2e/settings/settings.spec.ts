@@ -28,4 +28,14 @@ test.describe('settings pane', () => {
     await expect(field.locator('[data-testid="source-badge"]')).toHaveAttribute('data-source', 'default');
     expect(errors).toEqual([]);
   });
+
+  test("Settings → Claude installs and removes Kelta's MCP in Claude Code", async ({ page }) => {
+    await page.goto(`${HARNESS}?view=settings&section=claude`);
+    const mcp = page.getByTestId('claude-mcp');
+    await expect(mcp).toContainText('Install Kelta');
+    await mcp.getByRole('button', { name: 'Install' }).click();
+    await expect(mcp).toContainText('are installed in Claude Code');
+    await mcp.getByRole('button', { name: 'Remove' }).click();
+    await expect(mcp.getByRole('button', { name: 'Install' })).toBeVisible();
+  });
 });

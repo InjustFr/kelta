@@ -114,6 +114,10 @@ export interface Commands {
   clipboard_read: { args: { kind: ClipboardKind }; result: string };
   clipboard_write: { args: { kind: ClipboardKind; text: string }; result: null };
   notify_test: { args: NoArgs; result: null };
+  /** Kelta's MCP registered in Claude Code at user scope; `null` = Claude Code not found. */
+  claude_mcp_status: { args: NoArgs; result: boolean | null };
+  claude_mcp_install: { args: NoArgs; result: null };
+  claude_mcp_remove: { args: NoArgs; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -335,6 +339,9 @@ export const COMMAND_NAMES = [
   'clipboard_read',
   'clipboard_write',
   'notify_test',
+  'claude_mcp_status',
+  'claude_mcp_install',
+  'claude_mcp_remove',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -505,6 +512,9 @@ export const diagnosticsRun = wrap('diagnostics_run');
 export const clipboardRead = wrap('clipboard_read');
 export const clipboardWrite = wrap('clipboard_write');
 export const notifyTest = wrap('notify_test');
+export const claudeMcpStatus = wrap('claude_mcp_status');
+export const claudeMcpInstall = wrap('claude_mcp_install');
+export const claudeMcpRemove = wrap('claude_mcp_remove');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {

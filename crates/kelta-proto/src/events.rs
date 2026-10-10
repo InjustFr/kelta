@@ -35,17 +35,21 @@ pub struct Toast {
     pub text: String,
     #[serde(default)]
     pub action: Option<ToastAction>,
+    /// Second choice beside `action`; a toast with one stays until answered.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub secondary: Option<ToastAction>,
 }
 
 impl Toast {
     pub fn info(text: impl Into<String>) -> Self {
-        Self { level: ToastLevel::Info, text: text.into(), action: None }
+        Self { level: ToastLevel::Info, text: text.into(), action: None, secondary: None }
     }
     pub fn warn(text: impl Into<String>) -> Self {
-        Self { level: ToastLevel::Warn, text: text.into(), action: None }
+        Self { level: ToastLevel::Warn, text: text.into(), action: None, secondary: None }
     }
     pub fn error(text: impl Into<String>) -> Self {
-        Self { level: ToastLevel::Error, text: text.into(), action: None }
+        Self { level: ToastLevel::Error, text: text.into(), action: None, secondary: None }
     }
 }
 

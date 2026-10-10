@@ -14,6 +14,7 @@
       toast={entry.toast}
       ondismiss={() => toasts.dismiss(entry.id)}
       onaction={() => void toasts.run(entry.id)}
+      onsecondary={() => void toasts.run(entry.id, true)}
       kbd={entry.id === lastId ? runLastKey : null}
     />
   {/each}

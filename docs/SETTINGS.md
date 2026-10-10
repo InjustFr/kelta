@@ -119,6 +119,8 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `min_version` | str (semver) | `"2.1.200"` | older → warning, hooks still attempted |
 | `hook_transport` | enum(command\|http) | `command` | SessionStart always command |
 | `mcp` | bool | `true` | Kelta MCP server for Claude sessions |
+| `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
+| `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |
 | `append_system_prompt` | str | `""` | appended to generated `context.md` |
 | `extra_args` | list<str> | `[]` | appended before the prompt |

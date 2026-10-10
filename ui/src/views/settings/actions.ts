@@ -3,6 +3,7 @@
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit).
 
 import { registerAction } from '$lib/actions';
+import * as ipc from '$lib/ipc/commands';
 import { toasts, layout, projects } from '$lib/stores';
 
 let tomlRequest: string | null = null;
@@ -32,4 +33,13 @@ registerAction('settings.open', async (args) => {
     tomlRequest = null;
     toasts.error(err, 'Could not open settings');
   }
+});
+
+// The startup offer of Kelta's MCP in Claude Code (toast: Install / Never; dismissing = Not now).
+registerAction('claude.mcp_install', async () => {
+  await ipc.claudeMcpInstall();
+  toasts.info("Kelta's ticket tools are installed: new Claude sessions list them");
+});
+registerAction('claude.mcp_never', async () => {
+  await ipc.settingsSet({ layer: 'global', path: 'claude.mcp_offer', value: false });
 });

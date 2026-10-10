@@ -156,3 +156,33 @@ to order and colour them.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Anyone grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
+
+## Tickets from any Claude session
+
+Kelta's MCP server gives Claude its ticket tools. Sessions Kelta starts always get them; to use them from a
+`claude` you start yourself (in a terminal, or a subagent of one), install Kelta in Claude Code:
+
+- At launch, when Kelta finds Claude Code (`claude.binary` in your login PATH) and the `kelta` MCP server is not
+  registered, a toast asks "Claude Code detected. Let your Claude sessions use Kelta's ticket tools?".
+  **Install** registers it at user scope (`claude mcp add --scope user --transport http kelta
+  http://127.0.0.1:<port>/mcp` with a token of its own), so the next `claude`, in any directory, lists the `kelta`
+  tools. Dismissing the toast asks again at the next launch; **Never** stops asking (`claude.mcp_offer = false`).
+- Settings > Claude shows whether it is installed, with **Install** / **Remove**. Remove unregisters it and revokes
+  its token.
+- When Kelta's port changes, Kelta updates the registration at launch without asking. Kelta must be running for
+  the tools to answer.
+
+The tools work on any ticket of your Kelta projects by key:
+
+| Tool | Does |
+|---|---|
+| `list_tickets` | the tickets of every open project (or `project`, `view`), filtered by `status`, `assignee`, `label`; from Kelta's cache, `refresh` to fetch again. Parallel agents share one fetch |
+| `get_ticket_by_key` | description, comments, links, status and the description's revision |
+| `transition_ticket_by_key` | move to a status, transition or category (`in_progress`, `done`...) |
+| `comment_ticket_by_key` | add a Markdown comment |
+| `update_ticket_body` | replace the description (e.g. tick acceptance boxes); fails without writing when it changed since the revision you read (GitHub) |
+| `close_ticket` | close, with an optional comment first (GitHub issues) |
+| `list_review_requests` | pull requests awaiting your review |
+
+`claude.mcp_board_writes = false` keeps the board tools read-only (`list_tickets`, `get_ticket_by_key`). A ticket
+the lists do not show needs its `account` (the tracker account id) besides its key.

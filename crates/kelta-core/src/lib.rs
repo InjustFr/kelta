@@ -10,6 +10,7 @@
 
 pub mod attention;
 pub mod bus;
+pub mod claude_mcp;
 pub mod clipboard;
 pub mod ctl;
 pub mod detect;
@@ -58,7 +59,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
-use kelta_proto::tracker::{Ticket, TicketRef};
+use kelta_proto::tracker::{Ticket, TicketPage, TicketRef};
 use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
@@ -184,6 +185,8 @@ pub struct Core {
     pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
     /// Running refines (Tickets T10): their MCP sid → the ticket `get_ticket` returns.
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
+    /// The global `/mcp` holds an HTTP server reference (Claude Code registration, ticket #234).
+    pub(crate) claude_mcp_ref: AtomicBool,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -336,6 +339,7 @@ impl Core {
                 oauth: Mutex::default(),
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
+                claude_mcp_ref: AtomicBool::new(false),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -407,6 +411,12 @@ impl Core {
             let probe =
                 ctl::probe_claude(self.login_env.clone(), self.cfg.effective(None).claude.clone()).await;
             *self.claude_ver.lock() = probe;
+            let weak = self.me.clone();
+            self.rt.spawn(async move {
+                if let Some(core) = weak.upgrade() {
+                    core.claude_mcp_startup().await;
+                }
+            });
         }
         if self.install_ctl {
             let dirs = self.dirs.clone();
@@ -639,6 +649,17 @@ impl CoreApi for Core {
         session: Option<&SessionId>,
     ) -> Result<(), KeltaError> {
         self.tracker_comment(ticket, markdown, session).await
+    }
+    async fn ticket_list(
+        &self,
+        scope: Scope,
+        view: Option<String>,
+        refresh: bool,
+    ) -> Result<TicketPage, KeltaError> {
+        self.tracker_list(scope, view, None, None, refresh).await
+    }
+    async fn ticket_close(&self, ticket: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.tracker_close(ticket).await
     }
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await

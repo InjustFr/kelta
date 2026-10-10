@@ -576,6 +576,7 @@ impl PluginHost {
                     level: q.level.unwrap_or_default(),
                     text: crate::util::truncate(&q.text, 500),
                     action: None,
+                    secondary: None,
                 });
                 Ok(Value::Null)
             }

@@ -2,4 +2,8 @@
 import type { ToastAction } from "./ToastAction";
 import type { ToastLevel } from "./ToastLevel";
 
-export type Toast = { level: ToastLevel, text: string, action: ToastAction | null, };
+export type Toast = { level: ToastLevel, text: string, action: ToastAction | null, 
+/**
+ * Second choice beside `action`; a toast with one stays until answered.
+ */
+secondary?: ToastAction | null, };
