@@ -9,8 +9,8 @@
 # scripts/ or a failed detection. scripts/linux-check.sh (Ubuntu in Docker) runs with --linux or --full, or
 # when the diff touches Linux code: apps/desktop/src-tauri, packaging, docker, crates/*/src/**/*linux*,
 # cfg(target_os = "linux"). Heavy steps wait for one of KELTA_GATE_SLOTS (default 2) machine-wide slots.
-# Each run logs to its own file under ${TMPDIR}/kelta-gate/logs/. Stops at the first failing step. Exit code 0
-# only when every step that ran passed.
+# Each run logs to its own file under ${TMPDIR}/kelta-gate/logs/ (e2e, which runs alongside qa, in its own
+# -e2e.log, printed when it ends). Stops at the first failing step. Exit code 0 only when every step that ran passed.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -85,8 +85,28 @@ case "$rust,$ui" in
   *,1) read -ra qa_args <<<"all $rust" ;;
   *,0) read -ra qa_args <<<"rust $rust" ;;
 esac
+e2e_pid=
+if [ "$e2e" = 1 ]; then
+  # e2e runs on the Vite dev server, not ui/dist: it overlaps qa once the dependencies are installed.
+  run pnpm-install pnpm install --frozen-lockfile
+  if [ "$failed" = 0 ]; then
+    e2e_log="${log%.log}-e2e.log" e2e_t0=$SECONDS
+    e2e >"$e2e_log" 2>&1 &
+    e2e_pid=$!
+  fi
+fi
 [ ${#qa_args[@]} -eq 0 ] || run qa bash scripts/qa.sh "${qa_args[@]}"
-if [ "$e2e" = 1 ]; then run e2e e2e; else skip e2e "no UI, desktop or kelta-proto change"; fi
+if [ -n "$e2e_pid" ]; then
+  printf '\n##### e2e (ran alongside qa)\n'
+  e2e_rc=0
+  wait "$e2e_pid" || e2e_rc=$?
+  cat "$e2e_log"
+  if [ "$e2e_rc" = 0 ]; then record e2e pass "$((SECONDS - e2e_t0))"; else record e2e FAIL "$((SECONDS - e2e_t0))"; failed=1; fi
+elif [ "$e2e" = 1 ]; then
+  record e2e "not run" "-"
+else
+  skip e2e "no UI, desktop or kelta-proto change"
+fi
 if [ "$deny" = 1 ]; then
   run cargo-deny cargo deny check licenses bans sources
 else

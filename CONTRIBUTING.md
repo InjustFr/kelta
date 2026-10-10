@@ -44,8 +44,9 @@ bash scripts/qa.sh [all|ui|rust] [package...]   # the QA steps alone (default: e
 ```
 
 `qa.sh` runs the UI build, `svelte-check`, ESLint, vitest, the timer check, the gate self-test
-(`scripts/affected_test.py`), `cargo fmt --check`, clippy with `-D warnings`, the Rust tests and the codegen
-drift check. Packages limit the Rust steps to those workspace packages. Rust tests run with
+(`scripts/affected_test.py`), `cargo fmt --check`, clippy with `-D warnings`, the Rust tests (the codegen
+drift check is the xtask test `generated_files_are_up_to_date`). With `all` the UI checks run in the background during the Rust steps and their log prints when
+they end. Packages limit the Rust steps to those workspace packages. Rust tests run with
 [cargo-nextest](https://nexte.st) (`brew install cargo-nextest`) when it is installed, with one retry: a test
 that passes only on its retry is printed as `FLAKY` (fix it, do not ignore it); doctests still run with
 `cargo test --doc`. Without nextest the gate falls back to `cargo test`. The Playwright suite on mock IPC runs
@@ -64,10 +65,13 @@ untracked files), see `scripts/affected.py`:
 - Everything when `scripts/` changed, with `--full`, or when the detection fails. Release tags and the
   nightly use `--full`.
 
-Heavy steps (clippy, tests, codegen, linux-check) wait for one of `KELTA_GATE_SLOTS` (default 2) machine-wide
+Heavy steps (clippy, tests, linux-check) wait for one of `KELTA_GATE_SLOTS` (default 2) machine-wide
 slots under `${TMPDIR}/kelta-gate/` and print how long they waited, so parallel worktrees queue instead of
 overloading the CPU. Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary shows the
-time of each step and the log path.
+time of each step and the log path. The e2e suite runs alongside `qa.sh` (it uses the Vite dev server, not
+`ui/dist`) and writes its own `-e2e.log`, printed when it ends. `.config/nextest.toml` starts the slowest
+tests first so they do not become the tail of the run; give a new test that takes several seconds a priority
+there.
 
 Integration tests live in one binary per crate (`crates/<name>/tests/it/main.rs`, one `mod` per file), which
 keeps `target/` small and links fast. Run a subset with a module filter:

@@ -51,7 +51,7 @@ axum = { version = "=0.8.9", features = ["ws"] }
 hyper = { version = "=1.12.0", features = ["client", "server", "http1"] }
 hyper-util = { version = "=0.1.21", features = ["client-legacy", "tokio", "http1"] }
 http-body-util = { version = "=0.1.5" }
-tokio-tungstenite = { version = "=0.30.0" }
+tokio-tungstenite = { version = "=0.29.0" }
 rmpv = { version = "=1.3.1" }
 
 # ---- storage / config ------------------------------------------------------
@@ -63,7 +63,6 @@ jsonschema = { version = "=0.58.6", default-features = false }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151" }
 notify = { version = "=8.2.0" }
-notify-debouncer-full = { version = "=0.7.0" }
 
 # ---- secrets / platform ----------------------------------------------------
 keyring-core = { version = "=1.0.0" }
@@ -87,13 +86,11 @@ globset = { version = "=0.4.20" }
 
 # ---- misc ------------------------------------------------------------------
 uuid = { version = "=1.27.0", features = ["v4", "v7", "serde"] }
-directories = { version = "=6.0.0" }
 which = { version = "=8.0.6" }
 thiserror = { version = "=2.0.21" }
 anyhow = { version = "=1.0.104" }
 tracing = { version = "=0.1.44" }
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
-tracing-appender = { version = "=0.2.5" }
 ts-rs = { version = "=12.0.1", features = ["serde-json-impl", "no-serde-warnings"] }
 async-trait = { version = "=0.1.92" }
 base64 = { version = "=0.23.1" }
@@ -106,11 +103,11 @@ semver = { version = "=1.0.28", features = ["serde"] }
 mime_guess = { version = "=2.0.5" }
 
 # ---- dev ---------------------------------------------------------------------
-insta = { version = "=1.49.0", features = ["json", "redactions"] }
+insta = { version = "=1.49.0", features = ["json"] }
 wiremock = { version = "=0.6.5" }
-proptest = { version = "=1.11.0" }
+proptest = { version = "=1.11.0", default-features = false, features = ["std", "bit-set"] }
 tempfile = { version = "=3.27.0" }
-criterion = { version = "=0.8.2" }
+criterion = { version = "=0.8.2", default-features = false, features = ["cargo_bench_support"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
@@ -136,5 +133,18 @@ lto = "fat"
 strip = "symbols"
 panic = "abort"
 
-[profile.dev.package."*"]
+# No debuginfo: it doubles target/ and link time, and every worktree gets it (the clone-local .cargo is not copied).
+[profile.dev]
 debug = false
+
+# Unoptimised hot loops dominate test time. alacritty/vte parsing is generic, so it is compiled (and
+# must be optimised) in kelta-term, where `Term<Listener>` is instantiated.
+[profile.dev.package.kelta-term]
+opt-level = 1
+
+# Argon2id KDF (19 MiB, t=2) of the encrypted secrets file: seconds per derivation unoptimised.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

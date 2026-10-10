@@ -130,7 +130,11 @@ async fn a_rate_limited_repository_fails_the_whole_review_poll() {
     common(&server).await;
     mount(&server, "GET", "/repositories/acme", 200, "bitbucket/repos.json").await;
     mount(&server, "GET", "/repositories/acme/shop/pullrequests", 429, "bitbucket/prs.json").await;
-    let err = bb(&server).list_reviews(&query(ReviewKind::ReviewRequested, true, true)).await.unwrap_err();
+    // same retries as production, without ~1.75 s of real backoff sleeps
+    let policy =
+        kelta_http::HttpPolicy { max_backoff: std::time::Duration::from_millis(1), ..Default::default() };
+    let h = host_over(http_with("bitbucket-acme", policy), "bitbucket", &server.uri(), secrets_with(TOKEN));
+    let err = h.list_reviews(&query(ReviewKind::ReviewRequested, true, true)).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::RateLimited);
 }
 

@@ -438,3 +438,13 @@ fn gen_ts_fixtures() -> Result<(String, String)> {
     );
     Ok((s, t))
 }
+
+#[cfg(test)]
+mod tests {
+    /// `codegen --check` inside the workspace test run: it reuses that build, while
+    /// `cargo run -p xtask` resolves its own feature set and recompiles much of the graph.
+    #[test]
+    fn generated_files_are_up_to_date() {
+        super::codegen(true).unwrap();
+    }
+}
