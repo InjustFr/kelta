@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { flushJump, JUMP_CAP, Jumplist, jumplist, noteFocus, SETTLE_MS } from './jumplist';
+import { flushJump, JUMP_CAP, Jumplist, jumplist, navStep, noteFocus, SETTLE_MS } from './jumplist';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
 
@@ -45,5 +45,14 @@ describe('Jumplist', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('leaves the cursor in place when no live place exists that way', () => {
+    jumplist.list = [loc(1), loc(2), loc(3)];
+    jumplist.at = 1; // after one nav.back; project 'p' is not open, so every entry is dead
+    navStep(1);
+    expect(jumplist.at).toBe(1);
+    navStep(-1);
+    expect(jumplist.at).toBe(1);
   });
 });

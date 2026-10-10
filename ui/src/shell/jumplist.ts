@@ -95,6 +95,7 @@ export function flushJump(): void {
 /** `nav.back` / `nav.forward`: the previous / next place that still exists. */
 export function navStep(delta: 1 | -1): void {
   flushJump();
+  const from = jumplist.at;
   for (let loc = jumplist.step(delta); loc; loc = jumplist.step(delta)) {
     const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
     if (!projects.byId(loc.project)?.open || !tab || !findPane(tab.root, loc.pane)) continue;
@@ -103,5 +104,6 @@ export function navStep(delta: 1 | -1): void {
     focusPaneById(loc.project, loc.tab, loc.pane);
     return;
   }
+  jumplist.at = from; // no live place that way: stay put, not on a dead entry
   save();
 }
