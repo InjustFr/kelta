@@ -125,19 +125,31 @@ pub(crate) async fn prune_refs(repo: &Path, keep: &HashSet<String>) -> Result<()
 
 impl WorkService {
     /// What Louis last looked at: the `reviewed` ref, else the merge base with the base branch
-    /// (nothing reviewed yet), else HEAD.
+    /// (nothing reviewed yet, or the branch was rebased since: `reviewed` holds the old base, so
+    /// diffing against it would show upstream code), else HEAD.
     pub(crate) async fn reviewed_base(&self, env: &Env, item: &WorkItem) -> Result<String, KeltaError> {
         let wt = &item.worktree;
-        if let Some(r) = git::rev(wt, &wi_ref(&item.id, "reviewed")).await? {
+        let reviewed = git::rev(wt, &wi_ref(&item.id, "reviewed")).await?;
+        let Some(base) = Self::base_ref(env, item).await? else {
+            return Ok(match reviewed {
+                Some(r) => r,
+                None => git::rev(wt, "HEAD").await?.unwrap_or_else(|| "HEAD".into()),
+            });
+        };
+        let merge_base = async |rev: &str| -> Result<Option<String>, KeltaError> {
+            let mb = git::run(wt, &["merge-base", &base, rev], LOCAL_TIMEOUT).await?;
+            Ok(mb.ok().then(|| mb.stdout.trim().to_owned()))
+        };
+        let head_mb = merge_base("HEAD").await?;
+        if let Some(r) = reviewed
+            && (head_mb.is_none() || merge_base(&r).await? == head_mb)
+        {
             return Ok(r);
         }
-        if let Some(base) = Self::base_ref(env, item).await? {
-            let mb = git::run(wt, &["merge-base", &base, "HEAD"], LOCAL_TIMEOUT).await?;
-            if mb.ok() {
-                return Ok(mb.stdout.trim().to_owned());
-            }
+        match head_mb {
+            Some(mb) => Ok(mb),
+            None => Ok(git::rev(wt, "HEAD").await?.unwrap_or_else(|| "HEAD".into())),
         }
-        Ok(git::rev(wt, "HEAD").await?.unwrap_or_else(|| "HEAD".into()))
     }
 
     /// `Stop`: snapshots the worktree to `last`, then the shape of `reviewed..last`; `None` when

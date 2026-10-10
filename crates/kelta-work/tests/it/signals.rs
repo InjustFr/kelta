@@ -362,3 +362,33 @@ async fn startup_prunes_refs_of_items_that_are_gone() {
     assert_eq!(git(&fx.repo, &["for-each-ref", "--format=%(refname)", "refs/kelta/wi/"]).lines().count(), 2);
     assert!(refs(&fx, &item).contains("reviewed"), "an unfinished item keeps its refs");
 }
+
+#[tokio::test]
+async fn a_rebase_never_puts_upstream_code_in_the_delta() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item, claude) = started(&fx).await;
+    let wt = item.worktree.clone();
+    std::fs::write(wt.join("login.rs"), "fn a() {}\n").unwrap();
+    git(&wt, &["add", "-A"]);
+    git(&wt, &["commit", "-qm", "login"]);
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    wait_item(&fx, &item, |w| w.review_due).await;
+    w.mark_reviewed(&item.id).await.unwrap();
+
+    // origin/main gains 500 lines; the branch is rebased onto it.
+    git(&wt, &["checkout", "-q", "-b", "upstream", "origin/main"]);
+    std::fs::write(wt.join("upstream.txt"), "x\n".repeat(500)).unwrap();
+    git(&wt, &["add", "-A"]);
+    git(&wt, &["commit", "-qm", "upstream"]);
+    git(&wt, &["push", "-q", "origin", "upstream:main"]);
+    git(&wt, &["checkout", "-q", "-"]);
+    git(&wt, &["fetch", "-q", "origin"]);
+    git(&wt, &["rebase", "-q", "origin/main"]);
+
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    std::fs::write(wt.join("signup.rs"), "fn s() {}\n").unwrap();
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    let d = wait_item(&fx, &item, |w| w.review_due).await.delta.unwrap();
+    assert_eq!((d.lines, d.files), (2, 2), "the whole branch, no upstream lines");
+}

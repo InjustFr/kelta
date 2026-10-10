@@ -34,12 +34,16 @@
 
   // Return strip: decided when the item is (re)focused; leaving it stamps `left_at` (no timers).
   let briefFor = $state<string | null>(null);
+  let briefEl = $state<HTMLElement>();
+  // The strip takes the keyboard once per return, so `x` / `v` never land in the Claude or nvim pane.
+  let briefFocus = false;
   $effect(() => {
     const id = workItemId;
     untrack(() => {
       const w = work.get(id);
       const mins = settings.value()?.work.return_brief_after_mins ?? 20;
       briefFor = w && returnBrief(w, claudeOf(w)?.status ?? null, Date.now(), mins) ? id : null;
+      briefFocus = briefFor !== null;
     });
     return () =>
       void workLeft({ id }).then(
@@ -51,9 +55,24 @@
     briefFor === workItemId && item && claudeOf(item)?.status !== 'working' ? item : null,
   );
 
+  $effect(() => {
+    const el = briefEl;
+    if (el && briefFocus) {
+      briefFocus = false;
+      // After the Shell's own give-the-keyboard-back-to-the-terminal microtask (closing the switcher).
+      setTimeout(() => el.focus());
+    }
+  });
+
+  function dismissBrief(): void {
+    briefFor = null;
+    const sid = focusedSessionId();
+    if (sid) terminalPool.focus(sid);
+  }
+
   function briefKey(e: KeyboardEvent): void {
     if (e.metaKey || e.ctrlKey || e.altKey || !brief) return;
-    if (e.key === 'x') briefFor = null;
+    if (e.key === 'x') dismissBrief();
     else if (e.key === 'v') void runWorkAction('review_delta', brief);
     else return;
     e.preventDefault();
@@ -235,6 +254,8 @@
     role="region"
     aria-label="Where you left off"
     data-testid="return-brief"
+    tabindex="-1"
+    bind:this={briefEl}
     onkeydown={briefKey}
   >
     <div class="brief-text">
@@ -260,7 +281,7 @@
         onclick={() => void runWorkAction('review_delta', brief)}>Review changes</Button
       >
     {/if}
-    <Button size="sm" variant="ghost" chord="x" onclick={() => (briefFor = null)}>Dismiss</Button>
+    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>Dismiss</Button>
   </div>
 {/if}
 

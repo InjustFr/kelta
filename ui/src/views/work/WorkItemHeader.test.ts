@@ -239,6 +239,7 @@ describe('return strip', () => {
     work.upsert(w);
     mountHeader(w);
     const strip = await screen.findByTestId('return-brief');
+    await waitFor(() => expect(document.activeElement).toBe(strip)); // x / v reach it, not the pane
     expect(strip.textContent).toContain('next: check the retry path against staging');
     expect(strip.textContent).toMatch(/\+1890\/−122 since\s+you\s+reviewed/);
     expect(strip.textContent).toContain('Added the retry wrapper');
