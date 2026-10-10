@@ -1933,6 +1933,7 @@ export const settingsDefault: Settings = {
     "prefix": "ctrl+shift+space",
     "prefix_bindings": {
       "attention.next": "u",
+      "attention.peek": "y",
       "attention.prev": "U",
       "editor.send_selection": "@",
       "inbox.open": "0",

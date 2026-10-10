@@ -133,6 +133,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `tickets.open` | Cmd+Shift+B | Ctrl+Shift+B | `t` |
 | `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
 | `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
+| `attention.peek` ("Peek waiting session": popover with the last 15 lines, a detected permission menu as `1`/`2`/`3` buttons and a reply field; `Tab` next needs-input session, `Mod+Enter` go to it, `Esc` back; also on hovering a rail row, a tab lamp or a Now row) | Cmd+Shift+Y | Ctrl+Shift+Y | `y` |
 | `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |
 | `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
 | `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.create_ticket`, `work.open_ticket`, `work.open_pr`, `work.finish`, `work.park` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
