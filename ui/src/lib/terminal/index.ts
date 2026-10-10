@@ -104,8 +104,11 @@ export class TerminalViewPool {
         this.#views.set(sessionId, view);
       }
       if (!this.#visible.has(sessionId)) {
-        // Hidden again while the view was being created: keep it pooled, not mounted.
-        this.#pushHidden(sessionId);
+        // Hidden again while being created: hide() pooled the id. Released or evicted meanwhile: drop it.
+        if (!this.#hidden.includes(sessionId)) {
+          this.#views.delete(sessionId);
+          view.dispose();
+        }
         return;
       }
     }
@@ -117,8 +120,7 @@ export class TerminalViewPool {
   hide(sessionId: SessionId): void {
     if (!this.#visible.delete(sessionId)) return;
     const view = this.#views.get(sessionId);
-    if (!view) return; // still being created: show() pools it
-    view.unmount();
+    view?.unmount(); // no view yet: still being created, show() keeps it only if still pooled
     this.#pushHidden(sessionId);
   }
 

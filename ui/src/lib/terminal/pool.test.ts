@@ -194,6 +194,27 @@ describe('TerminalViewPool', () => {
     expect(pool.liveCount).toBe(1);
   });
 
+  it('disposes a view whose session was released while it was being created', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const view = new FakeView('a');
+    const pool = new TerminalViewPool({
+      capacity: 2,
+      createView: async () => {
+        await gate;
+        return view;
+      },
+    });
+    const shown = pool.show('a', document.createElement('div'));
+    pool.hide('a');
+    pool.release('a');
+    release();
+    await shown;
+    expect(view.disposed).toBe(true);
+    expect(pool.hiddenOrder).toEqual([]);
+    expect(pool.liveCount).toBe(0);
+  });
+
   it('shares one creation between concurrent shows of the same session', async () => {
     const { pool, el, created } = setup(2);
     await Promise.all([pool.show('a', el()), pool.show('a', el())]);
