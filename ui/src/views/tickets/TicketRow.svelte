@@ -321,25 +321,34 @@
     font-size: 10px;
   }
 
-  /* Narrow lists (the split view): age, source and who drop first, then the signals fold into the
-     lamp's tooltip. Key and title never drop. */
-  @container (width < 900px) {
+  /* Narrow lists: source and who drop first (the split view at 1440 wide leaves the list ~670px, and
+     a 60-character title needs 45 shown there), then the age, then the signals fold into the lamp's
+     tooltip. Key, title and status never drop. */
+  @container (width < 720px) {
     .tk,
     .tk.has-source,
     .tk.has-who {
-      --tk-age: 0px;
       --tk-source: 0px;
       --tk-who: 0px;
     }
 
-    .c-age,
     .c-source,
     .c-who {
       display: none;
     }
   }
 
-  @container (width < 560px) {
+  @container (width < 480px) {
+    .tk {
+      --tk-age: 0px;
+    }
+
+    .c-age {
+      display: none;
+    }
+  }
+
+  @container (width < 420px) {
     .tk {
       --tk-signals: 0px;
     }

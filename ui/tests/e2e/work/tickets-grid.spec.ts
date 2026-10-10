@@ -56,7 +56,7 @@ test('rows share one grid: key, title, status, age and source start at one x on 
   page,
 }) => {
   await openRailTickets(page);
-  await page.getByTestId('tickets-pane').press('Space'); // detail closed: the list is wide
+  await page.setViewportSize({ width: 1600, height: 900 }); // detail open, list past 720px
   await page.getByRole('button', { name: /^View/ }).click();
   await page.getByLabel('Group (g)').selectOption('none');
   await page.keyboard.press('Escape');
@@ -69,9 +69,8 @@ test('rows share one grid: key, title, status, age and source start at one x on 
   );
   expect(lefts.length).toBeGreaterThanOrEqual(20);
   for (let col = 0; col < 5; col++) expect(new Set(lefts.map((l) => l[col])).size).toBe(1);
-  // every column on screen: the list is past 900px
-  const ages = await rows(page).locator('.c-age').first().isVisible();
-  expect(ages).toBe(true);
+  expect(await rows(page).locator('.c-age').first().isVisible()).toBe(true);
+  expect(await rows(page).locator('.c-source').first().isVisible()).toBe(true);
 });
 
 test('the title takes the free width: a 60-character title shows 45 or more with the detail open', async ({
@@ -162,9 +161,10 @@ test('the toolbar shows at most six controls; person, sprint, group and sort sit
   await expect(view.getByRole('button', { name: /Current sprint/ })).toBeVisible();
 });
 
-test('narrow lists drop age and source first, then the signals; key and title stay', async ({ page }) => {
+test('narrow lists drop source first, then the age, then the signals; key and title stay', async ({
+  page,
+}) => {
   await openRailTickets(page);
-  await page.getByTestId('tickets-pane').press('Space');
   const row = page.locator('[data-key="jira-acme:SHOP-151"]'); // aged, from one of several sources
   const shown = async () =>
     Object.fromEntries(
@@ -180,21 +180,30 @@ test('narrow lists drop age and source first, then the signals; key and title st
       .locator('.list')
       .evaluate((l) => l.clientWidth);
 
-  expect(await listWidth()).toBeGreaterThanOrEqual(900);
+  // default: detail open at 1440, list about 670px: everything but the source
+  expect(await listWidth()).toBeLessThan(720);
+  expect(await shown()).toMatchObject({ '.c-age': true, '.c-signals': true, '.c-source': false });
+
+  await page.setViewportSize({ width: 1600, height: 900 });
+  expect(await listWidth()).toBeGreaterThanOrEqual(720);
   expect(Object.values(await shown()).every(Boolean)).toBe(true);
 
-  await page.setViewportSize({ width: 900, height: 900 });
-  expect(await listWidth()).toBeLessThan(900);
+  await page.setViewportSize({ width: 1200, height: 900 });
+  expect(await listWidth()).toBeLessThan(720);
   expect(await shown()).toMatchObject({
     '.c-key': true,
     '.c-title': true,
     '.c-signals': true,
     '[data-status]': true,
-    '.c-age': false,
+    '.c-age': true,
     '.c-source': false,
   });
 
-  await page.setViewportSize({ width: 600, height: 900 });
-  expect(await listWidth()).toBeLessThan(560);
+  await page.setViewportSize({ width: 850, height: 900 });
+  expect(await listWidth()).toBeLessThan(480);
+  expect(await shown()).toMatchObject({ '.c-title': true, '.c-age': false, '.c-signals': true });
+
+  await page.setViewportSize({ width: 800, height: 900 });
+  expect(await listWidth()).toBeLessThan(420);
   expect(await shown()).toMatchObject({ '.c-key': true, '.c-title': true, '.c-signals': false });
 });
