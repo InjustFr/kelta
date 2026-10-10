@@ -445,7 +445,13 @@ impl Tracker for GithubIssues {
                 Some(_) => return Err(KeltaError::invalid("github projects expect an `after` cursor")),
             };
             // Project filter syntax (not issue search): `assignee:@me`, `no:assignee`, `iteration:@current`.
+            // shortcut: assumes the iteration field is named "Iteration", read the field name from ProjectV2.fields when a board differs.
             let filter = [
+                match state_param(view) {
+                    "open" => Some("is:open"),
+                    "closed" => Some("is:closed"),
+                    _ => None,
+                },
                 match view.who {
                     Some(Who::Mine) => Some("assignee:@me"),
                     Some(Who::Unassigned) => Some("no:assignee"),
@@ -484,8 +490,10 @@ impl Tracker for GithubIssues {
             let assignee = match view.who {
                 Some(Who::Mine) => Some(self.me().await?.id),
                 Some(Who::Unassigned) => Some("none".to_owned()),
-                Some(Who::Anyone) => Some("*".to_owned()),
-                None => (view.assigned_to.as_deref() == Some("me")).then_some(self.me().await?.id),
+                // `assignee=*` would mean "assigned to anyone", so Anyone sends nothing.
+                Some(Who::Anyone) => None,
+                None if view.assigned_to.as_deref() == Some("me") => Some(self.me().await?.id),
+                None => None,
             };
             if let Some(a) = assignee {
                 r = r.query("assignee", a);
@@ -538,7 +546,7 @@ impl Tracker for GithubIssues {
                 name.to_ascii_lowercase().contains(&q).then(|| SourceHit {
                     kind: "repo".into(),
                     label: name.to_owned(),
-                    detail: s(r, "description").map(str::to_owned),
+                    detail: s(r, "description").filter(|d| !d.is_empty()).map(str::to_owned),
                     view: TrackerView {
                         id: format!("github:repo:{name}"),
                         label: name.to_owned(),
@@ -549,6 +557,7 @@ impl Tracker for GithubIssues {
                 })
             })
             .collect();
+        // shortcut: user-owned projects only, add viewer.organizations.projectsV2 when org boards are needed.
         const Q: &str = "query($q:String){ viewer{ projectsV2(first:50, query:$q){ nodes{ number title closed owner{ ... on Organization{ login } ... on User{ login } } } } } }";
         // Projects v2 need extra token scopes: a failure there must not hide the repos.
         if let Ok(data) = self.gql(Q, json!({"q": Some(query.trim()).filter(|q| !q.is_empty())})).await {

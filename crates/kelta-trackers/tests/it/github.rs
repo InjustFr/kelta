@@ -404,9 +404,20 @@ async fn repo_views_send_the_assignee_for_each_who() {
         .unwrap()
         .iter()
         .filter(|r| r.url.path() == "/repos/acme/shop/issues")
-        .map(|r| query_of(r)["assignee"].clone())
+        .map(|r| query_of(r).get("assignee").cloned())
         .collect();
-    assert_eq!(got, ["louis", "none", "*"]);
+    assert_eq!(got, [Some("louis".to_owned()), Some("none".to_owned()), None]);
+}
+
+#[tokio::test]
+async fn legacy_repo_views_without_assigned_to_skip_the_user_call() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/repos/acme/shop/issues", 200, "github/issues_repo.json").await;
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    gh(&server).list(&v, None).await.unwrap();
+    let reqs = server.received_requests().await.unwrap();
+    assert!(reqs.iter().all(|r| r.url.path() != "/user" && !query_of(r).contains_key("assignee")));
 }
 
 #[tokio::test]
@@ -449,7 +460,7 @@ async fn project_v2_views_filter_server_side_by_who_and_iteration() {
     gql(&server, "projectV2(number", "github/gql_project_items.json").await;
     let t = gh(&server);
     let mut v = project_view();
-    t.list(&v, None).await.unwrap(); // legacy: no filter
+    t.list(&v, None).await.unwrap(); // legacy: open only
     v.who = Some(Who::Mine);
     t.list(&v, None).await.unwrap();
     v.who = Some(Who::Unassigned);
@@ -463,10 +474,10 @@ async fn project_v2_views_filter_server_side_by_who_and_iteration() {
     assert_eq!(
         q,
         [
-            json!(null),
-            json!("assignee:@me"),
-            json!("no:assignee iteration:@current"),
-            json!("iteration:@current")
+            json!("is:open"),
+            json!("is:open assignee:@me"),
+            json!("is:open no:assignee iteration:@current"),
+            json!("is:open iteration:@current")
         ]
     );
 }
