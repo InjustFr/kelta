@@ -65,6 +65,23 @@ export class MoveController {
     }
   }
 
+  /**
+   * Status picker move, one ticket or a selection, in order.
+   * shortcut: stops at the first ticket that fails or asks for fields (its dialog opens), the rest
+   * stay where they are and a toast says how many moved; a bulk fields form would lift this.
+   */
+  async moveAll(moves: { ticket: Ticket; transition: Transition }[]): Promise<void> {
+    let done = 0;
+    for (const m of moves) {
+      if (!(await this.moveViaTransition(m.ticket, m.transition))) break;
+      done++;
+    }
+    const to = moves[0]?.transition.to.name;
+    if (moves.length < 2 || !to) return;
+    if (done === moves.length) toasts.info(`Moved ${done} tickets to ${to}`);
+    else toasts.warn(`Moved ${done} of ${moves.length} tickets to ${to}`);
+  }
+
   async choose(transition: Transition): Promise<void> {
     const d = this.dialog;
     if (d?.kind !== 'pick') return;
@@ -150,6 +167,11 @@ export class MoveController {
       });
       return;
     }
-    toasts.error(err, `Moving ${ticket.ref.key} failed`);
+    // The tracker's own words (workflow validator, 422...) and the way out: its web UI.
+    toasts.push({
+      level: 'error',
+      text: `Moving ${ticket.ref.key} failed: ${e.message}`,
+      action: { label: 'Open in browser', command: 'tickets.open_in_browser', args: { url: ticket.url } },
+    });
   }
 }

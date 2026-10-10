@@ -139,24 +139,37 @@ describe('palette sources', () => {
     });
   });
 
-  it('"Move KEY to…" opens the move menu for that ticket, and a digit moves it', async () => {
+  it('"Move KEY to…" opens the status picker for that ticket; filter and Enter move it', async () => {
     ui.sheets = [];
     const hit = mock.state.tickets[0]!;
     await ticketItems([hit])
       .find((i) => i.label === `Move ${hit.ticket.ref.key} to…`)!
       .run();
-    expect(ui.sheet).toMatchObject({ key: 'tickets.move', props: { ticket: hit.ticket } });
+    expect(ui.sheet).toMatchObject({
+      key: 'tickets.move',
+      props: { ticket: hit.ticket, project_id: hit.project_ids[0] },
+    });
     const Sheet = (await sheetRegistry['tickets.move']()).default;
     render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet('tickets.move') } });
-    const menu = await screen.findByRole('menu', { name: `Move ${hit.ticket.ref.key}` });
+    await screen.findByRole('menu', { name: `Move ${hit.ticket.ref.key}` });
     await screen.findAllByRole('menuitem');
-    await fireEvent.keyDown(menu, { key: '1' });
+    const filter = screen.getByRole('textbox', { name: 'Filter statuses' });
+    await fireEvent.input(filter, { target: { value: 'review' } });
+    await fireEvent.keyDown(filter, { key: 'Enter' });
     await waitFor(() =>
       expect(mock.calls.find((c) => c.cmd === 'tracker_transition')?.args).toMatchObject({
         ticket: hit.ticket.ref,
+        transition_id: 'to-in_review',
       }),
     );
     await waitFor(() => expect(ui.sheet).toBeNull());
+  });
+
+  it('offers no assign verb on a tracker that cannot assign', () => {
+    const hit = mock.state.tickets.find((t) => !t.caps.assign)!;
+    const labels = ticketItems([hit]).map((i) => i.label);
+    expect(labels).toContain(`Move ${hit.ticket.ref.key} to…`);
+    expect(labels).not.toContain(`Assign ${hit.ticket.ref.key} to me`);
   });
 
   it('ranks across groups and keeps the display group order', () => {

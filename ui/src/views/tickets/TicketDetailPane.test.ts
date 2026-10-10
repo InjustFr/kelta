@@ -65,10 +65,10 @@ describe('TicketDetailPane', () => {
   it('moves the ticket through the Move to menu (keyboard: m)', async () => {
     mountDetail();
     await screen.findByRole('heading', { level: 1 });
-    await waitFor(() => expect(tickets.transitions['jira-acme:SHOP-151']?.data?.length).toBeGreaterThan(0));
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 'm' });
     const menu = await screen.findByRole('menu');
-    await fireEvent.keyDown(menu, { key: 'ArrowDown' }); // first enabled transition: In progress
+    await screen.findAllByRole('menuitem');
+    await fireEvent.keyDown(menu, { key: 'ArrowDown' }); // first transition: In progress
     await fireEvent.keyDown(menu, { key: 'Enter' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
     expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
@@ -109,7 +109,7 @@ describe('TicketDetailPane', () => {
   it('opens the move menu from the status value and moves with a digit', async () => {
     mountDetail();
     await screen.findByRole('heading', { level: 1 });
-    expect(screen.getByTestId('ticket-pr').textContent).toContain('None');
+    expect(screen.getByTestId('ticket-pr').textContent).toContain('No pull request yet.');
     await fireEvent.click(screen.getByRole('button', { name: /^Status To Do/ }));
     const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
     expect(menu.querySelector('[aria-current="step"]')?.textContent).toBe('To Do');

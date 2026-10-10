@@ -258,16 +258,21 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
   return [
     verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref, project)),
     verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
-      ui.openSheet('tickets.move', { ticket: hit.ticket }),
+      ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
     ),
-    verb('assign', `Assign ${ref.key} to me`, 'user', async () => {
-      try {
-        tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: 'me' } }));
-        toasts.info(`${ref.key} assigned to you`);
-      } catch (err) {
-        toasts.error(err, `Assigning ${ref.key}`);
-      }
-    }),
+    // A tracker that cannot assign from Kelta (caps) offers no assign verb.
+    ...(hit.caps.assign
+      ? [
+          verb('assign', `Assign ${ref.key} to me`, 'user', async () => {
+            try {
+              tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: 'me' } }));
+              toasts.info(`${ref.key} assigned to you`);
+            } catch (err) {
+              toasts.error(err, `Assigning ${ref.key}`);
+            }
+          }),
+        ]
+      : []),
     verb(
       'browser',
       `Open ${ref.key} in browser`,
