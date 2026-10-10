@@ -397,6 +397,9 @@
     },
     "view_scrollback": 1000
   },
+  "tickets": {
+    "wip_limit": 3
+  },
   "tools": [],
   "triggers": [],
   "web": {

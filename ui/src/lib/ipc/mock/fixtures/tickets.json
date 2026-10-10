@@ -23,11 +23,56 @@
       "labels": ["security"],
       "priority": "High",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "SHOP"
+      "project_hint": "SHOP",
+      "priority_rank": 1,
+      "status_since": "2026-10-07T12:00:00Z",
+      "sprint": {
+        "id": "42",
+        "name": "SHOP Sprint 12",
+        "active": true,
+        "ends_at": "2026-10-16"
+      },
+      "estimate": "5",
+      "due": "2026-10-14"
     },
     "project_ids": ["shop"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [
+      {
+        "url": "https://github.com/acme/shop-api/pull/309",
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 309,
+        "title": "Retry failed webhooks",
+        "branch": "feat/pr-309",
+        "state": "open",
+        "draft": false,
+        "ci": "success",
+        "review": "review_required",
+        "source": "key_match"
+      },
+      {
+        "url": "https://github.com/acme/shop-web/pull/98",
+        "account": "github-acme",
+        "repo": "acme/shop-web",
+        "number": 98,
+        "title": "Bump vite to 8",
+        "branch": "deps/vite-8",
+        "state": "open",
+        "draft": false,
+        "ci": "failure",
+        "review": "review_required",
+        "source": "key_match"
+      }
+    ],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": true,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -53,11 +98,29 @@
       "labels": [],
       "priority": "Medium",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "SHOP"
+      "project_hint": "SHOP",
+      "priority_rank": 2,
+      "status_since": "2026-09-30T12:00:00Z",
+      "sprint": {
+        "id": "42",
+        "name": "SHOP Sprint 12",
+        "active": true,
+        "ends_at": "2026-10-16"
+      },
+      "estimate": "3",
+      "due": null
     },
     "project_ids": ["shop"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": true,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -78,11 +141,29 @@
       "labels": [],
       "priority": "Low",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "SHOP"
+      "project_hint": "SHOP",
+      "priority_rank": 3,
+      "status_since": "2026-09-15T12:00:00Z",
+      "sprint": {
+        "id": "43",
+        "name": "SHOP Sprint 13",
+        "active": false,
+        "ends_at": "2026-10-30"
+      },
+      "estimate": "1",
+      "due": null
     },
     "project_ids": ["shop"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": true,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -108,11 +189,56 @@
       "labels": [],
       "priority": "Medium",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "SHOP"
+      "project_hint": "SHOP",
+      "priority_rank": 2,
+      "status_since": "2026-09-24T12:00:00Z",
+      "sprint": {
+        "id": "42",
+        "name": "SHOP Sprint 12",
+        "active": true,
+        "ends_at": "2026-10-16"
+      },
+      "estimate": "8",
+      "due": "2026-10-09"
     },
     "project_ids": ["shop"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [
+      {
+        "url": "https://github.com/acme/shop-api/pull/88",
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 88,
+        "title": "SHOP-120: upgrade payment SDK",
+        "branch": "feat/SHOP-120-upgrade-payment-sdk",
+        "state": "merged",
+        "draft": false,
+        "ci": "success",
+        "review": "approved",
+        "source": "work_item"
+      },
+      {
+        "url": "https://github.com/acme/shop-api/pull/305",
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 305,
+        "title": "SHOP-120: upgrade payment SDK",
+        "branch": "feat/SHOP-120-payment-sdk",
+        "state": "open",
+        "draft": false,
+        "ci": "success",
+        "review": "changes_requested",
+        "source": "key_match"
+      }
+    ],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": true,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -138,11 +264,43 @@
       "labels": [],
       "priority": "Urgent",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "billing"
+      "project_hint": "billing",
+      "priority_rank": 0,
+      "status_since": "2026-09-24T12:00:00Z",
+      "sprint": {
+        "id": "24",
+        "name": "v2.4",
+        "active": true,
+        "ends_at": "2026-10-31"
+      },
+      "estimate": "6h",
+      "due": "2026-10-12"
     },
     "project_ids": ["billing"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [
+      {
+        "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/42",
+        "account": "gitlab-corp",
+        "repo": "fin/billing/core",
+        "number": 42,
+        "title": "Draft: 4567 fix invoice rounding",
+        "branch": "fix/4567-invoice-rounding",
+        "state": "open",
+        "draft": true,
+        "ci": "pending",
+        "review": null,
+        "source": "work_item"
+      }
+    ],
+    "caps": {
+      "board_columns": false,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -168,11 +326,43 @@
       "labels": [],
       "priority": "Normal",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "billing"
+      "project_hint": "billing",
+      "priority_rank": 2,
+      "status_since": "2026-09-30T12:00:00Z",
+      "sprint": {
+        "id": "24",
+        "name": "v2.4",
+        "active": true,
+        "ends_at": "2026-10-31"
+      },
+      "estimate": "4h",
+      "due": null
     },
     "project_ids": ["billing"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [
+      {
+        "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/44",
+        "account": "gitlab-corp",
+        "repo": "fin/billing/core",
+        "number": 44,
+        "title": "",
+        "branch": "feat/4590-export-invoices-csv",
+        "state": "merged",
+        "draft": false,
+        "ci": "none",
+        "review": null,
+        "source": "work_item"
+      }
+    ],
+    "caps": {
+      "board_columns": false,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -198,11 +388,29 @@
       "labels": [],
       "priority": "Normal",
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "billing"
+      "project_hint": "billing",
+      "priority_rank": 2,
+      "status_since": "2026-10-08T12:00:00Z",
+      "sprint": {
+        "id": "23",
+        "name": "v2.3",
+        "active": false,
+        "ends_at": "2026-10-03"
+      },
+      "estimate": null,
+      "due": null
     },
     "project_ids": ["billing"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": false,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -228,11 +436,43 @@
       "labels": ["enhancement"],
       "priority": null,
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "ada/kelta-tools"
+      "project_hint": "ada/kelta-tools",
+      "priority_rank": null,
+      "status_since": "2026-10-07T12:00:00Z",
+      "sprint": {
+        "id": "PVTI_it7",
+        "name": "Iteration 7",
+        "active": true,
+        "ends_at": "2026-10-17"
+      },
+      "estimate": null,
+      "due": null
     },
     "project_ids": ["kelta-tools"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [
+      {
+        "url": "https://github.com/ada/kelta-tools/pull/13",
+        "account": "github-oss",
+        "repo": "ada/kelta-tools",
+        "number": 13,
+        "title": "kt status --json",
+        "branch": "feat/gh-12-json-output",
+        "state": "open",
+        "draft": false,
+        "ci": "success",
+        "review": "approved",
+        "source": "work_item"
+      }
+    ],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": false,
+      "projects_v2": true
+    }
   },
   {
     "ticket": {
@@ -258,11 +498,24 @@
       "labels": ["bug"],
       "priority": null,
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "ada/kelta-tools"
+      "project_hint": "ada/kelta-tools",
+      "priority_rank": null,
+      "status_since": "2026-09-15T12:00:00Z",
+      "sprint": null,
+      "estimate": null,
+      "due": null
     },
     "project_ids": ["kelta-tools"],
     "work_item_id": null,
-    "view_ids": ["mine"]
+    "view_ids": ["mine"],
+    "prs": [],
+    "caps": {
+      "board_columns": true,
+      "assign": true,
+      "comment": true,
+      "transitions_need_fetch": false,
+      "projects_v2": true
+    }
   },
   {
     "ticket": {
@@ -288,11 +541,29 @@
       "labels": ["workflow::doing", "ops"],
       "priority": null,
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "ops/infra"
+      "project_hint": "ops/infra",
+      "priority_rank": null,
+      "status_since": "2026-09-30T12:00:00Z",
+      "sprint": {
+        "id": "m-12",
+        "name": "Q4 hardening",
+        "active": false,
+        "ends_at": null
+      },
+      "estimate": null,
+      "due": null
     },
     "project_ids": [],
     "work_item_id": null,
-    "view_ids": []
+    "view_ids": [],
+    "prs": [],
+    "caps": {
+      "board_columns": false,
+      "assign": false,
+      "comment": false,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
   },
   {
     "ticket": {
@@ -318,10 +589,23 @@
       "labels": ["docs"],
       "priority": null,
       "updated_at": "2026-10-08T16:00:00Z",
-      "project_hint": "ops/infra"
+      "project_hint": "ops/infra",
+      "priority_rank": null,
+      "status_since": "2026-10-07T12:00:00Z",
+      "sprint": null,
+      "estimate": null,
+      "due": "2026-11-01"
     },
     "project_ids": [],
     "work_item_id": null,
-    "view_ids": []
+    "view_ids": [],
+    "prs": [],
+    "caps": {
+      "board_columns": false,
+      "assign": false,
+      "comment": false,
+      "transitions_need_fetch": false,
+      "projects_v2": false
+    }
   }
 ]

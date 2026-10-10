@@ -203,6 +203,7 @@ impl GithubIssues {
             priority: None,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(repo),
+            ..Default::default()
         })
     }
 
@@ -268,6 +269,7 @@ impl GithubIssues {
                 priority: None,
                 updated_at: s(c, "updatedAt").unwrap_or("").to_owned(),
                 project_hint: Some(repo),
+                ..Default::default()
             });
         }
         let has_next =
@@ -675,6 +677,7 @@ impl Tracker for GithubIssues {
             body_format: BodyFormat::Markdown,
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent: None,
+            prs: Vec::new(),
         })
     }
 

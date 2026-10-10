@@ -198,6 +198,7 @@ impl JiraTracker {
             priority: f.get("priority").and_then(|p| s(p, "name")).map(str::to_owned),
             updated_at: normalize_time(s(f, "updated").unwrap_or("")),
             project_hint: f.get("project").and_then(|p| s(p, "key")).map(str::to_owned),
+            ..Default::default()
         })
     }
 
@@ -447,6 +448,7 @@ impl Tracker for JiraTracker {
             body_format,
             comments: self.comments_from(api.flavor, &v),
             parent,
+            prs: Vec::new(),
         })
     }
 

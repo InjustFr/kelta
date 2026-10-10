@@ -61,6 +61,7 @@ impl FakeTracker {
                 body_format: crate::tracker::BodyFormat::Markdown,
                 comments: vec![],
                 parent: None,
+                prs: Vec::new(),
             }
         };
         let wf = workflow();

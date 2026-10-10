@@ -3003,6 +3003,24 @@
       "x-kelta-category": "Terminal",
       "x-kelta-order": 3
     },
+    "tickets": {
+      "additionalProperties": false,
+      "default": {
+        "wip_limit": 3
+      },
+      "properties": {
+        "wip_limit": {
+          "default": 3,
+          "description": "Soft WIP limit: the Doing group header warns above it; blocks nothing.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Worktree & work",
+      "x-kelta-order": 9
+    },
     "tools": {
       "default": [],
       "items": {

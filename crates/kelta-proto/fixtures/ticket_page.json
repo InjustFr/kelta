@@ -12,8 +12,30 @@
   ],
   "items": [
     {
+      "caps": {
+        "assign": true,
+        "board_columns": true,
+        "comment": true,
+        "projects_v2": false,
+        "transitions_need_fetch": true
+      },
       "project_ids": [
         "shop"
+      ],
+      "prs": [
+        {
+          "account": "github-acme",
+          "branch": "feat/SHOP-142-rate-limit-login",
+          "ci": "pending",
+          "draft": false,
+          "number": 90,
+          "repo": "acme/shop-api",
+          "review": "review_required",
+          "source": "work_item",
+          "state": "open",
+          "title": "SHOP-142: Rate-limit login",
+          "url": "https://github.com/acme/shop-api/pull/90"
+        }
       ],
       "ticket": {
         "assignee": {
@@ -22,22 +44,32 @@
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "due": "2026-10-15",
+        "estimate": "3",
         "kind": "Story",
         "labels": [
           "api"
         ],
         "priority": "High",
+        "priority_rank": 1,
         "project_hint": "SHOP",
         "ref": {
           "account": "jira-acme",
           "id": "10142",
           "key": "SHOP-142"
         },
+        "sprint": {
+          "active": true,
+          "ends_at": "2026-10-16",
+          "id": "42",
+          "name": "SHOP Sprint 12"
+        },
         "status": {
           "category": "in_progress",
           "id": "3",
           "name": "In Progress"
         },
+        "status_since": "2026-10-09T12:00:00Z",
         "title": "Rate-limit login",
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://acme.atlassian.net/browse/SHOP-142"

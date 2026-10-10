@@ -170,6 +170,7 @@ impl GitlabIssues {
             labels,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(project),
+            ..Default::default()
         })
     }
 
@@ -359,6 +360,7 @@ impl Tracker for GitlabIssues {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            prs: Vec::new(),
         })
     }
 

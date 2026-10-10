@@ -144,6 +144,7 @@ impl LinearTracker {
             priority,
             updated_at: s(v, "updatedAt").unwrap_or("").to_owned(),
             project_hint: v.pointer("/team/key").and_then(Value::as_str).map(str::to_owned),
+            ..Default::default()
         })
     }
 
@@ -311,6 +312,7 @@ impl Tracker for LinearTracker {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            prs: Vec::new(),
         })
     }
 

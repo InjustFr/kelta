@@ -38,7 +38,8 @@
   import StatusChip from './StatusChip.svelte';
   import { GROUP_BYS, groupTickets, type GroupBy, type TicketGroup } from './group';
   import { MoveController } from './move.svelte';
-  import { ciLamp, ensureReviews, loadedReviews, prForTicket, prLabel } from './prLink';
+  import PrChip from './PrChip.svelte';
+  import { ensureReviews, mainPr } from './prs';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
@@ -206,10 +207,9 @@
       ? (projects.byId(item.project_ids[0] ?? '')?.name ?? 'Other')
       : (views.find((v) => v.id === item.view_ids[0])?.label ?? 'Other');
 
-  const reviewPool = $derived(loadedReviews());
   const workOf = (item: TicketItem) =>
     work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
-  const prOf = (item: TicketItem) => prForTicket(item.ticket, workOf(item)?.pr_url ?? null, reviewPool);
+  const prOf = (item: TicketItem) => mainPr(item.prs);
 
   // ---- selection ----------------------------------------------------------------------------
   let selKey = $state<string | null>(null);
@@ -644,14 +644,7 @@
                 <span class="k-row-key">{item.ticket.ref.key}</span>
                 <span class="k-row-title">{item.ticket.title}</span>
                 <span class="meta">
-                  {#if pr}
-                    <span class="pr" data-pr title={`${pr.title} (CI ${pr.ci})`}
-                      ><span class="k-mono">{prLabel(pr)}</span><Lamp
-                        level={ciLamp(pr.ci)}
-                        title={`CI ${pr.ci}`}
-                      /></span
-                    >
-                  {/if}
+                  {#if pr}<span class="pr" data-pr><PrChip {pr} /></span>{/if}
                   <span class="status-slot"><StatusChip status={item.ticket.status} /></span>
                   {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
                   {#if whoTab !== 'mine'}
@@ -893,8 +886,6 @@
 
   .pr {
     display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-muted);
   }

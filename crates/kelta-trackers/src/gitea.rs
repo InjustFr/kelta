@@ -115,6 +115,7 @@ impl GiteaIssues {
             labels,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(repo.to_owned()),
+            ..Default::default()
         })
     }
 
@@ -267,6 +268,7 @@ impl Tracker for GiteaIssues {
             body_format: BodyFormat::Markdown,
             comments: last_n(comments, COMMENT_LIMIT),
             parent: None,
+            prs: Vec::new(),
         })
     }
 

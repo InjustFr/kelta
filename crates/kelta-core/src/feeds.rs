@@ -10,8 +10,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kelta_proto::api::{CodeHost, Tracker};
 use kelta_proto::codehost::{
-    CiState, MyReviewState, PrState, Review, ReviewDecision, ReviewDetail, ReviewItem, ReviewKind,
-    ReviewPage, ReviewQuery, ReviewRef,
+    CiState, MyReviewState, PrLink, PrSource, PrState, Review, ReviewDecision, ReviewDetail, ReviewItem,
+    ReviewKind, ReviewPage, ReviewQuery, ReviewRef,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
@@ -91,10 +91,83 @@ pub fn age_of(ts: &str) -> Duration {
     }
 }
 
+/// PR number from its URL (GitHub `/pull/n`, GitLab `/merge_requests/n`, Gitea, Bitbucket).
+fn pr_number(url: &str) -> Option<u64> {
+    url.trim_end_matches('/').rsplit('/').next()?.parse().ok()
+}
+
+/// A review's `linked_tickets` badge names `key` (UI `sameKey`): case-insensitive; `#12` is
+/// `repo#12` on forges and the bare `12` on Redmine.
+fn same_key(key: &str, linked: &str, repo: &str) -> bool {
+    let (k, l) = (key.to_lowercase(), linked.to_lowercase());
+    k == l || (l.starts_with('#') && (k == format!("{}{l}", repo.to_lowercase()) || format!("#{k}") == l))
+}
+
+fn pr_link(r: &Review, source: PrSource) -> PrLink {
+    PrLink {
+        url: r.url.clone(),
+        account: Some(r.r#ref.account.clone()),
+        repo: r.r#ref.repo.clone(),
+        number: r.r#ref.number,
+        title: r.title.clone(),
+        branch: r.source_branch.clone(),
+        // The polled feeds only list open PRs.
+        state: PrState::Open,
+        draft: r.draft,
+        ci: r.ci,
+        review: r.decision,
+        source,
+    }
+}
+
+/// A ticket's PRs (TICKETS.md T1), no network: its work item's `pr_url` (enriched from the feed
+/// when listed there), then open PRs of the polled feeds naming the ticket; de-duplicated by URL.
+/// `bound` is the code-host `(account, repo)` of the work item's repo.
+pub fn ticket_prs(
+    key: &str,
+    work: Option<&WorkItem>,
+    bound: Option<(AccountId, String)>,
+    reviews: &[Review],
+) -> Vec<PrLink> {
+    let mut out: Vec<PrLink> = Vec::new();
+    if let Some(w) = work
+        && let Some(url) = &w.pr_url
+    {
+        let mut link = match reviews.iter().find(|r| &r.url == url) {
+            Some(r) => pr_link(r, PrSource::WorkItem),
+            None => PrLink {
+                url: url.clone(),
+                account: bound.as_ref().map(|(a, _)| a.clone()),
+                repo: bound.map(|(_, r)| r).unwrap_or_default(),
+                number: pr_number(url).unwrap_or(0),
+                title: w.title.clone().unwrap_or_default(),
+                branch: w.branch.clone(),
+                state: PrState::Open,
+                draft: false,
+                ci: CiState::None,
+                review: None,
+                source: PrSource::WorkItem,
+            },
+        };
+        link.state = match w.state {
+            WorkState::Merged { .. } => PrState::Merged,
+            WorkState::PrClosed => PrState::Closed,
+            _ => link.state,
+        };
+        out.push(link);
+    }
+    for r in reviews.iter().filter(|r| r.linked_tickets.iter().any(|l| same_key(key, l, &r.r#ref.repo))) {
+        if !out.iter().any(|l| l.url == r.url) {
+            out.push(pr_link(r, PrSource::KeyMatch));
+        }
+    }
+    out
+}
+
 /// Merge pages from several queries: de-dup by ref, union of project ids and view ids.
 pub fn merge_tickets(
     pages: Vec<(Vec<Ticket>, Vec<ProjectId>, String)>,
-    work: &HashMap<TicketRef, WorkItemId>,
+    work: &HashMap<TicketRef, WorkItem>,
 ) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
@@ -113,12 +186,13 @@ pub fn merge_tickets(
                 }
                 None => {
                     index.insert(t.r#ref.clone(), out.len());
-                    let work_item_id = work.get(&t.r#ref).cloned();
+                    let work_item_id = work.get(&t.r#ref).map(|w| w.id.clone());
                     out.push(TicketItem {
                         ticket: t,
                         project_ids: projects.clone(),
                         work_item_id,
                         view_ids: vec![view_id.clone()],
+                        ..TicketItem::default()
                     });
                 }
             }
@@ -413,13 +487,33 @@ impl Core {
         }
     }
 
-    async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItemId> {
+    async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItem> {
         let items = self.store.call(|c| q::work_list(c, None)).await.unwrap_or_default();
         items
             .into_iter()
             .filter(|w| w.state != WorkState::Finished)
-            .filter_map(|w| w.ticket.clone().map(|t| (t, w.id)))
+            .filter_map(|w| w.ticket.clone().map(|t| (t, w)))
             .collect()
+    }
+
+    /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
+    async fn cached_reviews(&self) -> Vec<Review> {
+        let mut out = Vec::new();
+        for a in self.review_accounts(&Scope::All) {
+            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
+                    out.extend(list);
+                }
+            }
+        }
+        out
+    }
+
+    /// Core-filled ticket fields: linked PRs and the tracker's caps.
+    fn enrich(&self, i: &mut TicketItem, work: &HashMap<TicketRef, WorkItem>, reviews: &[Review]) {
+        let w = work.get(&i.ticket.r#ref);
+        i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews);
+        i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
     }
 
     /// `tracker_list`.
@@ -464,7 +558,12 @@ impl Core {
             }
         }
         let work = self.work_by_ticket().await;
-        Ok(TicketPage { items: merge_tickets(pages, &work), next, stale, errors })
+        let reviews = self.cached_reviews().await;
+        let mut items = merge_tickets(pages, &work);
+        for i in &mut items {
+            self.enrich(i, &work, &reviews);
+        }
+        Ok(TicketPage { items, next, stale, errors })
     }
 
     /// `tracker_search` over the (cached) lists of a scope.
@@ -497,13 +596,15 @@ impl Core {
             tried.push(q.account.clone());
             let probe = TicketRef { account: q.account, key: key.into(), id: key.into() };
             if let Ok(d) = self.tracker_get(&probe).await {
-                let work_item_id = self.work_by_ticket().await.get(&d.ticket.r#ref).cloned();
-                return Ok(vec![TicketItem {
+                let work = self.work_by_ticket().await;
+                let mut item = TicketItem {
+                    work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
                     ticket: d.ticket,
                     project_ids: q.projects,
-                    work_item_id,
-                    view_ids: vec![],
-                }]);
+                    ..TicketItem::default()
+                };
+                self.enrich(&mut item, &work, &self.cached_reviews().await);
+                return Ok(vec![item]);
             }
         }
         Ok(hits)
@@ -537,7 +638,11 @@ impl Core {
         if !matches!(&r, Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::InvalidArgument)) {
             self.note_account(&t.account, &r);
         }
-        r
+        let mut d = r?;
+        let work = self.work_by_ticket().await;
+        let w = work.get(t);
+        d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &self.cached_reviews().await);
+        Ok(d)
     }
 
     /// The project whose binding or one of its views uses a ticket's account (active first, then open, then any).
@@ -1076,10 +1181,7 @@ impl Core {
                 continue;
             }
             // shortcut: the PR number is the last URL segment (GitHub /pull/n, GitLab /merge_requests/n).
-            let Some(number) = url.trim_end_matches('/').rsplit('/').next().and_then(|n| n.parse().ok())
-            else {
-                continue;
-            };
+            let Some(number) = pr_number(url) else { continue };
             self.pr_left_open(&ReviewRef { account, repo, number }).await;
         }
         Ok(())

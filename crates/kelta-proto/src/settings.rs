@@ -76,6 +76,8 @@ pub struct Settings {
     pub ports: PortsSettings,
     #[schemars(extend("x-kelta-category" = "Reviews", "x-kelta-order" = 10))]
     pub reviews: ReviewsSettings,
+    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
+    pub tickets: TicketsSettings,
     #[schemars(extend("x-kelta-category" = "Tools", "x-kelta-order" = 13))]
     pub web: WebSettings,
     #[schemars(extend("x-kelta-category" = "Performance", "x-kelta-order" = 16))]
@@ -1105,6 +1107,19 @@ impl Default for PortsSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct TicketsSettings {
+    /// Soft WIP limit: the Doing group header warns above it; blocks nothing.
+    pub wip_limit: u32,
+}
+
+impl Default for TicketsSettings {
+    fn default() -> Self {
+        Self { wip_limit: 3 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct WebSettings {
@@ -1382,6 +1397,7 @@ impl Default for Settings {
             work: WorkSettings::default(),
             ports: PortsSettings::default(),
             reviews: ReviewsSettings::default(),
+            tickets: TicketsSettings::default(),
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),

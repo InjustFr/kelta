@@ -257,6 +257,8 @@ impl PluginHost {
                             project_ids: vec![pid.clone()],
                             work_item_id: None,
                             view_ids: vec![view.id.clone()],
+                            caps: tracker.caps(),
+                            ..TicketItem::default()
                         })
                         .collect(),
                     next: page.next,

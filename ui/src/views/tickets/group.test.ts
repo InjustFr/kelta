@@ -20,6 +20,8 @@ const item = (
   project_ids: [],
   work_item_id: null,
   view_ids,
+  prs: [],
+  caps: samples.ticketPage.items[0]!.caps,
 });
 
 const summary = (g: ReturnType<typeof groupTickets>) =>

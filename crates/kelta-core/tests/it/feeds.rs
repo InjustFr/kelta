@@ -8,7 +8,7 @@ use crate::common::*;
 use kelta_core::store::q;
 use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
-use kelta_proto::codehost::{CiState, PrState, Review, ReviewKind, ReviewRef};
+use kelta_proto::codehost::{CiState, PrSource, PrState, Review, ReviewKind, ReviewRef};
 use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::ipc::WindowState;
@@ -579,8 +579,15 @@ async fn visible_list_refreshes_after_a_saga_transition() {
     let e = env(tmp.path(), vec![]);
     let shop = Scope::Project { id: "shop".into() };
     e.h.core.project_activate(&ProjectId::new("shop")).unwrap();
-    let content =
-        PaneContent::Tickets { scope: shop.clone(), view_id: None, mode: TicketsMode::List, who: None };
+    let content = PaneContent::Tickets {
+        scope: shop.clone(),
+        view_id: None,
+        mode: TicketsMode::List,
+        who: None,
+        group: None,
+        sort: None,
+        person: None,
+    };
     let req = OpenPaneRequest {
         content,
         placement: Placement::NewTab,
@@ -640,4 +647,67 @@ async fn sources_removed_unknown_views_and_unlisted_keys() {
         ps[0] = Arc::new(p);
     }
     assert!(e.h.core.ticket_queries(&shop, None, Some(Who::Mine)).is_empty());
+}
+
+#[tokio::test]
+async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
+    let tmp = tempfile::tempdir().unwrap();
+    // The work item's PR, also in the authored feed (enriched, listed once).
+    let mut own = review("acme/shop-api", 90, ReviewKind::Authored);
+    own.url = "https://github.com/acme/shop-api/pull/90".into();
+    own.ci = CiState::Failure;
+    own.linked_tickets = vec!["SHOP-142".into()];
+    // Someone else's PR naming the ticket (lower case) in its title.
+    let mut other = review("acme/shop-api", 95, ReviewKind::ReviewRequested);
+    other.url = "https://github.com/acme/shop-api/pull/95".into();
+    other.linked_tickets = vec!["shop-142".into(), "SHOP-143".into()];
+    let e = env(tmp.path(), vec![own.clone(), other.clone()]);
+    let mut item = work_item("feat/SHOP-142", Some(&own.url));
+    item.kind = WorkKind::Ticket;
+    item.ticket = Some(kelta_proto::samples::ticket_ref());
+    let it = item.clone();
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    let shop = || Scope::Project { id: "shop".into() };
+    // Before any review poll: only the work item's PR, from its URL and the repo binding.
+    let page = e.h.core.tracker_list(shop(), None, None, None, true).await.unwrap();
+    let prs = |p: &kelta_proto::tracker::TicketPage, key: &str| {
+        p.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().prs.clone()
+    };
+    let bare = prs(&page, "SHOP-142");
+    assert_eq!(bare.len(), 1);
+    assert_eq!((bare[0].number, bare[0].repo.as_str(), bare[0].ci), (90, "acme/shop-api", CiState::None));
+    assert_eq!(bare[0].account, Some(AccountId::new("github-work")));
+    assert!(page.items.iter().all(|i| i.caps == e.tracker.caps), "caps of the ticket's tracker");
+
+    for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+        e.h.core.review_page(Scope::All, kind, true).await.unwrap();
+    }
+    let calls = *e.host.calls.lock();
+    let page = e.h.core.tracker_list(shop(), None, None, None, false).await.unwrap();
+    assert_eq!(*e.host.calls.lock(), calls, "PR links come from the cache, never the network");
+    let linked = prs(&page, "SHOP-142");
+    let got: Vec<_> = linked.iter().map(|l| (l.number, l.source, l.ci)).collect();
+    assert_eq!(got, vec![(90, PrSource::WorkItem, CiState::Failure), (95, PrSource::KeyMatch, other.ci)]);
+    assert_eq!(prs(&page, "SHOP-143").iter().map(|l| l.number).collect::<Vec<_>>(), vec![95]);
+    assert!(prs(&page, "SHOP-141").is_empty());
+    let detail = e.h.core.tracker_get(&kelta_proto::samples::ticket_ref()).await.unwrap();
+    assert_eq!(detail.prs, linked);
+}
+
+#[test]
+fn hash_keys_resolve_against_the_pr_repo_and_merged_items_win() {
+    use kelta_core::feeds::ticket_prs;
+    let mut r = review("acme/shop", 7, ReviewKind::Authored);
+    r.url = "https://github.com/acme/shop/pull/7".into();
+    r.linked_tickets = vec!["#12".into()];
+    let one = std::slice::from_ref(&r);
+    assert_eq!(ticket_prs("acme/shop#12", None, None, one).len(), 1);
+    assert_eq!(ticket_prs("12", None, None, one).len(), 1, "Redmine bare number");
+    assert!(ticket_prs("acme/other#12", None, None, one).is_empty());
+    assert!(ticket_prs("SHOP-12", None, None, one).is_empty());
+    // A merged work item keeps its PR, unbound repo → no account (browser only).
+    let mut w = work_item("feat/x", Some("https://git.example/a/b/-/merge_requests/44/"));
+    w.state = WorkState::Merged { detail: None };
+    let got = ticket_prs("X-1", Some(&w), None, &[]);
+    assert_eq!((got[0].number, got[0].state, got[0].account.clone()), (44, PrState::Merged, None));
 }

@@ -153,6 +153,7 @@ impl RedmineTracker {
             priority: issue.pointer("/priority/name").and_then(Value::as_str).map(str::to_owned),
             updated_at: s(issue, "updated_on").unwrap_or("").to_owned(),
             project_hint: issue.pointer("/project/id").and_then(idstr),
+            ..Default::default()
         })
     }
 
@@ -367,6 +368,7 @@ impl Tracker for RedmineTracker {
             },
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent,
+            prs: Vec::new(),
         })
     }
 

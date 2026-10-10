@@ -4,7 +4,9 @@ import type { ReviewRef } from "./ReviewRef";
 import type { Scope } from "./Scope";
 import type { ScreenInstanceId } from "./ScreenInstanceId";
 import type { SessionId } from "./SessionId";
+import type { TicketGroupBy } from "./TicketGroupBy";
 import type { TicketRef } from "./TicketRef";
+import type { TicketSort } from "./TicketSort";
 import type { TicketsMode } from "./TicketsMode";
 import type { ToolInstanceId } from "./ToolInstanceId";
 import type { Who } from "./Who";
@@ -14,4 +16,16 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * Pane content; serde tag `kind`.
  */
-export type PaneContent = { "kind": "terminal", session_id: SessionId, } | { "kind": "web", tool_instance_id: ToolInstanceId, } | { "kind": "plugin_screen", plugin_id: PluginId, screen_id: string, instance_id: ScreenInstanceId, params: JsonValue, } | { "kind": "tickets", scope: Scope, view_id: string | null, mode: TicketsMode, who: Who | null, } | { "kind": "ticket_detail", ticket: TicketRef, } | { "kind": "reviews", scope: Scope, } | { "kind": "review_detail", review: ReviewRef, } | { "kind": "inbox" } | { "kind": "work_item", id: WorkItemId, } | { "kind": "settings", section: string | null, } | { "kind": "diagnostics" } | { "kind": "welcome" } | { "kind": "empty" };
+export type PaneContent = { "kind": "terminal", session_id: SessionId, } | { "kind": "web", tool_instance_id: ToolInstanceId, } | { "kind": "plugin_screen", plugin_id: PluginId, screen_id: string, instance_id: ScreenInstanceId, params: JsonValue, } | { "kind": "tickets", scope: Scope, view_id: string | null, mode: TicketsMode, who: Who | null, 
+/**
+ * `None` = flow.
+ */
+group?: TicketGroupBy | null, 
+/**
+ * `None` = priority.
+ */
+sort?: TicketSort | null, 
+/**
+ * Assignee user id narrowing the list client-side; `None` = everyone of the who.
+ */
+person?: string | null, } | { "kind": "ticket_detail", ticket: TicketRef, } | { "kind": "reviews", scope: Scope, } | { "kind": "review_detail", review: ReviewRef, } | { "kind": "inbox" } | { "kind": "work_item", id: WorkItemId, } | { "kind": "settings", section: string | null, } | { "kind": "diagnostics" } | { "kind": "welcome" } | { "kind": "empty" };

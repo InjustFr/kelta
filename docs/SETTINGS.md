@@ -179,6 +179,9 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
 | `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return strip (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
 
+### [tickets]
+| `wip_limit` | int | `3` | soft WIP limit: the tickets pane's Doing group header warns above it; blocks nothing |
+
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
 | `include_drafts` | bool | `false` | review requests only: my own (authored) PRs always include drafts |

@@ -4,6 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::codehost::PrLink;
 use crate::error::KeltaError;
 use crate::ids::{AccountId, ProjectId, WorkItemId};
 use crate::settings::TrackerView;
@@ -42,7 +43,7 @@ pub struct User {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub struct TicketRef {
     pub account: AccountId,
     /// Human key: `"SHOP-123"`, `"4567"`, `"acme/shop#12"`.
@@ -59,6 +60,42 @@ pub enum Who {
     Mine,
     Unassigned,
     Anyone,
+}
+
+/// Tickets pane grouping (`PaneContent::Tickets.group`; `None` = flow).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TicketGroupBy {
+    /// Doing / Waiting / Ready / Backlog / Done.
+    Flow,
+    Status,
+    Priority,
+    Sprint,
+    Assignee,
+    Source,
+    None,
+}
+
+/// Order within a tickets group (`PaneContent::Tickets.sort`; `None` = priority).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TicketSort {
+    Priority,
+    Updated,
+    /// Time in the current status (`Ticket.status_since`).
+    Age,
+    Key,
+}
+
+/// Jira sprint, Linear cycle, GitHub Projects iteration, GitLab iteration/milestone, Redmine version.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Sprint {
+    pub id: String,
+    pub name: String,
+    pub active: bool,
+    /// RFC 3339 or `YYYY-MM-DD`.
+    #[serde(default)]
+    pub ends_at: Option<String>,
 }
 
 /// One ticket source offered by `Tracker::sources`, ready to append to `TrackerBinding.views`.
@@ -90,7 +127,7 @@ pub struct Status {
     pub category: StatusCategory,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Ticket {
     #[serde(rename = "ref")]
     pub r#ref: TicketRef,
@@ -110,6 +147,20 @@ pub struct Ticket {
     /// Provider project key/path, used to match tickets to Kelta projects.
     #[serde(default)]
     pub project_hint: Option<String>,
+    /// Provider priority as a rank, 0 = highest; `None` = no priority.
+    #[serde(default)]
+    pub priority_rank: Option<u8>,
+    /// RFC 3339: when the ticket entered its current status (falls back to `updated_at`).
+    #[serde(default)]
+    pub status_since: Option<String>,
+    #[serde(default)]
+    pub sprint: Option<Sprint>,
+    /// Provider estimate as displayed (`3`, `5 pts`, `2h`).
+    #[serde(default)]
+    pub estimate: Option<String>,
+    /// Due date, `YYYY-MM-DD` or RFC 3339.
+    #[serde(default)]
+    pub due: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -140,6 +191,9 @@ pub struct TicketDetail {
     pub comments: Vec<Comment>,
     #[serde(default)]
     pub parent: Option<TicketRef>,
+    /// Filled by kelta-core (TICKETS.md T1); providers leave it empty.
+    #[serde(default)]
+    pub prs: Vec<PrLink>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -198,7 +252,7 @@ pub struct AccountError {
     pub error: KeltaError,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct TicketItem {
     pub ticket: Ticket,
     /// Kelta projects this ticket belongs to (empty = "Other").
@@ -208,6 +262,12 @@ pub struct TicketItem {
     /// Ids of the binding views (sources) that returned this ticket.
     #[serde(default)]
     pub view_ids: Vec<String>,
+    /// Linked PRs: the work item's first, then key matches from the polled review feeds.
+    #[serde(default)]
+    pub prs: Vec<PrLink>,
+    /// What the ticket's tracker can do (actions it cannot are disabled in the UI).
+    #[serde(default)]
+    pub caps: TrackerCaps,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]

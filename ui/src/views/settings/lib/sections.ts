@@ -13,7 +13,7 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   accounts: ['accounts'],
   claude: ['claude'],
   editors: ['editor'],
-  worktree: ['worktree', 'work', 'session_templates'],
+  worktree: ['worktree', 'work', 'tickets', 'session_templates'],
   reviews: ['reviews'],
   polling: ['polling'],
   notifications: ['notifications'],

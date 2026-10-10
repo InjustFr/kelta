@@ -77,6 +77,9 @@ async fn backend_open_moves_sessions_and_kill_removes_panes() {
         view_id: None,
         mode: TicketsMode::Board,
         who: None,
+        group: None,
+        sort: None,
+        person: None,
     };
     let p2 = h.core.layout_open(&shop, open(tickets.clone(), Placement::SplitRight)).await.unwrap();
     assert_eq!(p1.tab_id, p2.tab_id);

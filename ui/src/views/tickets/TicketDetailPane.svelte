@@ -28,7 +28,7 @@
   import MoveMenu from './MoveMenu.svelte';
   import StatusChip from './StatusChip.svelte';
   import { MoveController } from './move.svelte';
-  import { ciLamp, ensureReviews, loadedReviews, prForTicket, prLabel, reviewWord } from './prLink';
+  import { ciLamp, ensureReviews, mainPr, openPr, prLabel, reviewWord } from './prs';
 
   let { projectId, content, focused }: PaneProps<'ticket_detail'> = $props();
 
@@ -40,7 +40,7 @@
   /** `null` while loading: the menu says so instead of "no move available". */
   const transitions = $derived(tickets.transitions[ticketKey(ref)]?.data ?? null);
   const workItem = $derived(work.forTicket(ref));
-  const pr = $derived(ticket ? prForTicket(ticket, workItem?.pr_url ?? null, loadedReviews()) : null);
+  const pr = $derived(mainPr(detail?.prs ?? []));
 
   $effect(() => {
     const r = ref;
@@ -243,11 +243,7 @@
         <dt>Pull request</dt>
         <dd data-testid="ticket-pr">
           {#if pr}
-            <button
-              type="button"
-              class="link k-mono"
-              title={pr.title}
-              onclick={() => void openContent(projectId, { kind: 'review_detail', review: pr.ref })}
+            <button type="button" class="link k-mono" title={pr.title} onclick={() => openPr(pr, projectId)}
               >{prLabel(pr)}</button
             >
             <Lamp level={ciLamp(pr.ci)} title={`CI ${pr.ci}`} />

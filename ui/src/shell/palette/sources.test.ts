@@ -89,10 +89,23 @@ describe('palette sources', () => {
           priority: null,
           updated_at: '2026-10-01T00:00:00Z',
           project_hint: null,
+          priority_rank: null,
+          status_since: null,
+          sprint: null,
+          estimate: null,
+          due: null,
         },
         project_ids: ['shop'],
         work_item_id: null,
         view_ids: [],
+        prs: [],
+        caps: {
+          board_columns: false,
+          assign: true,
+          comment: true,
+          transitions_need_fetch: false,
+          projects_v2: false,
+        },
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });

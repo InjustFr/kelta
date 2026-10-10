@@ -162,12 +162,22 @@ function sampleNotes(id: string): ReviewNote[] {
   ];
 }
 
+/** The fixtures' `status_since` are written as of this instant; shifted to now so ages stay 3/10/16/25 days. */
+const FIXTURE_NOW = Date.parse('2026-10-10T12:00:00Z');
+
+function rebaseAges(items: TicketItem[]): TicketItem[] {
+  const shift = Date.now() - FIXTURE_NOW;
+  for (const { ticket: t } of items)
+    if (t.status_since) t.status_since = new Date(Date.parse(t.status_since) + shift).toISOString();
+  return items;
+}
+
 function freshState(): MockState {
   return {
     projects: clone(FIXTURES.projects),
     sessions: clone(FIXTURES.sessions),
     layouts: clone(FIXTURES.layouts),
-    tickets: clone(FIXTURES.tickets),
+    tickets: rebaseAges(clone(FIXTURES.tickets)),
     reviews: clone(FIXTURES.reviews),
     work: clone(FIXTURES.work),
     git: clone(FIXTURES.git),
@@ -194,7 +204,7 @@ const FINISH_MERGED: FinishOpts = {
   transition_to: null,
 };
 
-function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
+function ticketDetailFor({ ticket: t, prs }: TicketItem, comments: string[]): TicketDetail {
   const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
   return {
     ticket: t,
@@ -214,6 +224,7 @@ function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
       })),
     ],
     parent: null,
+    prs,
   };
 }
 
@@ -392,6 +403,7 @@ export function createMockTransport(options: MockOptions = {}): {
       ...item.ticket,
       status: { id: `st-${category}`, name: name ?? CATEGORY_NAMES[category], category },
       updated_at: new Date().toISOString(),
+      status_since: new Date().toISOString(),
     };
     const scopes = item.project_ids.map((id) => ({ kind: 'project' as const, id }));
     for (const scope of [...scopes, { kind: 'all' as const }]) emit({ type: 'tickets.changed', scope });
@@ -773,7 +785,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     tracker_get: ({ ticket }) => {
       const item = ticketItem(ticket);
-      return ticketDetailFor(clone(item.ticket), state.comments[refKey(ticket)] ?? []);
+      return ticketDetailFor(clone(item), state.comments[refKey(ticket)] ?? []);
     },
     tracker_columns: ({ project_id }) => {
       const p = project(project_id);
@@ -808,13 +820,14 @@ export function createMockTransport(options: MockOptions = {}): {
       return updateTicket(ticket, col.category, col.name);
     },
     tracker_comment: ({ ticket, markdown }) => {
-      ticketItem(ticket);
+      if (!ticketItem(ticket).caps.comment) throw err('unsupported', `${ticket.account} cannot comment`);
       const key = refKey(ticket);
       state.comments[key] = [...(state.comments[key] ?? []), markdown];
       return null;
     },
     tracker_assign: ({ ticket, assignee }) => {
       const item = ticketItem(ticket);
+      if (!item.caps.assign) throw err('unsupported', `${ticket.account} cannot assign`);
       item.ticket.assignee =
         assignee.kind === 'none'
           ? null
