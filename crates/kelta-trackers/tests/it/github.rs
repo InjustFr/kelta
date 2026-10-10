@@ -206,7 +206,18 @@ async fn detail_shows_the_newest_twenty_comments() {
         )
         .mount(&server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/issues/12/sub_issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+            "number": 13, "title": "Round per line", "state": "closed", "html_url": "https://github.com/acme/shop/issues/13",
+            "repository_url": "https://api.github.com/repos/acme/shop", "updated_at": "2026-10-01T08:30:00Z"
+        }])))
+        .mount(&server)
+        .await;
     let d = gh(&server).get(&r()).await.unwrap();
+    let kids: Vec<_> =
+        d.children.iter().map(|c| (c.ticket.r#ref.key.as_str(), c.ticket.status.category)).collect();
+    assert_eq!(kids, vec![("acme/shop#13", StatusCategory::Done)]);
     assert_eq!(d.comments.len(), 20);
     assert!(d.comments[19].body_html.contains("<strong>23</strong>"));
     assert!(d.comments[0].body_html.contains("<strong>4</strong>"));

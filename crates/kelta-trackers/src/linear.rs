@@ -323,7 +323,8 @@ impl Tracker for LinearTracker {
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         let q = format!(
             "query($id: String!, $n: Int) {{ issue(id: $id) {{ {ISSUE} description \
-             comments(last: $n) {{ nodes {{ body createdAt user {{ {USER} }} }} }} }} }}"
+             comments(last: $n) {{ nodes {{ body createdAt user {{ {USER} }} }} }} \
+             children(first: 50) {{ nodes {{ {ISSUE} }} }} }} }}"
         );
         let d = self.gql(&q, json!({"id": Self::id_of(t), "n": COMMENT_LIMIT})).await?;
         let raw = &d["issue"];
@@ -343,6 +344,11 @@ impl Tracker for LinearTracker {
                     .collect()
             })
             .unwrap_or_default();
+        let children = raw
+            .pointer("/children/nodes")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|c| self.ticket_from(c)).map(common::child).collect())
+            .unwrap_or_default();
         let body = s(raw, "description").unwrap_or("").to_owned();
         Ok(TicketDetail {
             ticket,
@@ -351,6 +357,7 @@ impl Tracker for LinearTracker {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            children,
             prs: Vec::new(),
             caps: Default::default(),
         })

@@ -301,6 +301,7 @@ impl Tracker for GiteaIssues {
             body_format: BodyFormat::Markdown,
             comments: last_n(comments, COMMENT_LIMIT),
             parent: None,
+            children: Vec::new(), // Gitea has no sub-issues
             prs: Vec::new(),
             caps: Default::default(),
         })

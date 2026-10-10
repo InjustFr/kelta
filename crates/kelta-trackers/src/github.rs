@@ -811,6 +811,21 @@ impl Tracker for GithubIssues {
                 )
             })
             .collect();
+        // Sub-issues are extra: a server without them (older GHES) or a failed call still shows the ticket.
+        let children = self
+            .rest(
+                HttpRequest::get(format!("{}/repos/{repo}/issues/{number}/sub_issues", self.api))
+                    .query("per_page", "50"),
+            )
+            .await
+            .map(|r| {
+                r.body.as_array().map(|a| {
+                    a.iter().filter_map(|c| self.ticket_from_rest(c, None)).map(common::child).collect()
+                })
+            })
+            .ok()
+            .flatten()
+            .unwrap_or_default();
         let body = s(&issue, "body").unwrap_or("").to_owned();
         Ok(TicketDetail {
             ticket,
@@ -819,6 +834,7 @@ impl Tracker for GithubIssues {
             body_format: BodyFormat::Markdown,
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent: None,
+            children,
             prs: Vec::new(),
             caps: Default::default(),
         })

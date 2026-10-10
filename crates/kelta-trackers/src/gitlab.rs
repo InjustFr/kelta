@@ -246,6 +246,45 @@ impl GitlabIssues {
         Ok(self.json(HttpRequest::get(self.issue_url(project, iid, ""))).await?.body)
     }
 
+    /// Child items of an issue: only GraphQL has the hierarchy, the items are then read over REST (one
+    /// call per project). Extra: an older server or a failed call gives none, the ticket still shows.
+    async fn children(&self, project: &str, iid: u64) -> Vec<Ticket> {
+        const Q: &str = "query($p:ID!,$iid:String!){ project(fullPath:$p){ workItems(iid:$iid){ nodes{ \
+            widgets{ ... on WorkItemWidgetHierarchy { children(first:50){ nodes{ iid namespace{ fullPath } } } } } } } } }";
+        let url = format!("{}/graphql", self.api.strip_suffix("/v4").unwrap_or(&self.api));
+        let body = json!({"query": Q, "variables": {"p": project, "iid": iid.to_string()}});
+        let Ok(r) = self.json(HttpRequest::post(url).json(body)).await else { return Vec::new() };
+        let nodes = r
+            .body
+            .pointer("/data/project/workItems/nodes/0/widgets")
+            .and_then(Value::as_array)
+            .and_then(|ws| ws.iter().find_map(|w| w.pointer("/children/nodes")?.as_array().cloned()));
+        let mut by_project: Vec<(String, Vec<String>)> = Vec::new();
+        for n in nodes.unwrap_or_default() {
+            let (Some(iid), p) = (s(&n, "iid"), n.pointer("/namespace/fullPath").and_then(Value::as_str))
+            else {
+                continue;
+            };
+            let p = p.unwrap_or(project);
+            match by_project.iter_mut().find(|(q, _)| q == p) {
+                Some((_, iids)) => iids.push(iid.to_owned()),
+                None => by_project.push((p.to_owned(), vec![iid.to_owned()])),
+            }
+        }
+        let mut out = Vec::new();
+        for (p, iids) in by_project {
+            let mut req = HttpRequest::get(format!("{}/projects/{}/issues", self.api, percent_encode(&p)))
+                .query("per_page", "100");
+            for i in iids {
+                req = req.query("iids[]", i);
+            }
+            if let Ok(r) = self.json(req).await {
+                out.extend(r.body.as_array().into_iter().flatten().filter_map(|v| self.ticket_from(v)));
+            }
+        }
+        out
+    }
+
     /// Labels `<scope>::*` of a project (and its ancestor groups), in server order.
     async fn scoped_labels(&self, project: &str, scope: &str) -> Result<Vec<String>, KeltaError> {
         let resp = self
@@ -417,6 +456,7 @@ impl Tracker for GitlabIssues {
             })
             .unwrap_or_default();
         comments.reverse(); // newest first on the wire, oldest first in the contract
+        let children = self.children(&project, iid).await.into_iter().map(common::child).collect();
         let body = s(&raw, "description").unwrap_or("").to_owned();
         Ok(TicketDetail {
             ticket,
@@ -425,6 +465,7 @@ impl Tracker for GitlabIssues {
             body_format: BodyFormat::Markdown,
             comments,
             parent: None,
+            children,
             prs: Vec::new(),
             caps: Default::default(),
         })

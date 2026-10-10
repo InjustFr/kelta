@@ -531,7 +531,7 @@ impl Tracker for JiraTracker {
         let api = self.api().await?;
         let lk = self.lookups(&api).await?;
         let mut fields = lk.fields();
-        fields.extend(["description", "comment"]);
+        fields.extend(["description", "comment", "subtasks"]);
         let v = api
             .json(
                 HttpRequest::get(api.url(&format!("/issue/{}", percent_encode(&t.key))))
@@ -564,6 +564,13 @@ impl Tracker for JiraTracker {
                 id: p.get("id").and_then(idstr).unwrap_or_else(|| key.to_owned()),
             })
         });
+        let children = v
+            .pointer("/fields/subtasks")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter().filter_map(|c| self.ticket_from(&t.account, c, lk).ok()).map(common::child).collect()
+            })
+            .unwrap_or_default();
         Ok(TicketDetail {
             ticket,
             body_md,
@@ -571,6 +578,7 @@ impl Tracker for JiraTracker {
             body_format,
             comments: self.comments_from(api.flavor, &v),
             parent,
+            children,
             prs: Vec::new(),
             caps: Default::default(),
         })

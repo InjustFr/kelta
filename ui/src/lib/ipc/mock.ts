@@ -224,6 +224,7 @@ function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[
       })),
     ],
     parent: null,
+    children: [],
     prs,
     caps,
   };
@@ -811,7 +812,11 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     tracker_get: ({ ticket }) => {
       const item = ticketItem(ticket);
-      return ticketDetailFor(clone(item), state.comments[refKey(ticket)] ?? []);
+      const detail = ticketDetailFor(clone(item), state.comments[refKey(ticket)] ?? []);
+      // One parent with a sub-task, for the detail's Sub-tasks section (TICKETS.md T7).
+      if (ticket.key === 'SHOP-142')
+        detail.children = [clone(ticketItem({ ...ticket, key: 'SHOP-160', id: '10160' }))];
+      return detail;
     },
     tracker_columns: ({ project_id }) => {
       const p = project(project_id);

@@ -105,7 +105,26 @@ async fn detail_lists_user_notes_oldest_first() {
     let server = MockServer::start().await;
     issue_with(&server, "gitlab/issue.json").await;
     mount(&server, "GET", &format!("{ISSUE}/notes"), 200, "gitlab/notes_desc.json").await;
+    Mock::given(method("POST"))
+        .and(path("/api/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"project": {"workItems": {"nodes": [
+            {"widgets": [{}, {"children": {"nodes": [{"iid": "13", "namespace": {"fullPath": "grp/sub/proj"}}]}}]}
+        ]}}}})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
+        .and(query_param("iids[]", "13"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+            "iid": 13, "title": "Task", "state": "closed", "web_url": "https://gitlab.example/grp/sub/proj/-/work_items/13",
+            "references": {"full": "grp/sub/proj#13"}, "labels": [], "updated_at": "2026-10-01T08:30:00Z"
+        }])))
+        .mount(&server)
+        .await;
     let d = gl(&server).get(&r()).await.unwrap();
+    let kids: Vec<_> =
+        d.children.iter().map(|c| (c.ticket.r#ref.key.as_str(), c.ticket.status.category)).collect();
+    assert_eq!(kids, vec![("grp/sub/proj#13", StatusCategory::Done)]);
     assert!(d.body_html.contains("<li>step one</li>"));
     assert_eq!(d.comments.len(), 2, "system notes are dropped");
     assert!(d.comments[0].body_html.contains("<strong>note</strong>"));

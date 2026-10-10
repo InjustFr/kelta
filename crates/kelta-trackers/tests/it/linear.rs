@@ -106,6 +106,9 @@ async fn detail_renders_markdown_and_lists_comments() {
     assert_eq!(d.comments.len(), 2);
     assert!(d.comments[0].body_html.contains("<strong>note</strong>"));
     assert_eq!(gql_bodies(&server, "comments(last").await[0]["variables"]["id"], "iss-uuid-12");
+    let kids: Vec<_> =
+        d.children.iter().map(|c| (c.ticket.r#ref.key.as_str(), c.ticket.status.category)).collect();
+    assert_eq!(kids, vec![("ENG-13", StatusCategory::Done)]);
 }
 
 #[tokio::test]

@@ -28,6 +28,20 @@
       "team": {
         "key": "ENG"
       },
+      "children": {
+        "nodes": [
+          {
+            "id": "iss-uuid-13",
+            "identifier": "ENG-13",
+            "title": "Keep the redirect target",
+            "url": "https://linear.app/acme/issue/ENG-13/keep-the-redirect-target",
+            "updatedAt": "2026-10-01T08:30:00.000Z",
+            "state": { "id": "st-done", "name": "Done", "type": "completed" },
+            "labels": { "nodes": [] },
+            "team": { "key": "ENG" }
+          }
+        ]
+      },
       "description": "# Login\n\n- step one\n- step two\n\n<script>alert(1)</script>",
       "comments": {
         "nodes": [
