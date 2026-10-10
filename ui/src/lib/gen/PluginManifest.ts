@@ -2,6 +2,7 @@
 import type { Contributes } from "./Contributes";
 import type { PlatformName } from "./PlatformName";
 import type { PluginId } from "./PluginId";
+import type { ProviderDef } from "./ProviderDef";
 
 /**
  * `kelta-plugin.toml` (or `.json`).
@@ -26,4 +27,8 @@ permissions: Array<string>,
 /**
  * `onStartup` | `onCommand:<id>` | `onScreen:<id>` | `onEvent:<glob>` | `onProjectOpen`.
  */
-activation: Array<string>, contributes: Contributes, };
+activation: Array<string>, contributes: Contributes, 
+/**
+ * A process (KPP) provider: tracker or code-host accounts served over JSON-RPC on stdio.
+ */
+provider: ProviderDef | null, };

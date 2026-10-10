@@ -56,7 +56,8 @@
       "settings": {
         "schema": "settings.schema.json"
       }
-    }
+    },
+    "provider": null
   },
   "permissions": [
     {

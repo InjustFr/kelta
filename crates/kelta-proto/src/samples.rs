@@ -368,6 +368,7 @@ pub fn plugin_manifest() -> PluginManifest {
             settings: Some(SettingsContribution { schema: "settings.schema.json".into() }),
             ..Contributes::default()
         },
+        provider: None,
     }
 }
 
@@ -1224,6 +1225,7 @@ pub fn all() -> Vec<Fixture> {
                 text_format: TextFormat::Textile,
                 poll_secs: None,
                 web_url: None,
+                plugin: None,
             }
         ),
         fx!("session_templates_default", Vec<SessionTemplate>, default_session_templates()),

@@ -279,17 +279,22 @@ impl Core {
             let work_store: Arc<dyn WorkStore> = store.clone();
             let grant_store: Arc<dyn GrantStore> = store.clone();
             let refresher: Weak<dyn scheduler::Refresher> = weak.clone();
+            let plugins = PluginHost::new(api.clone(), dirs.clone(), grant_store);
+            // plugin_tracker / plugin_codehost accounts are served by provider plugins (KPP)
+            let kpp = |inner: &Arc<dyn ProviderFactory>| -> Arc<dyn ProviderFactory> {
+                Arc::new(kelta_plugins::kpp::KppFactory::new(inner.clone(), Arc::downgrade(&plugins)))
+            };
             Core {
                 me: weak.clone(),
                 work: WorkService::new(api.clone(), work_store, dirs.clone()),
-                server: Server::new(api.clone(), dirs.clone()),
-                plugins: PluginHost::new(api, dirs.clone(), grant_store),
+                server: Server::new(api, dirs.clone()),
                 providers: providers::ProviderRegistry::new(
                     http.clone(),
-                    trackers.clone(),
-                    code_hosts.clone(),
+                    kpp(&trackers),
+                    kpp(&code_hosts),
                     resolver.clone(),
                 ),
+                plugins,
                 scheduler: scheduler::Scheduler::new(refresher, gauge),
                 dirs,
                 cli,

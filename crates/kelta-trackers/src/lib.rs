@@ -51,6 +51,11 @@ impl ProviderFactory for TrackerFactory {
             AccountKind::Bitbucket => {
                 return Err(KeltaError::unsupported("Bitbucket Cloud removed its issue tracker; use Jira"));
             }
+            AccountKind::PluginTracker | AccountKind::PluginCodehost => {
+                return Err(KeltaError::unsupported(
+                    "plugin accounts are built by kelta_plugins::KppFactory",
+                ));
+            }
         })
     }
 

@@ -13,6 +13,8 @@ pub enum CodeHostKind {
     Gitlab,
     Bitbucket,
     Gitea,
+    /// A process (KPP) plugin provider.
+    Plugin,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]

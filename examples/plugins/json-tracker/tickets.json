@@ -1,0 +1,28 @@
+{
+  "me": { "id": "me", "name": "Me", "login": "me" },
+  "statuses": [
+    { "id": "todo", "name": "To do", "category": "todo" },
+    { "id": "doing", "name": "In progress", "category": "in_progress" },
+    { "id": "done", "name": "Done", "category": "done" }
+  ],
+  "tickets": [
+    {
+      "key": "DEMO-1",
+      "title": "Write the README",
+      "status": "todo",
+      "assignee": null,
+      "body": "The plugin needs a **README**.",
+      "updated_at": "2026-10-01T10:00:00Z",
+      "comments": []
+    },
+    {
+      "key": "DEMO-2",
+      "title": "Ship the example",
+      "status": "doing",
+      "assignee": "me",
+      "body": "Make it pass `kpp-check`.",
+      "updated_at": "2026-10-02T10:00:00Z",
+      "comments": [{ "author": "me", "created_at": "2026-10-02T11:00:00Z", "body": "On it." }]
+    }
+  ]
+}

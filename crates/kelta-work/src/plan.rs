@@ -192,7 +192,9 @@ pub async fn suffixed(repo: &Path, branch: &str, path: &Path) -> Result<(String,
 /// Local branch for a review (`kelta/pr-<n>` / `kelta/mr-<iid>`).
 pub fn review_branch(kind: CodeHostKind, number: u64) -> String {
     match kind {
-        CodeHostKind::Github | CodeHostKind::Bitbucket | CodeHostKind::Gitea => format!("kelta/pr-{number}"),
+        CodeHostKind::Github | CodeHostKind::Bitbucket | CodeHostKind::Gitea | CodeHostKind::Plugin => {
+            format!("kelta/pr-{number}")
+        }
         CodeHostKind::Gitlab => format!("kelta/mr-{number}"),
     }
 }

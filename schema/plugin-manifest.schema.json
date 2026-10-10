@@ -3762,6 +3762,107 @@
       },
       "type": "array"
     },
+    "provider": {
+      "additionalProperties": false,
+      "default": null,
+      "description": "A process (KPP) provider: tracker or code-host accounts served over JSON-RPC on stdio.",
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "branch_key": {
+          "default": null,
+          "description": "Tracker `branch_key` (default `{key}`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "browser_url": {
+          "default": null,
+          "description": "Tracker `browser_url` (default `{web_url}/{key}`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "caps": {
+          "additionalProperties": false,
+          "default": {
+            "assign": false,
+            "board_columns": false,
+            "comment": false,
+            "projects_v2": false,
+            "transitions_need_fetch": false
+          },
+          "description": "Tracker capabilities.",
+          "properties": {
+            "assign": {
+              "default": false,
+              "type": "boolean"
+            },
+            "board_columns": {
+              "default": false,
+              "type": "boolean"
+            },
+            "comment": {
+              "default": false,
+              "type": "boolean"
+            },
+            "projects_v2": {
+              "default": false,
+              "type": "boolean"
+            },
+            "transitions_need_fetch": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "command": {
+          "description": "Program to run; a path with `/` is relative to the plugin dir. Runs in the plugin dir.",
+          "type": "string"
+        },
+        "fetch_refspec": {
+          "default": null,
+          "description": "Code host `fetch_refspec` (default `pull/{number}/head:{branch}`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "tracker",
+            "codehost"
+          ],
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": null,
+          "description": "Per-call timeout (default 30000).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "command"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
     "version": {
       "description": "Semver.",
       "type": "string"

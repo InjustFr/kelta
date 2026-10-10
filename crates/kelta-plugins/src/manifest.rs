@@ -322,6 +322,17 @@ pub fn validate(m: &PluginManifest) -> Vec<String> {
             errors.push(format!("contributes.session_templates: invalid or duplicate id `{}`", t.id));
         }
     }
+    if let Some(p) = &m.provider {
+        if !m.permissions.iter().any(|x| x == "provider") {
+            errors.push("[provider] needs the `provider` permission".to_owned());
+        }
+        if p.command.trim().is_empty() || (p.command.contains('/') && !is_safe_relative(&p.command)) {
+            errors.push(format!(
+                "[provider]: command `{}` must be a program name or a relative path inside the plugin",
+                p.command
+            ));
+        }
+    }
     if let Some(s) = &c.settings
         && !is_safe_relative(&s.schema)
     {

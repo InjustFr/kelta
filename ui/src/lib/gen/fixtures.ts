@@ -1203,6 +1203,7 @@ export const pluginInstallPreview: PluginInstallPreview = {
       "macos",
       "linux"
     ],
+    "provider": null,
     "version": "0.2.0"
   },
   "permissions": [
@@ -1856,6 +1857,7 @@ export const pluginManifest: PluginManifest = {
     "macos",
     "linux"
   ],
+  "provider": null,
   "version": "0.2.0"
 };
 
@@ -2292,6 +2294,7 @@ export const accountConfig: AccountConfig = {
   "email": "me@acme.com",
   "flavor": "auto",
   "kind": "jira",
+  "plugin": null,
   "poll_secs": null,
   "secret": "keyring:jira-acme",
   "text_format": "textile",

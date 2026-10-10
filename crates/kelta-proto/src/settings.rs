@@ -1079,11 +1079,15 @@ pub enum AccountKind {
     Bitbucket,
     /// Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.
     Gitea,
+    /// Tracker served by a process (KPP) plugin; `plugin` names it (PLUGINS §9).
+    PluginTracker,
+    /// Code host served by a process (KPP) plugin; `plugin` names it (PLUGINS §9).
+    PluginCodehost,
 }
 
 impl AccountKind {
     pub fn is_code_host(self) -> bool {
-        matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea)
+        matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea | Self::PluginCodehost)
     }
 }
 
@@ -1141,6 +1145,9 @@ pub struct AccountConfig {
     /// Browser links (GHE/GitLab); derived when absent.
     #[serde(default)]
     pub web_url: Option<String>,
+    /// `plugin_tracker` / `plugin_codehost`: id of the plugin whose `[provider]` serves this account.
+    #[serde(default)]
+    pub plugin: Option<String>,
 }
 
 impl AccountConfig {

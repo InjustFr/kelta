@@ -24,4 +24,8 @@ secret: SecretRef | null, text_format: TextFormat, poll_secs: number | null,
 /**
  * Browser links (GHE/GitLab); derived when absent.
  */
-web_url: string | null, };
+web_url: string | null, 
+/**
+ * `plugin_tracker` / `plugin_codehost`: id of the plugin whose `[provider]` serves this account.
+ */
+plugin: string | null, };
