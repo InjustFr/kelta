@@ -123,6 +123,11 @@ pub fn placeholders(s: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Placeholder roots used in `s`: `{worktree|project.root}` gives `worktree` and `project`.
+pub fn roots(s: &str) -> impl Iterator<Item = &str> {
+    placeholders(s).into_iter().flat_map(|b| b.split('|')).map(|p| p.split('.').next().unwrap_or(p))
+}
+
 /// Load-time validation: every placeholder path must be known. Returns the offending names.
 pub fn unknown_placeholders(s: &str) -> Vec<String> {
     let mut bad = Vec::new();

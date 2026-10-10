@@ -7,6 +7,7 @@
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "layer",
@@ -21,6 +22,7 @@
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "plugin",

@@ -50,7 +50,7 @@ use kelta_proto::codehost::{PrDraft, ReviewItem, ReviewKind};
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, UiEvent};
+use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, ToastAction, UiEvent};
 use kelta_proto::ext::{BlockingOutcome, ProxiedRequest, ProxiedResponse, ToolHandle};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
@@ -376,6 +376,16 @@ impl Core {
         });
         self.sync_plugin_schemas();
         apply_ticket_key_regex(&self.cfg.effective(None));
+        // The migration runs once (it empties the project files), so this toast shows once.
+        if self.config.tools_migrated() > 0 {
+            let mut t = Toast::info("Tools moved to your global settings");
+            t.action = Some(ToastAction {
+                label: "Review".into(),
+                command: "settings.open".into(),
+                args: Some(serde_json::json!({ "section": "tools" })),
+            });
+            self.emit(UiEvent::Toast { toast: t });
+        }
         let weak = self.me.clone();
         self.rt.spawn(async move {
             if let Some(core) = weak.upgrade() {

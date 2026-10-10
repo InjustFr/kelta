@@ -258,9 +258,9 @@ impl PluginHost {
     // ---- tools ---------------------------------------------------------------------------------
 
     /// `tool_list`.
-    pub async fn tools(&self, project: &ProjectId) -> Result<Vec<ToolInfo>, KeltaError> {
+    pub async fn tools(&self, _project: &ProjectId) -> Result<Vec<ToolInfo>, KeltaError> {
         self.start();
-        Ok(self.tool_infos(project))
+        Ok(self.tool_infos())
     }
 
     /// `tool_open`.

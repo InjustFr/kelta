@@ -6,7 +6,7 @@ free loopback port, waits for its JSON line, shows it next to your terminals and
 1. Install Sapling: `brew install sapling` (macOS) or see https://sapling-scm.com/docs/introduction/installation.
    ISL also needs Node.js on your login shell's `PATH`. Check with `sl --version` (it must say "Sapling":
    the `sl` steam-locomotive package uses the same name).
-2. Add the tool (Settings > Tools, or in `config.toml` / a project file). It works in Sapling and in plain git
+2. Add the tool (Settings > Tools, or in `config.toml`). It works in Sapling and in plain git
    repos:
 
 ```toml

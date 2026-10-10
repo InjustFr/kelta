@@ -5,7 +5,7 @@
   import type { SheetProps } from '$app/registry';
   import type { ToolCheck, ToolInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
-  import { projects, tools } from '$lib/stores';
+  import { projects, tools, ui } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -53,6 +53,12 @@
 
   async function open(t: ToolInfo): Promise<void> {
     if (!projectId) return;
+    // Home or a global view has no project to open in: `tools.open` asks, falls back to Home and activates.
+    if (ui.view !== null || (t.needs_project && projectId === (projects.home?.id ?? 'home'))) {
+      onclose();
+      void dispatch('tools.open', { tool_id: t.id });
+      return;
+    }
     // The active tab's work item, as `tools.open` sends: only meaningful in the shown project.
     const workItemId = projectId === projects.activeId ? focusedWorkItem() : null;
     const r = await openTool(projectId, t, { work_item_id: workItemId });

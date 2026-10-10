@@ -8,4 +8,8 @@ export type ToolInfo = { id: ToolId, label: string, icon: string | null, kind: T
 /**
  * `None` = not checked yet.
  */
-installed: boolean | null, source: ToolSource, keybinding: string | null, description: string | null, placement: Placement, };
+installed: boolean | null, source: ToolSource, keybinding: string | null, description: string | null, placement: Placement, 
+/**
+ * A template uses `{project.*}` or `{repo.*}`: opening it needs a real project (not Home).
+ */
+needs_project: boolean, };
