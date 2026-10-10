@@ -146,7 +146,7 @@
         overId = null;
       }}
     >
-      <span class="lamp-slot"><Lamp {level} /></span>
+      {#if level !== 'none'}<span class="lamp-slot"><Lamp {level} /></span>{/if}
       {#if tab.work_item_id}<Icon name="git-branch" size={14} />{/if}
       <span class="title">{tab.title}</span>
       <button
@@ -259,8 +259,24 @@
     outline-offset: -2px;
   }
 
+  /* Neighbouring plain tabs get a hairline between them so each one reads as its own target. */
+  .tab {
+    position: relative;
+  }
+
+  .tab:not(.active, .asks, :hover) + .tab:not(.active, .asks, :hover)::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--k-space-2) / 2 - 0.5px);
+    top: 25%;
+    bottom: 25%;
+    width: 1px;
+    background: var(--k-border);
+  }
+
   /* Call light (§4.4): only while not selected; the lamp carries it on the active tab. */
   .tab.asks {
+    --k-fg-subtle: var(--k-fg-muted);
     background: var(--k-lit);
     color: var(--k-fg);
   }
@@ -275,7 +291,6 @@
     box-shadow: inset 2px 0 0 var(--k-accent);
   }
 
-  /* Fixed width even when empty, so the states of all tabs line up in one column. */
   .lamp-slot {
     display: inline-flex;
     align-items: center;
@@ -294,21 +309,40 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 22px;
-    height: 22px;
+    position: relative;
+    width: 24px;
+    height: 24px;
     padding: 0;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: inherit;
-    visibility: hidden;
     cursor: pointer;
   }
 
-  .tab:hover .close,
-  .tab:focus-within .close,
-  .tab.active .close {
-    visibility: visible;
+  /* The visible box stays small; the target reaches the 28px floor. */
+  .close::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+  }
+
+  /* Plain tabs show the close button only on hover or focus, so their label is not padded by an
+     empty slot; the active tab always shows it. */
+  .tab:not(.active) .close {
+    display: none;
+  }
+
+  .tab:not(.active):is(:hover, :focus-within) .close {
+    display: inline-flex;
+  }
+
+  .tab:not(.active) {
+    padding-right: var(--k-space-4);
+  }
+
+  .tab:not(.active):is(:hover, :focus-within) {
+    padding-right: 6px;
   }
 
   .close:hover {

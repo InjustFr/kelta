@@ -306,6 +306,7 @@
 
   /* Call light (section 4.4): only while unfocused; focused keeps the selected tint. */
   .pane:not(.focused) header.asks {
+    --k-fg-subtle: var(--k-fg-muted);
     background: var(--k-lit);
     color: var(--k-fg);
   }

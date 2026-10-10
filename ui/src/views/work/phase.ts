@@ -89,6 +89,24 @@ function p(
 
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
+/** A failed start step as a gerund for "Failed …" / "Retry …" (common.ts holds the checklist
+ *  wording); unknown ids read as words. */
+const STEP_DOING: Record<string, string> = {
+  before_start: 'running the before-start hook',
+  fetch_ticket: 'fetching the ticket',
+  fetch_base: 'fetching the base branch',
+  worktree: 'creating the branch folder',
+  include_files: 'copying included files',
+  claude_files: 'preparing Claude files',
+  layout: 'opening the panes',
+  setup: 'running setup',
+  editor: 'starting the editor',
+  claude: 'starting Claude',
+  tracker_side_effects: 'updating the ticket',
+  persist: 'saving the work item',
+};
+const doing = (step: string): string => STEP_DOING[step] ?? step.replace(/_/g, ' ');
+
 /** The first matching row of FLOW §2.2 wins. `claude` is the item's Claude session (its `status`). */
 export function phaseOf(
   item: PhaseItem,
@@ -100,7 +118,15 @@ export function phaseOf(
   const urlNo = item.pr_url?.match(/(\d+)\/?$/)?.[1];
   const prLabel = pr ? `#${pr.ref.number}` : urlNo ? `#${urlNo}` : '';
   if (st.kind === 'failed')
-    return p('failed', `Failed at ${st.step}`, st.message, 'error', 'retry', `Retry ${st.step}`, 'fix');
+    return p(
+      'failed',
+      `Failed ${doing(st.step)}`,
+      st.message,
+      'error',
+      'retry',
+      `Retry ${doing(st.step)}`,
+      'fix',
+    );
   if (st.kind === 'starting' || st.kind === 'planned') {
     const done = item.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
     const detail = item.steps.length

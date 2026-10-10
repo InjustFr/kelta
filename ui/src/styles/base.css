@@ -109,6 +109,7 @@ pre,
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  container-type: inline-size; /* rows drop low-value chips in narrow panes */
   outline: none;
   background: var(--k-well);
   color: var(--k-fg);
@@ -158,6 +159,8 @@ pre,
 
 .k-filter {
   width: 240px;
+  flex: 0 1 240px; /* gives way in narrow panes before the toolbar wraps */
+  min-width: 96px;
   height: var(--k-control-height-sm);
   padding: 0 var(--k-space-3);
   border: 1px solid var(--k-border);
@@ -208,10 +211,36 @@ pre,
 }
 
 .k-row-title {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 18ch;
+  min-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Chips and meta after the title: they give way before the title does. Overflow is clipped on the
+   left, so the age and diffstat at the end stay readable. */
+.k-row-tail {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--k-space-3);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.k-row-tail > * {
+  flex: none;
+}
+
+.k-narrow-hide {
+  display: inline-flex;
+}
+
+@container (max-width: 720px) {
+  .k-row-tail .k-narrow-hide {
+    display: none;
+  }
 }
 
 .k-row-meta {
@@ -303,5 +332,6 @@ pre,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -38,7 +38,7 @@
   {#snippet after()}
     <section data-layer={layer} class="tools">
       <h2>Check if installed</h2>
-      <p class="muted">Tools in the strip, from config files or plugins.</p>
+      <p class="muted">Tools you can open from New tab or the palette, from config files or plugins.</p>
       {#if !pid}
         <EmptyState icon="folder" title="No project selected" />
       {:else if slot?.error && !slot.data}

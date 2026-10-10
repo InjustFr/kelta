@@ -256,7 +256,7 @@ describe('openPane', () => {
     const { layout, location } = openPane(base(), req({ kind: 'inbox' }, 'new_tab'));
     expect(layout.tabs).toHaveLength(2);
     expect(layout.active_tab).toBe(location.tabId);
-    expect(layout.tabs[1]?.title).toBe('Inbox');
+    expect(layout.tabs[1]?.title).toBe('Now');
   });
 
   it('split_right / split_down split the focused pane', () => {

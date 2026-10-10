@@ -194,7 +194,7 @@
     data-testid="rail-search"
   >
     <Icon name="search" size={16} />
-    <span class="search-text">Search or run a command</span>
+    <span class="search-text">Search or run…</span>
     {@render chord('palette.open')}
   </button>
 
@@ -204,7 +204,6 @@
     class:active={ui.inboxActive}
     onclick={openInbox}
     title={`Now: ${now.header}`}
-    aria-label="Now"
     aria-current={ui.inboxActive ? 'page' : undefined}
     data-testid="rail-inbox"
   >
@@ -433,6 +432,7 @@
 
   /* Call light: a session waits on you here. Selected rows keep their face; the lamp and word speak. */
   .project.lit:not(.active) {
+    --k-fg-subtle: var(--k-fg-muted); /* only fg and fg-muted read on lit (§4.4) */
     background-color: var(--k-lit);
   }
 
@@ -637,25 +637,33 @@
       display: none;
     }
 
+    /* The corner lamp is the only state cue here: a bezel halo keeps it apart from the tile. */
     .lamp-slot,
     .row:is(:hover, :focus-within, .active) .lamp-slot {
       position: absolute;
-      top: 4px;
-      left: calc(50% + 8px);
+      top: 2px;
+      left: calc(50% + 6px);
       width: auto;
+      padding: 2px;
+      border-radius: 50%;
+      background: var(--k-bezel);
       visibility: visible;
+    }
+
+    .lamp-slot:empty {
+      display: none;
+    }
+
+    .heading :global(.k-button) {
+      width: var(--k-control-height-sm);
+      padding: 0;
+      border-color: var(--k-border-strong);
     }
 
     .badge {
       position: absolute;
       top: 2px;
       left: calc(50% + 4px);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .item {
-      transition: none;
     }
   }
 </style>

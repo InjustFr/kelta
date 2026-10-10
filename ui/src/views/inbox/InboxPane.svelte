@@ -95,9 +95,9 @@
         const pr = prOf(item);
         const meta: string[] = [];
         if (git && (git.insertions || git.deletions))
-          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' dirty' : ''}`);
+          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
-        if (git?.behind) meta.push(`↓${git.behind} ${item.base}`);
+        if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
@@ -342,8 +342,10 @@
   {onkeydown}
 >
   <header class="bar">
-    <span class="title">Now</span>
-    <span class="subtitle">Everything waiting on you, across projects</span>
+    <span class="heading">
+      <span class="title">Now</span>
+      <span class="subtitle">Everything waiting on you, across projects</span>
+    </span>
     <span class="split" data-testid="now-header" title={summary.header}>
       {#each summary.parts as part (part)}<span>{part}</span>{/each}
     </span>
@@ -359,9 +361,7 @@
       onkeydown={onFilterKey}
       onblur={() => (filtering = false)}
     />
-    <Button variant="ghost" size="sm" icon="refresh-cw" onclick={refresh}
-      >Refresh<span aria-hidden="true"> <Kbd chord="r" /></span></Button
-    >
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
   {#if loading}
@@ -447,7 +447,7 @@
     <span><Kbd chord="g" /> Go to</span>
     <span><Kbd chord="o" /> Open in browser</span>
     <span><Kbd chord="/" /> Filter</span>
-    <span><Kbd chord="r" /> Refresh</span>
+    <span><Kbd chord="shift+r" /> Refresh</span>
   </footer>
 </div>
 
@@ -476,6 +476,14 @@
     background: var(--k-bg-elev);
   }
 
+  .heading {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    padding: var(--k-space-2) 0;
+    line-height: 1.3;
+  }
+
   .title {
     font-weight: 600;
   }
@@ -492,8 +500,7 @@
   }
 
   .subtitle {
-    flex: none;
-    font-size: var(--k-font-size-sm);
+    font-size: var(--k-font-size-xs);
     color: var(--k-fg-muted);
   }
 
@@ -516,7 +523,7 @@
     align-items: center;
     gap: var(--k-space-2);
     height: 100%;
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-3) 0 var(--k-space-4);
     font-size: var(--k-font-size-sm);
     font-weight: 600;
     color: var(--k-fg-muted);
@@ -532,7 +539,8 @@
     display: inline-flex;
     justify-content: center;
     flex: none;
-    width: 10px;
+    width: 12px;
+    margin-right: var(--k-space-2);
   }
 
   .row {
@@ -541,7 +549,7 @@
     gap: var(--k-space-2);
     width: 100%;
     height: 100%;
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-3) 0 var(--k-space-4);
     border: 0;
     box-shadow: inset 3px 0 0 var(--hue);
     background: transparent;
@@ -610,7 +618,7 @@
 
   .detail {
     gap: var(--k-space-3);
-    padding-left: calc(var(--k-space-3) + 10px + 76px + 2 * var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
   }
 
   .msg {
@@ -633,19 +641,31 @@
   }
 
   .moreline {
-    padding-left: calc(var(--k-space-3) + 10px + var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + 2 * var(--k-space-2));
     color: var(--k-accent);
     cursor: pointer;
   }
 
+  /* One line tall: hints that wrap fall out of view instead of adding a second line. */
   .hints {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--k-space-2) var(--k-space-5);
-    padding: var(--k-space-1) var(--k-space-3);
+    gap: 0 var(--k-space-5);
+    flex: none;
+    height: var(--k-statusbar-height);
+    overflow: hidden;
+    padding: 0 var(--k-space-3);
     border-top: 1px solid var(--k-border);
     font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
+    color: var(--k-fg-muted);
+    white-space: nowrap;
+  }
+
+  .hints > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: var(--k-statusbar-height);
   }
 </style>

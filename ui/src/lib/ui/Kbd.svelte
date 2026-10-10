@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatChord } from './format';
+  import { currentPlatform, formatChord } from './format';
 
   interface Props {
     /** Chord like `cmd+shift+k` / `ctrl+shift+k`, or a single key. */
@@ -8,7 +8,9 @@
   }
 
   let { chord, platform }: Props = $props();
-  const parts = $derived(formatChord(chord, platform));
+  const os = $derived(platform ?? currentPlatform());
+  // macOS writes a chord as one word (⌘⇧K); Linux keeps one cap per key (Ctrl Shift K).
+  const parts = $derived(os === 'macos' ? [formatChord(chord, os).join('')] : formatChord(chord, os));
 </script>
 
 <span class="k-kbd" aria-label={chord}>

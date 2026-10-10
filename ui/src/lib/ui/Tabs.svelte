@@ -63,6 +63,7 @@
     height: var(--k-control-height);
     padding: 0 var(--k-space-3);
     font-weight: var(--k-weight-medium);
+    white-space: nowrap;
     border: none;
     box-shadow: inset 0 -2px 0 transparent;
     background: transparent;

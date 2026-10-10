@@ -5,7 +5,7 @@
   import { Kbd, Lamp } from '$lib/ui';
 
   import { attentionLabel, chordFor } from './labels';
-  import { focusedSession, focusedSessionId, revealSession } from './nav';
+  import { focusedPane, focusedSession, focusedSessionId, revealSession } from './nav';
 
   interface Props {
     prefixArmed: boolean;
@@ -14,18 +14,20 @@
 
   let { prefixArmed, inbox }: Props = $props();
 
-  // The hint line teaches the keyboard: the user's own chords, skipped when unbound.
-  const HINTS: { id: string; verb: string }[] = [
+  // The hint line teaches the keyboard: the user's own chords, skipped when unbound. Split and
+  // Close pane only show where they act: a project with a focused pane, not Now or the welcome screen.
+  const HINTS: { id: string; verb: string; pane?: true }[] = [
     { id: 'palette.open', verb: 'Commands' },
     { id: 'session.new', verb: 'New session' },
-    { id: 'pane.split_right', verb: 'Split' },
-    { id: 'pane.close', verb: 'Close pane' },
+    { id: 'pane.split_right', verb: 'Split', pane: true },
+    { id: 'pane.close', verb: 'Close pane', pane: true },
     { id: 'attention.next', verb: 'Next waiting' },
   ];
+  const panes = $derived(!inbox && focusedPane() !== null);
   const hints = $derived(
-    HINTS.map((h) => ({ ...h, chord: chordFor(h.id) })).filter(
-      (h): h is { id: string; verb: string; chord: string } => !!h.chord,
-    ),
+    HINTS.filter((h) => panes || !h.pane)
+      .map((h) => ({ ...h, chord: chordFor(h.id) }))
+      .filter((h): h is { id: string; verb: string; chord: string } => !!h.chord),
   );
 
   const session = $derived(inbox ? null : focusedSession());
@@ -108,12 +110,15 @@
     white-space: nowrap;
   }
 
+  /* One line tall: a hint that does not fit wraps out of view whole instead of being cut. */
   .hints {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--k-space-5);
+    gap: 0 var(--k-space-5);
     flex: 1;
     min-width: 0;
+    height: var(--k-statusbar-height);
     margin: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -124,6 +129,7 @@
     align-items: center;
     gap: 6px;
     flex: none;
+    height: var(--k-statusbar-height);
   }
 
   .seg {

@@ -75,6 +75,16 @@
     margin-left: var(--k-space-2);
   }
 
+  /* The cap follows the button's text colour so it stays legible on the accent and danger fills. */
+  .chord :global(.k-kbd) {
+    color: inherit;
+    opacity: 0.85;
+  }
+
+  .chord :global(kbd) {
+    border-color: color-mix(in oklab, currentColor 45%, transparent);
+  }
+
   .k-button:not(.primary, .danger, .ghost):hover:not(:disabled) {
     background: var(--k-bg-active);
   }

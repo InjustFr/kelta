@@ -32,7 +32,7 @@
   --k-radius-screen: 8px; /* panes: screens set into the housing */
   --k-radius-lg: 10px; /* floating: menus, palette, dialogs, sheets, toasts */
 
-  --k-rail-width: 216px; /* labelled sidebar */
+  --k-rail-width: 240px; /* labelled sidebar */
   --k-rail-width-compact: 64px; /* sidebar below 1100px window width */
   --k-sidebar-row-height: 44px; /* two lines: name + status word */
   --k-tabbar-height: 40px; /* also .k-toolbar */
@@ -85,9 +85,9 @@
   /* lamps: colour + shape */
   --k-lamp-needs-input: #c4352e;
   --k-lamp-working: #1a7379;
-  --k-lamp-error: #a86f00;
+  --k-lamp-error: #946000; /* 3:1 on lit as a non-text mark */
   --k-lamp-done: #2a7a49;
-  --k-lamp-activity: #6f7883;
+  --k-lamp-activity: #626b76;
   --k-lit-mix: 14%; /* call light: needs-input share of the surface */
   --k-lit: #ddcccf; /* call light fallback; color-mix version below */
 

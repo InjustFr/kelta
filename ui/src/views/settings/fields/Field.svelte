@@ -9,6 +9,7 @@
   import { joinPath, splitPath } from '../lib/paths';
   import {
     childEntries,
+    COPY,
     descriptionOf,
     fieldKind,
     infoAt,
@@ -39,8 +40,9 @@
   const editor = useEditor();
   const kind = $derived(fieldKind(node));
   const segs = $derived(splitPath(path));
-  const label = $derived(title ?? titleOf(segs[segs.length - 1] ?? path));
-  const description = $derived(descriptionOf(node));
+  const copy = $derived(COPY[path]);
+  const label = $derived(title ?? copy?.label ?? titleOf(segs[segs.length - 1] ?? path));
+  const description = $derived(copy?.help ?? descriptionOf(node));
   const info = $derived(editor.schema ? infoAt(editor.schema, segs) : null);
   const access = $derived(editor.access(path));
   const source = $derived(editor.sourceOf(path));
@@ -180,10 +182,26 @@
     grid-row: auto;
   }
 
+  /* Narrow (a split pane): one column, label then control then help. `.field` is its own container,
+     so its two tracks stay; every child spans both instead. A toggle's badges move under it. */
   @container (max-width: 560px) {
-    .field > :global(*) {
-      grid-column: 1;
+    .field > :global(*),
+    .field > .head,
+    .field > .desc,
+    .field > .error,
+    .field[data-kind='bool'] > :global(*) {
+      grid-column: 1 / -1;
       grid-row: auto;
+    }
+
+    .field[data-kind='bool'] > .head {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      min-height: 0;
+    }
+
+    .field[data-kind='bool'] .markers {
+      margin-left: 0;
     }
   }
 

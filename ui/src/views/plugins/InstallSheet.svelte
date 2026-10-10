@@ -61,11 +61,11 @@
       <TextInput
         bind:value={source}
         label="Source"
-        hint="A plugin directory, a git URL (optionally #tag) or a .tar.gz"
         placeholder="~/code/my-plugin, a git URL or a .tgz file"
       />
       <Button type="submit" loading={busy && !preview} disabled={!source.trim()}>Inspect</Button>
     </form>
+    <p class="hint">A plugin directory, a git URL (optionally #tag) or a .tar.gz</p>
 
     {#if error}
       <ErrorState {error} title="Cannot install this plugin" />
@@ -113,6 +113,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--k-space-4);
+  }
+
+  .hint {
+    margin: calc(-1 * var(--k-space-3)) 0 0;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
   }
 
   form {

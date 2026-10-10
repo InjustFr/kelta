@@ -40,7 +40,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   notifications: 'Desktop notifications and quiet hours.',
   performance: 'Memory use and web view behaviour.',
   tools: 'Programs like lazygit that open inside Kelta in their own pane.',
-  projects: 'Environment variables added to every session (project and repo files may add more).',
+  projects: 'Folders Kelta manages, with their repositories and tracker.',
 };
 
 /** Visible section title; the registry label stays for ids and tests. */

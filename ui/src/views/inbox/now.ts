@@ -39,7 +39,12 @@ export interface NowSummary {
 export function nowSummary(): NowSummary {
   const sections = currentSections();
   const parts = headerParts(sections, workingCount());
-  return { sections, parts, header: parts.join(' · ') || 'Nothing waiting', waiting: waitingCount(sections) };
+  return {
+    sections,
+    parts,
+    header: parts.join('\u2002\u2002') || 'Nothing waiting',
+    waiting: waitingCount(sections),
+  };
 }
 
 /** "as of hh:mm" when a source is stale or failed; null when everything is fresh. */

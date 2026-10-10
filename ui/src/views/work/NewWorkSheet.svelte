@@ -5,7 +5,7 @@
   import { workLink, workPlan, workStart } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { projects, settings, toasts, work } from '$lib/stores';
-  import { Button, currentPlatform, IconButton, Kbd, Select, Sheet, TextInput } from '$lib/ui';
+  import { Button, currentPlatform, IconButton, Select, Sheet, TextInput } from '$lib/ui';
 
   import { activateProject, railProjects } from '../../shell/nav';
   import { scratchBranch, taskTitle, validateBranch } from './common';
@@ -164,9 +164,14 @@
   {#snippet actions()}
     {#if title}<span class="note" {title}>Title: “{title}”</span>{/if}
     <Button variant="ghost" onclick={onclose}>Cancel</Button>
-    <Button variant="primary" type="submit" form="new-work-form" loading={busy} disabled={touched && !valid}>
-      Start <Kbd chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'} />
-    </Button>
+    <Button
+      variant="primary"
+      type="submit"
+      form="new-work-form"
+      loading={busy}
+      disabled={touched && !valid}
+      chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'}>Start</Button
+    >
   {/snippet}
 </Sheet>
 

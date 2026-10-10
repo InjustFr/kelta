@@ -42,7 +42,8 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
   it('picks the first matching row', () => {
     const failed = item({ state: { kind: 'failed', step: 'worktree', message: 'exists' } });
     check('1 failed', phaseOf(failed, claude('needs_input'), null, null), 'failed', 'fix', 'retry');
-    expect(phaseOf(failed, null, null, null).primaryLabel).toBe('Retry worktree');
+    expect(phaseOf(failed, null, null, null).primaryLabel).toBe('Retry creating the branch folder');
+    expect(phaseOf(failed, null, null, null).label).toBe('Failed creating the branch folder');
     check(
       '2 starting',
       phaseOf(item({ state: { kind: 'starting' } }), null, null, null),

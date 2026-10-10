@@ -16,10 +16,12 @@
 </label>
 
 <style>
+  /* The whole label is the target, so the 20px track still meets the 28px floor. */
   .k-toggle {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-3);
+    min-height: var(--k-control-height-sm);
     cursor: pointer;
   }
 

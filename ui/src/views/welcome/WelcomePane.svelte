@@ -31,6 +31,13 @@
   });
 
   const ICONS = { ok: 'circle-check', warn: 'triangle-alert', fail: 'circle-x' } as const;
+  // Checks named for what they give the user; the raw backend detail stays in the tooltip.
+  const PLAIN: Record<string, { label: string; missing: string }> = {
+    'secret-service': {
+      label: 'Secure token storage',
+      missing: "Not found, so account tokens can't be saved in the system keychain yet.",
+    },
+  };
   const RANK = { fail: 0, warn: 1, ok: 2 } as const;
 
   const sorted = $derived(checks ? [...checks].sort((a, b) => RANK[a.status] - RANK[b.status]) : []);
@@ -106,11 +113,14 @@
       </p>
       <ul>
         {#each sorted as c (c.id)}
+          {@const plain = PLAIN[c.id]}
           <li class={c.status}>
             <Icon name={ICONS[c.status]} size={16} />
-            <span class="label">{c.label}</span>
-            <span class="detail">{c.detail}</span>
-            {#if c.fix}<code class="fix">{c.fix}</code>{/if}
+            <span class="label">{plain?.label ?? c.label}</span>
+            <span class="detail" title={plain ? c.detail : undefined}
+              >{plain && c.status !== 'ok' ? plain.missing : c.detail}</span
+            >
+            {#if c.fix}<span class="fix">To fix, run: <code>{c.fix}</code></span>{/if}
           </li>
         {/each}
       </ul>
@@ -252,11 +262,12 @@
     margin-bottom: var(--k-space-2);
   }
 
+  /* icon | label | detail; the fix command sits under the detail, in the same column. */
   .env li {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 16px 11rem 1fr; /* fixed label column: details line up across rows */
     align-items: baseline;
-    gap: var(--k-space-3);
+    gap: var(--k-space-1) var(--k-space-3);
   }
 
   .env li :global(.k-icon) {
@@ -276,7 +287,6 @@
   }
 
   .label {
-    min-width: 120px;
     font-weight: var(--k-weight-strong);
   }
 
@@ -285,12 +295,19 @@
   }
 
   .fix {
-    margin-left: auto;
+    grid-column: 3;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .fix code {
     padding: 1px 6px;
     border-radius: var(--k-radius-sm);
     background: var(--k-bg-sunken);
+    color: var(--k-fg);
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-xs);
+    overflow-wrap: anywhere;
   }
 
   footer {

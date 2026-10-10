@@ -6,7 +6,7 @@
   import { settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
-  import { Button, currentPlatform, Icon, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
@@ -175,7 +175,7 @@
           size="sm"
           variant="primary"
           disabled={primaryBlocked !== null}
-          title={primaryBlocked ?? undefined}
+          title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}
           onclick={() => void runPrimary(item)}
         >
           {phase.primaryLabel}
@@ -188,10 +188,9 @@
           aria-haspopup="menu"
           title="Work menu"
           data-testid="work-menu-button"
-          onclick={() => (workUi.menu = item.id)}
+          chord={menuChord}
+          onclick={() => (workUi.menu = item.id)}>Work</Button
         >
-          Work {#if menuChord}<Kbd chord={menuChord} />{/if}
-        </Button>
       </span>
     </span>
   </div>
@@ -238,9 +237,15 @@
     min-width: 0;
   }
 
-  /* The title and the actions keep their room; the middle groups give way first. */
+  /* Identity, state and actions lay their parts straight into the bar, so each part shrinks with its
+     own floor (title, steps, blocked reason) instead of a group overflowing onto its neighbour. */
   .identity,
+  .state,
   .actions {
+    display: contents;
+  }
+
+  .key {
     flex: none;
   }
 
@@ -263,7 +268,8 @@
   }
 
   .ttl {
-    min-width: 0;
+    flex: 0 1 auto;
+    min-width: 16ch;
     max-width: 32ch;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -271,13 +277,18 @@
     font-weight: var(--k-weight-strong);
   }
 
-  /* The steps button gives way first: its text ellipsises instead of running under its neighbours. */
-  .state :global(.k-button:last-child) {
-    flex: 0 1 auto;
-    min-width: 0;
+  /* The status keeps its width; the steps button ellipsises down to a readable "Steps…". */
+  .bar :global(.k-button) {
+    flex: none;
   }
 
-  .state :global(.k-button:last-child .label) {
+  .bar :global(.k-button[data-testid='work-phase']) {
+    flex: 0 1 auto;
+    min-width: 9ch;
+    overflow: hidden;
+  }
+
+  .bar :global(.k-button[data-testid='work-phase'] .label) {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -290,6 +301,8 @@
   }
 
   .branch {
+    flex: 0 1 auto;
+    min-width: 8ch;
     gap: var(--k-space-2);
     overflow: hidden;
     color: var(--k-fg-muted);
@@ -327,7 +340,20 @@
     line-height: 20px;
   }
 
+  /* A long primary label ("Retry …") gives way before the branch does. */
+  .actions :global(.k-button) {
+    max-width: 28ch;
+  }
+
+  .actions :global(.k-button .label) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .blocked {
+    flex: 0 1 auto;
+    min-width: 0;
     max-width: 32ch;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -351,13 +377,21 @@
     color: var(--k-fg-subtle);
   }
 
-  @container (max-width: 900px) {
+  /* Narrow bars drop detail in order of value: phase detail and base, then git, then the branch. */
+  @container (max-width: 1240px) {
+    .vs,
+    .detail {
+      display: none;
+    }
+  }
+
+  @container (max-width: 1000px) {
     .git {
       display: none;
     }
   }
 
-  @container (max-width: 720px) {
+  @container (max-width: 820px) {
     .branch {
       display: none;
     }

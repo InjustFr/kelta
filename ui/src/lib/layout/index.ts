@@ -470,7 +470,7 @@ export function defaultTitle(content: PaneContent): string {
     case 'plugin_screen':
       return content.screen_id;
     case 'tickets':
-      return content.mode === 'board' ? 'Board' : 'Tickets';
+      return 'Tickets'; // list or board is a mode inside the pane, not a different feature
     case 'ticket_detail':
       return content.ticket.key;
     case 'reviews':
@@ -478,7 +478,7 @@ export function defaultTitle(content: PaneContent): string {
     case 'review_detail':
       return `${content.review.repo}#${content.review.number}`;
     case 'inbox':
-      return 'Inbox';
+      return 'Now';
     case 'work_item':
       return 'Work item';
     case 'settings':

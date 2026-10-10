@@ -14,7 +14,6 @@
     EmptyState,
     ErrorState,
     Icon,
-    Kbd,
     Lamp,
     Menu,
     Tabs,
@@ -395,9 +394,7 @@
         onchange={setMode}
       />
     {/if}
-    <Button variant="ghost" size="sm" icon="refresh-cw" onclick={refresh}
-      >Refresh<span aria-hidden="true"> <Kbd chord="r" /></span></Button
-    >
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
   {#if noTracker}
@@ -478,17 +475,22 @@
             >
               <span class="k-row-key">{item.ticket.ref.key}</span>
               <span class="k-row-title">{item.ticket.title}</span>
-              {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
-              {#if scope.kind === 'all'}
-                <Badge>{item.project_ids[0] ?? 'Other'}</Badge>
-              {/if}
-              {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
-              <Badge tone={statusTone(item.ticket.status.category)}>{item.ticket.status.name}</Badge>
-              <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}>
-                {item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}
+              <span class="k-row-tail">
+                {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
+                {#if scope.kind === 'all'}
+                  <span class="k-narrow-hide"><Badge>{item.project_ids[0] ?? 'Other'}</Badge></span>
+                {/if}
+                {#each item.ticket.labels.slice(0, 2) as l (l)}<span class="k-narrow-hide"
+                    ><Badge>{l}</Badge></span
+                  >{/each}
+                <Badge tone={statusTone(item.ticket.status.category)}>{item.ticket.status.name}</Badge>
+                <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}>
+                  {item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}
+                </span>
+                {#if item.ticket.priority}<span class="k-row-meta k-narrow-hide">{item.ticket.priority}</span
+                  >{/if}
+                <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
               </span>
-              {#if item.ticket.priority}<span class="k-row-meta">{item.ticket.priority}</span>{/if}
-              <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
             </button>
           {/snippet}
         </VirtualList>
@@ -571,15 +573,15 @@
 
   <KeyHints
     hints={[
-      ['j/k', 'move'],
-      ['Enter', 'open'],
-      ['/', 'filter'],
-      ['m', 'move to'],
-      ['a', 'assign me'],
-      ['c', 'comment'],
-      ['o', 'browser'],
-      ['s', 'start work'],
-      ['R', 'refresh'],
+      ['j k', 'Move'],
+      ['enter', 'Open'],
+      ['/', 'Filter'],
+      ['s', 'Start work'],
+      ['m', 'Move to'],
+      ['a', 'Assign me'],
+      ['c', 'Comment'],
+      ['o', 'Open in browser'],
+      ['shift+r', 'Refresh'],
     ]}
   />
 </div>

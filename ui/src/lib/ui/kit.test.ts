@@ -72,9 +72,13 @@ describe('components', () => {
     expect(onretry).toHaveBeenCalledOnce();
   });
 
-  it('Kbd shows chord parts', () => {
-    const { container } = render(Kbd, { props: { chord: 'cmd+k', platform: 'macos' } });
-    expect([...container.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['⌘', 'K']);
+  it('Kbd shows one cap on macOS and one cap per key on Linux', () => {
+    const caps = (platform: 'macos' | 'linux') =>
+      [...render(Kbd, { props: { chord: 'mod+k', platform } }).container.querySelectorAll('kbd')].map(
+        (k) => k.textContent,
+      );
+    expect(caps('macos')).toEqual(['⌘K']);
+    expect(caps('linux')).toEqual(['Ctrl', 'Shift', 'K']);
   });
 
   it('Tabs selects with click and arrows', async () => {

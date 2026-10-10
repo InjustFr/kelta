@@ -159,8 +159,13 @@
     font-size: var(--k-font-size-lg);
   }
 
+  /* The ring moves to the input row: an accent underline while the field has focus. */
   input:focus-visible {
     outline: none;
+  }
+
+  .input:focus-within {
+    box-shadow: inset 0 -2px 0 var(--k-focus);
   }
 
   .list {
