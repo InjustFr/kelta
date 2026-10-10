@@ -129,9 +129,10 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | (prefix only) | `h j k l` / arrows |
 | `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Z | `z` |
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
-| `tickets.open` | Cmd+Shift+J | Ctrl+Shift+J | `t` |
+| `tickets.open` | Cmd+Shift+B | Ctrl+Shift+B | `t` |
 | `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
-| `attention.next` ("Next waiting": walks the first four sections of Now, any project, cycling) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
+| `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
+| `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |
 | `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
 | `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
@@ -191,4 +192,4 @@ Desktop notifications (`tauri-plugin-notification`) fire only when the related p
   - GNOME: Settings → Keyboard → Custom Shortcuts → `kelta-ctl toggle`.
   Fractional scaling may blur text (GTK3 renders at integer scale) — documented. IME: Kelta never sets `GTK_IM_MODULE`; fcitx5/ibus in QA matrix.
 - **macOS:** Cmd modifier, custom app menu, Option-as-Meta setting, closing the window keeps sessions running (background mode), Dock click reopens, login PATH resolved for Dock launches.
-- `kelta-ctl` commands: `toggle`, `palette`, `open <path>`, `focus-project <id>`, `start <ticket key|url> [--project]`, `start --task "<text>" [--project <id>]` (scratch work item, same saga as New work item), `new --template <id> [--cwd <dir>] [--project <id>]`, `emit <custom.event> --json '{…}'`, `trust <repo path>`, `editor-open <file>[:line]`, `hook` (internal), `version`.
+- `kelta-ctl` commands: `toggle`, `palette`, `next` (`attention.next`), `back` (`nav.back`), `open <path>`, `focus-project <id>`, `start <ticket key|url> [--project]`, `start --task "<text>" [--project <id>]` (scratch work item, same saga as New work item), `new --template <id> [--cwd <dir>] [--project <id>]`, `emit <custom.event> --json '{…}'`, `trust <repo path>`, `editor-open <file>[:line]`, `hook` (internal), `version`.

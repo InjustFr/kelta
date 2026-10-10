@@ -1924,8 +1924,11 @@ export const settingsDefault: Settings = {
     "prefix": "ctrl+shift+space",
     "prefix_bindings": {
       "attention.next": "u",
+      "attention.prev": "U",
       "editor.send_selection": "@",
       "inbox.open": "0",
+      "nav.back": "-",
+      "nav.forward": "=",
       "palette.open": ":",
       "pane.close": "x",
       "pane.focus_down": "j",

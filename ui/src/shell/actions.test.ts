@@ -18,7 +18,8 @@ const OWNED = ACTIONS.map((a) => a.id).filter(
     id.startsWith('tab.') ||
     id === 'session.new' ||
     id.startsWith('pane.') ||
-    id === 'attention.next' ||
+    id.startsWith('attention.') ||
+    id.startsWith('nav.') ||
     id.startsWith('terminal.') ||
     id === 'editor.send_selection' ||
     id === 'editor.quickfix_claude',

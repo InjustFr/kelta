@@ -4,7 +4,15 @@ import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
-import { headerParts, nowSections, readyByProject, waitingCount, type NowInput } from './groups';
+import {
+  headerParts,
+  jumpQueue,
+  nowSections,
+  readyByProject,
+  rowKey,
+  waitingCount,
+  type NowInput,
+} from './groups';
 
 let n = 0;
 function entry(id: PhaseId, section: NowSection, patch: Partial<WorkItem> = {}) {
@@ -251,5 +259,62 @@ describe('Ready for review', () => {
       'big',
       'newer',
     ]);
+  });
+});
+
+describe('jumpQueue', () => {
+  const session = (id: string, patch: Partial<SessionInfo>): SessionInfo => ({
+    ...samples.sessionInfo,
+    id,
+    work_item_id: null,
+    lifecycle: 'live',
+    ...patch,
+  });
+
+  it('orders the five bands, oldest first within a band, blocking requests first', () => {
+    const at = (key: string, day: number): Partial<WorkItem> => ({
+      ticket: { account: 'jira', key, id: key },
+      claude_at: `2026-10-0${day}T00:00:00Z`,
+    });
+    const sections = nowSections({
+      ...empty,
+      work: [
+        entry('to_review', 'to_review', at('REVIEW', 1)),
+        entry('checks_failed', 'fix', at('RED', 1)),
+        entry('failed', 'fix', at('FAILED', 5)),
+        entry('needs_you', 'needs_you', at('ASKS', 4)),
+        entry('replied', 'needs_you', at('REPLIED', 2)),
+      ],
+      sessions: [session('asking', { status: 'needs_input', created_at: '2026-10-03T00:00:00Z' })],
+      requested: [
+        review(1, { requested_at: '2026-10-01T00:00:00Z' }),
+        review(2, { requested_at: '2026-10-02T00:00:00Z', blocking: true }),
+      ],
+      authored: [review(3, { decision: 'changes_requested', updated_at: '2026-10-02T00:00:00Z' })],
+    });
+    const errored = session('broke', { status: 'error', created_at: '2026-10-09T00:00:00Z' });
+    const gone = session('gone', { status: 'error', lifecycle: 'exited' });
+    const queue = jumpQueue(sections, [errored, gone]);
+    expect(queue.map((j) => `${j.label}:${rowKey(j.row)}`)).toEqual([
+      'needs input:REPLIED', // day 2
+      `needs input:${samples.sessionInfo.name}`, // day 3
+      'needs input:ASKS', // day 4
+      'error:FAILED', // failed start, day 5
+      `error:${samples.sessionInfo.name}`, // StopFailure (API error or rate limit), day 9
+      'ready for review:REVIEW',
+      'feedback:RED', // day 1
+      'feedback:#3', // day 2
+      'review request:#2', // blocking beats older
+      'review request:#1',
+    ]);
+  });
+
+  it('is empty when nothing waits (In flight and Up next do not count)', () => {
+    const sections = nowSections({
+      ...empty,
+      work: [entry('no_changes', 'in_flight')],
+      tickets: [ticket('T-1', 'todo')],
+    });
+    expect(jumpQueue(sections, [])).toEqual([]);
   });
 });
