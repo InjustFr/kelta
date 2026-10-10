@@ -1824,6 +1824,8 @@ export const settingsDefault: Settings = {
   "accounts": {},
   "app": {
     "confirm_quit_with_running": true,
+    "dark_theme": "bezel-dark",
+    "light_theme": "bezel-light",
     "log_level": "info",
     "restore_mode": "lazy",
     "theme": "system"
@@ -2228,6 +2230,7 @@ export const settingsDefault: Settings = {
     },
     "view_scrollback": 1000
   },
+  "themes": {},
   "tickets": {
     "wip_limit": 3
   },

@@ -135,6 +135,13 @@ pub struct Settings {
         "x-kelta-exec" = true
     ))]
     pub env: BTreeMap<String, String>,
+    /// User colour themes, named by `app.dark_theme` / `app.light_theme` (a built-in id is overridden).
+    #[schemars(extend(
+        "x-kelta-category" = "General",
+        "x-kelta-order" = 0,
+        "x-kelta-scope" = ["global"]
+    ))]
+    pub themes: BTreeMap<String, ThemeDef>,
 }
 
 // =============================================================================================
@@ -180,6 +187,12 @@ pub struct AppSettings {
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
+    /// Theme id used in dark mode (`bezel-dark` or a `[themes.<id>]` with `base = "dark"`).
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub dark_theme: String,
+    /// Theme id used in light mode (`bezel-light` or a `[themes.<id>]` with `base = "light"`).
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub light_theme: String,
 }
 
 impl Default for AppSettings {
@@ -189,8 +202,84 @@ impl Default for AppSettings {
             restore_mode: RestoreMode::Lazy,
             confirm_quit_with_running: true,
             log_level: LogLevel::Info,
+            dark_theme: "bezel-dark".into(),
+            light_theme: "bezel-light".into(),
         }
     }
+}
+
+/// Bezel palette a theme overrides; also the mode its slot must be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeBase {
+    Dark,
+    Light,
+}
+
+/// A named, partial set of colour overrides on top of a Bezel base (`[themes.<id>]`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ThemeDef {
+    pub name: String,
+    pub base: ThemeBase,
+    #[serde(default)]
+    pub ui: ThemeUi,
+    #[serde(default)]
+    pub terminal: ThemeTerminal,
+}
+
+/// Chrome tokens (`well` -> `--k-well`); unset ones keep the Bezel value. `accent` is only a hue
+/// for the project colour fallback.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct ThemeUi {
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub bezel: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub bezel_raised: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub well: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub bg_float: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub fg: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub fg_muted: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub fg_subtle: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub fg_chrome: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub border: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub border_strong: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub danger: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub warn: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub ok: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub info: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub accent: Option<String>,
+}
+
+/// Terminal colours; background/foreground fall back to `ui.well` / `ui.fg`, then the Bezel base.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct ThemeTerminal {
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub background: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub foreground: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub cursor: Option<String>,
+    #[schemars(regex(pattern = r"^#[0-9a-fA-F]{6}$"))]
+    pub selection: Option<String>,
+    /// All 16 ANSI colours (black..white, then the bright variants) or none.
+    #[schemars(length(min = 16, max = 16), inner(regex(pattern = r"^#[0-9a-fA-F]{6}$")))]
+    pub ansi: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -1423,6 +1512,7 @@ impl Default for Settings {
             commands: Vec::new(),
             plugins: PluginsSettings::default(),
             env: BTreeMap::new(),
+            themes: BTreeMap::new(),
         }
     }
 }

@@ -831,6 +831,8 @@
       "additionalProperties": false,
       "default": {
         "confirm_quit_with_running": true,
+        "dark_theme": "bezel-dark",
+        "light_theme": "bezel-light",
         "log_level": "info",
         "restore_mode": "lazy",
         "theme": "system"
@@ -840,6 +842,22 @@
           "default": true,
           "description": "Ask before quitting while Claude is working or waiting for you.",
           "type": "boolean"
+        },
+        "dark_theme": {
+          "default": "bezel-dark",
+          "description": "Theme id used in dark mode (`bezel-dark` or a `[themes.<id>]` with `base = \"dark\"`).",
+          "type": "string",
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "light_theme": {
+          "default": "bezel-light",
+          "description": "Theme id used in light mode (`bezel-light` or a `[themes.<id>]` with `base = \"light\"`).",
+          "type": "string",
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "log_level": {
           "default": "info",
@@ -3567,6 +3585,242 @@
       "type": "object",
       "x-kelta-category": "Terminal",
       "x-kelta-order": 3
+    },
+    "themes": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "A named, partial set of colour overrides on top of a Bezel base (`[themes.<id>]`).",
+        "properties": {
+          "base": {
+            "description": "Bezel palette a theme overrides; also the mode its slot must be.",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "terminal": {
+            "additionalProperties": false,
+            "default": {
+              "ansi": null,
+              "background": null,
+              "cursor": null,
+              "foreground": null,
+              "selection": null
+            },
+            "description": "Terminal colours; background/foreground fall back to `ui.well` / `ui.fg`, then the Bezel base.",
+            "properties": {
+              "ansi": {
+                "default": null,
+                "description": "All 16 ANSI colours (black..white, then the bright variants) or none.",
+                "items": {
+                  "pattern": "^#[0-9a-fA-F]{6}$",
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "minItems": 16,
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "background": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "cursor": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "foreground": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "selection": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "ui": {
+            "additionalProperties": false,
+            "default": {
+              "accent": null,
+              "bezel": null,
+              "bezel_raised": null,
+              "bg_float": null,
+              "border": null,
+              "border_strong": null,
+              "danger": null,
+              "fg": null,
+              "fg_chrome": null,
+              "fg_muted": null,
+              "fg_subtle": null,
+              "info": null,
+              "ok": null,
+              "warn": null,
+              "well": null
+            },
+            "description": "Chrome tokens (`well` -> `--k-well`); unset ones keep the Bezel value. `accent` is only a hue\nfor the project colour fallback.",
+            "properties": {
+              "accent": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bezel": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bezel_raised": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bg_float": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "border": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "border_strong": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "danger": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "fg": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "fg_chrome": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "fg_muted": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "fg_subtle": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "info": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ok": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "warn": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "well": {
+                "default": null,
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "base"
+        ],
+        "type": "object"
+      },
+      "default": {},
+      "description": "User colour themes, named by `app.dark_theme` / `app.light_theme` (a built-in id is overridden).",
+      "type": "object",
+      "x-kelta-category": "General",
+      "x-kelta-order": 0,
+      "x-kelta-scope": [
+        "global"
+      ]
     },
     "tickets": {
       "additionalProperties": false,
