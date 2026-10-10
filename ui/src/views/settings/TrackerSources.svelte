@@ -5,6 +5,7 @@
   import { projects, settings, toasts, ui } from '$lib/stores';
   import { Button, IconButton, Select, Toggle } from '$lib/ui';
 
+  import { confirms } from '../../shell/confirm.svelte';
   import { saveTracker, iterationWord, viewAccount } from './lib/sources.svelte';
 
   interface Props {
@@ -27,9 +28,12 @@
     { value: 'unassigned', label: 'Unassigned' },
     { value: 'anyone', label: 'Anyone' },
   ];
-  // A view without `who` keeps its own query (jql, assigned_to, scope): say so rather than guess.
+  // A view without `who` keeps its own query (jql, assigned_to, scope): say so rather than guess,
+  // and keep the choice for any view with a query so trying a who can be undone.
+  const hasQuery = (v: TrackerView) =>
+    !!(v.jql || v.query_id != null || v.assigned_to || v.scope || v.search);
   const whoOptions = (v: TrackerView) =>
-    v.who ? WHO : [{ value: '' as const, label: 'Set by query' }, ...WHO];
+    v.who && !hasQuery(v) ? WHO : [{ value: '' as const, label: 'Set by query' }, ...WHO];
 
   $effect(() => {
     if (settings.value() === null) void settings.load().catch(() => undefined);
@@ -49,6 +53,21 @@
       b,
       b.views.map((v) => (v.id === id ? { ...v, ...p } : v)),
     );
+
+  /** A source can hold a hand-written query: removal is confirmed (it writes the TOML at once). */
+  async function remove(b: TrackerBinding, v: TrackerView): Promise<void> {
+    const answer = await confirms.ask({
+      title: `Remove ${v.label}?`,
+      body: `${project?.name ?? 'The project'} stops listing tickets from this source. Its query is not kept.`,
+      tone: 'danger',
+      actions: [{ id: 'remove', label: 'Remove source', variant: 'danger' }],
+    });
+    if (answer === 'remove')
+      await save(
+        b,
+        b.views.filter((x) => x.id !== v.id),
+      );
+  }
 </script>
 
 {#if project}
@@ -56,10 +75,10 @@
     <div class="head">
       <h3>Tracker</h3>
       {#if editable.length > 1}
+        <label class="k-visually-hidden" for="tracker-project">Project</label>
         <Select
           value={project.id}
           options={editable.map((p) => ({ value: p.id, label: p.name }))}
-          label="Project"
           onchange={(id) => (chosen = { id, from: projectId })}
           id="tracker-project"
         />
@@ -87,7 +106,7 @@
               <Select
                 value={v.who ?? ''}
                 options={whoOptions(v)}
-                onchange={(who) => who && void patch(b, v.id, { who })}
+                onchange={(who) => void patch(b, v.id, { who: who || null })}
                 id="who-{v.id}"
               />
             </span>
@@ -98,16 +117,7 @@
                 onchange={(on) => void patch(b, v.id, { current_iteration: on })}
               />
             {/if}
-            <IconButton
-              icon="trash-2"
-              label="Remove {v.label}"
-              size="sm"
-              onclick={() =>
-                void save(
-                  b,
-                  b.views.filter((x) => x.id !== v.id),
-                )}
-            />
+            <IconButton icon="trash-2" label="Remove {v.label}" size="sm" onclick={() => void remove(b, v)} />
           </li>
         {/each}
       </ul>

@@ -46,9 +46,9 @@
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
   const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
   const GROUP_LABELS: Record<GroupBy, string> = {
-    status: 'Group by status',
-    assignee: 'Group by assignee',
-    source: 'Group by source',
+    status: 'By status',
+    assignee: 'By assignee',
+    source: 'By source',
     none: 'No grouping',
   };
   const move = new MoveController();
@@ -61,7 +61,11 @@
   const multiAccount = $derived(new Set(views.map(accountOf)).size > 1);
   let viewOverride = $state<string | null | undefined>(undefined);
   /** `null` = all sources (the union of the project's views). */
-  const viewId = $derived(viewOverride !== undefined ? viewOverride : content.view_id);
+  const viewId = $derived.by(() => {
+    const v = viewOverride !== undefined ? viewOverride : content.view_id;
+    // A removed or renamed source falls back to all sources instead of another one.
+    return v && project?.tracker && !views.some((x) => x.id === v) ? null : v;
+  });
   const sourceLabel = $derived(
     viewId ? (views.find((v) => v.id === viewId)?.label ?? 'this source') : (project?.name ?? 'all projects'),
   );
@@ -491,6 +495,7 @@
   {onkeydown}
 >
   <header class="k-toolbar bar">
+    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
     <input
       class="k-filter"
       bind:this={filterInput}
@@ -512,7 +517,6 @@
         />
       </div>
     {/if}
-    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
     <span class="spacer"></span>
     {#if project?.tracker}
       <button
@@ -575,7 +579,9 @@
       onretry={refresh}
     />
     {#if items.length === 0}
-      {#if whoTab === 'mine'}
+      {#if list.data?.errors.length}
+        <!-- the banner above says what failed; "no tickets" would be a false claim -->
+      {:else if whoTab === 'mine'}
         <EmptyState icon="ticket" title={`Nothing assigned to you in ${sourceLabel}.`}>
           {#snippet actions()}<Button onclick={() => setWho('unassigned')}>Show unassigned</Button>{/snippet}
         </EmptyState>
@@ -647,7 +653,7 @@
                     >
                   {/if}
                   <span class="status-slot"><StatusChip status={item.ticket.status} /></span>
-                  {#if showSource}<Badge>{sourceOf(item)}</Badge>{/if}
+                  {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
                   {#if whoTab !== 'mine'}
                     <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
                       >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
@@ -816,6 +822,35 @@
     max-width: 100%;
   }
 
+  /* Fixed too, so source names of any length do not shift the status column. */
+  .source-slot {
+    display: inline-flex;
+    justify-content: flex-end;
+    width: 88px;
+  }
+
+  .source-slot :global(.k-badge) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The title is the row: the meta shrinks first, then drops the source and avatar at split widths. */
+  .list {
+    container-type: inline-size;
+  }
+
+  .k-row-title {
+    min-width: 120px;
+  }
+
+  @container (width < 560px) {
+    .source-slot,
+    .meta .k-avatar {
+      display: none;
+    }
+  }
+
   .source {
     display: inline-flex;
     align-items: center;
@@ -848,7 +883,9 @@
   }
 
   .meta {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-4);

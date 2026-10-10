@@ -465,14 +465,14 @@ async fn a_view_without_jql_gets_a_default_from_its_project_or_board_or_who() {
     v.who = Some(Who::Mine);
     assert_eq!(
         jql_sent(&t, &server, &v).await,
-        "(project = \"SHOP\") AND assignee = currentUser() ORDER BY updated DESC"
+        "(project = \"SHOP\" AND statusCategory != Done) AND assignee = currentUser() ORDER BY updated DESC"
     );
     let mut b = view("b");
     b.board_id = Some(7);
     b.who = Some(Who::Unassigned);
     assert_eq!(
         jql_sent(&t, &server, &b).await,
-        "(filter = 10010) AND assignee is EMPTY ORDER BY updated DESC"
+        "(filter = 10010 AND statusCategory != Done) AND assignee is EMPTY ORDER BY updated DESC"
     );
     let mut m = view("m");
     m.who = Some(Who::Mine);
@@ -523,10 +523,16 @@ async fn sources_offer_projects_boards_sprints_and_favourite_filters() {
             ("filter", "jira-acme-filter-10", "Shop hot bugs"),
         ]
     );
-    assert_eq!(hits[0].view.jql.as_deref(), Some("project = SHOP"));
+    assert_eq!(
+        hits[0].view.jql.as_deref(),
+        Some("project = SHOP AND statusCategory != Done ORDER BY updated DESC")
+    );
     assert_eq!((hits[1].view.board_id, hits[1].view.current_iteration), (Some(7), false));
     assert_eq!((hits[2].view.board_id, hits[2].view.current_iteration), (Some(7), true));
-    assert_eq!(hits[4].view.jql.as_deref(), Some("filter = 10"));
+    assert_eq!(
+        hits[4].view.jql.as_deref(),
+        Some("filter = 10 AND statusCategory != Done ORDER BY updated DESC")
+    );
     assert_eq!(hits[4].detail.as_deref(), Some("priority = Highest"));
     assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
 }
@@ -548,5 +554,8 @@ async fn sources_survive_a_site_without_jira_software_and_data_center_filters_pr
         .await;
     let hits = dc(&server).sources("ops").await.unwrap();
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].view.jql.as_deref(), Some("project = OPS"));
+    assert_eq!(
+        hits[0].view.jql.as_deref(),
+        Some("project = OPS AND statusCategory != Done ORDER BY updated DESC")
+    );
 }

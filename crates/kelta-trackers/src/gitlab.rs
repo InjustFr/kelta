@@ -26,6 +26,19 @@ use crate::common::{
 };
 
 const PER_PAGE: u32 = 50;
+
+/// The current milestone among active ones: the earliest `due_date >= today`, else an undated one.
+/// ISO dates compare as strings.
+fn current_milestone(milestones: &Value, today: &str) -> Option<String> {
+    let all = milestones.as_array()?;
+    all.iter()
+        .filter_map(|m| Some((s(m, "due_date").filter(|d| *d >= today)?, m)))
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, m)| m)
+        .or_else(|| all.iter().find(|m| s(m, "due_date").is_none()))
+        .and_then(|m| s(m, "title"))
+        .map(str::to_owned)
+}
 const DEFAULT_SCOPE: &str = "workflow";
 
 pub struct GitlabIssues {
@@ -276,8 +289,23 @@ impl Tracker for GitlabIssues {
             req = req.query("assignee_id", "None");
         }
         if view.current_iteration {
-            // Free tier has no iterations: the started milestone is the timebox.
-            req = req.query("milestone_id", "Started");
+            // Free tier has no iterations: a milestone is the timebox. REST's `milestone_id=Started` uses the
+            // legacy rule (start date set and past, due date ignored), so a project picks its own milestone.
+            match view.project.as_deref().filter(|p| !p.is_empty()) {
+                Some(p) => {
+                    let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
+                    let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
+                    let today = time::OffsetDateTime::now_utc().date();
+                    let today =
+                        format!("{:04}-{:02}-{:02}", today.year(), u8::from(today.month()), today.day());
+                    match current_milestone(&ms, &today) {
+                        Some(title) => req = req.query("milestone", title),
+                        None => return Ok(Page { items: vec![], next: None }),
+                    }
+                }
+                // shortcut: legacy `Started` semantics without a project, pick per project when views need it.
+                None => req = req.query("milestone_id", "Started"),
+            }
         }
         if let Some(l) = view.labels.as_ref().filter(|l| !l.is_empty()) {
             req = req.query("labels", l.join(","));

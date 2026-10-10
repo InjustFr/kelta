@@ -274,7 +274,7 @@ async fn who_on_a_saved_query_filters_the_returned_page() {
         &server,
         "/issues.json",
         json!({"total_count": 3, "issues": [
-            issue(1, json!({"id": 7, "name": "Me"})),
+            json!({"id": 1, "subject": "s", "status": {"id": 1, "name": "New"}, "assigned_to": {"id": 7, "name": "Me"}, "fixed_version": {"id": 8}}),
             issue(2, json!({"id": 8, "name": "Other"})),
             issue(3, serde_json::Value::Null),
         ]}),
@@ -290,6 +290,14 @@ async fn who_on_a_saved_query_filters_the_returned_page() {
     assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["1"]);
     v.who = Some(Who::Unassigned);
     assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["3"]);
+    // A saved query ignores `fixed_version_id`: the current version is applied to the returned page.
+    mount_json(&server, "/projects/p/versions.json", json!({"versions": [{"id": 8, "status": "open"}]}))
+        .await;
+    v.who = None;
+    v.project_id = Some("p".into());
+    v.current_iteration = true;
+    assert_eq!(keys(t.list(&v, None).await.unwrap().items), ["1"]);
+    assert!(!issues_query(&server, &t, &v).await.contains("fixed_version_id"));
 }
 
 #[tokio::test]

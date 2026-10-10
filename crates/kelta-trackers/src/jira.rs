@@ -608,7 +608,10 @@ impl Tracker for JiraTracker {
         for p in projects.as_array().into_iter().flatten() {
             let (Some(key), name) = (s(p, "key"), s(p, "name").unwrap_or("")) else { continue };
             if matches(name, key) {
-                let view = TrackerView { jql: Some(format!("project = {key}")), ..TrackerView::default() };
+                let view = TrackerView {
+                    jql: Some(format!("project = {key} AND {OPEN} ORDER BY updated DESC")),
+                    ..TrackerView::default()
+                };
                 out.push(hit(
                     "project",
                     format!("project-{key}"),
@@ -648,7 +651,10 @@ impl Tracker for JiraTracker {
             for f in f.as_array().into_iter().flatten() {
                 let (Some(id), Some(name)) = (f.get("id").and_then(idstr), s(f, "name")) else { continue };
                 if matches(name, "") {
-                    let view = TrackerView { jql: Some(format!("filter = {id}")), ..TrackerView::default() };
+                    let view = TrackerView {
+                        jql: Some(format!("filter = {id} AND {OPEN} ORDER BY updated DESC")),
+                        ..TrackerView::default()
+                    };
                     out.push(hit(
                         "filter",
                         format!("filter-{id}"),
@@ -693,6 +699,12 @@ impl JiraTracker {
                 None => String::new(),
             }
         };
+        // open tickets only, like the other providers; `status = "*"` lists every state
+        let cond = if cond.is_empty() || view.status.as_deref() == Some("*") {
+            cond
+        } else {
+            format!("{cond} AND {OPEN}")
+        };
         Ok(format!("{cond} ORDER BY updated DESC"))
     }
 
@@ -731,6 +743,9 @@ impl JiraTracker {
 }
 
 /// `project = SHOP`, `project in (SHOP, OPS)`, `project = "SHOP"` → first key.
+/// The JQL clause that keeps a list to open tickets.
+const OPEN: &str = "statusCategory != Done";
+
 pub(crate) fn project_key_from_jql(jql: &str) -> Option<String> {
     static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
     let re = RE

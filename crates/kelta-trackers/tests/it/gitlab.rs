@@ -328,11 +328,18 @@ async fn who_picks_the_scope_and_the_unassigned_filter_and_overrides_legacy_scop
 }
 
 #[tokio::test]
-async fn current_iteration_filters_on_the_started_milestone() {
+async fn current_iteration_filters_on_the_current_milestone() {
     let server = MockServer::start().await;
+    let ms = r#"[{"title":"v1.0","due_date":"2000-01-01"},{"title":"Later","due_date":"2999-12-31"},
+        {"title":"Sprint 42","due_date":"2999-01-01"},{"title":"Backlog","due_date":null}]"#;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/milestones"))
+        .and(query_param("state", "active"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(ms))
+        .mount(&server)
+        .await;
     Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/issues"))
         .and(query_param("scope", "all"))
-        .and(query_param("milestone_id", "Started"))
+        .and(query_param("milestone", "Sprint 42"))
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issues_p2.json")))
         .expect(1)
         .mount(&server)

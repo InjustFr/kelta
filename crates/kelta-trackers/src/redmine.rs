@@ -62,6 +62,28 @@ impl RedmineTracker {
         Ok(self.auth.send_json::<Value>(req).await?.body)
     }
 
+    /// `/{what}.json` rows: the first 100, or every page when `all`.
+    /// shortcut: at most 10 pages (1000 rows), raise when a site has more.
+    async fn listing(&self, what: &str, all: bool) -> Result<Vec<Value>, KeltaError> {
+        let mut out = Vec::new();
+        for page in 0..10 {
+            let v = self
+                .json(
+                    HttpRequest::get(format!("{}/{what}.json", self.base))
+                        .query("limit", "100")
+                        .query("offset", (page * 100).to_string()),
+                )
+                .await?;
+            let rows = v.get(what).and_then(Value::as_array).cloned().unwrap_or_default();
+            let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
+            out.extend(rows);
+            if !all || out.len() as u64 >= total {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
     /// Load `/issue_statuses.json` once (failures are ignored: names are used instead).
     async fn ensure_statuses(&self) {
         if self.statuses.lock().is_some() {
@@ -242,15 +264,18 @@ impl Tracker for RedmineTracker {
         if let Some(p) = &view.project_id {
             req = req.query("project_id", p.clone());
         }
+        let mut version = None;
         if view.current_iteration
             && let Some(p) = &view.project_id
         {
             let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
             let today = time::OffsetDateTime::now_utc().date();
             let today = format!("{:04}-{:02}-{:02}", today.year(), u8::from(today.month()), today.day());
-            if let Some(id) = current_version(&v, &today) {
-                req = req.query("fixed_version_id", id);
-            }
+            version = current_version(&v, &today);
+        }
+        // A saved query ignores short filters like `fixed_version_id`: it is applied to what comes back.
+        if let Some(id) = version.clone().filter(|_| view.query_id.is_none()) {
+            req = req.query("fixed_version_id", id);
         }
         if let Some(q) = view.query_id {
             // A saved query carries its own filters; `who` can only be applied to what comes back.
@@ -278,7 +303,17 @@ impl Tracker for RedmineTracker {
         let mut items: Vec<Ticket> = v
             .get("issues")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|i| self.ticket_from(i).ok()).collect())
+            .map(|a| {
+                a.iter()
+                    .filter(|i| {
+                        view.query_id.is_none()
+                            || version.as_ref().is_none_or(|v| {
+                                i.pointer("/fixed_version/id").and_then(idstr).as_ref() == Some(v)
+                            })
+                    })
+                    .filter_map(|i| self.ticket_from(i).ok())
+                    .collect()
+            })
             .unwrap_or_default();
         if view.query_id.is_some() {
             match view.who {
@@ -428,19 +463,15 @@ impl Tracker for RedmineTracker {
             SourceHit { kind: kind.to_owned(), label: label.to_owned(), detail: Some(detail), view }
         };
         let mut out = Vec::new();
-        // shortcut: first 100 projects and queries, filtered client-side; upgrade to paging for bigger sites.
-        let v =
-            self.json(HttpRequest::get(format!("{}/projects.json", self.base)).query("limit", "100")).await?;
-        for p in v.get("projects").and_then(Value::as_array).into_iter().flatten() {
+        // Filtered client-side: a typed query pages on so a big site's later projects are found too.
+        for p in &self.listing("projects", !q.is_empty()).await? {
             let (Some(name), Some(ident)) = (s(p, "name"), s(p, "identifier")) else { continue };
             if q.is_empty() || name.to_lowercase().contains(&q) || ident.to_lowercase().contains(&q) {
                 let view = TrackerView { project_id: Some(ident.to_owned()), ..TrackerView::default() };
                 out.push(hit("project", format!("project-{ident}"), name, ident.to_owned(), view));
             }
         }
-        let v =
-            self.json(HttpRequest::get(format!("{}/queries.json", self.base)).query("limit", "100")).await?;
-        for qy in v.get("queries").and_then(Value::as_array).into_iter().flatten() {
+        for qy in &self.listing("queries", !q.is_empty()).await? {
             let (Some(id), Some(name)) = (qy.get("id").and_then(Value::as_u64), s(qy, "name")) else {
                 continue;
             };

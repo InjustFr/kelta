@@ -79,10 +79,6 @@ fn review_kind_str(k: ReviewKind) -> &'static str {
     }
 }
 
-fn default_view() -> TrackerView {
-    TrackerView { id: "mine".into(), label: "My open".into(), ..TrackerView::default() }
-}
-
 /// Seconds since an RFC 3339 timestamp (`u64::MAX`-ish when unparsable).
 pub fn age_of(ts: &str) -> Duration {
     use time::format_description::well_known::Rfc3339;
@@ -320,15 +316,11 @@ impl Core {
         for p in projects {
             let Some(b) = &p.tracker else { continue };
             // shortcut: first page per source, add per-source Load more when needed
-            let mut views: Vec<TrackerView> = match view_id {
-                Some(v) => {
-                    b.views.iter().find(|x| x.id == v).or(b.views.first()).cloned().into_iter().collect()
-                }
+            // an unknown view id (source removed or renamed) falls back to the union
+            let views: Vec<TrackerView> = match view_id.and_then(|v| b.views.iter().find(|x| x.id == v)) {
+                Some(v) => vec![v.clone()],
                 None => b.views.clone(),
             };
-            if views.is_empty() {
-                views.push(default_view());
-            }
             for mut view in views {
                 if who.is_some() {
                     view.who = who;
@@ -358,7 +350,10 @@ impl Core {
     ) -> Result<Page<Ticket>, KeltaError> {
         let tracker = self.tracker_of(&q.account)?;
         let r = tracker.list(&q.view, cursor.clone()).await;
-        self.note_account(&q.account, &r);
+        // `Invalid` is a view the provider cannot answer (e.g. Unassigned without a repo), not account health
+        if !matches!(&r, Err(e) if e.code == ErrorCode::InvalidArgument) {
+            self.note_account(&q.account, &r);
+        }
         let page = r?;
         if cursor.is_none() {
             self.cache_put(&q.cache_key, &page);
@@ -474,9 +469,9 @@ impl Core {
 
     /// `tracker_search` over the (cached) lists of a scope.
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
-        let page = self.tracker_list(scope, None, None, None, false).await?;
+        let page = self.tracker_list(scope.clone(), None, None, None, false).await?;
         let needle = text.trim().to_lowercase();
-        Ok(page
+        let hits: Vec<TicketItem> = page
             .items
             .into_iter()
             .filter(|i| {
@@ -485,7 +480,33 @@ impl Core {
                     || i.ticket.title.to_lowercase().contains(&needle)
             })
             .take(50)
-            .collect())
+            .collect();
+        // a key outside every list (someone else's or nobody's ticket): resolve it by GET on each account
+        let key = text.trim();
+        if !hits.is_empty()
+            || !key.contains(|c: char| c.is_ascii_digit())
+            || key.contains(char::is_whitespace)
+        {
+            return Ok(hits);
+        }
+        let mut tried: Vec<AccountId> = Vec::new();
+        for q in self.ticket_queries(&scope, None, None) {
+            if tried.contains(&q.account) {
+                continue;
+            }
+            tried.push(q.account.clone());
+            let probe = TicketRef { account: q.account, key: key.into(), id: key.into() };
+            if let Ok(d) = self.tracker_get(&probe).await {
+                let work_item_id = self.work_by_ticket().await.get(&d.ticket.r#ref).cloned();
+                return Ok(vec![TicketItem {
+                    ticket: d.ticket,
+                    project_ids: q.projects,
+                    work_item_id,
+                    view_ids: vec![],
+                }]);
+            }
+        }
+        Ok(hits)
     }
 
     /// `tracker_sources`: ticket sources of an account matching `query`.
@@ -512,7 +533,10 @@ impl Core {
     pub async fn tracker_get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.rt.capture();
         let r = self.tracker_of(&t.account)?.get(t).await;
-        self.note_account(&t.account, &r);
+        // a missing or malformed key says nothing about the account's health
+        if !matches!(&r, Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::InvalidArgument)) {
+            self.note_account(&t.account, &r);
+        }
         r
     }
 

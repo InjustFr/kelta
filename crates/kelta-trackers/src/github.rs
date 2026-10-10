@@ -527,20 +527,26 @@ impl Tracker for GithubIssues {
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
         let q = query.trim().to_ascii_lowercase();
-        // shortcut: first 100 repos / 50 projects only, repos filtered client-side; page later.
-        let repos = self
-            .rest(
-                HttpRequest::get(format!("{}/user/repos", self.api))
-                    .query("affiliation", "owner,collaborator,organization_member")
-                    .query("sort", "pushed")
-                    .query("per_page", "100"),
-            )
-            .await?
-            .body;
+        // Repos are filtered client-side: a typed query pages on so older repos are found too.
+        // shortcut: at most 10 pages (1000 repos), raise when an account has more.
+        let mut repos: Vec<Value> = Vec::new();
+        for page in 1..=10 {
+            let r = self
+                .rest(
+                    HttpRequest::get(format!("{}/user/repos", self.api))
+                        .query("affiliation", "owner,collaborator,organization_member")
+                        .query("sort", "pushed")
+                        .query("per_page", "100")
+                        .query("page", page.to_string()),
+                )
+                .await?;
+            repos.extend(r.body.as_array().cloned().unwrap_or_default());
+            if q.is_empty() || link_rel(&r.headers, "next").is_none() {
+                break;
+            }
+        }
         let mut hits: Vec<SourceHit> = repos
-            .as_array()
-            .into_iter()
-            .flatten()
+            .iter()
             .filter_map(|r| {
                 let name = s(r, "full_name")?;
                 name.to_ascii_lowercase().contains(&q).then(|| SourceHit {
@@ -557,38 +563,54 @@ impl Tracker for GithubIssues {
                 })
             })
             .collect();
-        // shortcut: user-owned projects only, add viewer.organizations.projectsV2 when org boards are needed.
-        const Q: &str = "query($q:String){ viewer{ projectsV2(first:50, query:$q){ nodes{ number title closed owner{ ... on Organization{ login } ... on User{ login } } } } } }";
-        // Projects v2 need extra token scopes: a failure there must not hide the repos.
-        if let Ok(data) = self.gql(Q, json!({"q": Some(query.trim()).filter(|q| !q.is_empty())})).await {
-            let nodes = data.pointer("/viewer/projectsV2/nodes").and_then(Value::as_array);
-            for n in
-                nodes.into_iter().flatten().filter(|n| n.get("closed").and_then(Value::as_bool) != Some(true))
+        // The viewer's own projects, then their organisations' (the usual team board).
+        // shortcut: 20 orgs x 20 projects, raise when a user sits in more.
+        const P: &str =
+            "nodes{ number title closed owner{ ... on Organization{ login } ... on User{ login } } }";
+        let user_q = format!("query($q:String){{ viewer{{ projectsV2(first:50, query:$q){{ {P} }} }} }}");
+        let org_q = format!(
+            "query($q:String){{ viewer{{ organizations(first:20){{ nodes{{ projectsV2(first:20, query:$q){{ {P} }} }} }} }} }}"
+        );
+        let vars = json!({"q": Some(query.trim()).filter(|q| !q.is_empty())});
+        let mut nodes: Vec<Value> = Vec::new();
+        // Projects v2 need extra token scopes (read:org for orgs): a failure there must not hide the repos.
+        if let Ok(d) = self.gql(&user_q, vars.clone()).await {
+            nodes.extend(
+                d.pointer("/viewer/projectsV2/nodes").and_then(Value::as_array).cloned().unwrap_or_default(),
+            );
+        }
+        if let Ok(d) = self.gql(&org_q, vars).await {
+            for o in d.pointer("/viewer/organizations/nodes").and_then(Value::as_array).into_iter().flatten()
             {
-                let (Some(owner), Some(number), Some(title)) = (
-                    n.pointer("/owner/login").and_then(Value::as_str),
-                    n.get("number").and_then(Value::as_u64),
-                    s(n, "title"),
-                ) else {
-                    continue;
-                };
-                hits.push(SourceHit {
-                    kind: "project_v2".into(),
-                    label: title.to_owned(),
-                    detail: Some(format!("{owner} #{number}")),
-                    view: TrackerView {
-                        id: format!("github:project:{owner}/{number}"),
-                        label: title.to_owned(),
-                        project_v2: Some(ProjectV2Ref {
-                            owner: owner.to_owned(),
-                            number: number as u32,
-                            status_field: DEFAULT_STATUS_FIELD.into(),
-                        }),
-                        who: Some(Who::Mine),
-                        ..TrackerView::default()
-                    },
-                });
+                nodes.extend(
+                    o.pointer("/projectsV2/nodes").and_then(Value::as_array).cloned().unwrap_or_default(),
+                );
             }
+        }
+        for n in nodes.iter().filter(|n| n.get("closed").and_then(Value::as_bool) != Some(true)) {
+            let (Some(owner), Some(number), Some(title)) = (
+                n.pointer("/owner/login").and_then(Value::as_str),
+                n.get("number").and_then(Value::as_u64),
+                s(n, "title"),
+            ) else {
+                continue;
+            };
+            hits.push(SourceHit {
+                kind: "project_v2".into(),
+                label: title.to_owned(),
+                detail: Some(format!("{owner} #{number}")),
+                view: TrackerView {
+                    id: format!("github:project:{owner}/{number}"),
+                    label: title.to_owned(),
+                    project_v2: Some(ProjectV2Ref {
+                        owner: owner.to_owned(),
+                        number: number as u32,
+                        status_field: DEFAULT_STATUS_FIELD.into(),
+                    }),
+                    who: Some(Who::Mine),
+                    ..TrackerView::default()
+                },
+            });
         }
         Ok(hits)
     }

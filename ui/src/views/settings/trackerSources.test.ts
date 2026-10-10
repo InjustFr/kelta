@@ -9,6 +9,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, settings, ui } from '$lib/stores';
 
+import { confirms } from '../../shell/confirm.svelte';
 import { takeTomlRequest } from './actions';
 import { iterationWord } from './lib/sources.svelte';
 import TrackerSources from './TrackerSources.svelte';
@@ -44,6 +45,9 @@ describe('Tracker block', () => {
     const id = sources()[0]!.dataset.viewId!;
     await fireEvent.change(within(sources()[0]!).getByRole('combobox'), { target: { value: 'unassigned' } });
     await waitFor(() => expect(lastPatch()?.tracker?.views.find((v) => v.id === id)?.who).toBe('unassigned'));
+    // a view with a query can go back to letting the query decide
+    await fireEvent.change(within(sources()[0]!).getByRole('combobox'), { target: { value: '' } });
+    await waitFor(() => expect(lastPatch()?.tracker?.views.find((v) => v.id === id)?.who).toBeNull());
 
     await fireEvent.click(within(sources()[0]!).getByRole('switch'));
     await waitFor(() =>
@@ -52,6 +56,8 @@ describe('Tracker block', () => {
 
     const n = sources().length;
     await fireEvent.click(within(sources()[0]!).getByRole('button', { name: /^Remove / }));
+    await waitFor(() => expect(confirms.current?.title).toMatch(/^Remove /));
+    confirms.answer('remove');
     await waitFor(() => expect(lastPatch()?.tracker?.views.map((v) => v.id)).not.toContain(id));
     await waitFor(() => expect(sources()).toHaveLength(n - 1));
   });

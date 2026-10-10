@@ -609,3 +609,35 @@ async fn visible_list_refreshes_after_a_saga_transition() {
     }
     panic!("the cached list still shows {:?}", status().await);
 }
+
+#[tokio::test]
+async fn sources_removed_unknown_views_and_unlisted_keys() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let shop = Scope::Project { id: "shop".into() };
+    // a view id that no longer exists falls back to the union, not to another source
+    assert_eq!(e.h.core.ticket_queries(&shop, Some("gone"), None).len(), 1);
+    // a key outside every list resolves by GET; a miss leaves the account status alone
+    {
+        let mut ps = e.h.cfg.projects.write();
+        let mut p = (*ps[0]).clone();
+        p.tracker.as_mut().unwrap().views[0].who = Some(Who::Mine);
+        ps[0] = Arc::new(p);
+        ps.truncate(1);
+    }
+    let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
+    e.tracker.assign(&t, Assignee::None).await.unwrap();
+    let hits = e.h.core.tracker_search(shop.clone(), "SHOP-142").await.unwrap();
+    assert_eq!(hits.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), ["SHOP-142"]);
+    assert_eq!(hits[0].project_ids, [ProjectId::from("shop")]);
+    assert!(e.h.core.tracker_search(shop.clone(), "SHOP-999").await.unwrap().is_empty());
+    assert!(!e.h.ui.events().iter().any(|ev| matches!(ev, UiEvent::AccountStatusChanged { .. })));
+    // removing the last source stops the project's queries (no implicit "mine" view)
+    {
+        let mut ps = e.h.cfg.projects.write();
+        let mut p = (*ps[0]).clone();
+        p.tracker.as_mut().unwrap().views.clear();
+        ps[0] = Arc::new(p);
+    }
+    assert!(e.h.core.ticket_queries(&shop, None, Some(Who::Mine)).is_empty());
+}

@@ -294,12 +294,7 @@ impl Core {
                 if accounts.len() > 1 {
                     for account in accounts {
                         let probe = TicketRef { account, key: key.clone(), id: key.clone() };
-                        // not `tracker_get`: a 404 here must not flag the account as erroring
-                        let got = match self.tracker_of(&probe.account) {
-                            Ok(t) => t.get(&probe).await,
-                            Err(e) => Err(e),
-                        };
-                        if let Ok(d) = got {
+                        if let Ok(d) = self.tracker_get(&probe).await {
                             tref = Some(d.ticket.r#ref);
                             break;
                         }

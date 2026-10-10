@@ -37,7 +37,8 @@
   const slot = $derived(tickets.details[ticketKey(ref)]);
   const detail = $derived(slot?.data ?? null);
   const ticket = $derived(detail?.ticket ?? null);
-  const transitions = $derived(tickets.transitions[ticketKey(ref)]?.data ?? []);
+  /** `null` while loading: the menu says so instead of "no move available". */
+  const transitions = $derived(tickets.transitions[ticketKey(ref)]?.data ?? null);
   const workItem = $derived(work.forTicket(ref));
   const pr = $derived(ticket ? prForTicket(ticket, workItem?.pr_url ?? null, loadedReviews()) : null);
 
@@ -72,10 +73,17 @@
     void tickets.loadTransitions(ref);
   }
 
-  async function openMoveMenu(): Promise<void> {
-    if (transitions.length === 0) await tickets.loadTransitions(ref);
-    const r = statusBtn?.getBoundingClientRect();
+  /** Opens under `anchor` (the clicked button), else under the status chip (the `m` key). */
+  async function openMoveMenu(anchor?: HTMLElement): Promise<void> {
+    const r = (anchor ?? statusBtn)?.getBoundingClientRect();
     menu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+    if (transitions?.length) return;
+    const slot = await tickets.loadTransitions(ref);
+    if (!slot.data && menu) {
+      menu = null;
+      root?.focus();
+      toasts.error(slot.error ?? 'No transitions', `Moving ${ref.key}`);
+    }
   }
 
   async function assign(who: 'me' | 'none'): Promise<void> {
@@ -210,7 +218,7 @@
         <Button variant="primary" icon="play" onclick={() => void startWorkOnTicket(ref, projectId)}>
           {workItem ? 'Resume work' : 'Start work'}
         </Button>
-        <Button title="Move (m)" onclick={() => void openMoveMenu()}>Move</Button>
+        <Button title="Move (m)" onclick={(e) => void openMoveMenu(e.currentTarget)}>Move</Button>
         <Button icon="user" onclick={() => void assign('me')}>Assign to me</Button>
         {#if ticket.assignee}<Button variant="ghost" onclick={() => void assign('none')}>Unassign</Button
           >{/if}
