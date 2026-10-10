@@ -26,16 +26,19 @@ describe('registries', { timeout: 30_000 }, () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  }, 90_000); // cold-transforms every view
+  }, 120_000); // cold-transforms every view
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
       [
+        'finish',
+        'finish_merged',
         'fix',
         'link_ticket',
         'onboarding',
         'plugin_install',
         'project_new',
+        'ship',
         'start_work',
         'tool_picker',
         'work_dialog',
@@ -45,7 +48,7 @@ describe('registries', { timeout: 30_000 }, () => {
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {
       expect(typeof (await load()).default).toBe('function');
     }
-  }, 60_000); // cold transforms (the work bar pulls in the work actions)
+  }, 120_000); // cold-transforms every sheet chunk
 
   it('settings sections are unique, ordered per BUILD_PLAN §2.4 and load', async () => {
     const ids = settingsSections.map((s) => s.id);
@@ -70,5 +73,5 @@ describe('registries', { timeout: 30_000 }, () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  }, 90_000); // cold-transforms every section
+  }, 120_000); // cold-transforms every settings chunk: > 5 s on a loaded machine
 });

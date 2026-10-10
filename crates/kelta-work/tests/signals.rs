@@ -12,7 +12,7 @@ use kelta_proto::api::{CoreApi, WorkStore};
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::SessionId;
-use kelta_proto::model::{FinishOpts, SessionKind, WorkItem, WorkSource};
+use kelta_proto::model::{FinishOpts, SessionKind, SessionStatus, WorkItem, WorkSource};
 use kelta_proto::samples;
 use kelta_work::WorkService;
 use serde_json::json;
@@ -108,14 +108,36 @@ async fn hooks_set_and_clear_signals() {
 }
 
 #[tokio::test]
+async fn claude_at_stamps_when_claude_asks_or_stops() {
+    need_git!();
+    let fx = Fx::new();
+    let (_w, item, claude) = started(&fx).await;
+    assert!(item.claude_at.is_none());
+    // Idle reminders are not a question.
+    fx.core.publish(hook(&claude, "Notification", json!({ "notification_type": "idle_prompt" })));
+    fx.core.publish(hook(&claude, "SessionStart", json!({ "session_id": "s2" })));
+    let cur = wait_item(&fx, &item, |w| w.claude_uuid.as_deref() == Some("s2")).await;
+    assert!(cur.claude_at.is_none(), "hooks run in order: the idle prompt stamped nothing");
+    fx.core.publish(hook(&claude, "Notification", json!({ "notification_type": "permission_prompt" })));
+    let asked = wait_item(&fx, &item, |w| w.claude_at.is_some()).await.claude_at.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    wait_item(&fx, &item, |w| w.claude_at.as_deref().is_some_and(|t| t > asked.as_str())).await;
+}
+
+#[tokio::test]
 async fn stop_hook_during_push_survives_the_push_save() {
     need_git!();
     let fx = Fx::new();
     let (w, item, claude) = started(&fx).await;
     std::fs::write(item.worktree.join("login.rs"), "fn login() {}\n").unwrap();
+    git(&item.worktree, &["add", "login.rs"]);
+    git(&item.worktree, &["commit", "-q", "-m", "login"]);
 
     let (w2, id) = (w.clone(), item.id.clone());
-    let pr = tokio::spawn(async move { w2.create_pr(&id, PrDraft::default()).await });
+    let pr = tokio::spawn(async move {
+        w2.create_pr(&id, PrDraft::default(), kelta_proto::model::ShipOrigin::Mcp).await
+    });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.publish(hook(&claude, "Stop", json!({})));
     wait_item(&fx, &item, |w| w.review_due).await;
@@ -205,4 +227,55 @@ async fn prompt_right_after_stop_wins() {
     fx.core.publish(hook(&claude, "SessionStart", json!({ "session_id": "marker" })));
     let cur = wait_item(&fx, &item, |w| w.claude_uuid.as_deref() == Some("marker")).await;
     assert!(!cur.review_due && !cur.claude_replied);
+}
+
+/// Pushes a new commit to the remote's `refs/pull/87/head` (someone updated the PR).
+fn move_pr_head(fx: &Fx, file: &str) {
+    git(&fx.repo, &["fetch", "-q", "origin", "refs/pull/87/head"]);
+    git(&fx.repo, &["checkout", "-q", "FETCH_HEAD"]);
+    std::fs::write(fx.repo.join(file), "x\n").unwrap();
+    git(&fx.repo, &["add", file]);
+    git(&fx.repo, &["commit", "-q", "-m", file]);
+    git(&fx.repo, &["push", "-q", "origin", "HEAD:refs/pull/87/head"]);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+}
+
+#[tokio::test]
+async fn status_all_fast_forwards_a_clean_review_checkout_only() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Review { review: samples::review_ref() }).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    move_pr_head(&fx, "second.txt");
+    w.status_all().await.unwrap();
+    assert!(item.worktree.join("second.txt").exists(), "clean checkout follows the PR head");
+
+    // Dirty: left alone (a fresh service, so the 5 min fetch floor does not hide the case).
+    std::fs::write(item.worktree.join("feature.txt"), "my notes\n").unwrap();
+    move_pr_head(&fx, "third.txt");
+    fx.service().status_all().await.unwrap();
+    assert!(!item.worktree.join("third.txt").exists());
+    assert_eq!(std::fs::read_to_string(item.worktree.join("feature.txt")).unwrap(), "my notes\n");
+}
+
+#[tokio::test]
+async fn status_all_leaves_a_review_checkout_alone_while_claude_works() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Review { review: samples::review_ref() }).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    let mut s = fx
+        .core
+        .sessions()
+        .into_iter()
+        .find(|s| item.session_ids.contains(&s.id) && s.kind == SessionKind::Claude)
+        .expect("claude session");
+    s.status = SessionStatus::Working;
+    fx.core.insert_session(s);
+    let head = git(&item.worktree, &["rev-parse", "HEAD"]);
+    move_pr_head(&fx, "second.txt");
+    w.status_all().await.unwrap();
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head, "HEAD stays while Claude reads it");
 }

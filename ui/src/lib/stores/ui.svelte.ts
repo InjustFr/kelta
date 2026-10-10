@@ -11,6 +11,9 @@ export type SheetKey =
   | 'plugin_install'
   | 'tool_picker'
   | 'session_new'
+  | 'ship'
+  | 'finish'
+  | 'finish_merged'
   | 'fix'
   | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';

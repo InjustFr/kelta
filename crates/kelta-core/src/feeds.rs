@@ -10,14 +10,14 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kelta_proto::api::{CodeHost, Tracker};
 use kelta_proto::codehost::{
-    CiState, MyReviewState, Review, ReviewDecision, ReviewDetail, ReviewItem, ReviewKind, ReviewPage,
-    ReviewQuery, ReviewRef,
+    CiState, MyReviewState, PrState, Review, ReviewDecision, ReviewDetail, ReviewItem, ReviewKind,
+    ReviewPage, ReviewQuery, ReviewRef,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
-use kelta_proto::model::{PaneContent, Scope, WorkState};
+use kelta_proto::model::{PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
@@ -43,6 +43,10 @@ pub struct Feeds {
     /// Background revalidations in flight (cache keys).
     inflight: Mutex<HashSet<String>>,
     status: Mutex<HashMap<AccountId, AccountStatus>>,
+    /// Unfinished work items with an open PR → their project (keeps Authored subscribed, B7).
+    pr_items: Mutex<HashMap<WorkItemId, ProjectId>>,
+    /// PRs whose merge / close was published in this process (live diff and check publish once).
+    ended: Mutex<HashSet<ReviewRef>>,
 }
 
 /// One tracker list query shared by the projects that use it.
@@ -711,8 +715,9 @@ impl Core {
     async fn fetch_reviews(&self, account: &AccountId, kind: ReviewKind) -> Result<Vec<Review>, KeltaError> {
         let host = self.code_host_of(account)?;
         let rs = &self.accounts_settings().reviews;
-        let query =
-            ReviewQuery { kind, include_team: rs.include_team_requests, include_drafts: rs.include_drafts };
+        // Authored always includes drafts: reviewing on GitHub means a draft PR (B6).
+        let include_drafts = kind == ReviewKind::Authored || rs.include_drafts;
+        let query = ReviewQuery { kind, include_team: rs.include_team_requests, include_drafts };
         let r = host.list_reviews(&query).await;
         self.note_account(account, &r);
         let mut list = r?;
@@ -727,7 +732,12 @@ impl Core {
         self.cache_put(&reviews_key(account, kind), &list);
         match kind {
             ReviewKind::ReviewRequested => self.diff_requested(account, &list).await?,
-            ReviewKind::Authored => self.diff_authored(account, &list),
+            ReviewKind::Authored => {
+                for gone in self.diff_authored(account, &list) {
+                    self.pr_left_open(&gone).await;
+                }
+                self.join_work_prs(account, &list).await;
+            }
         }
         Ok(list)
     }
@@ -816,13 +826,15 @@ impl Core {
         Ok(())
     }
 
-    /// Authored PRs: CI / decision / head changes → `pr.*` (silent first poll).
-    fn diff_authored(&self, account: &AccountId, list: &[Review]) {
+    /// Authored PRs: CI / decision / head changes → `pr.*` (silent first poll). Returns the PRs
+    /// that left the open list (merged or closed: the caller asks the host which).
+    fn diff_authored(&self, account: &AccountId, list: &[Review]) -> Vec<ReviewRef> {
         let prev = {
             let mut m = self.feeds.authored.lock();
             m.insert(account.clone(), list.iter().map(|r| (r.r#ref.clone(), r.clone())).collect())
         };
-        let Some(prev) = prev else { return };
+        let Some(prev) = prev else { return Vec::new() };
+        let gone = prev.keys().filter(|k| !list.iter().any(|r| &r.r#ref == *k)).cloned().collect();
         let bindings = self.review_bindings();
         for r in list {
             let Some(p) = prev.get(&r.r#ref) else { continue };
@@ -880,6 +892,112 @@ impl Core {
                 )));
             }
         }
+        gone
+    }
+
+    /// A PR is not in the authored open list: one `get` tells merged / closed, published once
+    /// as `pr.merged` / `pr.closed` (kelta-work moves the work item, FLOW §4.6).
+    async fn pr_left_open(&self, r: &ReviewRef) {
+        if self.feeds.ended.lock().contains(r) {
+            return;
+        }
+        let d = match self.review_get(r).await {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(pr = %format!("{}#{}", r.repo, r.number), error = %e.message, "PR state check failed");
+                return;
+            }
+        };
+        let name = match d.state {
+            PrState::Merged => bus::PR_MERGED,
+            PrState::Closed => bus::PR_CLOSED,
+            PrState::Open => return,
+        };
+        if !self.feeds.ended.lock().insert(r.clone()) {
+            return;
+        }
+        let mut ev = BusEvent::new(
+            name,
+            serde_json::json!({ "review": d.review, "linked_tickets": d.review.linked_tickets }),
+        );
+        if let Some((_, _, p)) =
+            self.review_bindings().into_iter().find(|(a, repo, _)| a == &r.account && repo == &r.repo)
+        {
+            ev = ev.with_project(p);
+        }
+        self.publish_ev(ev);
+    }
+
+    /// `(account, repo)` of the code host bound to a work item's repo.
+    fn work_binding(&self, w: &WorkItem) -> Option<(AccountId, String)> {
+        let p = self.cfg.project(&w.project_id)?;
+        let ch = p.repos.iter().find(|r| r.id == w.repo_id)?.code_host.clone()?;
+        Some((ch.account, ch.repo))
+    }
+
+    /// Branch join (FLOW §3.1): an authored PR whose head is an active item's branch is that
+    /// item's PR (Claude ran `gh pr create`, or the web UI): `pr_url` backfill + `on_pr`, once.
+    async fn join_work_prs(&self, account: &AccountId, list: &[Review]) {
+        let items = self.store.call(|c| q::work_list(c, None)).await.unwrap_or_default();
+        for w in items.iter().filter(|w| w.pr_url.is_none() && w.state == WorkState::Active) {
+            let Some((acc, repo)) = self.work_binding(w) else { continue };
+            let hit = list.iter().find(|r| {
+                &acc == account && r.r#ref.repo.eq_ignore_ascii_case(&repo) && r.source_branch == w.branch
+            });
+            if let Some(r) = hit
+                && let Err(e) = self.work.link_pr(&w.id, r).await
+            {
+                tracing::warn!(work = %w.id, error = %e.message, "PR not linked to its work item");
+            }
+        }
+    }
+
+    /// Keeps the set of unfinished work items with an open PR (from `work.updated`); a change of
+    /// their projects re-subscribes Authored.
+    pub(crate) fn note_work_pr(&self, w: &WorkItem) {
+        let open = w.pr_url.is_some() && w.state != WorkState::Finished && !w.state.pr_done();
+        let changed = {
+            let mut m = self.feeds.pr_items.lock();
+            if open {
+                m.insert(w.id.clone(), w.project_id.clone()).as_ref() != Some(&w.project_id)
+            } else {
+                m.remove(&w.id).is_some()
+            }
+        };
+        if changed {
+            self.resubscribe();
+        }
+    }
+
+    /// Startup and Now open (FLOW §3.6): every unfinished work item whose PR is not in its
+    /// account's authored open list gets one `get`, so a merge while Kelta was closed is seen.
+    pub async fn check_work_prs(&self) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.work.ensure_listener();
+        let items = self.store.call(|c| q::work_list(c, None)).await?;
+        let mut open: HashMap<AccountId, Vec<Review>> = HashMap::new();
+        for w in &items {
+            self.note_work_pr(w);
+        }
+        for w in items.iter().filter(|w| w.state != WorkState::Finished && !w.state.pr_done()) {
+            let (Some(url), Some((account, repo))) = (&w.pr_url, self.work_binding(w)) else { continue };
+            if !open.contains_key(&account) {
+                match self.fetch_reviews(&account, ReviewKind::Authored).await {
+                    Ok(list) => open.insert(account.clone(), list),
+                    Err(_) => continue, // account error already noted; the next check retries
+                };
+            }
+            if open.get(&account).is_some_and(|l| l.iter().any(|r| &r.url == url)) {
+                continue;
+            }
+            // shortcut: the PR number is the last URL segment (GitHub /pull/n, GitLab /merge_requests/n).
+            let Some(number) = url.trim_end_matches('/').rsplit('/').next().and_then(|n| n.parse().ok())
+            else {
+                continue;
+            };
+            self.pr_left_open(&ReviewRef { account, repo, number }).await;
+        }
+        Ok(())
     }
 
     fn review_notify(&self, kind: NotifyKind, title: &str, r: &Review, project: Option<ProjectId>) {
@@ -1084,6 +1202,11 @@ impl Core {
                 _ => {}
             }
         }
+        // Own work-item PRs stay visible whatever panes are shown (B7).
+        let pr_projects: HashSet<ProjectId> = self.feeds.pr_items.lock().values().cloned().collect();
+        let pr_accounts =
+            self.review_bindings().into_iter().filter(|(_, _, p)| pr_projects.contains(p)).map(|(a, _, _)| a);
+        reviews(pr_accounts.collect(), &[ReviewKind::Authored], &mut want);
         let n = &s.notifications;
         if n.enabled {
             let mut kinds = Vec::new();

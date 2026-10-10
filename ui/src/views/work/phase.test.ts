@@ -87,7 +87,7 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
     );
     check(
       '6 merged',
-      phaseOf(item({ state: { kind: 'merged' }, review_due: true }), null, null, null),
+      phaseOf(item({ state: { kind: 'merged', detail: null }, review_due: true }), null, null, null),
       'merged',
       'ship',
       'finish',
@@ -95,6 +95,13 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
     check(
       '7 closed',
       phaseOf(item({ ...withPr, review_due: true }), null, pr({ state: 'closed' }), null),
+      'closed',
+      'ship',
+      'finish',
+    );
+    check(
+      '7 closed (state)',
+      phaseOf(item({ ...withPr, state: { kind: 'pr_closed' } }), null, null, null),
       'closed',
       'ship',
       'finish',

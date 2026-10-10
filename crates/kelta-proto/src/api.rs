@@ -24,7 +24,7 @@ use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
 use crate::ipc::WindowState;
 use crate::model::{
     AttachInfo, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
-    SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
+    ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -154,6 +154,10 @@ pub trait CodeHost: Send + Sync {
         Err(KeltaError::unsupported("pending review comments"))
     }
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
+    /// Renames a PR (the ticket key added after Link to ticket, FLOW §4.3 step 4).
+    async fn update_title(&self, _r: &ReviewRef, _title: &str) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot rename pull requests"))
+    }
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
     /// `pull/N/head:…` | `merge-requests/N/head:…`.
     fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String;
@@ -234,7 +238,12 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<(), KeltaError>;
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError>;
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
     async fn editor_open(

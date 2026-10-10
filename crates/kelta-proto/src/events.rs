@@ -236,6 +236,8 @@ pub mod bus {
     pub const PR_APPROVED: &str = "pr.approved";
     pub const PR_CHANGES_REQUESTED: &str = "pr.changes_requested";
     pub const PR_MERGED: &str = "pr.merged";
+    /// An authored PR was closed without merge (`{review, linked_tickets}`).
+    pub const PR_CLOSED: &str = "pr.closed";
     pub const TOOL_OPENED: &str = "tool.opened";
     pub const TOOL_EXITED: &str = "tool.exited";
     pub const SETTINGS_CHANGED: &str = "settings.changed";
@@ -279,6 +281,7 @@ pub mod bus {
         PR_APPROVED,
         PR_CHANGES_REQUESTED,
         PR_MERGED,
+        PR_CLOSED,
         TOOL_OPENED,
         TOOL_EXITED,
         SETTINGS_CHANGED,

@@ -17,7 +17,7 @@ use kelta_http::util::{percent_encode, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, Review, ReviewDecision,
+    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, PrState, Review, ReviewDecision,
     ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
@@ -93,7 +93,9 @@ impl BitbucketHost {
             let Some(req) = next.take() else { break };
             let body = self.json(req).await?.body;
             out.extend(body.get("values").and_then(Value::as_array).cloned().unwrap_or_default());
-            next = s(&body, "next").map(HttpRequest::get);
+            // The token rides on every page: never follow a `next` that leaves the API origin.
+            next =
+                s(&body, "next").filter(|u| u.starts_with(&format!("{}/", self.api))).map(HttpRequest::get);
         }
         Ok(out)
     }
@@ -357,7 +359,13 @@ impl CodeHost for BitbucketHost {
                     .collect()
             })
             .unwrap_or_default();
+        let state = match s(&pull, "state") {
+            Some("MERGED") => PrState::Merged,
+            Some("DECLINED" | "SUPERSEDED") => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
+            state,
             pending_comments: 0,
             body_html: markdown::to_html(s(&pull, "description").unwrap_or("")),
             review,

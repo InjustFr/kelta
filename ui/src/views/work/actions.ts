@@ -18,6 +18,7 @@ import {
   rebase,
   rebaseStep,
 } from './fixloop.svelte';
+import { workActionDisabled } from './common';
 import { claudeOf, phaseNow, prOf } from './live';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
@@ -26,7 +27,6 @@ import { startWorkOnTicket } from './startWork';
 import { workUi } from './ui.svelte';
 
 export const NOT_YET = 'not available yet';
-const READ_ONLY = 'Review checkout: read-only';
 
 interface Ctx {
   item: WorkItem;
@@ -44,7 +44,6 @@ export interface WorkAction {
   run: ((c: Ctx) => Promise<void>) | null;
 }
 
-const review = (c: Ctx) => c.item.kind === 'review';
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
   c.item.rebase && c.item.rebase.total > 0 ? null : 'Only while a rebase is stopped';
@@ -85,13 +84,12 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'ship',
     key: 'p',
     label: (c) => (c.phase.id === 'rebased' ? 'Force push…' : hasPr(c) ? 'Push' : 'Ship'),
-    blocked: (c) => (review(c) ? READ_ONLY : null),
-    // shortcut: Ship opens today's Create PR dialog; the ship-finish lane renames it.
+    blocked: () => null,
     run: async ({ item, phase }) => {
       if (phase.id === 'rebased') return forcePushItem(item);
       if (item.pr_url !== null) return pushItem(item);
       await goToWork(item);
-      workUi.ship = item.id;
+      ui.openSheet('ship', { item });
     },
   },
   {
@@ -105,14 +103,14 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'fix',
     key: 'f',
     label: () => 'Fix with Claude',
-    blocked: (c) => (review(c) ? READ_ONLY : hasPr(c) ? null : 'Needs a PR'),
+    blocked: (c) => (hasPr(c) ? null : 'Needs a PR'),
     run: async ({ item }) => fixItem(item),
   },
   {
     id: 'rebase',
     key: 'r',
     label: (c) => `Rebase onto ${c.item.base}`,
-    blocked: (c) => (review(c) ? READ_ONLY : null),
+    blocked: () => null,
     run: async ({ item, phase }) => rebase(item, phase.id === 'remote_new' ? 'remote_branch' : 'base'),
   },
   {
@@ -148,7 +146,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'link',
     key: 'l',
     label: () => 'Link to ticket…',
-    blocked: (c) => (review(c) ? READ_ONLY : c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
+    blocked: (c) => (c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
     run: async ({ item }) => ui.openSheet('link_ticket', { id: item.id }),
   },
   {
@@ -175,7 +173,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     blocked: () => null,
     run: async ({ item }) => {
       await goToWork(item);
-      workUi.finish = item.id;
+      ui.openSheet('finish', { item });
     },
   },
   // Primary-only actions (no letter of their own).
@@ -231,7 +229,8 @@ export function blockedReason(
   phase: Phase = phaseNow(item),
 ): string | null {
   const a = workAction(id);
-  return a.blocked({ item, phase }) ?? (a.run ? null : NOT_YET);
+  // Review items: p/r/f/l are read-only (#131), whatever the action's own check says.
+  return workActionDisabled(item, a.key ?? '') ?? a.blocked({ item, phase }) ?? (a.run ? null : NOT_YET);
 }
 
 /** Runs a work action; a blocked one flashes its reason instead. */
@@ -264,9 +263,13 @@ export function focusedWorkItem(): WorkItem | null {
   return id ? work.get(id) : null;
 }
 
-function onFocused(fn: (item: WorkItem) => void | Promise<void>): () => Promise<void> {
-  return async () => {
-    const item = focusedWorkItem();
+/** `args.id` names the item (palette, Now rows); default: the focused tab's. */
+function onFocused(
+  fn: (item: WorkItem) => void | Promise<void>,
+): (args?: Record<string, unknown>) => Promise<void> {
+  return async (args) => {
+    const id = args?.id as string | undefined;
+    const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
     else toasts.info('Focus a work item tab first');
   };
@@ -283,7 +286,7 @@ for (const a of WORK_ACTIONS)
       `work.${a.id}`,
       onFocused((item) => runWorkAction(a.id, item)),
     );
-registerAction('work.finish_merged', () => void toasts.info(`Finish all merged: ${NOT_YET}`));
+registerAction('work.finish_merged', () => ui.openSheet('finish_merged'));
 
 registerAction('work.start', async (args) => {
   const ticket = (args?.ticket as TicketRef | undefined) ?? selection.ticket;

@@ -13,14 +13,12 @@ kelta-proto = { workspace = true }
 kelta-http = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 time = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 kelta-proto = { workspace = true, features = ["testing"] }

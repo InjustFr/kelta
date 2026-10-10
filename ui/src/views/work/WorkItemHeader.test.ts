@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { sheetRegistry, type RegisteredSheetKey } from '$app/registry';
 import type { WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { layout, projects, sessions, tickets, toasts, work } from '$lib/stores';
+import { layout, projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import { workUi } from './ui.svelte';
 import WorkItemHeader from './WorkItemHeader.svelte';
@@ -22,10 +23,18 @@ beforeEach(async () => {
   work.byId = {};
   work.git = {};
   layout.byProject = {};
-  Object.assign(workUi, { menu: null, ship: null, finish: null });
+  ui.sheets = [];
+  Object.assign(workUi, { menu: null });
   // ProjectRail reads git status at startup; the header itself never asks.
   await Promise.all([work.load(), sessions.load(), projects.load(), work.refreshStatus()]);
 });
+
+/** Renders the sheet the last action opened (the shell's SheetHost does this in the app). */
+async function mountSheet(key: RegisteredSheetKey) {
+  await waitFor(() => expect(ui.sheet?.key).toBe(key));
+  const Sheet = (await sheetRegistry[key]()).default;
+  return render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet(key) } });
+}
 
 function mountHeader(item: WorkItem) {
   return render(WorkItemHeader, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
@@ -126,20 +135,24 @@ describe('work bar', () => {
     expect(reasons).toEqual(['Ship', 'Fix', 'Rebase', 'Link']);
   });
 
-  it('p ships through the Create PR dialog', async () => {
+  it('p ships through the Ship dialog', async () => {
     const w = { ...item(0) };
     mock.state.sessions.find((s) => s.id === w.session_ids[0])!.status = 'done';
     await sessions.load();
     mountHeader(w);
     const menu = await openMenu();
     await fireEvent.keyDown(menu, { key: 'p' });
+    await mountSheet('ship');
     const dialog = await screen.findByRole('dialog');
-    await fireEvent.input(within(dialog).getByLabelText('Title'), { target: { value: 'My PR' } });
-    await fireEvent.click(within(dialog).getByRole('button', { name: 'Create PR' }));
+    const title = within(dialog).getByLabelText('Title') as HTMLInputElement;
+    await waitFor(() => expect(title.value).toBe('SHOP-142: Rate-limit login attempts'));
+    await fireEvent.input(title, { target: { value: 'My PR' } });
+    // The fixture worktree is dirty: Ship anyway.
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Ship anyway' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_create_pr')).toBe(true));
     expect(mock.calls.filter((c) => c.cmd === 'work_create_pr').at(-1)?.args).toMatchObject({
       id: w.id,
-      draft: { title: 'My PR', body: null, draft: null },
+      draft: { title: 'My PR', draft: false },
     });
     // PR open with unpushed commits: the next action is Push (another lane's).
     await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('unpushed'));
@@ -150,6 +163,7 @@ describe('work bar', () => {
     mountHeader(w);
     const menu = await openMenu();
     await fireEvent.keyDown(menu, { key: 'F' });
+    await mountSheet('finish');
     const dialog = await screen.findByRole('dialog');
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Finish' }));
     const dirty = await screen.findByTestId('finish-dirty');

@@ -53,48 +53,27 @@ use crate::session::{Session, Shared};
 
 /// The PTY-backed terminal host.
 pub struct PtyTerminalHost {
-    env: LoginEnv,
     shared: Arc<Shared>,
     backend: Arc<dyn PtyBackend>,
 }
 
 impl PtyTerminalHost {
-    pub fn new(env: LoginEnv, limits: TerminalLimits) -> Self {
-        Self::with_backend(env, limits, backend::default_backend())
+    pub fn new(limits: TerminalLimits) -> Self {
+        Self::with_backend(limits, backend::default_backend())
     }
 
     /// Host with an explicit PTY backend.
-    pub fn with_backend(env: LoginEnv, limits: TerminalLimits, backend: Arc<dyn PtyBackend>) -> Self {
-        Self { env, shared: Arc::new(Shared::new(limits, None)), backend }
+    pub fn with_backend(limits: TerminalLimits, backend: Arc<dyn PtyBackend>) -> Self {
+        Self { shared: Arc::new(Shared::new(limits, None)), backend }
     }
 
     /// Host with the on-disk history log (ARCHITECTURE §9.6) in `dir`. Without a usable dir the
     /// host runs without it.
-    pub fn with_history_dir(
-        env: LoginEnv,
-        limits: TerminalLimits,
-        backend: Arc<dyn PtyBackend>,
-        dir: PathBuf,
-    ) -> Self {
+    pub fn with_history_dir(limits: TerminalLimits, backend: Arc<dyn PtyBackend>, dir: PathBuf) -> Self {
         let history = HistoryLog::start(dir, &limits)
             .inspect_err(|e| tracing::warn!("terminal history log disabled: {e}"))
             .ok();
-        Self { env, shared: Arc::new(Shared::new(limits, history)), backend }
-    }
-
-    /// Convenience for composition.
-    pub fn new_arc(env: LoginEnv, limits: TerminalLimits) -> Arc<Self> {
-        Arc::new(Self::new(env, limits))
-    }
-
-    /// The login environment this host was created with.
-    pub fn login_env(&self) -> &LoginEnv {
-        &self.env
-    }
-
-    /// Name of the PTY backend in use.
-    pub fn backend_name(&self) -> &'static str {
-        self.backend.name()
+        Self { shared: Arc::new(Shared::new(limits, history)), backend }
     }
 
     fn session(&self, id: &SessionId) -> Result<Arc<Session>, KeltaError> {
@@ -314,7 +293,8 @@ impl TerminalHost for PtyTerminalHost {
 
     fn kill(&self, id: &SessionId, signal: KillSignal) -> Result<(), KeltaError> {
         let s = self.session(id)?;
-        if s.exited.load(Ordering::SeqCst) {
+        // `reaped` is set before Exited is emitted, so a kill from the Exited handler closes too.
+        if s.exited.load(Ordering::SeqCst) || s.proc.lock().reaped {
             // Killing an exited session closes it ("x close"): free its model and memory estimate.
             let mut map = self.shared.sessions.write();
             // A respawn may already have replaced it under the same id.

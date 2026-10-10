@@ -13,7 +13,7 @@ use kelta_http::util::{link_rel, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, Review, ReviewDecision,
+    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, PrState, Review, ReviewDecision,
     ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
@@ -88,7 +88,15 @@ impl GiteaHost {
             let Some(req) = next.take() else { break };
             let resp = self.json(req).await?;
             out.extend(resp.body.as_array().cloned().unwrap_or_default());
-            next = link_rel(&resp.headers, "next").map(HttpRequest::get);
+            // The token rides on every page, and Gitea builds `next` from its ROOT_URL (often another
+            // origin behind a proxy): keep only the part after `/api/v1/` and fetch it from our own API.
+            next = link_rel(&resp.headers, "next").and_then(|u| match u.find("/api/v1/") {
+                Some(i) => Some(HttpRequest::get(format!("{}{}", self.api, &u[i + "/api/v1".len()..]))),
+                None => {
+                    tracing::warn!("gitea: dropped a next page link outside /api/v1/");
+                    None
+                }
+            });
         }
         Ok(out)
     }
@@ -319,7 +327,13 @@ impl CodeHost for GiteaHost {
                     .collect()
             })
             .unwrap_or_default();
+        let state = match (pull.get("merged").and_then(Value::as_bool), s(&pull, "state")) {
+            (Some(true), _) => PrState::Merged,
+            (_, Some("closed")) => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
+            state,
             pending_comments: 0,
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
