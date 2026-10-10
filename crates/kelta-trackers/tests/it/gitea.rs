@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::api::Tracker;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -140,4 +140,61 @@ fn bitbucket_has_no_tracker_and_gitea_needs_a_base_url() {
         TrackerFactory.tracker(&no_url, http("g"), secrets()).err().unwrap().code,
         ErrorCode::InvalidArgument
     );
+}
+
+#[tokio::test]
+async fn who_picks_assigned_all_or_client_side_unassigned() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v1/repos/acme/shop/issues", 200, "gitea/issues_p1.json").await;
+    mount(&server, "GET", "/api/v1/repos/issues/search", 200, "gitea/issues_p1.json").await;
+    let h = gt(&server);
+    let mut v = view("v");
+    v.project = Some("acme/shop".into());
+    v.scope = Some("all".into()); // ignored once `who` is set
+    v.who = Some(Who::Mine);
+    assert_eq!(h.list(&v, None).await.unwrap().items.len(), 1);
+    v.who = Some(Who::Anyone);
+    assert_eq!(h.list(&v, None).await.unwrap().items.len(), 1);
+    v.who = Some(Who::Unassigned);
+    assert!(h.list(&v, None).await.unwrap().items.is_empty(), "both fixture issues are assigned");
+    let urls: Vec<_> = server.received_requests().await.unwrap().iter().map(|r| r.url.to_string()).collect();
+    assert!(urls[0].contains("/repos/issues/search?") && urls[0].contains("assigned=true"));
+    assert!(urls[1].contains("/repos/acme/shop/issues?") && !urls[1].contains("assigned"));
+}
+
+#[tokio::test]
+async fn unassigned_keeps_only_issues_without_assignees() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v1/repos/acme/shop/issues", 200, "gitea/issues_p2.json").await;
+    let mut v = view("v");
+    v.project = Some("acme/shop".into());
+    v.who = Some(Who::Unassigned);
+    let page = gt(&server).list(&v, None).await.unwrap();
+    assert_eq!(page.items[0].r#ref.key, "acme/shop#14");
+    v.project = None;
+    assert_eq!(gt(&server).list(&v, None).await.unwrap_err().code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn sources_search_repositories() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/repos/search"))
+        .and(query_param("q", "shop"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitea/repos_search.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let hits = gt(&server).sources(" shop ").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    let h = &hits[0];
+    assert_eq!(
+        (h.kind.as_str(), h.label.as_str(), h.detail.as_deref()),
+        ("repo", "acme/shop", Some("The storefront"))
+    );
+    assert_eq!(
+        (h.view.id.as_str(), h.view.project.as_deref(), h.view.who),
+        ("gitea:repo:acme/shop", Some("acme/shop"), Some(Who::Mine))
+    );
+    assert_eq!(hits[1].detail, None, "empty descriptions are dropped");
 }

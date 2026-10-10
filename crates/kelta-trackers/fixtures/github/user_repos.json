@@ -1,0 +1,5 @@
+[
+  {"full_name": "acme/shop", "description": "The storefront"},
+  {"full_name": "acme/api", "description": null},
+  {"full_name": "louis/dotfiles", "description": "Config"}
+]

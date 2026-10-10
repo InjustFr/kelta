@@ -15,10 +15,10 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, TrackerBinding, TrackerView};
+use kelta_proto::settings::{AccountConfig, ProjectV2Ref, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, Status, StatusCategory, Ticket, TicketDetail, TicketRef,
-    TrackerCaps, TrackerKind, Transition, User,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
+    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -218,11 +218,14 @@ impl GithubIssues {
 
     async fn list_project_items(
         &self,
-        p: &kelta_proto::settings::ProjectV2Ref,
+        p: &ProjectV2Ref,
         after: Option<String>,
+        filter: Option<String>,
     ) -> Result<Page<Ticket>, KeltaError> {
-        const Q: &str = "query($owner:String!,$number:Int!,$after:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:20){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name } } } } } content{ ... on Issue { id databaseId number title url state updatedAt repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }";
-        let data = self.gql(Q, json!({"owner": p.owner, "number": p.number, "after": after})).await?;
+        const Q: &str = "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:20){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name } } } } } content{ ... on Issue { id databaseId number title url state updatedAt repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }";
+        let data = self
+            .gql(Q, json!({"owner": p.owner, "number": p.number, "after": after, "query": filter}))
+            .await?;
         let items = data.pointer("/repositoryOwner/projectV2/items");
         let nodes = items.and_then(|i| i.get("nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
         let mut out = Vec::new();
@@ -441,16 +444,34 @@ impl Tracker for GithubIssues {
                 Some(Cursor::After(a)) => Some(a),
                 Some(_) => return Err(KeltaError::invalid("github projects expect an `after` cursor")),
             };
-            return self.list_project_items(p, after).await;
+            // Project filter syntax (not issue search): `assignee:@me`, `no:assignee`, `iteration:@current`.
+            let filter = [
+                match view.who {
+                    Some(Who::Mine) => Some("assignee:@me"),
+                    Some(Who::Unassigned) => Some("no:assignee"),
+                    _ => None,
+                },
+                view.current_iteration.then_some("iteration:@current"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ");
+            return self.list_project_items(p, after, Some(filter).filter(|f| !f.is_empty())).await;
         }
         let page = Self::page_cursor(cursor)?;
         let state = state_param(view);
         let mut req = if let Some(q) = view.search.as_deref().filter(|q| !q.trim().is_empty()) {
-            let q = if q.contains("is:issue") || q.contains("is:pr") {
+            let mut q = if q.contains("is:issue") || q.contains("is:pr") {
                 q.to_owned()
             } else {
                 format!("{q} is:issue")
             };
+            match view.who {
+                Some(Who::Mine) => q.push_str(" assignee:@me"),
+                Some(Who::Unassigned) => q.push_str(" no:assignee"),
+                _ => {}
+            }
             HttpRequest::get(format!("{}/search/issues", self.api))
                 .query("q", q)
                 .query("sort", "updated")
@@ -460,10 +481,20 @@ impl Tracker for GithubIssues {
                 .query("state", state)
                 .query("sort", "updated")
                 .query("direction", "desc");
-            if view.assigned_to.as_deref() == Some("me") {
-                r = r.query("assignee", self.me().await?.id);
+            let assignee = match view.who {
+                Some(Who::Mine) => Some(self.me().await?.id),
+                Some(Who::Unassigned) => Some("none".to_owned()),
+                Some(Who::Anyone) => Some("*".to_owned()),
+                None => (view.assigned_to.as_deref() == Some("me")).then_some(self.me().await?.id),
+            };
+            if let Some(a) = assignee {
+                r = r.query("assignee", a);
             }
             r
+        } else if matches!(view.who, Some(Who::Unassigned | Who::Anyone)) {
+            return Err(KeltaError::invalid(
+                "github needs a repository, search or project to list unassigned or all tickets",
+            ));
         } else {
             HttpRequest::get(format!("{}/issues", self.api))
                 .query("filter", "assigned")
@@ -484,6 +515,73 @@ impl Tracker for GithubIssues {
             .unwrap_or_default();
         let has_next = link_rel(&resp.headers, "next").is_some();
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
+    }
+
+    async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
+        let q = query.trim().to_ascii_lowercase();
+        // shortcut: first 100 repos / 50 projects only, repos filtered client-side; page later.
+        let repos = self
+            .rest(
+                HttpRequest::get(format!("{}/user/repos", self.api))
+                    .query("affiliation", "owner,collaborator,organization_member")
+                    .query("sort", "pushed")
+                    .query("per_page", "100"),
+            )
+            .await?
+            .body;
+        let mut hits: Vec<SourceHit> = repos
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|r| {
+                let name = s(r, "full_name")?;
+                name.to_ascii_lowercase().contains(&q).then(|| SourceHit {
+                    kind: "repo".into(),
+                    label: name.to_owned(),
+                    detail: s(r, "description").map(str::to_owned),
+                    view: TrackerView {
+                        id: format!("github:repo:{name}"),
+                        label: name.to_owned(),
+                        repo: Some(name.to_owned()),
+                        who: Some(Who::Mine),
+                        ..TrackerView::default()
+                    },
+                })
+            })
+            .collect();
+        const Q: &str = "query($q:String){ viewer{ projectsV2(first:50, query:$q){ nodes{ number title closed owner{ ... on Organization{ login } ... on User{ login } } } } } }";
+        // Projects v2 need extra token scopes: a failure there must not hide the repos.
+        if let Ok(data) = self.gql(Q, json!({"q": Some(query.trim()).filter(|q| !q.is_empty())})).await {
+            let nodes = data.pointer("/viewer/projectsV2/nodes").and_then(Value::as_array);
+            for n in
+                nodes.into_iter().flatten().filter(|n| n.get("closed").and_then(Value::as_bool) != Some(true))
+            {
+                let (Some(owner), Some(number), Some(title)) = (
+                    n.pointer("/owner/login").and_then(Value::as_str),
+                    n.get("number").and_then(Value::as_u64),
+                    s(n, "title"),
+                ) else {
+                    continue;
+                };
+                hits.push(SourceHit {
+                    kind: "project_v2".into(),
+                    label: title.to_owned(),
+                    detail: Some(format!("{owner} #{number}")),
+                    view: TrackerView {
+                        id: format!("github:project:{owner}/{number}"),
+                        label: title.to_owned(),
+                        project_v2: Some(ProjectV2Ref {
+                            owner: owner.to_owned(),
+                            number: number as u32,
+                            status_field: DEFAULT_STATUS_FIELD.into(),
+                        }),
+                        who: Some(Who::Mine),
+                        ..TrackerView::default()
+                    },
+                });
+            }
+        }
+        Ok(hits)
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {

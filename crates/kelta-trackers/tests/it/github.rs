@@ -3,7 +3,7 @@
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::settings::{ProjectV2Ref, TrackerBinding};
-use kelta_proto::tracker::{Assignee, Cursor, StatusCategory};
+use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -379,4 +379,129 @@ async fn rejected_mutation_with_null_field_is_an_error() {
     mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
     let e = gh(&server).transition(&r(), "status:In Review", None).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::PermissionDenied);
+}
+
+fn query_of(r: &wiremock::Request) -> std::collections::HashMap<String, String> {
+    r.url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect()
+}
+
+#[tokio::test]
+async fn repo_views_send_the_assignee_for_each_who() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    mount(&server, "GET", "/repos/acme/shop/issues", 200, "github/issues_repo.json").await;
+    let t = gh(&server);
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    v.assigned_to = Some("me".into()); // ignored once `who` is set
+    for who in [Who::Mine, Who::Unassigned, Who::Anyone] {
+        v.who = Some(who);
+        t.list(&v, None).await.unwrap();
+    }
+    let got: Vec<_> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|r| r.url.path() == "/repos/acme/shop/issues")
+        .map(|r| query_of(r)["assignee"].clone())
+        .collect();
+    assert_eq!(got, ["louis", "none", "*"]);
+}
+
+#[tokio::test]
+async fn search_views_add_the_assignee_qualifier() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/search.json")))
+        .mount(&server)
+        .await;
+    let t = gh(&server);
+    let mut v = view("search");
+    v.search = Some("org:acme".into());
+    for who in [Who::Mine, Who::Unassigned, Who::Anyone] {
+        v.who = Some(who);
+        t.list(&v, None).await.unwrap();
+    }
+    let got: Vec<_> =
+        server.received_requests().await.unwrap().iter().map(|r| query_of(r)["q"].clone()).collect();
+    assert_eq!(got, ["org:acme is:issue assignee:@me", "org:acme is:issue no:assignee", "org:acme is:issue"]);
+}
+
+#[tokio::test]
+async fn unassigned_and_anyone_need_a_repo_search_or_project() {
+    let server = MockServer::start().await;
+    let t = gh(&server);
+    for who in [Who::Unassigned, Who::Anyone] {
+        let mut v = view("none");
+        v.who = Some(who);
+        let e = t.list(&v, None).await.unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidArgument);
+        assert!(e.message.contains("repository, search or project"));
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn project_v2_views_filter_server_side_by_who_and_iteration() {
+    let server = MockServer::start().await;
+    gql(&server, "projectV2(number", "github/gql_project_items.json").await;
+    let t = gh(&server);
+    let mut v = project_view();
+    t.list(&v, None).await.unwrap(); // legacy: no filter
+    v.who = Some(Who::Mine);
+    t.list(&v, None).await.unwrap();
+    v.who = Some(Who::Unassigned);
+    v.current_iteration = true;
+    t.list(&v, None).await.unwrap();
+    v.who = Some(Who::Anyone);
+    t.list(&v, None).await.unwrap();
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert!(b[0]["query"].as_str().unwrap().contains("query:$query"));
+    let q: Vec<_> = b.iter().map(|b| b["variables"]["query"].clone()).collect();
+    assert_eq!(
+        q,
+        [
+            json!(null),
+            json!("assignee:@me"),
+            json!("no:assignee iteration:@current"),
+            json!("iteration:@current")
+        ]
+    );
+}
+
+#[tokio::test]
+async fn sources_list_repos_and_open_projects_filtered_by_query() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user/repos", 200, "github/user_repos.json").await;
+    gql(&server, "projectsV2", "github/gql_viewer_projects.json").await;
+    let hits = gh(&server).sources("ACME").await.unwrap();
+    let got: Vec<_> = hits.iter().map(|h| (h.kind.as_str(), h.view.id.as_str(), h.label.as_str())).collect();
+    assert_eq!(
+        got,
+        [
+            ("repo", "github:repo:acme/shop", "acme/shop"),
+            ("repo", "github:repo:acme/api", "acme/api"),
+            ("project_v2", "github:project:acme/5", "Roadmap"),
+            ("project_v2", "github:project:louis/9", "Personal"),
+        ]
+    );
+    assert_eq!(hits[0].detail.as_deref(), Some("The storefront"));
+    assert_eq!(hits[2].detail.as_deref(), Some("acme #5"));
+    assert!(hits.iter().all(|h| h.view.who == Some(Who::Mine)));
+    assert_eq!(hits[0].view.repo.as_deref(), Some("acme/shop"));
+    let p = hits[2].view.project_v2.as_ref().unwrap();
+    assert_eq!((p.owner.as_str(), p.number, p.status_field.as_str()), ("acme", 5, "Status"));
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(b[0]["variables"]["q"], "ACME");
+}
+
+#[tokio::test]
+async fn sources_keep_the_repos_when_projects_are_not_readable() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user/repos", 200, "github/user_repos.json").await;
+    gql(&server, "projectsV2", "github/gql_rate_limited.json").await;
+    let hits = gh(&server).sources("").await.unwrap();
+    assert_eq!(hits.len(), 3);
 }
