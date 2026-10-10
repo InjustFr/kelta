@@ -220,8 +220,10 @@ async fn merge_moves_the_ticket_to_done_once_and_close_is_pr_closed() {
     let other = started(&fx, &w, "SHOP-143").await;
     let review = with_pr(&fx, &other, 92).await;
     let before = fx.tracker.ticket("SHOP-143").unwrap().ticket.status;
+    assert!(w.arm_merge(&other.id, MergeMethod::Squash).await.unwrap().auto_finish);
     publish_end(&fx, bus::PR_CLOSED, &review);
-    wait_state(&fx, &other, |s| *s == WorkState::PrClosed).await;
+    let closed = wait_state(&fx, &other, |s| *s == WorkState::PrClosed).await;
+    assert!(!closed.auto_finish, "a closed PR never finishes: disarmed");
     assert_eq!(fx.tracker.ticket("SHOP-143").unwrap().ticket.status, before, "close moves nothing");
 }
 
@@ -235,9 +237,16 @@ async fn ambiguous_done_is_never_auto_picked() {
     w.ensure_listener();
     let item = started(&fx, &w, "SHOP-141").await;
     let review = with_pr(&fx, &item, 93).await;
+    assert!(w.arm_merge(&item.id, MergeMethod::Squash).await.unwrap().auto_finish);
     publish_end(&fx, bus::PR_MERGED, &review);
     let got = wait_state(&fx, &item, |s| matches!(s, WorkState::Merged { .. })).await;
     assert_eq!(got.state, WorkState::Merged { detail: Some("choose Done status".into()) });
+    assert!(!got.auto_finish, "Finish waits for the dialog: disarmed");
+    let texts: Vec<String> = fx.core.toasts().into_iter().map(|t| t.text).collect();
+    assert!(
+        texts.iter().any(|t| t == "SHOP-141 merged · auto-finish skipped: choose Done status"),
+        "{texts:?}"
+    );
     assert_ne!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "Done");
     assert!(fx.tracker.calls().iter().all(|c| !c.starts_with("transition:SHOP-141:t5")));
 }

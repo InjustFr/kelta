@@ -431,7 +431,19 @@ impl WorkService {
             } else {
                 WorkState::PrClosed
             };
+            // Finish will not run (closed, or a Done status to choose): disarm so no chip lies.
+            let skipped = item.auto_finish && item.state != (WorkState::Merged { detail: None });
+            if skipped {
+                item.auto_finish = false;
+            }
             self.save(&mut item).await?;
+            if skipped
+                && let WorkState::Merged { detail: Some(why) } = &item.state
+                && let Ok(env) = self.env(&item.project_id, &item.repo_id)
+            {
+                let key = item.ticket.as_ref().map_or(item.branch.as_str(), |t| t.key.as_str());
+                env.core.toast(Toast::warn(format!("{key} merged · auto-finish skipped: {why}")));
+            }
             // Finish takes the item lock itself.
             drop(guard);
             self.auto_finish(&item).await;
