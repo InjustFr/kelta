@@ -94,7 +94,9 @@ test('the title takes the free width: a 60-character title shows 45 or more with
     return { n, len: text.textContent!.length };
   });
   expect(fit.len).toBe(60);
-  expect(fit.n).toBeGreaterThanOrEqual(45);
+  // 45 is #251's count with macOS's system-ui font (the cell is 295px wide at 1440px). The ubuntu CI
+  // runner's system-ui font is ~7% wider: the same cell holds 42 there (#256).
+  expect(fit.n).toBeGreaterThanOrEqual(process.platform === 'linux' ? 42 : 45);
 });
 
 for (const scheme of ['light', 'dark'] as const) {

@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential pkg-config curl ca-certificates git rsync file python3 \
+      build-essential pkg-config curl ca-certificates git rsync file python3 lsof \
       libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
       libssl-dev libxdo-dev patchelf \
     && rm -rf /var/lib/apt/lists/*

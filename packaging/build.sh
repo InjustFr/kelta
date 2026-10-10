@@ -42,5 +42,6 @@ extra=()
 cd apps/desktop/src-tauri
 # CI=true makes tauri pass --skip-jenkins to bundle_dmg.sh: no Finder AppleScript, which otherwise
 # opens the volume in Finder and leaves it mounted (on the Desktop) after every build.
+# ${a[@]+"${a[@]}"}: macOS /bin/bash 3.2 calls an empty array unbound under `set -u`.
 CI=true ../../../ui/node_modules/.bin/tauri build --config ../../../packaging/tauri.release.json \
-  "${extra[@]}" --bundles "$bundles" "${target[@]}"
+  ${extra[@]+"${extra[@]}"} --bundles "$bundles" ${target[@]+"${target[@]}"}
