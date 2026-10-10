@@ -745,12 +745,20 @@ pub(crate) fn project_key_from_jql(jql: &str) -> Option<String> {
 fn split_order_by(jql: &str) -> (&str, &str) {
     static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| regex::Regex::new(r"(?i)\border\s+by\b").ok()).as_ref();
-    // The last match outside a quoted string.
-    let m = re.and_then(|re| {
-        re.find_iter(jql)
-            .filter(|m| b"\"'".iter().all(|q| jql[..m.start()].bytes().filter(|b| b == q).count() % 2 == 0))
-            .last()
-    });
+    // The last match outside a quoted string (one open quote char at a time, `\` escapes).
+    let (mut open, mut esc) = (None::<char>, false);
+    let mut quoted = Vec::with_capacity(jql.len());
+    for c in jql.chars() {
+        quoted.push(open.is_some());
+        match (open, c) {
+            _ if esc => esc = false,
+            (Some(_), '\\') => esc = true,
+            (Some(q), c) if c == q => open = None,
+            (None, '"' | '\'') => open = Some(c),
+            _ => {}
+        }
+    }
+    let m = re.and_then(|re| re.find_iter(jql).filter(|m| !quoted[jql[..m.start()].chars().count()]).last());
     match m {
         Some(m) => (jql[..m.start()].trim(), jql[m.start()..].trim()),
         None => (jql.trim(), ""),
@@ -771,13 +779,30 @@ fn compose_jql(base: &str, who: Option<Who>, iteration: bool) -> String {
     .into_iter()
     .flatten()
     .collect();
-    if extra.is_empty() {
+    if who.is_none() && extra.is_empty() {
         return base.to_owned();
     }
     let (cond, order) = split_order_by(base);
+    // A pane-level who overrides the view's own `assignee = currentUser()` (onboarding writes one).
+    static ME: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    let me = ME.get_or_init(|| {
+        regex::Regex::new(
+            r"(?i)^\s*assignee\s*=\s*currentUser\(\)\s*(and\s+|$)|\s+and\s+assignee\s*=\s*currentUser\(\)",
+        )
+        .ok()
+    });
+    let stripped;
+    let cond = match me {
+        // shortcut: only a plain AND chain is rewritten (an OR may bind differently), grow it if views need more.
+        Some(re) if who.is_some() && !cond.to_lowercase().contains(" or ") => {
+            stripped = re.replace_all(cond, "").trim().to_owned();
+            stripped.as_str()
+        }
+        _ => cond,
+    };
     let mut parts: Vec<String> = Vec::new();
     if !cond.is_empty() {
-        parts.push(format!("({cond})"));
+        parts.push(if extra.is_empty() { cond.to_owned() } else { format!("({cond})") });
     }
     parts.extend(extra.into_iter().map(str::to_owned));
     format!("{} {order}", parts.join(" AND ")).trim_end().to_owned()
@@ -811,6 +836,23 @@ mod tests {
             "(summary ~ \"order by\") AND assignee = currentUser() ORDER BY key"
         );
         assert_eq!(split_order_by("a = 1").1, "");
+        // An apostrophe inside a double-quoted string does not hide the real ORDER BY.
+        assert_eq!(
+            c("text ~ \"can't login\" ORDER BY created", Some(Who::Mine), false),
+            "(text ~ \"can't login\") AND assignee = currentUser() ORDER BY created"
+        );
+        // Onboarding's own `assignee = currentUser()` yields to the pane-level who.
+        let ob = "project = X AND assignee = currentUser() AND statusCategory != Done";
+        assert_eq!(
+            c(ob, Some(Who::Mine), false),
+            "(project = X AND statusCategory != Done) AND assignee = currentUser()"
+        );
+        assert_eq!(
+            c(ob, Some(Who::Unassigned), false),
+            "(project = X AND statusCategory != Done) AND assignee is EMPTY"
+        );
+        assert_eq!(c(ob, Some(Who::Anyone), false), "project = X AND statusCategory != Done");
+        assert_eq!(c(ob, None, false), ob);
     }
 
     #[test]

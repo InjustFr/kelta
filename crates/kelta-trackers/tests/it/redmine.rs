@@ -293,6 +293,21 @@ async fn who_on_a_saved_query_filters_the_returned_page() {
 }
 
 #[tokio::test]
+async fn saved_query_cursor_follows_the_raw_page_not_the_filtered_one() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    mount(&server, "GET", "/users/current.json", 200, "redmine/current_user.json").await;
+    let other = |id: u64| json!({"id": id, "subject": "s", "status": {"id": 1, "name": "New"}, "assigned_to": {"id": 8, "name": "O"}});
+    mount_json(&server, "/issues.json", json!({"total_count": 200, "issues": [other(1), other(2)]})).await;
+    let mut v = view("q");
+    v.query_id = Some(12);
+    v.who = Some(Who::Mine);
+    let page = rm(&server, json!({})).list(&v, None).await.unwrap();
+    assert!(page.items.is_empty());
+    assert_eq!(page.next, Some(Cursor::Offset(2)));
+}
+
+#[tokio::test]
 async fn sources_list_projects_and_saved_queries_filtered_by_name() {
     let server = MockServer::start().await;
     mount_json(

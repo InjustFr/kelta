@@ -273,6 +273,8 @@ impl Tracker for RedmineTracker {
             }
         }
         let v = self.json(req).await?;
+        // Paging follows what Redmine returned, not what is left after the `who` filter below.
+        let raw = v.get("issues").and_then(Value::as_array).map_or(0, Vec::len) as u64;
         let mut items: Vec<Ticket> = v
             .get("issues")
             .and_then(Value::as_array)
@@ -289,8 +291,8 @@ impl Tracker for RedmineTracker {
             }
         }
         let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
-        let end = offset as u64 + items.len() as u64;
-        let next = (!items.is_empty() && end < total).then_some(Cursor::Offset(end as u32));
+        let end = offset as u64 + raw;
+        let next = (raw > 0 && end < total).then_some(Cursor::Offset(end as u32));
         Ok(Page { items, next })
     }
 
