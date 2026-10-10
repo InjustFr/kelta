@@ -1326,6 +1326,21 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_start_now: ({ id }) => {
+      const w = work(id);
+      if (w.state.kind !== 'queued') throw err('conflict', 'work item is not queued');
+      w.state = { kind: 'active' };
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_queue_front: ({ id }) => {
+      const w = work(id);
+      if (w.state.kind !== 'queued') throw err('conflict', 'work item is not queued');
+      const pos = Math.min(...state.work.map((x) => (x.state.kind === 'queued' ? x.state.pos : Infinity)));
+      w.state = { kind: 'queued', pos: pos - 1 };
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
     work_notes: ({ id }) => notesOf(id),
     work_note_resolve: ({ id, note }) => {
       const n = (state.notes[id] ?? []).find((x) => x.id === note);

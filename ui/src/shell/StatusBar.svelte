@@ -4,6 +4,7 @@
   import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
   import { Kbd, Lamp } from '$lib/ui';
 
+  import { claudeSlots } from '../views/work/batch.svelte';
   import { sessionLabel } from '../views/work/live';
   import { attentionLabel, chordFor } from './labels';
   import { focusedPane, focusedSession, focusedSessionId, revealSession } from './nav';
@@ -66,6 +67,7 @@
     if (next) void revealSession(next.id);
   }
   const restart = $derived(settings.pendingRestart.length > 0);
+  const slots = $derived(claudeSlots());
 
   // Rate-limit strip (subscription accounts only: API-key sessions report no rate_limits).
   const five = $derived(latestWindow(sessions.all, 'five_hour'));
@@ -105,6 +107,15 @@
   {/if}
   {#if hooksOff}
     <span class="seg warn" data-testid="status-hooks">Live status off</span>
+  {/if}
+  {#if slots.live > 0 || slots.queued > 0}
+    <span
+      class="seg"
+      data-testid="status-slots"
+      title="Live Claude processes / claude.max_live, and work items waiting for a slot"
+    >
+      Claude {slots.live}{slots.max ? `/${slots.max}` : ''}{slots.queued ? ` · ${slots.queued} queued` : ''}
+    </span>
   {/if}
   {#if five || seven}
     <span class="seg" data-testid="status-rate" title={spendTitle}>

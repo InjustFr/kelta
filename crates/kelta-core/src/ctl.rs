@@ -242,7 +242,11 @@ impl Core {
         match cmd {
             // kelta-server authenticates and ingests hooks itself (`hooks::ingest`).
             CtlCommand::Hook { .. } => Err(KeltaError::invalid("hooks go through the ctl server")),
-            CtlCommand::Toggle | CtlCommand::Palette | CtlCommand::PluginInstall { .. } => {
+            CtlCommand::Toggle
+            | CtlCommand::Palette
+            | CtlCommand::Next
+            | CtlCommand::Back
+            | CtlCommand::PluginInstall { .. } => {
                 self.emit(UiEvent::CtlCommand { cmd });
                 Ok(Value::Null)
             }

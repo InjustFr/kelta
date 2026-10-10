@@ -1,5 +1,5 @@
 // Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, tab.*,
-// session.new, pane.*, attention.next, terminal.*, editor.send_selection, editor.quickfix_claude, and the
+// session.new, pane.*, attention.*, nav.*, terminal.*, editor.send_selection, editor.quickfix_claude, and the
 // terminal file links. Loaded eagerly by main.ts.
 
 import { registerAction } from '$lib/actions';
@@ -26,6 +26,7 @@ import {
   splitFocused,
   toggleZoomFocused,
 } from './nav';
+import { navStep } from './jumplist';
 
 function focusedView(): TerminalView | null {
   const id = focusedSessionId();
@@ -154,8 +155,11 @@ registerAction('pane.focus_up', () => focusDirection('up'));
 registerAction('pane.focus_right', () => focusDirection('right'));
 registerAction('pane.zoom', () => toggleZoomFocused());
 registerAction('pane.close', () => closeFocusedPane());
-// Next waiting walks Now's queue (FLOW §3.4); loaded on first use.
-registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting());
+// Mod+J / Mod+Shift+J walk the jump queue (ticket #136); loaded on first use.
+registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting(1));
+registerAction('attention.prev', async () => (await import('../views/inbox/now')).nextWaiting(-1));
+registerAction('nav.back', () => navStep(-1));
+registerAction('nav.forward', () => navStep(1));
 registerAction('terminal.search', () => {
   const id = focusedSessionId();
   if (id) terminalUi.searchSession = id;

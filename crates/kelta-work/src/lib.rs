@@ -22,6 +22,7 @@ mod fixloop;
 mod listener;
 mod notes;
 mod ops;
+mod queue;
 mod rebase;
 mod review;
 mod saga;
@@ -83,6 +84,10 @@ pub struct WorkService {
     listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Claude sessions holding an HTTP server consumer.
     http_sessions: Mutex<HashSet<SessionId>>,
+    /// Items holding a Claude slot between the queue gate and the end of their saga (#141).
+    starting: Mutex<HashSet<WorkItemId>>,
+    /// A wake is armed for the reset of the 5h window that holds the queue (#141).
+    hold_wake: std::sync::atomic::AtomicBool,
     /// Test hook: abort the saga right after this step is journaled as done (simulated crash).
     crash_after: Mutex<Option<String>>,
 }
@@ -103,6 +108,8 @@ impl WorkService {
             fetched: Mutex::new(HashMap::new()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
+            starting: Mutex::new(HashSet::new()),
+            hold_wake: std::sync::atomic::AtomicBool::new(false),
             crash_after: Mutex::new(None),
         })
     }
@@ -393,7 +400,10 @@ impl WorkService {
     /// App start: `git worktree prune`, generate `<data>/lazygit-kelta.yml`.
     pub async fn startup(&self) -> Result<(), KeltaError> {
         self.ensure_listener();
-        self.startup_impl().await
+        let r = self.startup_impl().await;
+        // The queue survived the restart: fill the free slots.
+        self.kick_queue();
+        r
     }
 
     // ---- shared internals -----------------------------------------------------------------

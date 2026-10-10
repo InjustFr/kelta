@@ -91,7 +91,7 @@ describe('direct chords (Linux)', () => {
 
   it('does not consume chords of actions without a handler', () => {
     const { manager, calls } = setup({ hasAction: (id) => id !== 'tickets.open' });
-    expect(manager.handleKeyDown(ctrlShift('KeyJ', 'J'))).toBe('pass');
+    expect(manager.handleKeyDown(ctrlShift('KeyB', 'B'))).toBe('pass');
     expect(calls).toEqual([]);
   });
 

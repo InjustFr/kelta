@@ -206,7 +206,7 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `s` | Start work (Up next rows) / Review locally (Review requests rows) / Skip step (Failed rows) |
 | `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not Now): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not Now): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 | `N` | New work item |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
@@ -215,7 +215,7 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 ### 3.4 Next waiting, without opening Now
 
-`attention.next` (`⇧⌘U`) is renamed "Next waiting" and walks the first four sections of the Now queue in order, *going* to each row's place (like `g`), cycling on repeat. From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⇧⌘U`, look, `⌘.` `Enter`, repeat.
+`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
 
 ### 3.5 Palette
 
@@ -246,7 +246,7 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 3. Claude works with the ticket file and the `ticket` prompt. The tab, tile and Now row show the working ring. Louis goes elsewhere.
 4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible. The item moves to **To review** in Now, with Claude's last message on the expanded row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
 5. Review, either way:
-   - **In nvim**: `Enter` on the row (or `⇧⌘U`, then `⌘.` `Enter`). `work_diff` opens a split in the work tab running `nvim` with `editor.review_args` rendered for this item, zoomed, cwd = worktree. The diff is **merge base to working tree**, so uncommitted work is included: for own work items `{range}` renders as `origin/{base}` (for example `-c "DiffviewOpen origin/{base}"`, no `...HEAD`). Closing it returns to the Claude + nvim layout. With `review_args` empty, it opens a shell pane running `git diff $(git merge-base origin/{base} HEAD)` through the user's pager. `review_args` now applies to own work items too, not only review items: one setting, one diff command. The row and bar show `dirty` next to `+ins −del` when part of the diff is uncommitted.
+   - **In nvim**: `Enter` on the row (or `⌘J`, then `⌘.` `Enter`). `work_diff` opens a split in the work tab running `nvim` with `editor.review_args` rendered for this item, zoomed, cwd = worktree. The diff is **merge base to working tree**, so uncommitted work is included: for own work items `{range}` renders as `origin/{base}` (for example `-c "DiffviewOpen origin/{base}"`, no `...HEAD`). Closing it returns to the Claude + nvim layout. With `review_args` empty, it opens a shell pane running `git diff $(git merge-base origin/{base} HEAD)` through the user's pager. `review_args` now applies to own work items too, not only review items: one setting, one diff command. The row and bar show `dirty` next to `+ins −del` when part of the diff is uncommitted.
    - **On GitHub**: `p` (Ship, §4.5) with Draft on. The PR opens in the browser with `⇧⌘O` (last toast action) or `o` in Now. There is no "compare page without a PR": reviewing on GitHub means a (draft) PR.
 6. Not happy: type into Claude (`g` then type). The prompt submit clears `review_due`; the next Stop sets it again. Happy: Ship. A UI Ship clears it.
 
@@ -254,7 +254,7 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 |---|---|---|
 | Start | `⌘0`, `j`×N, `s`, click Start: 3+N | `⌘0`, `j`×N, `s`, `⌘↵`: 3+N, no mouse |
 | Know Claude is done | green dot on a rail tile, cleared by any glance | durable To review row + header count |
-| Open the diff | `⌘N` project, `⇧⌘]`×k, `⌥⌘→`, type `:DiffviewOpen origin/main...HEAD`: 4+k, misses uncommitted work | `⌘0` `Enter`, or `⇧⌘U` `⌘.` `Enter`: 2-3, includes uncommitted work |
+| Open the diff | `⌘N` project, `⇧⌘]`×k, `⌥⌘→`, type `:DiffviewOpen origin/main...HEAD`: 4+k, misses uncommitted work | `⌘0` `Enter`, or `⌘J` `⌘.` `Enter`: 2-3, includes uncommitted work |
 | Ship and open PR | Create PR, Create, Open PR: 3 clicks | `⌘.` `p` `⌘↵` `⇧⌘O`: 4 keys |
 
 ### 4.2 Flow 2: feedback into the previous Claude conversation
@@ -425,7 +425,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
 | `inbox.open` (label "Open Now") | `⌘0` | `Ctrl+Shift+0` | `0` | global, unchanged chord |
-| `attention.next` (label "Next waiting") | `⇧⌘U` | `Ctrl+Shift+U` | `u` | global, walks the Now queue (§3.4) |
+| `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+Shift+J` | `u` | global, walks the Now queue (§3.4) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
 | `work.menu` | `⌘.` | `Ctrl+Shift+.` | `.` | global, needs a focused work tab |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |

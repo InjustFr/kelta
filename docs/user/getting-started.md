@@ -31,5 +31,5 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 `kelta [--safe-graphics] [--config-dir DIR] [--set key=value] [PATH...]`. Starting `kelta` while it runs forwards
 the arguments to the running instance and raises its window.
 
-`kelta-ctl`: `toggle`, `palette`, `open <path>`, `focus-project <id>`, `start <ticket> [--project]`,
+`kelta-ctl`: `toggle`, `palette`, `next`, `back`, `open <path>`, `focus-project <id>`, `start <ticket> [--project]`,
 `new --template <id>`, `emit <custom.event>`, `trust <repo>`, `editor-open <file>[:line]`, `version`.

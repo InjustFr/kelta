@@ -19,7 +19,7 @@ accounts, so one project can show Jira and GitHub tickets together.
 ## Mine, Unassigned, Anyone
 
 Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. For a team view use
-Anyone and group by Assignee (`g`).
+Anyone and group by Assignee (`Shift+g`).
 
 The person menu next to the tabs narrows the list to one assignee (it lists the assignees of the loaded tickets,
 so it only knows people on the first page of each source). Choosing a person switches to Anyone and is remembered
@@ -43,14 +43,15 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 | Key | Action |
 |---|---|
 | `j` `k` | move the selection |
-| `Enter` | focus the detail column (on a group header: expand or collapse) |
+| `Enter` | with the detail column shown, focus it; hidden, a ticket with work runs its next step (as in Now), others open the detail (on a group header: expand or collapse) |
+| `g` | open the detail: focus the detail column, or its own pane in a narrow pane |
 | `Shift+Enter` | open the detail as its own pane |
 | `Space` | show or hide the detail column |
 | `Esc` | from the detail column back to the list; in the list, clear the multi-selection |
 | `/` | filter |
 | `1` `2` `3` | Mine, Unassigned, Anyone |
 | `v` | choose sources |
-| `g` | cycle the grouping |
+| `Shift+g` | cycle the grouping |
 | `f` `s` | only the current sprint (press again to clear) |
 | `x` | add or remove the ticket from the selection |
 | `Shift+j` `Shift+k` | extend the selection down or up |
@@ -67,7 +68,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 
 ## Grouping and sorting
 
-`g` cycles the grouping; the pane remembers it, and the sort, with its other settings.
+`Shift+g` cycles the grouping; the pane remembers it, and the sort, with its other settings.
 
 | Group by | Groups |
 |---|---|
@@ -92,7 +93,14 @@ GitHub and Gitea have no native priority: they rank from `priority:` style label
 
 Wider than about 720px, the pane splits: the list on the left, the selected ticket on the right. `Space` hides
 or shows it, `Enter` moves the keys into it and `Esc` gives them back. `Shift+Enter` opens it in its own pane,
-which is also what `Enter` does in a narrow pane.
+which is also what `g` does in a narrow pane.
+
+## Next step
+
+A ticket with work under way shows the work's phase in its row, with its lamp (Claude working, Claude needs
+you, To review, Changes requested, Checks failed, In review, Merged...): the state Now shows, from the same signals. With the
+detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
+the detail instead.
 
 From top to bottom: key, title, status (a button: it opens the status picker), the action bar, a grid with
 assignee, priority, sprint, estimate, due date, labels and last update, the pull requests, the description (task

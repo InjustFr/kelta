@@ -1777,6 +1777,7 @@ export const settingsDefault: Settings = {
     "extra_hooks": {},
     "hook_transport": "command",
     "ide_bridge": false,
+    "max_live": 4,
     "mcp": true,
     "min_version": "2.1.200",
     "profiles": {
@@ -1802,7 +1803,8 @@ export const settingsDefault: Settings = {
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
       "standalone": "{task}",
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
-    }
+    },
+    "queue_hold_pct": null
   },
   "commands": [],
   "editor": {
@@ -1922,8 +1924,11 @@ export const settingsDefault: Settings = {
     "prefix": "ctrl+shift+space",
     "prefix_bindings": {
       "attention.next": "u",
+      "attention.prev": "U",
       "editor.send_selection": "@",
       "inbox.open": "0",
+      "nav.back": "-",
+      "nav.forward": "=",
       "palette.open": ":",
       "pane.close": "x",
       "pane.focus_down": "j",
