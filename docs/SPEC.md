@@ -124,7 +124,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 
 In-view single keys (only when a list/board has focus, never in terminals): `j/k` move, `Enter` open, `/` filter, `R` refresh, `m` move ticket, `a` assign me, `c` comment, `o` open in browser, `s` start work.
 
-Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in Claude Code); passthrough elsewhere. macOS Option-as-Meta: `both` default (`left`, `right`, `none`). Copy-on-select off (Linux: selection always goes to PRIMARY; middle-click pastes PRIMARY). Paste uses bracketed paste when the app enabled `?2004`; multi-line paste into a shell prompt without bracketed paste asks for confirmation (`terminal.confirm_multiline_paste`).
+Terminal key handling: programs that enable the kitty keyboard protocol get kitty-encoded keys (`terminal.keyboard_protocol`, default `kitty`; Shift+Enter → `CSI 13;2u`). Otherwise Shift+Enter in Claude sessions sends `ESC CR` (newline in Claude Code); passthrough elsewhere. macOS Option-as-Meta: `both` default (`left`, `right`, `none`). Copy-on-select off (Linux: selection always goes to PRIMARY; middle-click pastes PRIMARY). Paste uses bracketed paste when the app enabled `?2004`; multi-line paste into a shell prompt without bracketed paste asks for confirmation (`terminal.confirm_multiline_paste`).
 
 ## 5. Empty, loading and error states (each pane must implement)
 
@@ -155,7 +155,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; GitHub and GitLab sign-in with a pasted token or the OAuth device flow (user-registered OAuth apps, `oauth.client_ids`); code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; Claude IDE bridge (opt-in `claude.ide_bridge`: openFile/openDiff in the editor pane); process (KPP) provider plugins with a conformance suite (`kelta-plugin.toml` `[provider]`, PLUGINS §9); deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), child-webview embed mode, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth for the other providers, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — child-webview embed mode, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth for the other providers, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

@@ -27,6 +27,7 @@ export const SWALLOWED_CSI: readonly CsiQuery[] = [
   { name: "DECRQM", prefix: "?", intermediates: "$", final: "p", params: [] },
   { name: "DECRQM_ANSI", intermediates: "$", final: "p", params: [] },
   { name: "XTWINOPS_CHARS", final: "t", params: [18] },
+  { name: "KITTY_KEYBOARD", prefix: "?", final: "u", params: [] },
 ];
 
 export const SWALLOWED_OSC: readonly OscQuery[] = [

@@ -142,6 +142,8 @@ pub(crate) struct State {
     pub released_at: Option<usize>,
     pub history: usize,
     pub memory: u64,
+    /// Kitty keyboard flags the view knows (0 after a Snapshot).
+    pub keyboard: u8,
 }
 
 impl State {
@@ -157,6 +159,7 @@ impl State {
             released_at: None,
             history: 0,
             memory: 0,
+            keyboard: 0,
         }
     }
 
@@ -167,6 +170,15 @@ impl State {
         shared.add_memory(self.memory, mem);
         self.history = h;
         self.memory = mem;
+    }
+
+    /// Tell the view when the model's kitty keyboard flags changed (after parsing or a config change).
+    pub fn sync_keyboard(&mut self, shared: &Shared) {
+        let flags = self.model.keyboard_flags();
+        if flags != self.keyboard {
+            self.keyboard = flags;
+            self.send(frames::keyboard(flags), shared);
+        }
     }
 
     /// Hand captured history lines to the log writer once there are `min` bytes (0 = any).
@@ -204,6 +216,9 @@ impl State {
         let len = frame.len() - 1;
         if self.send(frame, shared) {
             self.flow.snapshot_sent(len, now);
+            // The Snapshot reset the view's flags to 0.
+            self.keyboard = 0;
+            self.sync_keyboard(shared);
             // After an exit the view also needs the exit banner (re-attach, or deferred while paused).
             if let Some((code, _)) = self.exit {
                 self.send(frames::exit(code.unwrap_or(-1)), shared);

@@ -1,10 +1,11 @@
 // Terminal channel frames (ARCHITECTURE §6.1) and ack batching.
 //
 // Frame = tag byte + payload. Data: raw PTY bytes → `term.write(bytes, () => ack(n))`. Snapshot:
-// ANSI repaint → full reset then write, ack. Exit: i32 LE exit code (`-1` = signal).
+// ANSI repaint → full reset then write, ack. Exit: i32 LE exit code (`-1` = signal). Keyboard: u8
+// kitty keyboard flags (a Snapshot resets them to 0), not acknowledged.
 // Acks are batched per animation frame (`session_ack` with the summed bytes).
 
-import { FRAME_DATA, FRAME_EXIT, FRAME_SNAPSHOT } from '$lib/gen/constants';
+import { FRAME_DATA, FRAME_EXIT, FRAME_KEYBOARD, FRAME_SNAPSHOT } from '$lib/gen/constants';
 
 import { frames as sharedFrames, type FrameScheduler } from './raf';
 
@@ -12,6 +13,7 @@ export type DecodedFrame =
   | { kind: 'data'; bytes: Uint8Array }
   | { kind: 'snapshot'; bytes: Uint8Array }
   | { kind: 'exit'; code: number }
+  | { kind: 'keyboard'; flags: number }
   | { kind: 'unknown'; tag: number };
 
 export function decodeFrame(frame: Uint8Array): DecodedFrame {
@@ -27,6 +29,8 @@ export function decodeFrame(frame: Uint8Array): DecodedFrame {
       const view = new DataView(frame.buffer, frame.byteOffset + 1, 4);
       return { kind: 'exit', code: view.getInt32(0, true) };
     }
+    case FRAME_KEYBOARD:
+      return frame.length === 2 ? { kind: 'keyboard', flags: frame[1]! } : { kind: 'unknown', tag };
     default:
       return { kind: 'unknown', tag };
   }
@@ -89,6 +93,7 @@ export interface FrameHandlerOptions {
   acks: Pick<AckBatcher, 'add'>;
   onExit?: (code: number) => void;
   onSnapshot?: () => void;
+  onKeyboard?: (flags: number) => void;
   onData?: (bytes: number) => void;
 }
 
@@ -132,6 +137,9 @@ export class FrameHandler {
       }
       case 'exit':
         this.#opts.onExit?.(decoded.code);
+        return;
+      case 'keyboard':
+        this.#opts.onKeyboard?.(decoded.flags);
         return;
       case 'unknown':
         return;
