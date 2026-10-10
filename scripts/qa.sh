@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # BUILD_PLAN §7: the QA commands, in order. Run from anywhere; operates on the repo root.
-# Usage: qa.sh [all|ui|rust]   (default all; CI runs the halves in separate jobs)
+# Usage: qa.sh [all|ui|rust] [package...]   (default all; CI runs the halves in separate jobs)
+# Packages limit the Rust steps to those workspace packages (default: the whole workspace); scripts/ci-local.sh
+# passes the affected ones. Rust tests use cargo-nextest (--retries 1, retried passes print as FLAKY) when it
+# is installed, else cargo test. Heavy cargo steps wait for a machine-wide slot (scripts/gate-slot.pl).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 part="${1:-all}"
-case "$part" in all | ui | rust) ;; *) echo "usage: qa.sh [all|ui|rust]" >&2; exit 2 ;; esac
+case "$part" in all | ui | rust) ;; *) echo "usage: qa.sh [all|ui|rust] [package...]" >&2; exit 2 ;; esac
+pkgs=("${@:2}")
 want() { [[ "$part" == all || "$part" == "$1" ]]; }
 section() { printf '\n==> %s\n' "$*"; }
 
@@ -31,20 +35,44 @@ fi
 section "bash scripts/check-no-timers.sh"
 bash scripts/check-no-timers.sh
 bash scripts/check-no-timers.test.sh
+python3 scripts/affected_test.py
 
 if want rust; then
-  section "cargo fmt --all -- --check"
-  cargo fmt --all -- --check
+  slot() { perl scripts/gate-slot.pl "$@"; }
+  if [ ${#pkgs[@]} -eq 0 ]; then
+    scope=(--workspace) fmt_scope=(--all) doc_scope=(--workspace)
+  else
+    scope=() fmt_scope=() doc_scope=()
+    for p in "${pkgs[@]}"; do scope+=(-p "$p"); done
+    fmt_scope=("${scope[@]}")
+    # cargo test --doc fails on a package without a library target.
+    for p in $(python3 scripts/affected.py libs "${pkgs[@]}"); do doc_scope+=(-p "$p"); done
+  fi
 
-  section "cargo clippy --workspace --all-targets --locked -- -D warnings"
-  cargo clippy --workspace --all-targets --locked -- -D warnings
+  section "cargo fmt ${fmt_scope[*]} -- --check"
+  cargo fmt "${fmt_scope[@]}" -- --check
+
+  section "cargo clippy ${scope[*]} --all-targets --locked -- -D warnings"
+  slot cargo clippy "${scope[@]}" --all-targets --locked -- -D warnings
 
   # --no-fail-fast: one run lists every failing test, not just the first failing binary.
-  section "cargo test --workspace --locked --no-fail-fast"
-  cargo test --workspace --locked --no-fail-fast
+  if command -v cargo-nextest >/dev/null 2>&1; then
+    section "cargo nextest run ${scope[*]} --locked --no-fail-fast --retries 1"
+    slot cargo nextest run "${scope[@]}" --locked --no-fail-fast --retries 1 --no-tests=warn
+    if [ ${#doc_scope[@]} -gt 0 ]; then
+      section "cargo test --doc ${doc_scope[*]} --locked"
+      slot cargo test --doc "${doc_scope[@]}" --locked --no-fail-fast
+    fi
+  else
+    section "cargo test ${scope[*]} --locked --no-fail-fast (cargo-nextest not installed)"
+    slot cargo test "${scope[@]}" --locked --no-fail-fast
+  fi
 
-  section "cargo run -p xtask --locked -- codegen --check"
-  cargo run -p xtask --locked -- codegen --check
+  # xtask depends on every crate the generated files come from, so it is affected whenever they change.
+  if [ ${#pkgs[@]} -eq 0 ] || [[ " ${pkgs[*]} " == *" xtask "* ]]; then
+    section "cargo run -p xtask --locked -- codegen --check"
+    slot cargo run -p xtask --locked -- codegen --check
+  fi
 fi
 
 section "QA passed ($part)"
