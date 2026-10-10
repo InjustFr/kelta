@@ -30,6 +30,10 @@ review_due: boolean,
  */
 claude_replied: boolean, 
 /**
+ * When Claude last stopped or asked for input (RFC 3339), from hooks only; orders Now's rows.
+ */
+claude_at?: string | null, 
+/**
  * Review thread ids handed to Claude by the last Fix with Claude (resolved on request).
  */
 sent_threads?: Array<string>, 
