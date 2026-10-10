@@ -78,9 +78,13 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** The tool a pane shows: a tool session's id, a web pane's tool (`''` until known); null otherwise. */
+/** The tool a pane shows: a live tool session's or web instance's tool id; null otherwise. */
 export function paneTool(p: PaneNode): string | null {
-  if (p.content.kind === 'web') return webTools[p.content.tool_instance_id]?.toolId ?? '';
+  if (p.content.kind === 'web') {
+    // webTools is in-memory: after a restart a persisted web tab has no instance, so it is a closable row.
+    const w = webTools[p.content.tool_instance_id];
+    return w && !w.exited ? w.toolId : null;
+  }
   const id = paneSession(p);
   const s = id ? sessions.get(id) : null;
   // A dead tool session is no tool instance: its tab falls back to a closable row in its band.

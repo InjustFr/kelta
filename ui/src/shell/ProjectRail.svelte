@@ -478,7 +478,7 @@
                   data-testid="rail-tool"
                   data-tool-id={t.id}
                   data-attention={lvl}
-                  onclick={() => void dispatch('tools.open', { tool_id: t.id })}
+                  onclick={() => void dispatch('tools.open', { tool_id: t.id, focus_only: true })}
                 >
                   <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
                   <span class="kind" aria-hidden="true">

@@ -214,6 +214,19 @@ describe('tools.open', () => {
     expect(ui.view).toBe('now');
   });
 
+  it('a focus-only open (the rail click) on the tool in front stays there', async () => {
+    const { id } = await inTab(null);
+    ui.view = 'now';
+    noteFocus({ project: 'shop', tab: '', pane: '', view: 'now' });
+    await dispatch('tools.open', { tool_id: id });
+    await Promise.all([sessions.load(), layout.load('home')]);
+    const pane = focusedPane()!;
+    noteFocus({ project: 'home', tab: currentTab()!.id, pane: pane.id });
+    await dispatch('tools.open', { tool_id: id, focus_only: true });
+    expect(ui.view).toBeNull();
+    expect(focusedPane()?.id).toBe(pane.id);
+  });
+
   it('pressed again in front, a tool that takes a project asks for another project', async () => {
     const { open, id, opens } = await needsProject();
     await open();

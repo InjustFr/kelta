@@ -111,7 +111,7 @@ registerAction('tools.open', async (args) => {
   const at = ui.view === null ? liveToolPane(projectId, toolId, ctxItem ?? workItem, scope) : null;
   const inFront = at !== null && projects.activeId === projectId && focusedPane()?.id === at.paneId;
   const takesProject = scope !== 'user' && !!info?.needs_project;
-  if (inFront && !takesProject && args?.pick_project !== true) {
+  if (inFront && !takesProject && args?.pick_project !== true && args?.focus_only !== true) {
     navStep(-1);
     return;
   }

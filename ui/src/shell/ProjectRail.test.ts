@@ -16,7 +16,7 @@ const LAZYDOCKER = '0199a6b2-0000-7000-8000-000000000004';
 let m: MockControls;
 
 /** Every open layout loaded (as the shell preloads them); `toolTab` leaves shop's Shell tab with lazydocker only. */
-async function setup(toolTab = false) {
+async function setup(toolTab = false, webInstance?: string) {
   const created = createMockTransport();
   m = created.controls;
   setTransport(created.transport);
@@ -25,6 +25,8 @@ async function setup(toolTab = false) {
     tab.root = allPanes(tab.root).find(
       (p) => p.content.kind === 'terminal' && p.content.session_id === LAZYDOCKER,
     ) as LayoutNode;
+    if (webInstance && tab.root.type === 'pane')
+      tab.root = { ...tab.root, content: { kind: 'web', tool_instance_id: webInstance } };
   }
   layout.byProject = {};
   tools.byProject = {};
@@ -97,6 +99,12 @@ describe('ProjectRail', () => {
       session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'exited' },
     });
     await expect.poll(() => bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
+    expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
+  });
+
+  it('a web tab whose instance is unknown (Kelta restarted) is a closable row, not a tool', async () => {
+    const r = await setup(true, 'gone');
+    expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
     expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
   });
 
