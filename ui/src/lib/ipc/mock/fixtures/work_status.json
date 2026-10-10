@@ -48,5 +48,35 @@
     "insertions": 0,
     "deletions": 0,
     "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a006": {
+    "ahead": 0,
+    "behind": 0,
+    "dirty": false,
+    "unpushed": false,
+    "files": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a007": {
+    "ahead": 0,
+    "behind": 0,
+    "dirty": false,
+    "unpushed": false,
+    "files": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a008": {
+    "ahead": 0,
+    "behind": 0,
+    "dirty": true,
+    "unpushed": false,
+    "files": 1,
+    "insertions": 0,
+    "deletions": 0,
+    "missing": false
   }
 }

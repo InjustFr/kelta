@@ -15,8 +15,8 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackReview, FeedbackThread, FileChange,
-    MyReviewState, PrCreate, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef,
-    Reviewer,
+    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
+    ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -597,9 +597,15 @@ impl CodeHost for GithubHost {
                 deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
             })
             .collect();
+        let state = match (pull.get("merged_at").is_some_and(|m| !m.is_null()), s(&pull, "state")) {
+            (true, _) => PrState::Merged,
+            (false, Some("closed")) => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
             body_html: markdown::to_html(s(&pull, "body").unwrap_or("")),
             review,
+            state,
             reviewers,
             checks,
             files,

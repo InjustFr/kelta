@@ -20,6 +20,7 @@ import type {
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
+  FinishMergedReport,
   Feedback,
   FinishOpts,
   GitStatus,
@@ -206,6 +207,12 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  /** Title, body and draft flag Ship would use (prefills the Ship dialog). */
+  work_pr_draft: { args: { id: WorkItemId }; result: PrDraft };
+  /** Finishes merged items with clean worktrees; the rest come back as skipped. */
+  work_finish_merged: { args: { ids: WorkItemId[] }; result: FinishMergedReport };
+  /** Startup / Now open: one host check per work-item PR missing from the open list. */
+  work_check_prs: { args: NoArgs; result: null };
   /** Prompt (and brief files) into the item's previous Claude conversation; `threads` = sent thread ids. */
   work_send: {
     args: { id: WorkItemId; prompt: string; files: SendFile[]; threads?: string[] | null };
@@ -334,6 +341,9 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_pr_draft',
+  'work_finish_merged',
+  'work_check_prs',
   'work_send',
   'work_feedback',
   'work_rerequest_review',
@@ -528,6 +538,9 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workPrDraft = wrap('work_pr_draft');
+export const workFinishMerged = wrap('work_finish_merged');
+export const workCheckPrs = wrap('work_check_prs');
 export const workSend = wrap('work_send');
 export const workFeedback = wrap('work_feedback');
 export const workRerequestReview = wrap('work_rerequest_review');
