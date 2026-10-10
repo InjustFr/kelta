@@ -26,6 +26,8 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const dirty = $derived(text !== loadedText);
+  const errors = $derived(issues.filter((i) => i.severity === 'error'));
+  const warnings = $derived(issues.filter((i) => i.severity === 'warning'));
   const doc = $derived(editor.doc);
 
   let externalText = $state<string | null>(null);
@@ -58,7 +60,15 @@
     try {
       issues = await ipc.settingsValidate({ layer: editor.layer, text: t });
     } catch (err) {
-      issues = [{ path: '', message: toIpcError('settings_validate', err).message, line: null, col: null }];
+      issues = [
+        {
+          path: '',
+          message: toIpcError('settings_validate', err).message,
+          line: null,
+          col: null,
+          severity: 'error',
+        },
+      ];
     }
   }
 
@@ -116,7 +126,7 @@
       size="sm"
       variant="primary"
       loading={saving}
-      disabled={!dirty || issues.length > 0}
+      disabled={!dirty || errors.length > 0}
       onclick={save}
     >
       Save
@@ -134,10 +144,19 @@
     {oninput}
     spellcheck="false"
     aria-label="TOML source"
-    aria-invalid={issues.length > 0 || undefined}></textarea>
-  {#if issues.length > 0}
-    <ul class="issues" data-testid="toml-issues">
-      {#each issues as i, n (n)}
+    aria-invalid={errors.length > 0 || undefined}></textarea>
+  {#if errors.length > 0}
+    {@render issueList(errors, 'toml-issues')}
+  {:else if text.trim() !== ''}
+    <p class="ok" data-testid="toml-valid">Valid.</p>
+  {/if}
+  {#if warnings.length > 0}
+    <p class="warn-title">Warnings (saving is still allowed):</p>
+    {@render issueList(warnings, 'toml-warnings')}
+  {/if}
+  {#snippet issueList(list: ValidationIssue[], testid: string)}
+    <ul class="issues" class:warn={testid === 'toml-warnings'} data-testid={testid}>
+      {#each list as i, n (n)}
         <li>
           <button type="button" onclick={() => goTo(i)}>
             {#if i.line}<span class="loc">{i.line}:{i.col ?? 1}</span>{/if}
@@ -147,9 +166,7 @@
         </li>
       {/each}
     </ul>
-  {:else if text.trim() !== ''}
-    <p class="ok" data-testid="toml-valid">Valid.</p>
-  {/if}
+  {/snippet}
   {#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
 </section>
 
@@ -200,6 +217,12 @@
     padding: 0;
     list-style: none;
     color: var(--k-danger);
+  }
+
+  .issues.warn,
+  .warn-title {
+    margin: 0;
+    color: var(--k-warn);
   }
 
   .issues button {
