@@ -154,6 +154,10 @@ pub trait CodeHost: Send + Sync {
         Err(KeltaError::unsupported("pending review comments"))
     }
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
+    /// Renames a PR (the ticket key added after Link to ticket, FLOW §4.3 step 4).
+    async fn update_title(&self, _r: &ReviewRef, _title: &str) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot rename pull requests"))
+    }
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
     /// `pull/N/head:…` | `merge-requests/N/head:…`.
     fn fetch_refspec(&self, r: &ReviewRef, local_branch: &str) -> String;

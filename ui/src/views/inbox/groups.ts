@@ -3,6 +3,7 @@
 
 import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
+import { reviewPhase } from '../work/common';
 import type { Lamp, NowSection, Phase, PhaseId } from '../work/phase';
 
 export interface WorkEntry {
@@ -89,7 +90,7 @@ export function nowSections(input: NowInput): Section[] {
       phase.section,
       { type: 'work', id: `w:${item.id}`, item, phase },
       PHASE_ORDER[phase.id] ?? 0,
-      item.created_at,
+      item.claude_at ?? item.created_at,
     );
 
   // Plain sessions asking (WaitingUser is idle, never "needs you").
@@ -109,10 +110,12 @@ export function nowSections(input: NowInput): Section[] {
         ownedPrs.add(prKey(a));
   }
   for (const r of input.requested) {
-    if (ownedPrs.has(prKey(r)) || (r.review.my_state !== null && r.review.my_state !== 'pending')) continue;
+    const rp = reviewPhase(r.review);
+    if (ownedPrs.has(prKey(r)) || rp === 'reviewed') continue;
+    const reason = rp === 'updated' ? 'Updated since your review' : 'Review requested';
     add(
       'requests',
-      { type: 'review', id: `r:${prKey(r)}`, review: r, mine: false, reason: 'Review requested' },
+      { type: 'review', id: `r:${prKey(r)}`, review: r, mine: false, reason },
       0,
       r.review.updated_at,
     );
@@ -156,7 +159,7 @@ export function nowSections(input: NowInput): Section[] {
     );
 
   // Oldest first, except In flight (latest activity first). Up next keeps tracker order (`at` = index).
-  // shortcut: work items are aged by created_at (no "asked at" time yet), add one to WorkItem when the order must be exact.
+  // Work items are aged by when Claude last asked or stopped (`claude_at`), else when they started.
   const newestFirst = new Set<NowSection>(['in_flight']);
   return SECTIONS.flatMap((s) => {
     const ranked = by

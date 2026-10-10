@@ -708,6 +708,11 @@ impl CodeHost for GithubHost {
             .ok_or_else(|| KeltaError::upstream("create pull request response without number"))
     }
 
+    async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        self.auth.send_text(HttpRequest::patch(url).json(json!({ "title": title }))).await.map(|_| ())
+    }
+
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {
         let owner = repo.split('/').next().unwrap_or(repo);
         let head = if branch.contains(':') { branch.to_owned() } else { format!("{owner}:{branch}") };

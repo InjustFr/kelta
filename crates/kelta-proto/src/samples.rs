@@ -287,6 +287,7 @@ pub fn work_item() -> WorkItem {
         pr_title_needs_key: false,
         review_due: false,
         claude_replied: false,
+        claude_at: None,
         sent_threads: Vec::new(),
         rebase: None,
     }

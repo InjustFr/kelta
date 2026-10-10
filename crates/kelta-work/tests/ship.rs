@@ -145,6 +145,64 @@ async fn pr_draft_prefills_the_ticket_template_and_the_draft_setting() {
 }
 
 #[tokio::test]
+async fn pr_draft_of_a_scratch_item_is_its_title_and_task() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let task = "Speed up search\nCache the index between queries.";
+    let src = WorkSource::Branch { name: String::new(), task: Some(task.into()), repo: None };
+    let item = w.start(w.plan(&project(), src).await.unwrap()).await.unwrap();
+    let d = w.pr_draft(&item.id).await.unwrap();
+    assert_eq!(d.title.as_deref(), Some("Speed up search"));
+    assert!(d.body.as_deref().unwrap().ends_with(task), "{:?}", d.body);
+}
+
+#[tokio::test]
+async fn push_after_link_adds_the_ticket_key_to_the_pr_title_once() {
+    need_git!();
+    use kelta_proto::api::CodeHost;
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    set_claude_status(&fx, &item, SessionStatus::Done);
+    let binding = samples::project_info().repos[0].code_host.clone().unwrap();
+    let pr = fx
+        .host
+        .create(&kelta_proto::codehost::PrCreate {
+            repo: binding.repo.clone(),
+            head: item.branch.clone(),
+            base: "main".into(),
+            title: "Speed up search".into(),
+            body: String::new(),
+            draft: false,
+        })
+        .await
+        .unwrap();
+    let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
+    (it.pr_url, it.state, it.pr_title_needs_key) = (Some(pr.url.clone()), WorkState::PrOpen, true);
+    fx.store.put_item(&it).await.unwrap();
+
+    let mut last = None;
+    for file in ["a.txt", "b.txt"] {
+        commit(&item, file);
+        let task = tokio::spawn({
+            let (w, id) = (w.clone(), item.id.clone());
+            async move { w.push(&id, false).await }
+        });
+        let push = fx.wait_session(|s| s.name == "git push" && Some(&s.id) != last.as_ref()).await;
+        last = Some(push.clone());
+        git(&item.worktree, &["push", "-q", "-u", "origin", &item.branch]);
+        fx.core.exit_session(&push, 0);
+        let out = task.await.unwrap().unwrap();
+        assert!(!out.pr_title_needs_key);
+    }
+    let found = fx.host.find_for_branch(&binding.repo, &item.branch).await.unwrap().unwrap();
+    assert_eq!(found.title, "SHOP-141: Speed up search");
+    let renames = fx.host.calls().into_iter().filter(|c| c.starts_with("update_title:")).count();
+    assert_eq!(renames, 1, "the second push leaves the title alone");
+}
+
+#[tokio::test]
 async fn merge_moves_the_ticket_to_done_once_and_close_is_pr_closed() {
     need_git!();
     let fx = Fx::new();

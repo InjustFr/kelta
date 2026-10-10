@@ -400,7 +400,7 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, a
+    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`, a
     /// stored `claude_uuid`) are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
@@ -411,6 +411,7 @@ impl WorkService {
                 item.review_due = cur.review_due;
                 item.claude_replied = cur.claude_replied;
                 item.claude_uuid = cur.claude_uuid.or(item.claude_uuid.take());
+                item.claude_at = cur.claude_at;
             }
             self.store.put_item(item).await?;
         }
