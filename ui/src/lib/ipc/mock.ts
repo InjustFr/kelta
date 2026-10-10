@@ -128,6 +128,12 @@ function err(code: KeltaError['code'], message: string, detail: JsonValue | null
 
 /** The mock's signed-in user (`Assignee::Me`, `who: mine`). */
 const ME = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
+const MOCK_USERS = [
+  ME,
+  { id: 'u-grace', name: 'Grace Hopper', login: 'grace', avatar_url: null },
+  { id: 'u-linus', name: 'Linus Torvalds', login: 'linus', avatar_url: null },
+];
+const MOCK_PRIORITIES = ['Highest', 'High', 'Medium', 'Low', 'Lowest'];
 
 const CATEGORY_NAMES: Record<StatusCategory, string> = {
   todo: 'To do',
@@ -869,6 +875,24 @@ export function createMockTransport(options: MockOptions = {}): {
           : assignee.kind === 'me'
             ? { ...ME }
             : { id: assignee.id, name: assignee.id, login: null, avatar_url: null };
+      return clone(item.ticket);
+    },
+    tracker_assignable_users: ({ ticket, query }) => {
+      if (!ticketItem(ticket).caps.assign) throw err('unsupported', `${ticket.account} cannot assign`);
+      const q = query.trim().toLowerCase();
+      return clone(MOCK_USERS.filter((u) => `${u.name} ${u.login}`.toLowerCase().includes(q)));
+    },
+    tracker_priorities: ({ ticket }) => {
+      if (!ticketItem(ticket).caps.assign)
+        throw err('unsupported', `${ticket.account} cannot set priorities`);
+      return [...MOCK_PRIORITIES];
+    },
+    tracker_set_priority: ({ ticket, priority }) => {
+      const item = ticketItem(ticket);
+      const rank = MOCK_PRIORITIES.indexOf(priority);
+      if (rank < 0) throw err('not_found', `no priority named ${priority}`);
+      item.ticket.priority = priority;
+      item.ticket.priority_rank = rank;
       return clone(item.ticket);
     },
     tracker_search: ({ scope, text }) => {

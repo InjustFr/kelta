@@ -125,6 +125,17 @@ pub fn columns_from_statuses(statuses: &[Status]) -> Vec<Column> {
     out
 }
 
+/// Users whose name or login contains `query`, ignoring case (an empty query keeps them all).
+pub fn users_matching(users: impl IntoIterator<Item = User>, query: &str) -> Vec<User> {
+    let q = query.trim().to_lowercase();
+    users
+        .into_iter()
+        .filter(|u| {
+            [Some(&u.name), u.login.as_ref()].into_iter().flatten().any(|x| x.to_lowercase().contains(&q))
+        })
+        .collect()
+}
+
 pub fn comment(author: User, created_at: String, body_html: String) -> Comment {
     Comment { author, created_at, body_html }
 }
@@ -187,6 +198,16 @@ mod tests {
         assert_eq!(create_in(&v, "repo", Some("acme/shop")).unwrap(), "acme/shop");
         assert!(create_in(&v, "repo", None).unwrap_err().message.contains("`Mine` names no valid `repo`"));
         assert!(create_in(&v, "repo", Some("a/../b")).is_err());
+    }
+
+    #[test]
+    fn users_match_name_or_login() {
+        let u = |name: &str, login: &str| user_from(login, name, Some(login.to_owned()), None);
+        let all = vec![u("Dave Lee", "dlee"), u("Ann Smith", "asmith")];
+        let ids = |q| users_matching(all.clone(), q).into_iter().map(|u| u.id).collect::<Vec<_>>();
+        assert_eq!(ids("LEE"), ["dlee"]);
+        assert_eq!(ids("asm"), ["asmith"]);
+        assert_eq!(ids(" ").len(), 2);
     }
 
     #[test]

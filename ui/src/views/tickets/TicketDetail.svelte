@@ -1,17 +1,36 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import type { CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
-  import { clipboardWrite, openExternal, trackerAssign, trackerComment } from '$lib/ipc/commands';
+  import type { Assignee, CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
+  import {
+    clipboardWrite,
+    openExternal,
+    trackerAssign,
+    trackerAssignableUsers,
+    trackerComment,
+    trackerPriorities,
+    trackerSetPriority,
+  } from '$lib/ipc/commands';
   import { projects, tickets, toasts, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
-  import { Badge, Button, HtmlContent, Icon, Lamp, Menu, TextInput, relativeTime } from '$lib/ui';
+  import {
+    Badge,
+    Button,
+    HtmlContent,
+    Icon,
+    Lamp,
+    Menu,
+    type MenuItem,
+    TextInput,
+    relativeTime,
+  } from '$lib/ui';
 
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { startWorkOnTicket } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
+  import PickMenu from './PickMenu.svelte';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -42,6 +61,8 @@
   let commentBox = $state<HTMLDivElement>();
   let picker = $state<HTMLElement | null>(null);
   let prMenu = $state<{ x: number; y: number; browser: boolean } | null>(null);
+  /** The assignee (`u`) or priority (`!`) picker, under its meta row (TICKETS.md T8). */
+  let field = $state<{ kind: 'assignee' | 'priority'; x: number; y: number } | null>(null);
   let comment = $state('');
   let posting = $state(false);
 
@@ -53,6 +74,7 @@
       comment = '';
       picker = null;
       prMenu = null;
+      field = null;
       loadCurrent();
       ensureReviews();
     });
@@ -73,13 +95,62 @@
     });
   }
 
-  async function assign(who: 'me' | 'none'): Promise<void> {
+  async function assign(assignee: Assignee, done: string): Promise<void> {
     try {
-      tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: who } }));
-      toasts.info(who === 'me' ? `${ref.key} assigned to you` : `${ref.key} unassigned`);
+      tickets.patch(await trackerAssign({ ticket: ref, assignee }));
+      toasts.info(done);
     } catch (err) {
       toasts.error(err, `Assigning ${ref.key}`);
     }
+  }
+
+  async function setPriority(priority: string): Promise<void> {
+    try {
+      tickets.patch(await trackerSetPriority({ ticket: ref, priority }));
+      toasts.info(`${ref.key} priority set to ${priority}`);
+    } catch (err) {
+      toasts.error(err, `Changing the priority of ${ref.key}`);
+    }
+  }
+
+  function openField(kind: 'assignee' | 'priority'): void {
+    const reason = kind === 'assignee' ? blockedReason('assign', item, branch) : null;
+    if (reason) return void toasts.info(reason);
+    const r = root?.querySelector(`[data-field="${kind}"]`)?.getBoundingClientRect();
+    priorities = null;
+    field = { kind, x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+  }
+
+  /** Names of the users the picker shows, for the toast. */
+  let names: Record<string, string> = {};
+  async function loadUsers(query: string): Promise<MenuItem[]> {
+    const users = await trackerAssignableUsers({ ticket: ref, query });
+    names = Object.fromEntries(users.map((u) => [u.id, u.name]));
+    return users.map((u) => ({
+      id: u.id,
+      label: u.name,
+      detail: [u.login && u.login !== u.name ? u.login : '', u.id === ticket.assignee?.id ? 'assigned' : '']
+        .filter(Boolean)
+        .join(', '),
+    }));
+  }
+
+  // One `tracker_priorities` per open picker: the filter narrows the list it returned.
+  let priorities: Promise<string[]> | null = null;
+  async function loadPriorities(query: string): Promise<MenuItem[]> {
+    priorities ??= trackerPriorities({ ticket: ref }).catch((err: unknown) => {
+      priorities = null;
+      throw err;
+    });
+    const q = query.toLowerCase();
+    return (await priorities)
+      .filter((p) => p.toLowerCase().includes(q))
+      .map((p) => ({ id: p, label: p, detail: p === ticket.priority ? 'current' : '' }));
+  }
+
+  function pickField(id: string): void {
+    if (field?.kind === 'priority') void setPriority(id);
+    else void assign({ kind: 'user', id }, `${ref.key} assigned to ${names[id] ?? id}`);
   }
 
   async function postComment(): Promise<void> {
@@ -129,10 +200,10 @@
         openPrFrom(browser);
         break;
       case 'assign':
-        void assign('me');
+        void assign({ kind: 'me' }, `${ref.key} assigned to you`);
         break;
       case 'unassign':
-        void assign('none');
+        void assign({ kind: 'none' }, `${ref.key} unassigned`);
         break;
       case 'comment':
         commentBox?.querySelector('textarea')?.focus();
@@ -156,6 +227,8 @@
     else if (e.key === 'S') run('start', true);
     else if (e.key === 'P') run('pr', true);
     else if (e.key === 'R') void tickets.loadDetail(ref);
+    else if (e.key === 'u') openField('assignee');
+    else if (e.key === '!') openField('priority');
     else return;
     e.preventDefault();
   }
@@ -253,9 +326,29 @@
   <div class="scroll">
     <dl class="k-meta">
       <dt>Assignee</dt>
-      <dd>{ticket.assignee?.name ?? 'Unassigned'}</dd>
+      <dd>
+        <button
+          type="button"
+          class="field"
+          data-field="assignee"
+          aria-haspopup="menu"
+          aria-keyshortcuts="u"
+          title="Assign to… (u)"
+          onclick={() => openField('assignee')}>{ticket.assignee?.name ?? 'Unassigned'}</button
+        >
+      </dd>
       <dt>Priority</dt>
-      <dd>{ticket.priority ?? 'None'}</dd>
+      <dd>
+        <button
+          type="button"
+          class="field"
+          data-field="priority"
+          aria-haspopup="menu"
+          aria-keyshortcuts="Shift+1"
+          title="Change priority (!)"
+          onclick={() => openField('priority')}>{ticket.priority ?? 'None'}</button
+        >
+      </dd>
       <dt>Sprint</dt>
       <dd>
         {#if ticket.sprint}
@@ -397,6 +490,20 @@
     }}
   />
 {/if}
+{#if field}
+  <PickMenu
+    label={field.kind === 'assignee' ? `Assign ${ref.key}` : `Priority of ${ref.key}`}
+    placeholder={field.kind === 'assignee' ? 'Find a person' : 'Filter priorities'}
+    x={field.x}
+    y={field.y}
+    load={field.kind === 'assignee' ? loadUsers : loadPriorities}
+    onselect={pickField}
+    onclose={() => {
+      field = null;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if prMenu}
   {@const browser = prMenu.browser}
   <Menu
@@ -492,6 +599,22 @@
 
   .status {
     display: inline-flex;
+  }
+
+  /* A meta value that opens its picker: plain text until hovered. */
+  .field {
+    padding: 0;
+    border: 0;
+    border-bottom: 1px dashed transparent;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .field:hover,
+  .field:focus-visible {
+    border-bottom-color: var(--k-fg-subtle);
   }
 
   .status :global(.label) {

@@ -72,6 +72,9 @@ pub const COMMANDS: &[&str] = &[
     "tracker_move",
     "tracker_comment",
     "tracker_assign",
+    "tracker_assignable_users",
+    "tracker_priorities",
+    "tracker_set_priority",
     "tracker_search",
     "tracker_sources",
     // reviews

@@ -913,6 +913,33 @@ impl Core {
         Ok(ticket)
     }
 
+    /// The assignee picker's users (Tickets T8).
+    pub async fn tracker_assignable_users(
+        &self,
+        t: &TicketRef,
+        query: &str,
+    ) -> Result<Vec<kelta_proto::tracker::User>, KeltaError> {
+        self.rt.capture();
+        self.tracker_of(&t.account)?.assignable_users(t, query).await
+    }
+
+    /// The priority picker's choices, highest first (Tickets T8).
+    pub async fn tracker_priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        self.rt.capture();
+        self.tracker_of(&t.account)?.priorities(t).await
+    }
+
+    pub async fn tracker_set_priority(
+        &self,
+        t: &TicketRef,
+        priority: &str,
+    ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
+        self.rt.capture();
+        let ticket = self.tracker_of(&t.account)?.set_priority(t, priority).await?;
+        self.after_ticket_write(&ticket).await;
+        Ok(ticket)
+    }
+
     async fn cached_ticket(&self, t: &TicketRef) -> Option<Ticket> {
         let keys: Vec<String> = self
             .feeds
