@@ -95,6 +95,10 @@ impl FakeCore {
         self.projects.lock().insert(p.id.clone(), p);
     }
 
+    pub fn remove_project(&self, id: &ProjectId) {
+        self.projects.lock().remove(id);
+    }
+
     pub fn set_settings(&self, s: Settings) {
         *self.settings.lock() = Arc::new(s);
     }

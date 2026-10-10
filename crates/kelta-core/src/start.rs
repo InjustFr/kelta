@@ -42,7 +42,9 @@ impl Core {
             }
             WorkSource::Branch { .. } => None,
         };
-        let items = self.store.call(|c| q::work_list(c, None)).await?;
+        // A removed project (or one without a repository) keeps its work items but cannot host a start.
+        let mut items = self.store.call(|c| q::work_list(c, None)).await?;
+        items.retain(|w| configs.iter().any(|p| p.id == w.project_id && !p.repos.is_empty()));
         let active = self.active_project();
         let (project, guessed) =
             default_project(&source, project.as_ref(), &items, &choices, account_project, &active)?;

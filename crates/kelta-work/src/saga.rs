@@ -229,13 +229,17 @@ impl WorkService {
     ) -> Result<StartWorkPlan, KeltaError> {
         // A ticket or PR has one work item across projects: resume it where it lives. Branch sources
         // stay per project, the same `wip/` name can exist in two repos.
+        let core = self.api()?;
         if !matches!(source, WorkSource::Branch { .. }) {
             let all = self.store.list_items(None).await?;
-            if let Some(w) = plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id) {
+            // Skip a work item whose project was removed (or has no repository): start in the requested one.
+            let hosts = |w: &&WorkItem| core.project(&w.project_id).is_some_and(|p| !p.repos.is_empty());
+            if let Some(w) =
+                plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id).filter(hosts)
+            {
                 return Box::pin(self.build_plan(&w.project_id, source)).await;
             }
         }
-        let core = self.api()?;
         let project = project_of(&core, project_id)?;
         if project.repos.is_empty() {
             return Err(KeltaError::invalid(format!("project {project_id} has no repository")));

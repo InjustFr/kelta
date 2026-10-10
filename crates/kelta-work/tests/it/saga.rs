@@ -195,6 +195,22 @@ async fn start_work_end_to_end() {
 }
 
 #[tokio::test]
+async fn ticket_with_work_item_in_a_removed_project_plans_in_the_requested_one() {
+    need_git!();
+    let fx = Fx::new();
+    let mut other = samples::project_info();
+    other.id = kelta_proto::ids::ProjectId::new("other");
+    other.repos[0].path = fx.repo.clone();
+    fx.core.add_project(other.clone());
+    let w = fx.service();
+    w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    fx.core.remove_project(&project());
+    let plan = w.plan(&other.id, ticket("SHOP-141")).await.unwrap();
+    assert_eq!(plan.project_id, other.id);
+    assert!(plan.existing.is_none());
+}
+
+#[tokio::test]
 async fn ticket_with_work_item_in_another_project_resumes_there() {
     need_git!();
     let fx = Fx::new();
