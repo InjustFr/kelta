@@ -3,6 +3,7 @@ import type { ProjectId } from "./ProjectId";
 import type { RebaseState } from "./RebaseState";
 import type { ReviewDelta } from "./ReviewDelta";
 import type { ReviewRef } from "./ReviewRef";
+import type { RunClaim } from "./RunClaim";
 import type { SessionId } from "./SessionId";
 import type { TabId } from "./TabId";
 import type { TicketRef } from "./TicketRef";
@@ -78,6 +79,11 @@ parked_at?: string | null,
  * Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
  */
 nvim_kept: number, 
+/**
+ * Claimed by a background run (MCP `claim_ticket`, #235): the item adopts the run's worktree and
+ * branch, which Finish never removes.
+ */
+run?: RunClaim | null, 
 /**
  * `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
  */

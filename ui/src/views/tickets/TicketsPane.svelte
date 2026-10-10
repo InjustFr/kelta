@@ -974,7 +974,11 @@
                         tone="accent"
                         title="Marked: Mod+Enter starts the marked tickets">marked</Badge
                       >{/if}
-                    {#if phase}<span class="k-row-meta" data-phase={phase.id}>{phase.label}</span>{/if}
+                    {#if phase}<span
+                        class="k-row-meta"
+                        data-phase={phase.id}
+                        title={phase.id === 'run' ? phase.detail : undefined}>{phase.label}</span
+                      >{/if}
                     {#if pr}<span class="pr" data-pr
                         ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
                           ><PrChip {pr} /></RowButton

@@ -500,6 +500,7 @@ impl WorkService {
             auto_finish: false,
             parked_at: None,
             nvim_kept: 0,
+            run: None,
             ticket_source: plan.ticket_source.clone(),
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };

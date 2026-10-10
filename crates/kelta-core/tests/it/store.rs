@@ -115,6 +115,49 @@ async fn notes_survive_a_restart_and_go_with_their_item() {
 }
 
 #[tokio::test]
+async fn claim_item_is_atomic_and_round_trips_the_run() {
+    use kelta_proto::model::{RunClaim, RunState};
+    let s = std::sync::Arc::new(Store::open_in_memory().unwrap());
+    let claim = |sid: &str| {
+        let mut w = kelta_proto::samples::work_item();
+        w.id = WorkItemId::generate();
+        w.steps.clear();
+        w.run = Some(RunClaim {
+            name: Some("kelta-ticket-pass".into()),
+            run_id: None,
+            session_id: Some(SessionId::new(sid)),
+            phase: Some("Pick".into()),
+            state: RunState::Running,
+            note: None,
+            sha: None,
+        });
+        w
+    };
+    let tasks: Vec<_> = (0..8)
+        .map(|i| {
+            let (s, w) = (s.clone(), claim(&format!("s{i}")));
+            tokio::spawn(async move { s.claim_item(&w).await.unwrap() })
+        })
+        .collect();
+    let mut won = Vec::new();
+    for t in tasks {
+        if let Ok(w) = t.await.unwrap() {
+            won.push(w);
+        }
+    }
+    assert_eq!(won.len(), 1, "exactly one concurrent claim wins");
+    let got = s.get_item(&won[0].id).await.unwrap().unwrap();
+    assert_eq!(got.run, won[0].run);
+    // Orphaned: the next claim takes the same item over.
+    let mut orphan = got.clone();
+    orphan.run.as_mut().unwrap().state = RunState::Orphaned;
+    s.put_item(&orphan).await.unwrap();
+    let again = s.claim_item(&claim("s9")).await.unwrap().unwrap();
+    assert_eq!(again.id, got.id);
+    assert_eq!(again.run.unwrap().session_id, Some(SessionId::new("s9")));
+}
+
+#[tokio::test]
 async fn work_store_round_trip() {
     let s = Store::open_in_memory().unwrap();
     let mut w = kelta_proto::samples::work_item();
