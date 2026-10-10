@@ -51,7 +51,11 @@ impl ProviderFactory for CodeHostFactory {
             AccountKind::Gitlab => Ok(Arc::new(GitlabHost::new(account, http, secrets)?)),
             AccountKind::Bitbucket => Ok(Arc::new(BitbucketHost::new(account, http, secrets)?)),
             AccountKind::Gitea => Ok(Arc::new(GiteaHost::new(account, http, secrets)?)),
-            AccountKind::Jira | AccountKind::Redmine | AccountKind::Linear => {
+            AccountKind::Jira
+            | AccountKind::Redmine
+            | AccountKind::Linear
+            | AccountKind::PluginTracker
+            | AccountKind::PluginCodehost => {
                 Err(KeltaError::unsupported(format!("{:?} accounts have no code host", account.kind)))
             }
         }

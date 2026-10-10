@@ -1,4 +1,4 @@
-//! `cargo run -p xtask -- codegen [--check]`
+//! `cargo run -p xtask -- codegen [--check]` | `kpp-check <plugin dir>` (see `kpp_check`)
 //!
 //! Generates (all in memory first, then written or compared):
 //! - `ui/src/lib/gen/**`: ts-rs types (+ `index.ts` barrel), `terminal_queries.ts`, `actions.ts`,
@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
+
+mod kpp_check;
 use serde_json::Value;
 
 /// Marker present in every generated TS file (ts-rs writes its own note).
@@ -32,8 +34,9 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("codegen") => codegen(args.iter().any(|a| a == "--check")),
+        Some("kpp-check") => kpp_check::run(&args[1..]),
         _ => {
-            eprintln!("usage: cargo run -p xtask -- codegen [--check]");
+            eprintln!("usage: cargo run -p xtask -- codegen [--check] | kpp-check <plugin dir>");
             return ExitCode::from(2);
         }
     };

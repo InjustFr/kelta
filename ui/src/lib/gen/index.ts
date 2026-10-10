@@ -132,6 +132,8 @@ export type * from './ProjectId';
 export type * from './ProjectInfo';
 export type * from './ProjectPatch';
 export type * from './ProjectV2Ref';
+export type * from './ProviderDef';
+export type * from './ProviderKind';
 export type * from './ProxiedRequest';
 export type * from './ProxiedResponse';
 export type * from './Ready';

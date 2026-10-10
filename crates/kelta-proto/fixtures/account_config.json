@@ -4,6 +4,7 @@
   "email": "me@acme.com",
   "flavor": "auto",
   "kind": "jira",
+  "plugin": null,
   "poll_secs": null,
   "secret": "keyring:jira-acme",
   "text_format": "textile",

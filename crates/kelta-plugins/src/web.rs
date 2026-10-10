@@ -81,7 +81,7 @@ fn ready_from_line(ready: &Ready, re: Option<&Regex>, line: &str) -> Option<Stri
     }
 }
 
-async fn pump<R: tokio::io::AsyncRead + Unpin>(
+pub(crate) async fn pump<R: tokio::io::AsyncRead + Unpin>(
     mut r: R,
     log: Arc<Mutex<ByteRing>>,
     lines: Option<mpsc::UnboundedSender<String>>,

@@ -19,7 +19,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 | D6 | Programs are **exec'd directly** with a login environment resolved once (sentinel-delimited) — no `$SHELL -c` wrapper | Works with fish/nushell, no quoting bugs, Dock-launched apps get the user's PATH. | — |
 | D7 | **xterm 6.0.0 stable, kitty keyboard off**; the Rust model runs with `kitty_keyboard = false`; Shift+Enter remapped per session kind | xterm 6.0.0 cannot encode kitty; model and encoder must agree. | xterm 6.1 stable ships → v0.2 setting `terminal.keyboard_protocol = "kitty"`. |
 | D8 | Claude status from **async command hooks** calling an **absolute, version-stable** `kelta-ctl` path; HTTP hook transport optional | Independent of PATH/AppImage mount; `SessionStart` only supports command hooks. | Claude Code changes hook semantics → version gate `claude.min_version`. |
-| D9 | Extensibility = declarative tools + declarative triggers + plugin manifests with **sandboxed iframe screens**; no resident plugin runtime | Zero memory when unused; strong sandbox. Provider plugins (process/KPP) are v0.2 — the `Tracker`/`CodeHost` traits are already object-safe for it. | Demand for third-party trackers → v0.2 KPP runtime. |
+| D9 | Extensibility = declarative tools + declarative triggers + plugin manifests with **sandboxed iframe screens**; no resident plugin runtime | Zero memory when unused; strong sandbox. Provider plugins (process/KPP, PLUGINS §9) run a child process per plugin, spawned on first use and served through the same `Tracker`/`CodeHost` traits (`KppFactory` wraps the built-in factories). | WASM logic plugins if process plugins prove too heavy. |
 | D10 | Plugin grants and repo trust live in **SQLite app state**, never in user/repo-editable TOML | A repo or a hand edit must not be able to grant permissions. | — |
 | D11 | One **deadline-heap scheduler** in core is the only owner of periodic work; nothing polls when nothing is visible/subscribed | Idle CPU ≈ 0, ≤ 1 wakeup/s. Lint-enforced. | — |
 | D12 | Markdown (ticket/PR bodies) rendered in Rust (`pulldown-cmark` + `ammonia`) to sanitized HTML | No markdown/sanitizer libs in the JS bundle. | — |
@@ -176,7 +176,8 @@ crates/kelta-work       [L6]  git CLI ops, templates (branch/path/slug), work sa
 crates/kelta-server     [L7]  ctl socket server, hook ingestion + status machine, lazy axum server, MCP endpoint, http hooks
 crates/kelta-ctl        [L7]  CLI binary
 crates/kelta-plugins    [L8]  manifest load/validate/install, registry, grants, plugin_call gate, kelta-plugin:// handler, tools
-                              registry + web-tool lifecycle + proxy, trigger engine
+                              registry + web-tool lifecycle + proxy, trigger engine, KPP provider processes (`kpp`,
+                              depends on kelta-http as a provider host)
 crates/kelta-core       [L3]  AppState composition, ProjectRegistry, SessionRegistry, Layout store, Store (sqlite + migrations),
                               EventBus, Attention, Scheduler, ProviderRegistry + aggregation + caches + seen_reviews,
                               Notifier, clipboard, implements CoreApi
@@ -831,6 +832,7 @@ All writes go through the single sqlite thread. Startup reads (open projects, la
 - Bridge: host creates a `MessageChannel` per instance, transfers `port2` only after verifying `event.source === iframe.contentWindow`; every call → `plugin_call(instance_id, method, params)`; Rust checks the plugin's grants (SQLite) and the method's required permission (PLUGINS.md §4). `net:<host>` is enforced in Rust (`http_fetch`), exact host or `*.domain` glob, https only (http only for `127.0.0.1`/`localhost` when granted explicitly). Grants are re-prompted when a manifest update adds permissions.
 - **Security gate S1:** a sandboxed plugin iframe and a localhost tool iframe cannot reach `window.__TAURI_INTERNALS__`, `window.parent` DOM, or invoke any command, on WKWebView and WebKitGTK: automated on WebKitGTK by `scripts/sandbox-check.sh`, manual on WKWebView (BUILD_PLAN §6.1). Iframes can post to `window.webkit.messageHandlers.ipc`; Tauri's per-launch invoke key (main frame only) is what rejects those messages.
 - Declarative tools/triggers from repo-local `.kelta/config.toml` that execute anything (`command`, `run`, `setup`, `http`) are **inert until trusted**: trust = SHA-256 of the file content stored in `repo_trust`; any change → untrusted again (banner).
+- Provider plugins (KPP, PLUGINS §9): run only with the `provider` grant (checked on every call), get the account's settings and resolved secret per call and nothing else (no inherited environment, so `env:` secret refs of other accounts stay out of reach), cannot answer for another account (refs are rewritten to the calling account) and their HTML is re-sanitized in Rust.
 - Trigger engine: recursion guard (depth ≤ 4, a trigger never re-fires within a chain it started), per-trigger rate limit (10 runs / 60 s), `send_keys` requires `allow_send_keys = true` on the trigger and is rate-limited (1 / 2 s per session).
 
 ---

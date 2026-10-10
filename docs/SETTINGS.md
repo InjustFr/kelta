@@ -176,12 +176,13 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 ### [accounts.<id>]  (map; scope global only; ids `[a-z0-9-]+`)
 | Key | Type | Default | Applies to |
 |---|---|---|---|
-| `kind` | enum(jira\|redmine\|github\|gitlab\|linear\|bitbucket\|gitea) | — (required) | all |
+| `kind` | enum(jira\|redmine\|github\|gitlab\|linear\|bitbucket\|gitea\|plugin_tracker\|plugin_codehost) | — (required) | all |
+| `plugin` | str? | — (required for `plugin_*`) | plugin id whose `[provider]` serves the account (PLUGINS §9); the whole account table and its resolved secret go to the plugin with each call |
 | `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0` | all (jira/redmine/gitea required; gitea accepts a trailing `/api/v1`) |
 | `flavor` | enum(auto\|cloud\|dc) | `auto` | jira |
 | `auth` | enum(basic\|bearer\|api_key\|token\|oauth) | `oauth` = set by browser sign-in (github/gitlab: Bearer, refreshed before expiry); per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + Atlassian API token; `bearer` for repository/workspace access tokens), linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
 | `email` / `user` | str | — | jira cloud and bitbucket email / basic user |
-| `secret` | SecretRef | — (required) github default `gh-cli`, gitlab default `glab-cli`, linear a personal API key (`keyring:`, `env:` or `command:`) | x-kelta-secret |
+| `secret` | SecretRef | — (required; optional for `plugin_*`) github default `gh-cli`, gitlab default `glab-cli`, linear a personal API key (`keyring:`, `env:` or `command:`) | x-kelta-secret |
 | `text_format` | enum(textile\|markdown) | `textile` | redmine |
 | `poll_secs` | int? | none | override |
 | `web_url` | str? | derived | browser links (GHE/GitLab/Gitea); bitbucket: only used to match git remotes (default `https://bitbucket.org`) |
