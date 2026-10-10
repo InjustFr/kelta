@@ -36,15 +36,25 @@ export WAYLAND_DISPLAY="$XDG_RUNTIME_DIR/wayland-1" GDK_BACKEND=wayland
 # Docker has no user namespaces for bubblewrap; test container only.
 export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
 
-# The proof screenshot: `frame_max_ms` is the flood scenario's first mark, written while its two
-# panes are still on screen (kelta-bench closes the app three marks later).
-(
-  for _ in $(seq 1500); do grep -qs frame_max_ms /tmp/kb-*/marks.json && break; sleep 0.1; done
-  WAYLAND_DISPLAY=wayland-1 grim /out/linux-headless.png
-) &
 status=0
 for s in flood echo-latency ink-redraw; do
   target/release/kelta-bench --scenario "$s" --budgets bench/budgets-g2.toml || status=1
 done
-wait
+
+# The proof screenshot, from an extra unmeasured flood run (grim would perturb the measured ones): the
+# last capture taken while the app was still up, i.e. before the scenario's last mark (`inflight_kib`),
+# after which kelta-bench closes it.
+target/release/kelta-bench --scenario flood >/dev/null 2>&1 &
+bench=$!
+shot=0
+while kill -0 "$bench" 2>/dev/null; do
+  if grep -qs app_ready_ms /tmp/kb-*/marks.json; then
+    WAYLAND_DISPLAY=wayland-1 grim /tmp/new.png
+    if grep -qs app_ready_ms /tmp/kb-*/marks.json && ! grep -qs inflight_kib /tmp/kb-*/marks.json; then
+      cp /tmp/new.png /out/linux-headless.png && shot=1
+    fi
+  fi
+  sleep 0.5
+done
+[ "$shot" = 1 ] || { echo "linux-gui-check: no screenshot taken" >&2; status=1; }
 exit "$status"
