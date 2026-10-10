@@ -16,8 +16,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -29,7 +29,8 @@ const PAGE_SIZE: u32 = 50;
 pub const MAX_PAGES: u32 = 20;
 
 const USER: &str = "id name displayName avatarUrl";
-const ISSUE: &str = "id identifier title url updatedAt priorityLabel state { id name type } \
+const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
+    startedAt cycle { id name number isActive endsAt } state { id name type } \
     assignee { id name displayName avatarUrl } labels { nodes { name } } team { key }";
 
 pub struct LinearTracker {
@@ -129,11 +130,16 @@ impl LinearTracker {
         let url = s(v, "url").unwrap_or("").to_owned();
         self.urls.lock().insert(key.clone(), url.clone());
         let priority = s(v, "priorityLabel").filter(|p| *p != "No priority").map(str::to_owned);
+        let status = status_from(v.get("state")?);
+        let updated_at = s(v, "updatedAt").unwrap_or("").to_owned();
+        let started = matches!(status.category, StatusCategory::InProgress | StatusCategory::InReview)
+            .then(|| s(v, "startedAt"))
+            .flatten();
         Some(Ticket {
             r#ref: TicketRef { account: self.account().clone(), id: s(v, "id")?.to_owned(), key },
             title: s(v, "title").unwrap_or("").to_owned(),
             url,
-            status: status_from(v.get("state")?),
+            status,
             kind: None,
             assignee: v.get("assignee").and_then(user_from),
             labels: v
@@ -142,9 +148,21 @@ impl LinearTracker {
                 .map(|a| a.iter().filter_map(|l| s(l, "name").map(str::to_owned)).collect())
                 .unwrap_or_default(),
             priority,
-            updated_at: s(v, "updatedAt").unwrap_or("").to_owned(),
+            // 0 = none, 1 urgent .. 4 low.
+            priority_rank: v["priority"].as_u64().filter(|p| (1..=4).contains(p)).map(|p| (p - 1) as u8),
+            status_since: Some(started.map_or(updated_at.clone(), str::to_owned)),
+            updated_at,
             project_hint: v.pointer("/team/key").and_then(Value::as_str).map(str::to_owned),
-            ..Default::default()
+            sprint: v.get("cycle").filter(|c| !c.is_null()).and_then(|c| {
+                Some(Sprint {
+                    id: s(c, "id")?.to_owned(),
+                    name: s(c, "name").map_or_else(|| format!("Cycle {}", c["number"]), str::to_owned),
+                    active: c["isActive"].as_bool() == Some(true),
+                    ends_at: s(c, "endsAt").map(str::to_owned),
+                })
+            }),
+            estimate: v["estimate"].as_f64().map(|e| e.to_string()),
+            due: s(v, "dueDate").map(str::to_owned),
         })
     }
 

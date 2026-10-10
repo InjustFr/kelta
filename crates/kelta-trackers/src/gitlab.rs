@@ -15,8 +15,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
-    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
+    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -40,6 +40,66 @@ fn current_milestone(milestones: &Value, today: &str) -> Option<String> {
         .map(str::to_owned)
 }
 const DEFAULT_SCOPE: &str = "workflow";
+
+fn today() -> String {
+    let d = time::OffsetDateTime::now_utc().date();
+    format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day())
+}
+
+/// Priority rank from `priority::<0-3|critical|urgent|high|medium|low|p0-p3>` or a bare `P0`-`P3` label.
+fn priority_rank(labels: &[String]) -> Option<u8> {
+    const RANKS: [&[&str]; 4] = [
+        &["p0", "0", "critical", "urgent"],
+        &["p1", "1", "high"],
+        &["p2", "2", "medium"],
+        &["p3", "3", "low"],
+    ];
+    labels.iter().find_map(|l| {
+        let l = l.to_ascii_lowercase();
+        let scoped = l.strip_prefix("priority::");
+        let v = scoped.unwrap_or(&l);
+        if scoped.is_none() && !(v.len() == 2 && v.starts_with('p')) {
+            return None;
+        }
+        RANKS.iter().position(|r| r.contains(&v)).map(|i| i as u8)
+    })
+}
+
+/// `time_stats.time_estimate` seconds as `1h 30m`, else the issue weight. shortcut: no days, GitLab's `1d` is 8h.
+fn estimate(v: &Value) -> Option<String> {
+    let secs = v.pointer("/time_stats/time_estimate").and_then(Value::as_u64).filter(|s| *s > 0);
+    match secs {
+        Some(s) => Some(match (s / 3600, s % 3600 / 60) {
+            (0, m) => format!("{m}m"),
+            (h, 0) => format!("{h}h"),
+            (h, m) => format!("{h}h {m}m"),
+        }),
+        None => v.get("weight").and_then(idstr),
+    }
+}
+
+/// The issue's iteration, else its milestone. A milestone is active when open and today is inside its dates.
+fn sprint(v: &Value, today: &str) -> Option<Sprint> {
+    let (obj, is_iteration) = match (v.get("iteration"), v.get("milestone")) {
+        (Some(i), _) if !i.is_null() => (i, true),
+        (_, Some(m)) if !m.is_null() => (m, false),
+        _ => return None,
+    };
+    let in_dates =
+        s(obj, "start_date").is_none_or(|d| d <= today) && s(obj, "due_date").is_none_or(|d| d >= today);
+    let active = match (is_iteration, obj.get("state")) {
+        (true, Some(Value::Number(n))) => n.as_u64() == Some(2),
+        (true, Some(Value::String(st))) => matches!(st.as_str(), "current" | "started" | "active"),
+        (false, Some(Value::String(st))) => st == "active" && in_dates,
+        _ => in_dates,
+    };
+    Some(Sprint {
+        id: obj.get("id").and_then(idstr)?,
+        name: s(obj, "title").unwrap_or("Iteration").to_owned(),
+        active,
+        ends_at: s(obj, "due_date").map(str::to_owned),
+    })
+}
 
 pub struct GitlabIssues {
     api: String,
@@ -167,10 +227,15 @@ impl GitlabIssues {
             kind: s(v, "issue_type").or_else(|| s(v, "type")).map(str::to_owned),
             assignee,
             priority: labels.iter().find_map(|l| l.strip_prefix("priority::").map(str::to_owned)),
+            priority_rank: priority_rank(&labels),
             labels,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(project),
-            ..Default::default()
+            // No status-change date on the wire (label events need a request): closing date, else `updated_at`.
+            status_since: s(v, "closed_at").or_else(|| s(v, "updated_at")).map(str::to_owned),
+            sprint: sprint(v, &today()),
+            estimate: estimate(v),
+            due: s(v, "due_date").map(str::to_owned),
         })
     }
 
@@ -296,10 +361,7 @@ impl Tracker for GitlabIssues {
                 Some(p) => {
                     let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
                     let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
-                    let today = time::OffsetDateTime::now_utc().date();
-                    let today =
-                        format!("{:04}-{:02}-{:02}", today.year(), u8::from(today.month()), today.day());
-                    match current_milestone(&ms, &today) {
+                    match current_milestone(&ms, &today()) {
                         Some(title) => req = req.query("milestone", title),
                         None => return Ok(Page { items: vec![], next: None }),
                     }

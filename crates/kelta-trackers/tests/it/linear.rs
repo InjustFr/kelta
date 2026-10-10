@@ -264,3 +264,36 @@ async fn sources_offer_teams_cycles_and_projects() {
         json!({"or": [{"name": {"containsIgnoreCase": "e"}}, {"key": {"containsIgnoreCase": "e"}}]})
     );
 }
+
+#[tokio::test]
+async fn planning_fields_map_priority_cycle_estimate_due_and_start() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("linear/issues_planning.json")))
+        .mount(&server)
+        .await;
+    let items = lin(&server).list(&view("mine"), None).await.unwrap().items;
+    let [a, b, c, d] = &items[..] else { panic!("four issues") };
+    // urgent → 0, low → 3, medium → 2, none → None
+    assert_eq!([a, b, c, d].map(|t| t.priority_rank), [Some(0), Some(3), Some(2), None]);
+    let cy = a.sprint.as_ref().unwrap();
+    assert_eq!((cy.id.as_str(), cy.name.as_str(), cy.active), ("cyc-1", "Sprint 12", true));
+    assert_eq!(cy.ends_at.as_deref(), Some("2026-10-16T00:00:00.000Z"));
+    let cy = b.sprint.as_ref().unwrap();
+    assert_eq!((cy.name.as_str(), cy.active), ("Cycle 11", false), "unnamed cycle falls back to its number");
+    assert!(c.sprint.is_none() && d.sprint.is_none());
+    assert_eq!([a, b, c, d].map(|t| t.estimate.as_deref()), [Some("3"), Some("2.5"), None, None]);
+    assert_eq!([a, b, c, d].map(|t| t.due.as_deref()), [Some("2026-10-14"), None, None, None]);
+    // startedAt only for a started state; otherwise (unstarted, or started without it) updatedAt
+    assert_eq!(a.status_since.as_deref(), Some("2026-10-02T09:00:00.000Z"));
+    for t in [b, c, d] {
+        assert_eq!(t.status_since.as_deref(), Some("2026-10-05T08:00:00.000Z"));
+    }
+    let q = &gql_bodies(&server, "issues(filter").await[0]["query"];
+    assert!(
+        ["priority ", "estimate", "dueDate", "startedAt", "cycle {"]
+            .iter()
+            .all(|f| q.as_str().unwrap().contains(f))
+    );
+}

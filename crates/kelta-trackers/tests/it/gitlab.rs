@@ -382,3 +382,32 @@ async fn sources_lists_member_projects_as_mine_views() {
     assert_ne!(hits[0].view.id, hits[1].view.id);
     assert!(hits[1].detail.is_none(), "empty description is no detail");
 }
+
+#[tokio::test]
+async fn planning_fields_come_from_iteration_milestone_labels_and_time_stats() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/issues", 200, "gitlab/issues_planning.json").await;
+    let items = gl(&server).list(&view("mine"), None).await.unwrap().items;
+    let [a, b, c, d, e] = &items[..] else { panic!("five issues") };
+    // priority_rank: bare P1, scoped name, scoped number, scoped name (a bare `high` label is not a priority), none
+    assert_eq!([a, b, c, d, e].map(|t| t.priority_rank), [Some(1), Some(3), Some(0), Some(0), None]);
+    // sprint: iteration wins over milestone; open milestone inside its dates is active; expired and closed are not
+    let sp = a.sprint.as_ref().unwrap();
+    assert_eq!((sp.id.as_str(), sp.name.as_str(), sp.active), ("5", "Sprint 7", true));
+    assert_eq!(sp.ends_at.as_deref(), Some("2026-10-19"));
+    let sp = b.sprint.as_ref().unwrap();
+    assert_eq!((sp.name.as_str(), sp.active, sp.ends_at.as_deref()), ("v1", true, Some("2999-12-31")));
+    assert!(!c.sprint.as_ref().unwrap().active, "expired milestone");
+    let sp = d.sprint.as_ref().unwrap();
+    assert_eq!((sp.name.as_str(), sp.active), ("Iteration", false), "closed untitled iteration");
+    assert!(e.sprint.is_none());
+    // estimate: time estimate wins over weight, weight is the fallback
+    assert_eq!(
+        [a, b, c, d, e].map(|t| t.estimate.as_deref()),
+        [Some("1h 30m"), Some("5"), Some("2h"), None, None]
+    );
+    assert_eq!([a, b, c, d, e].map(|t| t.due.as_deref()), [Some("2026-10-14"), None, None, None, None]);
+    // status_since: closing date for closed issues, else updated_at
+    assert_eq!(c.status_since.as_deref(), Some("2026-10-02T10:00:00.000Z"));
+    assert_eq!(a.status_since.as_deref(), Some(a.updated_at.as_str()));
+}
