@@ -349,15 +349,8 @@ impl WorkService {
                     git::check_branch_name(&repo.path, name.trim()).await?
                 };
                 // The resolved branch (not the possibly empty name) identifies the item.
-                let existing = items
-                    .iter()
-                    .find(|w| {
-                        w.state != WorkState::Finished
-                            && w.ticket.is_none()
-                            && w.review.is_none()
-                            && w.branch == branch
-                    })
-                    .cloned();
+                let by_branch = WorkSource::Branch { name: branch.clone(), task: None, repo: None };
+                let existing = plan::existing_for(&items, &by_branch).cloned();
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
                 ctx.set("branch", branch.clone());

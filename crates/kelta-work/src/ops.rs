@@ -12,7 +12,7 @@ use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
     CloseOnExit, EditorTarget, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement, RestorePolicy,
-    SessionInfo, SessionKind, SpawnRequest, StepStatus, WorkItem, WorkKind, WorkState,
+    SessionInfo, SessionKind, SpawnRequest, StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore};
 use kelta_proto::tracker::TicketRef;
@@ -431,10 +431,23 @@ impl WorkService {
         if item.state == WorkState::Finished {
             return Err(KeltaError::conflict("work item is finished"));
         }
+        let items = self.store.list_items(Some(&item.project_id)).await?;
+        if plan::existing_for(&items, &WorkSource::Ticket { ticket: ticket.clone() })
+            .is_some_and(|w| w.id != item.id)
+        {
+            return Err(KeltaError::conflict(format!("{} already has a work item", ticket.key)));
+        }
         let env = self.env(&item.project_id, &item.repo_id)?;
         let tracker = env.core.tracker_for(&ticket.account).await?;
         let detail = tracker.get(&ticket).await?;
         let mut j = self.load_journal(id);
+        // Same file the ticket saga writes, so the next resume's CONTEXT.md points at a real ticket.md.
+        // shortcut: the open tab keeps its `wip` title until the next start (no tab-rename API), add one if it confuses.
+        let run = self.ensure_claude_run(&item, &mut j)?;
+        files::write_private(
+            &run.join(crate::claude::TICKET_FILE),
+            files::ticket_markdown(&detail).as_bytes(),
+        )?;
         j.ticket =
             Some(plan::TicketSnap::from_ticket(&detail.ticket, tracker.branch_key(&ticket), tracker.kind()));
         item.kind = WorkKind::Ticket;

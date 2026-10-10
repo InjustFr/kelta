@@ -560,6 +560,19 @@ async fn concurrent_starts_for_one_ticket_make_one_item() {
     assert_eq!(fx.store_items().await.len(), 1);
 }
 
+#[tokio::test]
+async fn concurrent_scratch_starts_for_one_task_make_one_item() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let plan = w.plan(&project(), scratch("Explore caching")).await.unwrap();
+    let (a, b) = tokio::join!(w.start(plan.clone()), w.start(plan));
+    let errs: Vec<_> = [&a, &b].into_iter().filter_map(|r| r.as_ref().err()).collect();
+    assert_eq!(errs.len(), 1, "{a:?} {b:?}");
+    assert_eq!(errs[0].code, ErrorCode::Conflict);
+    assert_eq!(fx.store_items().await.len(), 1);
+}
+
 fn scratch(task: &str) -> WorkSource {
     WorkSource::Branch { name: String::new(), task: Some(task.into()), repo: None }
 }
@@ -625,9 +638,25 @@ async fn link_scratch_item_to_a_ticket() {
     assert_eq!(fx.tracker.calls(), vec!["get:SHOP-141".to_owned()]);
     let e = w.link(&a.id, t.clone(), false).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Conflict, "already linked");
+    // The next resume's CONTEXT.md points at ticket.md: it must exist in the item's run dir.
+    let spawn = fx
+        .core
+        .calls()
+        .into_iter()
+        .find(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude");
+    let argv: Vec<String> = serde_json::from_value(spawn.unwrap().args["args"].clone()).unwrap();
+    let settings = argv.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
+    let md = std::fs::read_to_string(std::path::Path::new(&settings).with_file_name("ticket.md")).unwrap();
+    assert!(md.starts_with("# SHOP-141"), "{md}");
 
     // With a PR and side effects: on_start (assign + In Progress) then on_pr (In Review).
     let b = w.start(w.plan(&project(), scratch("Speed up search")).await.unwrap()).await.unwrap();
+    // `a` still holds SHOP-141: a second open item for it is refused.
+    let e = w.link(&b.id, t.clone(), false).await.unwrap_err();
+    assert!(e.code == ErrorCode::Conflict && e.message.contains("SHOP-141"), "{}", e.message);
+    let mut done = fx.store.get_item(&a.id).await.unwrap().unwrap();
+    done.state = WorkState::Finished;
+    fx.store.put_item(&done).await.unwrap();
     let binding = samples::project_info().repos[0].code_host.clone().unwrap();
     let pr = fx
         .host

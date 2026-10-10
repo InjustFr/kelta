@@ -126,9 +126,24 @@ impl WorkService {
         let guard = self.start_lock.lock().await;
         // Re-check: another start for this source may have created its item since `plan`.
         let items = self.store.list_items(Some(&plan.project_id)).await?;
-        let existing =
-            plan.existing.clone().or_else(|| plan::existing_for(&items, &plan.source).map(|w| w.id.clone()));
-        if let Some(existing) = existing {
+        // A scratch source's name may be empty: match on the branch the plan resolved.
+        let source = match &plan.source {
+            WorkSource::Branch { task, repo, .. } => {
+                WorkSource::Branch { name: plan.branch.clone(), task: task.clone(), repo: repo.clone() }
+            }
+            other => other.clone(),
+        };
+        let found = plan::existing_for(&items, &source).map(|w| w.id.clone());
+        if plan.existing.is_none()
+            && found.is_some()
+            && matches!(&plan.source, WorkSource::Branch { task: Some(_), .. })
+        {
+            return Err(KeltaError::conflict(format!(
+                "Branch {} has a work item. Edit the branch name or the task's first line.",
+                plan.branch
+            )));
+        }
+        if let Some(existing) = plan.existing.clone().or(found) {
             drop(guard);
             return self.resume(&existing).await;
         }
