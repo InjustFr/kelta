@@ -44,7 +44,10 @@ async fn one_graphql_request_with_only_the_requested_alias() {
     assert_eq!(a.author.login.as_deref(), Some("carol"));
     assert_eq!(a.mergeable, Some(true));
     assert!(a.additions.is_some() && a.deletions.is_some());
+    assert_eq!(a.requested_at.as_deref(), Some("2026-09-29T08:00:00Z"), "my latest request");
+    assert!(a.blocking, "bob approved after his request: I am the last reviewer");
     let b = &list[1];
+    assert!(!b.blocking && b.requested_at.is_none(), "already approved, no timeline");
     assert_eq!(b.my_state, Some(MyReviewState::Approved));
     assert_eq!(b.ci, CiState::Pending, "EXPECTED counts as pending");
     assert_eq!(b.mergeable, Some(false));

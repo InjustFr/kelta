@@ -464,6 +464,7 @@ impl WorkService {
             next_note: None,
             left_at: None,
             port_base,
+            cost_usd: 0.0,
             auto_finish: false,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };

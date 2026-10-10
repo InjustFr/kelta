@@ -111,6 +111,21 @@ describe('nowSections', () => {
     expect(rows).toEqual(['Review requested', 'Updated since your review']);
   });
 
+  it('Review requests: blocking first, then the oldest request (updated_at when unknown)', () => {
+    const sections = nowSections({
+      ...empty,
+      requested: [
+        review(1, { requested_at: '2026-09-20T00:00:00Z', updated_at: '2026-10-05T00:00:00Z' }),
+        review(2, { blocking: true, requested_at: '2026-10-02T00:00:00Z' }),
+        review(3, { requested_at: null, updated_at: '2026-09-10T00:00:00Z' }),
+        review(4, { blocking: true, requested_at: '2026-10-01T00:00:00Z' }),
+      ],
+    });
+    const rows = sections[0]!.rows.map((r) => (r.type === 'review' ? r.review.review.ref.number : 0));
+    expect(rows).toEqual([4, 2, 3, 1]);
+    expect(sections[0]!.rows[0]).toMatchObject({ reason: "Blocking: you're the last reviewer" });
+  });
+
   it('Fix: changes requested, checks failed, remote commits, conflicts, failed steps', () => {
     const sections = nowSections({
       ...empty,

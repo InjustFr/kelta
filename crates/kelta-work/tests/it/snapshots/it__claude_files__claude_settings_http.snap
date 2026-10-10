@@ -156,5 +156,9 @@ expression: got
         ]
       }
     ]
+  },
+  "statusLine": {
+    "command": "'/Users/ada/Library/Application Support/dev.kelta.Kelta/bin/current/kelta-ctl' statusline",
+    "type": "command"
   }
 }

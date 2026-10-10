@@ -28,7 +28,8 @@ fn expected_command_settings(ctl: &str) -> serde_json::Value {
         "Stop":              [ { "hooks": [ h ] } ],
         "StopFailure":       [ { "hooks": [ h ] } ],
         "SessionEnd":        [ { "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] } ]
-    } })
+    },
+    "statusLine": { "type": "command", "command": format!("'{ctl}' statusline") } })
 }
 
 #[test]

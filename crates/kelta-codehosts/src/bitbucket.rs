@@ -153,6 +153,8 @@ impl BitbucketHost {
             ci: CiState::None,
             decision,
             decision_head: None,
+            requested_at: None,
+            blocking: false,
             my_state: (kind == ReviewKind::ReviewRequested)
                 .then(|| mine.map_or(MyReviewState::Pending, |p| state_of(p))),
             mergeable: None,

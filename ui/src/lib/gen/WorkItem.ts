@@ -43,6 +43,10 @@ sent_threads?: Array<string>,
  */
 rebase?: RebaseState | null, 
 /**
+ * Claude spend of the item's ended sessions (USD), summed across sessions and resumes.
+ */
+cost_usd: number, 
+/**
  * Claude's full final message of its last `Stop` (the session preview keeps 200 chars).
  */
 claude_message?: string | null, 

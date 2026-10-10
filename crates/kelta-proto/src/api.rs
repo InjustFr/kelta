@@ -23,8 +23,8 @@ use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
 use crate::ipc::WindowState;
 use crate::model::{
-    AttachInfo, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
-    ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
+    AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope,
+    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx, WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -219,6 +219,10 @@ pub trait CoreApi: Send + Sync {
     fn session_get(&self, id: &SessionId) -> Option<SessionInfo>;
     fn session_list(&self, project: Option<&ProjectId>) -> Vec<SessionInfo>;
     async fn session_apply_hook(&self, id: &SessionId, change: StatusChange) -> Result<(), KeltaError>;
+    /// Last statusline snapshot of a Claude session (`kelta-ctl statusline`).
+    async fn session_set_usage(&self, _id: &SessionId, _usage: ClaudeUsage) -> Result<(), KeltaError> {
+        Ok(())
+    }
     /// New tab / split / focus.
     async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError>;
     // projects & settings

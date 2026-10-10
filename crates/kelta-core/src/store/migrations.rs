@@ -146,13 +146,18 @@ const V7: &str = r#"
 ALTER TABLE work_items ADD COLUMN port_base INTEGER;
 "#;
 
-/// v8: armed merge (`WorkItem.auto_finish`, #143).
+/// v8: Claude spend of a work item's ended sessions (`WorkItem.cost_usd`).
 const V8: &str = r#"
+ALTER TABLE work_items ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0;
+"#;
+
+/// v9: armed merge (`WorkItem.auto_finish`, #143).
+const V9: &str = r#"
 ALTER TABLE work_items ADD COLUMN auto_finish INTEGER NOT NULL DEFAULT 0;
 "#;
 
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

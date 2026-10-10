@@ -98,6 +98,13 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub decision_head: Option<String>,
+    /// When my review was requested (review requests only); `None`: the UI ages the row by `updated_at`.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub requested_at: Option<String>,
+    /// I am the last required reviewer: my approval unblocks the author (review requests only).
+    #[serde(default)]
+    pub blocking: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

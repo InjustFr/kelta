@@ -437,7 +437,7 @@ impl WorkService {
     }
 
     /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`,
-    /// `claude_message`, `delta`, a stored `claude_uuid`) and Louis's `next_note` / `left_at` are never written here: `item` takes the stored ones, so a long
+    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`) and Louis's `next_note` / `left_at` are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -452,11 +452,21 @@ impl WorkService {
                 item.delta = cur.delta;
                 item.next_note = cur.next_note;
                 item.left_at = cur.left_at;
+                item.cost_usd = cur.cost_usd;
             }
             self.store.put_item(item).await?;
         }
         self.publish_updated(item);
         Ok(())
+    }
+
+    /// Add Claude spend to the item's `cost_usd` (core, on SessionEnd and quit).
+    pub async fn add_cost(&self, id: &WorkItemId, usd: f64) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| {
+            w.cost_usd += usd;
+            true
+        })
+        .await
     }
 
     /// Field-level write: re-load under the write lock, apply `f`, save when it returns true, publish.

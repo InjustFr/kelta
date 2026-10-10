@@ -1,11 +1,13 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
   import type { SessionInfo } from '$lib/gen';
-  import { lampOf, sessions, settings, type LampLevel } from '$lib/stores';
+  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
   import { Kbd, Lamp } from '$lib/ui';
 
+  import { sessionLabel } from '../views/work/live';
   import { attentionLabel, chordFor } from './labels';
   import { focusedPane, focusedSession, focusedSessionId, revealSession } from './nav';
+  import { clock, itemCost, latestWindow, meter as bar, usd } from './usage';
 
   interface Props {
     prefixArmed: boolean;
@@ -64,6 +66,29 @@
     if (next) void revealSession(next.id);
   }
   const restart = $derived(settings.pendingRestart.length > 0);
+
+  // Rate-limit strip (subscription accounts only: API-key sessions report no rate_limits).
+  const five = $derived(latestWindow(sessions.all, 'five_hour'));
+  const seven = $derived(latestWindow(sessions.all, 'seven_day'));
+  const spendTitle = $derived.by(() => {
+    const cost = (s: SessionInfo): number => s.claude?.usage?.cost_usd ?? 0;
+    const top = sessions.all
+      .filter((s) => cost(s) > 0)
+      .sort((a, b) => cost(b) - cost(a))
+      .slice(0, 5)
+      .map((s) => `${sessionLabel(s)}  ${usd(cost(s))}`);
+    const perProject: Record<string, number> = {};
+    for (const w of work.all)
+      perProject[w.project_id] = (perProject[w.project_id] ?? 0) + itemCost(w, sessions.all);
+    const projectLines = Object.entries(perProject)
+      .filter(([, v]) => v > 0)
+      .map(([id, v]) => `${projects.byId(id)?.name ?? id}  ${usd(v)}`);
+    return [
+      'Top sessions by spend',
+      ...(top.length ? top : ['none yet']),
+      ...(projectLines.length ? ['', 'Work items per project', ...projectLines] : []),
+    ].join('\n');
+  });
 </script>
 
 <footer class="statusbar k-num" data-testid="statusbar">
@@ -80,6 +105,16 @@
   {/if}
   {#if hooksOff}
     <span class="seg warn" data-testid="status-hooks">Live status off</span>
+  {/if}
+  {#if five || seven}
+    <span class="seg" data-testid="status-rate" title={spendTitle}>
+      {#if five}<span
+          >5h <span aria-hidden="true">{bar(five.used_percentage)}</span>
+          {Math.round(five.used_percentage)}% → {clock(five.resets_at)}</span
+        >{/if}
+      {#if five && seven}<span aria-hidden="true">·</span>{/if}
+      {#if seven}<span>7d {Math.round(seven.used_percentage)}%</span>{/if}
+    </span>
   {/if}
   {#each meter as m (m.lamp)}
     <button
