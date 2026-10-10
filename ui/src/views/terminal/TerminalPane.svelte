@@ -30,7 +30,9 @@
   });
   let menu = $state<{ x: number; y: number } | null>(null);
 
-  const exited = $derived(viewState.exited || session?.lifecycle === 'exited');
+  // Parked (#142) or not restored yet: the next attach respawns it (`claude --resume`, nvim -S).
+  const dormant = $derived(session?.lifecycle === 'dormant');
+  const exited = $derived(!dormant && (viewState.exited || session?.lifecycle === 'exited'));
   const exitCode = $derived(viewState.exitCode ?? session?.exit_code ?? null);
   // The session was killed or removed: nothing to show (and nothing to attach to).
   const missing = $derived(sessions.loaded && !session);
@@ -54,6 +56,8 @@
         off = v.onState((s) => (viewState = s));
         v.confirmPaste = askPaste;
         v.onRequest = (r) => (r === 'restart' ? void restart() : close());
+        // A pooled view of a session parked since: showing it again resumes the session.
+        if (sessions.get(id)?.lifecycle === 'dormant' && v.state.attached) void v.reattach();
         if (focused) v.focus();
         void runProbe();
       })
@@ -217,6 +221,16 @@
         {/snippet}
       </ErrorState>
     </div>
+  {:else if dormant}
+    <div class="banner" role="status" data-testid="parked-banner">
+      <span class="mark parked" aria-hidden="true"></span>
+      {#if viewState.attaching}
+        <span class="what">Resuming…</span>
+      {:else}
+        <span class="what">Parked.</span>
+        <Button size="sm" variant="primary" icon="play" onclick={retryAttach}>Resume</Button>
+      {/if}
+    </div>
   {:else if exited}
     <div class="banner" role="status" data-testid="exit-banner">
       <span class="mark" aria-hidden="true"></span>
@@ -278,6 +292,13 @@
     height: 7px;
     transform: rotate(45deg);
     background: var(--k-lamp-error);
+  }
+
+  .mark.parked {
+    transform: none;
+    border-radius: 50%;
+    background: transparent;
+    border: 1.5px solid var(--k-fg-muted);
   }
 
   .what {

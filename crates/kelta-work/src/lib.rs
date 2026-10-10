@@ -347,6 +347,33 @@ impl WorkService {
         .await
     }
 
+    /// Park (#142): `Some(n)` marks the item parked now, `n` = unsaved buffers that kept nvim
+    /// running; `None` clears it (its Claude spawned again).
+    pub async fn set_parked(&self, id: &WorkItemId, nvim_kept: Option<u32>) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| match nvim_kept {
+            Some(n) => {
+                w.parked_at = Some(kelta_proto::now_rfc3339());
+                w.nvim_kept = n;
+                true
+            }
+            None => {
+                w.nvim_kept = 0;
+                w.parked_at.take().is_some()
+            }
+        })
+        .await
+    }
+
+    /// Park (#142): save a clean nvim's session → 0, else its unsaved buffer count (kept running).
+    pub async fn park_editor(&self, item: &WorkItem, editor: &SessionInfo) -> Result<u32, KeltaError> {
+        self.park_editor_impl(item, editor).await
+    }
+
+    /// Park (#142): `worktree.teardown` when configured.
+    pub async fn park_teardown(&self, item: &WorkItem) -> Result<(), KeltaError> {
+        self.park_teardown_impl(item).await
+    }
+
     /// Work item owning a session (for `CoreApi::work_for_session`).
     pub async fn for_session(&self, id: &SessionId) -> Option<WorkItem> {
         let items = self.store.list_items(None).await.ok()?;
@@ -460,7 +487,7 @@ impl WorkService {
     }
 
     /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`,
-    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`) and Louis's `next_note` / `left_at` are never written here: `item` takes the stored ones, so a long
+    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`), Louis's `next_note` / `left_at` and the park (`parked_at`, `nvim_kept`) are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -476,6 +503,8 @@ impl WorkService {
                 item.next_note = cur.next_note;
                 item.left_at = cur.left_at;
                 item.cost_usd = cur.cost_usd;
+                item.parked_at = cur.parked_at;
+                item.nvim_kept = cur.nvim_kept;
             }
             self.store.put_item(item).await?;
         }

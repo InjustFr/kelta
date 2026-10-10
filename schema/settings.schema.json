@@ -888,6 +888,7 @@
           "mcp__kelta__*"
         ],
         "append_system_prompt": "",
+        "auto_park_after_mins": 45,
         "binary": "claude",
         "budget_usd": null,
         "extra_args": [],
@@ -943,6 +944,13 @@
             "project",
             "repo"
           ]
+        },
+        "auto_park_after_mins": {
+          "default": 45,
+          "description": "Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         },
         "binary": {
           "default": "claude",

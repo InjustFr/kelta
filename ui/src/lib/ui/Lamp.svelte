@@ -16,6 +16,7 @@
     activity: 'activity',
     done: 'done',
     working: 'working',
+    parked: 'parked',
     error: 'error',
     needs_input: 'needs input',
   };
@@ -69,6 +70,13 @@
 
   .working {
     --c: var(--k-lamp-working);
+    background: transparent;
+    border: 1.5px solid var(--c);
+  }
+
+  /* Parked (#142): hollow like working, but quiet. */
+  .parked {
+    --c: var(--k-fg-muted);
     background: transparent;
     border: 1.5px solid var(--c);
   }
