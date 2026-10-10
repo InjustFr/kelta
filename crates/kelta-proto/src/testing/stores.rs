@@ -78,6 +78,7 @@ impl WorkStore for MemWorkStore {
 #[derive(Default)]
 pub struct MemGrantStore {
     grants: Mutex<BTreeMap<PluginId, BTreeMap<String, PluginGrant>>>,
+    kv: Mutex<BTreeMap<PluginId, BTreeMap<String, String>>>,
 }
 
 impl MemGrantStore {
@@ -118,6 +119,43 @@ impl GrantStore for MemGrantStore {
 
     async fn revoke_all(&self, plugin: &PluginId) -> Result<(), KeltaError> {
         self.grants.lock().remove(plugin);
+        Ok(())
+    }
+
+    async fn kv_get(&self, plugin: &PluginId, key: &str) -> Result<Option<String>, KeltaError> {
+        Ok(self.kv.lock().get(plugin).and_then(|m| m.get(key).cloned()))
+    }
+
+    async fn kv_set(
+        &self,
+        plugin: &PluginId,
+        key: &str,
+        value: String,
+        quota: usize,
+    ) -> Result<(), KeltaError> {
+        let mut kv = self.kv.lock();
+        let m = kv.entry(plugin.clone()).or_default();
+        let others: usize = m.iter().filter(|(k, _)| *k != key).map(|(k, v)| k.len() + v.len()).sum();
+        if others + key.len() + value.len() > quota {
+            return Err(crate::api::kv_quota_error(quota));
+        }
+        m.insert(key.to_owned(), value);
+        Ok(())
+    }
+
+    async fn kv_delete(&self, plugin: &PluginId, key: &str) -> Result<(), KeltaError> {
+        if let Some(m) = self.kv.lock().get_mut(plugin) {
+            m.remove(key);
+        }
+        Ok(())
+    }
+
+    async fn kv_keys(&self, plugin: &PluginId) -> Result<Vec<String>, KeltaError> {
+        Ok(self.kv.lock().get(plugin).map(|m| m.keys().cloned().collect()).unwrap_or_default())
+    }
+
+    async fn kv_clear(&self, plugin: &PluginId) -> Result<(), KeltaError> {
+        self.kv.lock().remove(plugin);
         Ok(())
     }
 }

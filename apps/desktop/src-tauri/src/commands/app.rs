@@ -38,6 +38,13 @@ pub async fn app_ready(core: State<'_, Arc<Core>>, t_ms: f64) -> Res<()> {
     core.app_ready(t_ms).await
 }
 
+/// kelta-bench metric measured in the UI (no-op unless `KELTA_BENCH_MARKS` is set).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn bench_mark(key: String, value: f64) -> Res<()> {
+    crate::window::bench::mark(&key, value);
+    Ok(())
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn open_external(core: State<'_, Arc<Core>>, url: String) -> Res<()> {
     core.open_external(&url).await

@@ -118,12 +118,21 @@ describe('connect', () => {
     await k.ui.openScreen('other', { x: 1 });
     await k.notify('t', 'b');
     await k.sessions.sendText('s1', 'ls');
+    await k.kv.set('n', { a: 1 });
+    await k.kv.get('n');
+    await k.kv.delete('n');
+    await k.kv.list();
     expect(h.requests.map((r) => r.method)).toEqual([
       'net.fetch',
       'ui.open_screen',
       'notify.send',
       'sessions.send_text',
+      'kv.set',
+      'kv.get',
+      'kv.delete',
+      'kv.list',
     ]);
+    expect(h.requests[4]?.params).toEqual({ key: 'n', value: { a: 1 } });
     expect(h.requests[0]?.params).toEqual({ url: 'https://api.example.com/x', method: 'POST', body: '{}' });
   });
 });

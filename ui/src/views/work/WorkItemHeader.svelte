@@ -117,7 +117,7 @@
 {#if item && phase}
   <div class="bar" role="toolbar" aria-label="Work item" data-testid="work-header" data-phase={phase.id}>
     <span class="lamp"><Lamp level={phase.lamp} title={phase.label} /></span>
-    <span class="key">{workKey(item)}</span>
+    <span class="key" data-testid="work-key">{workKey(item)}</span>
     <span class="ttl" title={workTitle(item)}>{workTitle(item)}</span>
     {#if ticketRef}
       <button

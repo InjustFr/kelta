@@ -657,7 +657,7 @@ pub struct ClaudeSettings {
     pub extra_hooks: BTreeMap<String, serde_json::Value>,
     pub profiles: BTreeMap<String, ClaudeProfile>,
     pub prompt_templates: BTreeMap<String, String>,
-    /// v0.2; ignored in v0.1.
+    /// Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
     pub ide_bridge: bool,
 }
 
@@ -691,7 +691,7 @@ impl Default for ClaudeSettings {
                     "review".to_owned(),
                     "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.".to_owned(),
                 ),
-                ("standalone".to_owned(), String::new()),
+                ("standalone".to_owned(), "{task}".to_owned()),
             ]),
             ide_bridge: false,
         }
@@ -1007,6 +1007,9 @@ pub struct WorkSettings {
     pub on_pr: OnPr,
     pub on_merge: OnMerge,
     pub pr: PrSettings,
+    /// Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
+    /// the task's first line.
+    pub scratch_branch_template: String,
 }
 
 impl Default for WorkSettings {
@@ -1019,6 +1022,7 @@ impl Default for WorkSettings {
             on_pr: OnPr::default(),
             on_merge: OnMerge::default(),
             pr: PrSettings::default(),
+            scratch_branch_template: "wip/{slug}".into(),
         }
     }
 }

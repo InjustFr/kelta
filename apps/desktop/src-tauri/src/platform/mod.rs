@@ -91,7 +91,8 @@ fn linux_pre_init(args: &[String], safe_flag: bool) -> PreInit {
     }
 
     let nvidia = graphics::detect_nvidia(std::path::Path::new("/"));
-    let inputs = graphics::GraphicsInputs { cfg, safe_flag, guard_safe, nvidia };
+    let no_gpu = graphics::detect_no_gpu(std::path::Path::new("/"));
+    let inputs = graphics::GraphicsInputs { cfg, safe_flag, guard_safe, nvidia, no_gpu };
     let safe = graphics::is_safe(&inputs);
     let set = graphics::apply(&graphics::decide(&inputs));
     let _ = APPLIED.set(AppliedGraphics {

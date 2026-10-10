@@ -95,6 +95,7 @@ export interface Commands {
   // ---- app ---------------------------------------------------------------------------------
   app_info: { args: NoArgs; result: AppInfo };
   app_ready: { args: { t_ms: number }; result: null };
+  bench_mark: { args: { key: string; value: number }; result: null };
   events_subscribe: { args: { channel: IpcChannel<UiEvent> }; result: SubscribeResult };
   open_external: { args: { url: string }; result: null };
   perf_snapshot: { args: NoArgs; result: PerfSnapshot };
@@ -202,6 +203,7 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
   /** Spawns the review diff session; the UI places it zoomed in the work tab. */
@@ -246,6 +248,7 @@ export type CommandResult<K extends CommandName> = Commands[K]['result'];
 export const COMMAND_NAMES = [
   'app_info',
   'app_ready',
+  'bench_mark',
   'events_subscribe',
   'open_external',
   'perf_snapshot',
@@ -318,6 +321,7 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_link',
   'work_status_all',
   'work_diff',
   'work_mark_reviewed',
@@ -382,6 +386,7 @@ function wrap<K extends CommandName>(cmd: K): Wrapper<K> {
 // ---- app ------------------------------------------------------------------------------------
 export const appInfo = wrap('app_info');
 export const appReady = wrap('app_ready');
+export const benchMark = wrap('bench_mark');
 export const openExternal = wrap('open_external');
 export const perfSnapshot = wrap('perf_snapshot');
 export const diagnosticsRun = wrap('diagnostics_run');
@@ -504,6 +509,7 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workLink = wrap('work_link');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');

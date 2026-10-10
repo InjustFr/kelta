@@ -8,4 +8,9 @@ export type WorkSettings = {
 /**
  * Show the StartWorkPlan sheet.
  */
-plan_preview: boolean, default_template: string, review_template: string, on_start: OnStart, on_pr: OnPr, on_merge: OnMerge, pr: PrSettings, };
+plan_preview: boolean, default_template: string, review_template: string, on_start: OnStart, on_pr: OnPr, on_merge: OnMerge, pr: PrSettings, 
+/**
+ * Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
+ * the task's first line.
+ */
+scratch_branch_template: string, };

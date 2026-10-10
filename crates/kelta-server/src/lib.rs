@@ -2,9 +2,10 @@
 //!
 //! Local surfaces (ARCHITECTURE §2, §7.6, §11.1, PLUGINS §8): ctl socket server (line JSON,
 //! peer-uid + per-session hook token checks), hook ingestion → `hooks::map`, lazy loopback axum
-//! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`).
+//! server (MCP at `/mcp/<sid>`, http hooks at `/hook/<sid>`), Claude IDE bridges (`ide`).
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 
 use kelta_proto::api::CoreApi;
@@ -18,6 +19,7 @@ mod auth;
 mod ctl;
 pub mod hooks;
 mod http;
+mod ide;
 mod mcp;
 
 struct CtlRunning {
@@ -31,6 +33,7 @@ pub struct Server {
     tokens: Arc<auth::TokenTable>,
     ctl: Mutex<Option<CtlRunning>>,
     http: Mutex<http::HttpState>,
+    ide: Mutex<HashMap<SessionId, ide::Bridge>>,
 }
 
 impl Server {
@@ -41,6 +44,7 @@ impl Server {
             tokens: Arc::new(auth::TokenTable::default()),
             ctl: Mutex::new(None),
             http: Mutex::new(http::HttpState::default()),
+            ide: Mutex::new(HashMap::new()),
         })
     }
 
@@ -90,6 +94,31 @@ impl Server {
 
     pub fn unregister_session(&self, sid: &SessionId) {
         self.tokens.unregister(sid);
+        self.ide_close(sid);
+    }
+
+    /// Start the Claude IDE bridge of `sid`: a loopback WebSocket plus `<claude_dir>/ide/<port>.lock`
+    /// (stale Kelta locks there are removed first); returns the port. Replaces a previous bridge.
+    pub fn ide_open(
+        &self,
+        sid: &SessionId,
+        claude_dir: &Path,
+        folders: Vec<PathBuf>,
+    ) -> Result<u16, KeltaError> {
+        let (bridge, port) =
+            ide::open(self.core.clone(), sid.clone(), claude_dir, folders, &self.dirs.runtime)?;
+        self.ide.lock().insert(sid.clone(), bridge);
+        Ok(port)
+    }
+
+    /// Stop the bridge of `sid` and remove its lock file.
+    pub fn ide_close(&self, sid: &SessionId) {
+        self.ide.lock().remove(sid);
+    }
+
+    /// App quit: the process exits without running destructors.
+    pub fn ide_close_all(&self) {
+        self.ide.lock().clear();
     }
 }
 

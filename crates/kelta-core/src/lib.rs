@@ -625,6 +625,15 @@ impl CoreApi for Core {
     ) -> Result<(), KeltaError> {
         self.work.editor_open(target, path, line).await
     }
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.work.editor_diff(target, old, proposed, close).await
+    }
     async fn tool_open(
         &self,
         project: &ProjectId,

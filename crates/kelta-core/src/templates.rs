@@ -315,6 +315,7 @@ impl Core {
         vars.insert("project", project.to_string());
         vars.insert("base", repo.as_ref().map(|r| r.base.clone()).unwrap_or_else(|| "main".into()));
         vars.insert("repo", repo.as_ref().map(|r| r.id.clone()).unwrap_or_default());
+        vars.insert("task", String::new()); // plain sessions have no task: `{task}` renders empty
         for (k, v) in &ctx.extra {
             if let Some(key) = ["key", "title", "url"].iter().find(|x| *x == k) {
                 vars.insert(key, v.clone());

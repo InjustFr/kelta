@@ -338,6 +338,16 @@ impl Core {
                     Ok(serde_json::to_value(w)?)
                 }
             }
+            CtlCommand::StartTask { task, project } => {
+                // Scripted: no sheet, same plan + saga as New work item (FLOW §4.3).
+                let project = project.unwrap_or_else(|| self.active_project());
+                let source = WorkSource::Branch { name: String::new(), task: Some(task), repo: None };
+                let plan = self.work.plan(&project, source).await?;
+                let w = self.work.start(plan).await?;
+                self.project_activate(&project)?;
+                self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
+                Ok(serde_json::to_value(w)?)
+            }
             CtlCommand::New { template, cwd, project } => {
                 let project = project.unwrap_or_else(|| self.active_project());
                 let ctx = TemplateCtx { cwd, ..TemplateCtx::default() };

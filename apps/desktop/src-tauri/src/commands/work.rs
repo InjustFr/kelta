@@ -58,6 +58,16 @@ pub async fn work_status(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<GitS
     core.work().status(&id).await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_link(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    ticket: TicketRef,
+    apply_side_effects: bool,
+) -> Res<WorkItem> {
+    core.work().link(&id, ticket, apply_side_effects).await
+}
+
 /// Every unfinished item, keyed by id (one fetch per repo, 5 min floor).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_status_all(core: State<'_, Arc<Core>>) -> Res<BTreeMap<WorkItemId, GitStatus>> {

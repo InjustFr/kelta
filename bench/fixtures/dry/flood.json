@@ -1,5 +1,6 @@
 {
  "frame_max_ms": 38.0,
+ "echo_max_ms": 30.0,
  "webview_delta_mb": 21.0,
  "inflight_kib": 192.0
 }

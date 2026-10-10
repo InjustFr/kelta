@@ -151,6 +151,7 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     assert!(matches!(spawned[0].kind, SessionKind::Claude));
     assert!(matches!(&spawned[1].kind, SessionKind::Editor { adapter } if adapter == "nvim"));
     let args = h.term.with_session(&spawned[0].id, |s| s.spec.args.clone()).unwrap();
+    assert!(!args.iter().any(|a| a.contains("{task}")), "plain session must not get a prompt: {args:?}");
     let file = args.iter().position(|a| a == "--settings").map(|i| args[i + 1].clone()).unwrap();
     let hooks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     assert!(hooks["hooks"]["SessionStart"].is_array());
@@ -208,4 +209,35 @@ async fn work_updated_reaches_the_ui() {
     ));
     assert!(h.ui.events().iter().any(|e| matches!(e,
         kelta_proto::events::UiEvent::WorkUpdated { work: w } if w.id == work.id)));
+}
+
+#[tokio::test]
+async fn claude_ide_bridge_follows_the_setting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let env_of = |id| h.term.with_session(id, |s| s.spec.env.clone()).unwrap();
+
+    // Off (default): no env, no lock file under the (temp) HOME.
+    let off = h.core.session_spawn(req(SessionKind::Claude, Some("claude"), &[])).await.unwrap();
+    let env = env_of(&off.id);
+    assert!(!env.contains_key("CLAUDE_CODE_SSE_PORT") && !env.contains_key("ENABLE_IDE_INTEGRATION"));
+    assert!(!tmp.path().join("home/.claude").exists());
+
+    // On: the lock goes under the session's own CLAUDE_CONFIG_DIR and goes away with the session.
+    h.cfg.update(|s| s.claude.ide_bridge = true);
+    let cfg_dir = tmp.path().join("claude-cfg");
+    let mut r = req(SessionKind::Claude, Some("claude"), &[]);
+    r.env.insert("CLAUDE_CONFIG_DIR".into(), cfg_dir.display().to_string());
+    let on = h.core.session_spawn(r).await.unwrap();
+    let env = env_of(&on.id);
+    assert_eq!(env["ENABLE_IDE_INTEGRATION"], "true");
+    let lock = cfg_dir.join("ide").join(format!("{}.lock", env["CLAUDE_CODE_SSE_PORT"]));
+    let l: serde_json::Value = serde_json::from_slice(&std::fs::read(&lock).unwrap()).unwrap();
+    assert_eq!(l["workspaceFolders"], serde_json::json!([on.cwd]));
+    // Shells never get a bridge.
+    let shell = h.core.session_spawn(req(SessionKind::Shell, None, &[])).await.unwrap();
+    assert!(!env_of(&shell.id).contains_key("CLAUDE_CODE_SSE_PORT"));
+
+    h.core.session_kill(&on.id, false).await.unwrap();
+    assert!(!lock.exists(), "lock file removed when the session ends");
 }

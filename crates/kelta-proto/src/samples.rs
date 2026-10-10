@@ -282,6 +282,8 @@ pub fn work_item() -> WorkItem {
             })
             .collect(),
         created_at: TS.into(),
+        title: None,
+        pr_title_needs_key: false,
         review_due: false,
         claude_replied: false,
     }

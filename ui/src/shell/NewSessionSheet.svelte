@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { SheetProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import type { Placement, ProjectId, TemplateCtx } from '$lib/gen';
   import { sessionSpawnTemplate, toolOpen } from '$lib/ipc/commands';
+  import { effectiveChords } from '$lib/keys/manager';
   import { plugins, projects, sessions, settings, toasts, tools, work } from '$lib/stores';
-  import { Button, Select, Sheet, TextInput } from '$lib/ui';
+  import { Button, currentPlatform, Kbd, Select, Sheet, TextInput } from '$lib/ui';
 
   import { activateProject, focusedSessionId, railProjects } from './nav';
 
@@ -17,6 +19,7 @@
   ];
 
   const rail = railProjects();
+  const newWorkChord = effectiveChords('work.new', settings.value()?.keys ?? null, currentPlatform())[0];
   let projectId = $state<ProjectId>(projects.activeId ?? rail[0]?.id ?? 'home');
   let template = $state('shell');
   let placement = $state<Placement>('new_tab');
@@ -146,6 +149,18 @@
     />
     <button type="submit" class="k-visually-hidden" tabindex="-1">Start</button>
   </form>
+  <p class="hint" data-testid="new-work-hint">
+    Want a branch and a PR?
+    <button
+      type="button"
+      class="link"
+      onclick={() => {
+        onclose();
+        void dispatch('work.new');
+      }}>New work item</button
+    >
+    {#if newWorkChord}<Kbd chord={newWorkChord} />{/if}
+  </p>
   {#snippet actions()}
     <Button onclick={onclose}>Cancel</Button>
     <Button variant="primary" icon="play" loading={busy} onclick={start} data-testid="new-session-start"
@@ -155,6 +170,24 @@
 </Sheet>
 
 <style>
+  .hint {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    margin: var(--k-space-5) 0 0;
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--k-accent);
+    font: inherit;
+    cursor: pointer;
+  }
+
   .form {
     display: flex;
     flex-direction: column;

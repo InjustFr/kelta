@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{PluginId, ProjectId, SessionId, WorkItemId};
 
 /// Current schema version (`schema_version(v)`); bumped by L3 migrations.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Table names.
 pub mod tables {
@@ -149,7 +149,7 @@ pub struct PluginGrantRow {
     pub manifest_sha256: String,
 }
 
-/// `plugin_kv(plugin_id, key, value, PK(plugin_id, key))` — v0.2 consumers; table exists.
+/// `plugin_kv(plugin_id, key, value, PK(plugin_id, key))` — screens' `kv.*` (PLUGINS §7); value is JSON text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginKvRow {
     pub plugin_id: PluginId,

@@ -466,6 +466,20 @@ impl CoreApi for FakeCore {
         self.overridden::<()>("editor_open").unwrap_or(Ok(()))
     }
 
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.record(
+            "editor_diff",
+            serde_json::json!({ "target": Self::arg(&target), "old": old, "proposed": proposed, "close": close }),
+        );
+        self.overridden::<()>("editor_diff").unwrap_or(Ok(()))
+    }
+
     async fn tool_open(
         &self,
         project: &ProjectId,

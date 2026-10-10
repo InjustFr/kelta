@@ -28,6 +28,36 @@ export function validateBranch(name: string): string | null {
   return null;
 }
 
+/** Scratch item title: the task's first non-empty line, 72 chars max (kelta-work `task_title`). */
+export function taskTitle(task: string): string {
+  const line =
+    task
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l !== '') ?? '';
+  return [...line].slice(0, 72).join('').trimEnd();
+}
+
+/**
+ * Live preview of `work.scratch_branch_template` for a task (kelta-work `slugify` + `{slug}`).
+ * shortcut: NFKD stands in for the backend's transliteration table and only `{slug}` is
+ * substituted; the backend renders the real branch when the field was not edited.
+ */
+export function scratchBranch(task: string, template: string, max: number): string {
+  let slug = taskTitle(task)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (max > 0 && slug.length > max) {
+    const cut = slug.slice(0, max);
+    const dash = cut.lastIndexOf('-');
+    slug = slug[max] === '-' ? cut.replace(/-+$/, '') : dash > 0 ? cut.slice(0, dash) : cut;
+  }
+  return slug === '' ? '' : template.replaceAll('{slug}', slug);
+}
+
 export interface PlanErrors {
   branch: string | null;
   base: string | null;

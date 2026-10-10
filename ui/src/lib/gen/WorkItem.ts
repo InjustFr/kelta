@@ -11,6 +11,15 @@ import type { WorkStepStatus } from "./WorkStepStatus";
 
 export type WorkItem = { id: WorkItemId, project_id: ProjectId, kind: WorkKind, ticket: TicketRef | null, review: ReviewRef | null, repo_id: string, worktree: string, branch: string, base: string, claude_uuid: string | null, nvim_socket: string | null, session_ids: Array<SessionId>, tab_id: TabId | null, pr_url: string | null, state: WorkState, steps: Array<WorkStepStatus>, created_at: string, 
 /**
+ * Scratch items: first line of the task, 72 chars max (tab, rows, PR title).
+ */
+title: string | null, 
+/**
+ * Set by `work_link` on an item with a PR: the next Ship/Push prefixes the ticket key to the PR
+ * title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
+ */
+pr_title_needs_key: boolean, 
+/**
  * Claude stopped with changes Louis has not looked at (FLOW §2.3). Set only from a real `Stop`
  * hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
  */

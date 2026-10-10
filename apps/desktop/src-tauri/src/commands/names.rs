@@ -7,6 +7,7 @@ pub const COMMANDS: &[&str] = &[
     // app
     "app_info",
     "app_ready",
+    "bench_mark",
     "events_subscribe",
     "open_external",
     "perf_snapshot",
@@ -86,6 +87,7 @@ pub const COMMANDS: &[&str] = &[
     "work_create_pr",
     "work_finish",
     "work_status",
+    "work_link",
     "work_status_all",
     "work_diff",
     "work_mark_reviewed",

@@ -30,7 +30,15 @@ describe('registries', { timeout: 30_000 }, () => {
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
-      ['onboarding', 'plugin_install', 'project_new', 'start_work', 'tool_picker'].sort(),
+      [
+        'link_ticket',
+        'onboarding',
+        'plugin_install',
+        'project_new',
+        'start_work',
+        'tool_picker',
+        'work_new',
+      ].sort(),
     );
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {
       expect(typeof (await load()).default).toBe('function');

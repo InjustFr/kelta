@@ -90,6 +90,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         // app
         app::app_info,
         app::app_ready,
+        app::bench_mark,
         app::events_subscribe,
         app::open_external,
         app::perf_snapshot,
@@ -169,6 +170,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_create_pr,
         work::work_finish,
         work::work_status,
+        work::work_link,
         work::work_status_all,
         work::work_diff,
         work::work_mark_reviewed,
