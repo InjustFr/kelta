@@ -263,9 +263,13 @@ export function focusedWorkItem(): WorkItem | null {
   return id ? work.get(id) : null;
 }
 
-function onFocused(fn: (item: WorkItem) => void | Promise<void>): () => Promise<void> {
-  return async () => {
-    const item = focusedWorkItem();
+/** `args.id` names the item (palette, Now rows); default: the focused tab's. */
+function onFocused(
+  fn: (item: WorkItem) => void | Promise<void>,
+): (args?: Record<string, unknown>) => Promise<void> {
+  return async (args) => {
+    const id = args?.id as string | undefined;
+    const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
     else toasts.info('Focus a work item tab first');
   };
