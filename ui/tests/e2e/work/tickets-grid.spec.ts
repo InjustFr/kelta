@@ -76,6 +76,8 @@ test('rows share one grid: key, title, status, age and source start at one x on 
 test('the title takes the free width: a 60-character title shows 45 or more with the detail open', async ({
   page,
 }) => {
+  // The #251 criterion's width: the 1280px default fits only 42 characters with Linux's system-ui font.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await openRailTickets(page);
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
   const row = page.locator('[data-key="jira-acme:SHOP-9111"]');

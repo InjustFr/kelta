@@ -329,7 +329,8 @@ async fn ports_env_template_and_teardown() {
     need_git!();
     let fx = Fx::new();
     fx.settings(|s| {
-        s.ports.range = "47300-47319".into();
+        // Below the ephemeral ports (Linux 32768+, macOS 49152+) other tests' connections take.
+        s.ports.range = "27300-27319".into();
         s.worktree.env_template = ".env.kelta".into();
         s.worktree.teardown = "docker compose down".into();
     });
