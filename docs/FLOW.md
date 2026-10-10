@@ -24,6 +24,7 @@ And the two questions behind them, asked many times a day with many things in fl
 - **Automatic when reversible, confirmed when destructive.** Reading state, fetching, moving a ticket after merge: automatic. Force push, removing a worktree: confirmed in one keystroke, never batched.
 - **No new polling.** State refreshes on events (hooks, `work.updated`, the review polls that already exist), on window focus, on startup and when Now opens.
 - **Every flow is keyboard-complete**, including sheets, dialogs, toasts and stopped rebases (§7.1).
+- **No ticket source is an onboarding step, not an empty list.** With no `[[sources]]` board, Tickets (every scope, Home included) shows "Add a ticket source: pick a board" and **Pick a board**; Now shows "No ticket source yet · Pick a board" above its list, or as its empty state. The picker creates a source labelled after the board (feeding the project it was opened from, else none) and its toast "… added · Choose its projects" opens Settings → Sources on it.
 
 ---
 

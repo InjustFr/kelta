@@ -411,7 +411,7 @@ impl Core {
                 t.action = Some(kelta_proto::events::ToastAction {
                     label: "Review".into(),
                     command: "settings.open".into(),
-                    args: Some(serde_json::json!({ "section": "projects" })),
+                    args: Some(serde_json::json!({ "section": "sources" })),
                 });
                 t
             }

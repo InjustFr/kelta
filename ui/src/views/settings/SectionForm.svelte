@@ -17,7 +17,7 @@
     before?: Snippet;
     /** Rendered after the generated form. */
     after?: Snippet;
-    /** Paths left out of the generated form (owned by a custom control). */
+    /** Paths (or whole roots) left out of the generated form (owned by a custom control). */
     skip?: readonly string[];
   }
 
@@ -45,7 +45,7 @@
     <div class="loading"><Spinner size={16} /> Loading settings…</div>
   {:else if editor.schema}
     {@const schema = editor.schema}
-    {#each roots as root (root)}
+    {#each roots.filter((r) => !skip.includes(r)) as root (root)}
       {@const node = schema.properties?.[root]}
       {#if node}
         {#if roots.length === 1 && fieldKind(node) === 'group'}

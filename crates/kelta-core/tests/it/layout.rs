@@ -75,6 +75,7 @@ async fn backend_open_moves_sessions_and_kill_removes_panes() {
     let tickets = PaneContent::Tickets {
         scope: Scope::Project { id: shop.clone() },
         view_id: None,
+        source_id: None,
         mode: TicketsMode::Board,
         who: None,
         group: None,

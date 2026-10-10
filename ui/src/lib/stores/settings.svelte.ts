@@ -29,6 +29,12 @@ export class SettingsStore {
     return (slot?.data?.value as unknown as Settings | undefined) ?? null;
   }
 
+  /** A ticket source (`[[sources]]`) with a view exists; `null` until the settings load. */
+  hasSources(): boolean | null {
+    const v = this.value();
+    return v ? v.sources.some((s) => s.tracker.views.length > 0) : null;
+  }
+
   sources(projectId?: ProjectId | null): Record<string, Layer> {
     return (this.effective[projectId ?? GLOBAL]?.data?.sources ?? {}) as Record<string, Layer>;
   }

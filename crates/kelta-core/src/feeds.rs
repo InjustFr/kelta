@@ -200,34 +200,41 @@ pub fn ticket_prs(
     out
 }
 
-/// Merge pages from several queries: de-dup by ref, union of project ids and view ids.
+/// Merge pages from several queries: de-dup by ref, union of project, source and view ids.
 pub fn merge_tickets(
-    pages: Vec<(Vec<Ticket>, Vec<ProjectId>, String)>,
+    pages: Vec<(Vec<Ticket>, &TicketQuery)>,
     work: &HashMap<TicketRef, WorkItem>,
 ) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
-    for (tickets, projects, view_id) in pages {
+    let union = |into: &mut Vec<String>, from: &[String]| {
+        for x in from {
+            if !into.contains(x) {
+                into.push(x.clone());
+            }
+        }
+    };
+    for (tickets, q) in pages {
         for t in tickets {
             match index.get(&t.r#ref) {
                 Some(&i) => {
-                    for p in &projects {
+                    for p in &q.projects {
                         if !out[i].project_ids.contains(p) {
                             out[i].project_ids.push(p.clone());
                         }
                     }
-                    if !out[i].view_ids.contains(&view_id) {
-                        out[i].view_ids.push(view_id.clone());
-                    }
+                    union(&mut out[i].source_ids, &q.sources);
+                    union(&mut out[i].view_ids, std::slice::from_ref(&q.view.id));
                 }
                 None => {
                     index.insert(t.r#ref.clone(), out.len());
                     let work_item_id = work.get(&t.r#ref).map(|w| w.id.clone());
                     out.push(TicketItem {
                         ticket: t,
-                        project_ids: projects.clone(),
+                        project_ids: q.projects.clone(),
                         work_item_id,
-                        view_ids: vec![view_id.clone()],
+                        view_ids: vec![q.view.id.clone()],
+                        source_ids: q.sources.clone(),
                         ..TicketItem::default()
                     });
                 }
@@ -673,7 +680,7 @@ impl Core {
                 if let Some(n) = p.next {
                     nexts.insert(q.cache_key.clone(), n);
                 }
-                pages.push((p.items, q.projects.clone(), q.view.id.clone()));
+                pages.push((p.items, q));
             }
         }
         let next = if single || nexts.is_empty() {
@@ -717,8 +724,7 @@ impl Core {
             items
         }))
         .await;
-        let pages =
-            queries.iter().zip(found).map(|(q, items)| (items, q.projects.clone(), q.view.id.clone()));
+        let pages = found.into_iter().zip(&queries);
         let work = self.work_by_ticket().await;
         let reviews = self.cached_reviews().await;
         let mut hits = merge_tickets(pages.collect(), &work);
@@ -747,6 +753,7 @@ impl Core {
                         work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
                         ticket: d.ticket,
                         project_ids: q.projects,
+                        source_ids: q.sources,
                         prs: d.prs,
                         caps: d.caps,
                         ..TicketItem::default()
@@ -826,20 +833,19 @@ impl Core {
             .cloned()
     }
 
-    fn binding_of(&self, project: &ProjectId) -> Result<TrackerBinding, KeltaError> {
-        self.cfg.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
-        self.project_binding(project)
-            .ok_or_else(|| KeltaError::invalid(format!("project {project} has no tracker")))
+    /// `tracker_columns`: the source's `tracker.columns` override, else the provider's, else by category.
+    pub async fn tracker_columns(&self, source: &str) -> Result<Vec<Column>, KeltaError> {
+        self.rt.capture();
+        let s = self.sources().into_iter().find(|s| s.id == source);
+        let b = s.ok_or_else(|| KeltaError::not_found(format!("source {source}")))?.tracker;
+        self.columns_of(&b).await
     }
 
-    /// `tracker_columns`: project `tracker.columns` override, else the provider's, else by category.
-    pub async fn tracker_columns(&self, project: &ProjectId) -> Result<Vec<Column>, KeltaError> {
-        self.rt.capture();
-        let b = self.binding_of(project)?;
+    async fn columns_of(&self, b: &TrackerBinding) -> Result<Vec<Column>, KeltaError> {
         if !b.columns.is_empty() {
             return Ok(b.columns.iter().enumerate().map(|(i, s)| spec_column(i, s)).collect());
         }
-        match self.tracker_of(&b.account)?.columns(&b).await {
+        match self.tracker_of(&b.account)?.columns(b).await {
             Ok(c) if !c.is_empty() => Ok(c),
             Ok(_) => Ok(default_columns()),
             Err(e) if e.code == ErrorCode::Unsupported => Ok(default_columns()),
@@ -891,21 +897,26 @@ impl Core {
     }
 
     /// `tracker_move`: column → transition (by names, then categories); ambiguous → `Conflict`.
-    /// `project` picks the columns; `None` = the project bound to the ticket's account.
+    /// `source` picks the columns; `None` = the board of the project bound to the ticket's account.
     pub async fn tracker_move(
         &self,
         t: &TicketRef,
         column_id: &str,
-        project: Option<&ProjectId>,
+        source: Option<&str>,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
-        let project = match project {
-            Some(id) => self.cfg.project(id).ok_or_else(|| KeltaError::not_found(format!("project {id}")))?,
-            None => self.project_for_account(&t.account).ok_or_else(|| {
-                KeltaError::not_found(format!("no project uses tracker account {}", t.account))
-            })?,
+        let binding = match source {
+            Some(id) => {
+                let s = self.sources().into_iter().find(|s| s.id == id);
+                s.ok_or_else(|| KeltaError::not_found(format!("source {id}")))?.tracker
+            }
+            None => {
+                let p = self.project_for_account(&t.account).ok_or_else(|| {
+                    KeltaError::not_found(format!("no project uses tracker account {}", t.account))
+                })?;
+                self.project_binding(&p.id).unwrap_or_default()
+            }
         };
-        let binding = self.project_binding(&project.id).unwrap_or_default();
         let (label, categories, names) = match binding.columns.iter().find(|c| c.id == column_id) {
             Some(s) => (
                 if s.label.is_empty() { s.id.clone() } else { s.label.clone() },
@@ -913,7 +924,7 @@ impl Core {
                 s.names.clone(),
             ),
             None => {
-                let cols = self.tracker_columns(&project.id).await?;
+                let cols = self.columns_of(&binding).await?;
                 let c = cols
                     .into_iter()
                     .find(|c| c.id == column_id)
@@ -1692,8 +1703,17 @@ impl Core {
         let both = [ReviewKind::ReviewRequested, ReviewKind::Authored];
         for c in &contents {
             match c {
-                PaneContent::Tickets { scope, view_id, who, .. } => {
-                    tickets(scope, view_id.as_deref(), *who, &mut want)
+                PaneContent::Tickets { scope, view_id, who, source_id, .. } => {
+                    // a pane narrowed to one source lists that source's queries (as the UI loads it);
+                    // a removed source, or one no longer feeding the pane's project, is ignored (UI shows all)
+                    let narrowed = source_id.as_ref().filter(|id| {
+                        self.sources().iter().any(|s| {
+                            s.id == **id
+                                && !matches!(scope, Scope::Project { id: p } if !s.projects.contains(p))
+                        })
+                    });
+                    let scope = narrowed.map_or_else(|| scope.clone(), |id| Scope::Source { id: id.clone() });
+                    tickets(&scope, view_id.as_deref(), *who, &mut want)
                 }
                 PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
                 PaneContent::Inbox => {
