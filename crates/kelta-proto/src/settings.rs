@@ -372,6 +372,14 @@ pub struct TerminalSettings {
     pub max_live_views: u32,
     #[schemars(range(min = 32, max = 2048))]
     pub memory_cap_mb: u32,
+    /// Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+    pub history_log: bool,
+    /// Per-session log cap (two rotated halves).
+    #[schemars(range(min = 1, max = 1024))]
+    pub history_log_mb: u32,
+    /// Cap of all session logs; oldest files are deleted first.
+    #[schemars(range(min = 16, max = 65536))]
+    pub history_log_total_mb: u32,
     /// macOS.
     pub option_as_meta: OptionAsMeta,
     pub copy_on_select: bool,
@@ -405,6 +413,9 @@ impl Default for TerminalSettings {
             view_scrollback: 1000,
             max_live_views: 4,
             memory_cap_mb: 160,
+            history_log: true,
+            history_log_mb: 16,
+            history_log_total_mb: 512,
             option_as_meta: OptionAsMeta::Both,
             copy_on_select: false,
             primary_selection: true,

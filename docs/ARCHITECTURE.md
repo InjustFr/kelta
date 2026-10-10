@@ -138,6 +138,7 @@ kelta-ctl: short-lived CLI (Claude hooks, compositor keybinds, scripts)
 | config | `$XDG_CONFIG_HOME/kelta` (`~/.config/kelta`) | `~/.config/kelta` (honours `XDG_CONFIG_HOME`) |
 | data (db, plugins, bin, logs) | `$XDG_DATA_HOME/kelta` (`~/.local/share/kelta`) | `~/Library/Application Support/dev.kelta.Kelta` |
 | state db | `<data>/kelta.db` | same |
+| terminal history logs | `<data>/history/` (0700): `<session id>.log` + `<session id>.1.log` (0600), §9.6 | same |
 | logs | `$XDG_STATE_HOME/kelta/logs/kelta.log` (5 MB × 2) | `~/Library/Logs/Kelta/kelta.log` |
 | stable CLI copy | `<data>/bin/<version>/kelta-ctl` + `<data>/bin/current` symlink | same |
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
@@ -212,6 +213,9 @@ pub trait TerminalHost: Send + Sync {
   fn set_palette(&self, palette: TerminalPalette);                              // OSC 4/10/11/12 replies
   fn set_limits(&self, limits: TerminalLimits);                                 // scrollback per kind, memory cap, view_scrollback
   fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>; // plain text (search, persistence)
+  fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>; // on-disk log (§9.6), also for sessions not running
+  fn history_search(&self, ids: &[SessionId], query: &str, limit: u32) -> Result<Vec<HistoryHit>, KeltaError>;
+  fn history_delete(&self, id: &SessionId);                                     // session row gone
   fn stats(&self) -> TerminalStats;                                             // per-session bytes, lines, inflight
 }
 pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // false = channel closed → auto-detach
@@ -442,7 +446,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `session_list` | `{project_id?}` | `Vec<SessionInfo>` | |
 | `session_mark_seen` | `{id}` | `()` | |
 | `session_link` | `{id, work_item_id?: WorkItemId, ticket?: TicketRef}` | `SessionInfo` | |
-| `session_text_tail` | `{id, max_lines}` | `String` | |
+| `session_text_tail` | `{id, max_lines}` | `String` | Dormant: on-disk history log first (§9.6), else the tail stored at quit |
+| `session_history_search` | `{project_id, session_id?, query, limit}` | `Vec<HistoryHit{session_id, line}>` | on-disk history log (§9.6) of one session or every session of the project; case-insensitive substring |
 | `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
 | **tickets** | | | `commands/tracker.rs` (L3) |
 | `tracker_list` | `{scope, view_id?, cursor?: Cursor, refresh: bool}` | `TicketPage{items: Vec<TicketItem{ticket, project_ids, work_item_id?}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
@@ -711,6 +716,13 @@ Alt-screen state with main scrollback (`?1049`), last N history lines (`terminal
 
 ### 9.5 Memory budget for scrollback (L1)
 Scrollback per kind (`terminal.scrollback`: shell 3000, claude 3000, editor 500, tool 500, setup 1000). Global cap `terminal.memory_cap_mb` (default 160): computed from `history_lines × cols × 24 B` per session, updated on line growth (counter, event-driven). On exceed: shrink history of least-recently-viewed sessions to 500 lines (never below), oldest first; the host emits `TerminalEvent::MemoryCapReached` once and core raises a warning toast. Snapshots carry `terminal.view_scrollback` history lines (`TerminalLimits.view_scrollback`).
+
+### 9.6 On-disk history log (L1)
+Output older than the in-memory scrollback stays searchable and restorable without RAM growth (`terminal.history_log`, default on).
+- **Capture:** the model's `Handler` wrapper copies screen rows as plain text (ANSI stripped, wrapped rows joined, trailing blanks trimmed) just before alacritty rotates them into the primary history: linefeed/auto-wrap at the bottom of a top-anchored scroll region, `CSI S`, delete-lines at row 0, `ED 2`. The alternate screen and regions below the top never reach history and are not logged. At reader exit the remaining screen rows are appended. Not captured: rows pushed into history by a resize reflow.
+- **Write path:** the reader appends to a per-session buffer under the session lock and hands it to one `kelta-history` writer thread (`try_send` on a bounded queue) past 64 KiB, when its `poll` goes idle, and at exit (exit waits for the write so quit cannot lose it). No timer. A full queue keeps the text for the next flush up to 1 MiB, then drops it behind a `[kelta: … not saved]` marker line.
+- **Files:** `<data>/history/<id>.log` rotates to `<id>.1.log` past half of `terminal.history_log_mb` (default 16); past `terminal.history_log_total_mb` (default 512) the oldest files (mtime) are deleted. Session ids that are not `[A-Za-z0-9_-]{1,128}` get no file. A crash can only cut the last line; the first append after a start terminates it, readers treat it as a line.
+- **Read path:** `history_tail` (Dormant `session_text_tail`; a respawn under the same id first feeds the last `view_scrollback` lines into the new model's scrollback above a cleared screen, before logging starts), `history_search` (case-insensitive substring, newest `limit` per session; buffered lines are flushed first, the visible screen is not searched). Both run on the writer thread, after pending writes. `history_delete` runs when core deletes the session row (close, quit without restore, startup prune).
 
 ---
 
