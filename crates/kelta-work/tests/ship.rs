@@ -190,15 +190,16 @@ async fn ambiguous_done_is_never_auto_picked() {
 }
 
 #[tokio::test]
-async fn finish_merged_finishes_clean_items_and_skips_dirty_ones() {
+async fn finish_merged_finishes_listed_clean_items_and_skips_dirty_ones() {
     need_git!();
     let fx = Fx::new();
     let w = fx.service();
     w.ensure_listener();
     let clean = started(&fx, &w, "SHOP-141").await;
     let dirty = started(&fx, &w, "SHOP-143").await;
-    let active = started(&fx, &w, "SHOP-142").await;
-    for (it, n) in [(&clean, 94), (&dirty, 95)] {
+    // Merged but not listed by the dialog (merged while it was open): left alone.
+    let unlisted = started(&fx, &w, "SHOP-142").await;
+    for (it, n) in [(&clean, 94), (&dirty, 95), (&unlisted, 96)] {
         commit(it, "a.txt");
         git(&it.worktree, &["push", "-q", "-u", "origin", &it.branch]);
         let review = with_pr(&fx, it, n).await;
@@ -207,14 +208,17 @@ async fn finish_merged_finishes_clean_items_and_skips_dirty_ones() {
     }
     std::fs::write(dirty.worktree.join("wip.txt"), "wip\n").unwrap();
 
-    let report = w.finish_merged().await.unwrap();
+    let report = w.finish_merged(&[clean.id.clone(), dirty.id.clone()]).await.unwrap();
     assert_eq!(report.finished.iter().map(|w| &w.id).collect::<Vec<_>>(), vec![&clean.id]);
     assert_eq!(report.skipped.len(), 1);
     assert_eq!(report.skipped[0].id, dirty.id);
     assert!(report.skipped[0].reason.contains("uncommitted"), "{:?}", report.skipped);
-    assert!(!clean.worktree.exists() && dirty.worktree.exists() && active.worktree.exists());
+    assert!(!clean.worktree.exists() && dirty.worktree.exists() && unlisted.worktree.exists());
     assert!(git(&fx.repo, &["branch", "--list", &clean.branch]).is_empty(), "merged branch deleted");
-    for (it, want) in [(&dirty, WorkState::Merged { detail: None }), (&active, WorkState::Active)] {
-        assert_eq!(fx.store.get_item(&it.id).await.unwrap().unwrap().state, want);
+    for it in [&dirty, &unlisted] {
+        assert_eq!(
+            fx.store.get_item(&it.id).await.unwrap().unwrap().state,
+            WorkState::Merged { detail: None }
+        );
     }
 }

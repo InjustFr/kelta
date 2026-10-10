@@ -193,7 +193,7 @@ export interface Commands {
   /** Title, body and draft flag Ship would use (prefills the Ship dialog). */
   work_pr_draft: { args: { id: WorkItemId }; result: PrDraft };
   /** Finishes merged items with clean worktrees; the rest come back as skipped. */
-  work_finish_merged: { args: NoArgs; result: FinishMergedReport };
+  work_finish_merged: { args: { ids: WorkItemId[] }; result: FinishMergedReport };
   /** Startup / Now open: one host check per work-item PR missing from the open list. */
   work_check_prs: { args: NoArgs; result: null };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };

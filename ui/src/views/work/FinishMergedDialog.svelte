@@ -10,7 +10,7 @@
 
   // "Finish all merged" (FLOW §4.6): the only bulk destructive action. Lists merged items with a
   // clean worktree; dirty ones and those waiting for a Done choice are listed as skipped. The
-  // backend re-checks every item and skips anything that changed since.
+  // backend finishes only the listed ids and re-checks each one.
 
   interface Props {
     onclose: () => void;
@@ -50,10 +50,11 @@
     if (busy || ready.length === 0) return;
     busy = true;
     try {
-      const report = await workFinishMerged({});
+      const report = await workFinishMerged({ ids: ready.map((r) => r.item.id) });
       for (const w of report.finished) work.upsert(w);
       const n = report.finished.length;
-      const more = report.skipped.length ? `, ${report.skipped.length} skipped` : '';
+      const k = skipped.length + report.skipped.length;
+      const more = k ? `, ${k} skipped` : '';
       toasts.info(`Finished ${n} merged work item${n === 1 ? '' : 's'}${more}`);
       onclose();
     } catch (err) {
@@ -95,7 +96,7 @@
   </div>
   {#snippet actions()}
     <Button variant="ghost" onclick={onclose}>Cancel</Button>
-    <Button variant="danger" loading={busy} disabled={ready.length === 0} onclick={() => void finish()}>
+    <Button variant="primary" loading={busy} disabled={ready.length === 0} onclick={() => void finish()}>
       Finish {ready.length}
     </Button>
   {/snippet}

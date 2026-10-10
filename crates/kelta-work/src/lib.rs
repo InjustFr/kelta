@@ -190,10 +190,10 @@ impl WorkService {
         self.finish_impl(id, opts).await
     }
 
-    /// `work_finish_merged`: finish every merged item whose worktree is clean and whose ticket
-    /// needs no Done choice; the rest are skipped with a reason.
-    pub async fn finish_merged(&self) -> Result<FinishMergedReport, KeltaError> {
-        self.finish_merged_impl().await
+    /// `work_finish_merged`: finish the listed items that are still merged, clean and need no
+    /// Done choice; the rest are skipped with a reason.
+    pub async fn finish_merged(&self, ids: &[WorkItemId]) -> Result<FinishMergedReport, KeltaError> {
+        self.finish_merged_impl(ids).await
     }
 
     /// Branch join (FLOW §3.1): an open PR found for this item's branch becomes its PR

@@ -206,6 +206,7 @@ describe('mock transport', () => {
       work_create_pr: { id: work.id, draft: { title: null, body: null, draft: null } },
       work_status: { id: work.id },
       work_pr_draft: { id: work.id },
+      work_finish_merged: { ids: [] },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },
       editor_send_selection: { editor_session: s.sessions[1]!.id, claude_session: session.id },
       tool_list: { project_id: 'shop' },

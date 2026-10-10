@@ -666,24 +666,37 @@ impl WorkService {
         Ok(item)
     }
 
-    pub(crate) async fn finish_merged_impl(&self) -> Result<FinishMergedReport, KeltaError> {
+    pub(crate) async fn finish_merged_impl(
+        &self,
+        ids: &[WorkItemId],
+    ) -> Result<FinishMergedReport, KeltaError> {
         let mut report = FinishMergedReport::default();
-        let merged = self
-            .store
-            .list_items(None)
-            .await?
-            .into_iter()
-            .filter(|w| matches!(w.state, WorkState::Merged { .. }));
-        for item in merged {
-            if let WorkState::Merged { detail: Some(why) } = &item.state {
-                report.skipped.push(SkippedItem { id: item.id.clone(), reason: why.clone() });
-                continue;
+        // Only the ids the dialog listed: one confirmation finishes exactly what it showed.
+        for id in ids {
+            let skip = |reason: String| SkippedItem { id: id.clone(), reason };
+            let item = match self.load(id).await {
+                Ok(item) => item,
+                Err(e) => {
+                    report.skipped.push(skip(e.message));
+                    continue;
+                }
+            };
+            match &item.state {
+                WorkState::Merged { detail: None } => {}
+                WorkState::Merged { detail: Some(why) } => {
+                    report.skipped.push(skip(why.clone()));
+                    continue;
+                }
+                _ => {
+                    report.skipped.push(skip("no longer merged".into()));
+                    continue;
+                }
             }
             let opts =
                 FinishOpts { remove_worktree: true, delete_branch: true, force: false, transition_to: None };
-            match self.finish_impl(&item.id, opts).await {
+            match self.finish_impl(id, opts).await {
                 Ok(done) => report.finished.push(done),
-                Err(e) => report.skipped.push(SkippedItem { id: item.id.clone(), reason: e.message }),
+                Err(e) => report.skipped.push(skip(e.message)),
             }
         }
         Ok(report)

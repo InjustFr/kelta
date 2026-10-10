@@ -53,8 +53,8 @@ pub async fn work_pr_draft(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<Pr
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn work_finish_merged(core: State<'_, Arc<Core>>) -> Res<FinishMergedReport> {
-    core.work().finish_merged().await
+pub async fn work_finish_merged(core: State<'_, Arc<Core>>, ids: Vec<WorkItemId>) -> Res<FinishMergedReport> {
+    core.work().finish_merged(&ids).await
 }
 
 /// Missed merges / closes of work-item PRs (Now open; also run on startup).

@@ -163,5 +163,9 @@ describe('Finish', () => {
     );
     expect(work.get(mock.state.work[4]!.id)?.state.kind).toBe('finished');
     expect(work.get(mock.state.work[5]!.id)?.state.kind).toBe('merged');
+    // Exactly the listed items: the backend never finishes one the dialog did not show.
+    expect(mock.calls.find((c) => c.cmd === 'work_finish_merged')?.args).toEqual({
+      ids: [mock.state.work[4]!.id],
+    });
   });
 });

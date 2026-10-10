@@ -906,9 +906,9 @@ export function createMockTransport(options: MockOptions = {}): {
         draft: pr?.draft ?? false,
       };
     },
-    work_finish_merged: () => {
+    work_finish_merged: ({ ids }) => {
       const report: FinishMergedReport = { finished: [], skipped: [] };
-      for (const w of state.work.filter((x) => x.state.kind === 'merged')) {
+      for (const w of state.work.filter((x) => x.state.kind === 'merged' && ids.includes(x.id))) {
         const why = w.state.kind === 'merged' ? w.state.detail : null;
         if (why || dirtyWork(w)) {
           report.skipped.push({ id: w.id, reason: why ?? `${w.worktree} has uncommitted changes` });
