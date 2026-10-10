@@ -21,6 +21,7 @@
   "label": "Sapling ISL",
   "lifecycle": "on_close",
   "placement": "split_right",
+  "scope": "work",
   "scrollback": null,
   "start": {
     "args": [

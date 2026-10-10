@@ -1,8 +1,8 @@
 # Tools
 
 A tool is a button that opens a program in Kelta: a terminal program like lazygit in its own pane, or an app
-like Fork beside Kelta. Tools show in the tool strip at the right of the tab bar, in the `+` menu, and in the
-palette ("Open tool: lazygit").
+like Fork beside Kelta. Tools show in the Tools section of the sidebar (`Cmd+Alt+1..9` on macOS opens the
+first nine), in the `+` menu, and in the palette ("Open tool: lazygit").
 
 ## Add one in Settings
 
@@ -33,6 +33,7 @@ with a copy of each project file in `projects/.trash/`).
 id = "lazydocker"
 label = "lazydocker"
 command = "lazydocker"
+scope = "user"                  # one for you, as its own tab in Home, wherever you open it
 
 [[tools]]
 id = "lazygit"
@@ -79,7 +80,11 @@ covered in [Sapling ISL](sapling-isl.md).
 
 ## Opening a tool that is already running
 
-A terminal tool runs once per work item: clicking its button (or pressing its key) while it runs in the
-current work item focuses that pane instead of opening a second copy, and the button shows as pressed. In
-another work item it opens a new one there. When the program is not installed, the pane says so with its
+`scope` says how many copies a terminal tool has. By default (`work`) it runs once per work item, in a pane
+next to the current one: clicking its row in the sidebar (or pressing its key) while it runs in the current
+work item focuses that pane instead of opening a second copy, and in another work item it opens a new one
+there. `project` runs it once per project, as its own tab. `user` runs it once for you, as its own tab in Home,
+from wherever you open it (Settings > Tools: **One instance**). Each running copy is a line under the tool in
+the sidebar that goes to its pane. Pressing the tool's key again while it is in front takes you back where you
+were, Now included; a tool that takes a project asks for another project instead. When the program is not installed, the pane says so with its
 install hint and a **Check again** button; Settings > Tools > **Check** runs the same check.

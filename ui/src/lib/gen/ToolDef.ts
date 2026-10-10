@@ -3,6 +3,7 @@ import type { CloseOnExit } from "./CloseOnExit";
 import type { EmbedMode } from "./EmbedMode";
 import type { Placement } from "./Placement";
 import type { ToolKind } from "./ToolKind";
+import type { ToolScope } from "./ToolScope";
 import type { WebLifecycle } from "./WebLifecycle";
 import type { WebStart } from "./WebStart";
 
@@ -26,4 +27,8 @@ url_is_secret: boolean | null, lifecycle: WebLifecycle,
 /**
  * `None` = `web.keep_alive`.
  */
-keep_alive: boolean | null, check: Array<string> | null, install_hint: string | null, placement: Placement, keybinding: string | null, autostart: boolean, enabled: boolean, };
+keep_alive: boolean | null, check: Array<string> | null, install_hint: string | null, placement: Placement, 
+/**
+ * How many instances the tool has; sets where it opens and what a second open focuses.
+ */
+scope: ToolScope, keybinding: string | null, autostart: boolean, enabled: boolean, };

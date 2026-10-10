@@ -466,7 +466,8 @@
             {#each toolList as t, i (t.id)}
               {@const launchOnly = t.kind !== 'pty'}
               {@const lvl = launchOnly ? 'none' : toolLamp(t.id)}
-              {@const instances = toolInstances(t.id)}
+              <!-- A `user` tool has one instance: its row is the way to it. -->
+              {@const instances = t.scope === 'user' ? [] : toolInstances(t.id)}
               <li class="row">
                 <button
                   type="button"

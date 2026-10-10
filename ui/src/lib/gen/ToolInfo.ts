@@ -2,6 +2,7 @@
 import type { Placement } from "./Placement";
 import type { ToolId } from "./ToolId";
 import type { ToolKind } from "./ToolKind";
+import type { ToolScope } from "./ToolScope";
 import type { ToolSource } from "./ToolSource";
 
 export type ToolInfo = { id: ToolId, label: string, icon: string | null, kind: ToolKind, 
@@ -12,4 +13,4 @@ installed: boolean | null, source: ToolSource, keybinding: string | null, descri
 /**
  * A template uses `{project.*}` or `{repo.*}`: opening it needs a real project (not Home).
  */
-needs_project: boolean, };
+needs_project: boolean, scope: ToolScope, };

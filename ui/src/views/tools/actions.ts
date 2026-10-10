@@ -4,7 +4,7 @@
 // with no project argument goes back (`nav.back`), one that takes a project asks for another project.
 // `tool.goto.N` opens tool N of the rail's Tools section.
 
-import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, WorkItemId } from '$lib/gen';
+import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, ToolScope, WorkItemId } from '$lib/gen';
 import { dispatch, registerAction } from '$lib/actions';
 import { findSession, focusPane, type PaneLocation } from '$lib/layout';
 import { toolCheck, toolOpen } from '$lib/ipc/commands';
@@ -25,29 +25,35 @@ export const EMPTY_CTX: TemplateCtx = {
 };
 
 /**
- * Opens a tool with its placement; the backend opens the pane (PTY session or web pane). A running
- * PTY instance of the same work item (`ctx.work_item_id`) gets focus instead of a second copy (web
- * tools reopen). Returns true when opened or focused, the failed check when the open failed because
- * the binary is missing, false otherwise (toasted). Checks only after a failed open.
+ * Opens a tool in its host per its `scope`: `work` (default) at its placement in `projectId`, one
+ * instance per work item (`ctx.work_item_id`); `project` as its own tab, one per project; `user` as
+ * its own tab in Home, one for the app. A running PTY instance gets focus instead of a second copy
+ * (web tools reopen). Activates the host first. Returns true when opened or focused, the failed
+ * check when the open failed because the binary is missing, false otherwise (toasted). Checks only
+ * after a failed open.
  */
 export async function openTool(
   projectId: ProjectId,
-  tool: Pick<ToolInfo, 'id' | 'label'> & { placement?: Placement },
+  tool: Pick<ToolInfo, 'id' | 'label'> & { placement?: Placement; scope?: ToolScope },
   ctx: Partial<TemplateCtx>,
 ): Promise<true | false | ToolCheck> {
-  const at = liveToolPane(projectId, tool.id, ctx.work_item_id ?? null);
+  const scope = tool.scope ?? 'work';
+  const host = scope === 'user' ? (projects.home?.id ?? 'home') : projectId;
+  const workItem = scope === 'work' ? (ctx.work_item_id ?? null) : null;
+  await activateProject(host);
+  const at = liveToolPane(host, tool.id, workItem, scope);
   if (at) {
-    layout.update(projectId, (l) => focusPane(l, at.tabId, at.paneId));
+    layout.update(host, (l) => focusPane(l, at.tabId, at.paneId));
     return true;
   }
   try {
     const handle = await toolOpen({
-      project_id: projectId,
+      project_id: host,
       tool_id: tool.id,
-      ctx: { ...EMPTY_CTX, ...ctx },
-      placement: tool.placement ?? 'split_right',
+      ctx: { ...EMPTY_CTX, ...ctx, work_item_id: workItem },
+      placement: scope === 'work' ? (tool.placement ?? 'split_right') : 'new_tab',
     });
-    rememberWebTool(handle, { toolId: tool.id, label: tool.label, projectId });
+    rememberWebTool(handle, { toolId: tool.id, label: tool.label, projectId: host });
     return true;
   } catch (e) {
     const check = await toolCheck({ tool_id: tool.id }).catch(() => null);
@@ -57,11 +63,15 @@ export async function openTool(
   }
 }
 
-/** The live PTY instance of `toolId` in this work item (`null` = no work item), if shown. */
+/**
+ * The live PTY instance of `toolId` in `projectId`, if shown: of this work item (`null` = none) for a
+ * `work` tool, any for a `project` or `user` one (the caller passes Home for `user`).
+ */
 export function liveToolPane(
   projectId: ProjectId,
   toolId: string,
   workItemId: WorkItemId | null,
+  scope: ToolScope = 'work',
 ): PaneLocation | null {
   const live = sessions
     .forProject(projectId)
@@ -70,7 +80,7 @@ export function liveToolPane(
         s.kind.type === 'tool' &&
         s.kind.tool_id === toolId &&
         s.lifecycle === 'live' &&
-        (s.work_item_id ?? null) === workItemId,
+        (scope !== 'work' || (s.work_item_id ?? null) === workItemId),
     );
   const l = layout.get(projectId);
   return live && l ? findSession(l, live.id) : null;
@@ -85,20 +95,24 @@ registerAction('tools.open', async (args) => {
   const home = projects.home?.id ?? 'home';
   // A global view (Tickets, Now, Reviews) hides the active project: the tool opens in Home there.
   const here = ui.view === null && projects.activeId !== home ? projects.activeId : null;
-  const info = tools.list(projects.activeId).find((t) => t.id === toolId);
+  const info = tools.list(projects.activeId).find((t) => t.id === toolId) ?? tools.find(toolId);
   const tool = info ?? { id: toolId, label: toolId };
-  let projectId = here ?? home;
+  const scope = info?.scope ?? 'work';
+  // The host, decided before anything switches: Home for a `user` tool, else where you are.
+  let projectId = scope === 'user' ? home : (here ?? home);
   let workItem = here ? focusedWorkItem() : null;
   // In front: the pane this open would focus is the focused one.
   const ctxItem = (args?.ctx as Partial<TemplateCtx> | undefined)?.work_item_id;
-  const at = ui.view === null ? liveToolPane(projectId, toolId, ctxItem ?? workItem) : null;
+  const at = ui.view === null ? liveToolPane(projectId, toolId, ctxItem ?? workItem, scope) : null;
   const inFront = at !== null && projects.activeId === projectId && focusedPane()?.id === at.paneId;
-  if (inFront && !info?.needs_project && args?.pick_project !== true) {
+  const takesProject = scope !== 'user' && !!info?.needs_project;
+  if (inFront && !takesProject && args?.pick_project !== true) {
     navStep(-1);
     return;
   }
   flushJump(); // the place this open leaves is a stop on the way back
-  if (args?.pick_project === true || (info?.needs_project && (!here || inFront))) {
+  const wantsProject = takesProject || scope === 'project';
+  if (args?.pick_project === true || (wantsProject && (!here || inFront))) {
     const picked = await ui.pickProject(`Open ${tool.label} for project…`);
     if (!picked) return;
     try {
@@ -110,7 +124,6 @@ registerAction('tools.open', async (args) => {
     projectId = picked;
     workItem = null;
   }
-  await activateProject(projectId);
   const ctx = { work_item_id: workItem, ...(args?.ctx as Partial<TemplateCtx>) };
   const r = await openTool(projectId, tool, ctx);
   // A missing binary opens the picker on that tool with its install hint and "Check again".

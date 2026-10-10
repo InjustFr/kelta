@@ -1,14 +1,16 @@
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
+import type { ToolScope } from '$lib/gen';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { activeTab } from '$lib/layout';
 import { layout, projects, sessions, tools, ui } from '$lib/stores';
 
-import { noteFocus } from '../../shell/jumplist';
-import { currentTab, focusedPane, paneTool } from '../../shell/nav';
+import { jumplist, noteFocus } from '../../shell/jumplist';
+import NewSessionSheet from '../../shell/NewSessionSheet.svelte';
+import { activateProject, currentTab, focusedPane, isToolTab, paneTool, selectTab } from '../../shell/nav';
 import './actions';
 import ToolPicker from './ToolPicker.svelte';
 
@@ -222,5 +224,94 @@ describe('tools.open', () => {
     await done;
     expect(opens()).toHaveLength(2);
     expect(opens()[1].args).toMatchObject({ project_id: 'billing', ctx: { work_item_id: null } });
+  });
+});
+
+describe('tool scope', () => {
+  /** Shop active on a W1 tab, no tool instance yet, the pty tool set to `scope`. */
+  async function scoped(scope: ToolScope) {
+    const m = createMockTransport();
+    setTransport(m.transport);
+    const c = m.controls;
+    ui.view = null;
+    layout.byProject = {};
+    tools.byProject = {};
+    c.state.sessions = c.state.sessions.filter((s) => s.kind.type !== 'tool');
+    activeTab(c.state.layouts.shop)!.work_item_id = 'W1';
+    const id = c.state.tools.find((t) => t.kind === 'pty')!.id;
+    c.state.tools.find((t) => t.id === id)!.scope = scope;
+    await projects.load();
+    await sessions.load();
+    await Promise.all([layout.ensure('shop'), layout.ensure('home'), tools.load('shop')]);
+    const open = async (args: object = {}) => {
+      await dispatch('tools.open', { tool_id: id, ...args });
+      await Promise.all([
+        sessions.load(),
+        layout.load('shop'),
+        layout.load('home'),
+        layout.ensure('billing'),
+      ]);
+    };
+    const opens = () => c.calls.filter((x) => x.cmd === 'tool_open');
+    return { id, open, opens };
+  }
+
+  it('user: one Home tab from a project, a work item or a global view; another open only focuses it', async () => {
+    const { open, opens } = await scoped('user');
+    await open();
+    expect(opens()).toHaveLength(1);
+    expect(opens()[0].args).toMatchObject({
+      project_id: 'home',
+      placement: 'new_tab',
+      ctx: { work_item_id: null },
+    });
+    expect(projects.activeId).toBe('home');
+    const tab = currentTab()!;
+    expect(isToolTab(tab)).toBe(true);
+
+    await activateProject('shop');
+    await open();
+    ui.view = 'now';
+    await open();
+    expect(opens()).toHaveLength(1);
+    expect([ui.view, projects.activeId, currentTab()!.id]).toEqual([null, 'home', tab.id]);
+  });
+
+  it('a Home tool tab makes New session default to the project last shown, not Home', async () => {
+    const { open } = await scoped('user');
+    jumplist.list = [{ project: 'shop', tab: 'shop-t1', pane: 'shop-p1' }];
+    jumplist.at = 0;
+    await open();
+    render(NewSessionSheet, { onclose: () => {} });
+    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('shop');
+  });
+
+  it('project: one instance per project as its own tab, whatever the work item', async () => {
+    const { open, opens } = await scoped('project');
+    await open();
+    expect(opens()[0].args).toMatchObject({
+      project_id: 'shop',
+      placement: 'new_tab',
+      ctx: { work_item_id: null },
+    });
+    selectTab('shop', 'shop-t1');
+    await open({ ctx: { work_item_id: 'W2' } });
+    expect(opens()).toHaveLength(1);
+    expect(isToolTab(currentTab()!)).toBe(true);
+
+    await activateProject('billing');
+    await open();
+    expect(opens()).toHaveLength(2);
+    expect(opens()[1].args).toMatchObject({ project_id: 'billing' });
+  });
+
+  it('project: from Home or a global view it asks which project', async () => {
+    const { open, opens } = await scoped('project');
+    ui.view = 'reviews';
+    const done = open();
+    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+    ui.resolvePick('billing');
+    await done;
+    expect(opens()[0].args).toMatchObject({ project_id: 'billing', placement: 'new_tab' });
   });
 });

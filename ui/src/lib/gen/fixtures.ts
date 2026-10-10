@@ -1486,6 +1486,7 @@ export const toolInfos: ToolInfo[] = [
     "label": "Docker",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "user",
     "source": {
       "kind": "layer",
       "layer": "global"
@@ -1501,6 +1502,7 @@ export const toolInfos: ToolInfo[] = [
     "label": "Kubernetes",
     "needs_project": false,
     "placement": "split_right",
+    "scope": "work",
     "source": {
       "kind": "plugin",
       "plugin_id": "tools-pack"
@@ -2433,6 +2435,7 @@ export const toolDef: ToolDef = {
   "label": "Sapling ISL",
   "lifecycle": "on_close",
   "placement": "split_right",
+  "scope": "work",
   "scrollback": null,
   "start": {
     "args": [

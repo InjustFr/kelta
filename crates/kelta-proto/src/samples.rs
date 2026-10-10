@@ -1040,6 +1040,7 @@ pub fn all() -> Vec<Fixture> {
                     description: None,
                     placement: Placement::SplitRight,
                     needs_project: false,
+                    scope: ToolScope::User,
                 },
                 ToolInfo {
                     id: ToolId::new("tools-pack/k9s"),
@@ -1052,6 +1053,7 @@ pub fn all() -> Vec<Fixture> {
                     description: None,
                     placement: Placement::SplitRight,
                     needs_project: false,
+                    scope: ToolScope::Work,
                 },
             ]
         ),

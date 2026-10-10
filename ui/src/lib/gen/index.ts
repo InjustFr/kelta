@@ -246,6 +246,7 @@ export type * from './ToolId';
 export type * from './ToolInfo';
 export type * from './ToolInstanceId';
 export type * from './ToolKind';
+export type * from './ToolScope';
 export type * from './ToolSource';
 export type * from './ToolVersion';
 export type * from './TrackerBinding';
