@@ -43,7 +43,7 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'A', 'c', 'y', 'o']);
+    ).toEqual(['s', 'm', 'p', 'a', 'Shift+A', 'c', 'y', 'o']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
@@ -55,6 +55,16 @@ describe('TicketDetail', () => {
     expect(await screen.findByText(/Mock body rendered/)).toBeTruthy();
     expect(screen.getByText('Can we keep the existing behaviour behind a flag?')).toBeTruthy();
     expect(screen.getByLabelText(/Add a comment/)).toBeTruthy();
+  });
+
+  it('drops a half-written comment when the item changes under it (split view)', async () => {
+    const { rerender } = render(TicketDetail, {
+      props: { item: itemOf('SHOP-142'), projectId: 'shop', embedded: true },
+    });
+    const box = () => screen.getByLabelText(/Add a comment/) as HTMLTextAreaElement;
+    await fireEvent.input(box(), { target: { value: 'draft for SHOP-142' } });
+    await rerender({ item: itemOf('SHOP-120'), projectId: 'shop', embedded: true });
+    await waitFor(() => expect(box().value).toBe(''));
   });
 
   it('marks a past due date as overdue', () => {

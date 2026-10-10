@@ -24,7 +24,8 @@ export function blockedReason(action: TicketAction, item: TicketItem, branch: st
       return item.prs.length > 0 ? null : 'No pull request is linked to this ticket yet.';
     case 'assign':
     case 'unassign':
-      return item.caps.assign ? null : 'This tracker does not let Kelta change the assignee.';
+      if (!item.caps.assign) return 'This tracker does not let Kelta change the assignee.';
+      return action === 'unassign' && !item.ticket.assignee ? 'Nobody is assigned.' : null;
     case 'comment':
       return item.caps.comment ? null : 'This tracker does not let Kelta add comments.';
     case 'branch':

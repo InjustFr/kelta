@@ -83,8 +83,8 @@
         break;
       case 'Enter':
       case ' ':
-        // Nothing highlighted yet: Enter runs the first item (the work menu's primary action).
-        choose(active >= 0 ? active : e.key === 'Enter' ? 0 : -1);
+        // Nothing highlighted (or a filter shrank the list under it): Enter runs the first item.
+        choose(items[active] ? active : e.key === 'Enter' ? 0 : -1);
         break;
       case 'Escape':
         onclose();

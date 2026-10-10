@@ -43,4 +43,10 @@ describe('blockedReason', () => {
     expect(blockedReason('branch', item, null)).toMatch(/Start work first/);
     expect(blockedReason('move', item, null)).toBeNull();
   });
+
+  it('will not unassign a ticket nobody is assigned to', () => {
+    const item = { ...base, ticket: { ...base.ticket, assignee: null } };
+    expect(blockedReason('unassign', item, null)).toBe('Nobody is assigned.');
+    expect(blockedReason('assign', item, null)).toBeNull();
+  });
 });

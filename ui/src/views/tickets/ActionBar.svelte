@@ -48,7 +48,7 @@
       variant={a.id === 'start' ? 'primary' : 'ghost'}
       class={a.reason ? 'off' : ''}
       aria-label={a.label}
-      aria-keyshortcuts={a.key}
+      aria-keyshortcuts={a.key === 'A' ? 'Shift+A' : a.key}
       aria-disabled={a.reason ? 'true' : undefined}
       title={a.reason ?? `${a.label} (${a.key})`}
       data-action={a.id}

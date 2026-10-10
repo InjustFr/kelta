@@ -43,7 +43,12 @@ export class MoveController {
   }
 
   /** "Move to…" from the detail: applies one transition (shows the form when fields are needed). */
-  async moveViaTransition(ticket: Ticket, transition: Transition, fields?: JsonValue): Promise<boolean> {
+  async moveViaTransition(
+    ticket: Ticket,
+    transition: Transition,
+    fields?: JsonValue,
+    quiet = false,
+  ): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     try {
@@ -55,7 +60,7 @@ export class MoveController {
       tickets.patch(updated);
       void tickets.loadTransitions(ticket.ref); // the legal moves changed with the status
       this.dialog = null;
-      toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
+      if (!quiet) toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
       return true;
     } catch (err) {
       await this.#handle(err, ticket, transition.to.name, transition.to.category, transition);
@@ -72,8 +77,10 @@ export class MoveController {
    */
   async moveAll(moves: { ticket: Ticket; transition: Transition }[]): Promise<void> {
     let done = 0;
+    // A bulk move toasts once at the end, not per ticket.
+    const quiet = moves.length > 1;
     for (const m of moves) {
-      if (!(await this.moveViaTransition(m.ticket, m.transition))) break;
+      if (!(await this.moveViaTransition(m.ticket, m.transition, undefined, quiet))) break;
       done++;
     }
     const to = moves[0]?.transition.to.name;

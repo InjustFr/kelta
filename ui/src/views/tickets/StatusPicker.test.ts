@@ -6,6 +6,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { tickets, toasts } from '$lib/stores';
 
+import { MoveController } from './move.svelte';
 import StatusPicker from './StatusPicker.svelte';
 
 let mock: MockControls;
@@ -91,6 +92,50 @@ describe('StatusPicker', () => {
         url: ticket('SHOP-151').url,
       }),
     );
+  });
+
+  it('keeps the filter focused when the transitions fail after the menu opened', async () => {
+    mock.failNext('tracker_transitions', { code: 'upstream', message: 'Jira is down for maintenance' });
+    const onclose = mount([ticket('SHOP-151')]);
+    await waitFor(() => expect(document.activeElement).toBe(filter()));
+    expect(await screen.findByText('Jira is down for maintenance')).toBeTruthy();
+    expect(document.activeElement).toBe(filter());
+    await fireEvent.keyDown(filter(), { key: 'Escape' });
+    expect(onclose).toHaveBeenCalled();
+  });
+
+  it('Enter picks the first match even after the arrows moved past the filtered list', async () => {
+    mount([ticket('SHOP-151')]);
+    await labels();
+    await fireEvent.keyDown(filter(), { key: 'ArrowDown' });
+    await fireEvent.keyDown(filter(), { key: 'ArrowDown' });
+    await fireEvent.keyDown(filter(), { key: 'ArrowDown' });
+    await fireEvent.input(filter(), { target: { value: 'blk' } });
+    expect(await labels()).toEqual(['Blocked 1']);
+    await fireEvent.keyDown(filter(), { key: 'Enter' });
+    await waitFor(() =>
+      expect(transitionCalls().at(-1)?.args).toMatchObject({ transition_id: 'to-blocked' }),
+    );
+  });
+
+  it('a bulk move toasts once, and says how many moved when one fails', async () => {
+    const done = {
+      id: 'to-done',
+      name: 'Done',
+      to: { id: 'done', name: 'Done', category: 'done' },
+      needs_fields: false,
+    } as const;
+    const move = new MoveController();
+    await move.moveAll([
+      { ticket: ticket('#12'), transition: done },
+      { ticket: ticket('4567'), transition: done }, // Redmine refuses
+      { ticket: ticket('SHOP-155'), transition: done },
+    ]);
+    expect(transitionCalls()).toHaveLength(2);
+    expect(toasts.list.map((t) => t.toast.text)).toEqual([
+      'Moving 4567 failed: Redmine: status transition not allowed (422)',
+      'Moved 1 of 3 tickets to Done',
+    ]);
   });
 
   it('a refused move toasts the tracker message with Open in browser', async () => {

@@ -107,38 +107,37 @@
           >
         {/each}
       </p>
+      <!-- Always drawn: an error arriving after open must not pull focus out of the menu. -->
+      <input
+        bind:this={input}
+        bind:value={query}
+        class="filter"
+        placeholder="Filter statuses"
+        aria-label="Filter statuses"
+        spellcheck="false"
+        autocomplete="off"
+        onkeydown={filterKey}
+      />
       {#if error}
         <div class="none">
           <p>{error}</p>
           <Button size="sm" variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
         </div>
-      {:else}
-        <input
-          bind:this={input}
-          bind:value={query}
-          class="filter"
-          placeholder="Filter statuses"
-          aria-label="Filter statuses"
-          spellcheck="false"
-          autocomplete="off"
-          onkeydown={filterKey}
-        />
-        {#if shown.length === 0}
-          <div class="none">
-            {#if !transitions}
-              <p>Loading…</p>
-            {:else if moves.length > 0}
-              <p>No status matches "{query}".</p>
-            {:else}
-              <p>
-                {all.length > 1
-                  ? 'These tickets have no status in common to move to.'
-                  : `No move available from ${ticket.status.name}.`}
-              </p>
-              <Button size="sm" variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
-            {/if}
-          </div>
-        {/if}
+      {:else if shown.length === 0}
+        <div class="none">
+          {#if !transitions}
+            <p>Loading…</p>
+          {:else if moves.length > 0}
+            <p>No status matches "{query}".</p>
+          {:else}
+            <p>
+              {all.length > 1
+                ? 'These tickets have no status in common to move to.'
+                : `No move available from ${ticket.status.name}.`}
+            </p>
+            <Button size="sm" variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          {/if}
+        </div>
       {/if}
     {/snippet}
   </Menu>

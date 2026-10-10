@@ -30,21 +30,12 @@
 
   const ticket = $derived(item.ticket);
   const ref = $derived(ticket.ref);
-  const slot = $derived(tickets.details[ticketKey(ref)]);
+  const key = $derived(ticketKey(ref));
+  const slot = $derived(tickets.details[key]);
   const detail = $derived(slot?.data ?? null);
   const project = $derived(projectId ?? item.project_ids[0] ?? projects.activeId);
   const workItem = $derived(work.forTicket(ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null));
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
-
-  $effect(() => {
-    const r = ref;
-    untrack(() => {
-      // The standalone pane has just loaded it: no second `tracker_get` on mount.
-      const s = tickets.details[ticketKey(r)];
-      if (!s?.loading && Date.now() - (s?.fetchedAt ?? 0) > 2000) void tickets.loadDetail(r);
-      ensureReviews();
-    });
-  });
 
   let root = $state<HTMLDivElement>();
   let statusBtn = $state<HTMLElement>();
@@ -53,6 +44,21 @@
   let prMenu = $state<{ x: number; y: number; browser: boolean } | null>(null);
   let comment = $state('');
   let posting = $state(false);
+
+  // Keyed on the ticket key, not the `ref` object: list refreshes and patches make new objects.
+  $effect(() => {
+    const k = key;
+    untrack(() => {
+      // A reused instance (split view following the selection) must not carry a draft across.
+      comment = '';
+      picker = null;
+      prMenu = null;
+      // The standalone pane has just loaded it: no second `tracker_get` on mount.
+      const s = tickets.details[k];
+      if (!s?.loading && Date.now() - (s?.fetchedAt ?? 0) > 2000) void tickets.loadDetail(ref);
+      ensureReviews();
+    });
+  });
 
   async function assign(who: 'me' | 'none'): Promise<void> {
     try {
@@ -377,6 +383,11 @@
     outline: none;
     background: var(--k-well);
     color: var(--k-fg);
+  }
+
+  /* Split view: list and detail share one pane, so mark which side has the keys (DESIGN §7). */
+  .detail.embedded:focus-visible {
+    box-shadow: inset 2px 0 0 var(--k-focus);
   }
 
   .head {
