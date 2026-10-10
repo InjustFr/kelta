@@ -710,6 +710,39 @@ impl Tracker for JiraTracker {
         self.fetch_ticket(&api, &t.key).await
     }
 
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        let api = self.api().await?;
+        // Cloud searches by `query`, Data Center by `username` (which also matches display names).
+        let q = if api.flavor == Flavor::Cloud { "query" } else { "username" };
+        let req = HttpRequest::get(api.url("/user/assignable/search"))
+            .query("issueKey", &t.key)
+            .query(q, query.trim())
+            .query("maxResults", "20");
+        let v = api.json(req).await?;
+        Ok(v.as_array().map(|a| a.iter().filter_map(Self::user_from).collect()).unwrap_or_default())
+    }
+
+    async fn priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        // The issue's edit screen lists the priorities its scheme allows, in rank order.
+        let api = self.api().await?;
+        let v = api
+            .json(HttpRequest::get(api.url(&format!("/issue/{}/editmeta", percent_encode(&t.key)))))
+            .await?;
+        let allowed = v.pointer("/fields/priority/allowedValues").and_then(Value::as_array);
+        Ok(allowed
+            .map(|a| a.iter().filter_map(|p| s(p, "name")).map(str::to_owned).collect())
+            .unwrap_or_default())
+    }
+
+    async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
+        let api = self.api().await?;
+        let body = json!({ "fields": { "priority": { "name": priority } } });
+        api.auth
+            .send_text(HttpRequest::put(api.url(&format!("/issue/{}", percent_encode(&t.key)))).json(body))
+            .await?;
+        self.fetch_ticket(&api, &t.key).await
+    }
+
     async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
         let jql = compose_jql(&self.base_jql(view).await?, view.who, view.current_iteration);
         let (cond, order) = split_order_by(&jql);

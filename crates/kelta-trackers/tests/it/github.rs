@@ -406,6 +406,41 @@ async fn assign_keeps_the_board_fields_of_a_project_item() {
 }
 
 #[tokio::test]
+async fn reassign_picker_and_priority_from_the_project_field() {
+    let server = MockServer::start().await;
+    gql(&server, "projectItems", "github/gql_issue_projects.json").await;
+    gql(&server, "fields(first", "github/gql_project_fields.json").await;
+    gql(&server, "updateProjectV2ItemFieldValue", "github/gql_mutation.json").await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/assignees"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"login": "louis"}, {"login": "dave", "name": "Dave Lee"}
+        ])))
+        .mount(&server)
+        .await;
+    let t = gh(&server);
+    let users = t.assignable_users(&r(), "lee").await.unwrap();
+    assert_eq!(users.iter().map(|u| u.id.as_str()).collect::<Vec<_>>(), ["dave"]);
+    assert_eq!(t.priorities(&r()).await.unwrap(), ["P1"]);
+    let ticket = t.set_priority(&r(), "p1").await.unwrap();
+    assert_eq!(ticket.status.name, "In Progress", "the board fields stay");
+    let sets: Vec<_> = bodies(&server, "POST", "/graphql")
+        .await
+        .into_iter()
+        .filter(|b| b["query"].as_str().is_some_and(|q| q.contains("updateProjectV2ItemFieldValue")))
+        .collect();
+    assert_eq!((&sets[0]["variables"]["f"], &sets[0]["variables"]["o"]), (&json!("PVTF_prio"), &json!("p1")));
+}
+
+#[tokio::test]
+async fn priority_needs_a_project_with_a_priority_field() {
+    let server = MockServer::start().await;
+    gql(&server, "projectItems", "github/gql_issue_no_projects.json").await;
+    assert_eq!(gh(&server).priorities(&r()).await.unwrap_err().code, ErrorCode::Unsupported);
+}
+
+#[tokio::test]
 async fn auth_and_rate_limit_errors() {
     let server = MockServer::start().await;
     Mock::given(path("/user")).respond_with(ResponseTemplate::new(401)).mount(&server).await;

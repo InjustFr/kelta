@@ -268,6 +268,42 @@ async fn assign_and_comment() {
 }
 
 #[tokio::test]
+async fn reassign_picker_and_priority_labels() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v4/projects/grp%2Fsub%2Fproj/users"))
+        .and(query_param("search", "dav"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!([{"id": 43, "username": "dave", "name": "Dave"}])),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/v4/projects/grp%2Fsub%2Fproj/labels"))
+        .and(query_param("search", "priority::"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"name": "priority::low"}, {"name": "priority::someday"}, {"name": "priority::critical"},
+            {"name": "priority::high"}
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(ISSUE))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issue_assigned.json")))
+        .mount(&server)
+        .await;
+    let t = gl(&server);
+    assert_eq!(t.assignable_users(&r(), "dav").await.unwrap()[0].id, "43");
+    assert_eq!(t.priorities(&r()).await.unwrap(), ["critical", "high", "low", "someday"]);
+    t.set_priority(&r(), "High").await.unwrap();
+    assert_eq!(
+        bodies(&server, "PUT", ISSUE).await[0],
+        json!({"add_labels": "priority::high", "remove_labels": "priority::critical,priority::low,priority::someday"})
+    );
+    assert_eq!(t.set_priority(&r(), "urgent").await.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[tokio::test]
 async fn columns_from_scoped_labels_or_the_binding() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/api/v4/projects/grp%2Fsub%2Fproj/labels", 200, "gitlab/labels_no_done.json")

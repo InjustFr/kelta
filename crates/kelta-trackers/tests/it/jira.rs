@@ -366,6 +366,53 @@ async fn assign_uses_account_id_on_cloud_and_name_on_dc() {
 }
 
 #[tokio::test]
+async fn reassign_picker_and_priority_change() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/user/assignable/search"))
+        .and(query_param("issueKey", "SHOP-142"))
+        .and(query_param("query", "ali"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"accountId": "acc-alice", "displayName": "Alice Martin"}
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/2/user/assignable/search"))
+        .and(query_param("username", "ali"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!([{"name": "alice", "displayName": "Alice"}])),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/issue/SHOP-142/editmeta"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"fields": {"priority": {
+            "allowedValues": [{"id": "1", "name": "Highest"}, {"id": "3", "name": "Medium"}]
+        }}})))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/rest/api/3/issue/SHOP-142"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/rest/api/3/issue/SHOP-142", 200, "jira/issue_assigned_cloud.json").await;
+    let r = tref("jira-acme", "SHOP-142", "10142");
+    let users = cloud(&server).assignable_users(&r, " ali ").await.unwrap();
+    assert_eq!((users[0].id.as_str(), users[0].name.as_str()), ("acc-alice", "Alice Martin"));
+    // Data Center assigns by user name: the picker's ids are names too.
+    assert_eq!(dc(&server).assignable_users(&r, "ali").await.unwrap()[0].id, "alice");
+    assert_eq!(cloud(&server).priorities(&r).await.unwrap(), ["Highest", "Medium"]);
+    let t = cloud(&server).set_priority(&r, "Highest").await.unwrap();
+    assert_eq!(t.r#ref.key, "SHOP-142");
+    assert_eq!(
+        bodies(&server, "PUT", "/rest/api/3/issue/SHOP-142").await[0],
+        json!({"fields": {"priority": {"name": "Highest"}}})
+    );
+}
+
+#[tokio::test]
 async fn columns_come_from_project_statuses_the_board_or_the_binding() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/rest/api/3/project/SHOP/statuses", 200, "jira/project_statuses.json").await;

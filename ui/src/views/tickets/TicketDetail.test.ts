@@ -91,6 +91,42 @@ describe('TicketDetail', () => {
     expect(toasts.list.at(-1)?.toast.text).toBe('This tracker does not let Kelta change the assignee.');
   });
 
+  it('u assigns to anyone the tracker offers, ! changes the priority', async () => {
+    const root = mount('SHOP-142');
+    await fireEvent.keyDown(root, { key: 'u' });
+    const people = await screen.findByRole('menu', { name: 'Assign SHOP-142' });
+    await fireEvent.input(within(people).getByLabelText('Find a person'), { target: { value: 'grace' } });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_assignable_users').at(-1)?.args).toMatchObject({
+        query: 'grace',
+      }),
+    );
+    await waitFor(() => expect(within(people).getAllByRole('menuitem')).toHaveLength(1));
+    await fireEvent.click(within(people).getByRole('menuitem', { name: /Grace Hopper/ }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_assign').at(-1)?.args).toMatchObject({
+        assignee: { kind: 'user', id: 'u-grace' },
+      }),
+    );
+    expect(toasts.list.at(-1)?.toast.text).toBe('SHOP-142 assigned to Grace Hopper');
+
+    await fireEvent.keyDown(root, { key: '!' });
+    const prios = await screen.findByRole('menu', { name: 'Priority of SHOP-142' });
+    await fireEvent.click(await within(prios).findByRole('menuitem', { name: 'Low' }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_set_priority').at(-1)?.args).toMatchObject({
+        priority: 'Low',
+      }),
+    );
+  });
+
+  it('the priority picker shows why a tracker cannot change it', async () => {
+    mount('#88'); // gitlab-corp: read-only tracker
+    await fireEvent.click(screen.getByRole('button', { name: 'None' }));
+    const menu = await screen.findByRole('menu', { name: 'Priority of #88' });
+    expect(await within(menu).findByText('gitlab-corp cannot set priorities')).toBeTruthy();
+  });
+
   it('p with several PRs opens the PR picker; P opens the chosen one in the browser', async () => {
     const root = mount('SHOP-142');
     await fireEvent.keyDown(root, { key: 'P' });

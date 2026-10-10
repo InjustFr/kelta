@@ -136,6 +136,21 @@ pub trait Tracker: Send + Sync {
         Err(KeltaError::unsupported("this tracker cannot search"))
     }
 
+    /// Users `t` can be assigned to whose name or login matches `query` (empty = the first ones) (Tickets T8).
+    async fn assignable_users(&self, _t: &TicketRef, _query: &str) -> Result<Vec<User>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot list assignable users"))
+    }
+
+    /// Priority names `t` can take, highest first (Tickets T8).
+    async fn priorities(&self, _t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot set priorities"))
+    }
+
+    /// Sets `t`'s priority to one of [`Self::priorities`], by name.
+    async fn set_priority(&self, _t: &TicketRef, _priority: &str) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot set priorities"))
+    }
+
     /// Files a new ticket in the project (repo, team...) that `project` lists (Tickets T11).
     async fn create(
         &self,
