@@ -21,6 +21,14 @@ hook_transport: HookTransport,
  */
 mcp: boolean, 
 /**
+ * Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.
+ */
+mcp_board_writes: boolean, 
+/**
+ * At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.
+ */
+mcp_offer: boolean, 
+/**
  * Passed via `--allowedTools`.
  */
 allowed_tools: Array<string>, 

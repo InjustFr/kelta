@@ -899,3 +899,38 @@ async fn refine_feeds_claude_the_ticket_and_serves_get_ticket_over_mcp() {
     let err = e.h.core.tracker_refine(&t, None).await.unwrap_err();
     assert!(err.message.contains("could not refine SHOP-142: not logged in"), "{err:?}");
 }
+
+#[tokio::test]
+async fn concurrent_cold_lists_share_one_provider_call() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let core: Arc<dyn CoreApi> = e.h.core.clone();
+    let pages =
+        futures::future::join_all((0..5).map(|_| core.ticket_list(Scope::All, None, None, false))).await;
+    for p in pages {
+        assert_eq!(p.unwrap().items.len(), 3);
+    }
+    let lists = e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count();
+    assert_eq!(lists, 1, "{:?}", e.tracker.calls());
+}
+
+#[tokio::test]
+async fn writes_patch_the_cached_list() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let core: Arc<dyn CoreApi> = e.h.core.clone();
+    let lists = || e.tracker.calls().iter().filter(|c| c.starts_with("list")).count();
+    let status = |page: &kelta_proto::tracker::TicketPage, key: &str| {
+        page.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().ticket.status.name.clone()
+    };
+    let page = core.ticket_list(Scope::All, None, None, false).await.unwrap();
+    let before = lists();
+    let r = |key: &str| page.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().ticket.r#ref.clone();
+    // SHOP-141 To Do → In Progress (FakeTracker transition ids are `t<status id>`).
+    core.ticket_transition(&r("SHOP-141"), "t3", None, None).await.unwrap();
+    core.ticket_close(&r("SHOP-142")).await.unwrap();
+    let page = core.ticket_list(Scope::All, None, None, false).await.unwrap();
+    assert_eq!(status(&page, "SHOP-141"), "In Progress");
+    assert_eq!(status(&page, "SHOP-142"), "Done");
+    assert_eq!(lists(), before, "served from the patched cache: {:?}", e.tracker.calls());
+}

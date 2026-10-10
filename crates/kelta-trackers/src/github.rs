@@ -1150,6 +1150,18 @@ impl Tracker for GithubIssues {
         Ok(())
     }
 
+    async fn set_body(&self, t: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
+        let (repo, number) = split_repo_number(&t.key)?;
+        let url = format!("{}/repos/{repo}/issues/{number}", self.api);
+        self.rest(HttpRequest::patch(&url).json(json!({"body": body_md}))).await?;
+        Ok(())
+    }
+
+    /// Issue state, apart from the board's Status (which a close leaves as it was).
+    async fn close(&self, t: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.transition(t, "closed", None).await
+    }
+
     async fn assign(&self, t: &TicketRef, who: Assignee) -> Result<Ticket, KeltaError> {
         let (repo, number) = split_repo_number(&t.key)?;
         let assignees: Vec<String> = match who {

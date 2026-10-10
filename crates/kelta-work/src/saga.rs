@@ -563,6 +563,7 @@ impl WorkService {
                             command: "work.retry_step".into(),
                             args: Some(serde_json::json!({ "id": id, "step": step })),
                         }),
+                        secondary: None,
                     });
                     return Ok(item);
                 }
