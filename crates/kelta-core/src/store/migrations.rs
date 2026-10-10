@@ -156,7 +156,7 @@ const V9: &str = r#"
 ALTER TABLE work_items ADD COLUMN auto_finish INTEGER NOT NULL DEFAULT 0;
 "#;
 
-/// v9: review notes (#133), `ReviewNote`.
+/// v10: review notes (#133), `ReviewNote`.
 const V10: &str = r#"
 CREATE TABLE IF NOT EXISTS notes (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
