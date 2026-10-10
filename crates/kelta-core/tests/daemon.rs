@@ -131,9 +131,20 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
     settings.app.restore_mode = RestoreMode::None;
     let term = DaemonTerminalHost::connect(&sock).unwrap();
     let core = app_with(root, term.clone(), settings);
-    // A Claude that stays up (the PATH stub exits at once).
-    std::fs::write(root.join("bin/claude"), "#!/bin/sh\nexec sleep 60\n").unwrap();
-    let claude = core.session_spawn(req(SessionKind::Claude)).await.unwrap();
+    // A Claude that stays up (the PATH stub exits at once). Written by a child `sh`: a write fd
+    // held here leaks into concurrent forks -> ETXTBSY (Linux), as in common::bin_dir.
+    let stub = root.join("bin/claude");
+    let wrote = std::process::Command::new("sh")
+        .args(["-c", "printf '#!/bin/sh\\nexec sleep 60\\n' > \"$1\"", "sh"])
+        .arg(&stub)
+        .status()
+        .unwrap();
+    assert!(wrote.success());
+    // Without a program the session runs the login shell with Claude's args (dash exits at once).
+    let claude = core
+        .session_spawn(SpawnRequest { program: Some("claude".into()), ..req(SessionKind::Claude) })
+        .await
+        .unwrap();
     let working = StatusChange {
         status: SessionStatus::Working,
         preview: None,
