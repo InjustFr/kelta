@@ -1800,9 +1800,7 @@
       "x-kelta-merge": "by_id",
       "x-kelta-order": 13,
       "x-kelta-scope": [
-        "global",
-        "project",
-        "repo"
+        "global"
       ]
     },
     "editor": {
@@ -4225,9 +4223,7 @@
       "x-kelta-merge": "by_id",
       "x-kelta-order": 13,
       "x-kelta-scope": [
-        "global",
-        "project",
-        "repo"
+        "global"
       ]
     },
     "triggers": {

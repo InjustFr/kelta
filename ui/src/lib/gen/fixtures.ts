@@ -1484,6 +1484,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "layer",
@@ -1498,6 +1499,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "plugin",

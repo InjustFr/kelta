@@ -150,69 +150,6 @@ fn plugin_secret_default_is_never_applied() {
 }
 
 #[test]
-fn by_id_override_disable_and_append() {
-    let e = env();
-    e.global(
-        r#"
-[[tools]]
-id = "lazydocker"
-label = "Docker"
-kind = "pty"
-command = "lazydocker"
-
-[[tools]]
-id = "lazygit"
-label = "Git"
-kind = "pty"
-command = "lazygit"
-"#,
-    );
-    e.project(
-        "shop",
-        r#"
-[[tools]]
-id = "lazydocker"
-enabled = false
-
-[[tools]]
-id = "lazygit"
-label = "Git (shop)"
-kind = "pty"
-command = "lazygit"
-args = ["--use-config-dir", "x"]
-
-[[tools]]
-id = "psql"
-label = "psql"
-kind = "pty"
-command = "psql"
-"#,
-    );
-    let svc = e.load();
-    let global = svc.effective(None);
-    assert_eq!(global.tools.len(), 2);
-    assert!(global.tools.iter().all(|t| t.enabled));
-
-    let shop = svc.effective(Some(&pid("shop")));
-    let by: BTreeMap<&str, &kelta_proto::ext::ToolDef> =
-        shop.tools.iter().map(|t| (t.id.as_str(), t)).collect();
-    assert_eq!(shop.tools.len(), 3);
-    let docker = by["lazydocker"];
-    assert!(!docker.enabled, "stub entry disables the inherited tool");
-    assert_eq!(docker.command.as_deref(), Some("lazydocker"), "the rest of the inherited entry is kept");
-    assert_eq!(by["lazygit"].label, "Git (shop)", "full entry replaces");
-    assert_eq!(by["lazygit"].args.len(), 2);
-    assert_eq!(by["psql"].command.as_deref(), Some("psql"));
-
-    let eff = svc.effective_doc(Some(&pid("shop"))).unwrap();
-    assert_eq!(eff.sources["tools.lazydocker"], Layer::Project);
-    assert_eq!(eff.sources["tools.psql"], Layer::Project);
-    assert_eq!(eff.sources["tools"], Layer::Project);
-    let eff = svc.effective_doc(None).unwrap();
-    assert_eq!(eff.sources["tools.lazydocker"], Layer::Global);
-}
-
-#[test]
 fn external_tool_round_trips_in_config_order() {
     use kelta_proto::ext::ToolKind;
     let e = env();
@@ -316,7 +253,8 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let s = svc.effective(Some(&p));
     assert_eq!(s.worktree.setup, vec!["pnpm install".to_owned()]);
     assert_eq!(s.env["TOKEN_URL"], "x");
-    assert_eq!(s.tools.len(), 1);
+    assert!(s.tools.is_empty(), "repo tools are personal: ignored even when trusted");
+    assert!(svc.issues().iter().any(|i| i.file == path && i.issue.message.contains("`tools` is personal")));
     assert_eq!(svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap().trusted, Some(true));
     assert_eq!(svc.effective_doc(Some(&p)).unwrap().sources["worktree.setup"], Layer::Repo);
 

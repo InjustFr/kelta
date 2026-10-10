@@ -1039,6 +1039,7 @@ pub fn all() -> Vec<Fixture> {
                     keybinding: None,
                     description: None,
                     placement: Placement::SplitRight,
+                    needs_project: false,
                 },
                 ToolInfo {
                     id: ToolId::new("tools-pack/k9s"),
@@ -1050,6 +1051,7 @@ pub fn all() -> Vec<Fixture> {
                     keybinding: None,
                     description: None,
                     placement: Placement::SplitRight,
+                    needs_project: false,
                 },
             ]
         ),

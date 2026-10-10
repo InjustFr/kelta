@@ -142,6 +142,27 @@ async fn registry_merges_config_and_namespaced_plugin_tools() {
 }
 
 #[tokio::test]
+async fn tools_are_global_and_flag_project_templates() {
+    let env = common::Env::new().with_settings(|s| {
+        let tool = |id: &str, f: &dyn Fn(&mut ToolDef)| {
+            let mut t = ToolDef { id: id.into(), command: Some(id.into()), ..Default::default() };
+            f(&mut t);
+            t
+        };
+        s.tools.push(tool("lazydocker", &|_| {}));
+        s.tools.push(tool("sl-web", &|t| t.cwd = Some("{worktree|project.root}".into())));
+        s.tools.push(tool("lint", &|t| t.args = vec!["{repo.path}".into()]));
+    });
+    let in_shop = env.host.tools(&shop()).await.unwrap();
+    assert_eq!(in_shop, env.host.tools(&ProjectId::home()).await.unwrap());
+    // only the global settings are read: no project layer can add or replace a tool
+    let reads: Vec<_> = env.core.calls().into_iter().filter(|c| c.method == "settings").collect();
+    assert!(reads.iter().all(|c| c.args["project"].is_null()), "{reads:?}");
+    let needs: Vec<(&str, bool)> = in_shop.iter().map(|t| (t.id.as_str(), t.needs_project)).collect();
+    assert_eq!(needs, [("lazydocker", false), ("sl-web", true), ("lint", true)]);
+}
+
+#[tokio::test]
 async fn tool_check_runs_the_check_argv() {
     let env = common::Env::new().with_settings(|s| {
         s.tools.push(ToolDef {

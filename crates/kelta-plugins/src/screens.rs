@@ -453,7 +453,7 @@ impl PluginHost {
                 }
                 let q: Q = p(method, params)?;
                 let project = self.screen_project(screen)?;
-                let tool = self.qualify_tool(&screen.plugin, &project, &q.tool_id);
+                let tool = self.qualify_tool(&screen.plugin, &q.tool_id);
                 to_value(self.open_tool(&project, &tool, TemplateCtx::default(), q.placement).await?)
             }
             PluginMethod::EventsSubscribe => {
@@ -699,12 +699,12 @@ impl PluginHost {
     }
 
     /// `"k9s"` from plugin `tools-pack` → `tools-pack/k9s` when that exists.
-    fn qualify_tool(&self, plugin: &PluginId, project: &ProjectId, id: &str) -> ToolId {
+    fn qualify_tool(&self, plugin: &PluginId, id: &str) -> ToolId {
         if id.contains('/') {
             return ToolId::new(id);
         }
         let namespaced = format!("{plugin}/{id}");
-        if self.resolve_tools(Some(project)).iter().any(|t| t.id.as_str() == namespaced) {
+        if self.resolve_tools().iter().any(|t| t.id.as_str() == namespaced) {
             ToolId::new(namespaced)
         } else {
             ToolId::new(id)

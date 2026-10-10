@@ -151,6 +151,8 @@ pub struct ConfigService {
     pub(crate) trusted: RwLock<HashMap<PathBuf, String>>,
     pub(crate) trust_store: RwLock<Option<Arc<dyn TrustStore>>>,
     pub(crate) watcher: Mutex<Option<crate::watch::WatchHandle>>,
+    /// Project-layer tool entries moved to the global file by this load (#243).
+    pub(crate) tools_migrated: usize,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -342,6 +344,11 @@ impl ConfigService {
         if let Some(c) = &overrides.config_dir {
             dirs.config = c.clone();
         }
+        // before the first build, so the global-only `tools` scope never reports a migrated file
+        let tools_migrated = Self::migrate_project_tools(&dirs).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "project tools not moved to the global settings");
+            0
+        });
         let defaults = serde_json::to_value(Settings::defaults())?;
         let (runtime, runtime_issues) = build_runtime(&overrides);
         let empty = Inner {
@@ -371,6 +378,7 @@ impl ConfigService {
             trusted: RwLock::new(HashMap::new()),
             trust_store: RwLock::new(None),
             watcher: Mutex::new(None),
+            tools_migrated,
         });
         {
             let _g = svc.gate.lock();
@@ -384,6 +392,11 @@ impl ConfigService {
 
     pub fn dirs(&self) -> &Dirs {
         &self.dirs
+    }
+
+    /// Project-layer tool entries this load moved to the global file (0 = nothing to tell).
+    pub fn tools_migrated(&self) -> usize {
+        self.tools_migrated
     }
 
     pub fn overrides(&self) -> &RuntimeOverrides {
@@ -529,8 +542,20 @@ impl ConfigService {
             let raw = locate_keybindings_path(&parsed, validate::layer_issues(Layer::Global, &wrapped, None));
             (wrapped, raw)
         } else {
-            let raw = validate::layer_issues(kind.layer(), &parsed.value, stem);
-            (parsed.value.clone(), raw)
+            let mut value = parsed.value.clone();
+            // `tools` is personal: a repo file's tools are reported and ignored, the rest still applies.
+            let personal =
+                kind == FileKind::Repo && value.as_object_mut().and_then(|m| m.remove("tools")).is_some();
+            let raw = validate::layer_issues(kind.layer(), &value, stem);
+            if personal && raw.is_empty() {
+                let issues = validate::position(
+                    &text,
+                    Some(&parsed),
+                    vec![validate::RawIssue::new(&["tools".to_owned()], validate::REPO_TOOLS_PERSONAL)],
+                );
+                return FileLayer { path: path.to_owned(), exists, text, hash, value, valid: true, issues };
+            }
+            (value, raw)
         };
         if raw.is_empty() {
             FileLayer { path: path.to_owned(), exists, text, hash, value, valid: true, issues: vec![] }
@@ -624,9 +649,9 @@ impl ConfigService {
             .collect()
     }
 
-    fn project_files(&self) -> Vec<(String, PathBuf)> {
+    pub(crate) fn project_files(dirs: &Dirs) -> Vec<(String, PathBuf)> {
         let mut out = Vec::new();
-        if let Ok(rd) = std::fs::read_dir(self.dirs.projects_dir()) {
+        if let Ok(rd) = std::fs::read_dir(dirs.projects_dir()) {
             for e in rd.flatten() {
                 let p = e.path();
                 if p.extension().and_then(|x| x.to_str()) == Some("toml")
@@ -701,7 +726,7 @@ impl ConfigService {
         let gv = Self::global_value(&global, &keybindings);
 
         // project files (including ones that only exist in `ov`)
-        let mut paths: Vec<(String, PathBuf)> = self.project_files();
+        let mut paths: Vec<(String, PathBuf)> = Self::project_files(&self.dirs);
         for p in ov.keys() {
             if p.parent() == Some(self.dirs.projects_dir().as_path())
                 && p.extension().and_then(|x| x.to_str()) == Some("toml")

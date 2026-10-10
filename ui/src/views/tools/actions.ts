@@ -1,4 +1,6 @@
-// `tools.open`: with `{tool_id}` opens that tool in the active project, else shows the tool picker.
+// `tools.open`: with `{tool_id}` opens that tool where the user is (the shown project and its focused
+// work item, else Home), asking for a project when the tool needs one; `{pick_project: true}` always
+// asks. Without `tool_id` it shows the tool picker.
 
 import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, WorkItemId } from '$lib/gen';
 import { registerAction } from '$lib/actions';
@@ -23,8 +25,7 @@ export const EMPTY_CTX: TemplateCtx = {
  * Opens a tool with its placement; the backend opens the pane (PTY session or web pane). A running
  * PTY instance of the same work item (`ctx.work_item_id`) gets focus instead of a second copy (web
  * tools reopen). Returns true when opened or focused, the failed check when the open failed because
- * the binary is missing, false otherwise (toasted).
- * Checks only after a failed open: `tool_check` has no project, so it may see another layer's def.
+ * the binary is missing, false otherwise (toasted). Checks only after a failed open.
  */
 export async function openTool(
   projectId: ProjectId,
@@ -78,12 +79,28 @@ registerAction('tools.open', async (args) => {
     ui.openSheet('tool_picker');
     return;
   }
-  // From Now the active project is hidden: show it so the pane is not opened out of sight.
-  await activateProject(projects.activeId);
-  const projectId = projects.activeId;
-  const ctx = { work_item_id: focusedWorkItem(), ...(args?.ctx as Partial<TemplateCtx>) };
-  const info = tools.list(projectId).find((t) => t.id === toolId);
-  const r = await openTool(projectId, info ?? { id: toolId, label: toolId }, ctx);
+  const home = projects.home?.id ?? 'home';
+  // A global view (Tickets, Now, Reviews) hides the active project: the tool opens in Home there.
+  const here = ui.view === null && projects.activeId !== home ? projects.activeId : null;
+  const info = tools.list(projects.activeId).find((t) => t.id === toolId);
+  const tool = info ?? { id: toolId, label: toolId };
+  let projectId = here ?? home;
+  let workItem = here ? focusedWorkItem() : null;
+  if (args?.pick_project === true || (info?.needs_project && !here)) {
+    const picked = await ui.pickProject(`Open ${tool.label} for project…`);
+    if (!picked) return;
+    try {
+      if (!projects.byId(picked)?.open) await projects.open(picked);
+    } catch (e) {
+      toasts.error(e, 'Opening the project failed');
+      return;
+    }
+    projectId = picked;
+    workItem = null;
+  }
+  await activateProject(projectId);
+  const ctx = { work_item_id: workItem, ...(args?.ctx as Partial<TemplateCtx>) };
+  const r = await openTool(projectId, tool, ctx);
   // A missing binary opens the picker on that tool with its install hint and "Check again".
   if (typeof r === 'object')
     ui.openSheet('tool_picker', { projectId, query: toolId, checks: { [toolId]: r } });

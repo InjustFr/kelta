@@ -115,11 +115,61 @@ describe('tools.open', () => {
     expect(opens()).toHaveLength(1);
   });
 
-  it('leaves Now and opens the tool in the active project', async () => {
-    const { open, opens } = await inTab(null);
+  it('from a global view opens a no-project tool in Home, with no work item', async () => {
+    const { open, opens } = await inTab('W1');
     ui.view = 'now';
     await open();
     expect(ui.view).toBeNull();
-    expect(opens()[0].args).toMatchObject({ project_id: 'shop' });
+    expect(projects.activeId).toBe('home');
+    expect(opens()[0].args).toMatchObject({ project_id: 'home', ctx: { work_item_id: null } });
+  });
+
+  /** The pty tool now takes a project (`{project.root}` in a template). */
+  async function needsProject() {
+    const t = await inTab('W1');
+    t.m.state.tools.find((x) => x.id === t.id)!.needs_project = true;
+    await tools.load('shop');
+    return t;
+  }
+
+  it('from a global view asks which project a needs_project tool opens in', async () => {
+    const { m, id, opens } = await needsProject();
+    ui.view = 'tickets';
+    const done = dispatch('tools.open', { tool_id: id });
+    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+    const label = m.state.tools.find((x) => x.id === id)!.label;
+    expect([ui.overlay, ui.pick!.placeholder]).toEqual(['switcher', `Open ${label} for project…`]);
+    ui.resolvePick('billing');
+    await done;
+    expect([ui.overlay, ui.view, projects.activeId]).toEqual([null, null, 'billing']);
+    expect(opens()).toHaveLength(1);
+    expect(opens()[0].args).toMatchObject({ project_id: 'billing', ctx: { work_item_id: null } });
+  });
+
+  it('Esc on the project picker opens nothing', async () => {
+    const { id, opens } = await needsProject();
+    ui.view = 'now';
+    const done = dispatch('tools.open', { tool_id: id });
+    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+    ui.closeOverlay();
+    await done;
+    expect(opens()).toHaveLength(0);
+    expect(ui.view).toBe('now');
+  });
+
+  it('inside a project opens a needs_project tool in the focused work item, no picker', async () => {
+    const { open, opens } = await needsProject();
+    await open();
+    expect(ui.pick).toBeNull();
+    expect(opens()[0].args).toMatchObject({ project_id: 'shop', ctx: { work_item_id: 'W1' } });
+  });
+
+  it('pick_project asks even inside a project', async () => {
+    const { id, opens } = await needsProject();
+    const done = dispatch('tools.open', { tool_id: id, pick_project: true });
+    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
+    ui.resolvePick('shop');
+    await done;
+    expect(opens()[0].args).toMatchObject({ project_id: 'shop', ctx: { work_item_id: null } });
   });
 });

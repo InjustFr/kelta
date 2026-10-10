@@ -136,17 +136,27 @@ export function actionItems(): PaletteItem[] {
 }
 
 export function toolItems(): PaletteItem[] {
-  const id = projects.activeId;
-  if (!id) return [];
-  return tools.list(id).map((t) => ({
-    id: `tool:${t.id}`,
-    group: 'Tools' as const,
-    label: `Open ${t.label}`,
-    detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
-    kbd: t.keybinding ?? undefined,
-    icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
-    run: () => void dispatch('tools.open', { tool_id: t.id }),
-  }));
+  // Tools are global: any project's list is the same one.
+  return tools.list(projects.activeId ?? projects.home?.id ?? 'home').flatMap((t) => {
+    const item = {
+      id: `tool:${t.id}`,
+      group: 'Tools' as const,
+      label: `Open ${t.label}`,
+      detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
+      kbd: t.keybinding ?? undefined,
+      icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
+      run: () => void dispatch('tools.open', { tool_id: t.id }),
+    };
+    if (!t.needs_project) return [item];
+    const forProject = {
+      ...item,
+      id: `tool-for:${t.id}`,
+      label: `Open ${t.label} for project…`,
+      kbd: undefined,
+      run: () => void dispatch('tools.open', { tool_id: t.id, pick_project: true }),
+    };
+    return [item, forProject];
+  });
 }
 
 function commandApplies(cmd: CommandDef): boolean {

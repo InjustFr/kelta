@@ -199,6 +199,8 @@ pub struct ToolInfo {
     pub keybinding: Option<Chord>,
     pub description: Option<String>,
     pub placement: Placement,
+    /// A template uses `{project.*}` or `{repo.*}`: opening it needs a real project (not Home).
+    pub needs_project: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

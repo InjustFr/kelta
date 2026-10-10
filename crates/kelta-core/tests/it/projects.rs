@@ -185,3 +185,39 @@ async fn kelta_ctl_trust_is_bound_to_the_hash_and_persisted() {
     let h = start(tmp.path(), Settings::defaults(), vec![]);
     assert_eq!(setup(&h.core), ["make"]);
 }
+
+#[tokio::test]
+async fn project_tools_moved_to_global_toast_once() {
+    use kelta_proto::events::UiEvent;
+    let moved = |h: &H| {
+        h.ui.take_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                UiEvent::Toast { toast } if toast.text == "Tools moved to your global settings" => {
+                    Some(toast)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let projects = tmp.path().join("config/projects");
+    std::fs::create_dir_all(&projects).unwrap();
+    std::fs::write(
+        projects.join("shop.toml"),
+        "[project]\nid = \"shop\"\nname = \"Shop\"\n\n[[tools]]\nid = \"sl-web\"\nlabel = \"sl web\"\ncommand = \"sl\"\n",
+    )
+    .unwrap();
+
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    let toasts = moved(&h);
+    assert_eq!(toasts.len(), 1);
+    let action = toasts[0].action.clone().unwrap();
+    assert_eq!((action.label.as_str(), action.command.as_str()), ("Review", "settings.open"));
+    assert_eq!(action.args, Some(serde_json::json!({ "section": "tools" })));
+    drop(h);
+
+    // nothing left to move: no toast on the next start
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    assert!(moved(&h).is_empty());
+}
