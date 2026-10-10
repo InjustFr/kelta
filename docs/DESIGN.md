@@ -408,7 +408,7 @@ One row grammar for all three, so they read as one instrument:
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
 - Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the StatusPicker of §6.8. Order: key, title, status, action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated; assignee `u` and priority `!` are buttons opening a filtered picker), Pull request rows, description, comments with a compose box.
 - Pull request rows: one line each, `#N` chip, title filling, then CI lamp and review state in words; wraps under the title when narrow.
-- Action bar: ghost `sm` Buttons with the key as chord hint: Start / Resume work (primary), Move `m`, Open PR `p`, Assign to me `a` (Unassign `A` when assigned), Comment `c`, Copy branch `y`, Open in browser `o`. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
+- Action bar: ghost `sm` Buttons with the key as chord hint: Start / Resume work (primary), Move `m`, Open PR `p`, Assign to me `a` (Unassign `A` when assigned), Comment `c`, Refine with Claude `r`, Copy branch `y`, Open in browser `o`. A refine shows its proposal under the sub-tasks as mono pre-wrapped Markdown on `--k-bezel-raised`, with Post as comment (primary), Copy and Discard. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
 - Embedded in the split view the detail drops the pane padding it would double, and shows the 2px `--k-focus` bar when it holds the keys.
 
 ### 6.10 Board

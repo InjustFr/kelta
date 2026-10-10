@@ -158,6 +158,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         tracker::tracker_assignable_users,
         tracker::tracker_priorities,
         tracker::tracker_set_priority,
+        tracker::tracker_refine,
         tracker::tracker_search,
         tracker::tracker_sources,
         tracker::next_up_list,

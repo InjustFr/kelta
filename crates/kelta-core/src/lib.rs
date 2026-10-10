@@ -22,6 +22,7 @@ mod park;
 pub mod perf;
 pub mod projects;
 pub mod providers;
+mod refine;
 pub mod rt;
 pub mod scheduler;
 pub mod sessions;
@@ -181,6 +182,8 @@ pub struct Core {
     pub(crate) oauth: Mutex<std::collections::HashMap<String, oauth::Pending>>,
     /// Device-flow sign-ins being polled, by user code; `oauth_device_cancel` notifies.
     pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
+    /// Running refines (Tickets T10): their MCP sid → the ticket `get_ticket` returns.
+    pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -332,6 +335,7 @@ impl Core {
                 claude_ver: Mutex::new(None),
                 oauth: Mutex::default(),
                 oauth_polling: Mutex::default(),
+                refines: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -637,6 +641,13 @@ impl CoreApi for Core {
     }
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
+    }
+    async fn ticket_for_session(&self, id: &SessionId) -> Option<TicketRef> {
+        let refine = self.refines.lock().get(id).cloned();
+        match refine {
+            Some(t) => Some(t),
+            None => self.work.for_session(id).await.and_then(|w| w.ticket),
+        }
     }
     async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
         Core::work_get(self, id).await

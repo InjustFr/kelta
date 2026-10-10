@@ -900,6 +900,23 @@ export function createMockTransport(options: MockOptions = {}): {
       item.ticket.priority_rank = rank;
       return clone(item.ticket);
     },
+    tracker_refine: ({ ticket }) => {
+      const t = ticketItem(ticket).ticket;
+      return [
+        '## Acceptance criteria',
+        '',
+        `- [ ] ${t.title} works end to end`,
+        '- [ ] Covered by a test',
+        '',
+        '## Open questions',
+        '',
+        'None',
+        '',
+        '## Sub-tasks',
+        '',
+        'None',
+      ].join('\n');
+    },
     tracker_search: ({ scope, text }) => {
       const q = text.toLowerCase();
       return clone(
