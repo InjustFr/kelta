@@ -34,8 +34,8 @@ use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::{
-    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind,
-    Transition, User,
+    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketPage, TicketRef, TrackerCaps,
+    TrackerKind, Transition, User,
 };
 
 // ---- terminal (impl: kelta-term) ---------------------------------------------------------------
@@ -286,6 +286,24 @@ pub trait CoreApi: Send + Sync {
         markdown: &str,
         session: Option<&SessionId>,
     ) -> Result<(), KeltaError>;
+    /// `ticket.assigned` + cache invalidation, like `ticket_transition`.
+    async fn ticket_assign(&self, _ticket: &TicketRef, _who: Assignee) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("ticket_assign"))
+    }
+    /// Kelta's Tickets list (cached, merged views, with `work_item_id`, `prs`, `caps`); `view_id`
+    /// narrows to one view.
+    async fn ticket_list(
+        &self,
+        _scope: Scope,
+        _view_id: Option<String>,
+        _cursor: Option<Cursor>,
+    ) -> Result<TicketPage, KeltaError> {
+        Ok(TicketPage::default())
+    }
+    /// A ticket with its `prs` and `caps`, like Kelta's detail view.
+    async fn ticket_get(&self, _ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {
+        Err(KeltaError::unsupported("ticket_get"))
+    }
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
     /// The ticket MCP `get_ticket` reads for `id`: its work item's, or the ticket a refine runs on (T10).
@@ -294,6 +312,10 @@ pub trait CoreApi: Send + Sync {
     }
     async fn work_get(&self, _id: &WorkItemId) -> Option<WorkItem> {
         None
+    }
+    /// Work items of `project`, every project for `None`; newest first.
+    async fn work_list(&self, _project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
+        Ok(Vec::new())
     }
     async fn work_create_pr(
         &self,
