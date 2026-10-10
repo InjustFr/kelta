@@ -10,8 +10,10 @@ import {
   workDiff,
   workDisarmMerge,
   workMarkReviewed,
+  workQueueFront,
   workRetryStep,
   workSetNote,
+  workStartNow,
 } from '$lib/ipc/commands';
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
@@ -55,6 +57,7 @@ export interface WorkAction {
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
   c.item.rebase && c.item.rebase.total > 0 ? null : 'Only while a rebase is stopped';
+const queuedOnly = (c: Ctx) => (c.item.state.kind === 'queued' ? null : 'Not queued');
 const hasPr = (c: Ctx) => c.item.pr_url !== null || prOf(c.item) !== null;
 
 async function step(c: Ctx, step: string): Promise<void> {
@@ -237,6 +240,20 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     label: (c) => c.phase.primaryLabel,
     blocked: () => null,
     run: (c) => step(c, failedStep(c)),
+  },
+  {
+    id: 'start_now',
+    key: null,
+    label: () => 'Start now (over cap)',
+    blocked: queuedOnly,
+    run: async ({ item }) => void work.upsert(await workStartNow({ id: item.id })),
+  },
+  {
+    id: 'queue_front',
+    key: null,
+    label: () => 'Move to front',
+    blocked: queuedOnly,
+    run: async ({ item }) => void work.upsert(await workQueueFront({ id: item.id })),
   },
   {
     id: 'recreate',

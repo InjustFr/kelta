@@ -117,6 +117,8 @@ describe('mock transport', () => {
     const session = s.sessions[0]!;
     const work = s.work[0]!;
     const withPr = s.work[2]!; // PR open, Claude idle with hook status
+    const queued = { ...structuredClone(work), id: 'queued-1', state: { kind: 'queued' as const, pos: 0 } };
+    s.work.push(queued);
     const ctx = {
       repo_id: null,
       cwd: null,
@@ -225,6 +227,8 @@ describe('mock transport', () => {
       work_mark_reviewed: { id: work.id },
       work_set_note: { id: work.id, note: 'next: tests' },
       work_left: { id: work.id },
+      work_queue_front: { id: queued.id },
+      work_start_now: { id: queued.id },
       work_arm_merge: { id: withPr.id, method: 'squash' },
       work_disarm_merge: { id: withPr.id },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },

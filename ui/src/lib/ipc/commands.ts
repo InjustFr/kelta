@@ -238,6 +238,10 @@ export interface Commands {
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
   work_left: { args: { id: WorkItemId }; result: WorkItem };
+  /** Start a queued item now, over `claude.max_live`. */
+  work_start_now: { args: { id: WorkItemId }; result: WorkItem };
+  /** The queued item starts next. */
+  work_queue_front: { args: { id: WorkItemId }; result: WorkItem };
   /** Merge when ready: the host's auto-merge, then Finish once merged (`auto_finish`). */
   work_arm_merge: { args: { id: WorkItemId; method: MergeMethod }; result: WorkItem };
   work_disarm_merge: { args: { id: WorkItemId }; result: WorkItem };
@@ -372,6 +376,8 @@ export const COMMAND_NAMES = [
   'work_mark_reviewed',
   'work_set_note',
   'work_left',
+  'work_start_now',
+  'work_queue_front',
   'work_arm_merge',
   'work_disarm_merge',
   'editor_open',
@@ -576,6 +582,8 @@ export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
+export const workStartNow = wrap('work_start_now');
+export const workQueueFront = wrap('work_queue_front');
 export const workArmMerge = wrap('work_arm_merge');
 export const workDisarmMerge = wrap('work_disarm_merge');
 export const editorOpen = wrap('editor_open');

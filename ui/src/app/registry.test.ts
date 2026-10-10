@@ -40,6 +40,7 @@ describe('registries', { timeout: 30_000 }, () => {
         'plugin_install',
         'project_new',
         'ship',
+        'start_batch',
         'start_work',
         'tool_picker',
         'work_dialog',

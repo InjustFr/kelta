@@ -31,6 +31,7 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { startWorkOnTicket } from '../work/startWork';
+  import { batch, batchKey } from '../work/batch.svelte';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import { MoveController } from './move.svelte';
@@ -248,8 +249,12 @@
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
     const item = cur;
+    if (batchKey(e, item ? { ref: item.ticket.ref, projectId: item.project_ids[0] ?? projectId } : null)) {
+      e.preventDefault();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     switch (e.key) {
       case 'j':
       case 'ArrowDown':
@@ -476,6 +481,10 @@
               <span class="k-row-key">{item.ticket.ref.key}</span>
               <span class="k-row-title">{item.ticket.title}</span>
               <span class="k-row-tail">
+                {#if batch.has(item.ticket.ref)}<Badge
+                    tone="accent"
+                    title="Marked: Mod+Enter starts the marked tickets">marked</Badge
+                  >{/if}
                 {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
                 {#if scope.kind === 'all'}
                   <span class="k-narrow-hide"><Badge>{item.project_ids[0] ?? 'Other'}</Badge></span>
@@ -536,6 +545,10 @@
                     <span class="key">{item.ticket.ref.key}</span>
                     <Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} />
                     {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
+                    {#if batch.has(item.ticket.ref)}<Badge
+                        tone="accent"
+                        title="Marked: Mod+Enter starts the marked tickets">marked</Badge
+                      >{/if}
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
                   <span class="card-row">
@@ -577,6 +590,8 @@
       ['enter', 'Open'],
       ['/', 'Filter'],
       ['s', 'Start work'],
+      ['space', 'Mark'],
+      ['mod+enter', 'Start marked'],
       ['m', 'Move to'],
       ['a', 'Assign me'],
       ['c', 'Comment'],

@@ -30,11 +30,14 @@ export type WorkActionId =
   | 'open_pr'
   | 'open_review'
   | 'merge'
+  | 'start_now'
+  | 'queue_front'
   | 'finish';
 
 export type PhaseId =
   | 'failed'
   | 'starting'
+  | 'queued'
   | 'missing'
   | 'rebase_stopped'
   | 'needs_you'
@@ -147,6 +150,16 @@ export function phaseOf(
       'retry',
       `Retry ${doing(st.step)}`,
       'fix',
+    );
+  if (st.kind === 'queued')
+    return p(
+      'queued',
+      'Queued',
+      'waiting for a Claude slot',
+      'none',
+      'start_now',
+      'Start now (over cap)',
+      'in_flight',
     );
   if (st.kind === 'starting' || st.kind === 'planned') {
     const done = item.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
