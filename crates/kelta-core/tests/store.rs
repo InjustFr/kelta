@@ -95,6 +95,27 @@ async fn grant_and_trust_stores() {
 }
 
 #[tokio::test]
+async fn plugin_kv_is_namespaced_capped_in_bytes_and_cleared() {
+    let s = Store::open_in_memory().unwrap();
+    let (a, b) = (PluginId::new("a"), PluginId::new("b"));
+    s.kv_set(&a, "k", "1".into(), 100).await.unwrap();
+    s.kv_set(&a, "k", "2".into(), 100).await.unwrap();
+    assert_eq!(s.kv_get(&a, "k").await.unwrap().as_deref(), Some("2"));
+    assert_eq!(s.kv_get(&b, "k").await.unwrap(), None);
+    // Quota counts key + value bytes ("é" is 2): "k2" + "x" + 48 * 2 = 99 fits, one more char does not.
+    s.kv_set(&a, "x", "é".repeat(48), 100).await.unwrap();
+    assert!(s.kv_set(&a, "x", "é".repeat(49), 100).await.is_err());
+    assert_eq!(s.kv_get(&a, "x").await.unwrap().unwrap().len(), 96, "refused write kept the old value");
+    s.kv_set(&b, "k", "1".into(), 100).await.unwrap();
+    assert_eq!(s.kv_keys(&a).await.unwrap(), vec!["k", "x"]);
+    s.kv_delete(&a, "x").await.unwrap();
+    assert_eq!(s.kv_keys(&a).await.unwrap(), vec!["k"]);
+    s.kv_clear(&a).await.unwrap();
+    assert!(s.kv_keys(&a).await.unwrap().is_empty());
+    assert_eq!(s.kv_keys(&b).await.unwrap(), vec!["k"]);
+}
+
+#[tokio::test]
 async fn trigger_log_is_capped() {
     let s = Store::open_in_memory().unwrap();
     s.call(|c| {

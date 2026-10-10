@@ -33,6 +33,24 @@ pub(crate) struct Screen {
 
 /// Max `net.fetch` response body (PLUGINS §7).
 pub const NET_FETCH_CAP: usize = 5 * 1024 * 1024;
+/// `kv.*` limits (PLUGINS §7): key bytes, one value's JSON bytes, keys + values of one plugin.
+pub const KV_KEY_CAP: usize = 256;
+pub const KV_VALUE_CAP: usize = 64 * 1024;
+pub const KV_QUOTA: usize = 1024 * 1024;
+
+#[derive(Deserialize)]
+struct KvKey {
+    key: String,
+}
+
+impl KvKey {
+    fn checked(self) -> Result<String, KeltaError> {
+        if self.key.is_empty() || self.key.len() > KV_KEY_CAP {
+            return Err(KeltaError::invalid(format!("kv: `key` must be 1..={KV_KEY_CAP} bytes")));
+        }
+        Ok(self.key)
+    }
+}
 
 fn p<T: DeserializeOwned>(method: PluginMethod, params: Value) -> Result<T, KeltaError> {
     let params = if params.is_null() { json!({}) } else { params };
@@ -501,6 +519,35 @@ impl PluginHost {
                     json!({ "status": resp.status, "headers": resp.headers, "body": resp.body, "body_base64": resp.body_base64 }),
                 )
             }
+            // Namespaced by `screen.plugin` (host-side, never from params).
+            PluginMethod::KvGet => {
+                let key = p::<KvKey>(method, params)?.checked()?;
+                let v = self.grant_store().kv_get(&screen.plugin, &key).await?;
+                Ok(v.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or(Value::Null))
+            }
+            PluginMethod::KvSet => {
+                #[derive(Deserialize)]
+                struct Q {
+                    key: String,
+                    value: Value,
+                }
+                let q: Q = p(method, params)?;
+                let key = KvKey { key: q.key }.checked()?;
+                let value = serde_json::to_string(&q.value)?;
+                if value.len() > KV_VALUE_CAP {
+                    return Err(KeltaError::invalid(format!(
+                        "kv.set: value larger than {KV_VALUE_CAP} bytes"
+                    )));
+                }
+                self.grant_store().kv_set(&screen.plugin, &key, value, KV_QUOTA).await?;
+                Ok(Value::Null)
+            }
+            PluginMethod::KvDelete => {
+                let key = p::<KvKey>(method, params)?.checked()?;
+                self.grant_store().kv_delete(&screen.plugin, &key).await?;
+                Ok(Value::Null)
+            }
+            PluginMethod::KvList => to_value(self.grant_store().kv_keys(&screen.plugin).await?),
             PluginMethod::UiToast => {
                 #[derive(Deserialize)]
                 struct Q {

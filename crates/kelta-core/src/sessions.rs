@@ -621,7 +621,7 @@ impl Core {
         }
         let hook_token = spawn_env::token();
         let mcp_token = is_claude.then(spawn_env::token);
-        let env = spawn_env::assemble_env(&EnvInputs {
+        let mut env = spawn_env::assemble_env(&EnvInputs {
             login: &self.login_env.vars,
             terminal_env: &settings.terminal.env,
             project_env: &settings.env,
@@ -635,6 +635,19 @@ impl Core {
             mcp_token: mcp_token.as_deref(),
             mcp_url: mcp_url.as_deref(),
         });
+        // Claude IDE bridge: the lock file goes where this claude process looks (its own env).
+        if is_claude && settings.claude.ide_bridge {
+            let opened = spawn_env::claude_config_dir(&env)
+                .ok_or_else(|| KeltaError::internal("HOME is not set"))
+                .and_then(|dir| self.server.ide_open(&id, &dir, vec![cwd.clone()]));
+            match opened {
+                Ok(port) => {
+                    env.insert("CLAUDE_CODE_SSE_PORT".into(), port.to_string());
+                    env.insert("ENABLE_IDE_INTEGRATION".into(), "true".into());
+                }
+                Err(e) => tracing::warn!(error = %e, "claude ide bridge unavailable"),
+            }
+        }
         let shell = spawn_env::default_shell(&settings.terminal.shell, &self.login_env.vars);
         let resolved = match &launch.program {
             None => Ok((
@@ -648,6 +661,7 @@ impl Core {
             Ok(x) => x,
             Err(e) => {
                 self.release_http_ref(http_ref);
+                self.server.ide_close(&id);
                 return Err(e);
             }
         };
@@ -712,6 +726,7 @@ impl Core {
             if mode != SpawnMode::New && !s.contains_key(&id) {
                 drop(s);
                 self.release_http_ref(http_ref);
+                self.server.ide_close(&id);
                 return Err(KeltaError::not_found(format!("session {id}")));
             }
             let entry = SessionEntry {
@@ -747,6 +762,7 @@ impl Core {
             }
             drop(s);
             self.release_http_ref(http_ref);
+            self.server.ide_close(&id);
             return Err(e);
         }
         self.server.register_session(&id, &hook_token, mcp_token.as_deref());
@@ -1673,6 +1689,8 @@ impl Core {
                 self.terminal.history_delete(id);
             }
         }
+        // shortcut: sessions kept by keltad lose their IDE bridge at quit; re-open it on adoption if missed.
+        self.server.ide_close_all();
         self.store.flush().await
     }
 }

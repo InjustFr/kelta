@@ -369,6 +369,7 @@ pub(crate) async fn uninstall(host: &PluginHost, id: &PluginId) -> Result<(), Ke
         .await
         .map_err(|e| KeltaError::internal(e.to_string()))??;
     host.grant_store().revoke_all(id).await?;
+    host.grant_store().kv_clear(id).await?;
     let pdir = host.dirs().plugins_dir();
     let mut state = registry::load_state(&pdir);
     if state.disabled.remove(id.as_str()) {

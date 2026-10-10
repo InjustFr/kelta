@@ -146,6 +146,7 @@ keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the 
 | stable CLI copy | `<data>/bin/<version>/{kelta-ctl,keltad}` + `<data>/bin/current` symlink | same |
 | runtime | `$XDG_RUNTIME_DIR/kelta` (fallback `/tmp/kelta-<uid>`) | `/tmp/kelta-<uid>` |
 | per-session runtime | `<runtime>/s/<sid8>/` (0700): `claude-settings.json` (0600), `mcp.json` (0600), `ticket.md`, `context.md`, `nvim.sock` | same |
+| Claude IDE bridge (§8.5) | `<claude dir>/ide/<port>.lock` (0600, dir created 0700) per Claude session; `openDiff` proposals in `<runtime>/ide/<random>/` (0700) while shown | same |
 
 `KELTA_RUNTIME_DIR` (both OSes) replaces the runtime dir and makes the instance skip the single-instance handshake, so a bench or test instance never talks to the user's running Kelta.
 
@@ -285,6 +286,7 @@ pub trait SecretResolver: Send + Sync {
   async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
   async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError>;
   async fn editor_open(&self, target: EditorTarget, path: &Path, line: Option<u32>) -> Result<(), KeltaError>;
+  async fn editor_diff(&self, target: EditorTarget, old: &Path, proposed: &Path, close: bool) -> Result<(), KeltaError>; // IDE bridge openDiff, nvim RPC only (§8.5)
   // tools/plugins/bus/ui
   async fn tool_open(&self, project: &ProjectId, tool: &ToolId, ctx: TemplateCtx, placement: Placement) -> Result<ToolHandle, KeltaError>;
   fn publish(&self, ev: BusEvent);
@@ -420,6 +422,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | **app** | | | `commands/app.rs` (L3) |
 | `app_info` | `{}` | `AppInfo{version, platform, arch, data_dir, config_dir, runtime_dir, claude: Option<ToolVersion>, safe_graphics: bool, decorations: Decorations}` (`decorations` = what the window was built with: `native`/`none`/`custom`; `custom` → the UI draws the drag strip + resize handles) | |
 | `app_ready` | `{t_ms: f64}` | `()` (desktop clears the launch crash guard and writes the `app_ready_ms` bench mark; core binds the runtime) | |
+| `bench_mark` | `{key: String, value: f64}` | `()` (merges a UI-measured kelta-bench metric into `KELTA_BENCH_MARKS`; no-op without it) | |
 | `events_subscribe` | `{channel: Channel<UiEvent>}` | `{sub_id: u64}` (one per window) | |
 | `open_external` | `{url: String}` (http/https/mailto only) | `()` | |
 | `perf_snapshot` | `{}` | `PerfSnapshot{processes: Vec<ProcMem{pid, name, role: Core|WebContent|Network|Gpu|Child, pss_or_footprint_kb}>, sessions: Vec<SessionMem>, live_views: u32, timers_armed: u32, http_server: bool}` | |
@@ -737,6 +740,17 @@ One shared `reqwest::Client` (20 s timeout, pool idle 30 s, UA `kelta/<ver>`). P
 - Aggregation: `Scope::All` fans out over accounts referenced by open projects **plus all configured accounts** for reviews; de-dup by ref; items tagged with matching project ids; unmatched → `project_ids = []` (UI "Other" group).
 - `seen_reviews(account, repo, number, head_sha, first_seen)`: first poll after start/account creation fills silently; new key (or new head after my review) → `pr.review_requested`.
 
+### 8.5 Claude IDE bridge (kelta-server `ide`, `claude.ide_bridge`, off by default)
+
+Kelta acts as the IDE of the Claude sessions it spawns, with the protocol of the VS Code / JetBrains extensions and claudecode.nvim (no official spec; reverse-engineered, see coder/claudecode.nvim `PROTOCOL.md`):
+- **One bridge per Claude session**: an axum WebSocket listener on `127.0.0.1:<random>` and the lock file `<claude dir>/ide/<port>.lock` = `{pid, workspaceFolders: [session cwd], ideName: "Kelta", transport: "ws", authToken}`. `<claude dir>` is resolved from the session's own environment: `CLAUDE_CONFIG_DIR`, else `$HOME/.claude`. The session gets `CLAUDE_CODE_SSE_PORT=<port>` and `ENABLE_IDE_INTEGRATION=true`, so Claude connects to its own bridge. A per-session port (not one shared server) is what lets one lock file carry one token and route to one session's editor.
+- **Lifecycle**: opened in `spawn_with` before the pty spawns; closed (listener aborted, lock removed) on spawn failure, session exit/removal (`Server::unregister_session`), restart (replaced) and app quit (`Server::ide_close_all`; the process exits without destructors). Each open first removes *stale Kelta locks* in that dir: `ideName == "Kelta"` and `pid` no longer alive. Locks of other IDEs, of live Kelta processes and unparsable files are never touched. Sessions kept by keltad across a quit lose their bridge until restarted.
+- **Transport**: MCP JSON-RPC 2.0, one message per text frame (`initialize`, `tools/list`, `tools/call`, `ping`; notifications ignored). Each request runs in its own task so a pending `openDiff` does not block `close_tab`.
+- **Tools** (routed to the session's editor: its work item's editor, else a live editor session of its project — same rule as the MCP `open_in_editor`):
+  - `openFile {filePath, startText?}` → `CoreApi::editor_open` (every editor preset with an open mode); `startText` → its first line.
+  - `openDiff {old_file_path, new_file_path, new_file_contents, tab_name}` → the proposal is staged in `<runtime>/ide/<random>/<file name>` (0700 dir, 0600 file) and shown with `CoreApi::editor_diff` (nvim RPC: new tab, `:vertical diffsplit`). The call stays pending until Claude sends `close_tab`/`closeAllDiffTabs` or disconnects, then the diff tab is closed, the staging dir deleted and `DIFF_REJECTED` returned (claudecode.nvim semantics; the edit itself is accepted or rejected in Claude's terminal prompt). Saving the proposal in nvim does not answer `FILE_SAVED`. Without an nvim editor the call fails at once and Claude falls back to its own diff.
+  - `getWorkspaceFolders` → the session cwd. `getCurrentSelection`/`getLatestSelection` → `{success: false}`, `getOpenEditors` → `{tabs: []}`, `getDiagnostics` → `[]`: Kelta tracks neither nvim buffers nor LSP diagnostics (the editor's "Send selection" action covers selections). No `selection_changed`/`at_mentioned` notifications.
+
 ---
 
 ## 9. Terminal frontend contract (L2)
@@ -782,7 +796,7 @@ work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, d
 seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
 provider_cache(key PK, etag, body_json, fetched_at)
 plugin_grants(plugin_id, permission, granted_at, manifest_sha256, PK(plugin_id, permission))
-plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- v0.2 consumers; table exists
+plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- screens' kv.* (PLUGINS §7); value = JSON text
 repo_trust(path PK, sha256, trusted_at)
 trigger_log(id PK, ts, trigger_id, event, ok, detail, depth)   -- capped 1000 rows
 ui_state(key PK, value)                                   -- webgl probe result, onboarding done, window geometry
@@ -797,6 +811,12 @@ All writes go through the single sqlite thread. Startup reads (open projects, la
 - ctl socket: 0600 in a 0700 dir owned by the user; peer uid must equal ours; hook frames must carry the session's `KELTA_HOOK_TOKEN` (constant-time compare). Other ctl commands are allowed for same-uid peers.
 - HTTP server: binds `127.0.0.1` only; `/mcp/<sid>` and `/hook/<sid>` require `Authorization: Bearer <per-session token>`; the per-instance web-tool proxy listeners (kelta-plugins) serve `/proxy/<instance>/…` with an unguessable instance path segment (128-bit), only proxy to the tool's own loopback origin and require `Host: 127.0.0.1:<listener port>`; `Host` header must be `127.0.0.1:<port>` (DNS-rebinding guard).
 - Per-session runtime files 0600; never inside the worktree (no repo pollution).
+- Claude IDE bridge (§8.5, opt-in `claude.ide_bridge`; off → no listener, no lock file, no env). Threat model: other local users, browsers (DNS rebinding / cross-site WebSocket), other same-user processes. Controls:
+  - binds `127.0.0.1` only, random port, one listener per Claude session, stopped with the session;
+  - handshake requires `x-claude-code-ide-authorization: <128-bit random token>` (uuid v4, OS CSPRNG), compared in constant time (`auth::ct_eq`); missing/wrong → 401 before the upgrade; the token is never logged;
+  - any `Origin` header → 403: browsers always send one on WebSocket handshakes, Claude Code does not, so a web page cannot reach the bridge even with DNS rebinding (the `Host` header is not pinned because Claude may dial `localhost`);
+  - the lock file holding the token is written via a fresh `create_new` 0600 temp file (never follows an existing file or symlink) then renamed; the `ide` dir is created 0700; locks are removed on session end and quit, and startup cleanup removes only Kelta locks whose pid is dead, never other IDEs' files;
+  - residual risk: any process of the same user can read the lock file and drive the tools — the same trust level as the VS Code/JetBrains integrations, and that process could already run `nvim --server` or edit files directly. Tools can open a file or show a diff in the user's editor and read nothing back except the session cwd; `openDiff` writes only into Kelta's 0700 runtime dir, never the target file. Requests are unbounded in count per connection but each is answered or parked (pending diffs are freed on disconnect).
 - Tokens, secrets and tokenized URLs (ISL) are never logged (`tracing` field redaction helper in proto).
 
 ### 11.2 Webview
@@ -860,5 +880,5 @@ Reference workload `bench/fixtures/3p10s`: 3 open projects, 10 live sessions (3 
 
 ## 14. Platform specifics (summary; details in SPEC.md §8)
 
-- Linux: Tauri → WebKitGTK `webkit2gtk-4.1` (GTK3). `pre_init` (before any GTK init, single-threaded): read `[linux.graphics]` with a minimal TOML parse; NVIDIA detect (`/proc/driver/nvidia/version` or `/sys/module/nvidia_drm`) → `WEBKIT_DISABLE_DMABUF_RENDERER=1` + `__NV_DISABLE_EXPLICIT_SYNC=1`; toggles for `WEBKIT_DISABLE_COMPOSITING_MODE`, `GDK_BACKEND=x11`; `--safe-graphics` sets all; never set `GTK_IM_MODULE`. `mallopt(M_ARENA_MAX, 2)`. app_id/WM_CLASS `dev.kelta.Kelta`. `window.decorations=auto`: `none` if `HYPRLAND_INSTANCE_SIGNATURE` or `SWAYSOCK`, else `native`. No in-app global shortcuts: `kelta-ctl toggle` bound in compositor; raise uses `XDG_ACTIVATION_TOKEN` when provided.
+- Linux: Tauri → WebKitGTK `webkit2gtk-4.1` (GTK3). `pre_init` (before any GTK init, single-threaded): read `[linux.graphics]` with a minimal TOML parse; NVIDIA detect (`/proc/driver/nvidia/version` or `/sys/module/nvidia_drm`) → `WEBKIT_DISABLE_DMABUF_RENDERER=1` + `__NV_DISABLE_EXPLICIT_SYNC=1`; no `/dev/dri/renderD*` (VM, container) → `WEBKIT_DISABLE_COMPOSITING_MODE=1` (software GL compositing costs ~4× per frame, gate G2); toggles for `WEBKIT_DISABLE_COMPOSITING_MODE`, `GDK_BACKEND=x11`; `--safe-graphics` sets all; never set `GTK_IM_MODULE`. `mallopt(M_ARENA_MAX, 2)`. app_id/WM_CLASS `dev.kelta.Kelta`. `window.decorations=auto`: `none` if `HYPRLAND_INSTANCE_SIGNATURE` or `SWAYSOCK`, else `native`. No in-app global shortcuts: `kelta-ctl toggle` bound in compositor; raise uses `XDG_ACTIVATION_TOKEN` when provided.
 - macOS: WKWebView, WebGL default, Cmd is the app modifier, custom app menu replaces Tauri's default (Cmd+W/H/M/Q intentional), dock badge = sessions needing input, window close → background mode by default, `/tmp/kelta-<uid>` runtime dir, Developer ID signing + notarization in release CI.

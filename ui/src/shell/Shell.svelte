@@ -147,6 +147,10 @@
     });
     const offCtl = ui.onCtl((cmd) => {
       if (cmd.cmd === 'focus_project') void activateProject(cmd.id);
+      else if (cmd.cmd === 'emit' && cmd.name === 'custom.bench.run')
+        import('./bench')
+          .then((b) => b.runScenario(cmd.payload))
+          .catch((err: unknown) => toasts.error(err, 'Bench scenario failed'));
       else if (cmd.cmd === 'new') {
         const project = cmd.project ?? projects.activeId;
         if (!project) return;

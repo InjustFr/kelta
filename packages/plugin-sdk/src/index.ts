@@ -98,6 +98,15 @@ export interface Kelta {
   };
   notify(title: string, body?: string): Promise<unknown>;
   clipboard: { write(text: string): Promise<unknown> };
+  /** Own key-value store (needs `storage`): JSON values, 64 KiB each, 1 MiB per plugin. */
+  kv: {
+    /** `null` when the key is not set. */
+    get<T = unknown>(key: string): Promise<T | null>;
+    set(key: string, value: unknown): Promise<null>;
+    delete(key: string): Promise<null>;
+    /** Keys, sorted. */
+    list(): Promise<string[]>;
+  };
   onVisibility(cb: (visible: boolean) => void): () => void;
   onParams(cb: (params: unknown) => void): () => void;
   onTheme(cb: (theme: Record<string, string>) => void): () => void;
@@ -255,6 +264,12 @@ function createClient(win: Window, init: ScreenInit, port: MessagePort): Kelta {
     },
     notify: (title, body) => call('notify.send', { title, body }),
     clipboard: { write: (text) => call('clipboard.write', { text }) },
+    kv: {
+      get: (key) => call('kv.get', { key }),
+      set: (key, value) => call('kv.set', { key, value }),
+      delete: (key) => call('kv.delete', { key }),
+      list: () => call('kv.list'),
+    },
     onVisibility: (cb) => sub(visibility, cb),
     onParams: (cb) => sub(paramsListeners, cb),
     onTheme: (cb) => sub(themeListeners, cb),

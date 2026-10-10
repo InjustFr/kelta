@@ -149,7 +149,7 @@ pub struct PluginGrantRow {
     pub manifest_sha256: String,
 }
 
-/// `plugin_kv(plugin_id, key, value, PK(plugin_id, key))` — v0.2 consumers; table exists.
+/// `plugin_kv(plugin_id, key, value, PK(plugin_id, key))` — screens' `kv.*` (PLUGINS §7); value is JSON text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginKvRow {
     pub plugin_id: PluginId,

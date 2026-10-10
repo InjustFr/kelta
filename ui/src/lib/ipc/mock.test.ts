@@ -128,6 +128,7 @@ describe('mock transport', () => {
     };
     const args: Record<string, Record<string, unknown>> = {
       app_ready: { t_ms: 1 },
+      bench_mark: { key: 'k', value: 1 },
       open_external: { url: 'https://example.com' },
       clipboard_read: { kind: 'clipboard' },
       clipboard_write: { kind: 'primary', text: 'x' },

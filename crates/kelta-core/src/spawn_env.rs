@@ -66,6 +66,15 @@ pub fn assemble_env(i: &EnvInputs<'_>) -> BTreeMap<String, String> {
     env
 }
 
+/// Claude Code's config dir as the session will see it: `CLAUDE_CONFIG_DIR`, else `$HOME/.claude`.
+pub fn claude_config_dir(env: &BTreeMap<String, String>) -> Option<PathBuf> {
+    let home = env.get("HOME").filter(|h| !h.is_empty());
+    match env.get("CLAUDE_CONFIG_DIR").filter(|d| !d.is_empty()) {
+        Some(d) => Some(PathBuf::from(expand_tilde(d, home.map(String::as_str)))),
+        None => home.map(|h| Path::new(h).join(".claude")),
+    }
+}
+
 /// `terminal.shell`, else the login `$SHELL`, else the platform default.
 pub fn default_shell(terminal_shell: &str, login: &BTreeMap<String, String>) -> PathBuf {
     if !terminal_shell.trim().is_empty() {
@@ -289,6 +298,17 @@ mod tests {
         assert_eq!(out, v(&["-S", "/f.vim", "--listen", "/s", "."]));
         let out = editor_restore_args(&v(&["-S", "/old", "."]), Some(Path::new("/f.vim")), &|_| false);
         assert_eq!(out, v(&["."]));
+    }
+
+    #[test]
+    fn claude_dir() {
+        let env = |kv: &[(&str, &str)]| kv.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+        assert_eq!(claude_config_dir(&env(&[("HOME", "/h")])), Some(PathBuf::from("/h/.claude")));
+        assert_eq!(
+            claude_config_dir(&env(&[("HOME", "/h"), ("CLAUDE_CONFIG_DIR", "~/c")])),
+            Some(PathBuf::from("/h/c"))
+        );
+        assert_eq!(claude_config_dir(&env(&[])), None);
     }
 
     #[test]

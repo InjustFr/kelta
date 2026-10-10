@@ -66,6 +66,27 @@ end
 return { path = vim.api.nvim_buf_get_name(0), l1 = l1, l2 = l2, text = text }
 "#;
 
+/// `nvim_exec_lua` body: close the diff tab of `proposed` (tab var `kelta_ide_diff`), then unless
+/// `close`, open `old` and `proposed` side by side in a new tab.
+pub const LUA_DIFF: &str = r#"
+local old, proposed, close = ...
+for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+  local ok, d = pcall(vim.api.nvim_tabpage_get_var, tab, 'kelta_ide_diff')
+  if ok and type(d) == 'table' and d.file == proposed then
+    pcall(vim.cmd, 'tabclose ' .. vim.api.nvim_tabpage_get_number(tab))
+    pcall(vim.api.nvim_buf_delete, d.buf, { force = true })
+  end
+end
+if close then
+  pcall(vim.cmd, 'silent! checktime')
+  return proposed
+end
+vim.cmd('tabedit ' .. vim.fn.fnameescape(old))
+vim.cmd('vertical diffsplit ' .. vim.fn.fnameescape(proposed))
+vim.t.kelta_ide_diff = { file = proposed, buf = vim.api.nvim_get_current_buf() }
+return proposed
+"#;
+
 /// `nvim_exec_lua` body: `:wall | mksession! <file>`.
 pub const LUA_MKSESSION: &str = r#"
 local file = ...

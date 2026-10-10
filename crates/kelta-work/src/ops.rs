@@ -768,6 +768,26 @@ impl WorkService {
         }
     }
 
+    pub(crate) async fn editor_diff_impl(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        let info = self.editor_session(&core, &target).await?;
+        let sock = self
+            .editor_socket(&info)
+            .await
+            .ok_or_else(|| KeltaError::unsupported("the IDE diff needs an nvim (RPC) editor session"))?;
+        let path = |p: &Path| rmpv::Value::from(p.to_string_lossy().as_ref());
+        let mut c = NvimClient::connect(&sock).await?;
+        c.exec_lua(crate::nvim::LUA_DIFF, vec![path(old), path(proposed), rmpv::Value::from(close)])
+            .await
+            .map(|_| ())
+    }
+
     pub(crate) async fn send_selection_impl(
         &self,
         editor_session: &SessionId,

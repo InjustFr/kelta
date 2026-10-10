@@ -23,6 +23,8 @@ pub struct GraphicsInputs {
     pub guard_safe: bool,
     /// NVIDIA proprietary driver detected.
     pub nvidia: bool,
+    /// No DRM render node: WebKit's GL compositing would run on the CPU (VMs, containers).
+    pub no_gpu: bool,
 }
 
 /// True when the safe profile is in effect (every workaround on).
@@ -34,12 +36,14 @@ pub fn is_safe(i: &GraphicsInputs) -> bool {
 /// process environment are never overridden by [`apply`].
 pub fn decide(i: &GraphicsInputs) -> Vec<(&'static str, &'static str)> {
     let safe = is_safe(i);
-    let auto_nvidia = i.cfg.profile == GraphicsProfile::Auto && i.cfg.auto_nvidia && i.nvidia;
+    let auto = i.cfg.profile == GraphicsProfile::Auto;
+    let auto_nvidia = auto && i.cfg.auto_nvidia && i.nvidia;
     let mut out = Vec::new();
     if safe || auto_nvidia || i.cfg.disable_dmabuf {
         out.push((ENV_DMABUF, "1"));
     }
-    if safe || i.cfg.disable_compositing {
+    // Software GL compositing is several times slower per frame than plain painting (gate G2).
+    if safe || (auto && i.no_gpu) || i.cfg.disable_compositing {
         out.push((ENV_COMPOSITING, "1"));
     }
     if safe || auto_nvidia || i.cfg.nvidia_disable_explicit_sync {
@@ -61,6 +65,12 @@ pub fn decide(i: &GraphicsInputs) -> Vec<(&'static str, &'static str)> {
 /// `nvidia_drm` kernel module is loaded (`<root>/sys/module/nvidia_drm`). Nouveau does not match.
 pub fn detect_nvidia(root: &Path) -> bool {
     root.join("proc/driver/nvidia/version").is_file() || root.join("sys/module/nvidia_drm").is_dir()
+}
+
+/// True when `<root>/dev/dri` has no `renderD*` node (no GPU the webview could use).
+pub fn detect_no_gpu(root: &Path) -> bool {
+    let mut nodes = std::fs::read_dir(root.join("dev/dri")).into_iter().flatten().flatten();
+    !nodes.any(|e| e.file_name().to_string_lossy().starts_with("renderD"))
 }
 
 /// Exports `vars` unless the user already set them. Returns the variables actually set.
@@ -89,7 +99,13 @@ mod tests {
     }
 
     fn inputs() -> GraphicsInputs {
-        GraphicsInputs { cfg: LinuxGraphics::default(), safe_flag: false, guard_safe: false, nvidia: false }
+        GraphicsInputs {
+            cfg: LinuxGraphics::default(),
+            safe_flag: false,
+            guard_safe: false,
+            nvidia: false,
+            no_gpu: false,
+        }
     }
 
     #[test]
@@ -107,6 +123,20 @@ mod tests {
         assert!(!detect_nvidia(&fixture("nouveau")));
         assert!(!detect_nvidia(&fixture("empty")));
         assert!(!detect_nvidia(&fixture("does-not-exist")));
+    }
+
+    #[test]
+    fn detects_missing_render_node() {
+        assert!(!detect_no_gpu(&fixture("gpu")));
+        assert!(detect_no_gpu(&fixture("empty")));
+    }
+
+    #[test]
+    fn auto_without_gpu_disables_compositing_only() {
+        let mut i = GraphicsInputs { no_gpu: true, ..inputs() };
+        assert_eq!(decide(&i), vec![(ENV_COMPOSITING, "1")]);
+        i.cfg.profile = GraphicsProfile::Default;
+        assert!(decide(&i).is_empty());
     }
 
     #[test]
