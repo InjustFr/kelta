@@ -375,6 +375,9 @@ mod tests {
         let exe = tmp.path().join("faketool");
         std::fs::write(&exe, "#!/bin/sh\necho 'faketool 3.4.5'\n").unwrap();
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // The first exec of a fresh file can stall for seconds under load (macOS scans it); pay that
+        // outside the probe's 3 s limit so the test measures the probe, not the scanner.
+        assert!(std::process::Command::new(&exe).output().unwrap().status.success());
         let dirs = vec![tmp.path().to_path_buf()];
         let (c, v) = tool("faketool", true, Some("3.0"), &dirs).await;
         assert_eq!(c.status, CheckStatus::Ok);
