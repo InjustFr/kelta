@@ -10,7 +10,11 @@ A source is a place tickets come from: a Jira board or filter, a Redmine project
 Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A project can have several, from different
 accounts, so one project can show Jira and GitHub tickets together.
 
-- The pane shows every source of the project by default (first page of each, duplicates removed).
+- The pane shows every source of the project by default (first page of each, duplicates removed); **Load more**
+  pages every source that has more.
+- The palette and the ticket pickers search the trackers themselves (Jira `text ~`, Linear title and description,
+  GitHub / GitLab / Gitea search, Redmine subject), so they find tickets past the first page. A tracker that cannot
+  search matches the loaded first page instead; a typed key is also looked up directly.
 - `v` opens the source menu: "All sources", one entry per source, and "Add source...".
 - **Add source** (also Settings > Projects > Tracker) opens a sheet: choose the account, type to search, press
   `Enter` on a result. Providers that cannot list sources tell you so; edit the TOML instead
@@ -99,7 +103,7 @@ which is also what `g` does in a narrow pane.
 
 A ticket with work under way shows the work's phase in its row, with its lamp (Claude working, Claude needs
 you, To review, Changes requested, Checks failed, In review, Merged...): the state Now shows, from the same signals. With the
-detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now; `g` opens
+detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
 the detail instead.
 
 From top to bottom: key, title, status (a button: it opens the status picker), the action bar, a grid with

@@ -1215,6 +1215,25 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_create_ticket: ({ id, view_id, title, apply_side_effects }) => {
+      const w = work(id);
+      if (w.kind !== 'branch') throw err('conflict', 'work item already has a ticket');
+      const views = state.projects.find((p) => p.id === w.project_id)?.tracker?.views ?? [];
+      if (!views.some((v) => v.id === view_id)) throw err('not_found', `tracker source ${view_id}`);
+      if (!title.trim()) throw err('invalid_argument', 'the ticket needs a title');
+      const base = clone(state.tickets[0]!);
+      const key = `SHOP-${900 + state.tickets.length}`;
+      base.ticket = {
+        ...base.ticket,
+        ref: { ...base.ticket.ref, key, id: key },
+        title: title.trim(),
+        assignee: null,
+      };
+      base.project_ids = [w.project_id];
+      base.work_item_id = null;
+      state.tickets.push(base);
+      return handlers.work_link({ id, ticket: base.ticket.ref, apply_side_effects });
+    },
     work_status: ({ id }) => gitOf(work(id)),
     work_status_all: () =>
       Object.fromEntries(state.work.filter((w) => w.state.kind !== 'finished').map((w) => [w.id, gitOf(w)])),

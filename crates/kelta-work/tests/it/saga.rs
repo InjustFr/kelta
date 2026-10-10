@@ -4,12 +4,14 @@ use std::sync::Arc;
 
 use crate::common::{Fx, git, has_git, project};
 use async_trait::async_trait;
+use kelta_proto::codehost::PrDraft;
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::BusEvent;
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::AccountId;
 use kelta_proto::model::{
-    BranchChoice, PaneContent, Placement, SessionKind, StepStatus, WORK_STEPS, WorkSource, WorkState,
+    BranchChoice, PaneContent, Placement, SessionKind, ShipOrigin, StepStatus, WORK_STEPS, WorkSource,
+    WorkState,
 };
 use kelta_proto::samples;
 use kelta_proto::tracker::TicketRef;
@@ -649,6 +651,47 @@ async fn scratch_item_from_a_task() {
     assert_eq!(e.code, ErrorCode::InvalidArgument);
     let other = WorkSource::Branch { name: String::new(), task: Some("x".into()), repo: Some("nope".into()) };
     assert_eq!(w.plan(&project(), other).await.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[tokio::test]
+async fn create_ticket_files_then_links_a_scratch_item() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let a = w.start(w.plan(&project(), scratch("Explore caching")).await.unwrap()).await.unwrap();
+    // Refused before the tracker is called: no orphan ticket.
+    let e = w.create_ticket(&a.id, "nope", "Explore caching", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotFound);
+    let e = w.create_ticket(&a.id, "mine", "  ", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+    assert!(fx.tracker.calls().is_empty(), "{:?}", fx.tracker.calls());
+    // A ship holds the item lock: refused before the tracker call, so a retry cannot double-file.
+    std::fs::write(a.worktree.join("a.txt"), "x\n").unwrap();
+    git(&a.worktree, &["add", "a.txt"]);
+    git(&a.worktree, &["commit", "-q", "-m", "a"]);
+    let ship = tokio::spawn({
+        let (w, id) = (w.clone(), a.id.clone());
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Ui).await }
+    });
+    let push = fx.wait_session(|s| s.name == "git push").await;
+    let e = w.create_ticket(&a.id, "mine", "Explore caching", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(fx.tracker.calls().is_empty(), "{:?}", fx.tracker.calls());
+    git(&a.worktree, &["push", "-q", "-u", "origin", &a.branch]);
+    fx.core.exit_session(&push, 0);
+    ship.await.unwrap().unwrap();
+
+    let linked = w.create_ticket(&a.id, "mine", " Explore caching ", "The task", false).await.unwrap();
+    let key = linked.ticket.as_ref().map(|t| t.key.clone()).unwrap();
+    assert_eq!(linked.kind, kelta_proto::model::WorkKind::Ticket);
+    assert_eq!(linked.branch, "wip/explore-caching");
+    let created = fx.tracker.ticket(&key).unwrap();
+    assert_eq!((created.ticket.title.as_str(), created.body_md.as_str()), ("Explore caching", "The task"));
+    assert_eq!(fx.tracker.calls(), vec!["create:mine".to_owned(), format!("get:{key}")]);
+    // Already linked: refused before creating a second ticket.
+    let e = w.create_ticket(&a.id, "mine", "Again", "", false).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert_eq!(fx.tracker.calls().len(), 2);
 }
 
 #[tokio::test]

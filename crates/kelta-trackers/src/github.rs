@@ -545,6 +545,28 @@ impl GithubIssues {
     }
 }
 
+/// Project filter syntax (not issue search): `assignee:@me`, `no:assignee`, `iteration:@current`.
+fn project_filter(view: &TrackerView) -> String {
+    // shortcut: assumes the iteration field is named "Iteration", read the field name from ProjectV2.fields when a board differs.
+    [
+        match state_param(view) {
+            "open" => Some("is:open"),
+            "closed" => Some("is:closed"),
+            _ => None,
+        },
+        match view.who {
+            Some(Who::Mine) => Some("assignee:@me"),
+            Some(Who::Unassigned) => Some("no:assignee"),
+            _ => None,
+        },
+        view.current_iteration.then_some("iteration:@current"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
 fn state_param(view: &TrackerView) -> &'static str {
     match view.status.as_deref() {
         Some("closed") => "closed",
@@ -587,25 +609,7 @@ impl Tracker for GithubIssues {
                 Some(Cursor::After(a)) => Some(a),
                 Some(_) => return Err(KeltaError::invalid("github projects expect an `after` cursor")),
             };
-            // Project filter syntax (not issue search): `assignee:@me`, `no:assignee`, `iteration:@current`.
-            // shortcut: assumes the iteration field is named "Iteration", read the field name from ProjectV2.fields when a board differs.
-            let filter = [
-                match state_param(view) {
-                    "open" => Some("is:open"),
-                    "closed" => Some("is:closed"),
-                    _ => None,
-                },
-                match view.who {
-                    Some(Who::Mine) => Some("assignee:@me"),
-                    Some(Who::Unassigned) => Some("no:assignee"),
-                    _ => None,
-                },
-                view.current_iteration.then_some("iteration:@current"),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" ");
+            let filter = project_filter(view);
             return self.list_project_items(p, after, Some(filter).filter(|f| !f.is_empty())).await;
         }
         let page = Self::page_cursor(cursor)?;
@@ -666,6 +670,26 @@ impl Tracker for GithubIssues {
             .unwrap_or_default();
         let has_next = link_rel(&resp.headers, "next").is_some();
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
+    }
+
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        if let Some(p) = &view.project_v2 {
+            self.remember_view(view);
+            let filter = format!("{} {text}", project_filter(view));
+            return Ok(self.list_project_items(p, None, Some(filter.trim().to_owned())).await?.items);
+        }
+        // The view as an issue search (`list` adds `is:issue` and `who`), plus the text.
+        let state = match state_param(view) {
+            "all" => String::new(),
+            s => format!(" is:{s}"),
+        };
+        let q = match (view.search.as_deref(), view.repo.as_deref()) {
+            (Some(q), _) if !q.trim().is_empty() => format!("{q} {text}"),
+            (_, Some(repo)) if !repo.is_empty() => format!("repo:{repo}{state} {text}"),
+            _ => format!("assignee:@me{state} {text}"),
+        };
+        let view = TrackerView { search: Some(q), ..view.clone() };
+        Ok(self.list(&view, None).await?.items)
     }
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {
@@ -974,6 +998,19 @@ impl Tracker for GithubIssues {
             .body;
         self.ticket_with_board(&repo, number, &v)
             .await
+            .ok_or_else(|| KeltaError::upstream("issue response without repository"))
+    }
+
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let repo = common::create_in(project, "repo", project.repo.as_deref())?;
+        let v = self
+            .rest(
+                HttpRequest::post(format!("{}/repos/{repo}/issues", self.api))
+                    .json(json!({"title": title, "body": body_md})),
+            )
+            .await?
+            .body;
+        self.ticket_from_rest(&v, None)
             .ok_or_else(|| KeltaError::upstream("issue response without repository"))
     }
 

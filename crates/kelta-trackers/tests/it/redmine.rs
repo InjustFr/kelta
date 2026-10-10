@@ -465,3 +465,18 @@ async fn sprints_resolve_from_one_project_versions_call() {
     assert_eq!(count(&server, "GET", "/projects/5/versions.json").await, 1);
     assert_eq!(count(&server, "GET", "/versions/1.json").await, 0);
 }
+
+#[tokio::test]
+async fn search_filters_the_subject_server_side() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    Mock::given(method("GET"))
+        .and(path("/issues.json"))
+        .and(query_param("subject", "~login"))
+        .and(query_param("assigned_to_id", "me"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("redmine/issues_p2.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(!rm(&server, json!({})).search(&view("mine"), "login").await.unwrap().is_empty());
+}

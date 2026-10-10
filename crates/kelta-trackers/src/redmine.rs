@@ -264,6 +264,99 @@ impl RedmineTracker {
             Err(e) => Err(surface_422(e)),
         }
     }
+
+    /// `list`, narrowed to the tickets matching `text` when set.
+    async fn issues(
+        &self,
+        view: &TrackerView,
+        cursor: Option<Cursor>,
+        text: Option<&str>,
+    ) -> Result<Page<Ticket>, KeltaError> {
+        let offset = match cursor {
+            None => 0,
+            Some(Cursor::Offset(o)) => o,
+            Some(_) => return Err(KeltaError::invalid("redmine expects an offset cursor")),
+        };
+        self.ensure_statuses().await;
+        self.ensure_priorities().await;
+        let mut req = HttpRequest::get(format!("{}/issues.json", self.base))
+            .query("sort", "updated_on:desc")
+            .query("limit", PAGE_SIZE.to_string())
+            .query("offset", offset.to_string());
+        if let Some(p) = &view.project_id {
+            req = req.query("project_id", p.clone());
+        }
+        if let Some(t) = text {
+            req = req.query("subject", format!("~{t}"));
+        }
+        let mut version = None;
+        if view.current_iteration
+            && let Some(p) = &view.project_id
+        {
+            let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
+            version = current_version(&v, &today());
+        }
+        // A saved query ignores short filters like `fixed_version_id`: it is applied to what comes back.
+        if let Some(id) = version.clone().filter(|_| view.query_id.is_none()) {
+            req = req.query("fixed_version_id", id);
+        }
+        if let Some(q) = view.query_id {
+            // A saved query carries its own filters; `who` can only be applied to what comes back.
+            req = req.query("query_id", q.to_string());
+        } else {
+            let status = match view.status.as_deref() {
+                Some("closed") => "closed",
+                Some("*") => "*",
+                _ => "open",
+            };
+            req = req.query("status_id", status);
+            match view.who {
+                Some(Who::Mine) => req = req.query("assigned_to_id", "me"),
+                Some(Who::Unassigned) => req = req.query("assigned_to_id", "!*"),
+                Some(Who::Anyone) => {}
+                None if view.assigned_to.as_deref().unwrap_or("me") != "any" => {
+                    req = req.query("assigned_to_id", "me");
+                }
+                None => {}
+            }
+        }
+        let v = self.json(req).await?;
+        // Paging follows what Redmine returned, not what is left after the `who` filter below.
+        let raw = v.get("issues").and_then(Value::as_array).map_or(0, Vec::len) as u64;
+        let mut items: Vec<Ticket> = v
+            .get("issues")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter(|i| {
+                        view.query_id.is_none()
+                            || version.as_ref().is_none_or(|v| {
+                                i.pointer("/fixed_version/id").and_then(idstr).as_ref() == Some(v)
+                            })
+                    })
+                    .filter_map(|i| self.ticket_from(i).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if view.query_id.is_some() {
+            match view.who {
+                Some(Who::Mine) => {
+                    let me = self.me().await?.id;
+                    items.retain(|t| t.assignee.as_ref().is_some_and(|a| a.id == me));
+                }
+                Some(Who::Unassigned) => items.retain(|t| t.assignee.is_none()),
+                _ => {}
+            }
+            if let Some(t) = text.map(str::to_lowercase) {
+                items.retain(|i| i.title.to_lowercase().contains(&t));
+            }
+        }
+        self.resolve_sprints(&mut items).await;
+        let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
+        let end = offset as u64 + raw;
+        let next = (raw > 0 && end < total).then_some(Cursor::Offset(end as u32));
+        Ok(Page { items, next })
+    }
 }
 
 /// The project's current version: the open one with the earliest `due_date >= today`, else an open undated one.
@@ -339,84 +432,11 @@ impl Tracker for RedmineTracker {
     }
 
     async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError> {
-        let offset = match cursor {
-            None => 0,
-            Some(Cursor::Offset(o)) => o,
-            Some(_) => return Err(KeltaError::invalid("redmine expects an offset cursor")),
-        };
-        self.ensure_statuses().await;
-        self.ensure_priorities().await;
-        let mut req = HttpRequest::get(format!("{}/issues.json", self.base))
-            .query("sort", "updated_on:desc")
-            .query("limit", PAGE_SIZE.to_string())
-            .query("offset", offset.to_string());
-        if let Some(p) = &view.project_id {
-            req = req.query("project_id", p.clone());
-        }
-        let mut version = None;
-        if view.current_iteration
-            && let Some(p) = &view.project_id
-        {
-            let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
-            version = current_version(&v, &today());
-        }
-        // A saved query ignores short filters like `fixed_version_id`: it is applied to what comes back.
-        if let Some(id) = version.clone().filter(|_| view.query_id.is_none()) {
-            req = req.query("fixed_version_id", id);
-        }
-        if let Some(q) = view.query_id {
-            // A saved query carries its own filters; `who` can only be applied to what comes back.
-            req = req.query("query_id", q.to_string());
-        } else {
-            let status = match view.status.as_deref() {
-                Some("closed") => "closed",
-                Some("*") => "*",
-                _ => "open",
-            };
-            req = req.query("status_id", status);
-            match view.who {
-                Some(Who::Mine) => req = req.query("assigned_to_id", "me"),
-                Some(Who::Unassigned) => req = req.query("assigned_to_id", "!*"),
-                Some(Who::Anyone) => {}
-                None if view.assigned_to.as_deref().unwrap_or("me") != "any" => {
-                    req = req.query("assigned_to_id", "me");
-                }
-                None => {}
-            }
-        }
-        let v = self.json(req).await?;
-        // Paging follows what Redmine returned, not what is left after the `who` filter below.
-        let raw = v.get("issues").and_then(Value::as_array).map_or(0, Vec::len) as u64;
-        let mut items: Vec<Ticket> = v
-            .get("issues")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter(|i| {
-                        view.query_id.is_none()
-                            || version.as_ref().is_none_or(|v| {
-                                i.pointer("/fixed_version/id").and_then(idstr).as_ref() == Some(v)
-                            })
-                    })
-                    .filter_map(|i| self.ticket_from(i).ok())
-                    .collect()
-            })
-            .unwrap_or_default();
-        if view.query_id.is_some() {
-            match view.who {
-                Some(Who::Mine) => {
-                    let me = self.me().await?.id;
-                    items.retain(|t| t.assignee.as_ref().is_some_and(|a| a.id == me));
-                }
-                Some(Who::Unassigned) => items.retain(|t| t.assignee.is_none()),
-                _ => {}
-            }
-        }
-        self.resolve_sprints(&mut items).await;
-        let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
-        let end = offset as u64 + raw;
-        let next = (raw > 0 && end < total).then_some(Cursor::Offset(end as u32));
-        Ok(Page { items, next })
+        self.issues(view, cursor, None).await
+    }
+
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        Ok(self.issues(view, None, Some(text)).await?.items)
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
@@ -544,6 +564,18 @@ impl Tracker for RedmineTracker {
         };
         self.put_issue(&t.id, json!({ "assigned_to_id": id })).await?;
         self.refetch(&t.id).await
+    }
+
+    async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
+        let p = common::create_in(project, "project_id", project.project_id.as_deref())?;
+        let issue = json!({"project_id": p, "subject": title, "description": body_md});
+        let req = HttpRequest::post(format!("{}/issues.json", self.base)).json(json!({ "issue": issue }));
+        let v = self.json(req).await.map_err(surface_422)?;
+        let id = v
+            .pointer("/issue/id")
+            .and_then(idstr)
+            .ok_or_else(|| KeltaError::upstream("redmine response without `issue`"))?;
+        self.refetch(&id).await
     }
 
     async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError> {

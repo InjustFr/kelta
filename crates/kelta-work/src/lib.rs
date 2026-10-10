@@ -231,6 +231,18 @@ impl WorkService {
         self.link_impl(id, ticket, apply_side_effects).await
     }
 
+    /// `work_create_ticket`: file a ticket for a scratch item, then link it (see [`Self::link`]).
+    pub async fn create_ticket(
+        &self,
+        id: &WorkItemId,
+        view_id: &str,
+        title: &str,
+        body_md: &str,
+        apply_side_effects: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        self.create_ticket_impl(id, view_id, title, body_md, apply_side_effects).await
+    }
+
     /// `work_finish`.
     pub async fn finish(&self, id: &WorkItemId, opts: FinishOpts) -> Result<WorkItem, KeltaError> {
         self.finish_impl(id, opts).await
