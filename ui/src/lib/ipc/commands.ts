@@ -9,6 +9,7 @@
 
 import type {
   AccountId,
+  AccountKind,
   AccountTestResult,
   AppInfo,
   Assignee,
@@ -45,6 +46,7 @@ import type {
   Scope,
   ScreenInstanceId,
   ScreenOpenResult,
+  OAuthDevicePrompt,
   SecretBackendStatus,
   SessionId,
   SessionInfo,
@@ -114,6 +116,11 @@ export interface Commands {
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };
   secret_unlock: { args: { passphrase: string; create: boolean }; result: null };
+  oauth_device_start: {
+    args: { kind: AccountKind; base_url: string; secret_ref: string };
+    result: OAuthDevicePrompt;
+  };
+  oauth_device_finish: { args: { user_code: string }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -259,6 +266,8 @@ export const COMMAND_NAMES = [
   'secret_delete',
   'secret_backends_status',
   'secret_unlock',
+  'oauth_device_start',
+  'oauth_device_finish',
   'account_test',
   'project_list',
   'project_detect',
@@ -400,6 +409,8 @@ export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
 export const secretBackendsStatus = wrap('secret_backends_status');
 export const secretUnlock = wrap('secret_unlock');
+export const oauthDeviceStart = wrap('oauth_device_start');
+export const oauthDeviceFinish = wrap('oauth_device_finish');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------

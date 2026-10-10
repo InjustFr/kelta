@@ -434,6 +434,13 @@ export function createMockTransport(options: MockOptions = {}): {
     secret_delete: () => null,
     secret_backends_status: () => clone(samples.secretBackendsStatus),
     secret_unlock: () => null,
+    oauth_device_start: ({ kind }) => ({
+      user_code: 'WDJB-MJHT',
+      verification_uri:
+        kind === 'github' ? 'https://github.com/login/device' : 'https://gitlab.com/oauth/device',
+      expires_in: 900,
+    }),
+    oauth_device_finish: () => null,
     account_test: ({ account_id }) =>
       account_id.startsWith('broken')
         ? { ok: false, user: null, error: err('needs_auth', '401 Unauthorized') }

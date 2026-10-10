@@ -151,9 +151,9 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 ## 6. v0.1 scope
 
-**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
+**In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Gitea/Forgejo Issues, Linear; GitHub and GitLab sign-in with a pasted token or the OAuth device flow (user-registered OAuth apps, `oauth.client_ids`); code hosts GitHub (incl. GHE), GitLab (incl. self-managed), Bitbucket Cloud and Gitea/Forgejo; editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth for the other providers, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 
