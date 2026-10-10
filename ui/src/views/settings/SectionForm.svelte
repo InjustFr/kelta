@@ -17,9 +17,19 @@
     before?: Snippet;
     /** Rendered after the generated form. */
     after?: Snippet;
+    /** Paths left out of the generated form (owned by a custom control). */
+    skip?: readonly string[];
   }
 
-  let { sectionId, layer = 'global', projectId = null, repoId = null, before, after }: Props = $props();
+  let {
+    sectionId,
+    layer = 'global',
+    projectId = null,
+    repoId = null,
+    before,
+    after,
+    skip = [],
+  }: Props = $props();
 
   const editor = useEditor(() => ({ layer, projectId, repoId }));
   const roots = $derived(SECTION_ROOTS[sectionId] ?? []);
@@ -39,7 +49,7 @@
       {@const node = schema.properties?.[root]}
       {#if node}
         {#if roots.length === 1 && fieldKind(node) === 'group'}
-          {#each childEntries(node) as [key, child] (key)}
+          {#each childEntries(node).filter(([key]) => !skip.includes(joinPath( [root, key] ))) as [key, child] (key)}
             <Field path={joinPath([root, key])} node={child} depth={1} />
           {/each}
         {:else}

@@ -2,8 +2,24 @@
   import type { SettingsSectionProps } from '$app/registry';
 
   import SectionForm from '../SectionForm.svelte';
+  import ThemePicker from '../ThemePicker.svelte';
 
   let props: SettingsSectionProps = $props();
 </script>
 
-<SectionForm sectionId="general" {...props} />
+<SectionForm sectionId="general" {...props} skip={['app.dark_theme', 'app.light_theme']}>
+  {#snippet before()}
+    {#if props.layer === 'global'}
+      <ThemePicker />
+    {:else}
+      <p class="note" data-testid="theme-note">Themes are chosen in global settings.</p>
+    {/if}
+  {/snippet}
+</SectionForm>
+
+<style>
+  .note {
+    margin: 0 0 var(--k-space-3);
+    color: var(--k-fg-muted);
+  }
+</style>
