@@ -6,6 +6,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 
+import { acceptanceCriteria, refines } from './refine.svelte';
 import TicketDetail from './TicketDetail.svelte';
 
 let mock: MockControls;
@@ -22,6 +23,7 @@ beforeEach(async () => {
   ui.sheets = [];
   work.byId = {};
   reviews.lists = {};
+  for (const k of Object.keys(refines)) delete refines[k];
   await projects.load();
 });
 
@@ -43,7 +45,7 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'Shift+A', 'c', 'y', 'o']);
+    ).toEqual(['s', 'm', 'p', 'a', 'Shift+A', 'c', 'r', 'y', 'o']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
@@ -185,5 +187,49 @@ describe('TicketDetail', () => {
     const root = mount('SHOP-151');
     await fireEvent.keyDown(root, { key: 'c' });
     expect(document.activeElement).toBe(screen.getByLabelText(/Add a comment/));
+  });
+
+  it('r refines with Claude: preview, post as comment, criteria in the start prompt, discard', async () => {
+    const root = mount('SHOP-151');
+    const ref = itemOf('SHOP-151').ticket.ref;
+    await fireEvent.keyDown(root, { key: 'r' });
+    const section = await screen.findByTestId('ticket-refine');
+    await waitFor(() =>
+      expect(section.querySelector('pre')?.textContent).toContain('## Acceptance criteria'),
+    );
+    expect(mock.calls.find((c) => c.cmd === 'tracker_refine')?.args).toEqual({
+      ticket: ref,
+      project_id: 'shop',
+    });
+
+    await fireEvent.click(within(section).getByRole('button', { name: 'Post as comment' }));
+    await waitFor(() =>
+      expect(mock.calls.find((c) => c.cmd === 'tracker_comment')?.args).toMatchObject({
+        markdown: expect.stringContaining('## Open questions'),
+      }),
+    );
+    await within(section).findByRole('button', { name: 'Posted' });
+
+    const prompt = async () => {
+      await fireEvent.keyDown(root, { key: 's' });
+      await waitFor(() => expect(ui.sheets.length).toBeGreaterThan(0));
+      const sheet = ui.sheets.pop()!;
+      return (sheet.props as { plan: { claude: { prompt: string } } }).plan.claude.prompt;
+    };
+    expect(await prompt()).toContain('Acceptance criteria (from the refine):\n- [ ] ');
+
+    await fireEvent.click(within(section).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByTestId('ticket-refine')).toBeNull());
+    expect(await prompt()).not.toContain('from the refine');
+  });
+});
+
+describe('acceptanceCriteria', () => {
+  it('takes the section body up to the next heading', () => {
+    const md = '# T\n\n## Acceptance criteria\n\n- [ ] a\n- [ ] b\n\n## Open questions\nNone';
+    expect(acceptanceCriteria(md)).toBe('- [ ] a\n- [ ] b');
+    expect(acceptanceCriteria('### acceptance criteria\n- x')).toBe('- x');
+    expect(acceptanceCriteria('## Acceptance criteria\n\n## Open questions')).toBeNull();
+    expect(acceptanceCriteria('no section')).toBeNull();
   });
 });

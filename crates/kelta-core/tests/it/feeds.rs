@@ -844,3 +844,34 @@ async fn a_nudge_is_refused_for_24_hours_even_after_a_restart() {
     e.h.core.store().call(move |c| q::nudge_put(c, &rr, "2026-01-01T00:00:00Z")).await.unwrap();
     e.h.core.review_nudge(&r, &[], Some("ping")).await.unwrap();
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refine_feeds_claude_the_ticket_and_serves_get_ticket_over_mcp() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // Fake Claude: echoes the first stdin line, its args, then calls MCP get_ticket.
+    let fake = tmp.path().join("fake-claude");
+    std::fs::write(
+        &fake,
+        "#!/bin/sh\nhead -n1\necho \"args: $*\"\n/usr/bin/curl -s -H \"Authorization: Bearer $KELTA_MCP_TOKEN\" \
+         -H 'Content-Type: application/json' \
+         -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_ticket\"}}' \
+         \"$KELTA_MCP_URL\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    e.h.cfg.update(|s| s.claude.binary = fake.to_string_lossy().into_owned());
+    let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
+
+    let out = e.h.core.tracker_refine(&t, Some(&ProjectId::new("shop"))).await.unwrap();
+    assert!(out.starts_with("# SHOP-142: "), "{out}");
+    assert!(out.contains("args: -p ") && out.contains("--allowedTools mcp__kelta__get_ticket"), "{out}");
+    assert!(out.contains("Acceptance criteria"), "the prompt asks for the criteria: {out}");
+    assert!(out.contains("# SHOP-142: ") && out.contains("\"isError\":false"), "get_ticket answered: {out}");
+
+    std::fs::write(&fake, "#!/bin/sh\necho 'not logged in' >&2\nexit 1\n").unwrap();
+    let err = e.h.core.tracker_refine(&t, None).await.unwrap_err();
+    assert!(err.message.contains("could not refine SHOP-142: not logged in"), "{err:?}");
+}

@@ -79,6 +79,7 @@
     "allow-tracker-assignable-users",
     "allow-tracker-priorities",
     "allow-tracker-set-priority",
+    "allow-tracker-refine",
     "allow-tracker-search",
     "allow-tracker-sources",
     "allow-next-up-list",

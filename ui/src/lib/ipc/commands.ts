@@ -214,6 +214,7 @@ export interface Commands {
   tracker_assignable_users: { args: { ticket: TicketRef; query: string }; result: User[] };
   tracker_priorities: { args: { ticket: TicketRef }; result: string[] };
   tracker_set_priority: { args: { ticket: TicketRef; priority: string }; result: Ticket };
+  tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
   /** My Next up list, snoozes and seen tickets (#145): Kelta-local. */
@@ -389,6 +390,7 @@ export const COMMAND_NAMES = [
   'tracker_assignable_users',
   'tracker_priorities',
   'tracker_set_priority',
+  'tracker_refine',
   'tracker_search',
   'tracker_sources',
   'next_up_list',
@@ -605,6 +607,7 @@ export const trackerAssign = wrap('tracker_assign');
 export const trackerAssignableUsers = wrap('tracker_assignable_users');
 export const trackerPriorities = wrap('tracker_priorities');
 export const trackerSetPriority = wrap('tracker_set_priority');
+export const trackerRefine = wrap('tracker_refine');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
 export const nextUpList = wrap('next_up_list');

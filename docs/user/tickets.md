@@ -67,6 +67,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 | `a` `A` | assign to me, unassign |
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
+| `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |

@@ -31,6 +31,7 @@
   import ActionBar from './ActionBar.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
+  import { discard, refine, refines } from './refine.svelte';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -55,6 +56,7 @@
   const project = $derived(projectId ?? item.project_ids[0] ?? projects.activeId);
   const workItem = $derived(work.forTicket(ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null));
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
+  const proposal = $derived(refines[key] ?? null);
 
   let root = $state<HTMLDivElement>();
   let statusBtn = $state<HTMLElement>();
@@ -168,6 +170,32 @@
     }
   }
 
+  async function postProposal(): Promise<void> {
+    const text = proposal?.text;
+    if (!text || posting) return;
+    posting = true;
+    try {
+      await trackerComment({ ticket: ref, markdown: text });
+      if (refines[key]) refines[key].posted = true;
+      toasts.info(`Refinement posted on ${ref.key}`);
+      void tickets.loadDetail(ref);
+    } catch (err) {
+      toasts.error(err, `Commenting on ${ref.key}`);
+    } finally {
+      posting = false;
+    }
+  }
+
+  async function copyProposal(): Promise<void> {
+    if (!proposal?.text) return;
+    try {
+      await clipboardWrite({ kind: 'clipboard', text: proposal.text });
+      toasts.info('Copied the refinement');
+    } catch (err) {
+      toasts.error(err, 'Copy');
+    }
+  }
+
   async function copyBranch(): Promise<void> {
     if (!branch) return;
     try {
@@ -207,6 +235,9 @@
         break;
       case 'comment':
         commentBox?.querySelector('textarea')?.focus();
+        break;
+      case 'refine':
+        void refine(ref, project);
         break;
       case 'branch':
         void copyBranch();
@@ -425,6 +456,30 @@
             <span class="pr-title">{c.ticket.title}</span>
           </button>
         {/each}
+      </section>
+    {/if}
+
+    {#if proposal}
+      <section aria-label="Refinement" data-testid="ticket-refine">
+        <h2>
+          Refinement {#if proposal.running}<span class="muted">Claude is working…</span>{/if}
+        </h2>
+        {#if proposal.text !== null}
+          <pre class="proposal">{proposal.text}</pre>
+          <div class="refine-actions">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={proposal.posted || !item.caps.comment}
+              loading={posting}
+              title={item.caps.comment ? undefined : 'This tracker does not let Kelta add comments.'}
+              onclick={() => void postProposal()}>{proposal.posted ? 'Posted' : 'Post as comment'}</Button
+            >
+            <Button size="sm" onclick={() => void copyProposal()}>Copy</Button>
+            <Button size="sm" variant="ghost" onclick={() => discard(ref)}>Discard</Button>
+          </div>
+          <p class="muted">Start work adds these acceptance criteria to Claude's first prompt.</p>
+        {/if}
       </section>
     {/if}
 
@@ -733,5 +788,24 @@
 
   .compose :global(.k-field) {
     align-self: stretch;
+  }
+
+  .proposal {
+    max-width: var(--k-measure);
+    margin: 0;
+    padding: var(--k-space-3);
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-sm);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: var(--k-bezel-raised);
+    border-radius: var(--k-radius-sm);
+  }
+
+  .refine-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-space-2);
+    margin-top: var(--k-space-3);
   }
 </style>
