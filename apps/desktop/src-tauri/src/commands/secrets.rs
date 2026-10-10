@@ -33,3 +33,22 @@ pub async fn secret_backends_status(core: State<'_, Arc<Core>>) -> Res<Vec<Secre
 pub async fn secret_unlock(core: State<'_, Arc<Core>>, passphrase: String, create: bool) -> Res<()> {
     core.secrets().unlock(passphrase, create).await
 }
+
+/// "Sign in with browser": a device code for GitHub / GitLab. The response carries only the
+/// user code and URL to show; the device code stays in the core.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn oauth_device_start(
+    core: State<'_, Arc<Core>>,
+    kind: AccountKind,
+    base_url: String,
+    secret_ref: String,
+) -> Res<OAuthDevicePrompt> {
+    core.oauth_device_start(kind, &base_url, SecretRef::new(secret_ref)).await
+}
+
+/// Resolves once the user approved `user_code` and the tokens are stored at the start's
+/// `secret_ref`; `timeout` when the code expired, `cancelled` when denied.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn oauth_device_finish(core: State<'_, Arc<Core>>, user_code: String) -> Res<()> {
+    core.oauth_device_finish(&user_code).await
+}

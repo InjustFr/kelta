@@ -680,19 +680,31 @@
         "description": "One tracker / code-host account (global scope only).",
         "properties": {
           "auth": {
-            "default": null,
-            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth).",
-            "enum": [
-              "basic",
-              "bearer",
-              "api_key",
-              "token",
-              null
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "basic",
+                      "bearer",
+                      "api_key",
+                      "token"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "oauth",
+                    "description": "Bearer token from \"Sign in with browser\" (device flow), refreshed before it expires.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "type": [
-              "string",
-              "null"
-            ]
+            "default": null,
+            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth)."
           },
           "base_url": {
             "default": null,
@@ -2261,6 +2273,29 @@
       "type": "object",
       "x-kelta-category": "Notifications",
       "x-kelta-order": 12
+    },
+    "oauth": {
+      "additionalProperties": false,
+      "default": {
+        "client_ids": {}
+      },
+      "description": "OAuth apps used by \"Sign in with browser\" (device flow, GitHub and GitLab).",
+      "properties": {
+        "client_ids": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Client id of the GitHub OAuth App or application id of the GitLab application, per host (`github.com`, `gitlab.com`, `gitlab.acme.example`). Public values; a host without one only offers pasted tokens.",
+          "type": "object"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Accounts",
+      "x-kelta-order": 6,
+      "x-kelta-scope": [
+        "global"
+      ]
     },
     "performance": {
       "additionalProperties": false,

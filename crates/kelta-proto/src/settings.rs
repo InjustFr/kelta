@@ -84,6 +84,12 @@ pub struct Settings {
     ))]
     pub accounts: BTreeMap<AccountId, AccountConfig>,
     #[schemars(extend(
+        "x-kelta-category" = "Accounts",
+        "x-kelta-order" = 6,
+        "x-kelta-scope" = ["global"]
+    ))]
+    pub oauth: OAuthSettings,
+    #[schemars(extend(
         "x-kelta-category" = "Worktree & work",
         "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"],
@@ -1099,6 +1105,16 @@ pub enum AuthKind {
     Bearer,
     ApiKey,
     Token,
+    /// Bearer token from "Sign in with browser" (device flow), refreshed before it expires.
+    Oauth,
+}
+
+/// OAuth apps used by "Sign in with browser" (device flow, GitHub and GitLab).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct OAuthSettings {
+    /// Client id of the GitHub OAuth App or application id of the GitLab application, per host (`github.com`, `gitlab.com`, `gitlab.acme.example`). Public values; a host without one only offers pasted tokens.
+    pub client_ids: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -1306,6 +1322,7 @@ impl Default for Settings {
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),
+            oauth: OAuthSettings::default(),
             session_templates: default_session_templates(),
             tools: Vec::new(),
             triggers: Vec::new(),

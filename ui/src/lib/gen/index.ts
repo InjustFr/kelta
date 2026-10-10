@@ -90,6 +90,8 @@ export type * from './Matcher';
 export type * from './MyReviewState';
 export type * from './Notification';
 export type * from './NotificationSettings';
+export type * from './OAuthDevicePrompt';
+export type * from './OAuthSettings';
 export type * from './OnMerge';
 export type * from './OnPr';
 export type * from './OnStart';

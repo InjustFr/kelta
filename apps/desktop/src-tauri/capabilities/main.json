@@ -35,6 +35,8 @@
     "allow-secret-delete",
     "allow-secret-backends-status",
     "allow-secret-unlock",
+    "allow-oauth-device-start",
+    "allow-oauth-device-finish",
     "allow-account-test",
     "allow-project-list",
     "allow-project-detect",

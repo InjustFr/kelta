@@ -371,7 +371,7 @@ fn jitter_unit() -> f64 {
     (RandomState::new().hash_one(0u8) >> 11) as f64 / (1u64 << 53) as f64
 }
 
-fn map_reqwest_error(e: reqwest::Error) -> KeltaError {
+pub(crate) fn map_reqwest_error(e: reqwest::Error) -> KeltaError {
     if e.is_timeout() {
         KeltaError::timeout(format!("request timed out: {}", short(&e)))
     } else if e.is_connect() || e.is_request() {

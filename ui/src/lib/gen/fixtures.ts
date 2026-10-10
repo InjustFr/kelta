@@ -1536,6 +1536,9 @@ export const settingsDefault: Settings = {
     "quiet_hours": "",
     "review_requested": true
   },
+  "oauth": {
+    "client_ids": {}
+  },
   "performance": {
     "hud": false
   },
