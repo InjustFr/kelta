@@ -33,6 +33,10 @@ const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority es
     startedAt cycle { id name number isActive endsAt } state { id name type } \
     assignee { id name displayName avatarUrl } labels { nodes { name } } team { key }";
 
+/// Linear's fixed priorities as (label, API value), highest first.
+const PRIORITIES: [(&str, u8); 5] =
+    [("Urgent", 1), ("High", 2), ("Medium", 3), ("Low", 4), ("No priority", 0)];
+
 pub struct LinearTracker {
     gql: String,
     auth: Authed,
@@ -459,6 +463,29 @@ impl Tracker for LinearTracker {
             Assignee::None => None,
         };
         self.update(t, json!({"assigneeId": id})).await
+    }
+
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        let q = format!(
+            "query($id: String!, $q: String!) {{ issue(id: $id) {{ team {{ members(first: 20, filter: \
+             {{ active: {{ eq: true }}, or: [{{ name: {{ containsIgnoreCase: $q }} }}, \
+             {{ displayName: {{ containsIgnoreCase: $q }} }}] }}) {{ nodes {{ {USER} }} }} }} }} }}"
+        );
+        let d = self.gql(&q, json!({"id": Self::id_of(t), "q": query.trim()})).await?;
+        let nodes = d.pointer("/issue/team/members/nodes").and_then(Value::as_array);
+        Ok(nodes.map(|a| a.iter().filter_map(user_from).collect()).unwrap_or_default())
+    }
+
+    async fn priorities(&self, _t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        Ok(PRIORITIES.iter().map(|(n, _)| (*n).to_owned()).collect())
+    }
+
+    async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
+        let (_, n) = PRIORITIES
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(priority.trim()))
+            .ok_or_else(|| KeltaError::invalid(format!("no Linear priority named `{priority}`")))?;
+        self.update(t, json!({"priority": n})).await
     }
 
     fn browser_url(&self, t: &TicketRef) -> String {

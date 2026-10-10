@@ -74,6 +74,29 @@ pub async fn tracker_assign(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_assignable_users(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    query: String,
+) -> Res<Vec<User>> {
+    core.tracker_assignable_users(&ticket, &query).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_priorities(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Res<Vec<String>> {
+    core.tracker_priorities(&ticket).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_set_priority(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    priority: String,
+) -> Res<Ticket> {
+    core.tracker_set_priority(&ticket, &priority).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_search(core: State<'_, Arc<Core>>, scope: Scope, text: String) -> Res<Vec<TicketItem>> {
     core.tracker_search(scope, &text).await
 }

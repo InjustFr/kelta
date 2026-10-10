@@ -188,6 +188,45 @@ async fn notes_and_assignment() {
 }
 
 #[tokio::test]
+async fn reassign_picker_and_priority_change() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;
+    mount(&server, "GET", "/issues/4567.json", 200, "redmine/issue.json").await;
+    mount_json(
+        &server,
+        "/enumerations/issue_priorities.json",
+        json!({"issue_priorities": [
+            {"id": 1, "name": "Low"}, {"id": 2, "name": "Normal"}, {"id": 9, "name": "Old", "active": false},
+            {"id": 3, "name": "High"}
+        ]}),
+    )
+    .await;
+    mount_json(
+        &server,
+        "/projects/3/memberships.json",
+        json!({"memberships": [
+            {"id": 1, "user": {"id": 7, "name": "Louis Dupont"}},
+            {"id": 2, "group": {"id": 20, "name": "Developers"}},
+            {"id": 3, "user": {"id": 8, "name": "Dave Lee"}}
+        ]}),
+    )
+    .await;
+    Mock::given(method("PUT"))
+        .and(path("/issues/4567.json"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    let t = rm(&server, json!({}));
+    let users = t.assignable_users(&r(), "dave").await.unwrap();
+    assert_eq!(users.iter().map(|u| u.id.as_str()).collect::<Vec<_>>(), ["8"]);
+    assert_eq!(t.assignable_users(&r(), "").await.unwrap().len(), 2, "groups left out");
+    assert_eq!(t.priorities(&r()).await.unwrap(), ["High", "Normal", "Low"]);
+    t.set_priority(&r(), "high").await.unwrap();
+    assert_eq!(bodies(&server, "PUT", "/issues/4567.json").await[0], json!({"issue": {"priority_id": "3"}}));
+    assert_eq!(t.set_priority(&r(), "Old").await.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[tokio::test]
 async fn columns_group_statuses_by_category() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/issue_statuses.json", 200, "redmine/issue_statuses.json").await;

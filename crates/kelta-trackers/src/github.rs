@@ -30,6 +30,9 @@ use crate::common::{
 
 const PER_PAGE: u32 = 50;
 const DEFAULT_STATUS_FIELD: &str = "Status";
+const PRIORITY_FIELD: &str = "Priority";
+/// Sets a single-select field of a Projects v2 item.
+const SET_OPTION: &str = "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }";
 
 /// Single-select field of a Projects v2 project.
 #[derive(Debug, Clone)]
@@ -527,13 +530,22 @@ impl GithubIssues {
         if !refresh && let Some(f) = self.fields.lock().get(&item.project_id).cloned() {
             return Ok(Some(f));
         }
+        let meta =
+            self.select_field(&item.project_id, &self.status_field_name(&item.owner, item.number)).await?;
+        if let Some(m) = &meta {
+            self.fields.lock().insert(item.project_id.clone(), m.clone());
+        }
+        Ok(meta)
+    }
+
+    /// The single-select field named `wanted` of a project (any case), uncached.
+    async fn select_field(&self, project_id: &str, wanted: &str) -> Result<Option<FieldMeta>, KeltaError> {
         const Q: &str = "query($id:ID!){ node(id:$id){ ... on ProjectV2 { fields(first:50){ nodes{ ... on ProjectV2SingleSelectField { id name options{ id name } } } } } } }";
-        let data = self.gql(Q, json!({"id": item.project_id})).await?;
-        let wanted = self.status_field_name(&item.owner, item.number);
-        let meta = data
+        let data = self.gql(Q, json!({"id": project_id})).await?;
+        Ok(data
             .pointer("/node/fields/nodes")
             .and_then(Value::as_array)
-            .and_then(|fs| fs.iter().find(|f| s(f, "name").is_some_and(|n| n.eq_ignore_ascii_case(&wanted))))
+            .and_then(|fs| fs.iter().find(|f| s(f, "name").is_some_and(|n| n.eq_ignore_ascii_case(wanted))))
             .and_then(|f| {
                 Some(FieldMeta {
                     field_id: s(f, "id")?.to_owned(),
@@ -547,11 +559,19 @@ impl GithubIssues {
                         })
                         .unwrap_or_default(),
                 })
-            });
-        if let Some(m) = &meta {
-            self.fields.lock().insert(item.project_id.clone(), m.clone());
+            }))
+    }
+
+    /// The issue's first Projects v2 item whose project has a Priority field, with that field.
+    async fn priority_field(&self, repo: &str, number: u64) -> Result<(ItemInfo, FieldMeta), KeltaError> {
+        for item in self.issue_projects(repo, number).await?.items {
+            if let Some(f) = self.select_field(&item.project_id, PRIORITY_FIELD).await? {
+                return Ok((item, f));
+            }
         }
-        Ok(meta)
+        Err(KeltaError::unsupported(format!(
+            "{repo}#{number} is in no Projects v2 project with a {PRIORITY_FIELD} field"
+        )))
     }
 
     async fn move_in_project(
@@ -564,7 +584,6 @@ impl GithubIssues {
         if info.items.is_empty() {
             return Err(KeltaError::not_found(format!("{repo}#{number} is not in a Projects v2 project")));
         }
-        const M: &str = "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }";
         let mut last_err = None;
         for item in &info.items {
             // First try with the cached field; if the option is unknown or the mutation fails
@@ -573,7 +592,10 @@ impl GithubIssues {
                 let Some(meta) = self.status_field(item, refresh).await? else { break };
                 let Some((opt_id, opt_name)) = meta.option(option_name).cloned() else { continue };
                 match self
-                    .gql(M, json!({"p": item.project_id, "i": item.item_id, "f": meta.field_id, "o": opt_id}))
+                    .gql(
+                        SET_OPTION,
+                        json!({"p": item.project_id, "i": item.item_id, "f": meta.field_id, "o": opt_id}),
+                    )
                     .await
                 {
                     Ok(_) => {
@@ -889,6 +911,36 @@ impl Tracker for GithubIssues {
             });
         }
         Ok(hits)
+    }
+
+    // shortcut: the first page of 100 assignees, filtered here; page on when a repo has more.
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        let (repo, _) = split_repo_number(&t.key)?;
+        let req = HttpRequest::get(format!("{}/repos/{repo}/assignees", self.api)).query("per_page", "100");
+        let users =
+            self.rest(req).await?.body.as_array().map(|a| a.iter().filter_map(Self::user_from).collect());
+        Ok(common::users_matching(users.unwrap_or_else(Vec::new), query))
+    }
+
+    /// The options of the Priority field of the issue's Projects v2 board (plain issues have none).
+    async fn priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        let (repo, number) = split_repo_number(&t.key)?;
+        let (_, field) = self.priority_field(&repo, number).await?;
+        Ok(field.options.into_iter().map(|(_, name)| name).collect())
+    }
+
+    async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
+        let (repo, number) = split_repo_number(&t.key)?;
+        let (item, field) = self.priority_field(&repo, number).await?;
+        let (opt, _) = field
+            .option(priority)
+            .ok_or_else(|| KeltaError::not_found(format!("no {PRIORITY_FIELD} option named `{priority}`")))?;
+        self.gql(SET_OPTION, json!({"p": item.project_id, "i": item.item_id, "f": field.field_id, "o": opt}))
+            .await?;
+        let issue = self.fetch_issue(&repo, number).await?;
+        self.ticket_with_board(&repo, number, &issue)
+            .await
+            .ok_or_else(|| KeltaError::upstream("issue response without repository"))
     }
 
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {

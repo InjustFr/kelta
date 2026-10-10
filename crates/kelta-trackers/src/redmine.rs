@@ -256,6 +256,19 @@ impl RedmineTracker {
         Ok(ticket)
     }
 
+    /// `(id, name)` of the active issue priorities, highest first (the server lists them lowest first).
+    async fn priority_list(&self) -> Result<Vec<(String, String)>, KeltaError> {
+        let v =
+            self.json(HttpRequest::get(format!("{}/enumerations/issue_priorities.json", self.base))).await?;
+        let rows = v.get("issue_priorities").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+        Ok(rows
+            .iter()
+            .rev()
+            .filter(|p| p.get("active").and_then(Value::as_bool) != Some(false))
+            .filter_map(|p| Some((p.get("id").and_then(idstr)?, s(p, "name")?.to_owned())))
+            .collect())
+    }
+
     async fn put_issue(&self, id: &str, issue: Value) -> Result<(), KeltaError> {
         id.parse::<u64>().map_err(|_| KeltaError::invalid(format!("bad redmine id: {id}")))?;
         let url = format!("{}/issues/{id}.json", self.base);
@@ -581,6 +594,37 @@ impl Tracker for RedmineTracker {
             Assignee::None => json!(""),
         };
         self.put_issue(&t.id, json!({ "assigned_to_id": id })).await?;
+        self.refetch(&t.id).await
+    }
+
+    async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError> {
+        let issue = self.fetch_issue(&t.id, None).await?;
+        let project = issue
+            .pointer("/project/id")
+            .and_then(idstr)
+            .ok_or_else(|| KeltaError::upstream("redmine issue without project"))?;
+        // shortcut: the first 100 members (groups left out), page on when a project has more.
+        let url = format!("{}/projects/{project}/memberships.json", self.base);
+        let v = self.json(HttpRequest::get(url).query("limit", "100")).await?;
+        let rows = v.get("memberships").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+        Ok(common::users_matching(
+            rows.iter().filter_map(|m| m.get("user")).filter_map(Self::user_from),
+            query,
+        ))
+    }
+
+    async fn priorities(&self, _t: &TicketRef) -> Result<Vec<String>, KeltaError> {
+        Ok(self.priority_list().await?.into_iter().map(|(_, name)| name).collect())
+    }
+
+    async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
+        let (id, _) = self
+            .priority_list()
+            .await?
+            .into_iter()
+            .find(|(_, n)| n.eq_ignore_ascii_case(priority))
+            .ok_or_else(|| KeltaError::not_found(format!("no Redmine priority named `{priority}`")))?;
+        self.put_issue(&t.id, json!({ "priority_id": id })).await?;
         self.refetch(&t.id).await
     }
 
