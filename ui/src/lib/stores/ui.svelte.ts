@@ -10,7 +10,9 @@ export type SheetKey =
   | 'project_new'
   | 'plugin_install'
   | 'tool_picker'
-  | 'session_new';
+  | 'session_new'
+  | 'fix'
+  | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {

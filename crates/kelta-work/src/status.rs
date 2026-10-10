@@ -12,7 +12,7 @@ use kelta_proto::model::{
 
 use crate::saga::{COLS, Env, ROWS};
 use crate::template::{Mode, render, shell_quote};
-use crate::{WorkService, editor, git};
+use crate::{WorkService, editor, git, rebase};
 
 /// `work_status_all` fetches a repo at most this often (no polling: it runs on focus and Now open).
 const FETCH_FLOOR: Duration = Duration::from_secs(5 * 60);
@@ -44,6 +44,9 @@ impl WorkService {
             (st.ahead, st.behind) = git::ahead_behind(&item.worktree, &base).await?;
             (st.files, st.insertions, st.deletions) = git::diffstat(&item.worktree, &base).await?;
         }
+        let remote_ref = format!("refs/remotes/{}/{}", env.repo.remote, item.branch);
+        st.diverged = rebase::diverged(&item.worktree, &remote_ref, item.rebase.as_deref()).await?;
+        st.remote_new = rebase::remote_new(&item.worktree, &remote_ref, item.rebase.as_deref()).await?;
         Ok(st)
     }
 

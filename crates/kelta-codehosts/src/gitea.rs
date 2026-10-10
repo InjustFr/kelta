@@ -120,6 +120,7 @@ impl GiteaHost {
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
             ci: CiState::None,
             decision: None,
+            decision_head: None,
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             mergeable: v.get("mergeable").and_then(Value::as_bool),
             labels: v

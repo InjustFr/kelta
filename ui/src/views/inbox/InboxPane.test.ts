@@ -99,8 +99,8 @@ describe('Now', () => {
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: 'j' });
-    await fireEvent.keyDown(pane, { key: 'r' });
-    expect(toasts.list.at(-1)?.toast.text).toMatch(/not available yet/);
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(toasts.list.at(-1)?.toast.text).toMatch(/Only while a rebase is stopped/);
     await fireEvent.keyDown(pane, { key: 'x' });
     await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
   });

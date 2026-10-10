@@ -46,6 +46,7 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                 ) else {
                     continue;
                 };
+                let stop = ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop");
                 // Hooks read git status: off the listener task, in order per session.
                 let prev = last_hook.remove(&sid);
                 let key = sid.clone();
@@ -55,6 +56,14 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     }
                     if let Err(e) = svc.on_claude_hook(&sid, hook).await {
                         tracing::debug!(error = %e.message, "work item hook signal failed");
+                    }
+                    // Claude may have finished (or aborted) a rebase it was asked to resolve.
+                    if stop
+                        && let Some(item) = svc.for_session(&sid).await
+                        && item.rebase.is_some()
+                        && let Err(e) = svc.refresh_rebase(&item.id).await
+                    {
+                        tracing::debug!(error = %e.message, "rebase re-read on Stop failed");
                     }
                 });
                 last_hook.insert(key, task);

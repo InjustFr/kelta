@@ -82,9 +82,23 @@
     if (rv) openExternal({ url: rv.url }).catch((err) => toasts.error(err, 'Open in browser'));
   }
 
+  /** My own PR: fixed through its work item, never approved here (FLOW §4.2). */
+  const own = $derived(rv?.kind === 'authored');
+
+  function fixWithClaude(): void {
+    void dispatch('work.fix_pr', { review: ref, project_id: projectId });
+  }
+
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (own && (e.key === 'f' || e.key === 'g')) {
+      e.preventDefault();
+      if (e.key === 'f') fixWithClaude();
+      else void reviewLocally(ref, projectId);
+      return;
+    }
+    if (own && ['A', 'c', 'x'].includes(e.key)) return;
     switch (e.key) {
       case 'a':
         void approve();
@@ -189,20 +203,27 @@
           <dd><Badge tone="warn">conflicts</Badge></dd>{/if}
       </dl>
       <div class="line actions">
-        <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
-          >Approve</Button
-        >
-        <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
-        <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
-        {#if detail.pending_comments > 0}
-          <span class="pending" data-testid="pending-comments">
-            {detail.pending_comments} pending {detail.pending_comments === 1 ? 'comment' : 'comments'}
-          </span>
+        {#if own}
+          <Button variant="primary" icon="bot" onclick={fixWithClaude}>Fix with Claude</Button>
+          <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>Go to work item</Button
+          >
+          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+        {:else}
+          <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
+            >Approve</Button
+          >
+          <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
+          <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
+          {#if detail.pending_comments > 0}
+            <span class="pending" data-testid="pending-comments">
+              {detail.pending_comments} pending {detail.pending_comments === 1 ? 'comment' : 'comments'}
+            </span>
+          {/if}
+          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
+            Review locally
+          </Button>
         {/if}
-        <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
-        <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
-          Review locally
-        </Button>
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
       </div>
     </header>

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind};
 use kelta_proto::error::ErrorCode;
-use serde_json::json;
+use serde_json::{Value, json};
 use support::*;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -204,6 +204,7 @@ async fn detail_combines_reviews_checks_and_files() {
     assert_eq!(d.review.head_sha, "abc123");
     assert_eq!(d.review.ci, CiState::Pending, "one run still in progress");
     assert_eq!(d.review.decision, Some(ReviewDecision::ChangesRequested));
+    assert_eq!(d.review.decision_head.as_deref(), Some("abc123"), "head of erin's change request");
     assert_eq!(d.review.my_state, Some(MyReviewState::Pending));
     assert_eq!(d.review.linked_tickets, vec!["SHOP-142"]);
     assert_eq!(
@@ -385,6 +386,94 @@ async fn unauthorized_is_needs_auth_and_secret_is_invalidated() {
     let (h, secrets) = host_with("github-work", "github", &server.uri(), TOKEN);
     assert_eq!(h.me().await.unwrap_err().code, ErrorCode::NeedsAuth);
     assert_eq!(secrets.invalidated(), vec!["env:TOK"]);
+}
+
+#[tokio::test]
+async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/graphql", 200, "github/gql_feedback.json").await;
+    mount(
+        &server,
+        "GET",
+        "/repos/acme/shop/commits/abc123/check-runs",
+        200,
+        "github/check_runs_actions.json",
+    )
+    .await;
+    let log: String = (1..=60).map(|i| format!("line {i}\n")).collect();
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/shop/actions/jobs/9/logs"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(log))
+        .mount(&server)
+        .await;
+    let f = gh(&server).feedback(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    let q = &bodies(&server, "POST", "/graphql").await[0];
+    assert_eq!((q["variables"]["o"].as_str(), q["variables"]["num"].as_u64()), (Some("acme"), Some(101)));
+
+    assert_eq!(f.threads.len(), 1, "resolved threads are dropped");
+    let t = &f.threads[0];
+    assert_eq!((t.id.as_str(), t.author.as_str()), ("PRRT_open", "erin"));
+    assert_eq!((t.path.as_deref(), t.line), (Some("src/limiter.rs"), Some(42)), "outdated → original line");
+    assert_eq!(t.body_md, "erin: Reset the counter on success.\n\nlouis: Will do.");
+    assert_eq!(f.reviews.len(), 2, "empty bodies dropped");
+    assert_eq!(f.reviews[0].state, Some(MyReviewState::ChangesRequested));
+    assert_eq!(f.reviewers, vec!["erin", "zed"], "me excluded");
+    assert_eq!(f.failed_checks.len(), 1);
+    let c = &f.failed_checks[0];
+    assert_eq!((c.name.as_str(), c.url.as_deref()), ("tests", Some("https://github.com/acme/shop/runs/9")));
+    let tail = c.log_tail.as_deref().unwrap();
+    assert_eq!(tail.lines().count(), 40);
+    assert!(tail.starts_with("line 21") && tail.ends_with("line 60"));
+}
+
+#[tokio::test]
+async fn feedback_refused_names_the_missing_scope() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    let e = gh(&server).feedback(&rref("github-work", "acme/shop", 101)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(e.message, "GitHub refused the review threads (403: token lacks `pull_requests:read`).");
+}
+
+#[tokio::test]
+async fn rerequest_asks_previous_reviewers_and_resolve_runs_one_mutation_per_thread() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/user", 200, "github/user.json").await;
+    mount(&server, "GET", "/repos/acme/shop/pulls/101/reviews", 200, "github/reviews.json").await;
+    Mock::given(method("POST"))
+        .and(path("/repos/acme/shop/pulls/101/requested_reviewers"))
+        .respond_with(ResponseTemplate::new(201).set_body_string("{}"))
+        .mount(&server)
+        .await;
+    let h = gh(&server);
+    let who = h.rerequest_review(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    assert_eq!(who, vec!["zed", "erin"], "me (louis) never re-requested");
+    let body = &bodies(&server, "POST", "/repos/acme/shop/pulls/101/requested_reviewers").await[0];
+    assert_eq!(body["reviewers"], json!(["zed", "erin"]));
+
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(
+                r#"{"data":{"resolveReviewThread":{"thread":{"id":"x","isResolved":true}}}}"#,
+            ),
+        )
+        .mount(&server)
+        .await;
+    h.resolve_threads(&rref("github-work", "acme/shop", 101), &["T1".into(), "T2".into()]).await.unwrap();
+    let ids: Vec<Value> =
+        bodies(&server, "POST", "/graphql").await.iter().map(|b| b["variables"]["id"].clone()).collect();
+    assert_eq!(ids, vec![json!("T1"), json!("T2")]);
+    assert!(
+        bodies(&server, "POST", "/graphql").await[0]["query"]
+            .as_str()
+            .unwrap()
+            .contains("resolveReviewThread")
+    );
 }
 
 #[tokio::test]

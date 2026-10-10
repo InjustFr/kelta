@@ -10,6 +10,14 @@ ahead: number,
  */
 behind: number, dirty: boolean, unpushed: boolean, 
 /**
+ * Own rewrite: the remote tip is in the pre-rebase HEAD but not in HEAD (force push allowed).
+ */
+diverged?: boolean, 
+/**
+ * Commits on `<remote>/<branch>` the local work does not have (suggestions, Update branch).
+ */
+remote_new?: number, 
+/**
  * Diffstat from the merge base with `<remote>/<base>` to the working tree (untracked files
  * count in `files` only).
  */

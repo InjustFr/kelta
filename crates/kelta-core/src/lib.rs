@@ -617,6 +617,9 @@ impl CoreApi for Core {
     async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
         self.work.create_pr(id, draft).await
     }
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
+        self.work.feedback(id).await
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,

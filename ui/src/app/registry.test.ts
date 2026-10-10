@@ -31,12 +31,14 @@ describe('registries', { timeout: 30_000 }, () => {
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
       [
+        'fix',
         'link_ticket',
         'onboarding',
         'plugin_install',
         'project_new',
         'start_work',
         'tool_picker',
+        'work_dialog',
         'work_new',
       ].sort(),
     );

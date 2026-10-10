@@ -112,6 +112,10 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("work.open_ticket", "Work: Open ticket", [], [], None, Global),
     a!("work.open_pr", "Work: Open PR", [], [], None, Global),
     a!("work.finish", "Work: Finish", [], [], None, Global),
+    a!("work.force_push", "Work: Force push…", [], [], None, Global),
+    a!("work.rebase_ask_claude", "Work: Ask Claude to resolve conflicts", [], [], None, Global),
+    a!("work.rerequest_review", "Work: Re-request review", [], [], None, Global),
+    a!("work.resolve_threads", "Work: Resolve sent threads", [], [], None, Global),
     a!("work.finish_merged", "Finish all merged", [], [], None, Global),
     a!("window.toggle", "Toggle window (kelta-ctl toggle)", [], [], None, External),
 ];

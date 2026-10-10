@@ -7,7 +7,6 @@ import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 import { layout, projects, sessions, tickets, toasts, work } from '$lib/stores';
 
-import { NOT_YET } from './actions';
 import { workUi } from './ui.svelte';
 import WorkItemHeader from './WorkItemHeader.svelte';
 
@@ -100,12 +99,12 @@ describe('work bar', () => {
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
     const labels = entries.map(label);
     expect(labels.length).toBe(15); // primary + d p x f r c a n s g l t o ⇧F
-    const rebase = entries.find((e) => label(e).startsWith('Rebase onto'))!;
-    expect(rebase.getAttribute('aria-disabled')).toBe('true');
-    expect(rebase.title).toBe(NOT_YET);
+    const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
+    expect(cont.getAttribute('aria-disabled')).toBe('true');
+    expect(cont.title).toBe('Only while a rebase is stopped');
     const mark = entries.find((e) => label(e).startsWith('Mark reviewed'))!;
     expect(mark.title).toBe('Nothing to review');
-    await fireEvent.keyDown(menu, { key: 'r' }); // disabled: nothing runs, the menu stays
+    await fireEvent.keyDown(menu, { key: 'c' }); // disabled: nothing runs, the menu stays
     expect(screen.getByRole('menu', { name: 'Work' })).toBeTruthy();
   });
 
@@ -169,6 +168,47 @@ describe('work bar', () => {
     mountHeader(w);
     await fireEvent.click(await screen.findByRole('button', { name: /^Retry / }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_retry_step')).toBe(true));
+  });
+
+  it('rebase: stopped on conflicts → Continue → Rebased → Force push… (confirmed, lease)', async () => {
+    const w = item(2); // PR open, Claude idle
+    mountHeader(w);
+    await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Rebase onto main/ }));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebase_stopped'));
+    expect(screen.getByRole('button', { name: 'Ask Claude to resolve' })).toBeTruthy();
+    await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Continue rebase/ }));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebased'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Force push…' }));
+    // The dialog is a sheet entry: it is mounted by the sheet host, here we assert what it asks.
+    const { ui } = await import('$lib/stores');
+    expect(ui.sheet?.key).toBe('work_dialog');
+    expect(ui.sheet?.props).toMatchObject({ tone: 'danger', title: 'Force push' });
+    expect(String(ui.sheet?.props.text)).toMatch(
+      /Rewrites feat\/gh-12-json-output on origin \(#13\)\. The lease checks origin is still at \w{7}\./,
+    );
+    expect(mock.calls.some((c) => c.cmd === 'work_push')).toBe(false);
+    ui.closeSheet();
+  });
+
+  it('remote commits get "Rebase onto origin/<branch>", never Force push', async () => {
+    const w = item(2); // a reviewer's suggestion commit landed on the remote branch
+    mock.state.remoteNew[w.id] = 2;
+    await work.refreshStatus();
+    const claude = mock.state.sessions.find((x) => w.session_ids.includes(x.id) && x.kind.type === 'claude')!;
+    claude.status = 'done'; // it was asking for permission: rebase would be refused
+    mountHeader(w);
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('remote_new'));
+    expect(screen.queryByRole('button', { name: 'Force push…' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: `Rebase onto origin/${w.branch}` }));
+    // The rebase onto the remote branch is followed by the normal rebase onto base (FLOW §4.4).
+    await waitFor(() =>
+      expect(
+        mock.calls
+          .filter((c) => c.cmd === 'work_rebase')
+          .map((c) => (c.args as { op: { onto: string } }).op.onto),
+      ).toEqual(['remote_branch', 'base']),
+    );
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).not.toBe('remote_new'));
   });
 
   it('shows a placeholder for an unknown work item', async () => {

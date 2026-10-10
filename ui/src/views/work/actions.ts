@@ -9,6 +9,15 @@ import { openExternal, workDiff, workMarkReviewed, workRetryStep } from '$lib/ip
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import { currentTab, revealSession } from '../../shell/nav';
+import {
+  askClaudeToResolve,
+  fixItem,
+  forcePushItem,
+  openConflicts,
+  pushItem,
+  rebase,
+  rebaseStep,
+} from './fixloop.svelte';
 import { claudeOf, phaseNow, prOf } from './live';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
@@ -36,7 +45,9 @@ export interface WorkAction {
 }
 
 const review = (c: Ctx) => c.item.kind === 'review';
-const stopped = (c: Ctx) => (c.phase.id === 'rebase_stopped' ? null : 'Only while a rebase is stopped');
+// A rebase is stopped while git has it open, also after Claude staged the last conflict.
+const stopped = (c: Ctx) =>
+  c.item.rebase && c.item.rebase.total > 0 ? null : 'Only while a rebase is stopped';
 const hasPr = (c: Ctx) => c.item.pr_url !== null || prOf(c.item) !== null;
 
 async function step(c: Ctx, step: string): Promise<void> {
@@ -74,9 +85,11 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'ship',
     key: 'p',
     label: (c) => (c.phase.id === 'rebased' ? 'Force push…' : hasPr(c) ? 'Push' : 'Ship'),
-    blocked: (c) => (review(c) ? READ_ONLY : c.phase.id === 'rebased' || hasPr(c) ? NOT_YET : null),
-    // shortcut: Ship opens today's Create PR dialog; the ship-finish lane renames it and adds Push.
-    run: async ({ item }) => {
+    blocked: (c) => (review(c) ? READ_ONLY : null),
+    // shortcut: Ship opens today's Create PR dialog; the ship-finish lane renames it.
+    run: async ({ item, phase }) => {
+      if (phase.id === 'rebased') return forcePushItem(item);
+      if (item.pr_url !== null) return pushItem(item);
       await goToWork(item);
       workUi.ship = item.id;
     },
@@ -92,36 +105,36 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'fix',
     key: 'f',
     label: () => 'Fix with Claude',
-    blocked: (c) => (review(c) ? READ_ONLY : hasPr(c) ? NOT_YET : 'Needs a PR'),
-    run: null,
+    blocked: (c) => (review(c) ? READ_ONLY : hasPr(c) ? null : 'Needs a PR'),
+    run: async ({ item }) => fixItem(item),
   },
   {
     id: 'rebase',
     key: 'r',
     label: (c) => `Rebase onto ${c.item.base}`,
-    blocked: (c) => (review(c) ? READ_ONLY : NOT_YET),
-    run: null,
+    blocked: (c) => (review(c) ? READ_ONLY : null),
+    run: async ({ item, phase }) => rebase(item, phase.id === 'remote_new' ? 'remote_branch' : 'base'),
   },
   {
     id: 'rebase_continue',
     key: 'c',
     label: () => 'Continue rebase',
-    blocked: (c) => stopped(c) ?? NOT_YET,
-    run: null,
+    blocked: stopped,
+    run: ({ item }) => rebaseStep(item, 'continue'),
   },
   {
     id: 'rebase_abort',
     key: 'a',
     label: () => 'Abort rebase',
-    blocked: (c) => stopped(c) ?? NOT_YET,
-    run: null,
+    blocked: stopped,
+    run: ({ item }) => rebaseStep(item, 'abort'),
   },
   {
     id: 'conflicts',
     key: 'n',
     label: () => 'Open conflicts in nvim',
-    blocked: (c) => stopped(c) ?? NOT_YET,
-    run: null,
+    blocked: (c) => (c.item.rebase?.conflicts.length ? null : 'No conflicted files'),
+    run: ({ item }) => openConflicts(item),
   },
   {
     id: 'skip_step',
@@ -183,7 +196,13 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
       await goToWork(c.item);
     },
   },
-  { id: 'resolve', key: null, label: () => 'Ask Claude to resolve', blocked: () => NOT_YET, run: null },
+  {
+    id: 'resolve',
+    key: null,
+    label: () => 'Ask Claude to resolve',
+    blocked: stopped,
+    run: ({ item }) => askClaudeToResolve(item),
+  },
   {
     id: 'open_review',
     key: null,

@@ -14,4 +14,9 @@ repo_choices: Array<string>, base: string, branch: string, branch_exists: Branch
 /**
  * Existing work item → the sheet becomes "Resume".
  */
-existing: WorkItemId | null, };
+existing: WorkItemId | null, 
+/**
+ * Own PR made outside Kelta: the item is a scratch item on the PR's head branch, linked to
+ * this PR URL (FLOW §2.1).
+ */
+adopt_pr?: string | null, };

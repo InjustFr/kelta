@@ -95,6 +95,8 @@ export interface MockState {
   settings: EffectiveSettings;
   approved: Set<string>;
   comments: Record<string, string[]>;
+  /** Commits on the remote branch the item does not have (suggestions, Update branch), per item. */
+  remoteNew: Record<string, number>;
   /** Pending (draft) review line comments per `repo#number`. */
   pending: Record<string, number>;
   plugins: (typeof samples.pluginInfo)[];
@@ -135,6 +137,7 @@ function freshState(): MockState {
     settings: { value: clone(samples.settingsDefault) as unknown as JsonValue, sources: {} },
     approved: new Set(),
     comments: {},
+    remoteNew: {},
     pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
   };
@@ -287,6 +290,17 @@ export function createMockTransport(options: MockOptions = {}): {
     const w = state.work.find((x) => x.id === id);
     if (!w) throw err('not_found', `work item not found: ${id}`);
     return w;
+  };
+  // A recorded rebase awaiting its force push is "diverged"; `remoteNew` drives "Remote has new commits".
+  const gitOf = (w: WorkItem): GitStatus => {
+    const base = clone(state.git[w.id] ?? samples.gitStatus);
+    const pending = !!w.rebase && w.rebase.total === 0 && !!w.rebase.remote_sha;
+    return {
+      ...base,
+      unpushed: base.unpushed || pending,
+      diverged: pending,
+      remote_new: state.remoteNew[w.id] ?? 0,
+    };
   };
   const ticketItem = (ref: TicketRef): TicketItem => {
     const t = state.tickets.find((x) => sameRef(x.ticket.ref, ref));
@@ -1028,17 +1042,95 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
-    work_status: ({ id }) => clone(state.git[work(id).id] ?? samples.gitStatus),
+    work_status: ({ id }) => gitOf(work(id)),
     work_status_all: () =>
-      Object.fromEntries(
-        state.work
-          .filter((w) => w.state.kind !== 'finished')
-          .map((w) => [w.id, clone(state.git[w.id] ?? samples.gitStatus)]),
-      ),
+      Object.fromEntries(state.work.filter((w) => w.state.kind !== 'finished').map((w) => [w.id, gitOf(w)])),
     work_diff: ({ id }) => {
       const w = work(id);
       const s = spawn(w.project_id, { type: 'editor', adapter: 'nvim' }, 'diff', w.worktree);
       return updateSession(session(s.id), { work_item_id: w.id });
+    },
+    work_send: ({ id, prompt, files, threads }) => {
+      const w = work(id);
+      if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
+      const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
+      if (claude?.lifecycle === 'live') {
+        if (claude.status === 'working' || claude.status === 'needs_input' || claude.status === 'running') {
+          throw err('conflict', 'Claude is busy; send when it stops.', { reason: 'claude_busy' });
+        }
+        if (claude.status_source !== 'hook') {
+          throw err('conflict', "Kelta can't tell whether Claude is idle (status hooks inactive).", {
+            reason: 'hooks_inactive',
+          });
+        }
+      }
+      void files;
+      if (claude) updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      if (threads) w.sent_threads = [...threads];
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_feedback: ({ id }) => {
+      if (!work(id).pr_url) throw err('invalid_argument', 'this work item has no pull request');
+      return clone(samples.feedback);
+    },
+    work_rerequest_review: ({ id }) => {
+      work(id);
+      return clone(samples.feedback.reviewers);
+    },
+    work_resolve_sent_threads: ({ id }) => {
+      const w = work(id);
+      if (!w.sent_threads?.length) throw err('invalid_argument', 'no review threads were sent to Claude');
+      w.sent_threads = [];
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_rebase: ({ id, op }) => {
+      const w = work(id);
+      const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
+      const busy =
+        claude?.lifecycle === 'live' && (claude.status === 'working' || claude.status === 'needs_input');
+      if (busy && op.kind !== 'abort') {
+        throw err('conflict', 'Claude is working in this worktree. Rebase when it stops.', {
+          reason: 'claude_busy',
+        });
+      }
+      const sha = (n: number): string => `${'abcdef0123456789'.repeat(3)}${n}`.slice(0, 40);
+      if (op.kind === 'start' && op.onto === 'remote_branch') {
+        delete state.remoteNew[id];
+        w.rebase = null;
+      } else if (op.kind === 'start') {
+        // A pushed item (with a PR) stops on a conflict; an unpushed one rebases cleanly.
+        w.rebase = w.pr_url
+          ? {
+              onto: `origin/${w.base}`,
+              pre_head: sha(1),
+              remote_sha: sha(1),
+              conflicts: ['src/output.rs'],
+              step: 1,
+              total: 2,
+            }
+          : null;
+      } else if (!w.rebase || w.rebase.total === 0) {
+        throw err('conflict', 'No rebase is in progress.');
+      } else if (op.kind === 'continue') {
+        w.rebase = { ...w.rebase, conflicts: [], step: 0, total: 0 };
+      } else {
+        w.rebase = null;
+      }
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_push: ({ id, force }) => {
+      const w = work(id);
+      if (force && !(w.rebase && w.rebase.total === 0)) {
+        throw err('conflict', 'Force push is only offered to rewrite your own rebased commits.', {
+          reason: 'not_diverged',
+        });
+      }
+      w.rebase = null;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
     },
     work_mark_reviewed: ({ id }) => {
       const w = work(id);

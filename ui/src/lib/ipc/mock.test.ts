@@ -116,6 +116,7 @@ describe('mock transport', () => {
     const review = s.reviews[0]!.review;
     const session = s.sessions[0]!;
     const work = s.work[0]!;
+    const withPr = s.work[2]!; // PR open, Claude idle with hook status
     const ctx = {
       repo_id: null,
       cwd: null,
@@ -210,6 +211,12 @@ describe('mock transport', () => {
       work_retry_step: { id: work.id, step: 'persist' },
       work_create_pr: { id: work.id, draft: { title: null, body: null, draft: null } },
       work_status: { id: work.id },
+      work_feedback: { id: withPr.id },
+      work_rerequest_review: { id: withPr.id },
+      work_rebase: { id: withPr.id, op: { kind: 'start', onto: 'base', no_fetch: false } },
+      work_push: { id: withPr.id, force: false },
+      work_send: { id: withPr.id, prompt: 'Fix {file}', files: [], threads: ['t1'] },
+      work_resolve_sent_threads: { id: withPr.id },
       work_status_all: {},
       work_diff: { id: work.id },
       work_mark_reviewed: { id: work.id },

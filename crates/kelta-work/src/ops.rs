@@ -33,24 +33,33 @@ const RESUME_GRACE: Duration = Duration::from_secs(5);
 impl WorkService {
     // ---- resume ------------------------------------------------------------------------------
 
-    pub(crate) async fn resume_item(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+    /// Resume the item; `prompt` goes to its previous Claude conversation (pasted into a live
+    /// idle Claude, or passed to `claude --resume`).
+    pub(crate) async fn resume_item(
+        &self,
+        id: &WorkItemId,
+        prompt: Option<String>,
+    ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
         let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
         let mut item = self.load(id).await?;
         match &item.state {
             WorkState::Finished => Err(KeltaError::conflict("work item is finished")),
+            _ if prompt.is_some() && !matches!(item.state, WorkState::Active | WorkState::PrOpen) => {
+                Err(KeltaError::conflict("work item has not finished starting"))
+            }
             WorkState::Planned | WorkState::Starting | WorkState::Failed { .. } => {
                 if let WorkState::Failed { step, .. } = item.state.clone() {
                     self.set_step(&mut item, &step, StepStatus::Pending, None).await?;
                 }
                 self.run_saga_locked(id).await
             }
-            WorkState::Active | WorkState::PrOpen => self.reopen(&mut item).await.map(|()| item),
+            WorkState::Active | WorkState::PrOpen => self.reopen(&mut item, prompt).await.map(|()| item),
         }
     }
 
     /// Focus the work item's tab, respawning sessions that are gone and recreating the tab if needed.
-    async fn reopen(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
+    async fn reopen(&self, item: &mut WorkItem, mut prompt: Option<String>) -> Result<(), KeltaError> {
         let env = self.env(&item.project_id, &item.repo_id)?;
         let mut j = self.load_journal(&item.id);
         let template = self.template_of(&env, &j);
@@ -61,17 +70,25 @@ impl WorkService {
         for slot in layout::slots(&template.layout) {
             match slot.kind {
                 SlotKind::Claude { .. } => {
-                    if alive(&j.claude_session).is_some() {
-                        continue;
+                    if let Some(live) = alive(&j.claude_session) {
+                        let Some(p) = prompt.take() else { continue };
+                        if live.lifecycle == Lifecycle::Live {
+                            crate::fixloop::paste_prompt(&env.core, &live, &p).await?;
+                            continue;
+                        }
+                        // Dormant (never attached since restart): respawn it below with the prompt.
+                        env.core.session_kill(&live.id, false).await?;
+                        prompt = Some(p);
                     }
                     let Some(uuid) = item.claude_uuid.clone() else { continue };
                     if let Some(old) = j.claude_session.take() {
                         item.session_ids.retain(|s| s != &old);
                     }
                     let rx = env.core.subscribe();
-                    let sid = self.spawn_claude(&env, item, &mut j, LaunchMode::Resume { uuid }).await?;
+                    let mode = LaunchMode::Resume { uuid, prompt: prompt.clone() };
+                    let sid = self.spawn_claude(&env, item, &mut j, mode).await?;
                     respawned = true;
-                    self.watch_resume(rx, item.id.clone(), sid);
+                    self.watch_resume(rx, item.id.clone(), sid, prompt.take());
                 }
                 SlotKind::Editor | SlotKind::Shell { .. } => {
                     if alive(&j.sessions.get(&slot.idx).cloned()).is_some() {
@@ -172,6 +189,7 @@ impl WorkService {
         mut rx: tokio::sync::broadcast::Receiver<kelta_proto::events::BusEvent>,
         id: WorkItemId,
         sid: SessionId,
+        prompt: Option<String>,
     ) {
         let me = self.me.clone();
         let Ok(rt) = tokio::runtime::Handle::try_current() else { return };
@@ -186,8 +204,14 @@ impl WorkService {
             let Ok(env) = svc.env(&item.project_id, &item.repo_id) else { return };
             let mut j = svc.load_journal(&id);
             tracing::info!(work_item = %id, "claude --resume refused; falling back to --continue");
-            match svc.spawn_claude(&env, &mut item, &mut j, LaunchMode::Continue).await {
+            let with_prompt = prompt.is_some();
+            match svc.spawn_claude(&env, &mut item, &mut j, LaunchMode::Continue { prompt }).await {
                 Ok(new) => {
+                    core.toast(Toast::warn(if with_prompt {
+                        "Previous conversation not found; Claude continued the latest one in this worktree with your prompt."
+                    } else {
+                        "Previous conversation not found; Claude continued the latest one in this worktree."
+                    }));
                     let title = Self::tab_title(&item, &j);
                     let old = PaneContent::Terminal { session_id: sid.clone() };
                     let _ = svc.open_pane(&env, &mut item, &title, old, Placement::Focused, true).await;
@@ -217,6 +241,7 @@ impl WorkService {
         &self,
         session: &SessionId,
         fallback: bool,
+        prompt: Option<String>,
     ) -> Result<Option<SpawnRequest>, KeltaError> {
         let Some(item) = self.for_session(session).await else { return Ok(None) };
         let Some(uuid) = item.claude_uuid.clone() else { return Ok(None) };
@@ -232,7 +257,8 @@ impl WorkService {
             self.http_sessions.lock().insert(session.clone());
         }
         self.save_journal(&item.id, &j)?;
-        let mode = if fallback { LaunchMode::Continue } else { LaunchMode::Resume { uuid } };
+        let mode =
+            if fallback { LaunchMode::Continue { prompt } } else { LaunchMode::Resume { uuid, prompt } };
         Ok(Some(self.claude_request(&env, &item, &j, &run, mode, port, session)))
     }
 
@@ -261,7 +287,11 @@ impl WorkService {
             .with_work_item(item.id.clone());
         self.blocking(&env.core, ev).await?;
 
-        self.push(&env, &mut item, &j).await?;
+        let args = vec!["push".into(), "-u".into(), env.repo.remote.clone(), item.branch.clone()];
+        let code = self.push_pane(&env, &mut item, &j, args).await?;
+        if code != 0 {
+            return Err(KeltaError::upstream(format!("git push failed (exit {code})")));
+        }
 
         let review: Review = match host.find_for_branch(&binding.repo, &item.branch).await? {
             Some(r) => r,
@@ -332,8 +362,15 @@ impl WorkService {
         Ok(item)
     }
 
-    /// `git push -u <remote> <branch>` in a visible transient pane, awaited through `session.exited`.
-    async fn push(&self, env: &Env, item: &mut WorkItem, j: &Journal) -> Result<(), KeltaError> {
+    /// `git <args>` (a push) in a visible transient pane, awaited through `session.exited`; returns
+    /// the exit code.
+    pub(crate) async fn push_pane(
+        &self,
+        env: &Env,
+        item: &mut WorkItem,
+        j: &Journal,
+        args: Vec<String>,
+    ) -> Result<i32, KeltaError> {
         let mut rx = env.core.subscribe();
         let info = env
             .core
@@ -343,7 +380,7 @@ impl WorkService {
                 kind: SessionKind::Custom,
                 name: Some("git push".into()),
                 program: Some("git".into()),
-                args: vec!["push".into(), "-u".into(), env.repo.remote.clone(), item.branch.clone()],
+                args,
                 cwd: Some(item.worktree.clone()),
                 env: BTreeMap::new(),
                 cols: COLS,
@@ -368,11 +405,7 @@ impl WorkService {
         {
             tracing::warn!(error = %e.message, "could not show the push pane");
         }
-        let code = await_exit(&env.core, &mut rx, &info.id, PUSH_TIMEOUT).await?;
-        if code != 0 {
-            return Err(KeltaError::upstream(format!("git push failed (exit {code})")));
-        }
-        Ok(())
+        await_exit(&env.core, &mut rx, &info.id, PUSH_TIMEOUT).await
     }
 
     /// `work.on_pr`: transition (status_map.review overrides) + comment; non-fatal.
@@ -649,7 +682,8 @@ impl WorkService {
     // ---- status ------------------------------------------------------------------------------
 
     pub(crate) async fn status_impl(&self, id: &WorkItemId) -> Result<GitStatus, KeltaError> {
-        let item = self.load(id).await?;
+        // Re-read a recorded rebase on every status read (window focus, FLOW §4.4).
+        let item = self.refresh_rebase(id).await?;
         let env = self.env(&item.project_id, &item.repo_id)?;
         self.git_status(&env, &item).await
     }

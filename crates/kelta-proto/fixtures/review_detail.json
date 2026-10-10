@@ -25,6 +25,7 @@
     },
     "ci": "success",
     "decision": "review_required",
+    "decision_head": null,
     "deletions": 14,
     "draft": false,
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
