@@ -39,7 +39,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   polling: 'How often Kelta checks your tracker and code host for changes.',
   notifications: 'Desktop notifications and quiet hours.',
   performance: 'Memory use and web view behaviour.',
-  tools: 'Programs like lazygit that open inside Kelta in their own pane.',
+  tools: 'Buttons that open programs like lazygit in a pane, or apps like Fork.',
   projects: 'Folders Kelta manages, with their repositories and ticket sources.',
 };
 

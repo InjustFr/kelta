@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Settings → Tools: add/edit/remove `[[tools]]` of the edited layer (global or project) through
-  // the generic keyed-list editor, then the merged list (config layers + plugins) with an
-  // install check.
+  // Settings → Tools: a quick Add tool form, the generic keyed-list editor for `[[tools]]` of the
+  // edited layer (global or project), then the merged list (config layers + plugins) with an
+  // install check and key-conflict warnings.
   import type { SettingsSectionProps } from '$app/registry';
   import type { ToolCheck } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -11,8 +11,14 @@
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
+  import { currentPlatform } from '$lib/ui/format';
 
   import SectionForm from '../../settings/SectionForm.svelte';
+  import { effectiveBindings } from '../../settings/lib/chords';
+  import { useEditor } from '../../settings/lib/editor.svelte';
+  import { isRecord } from '../../settings/lib/paths';
+  import { toolKeyConflict } from '../../settings/lib/tools';
+  import AddToolForm from './AddToolForm.svelte';
 
   let props: SettingsSectionProps = $props();
   const { layer, projectId } = $derived(props);
@@ -20,6 +26,18 @@
   const pid = $derived(projectId ?? projects.activeId);
   const slot = $derived(pid ? tools.byProject[pid] : undefined);
   let checks = $state<Record<string, ToolCheck | string>>({});
+  let adding = $state(false);
+
+  const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
+  const platform = currentPlatform();
+  const bindings = $derived.by(() => {
+    const v = editor.valueOf('keys.bindings');
+    return effectiveBindings(isRecord(v) ? (v as Record<string, string[]>) : {}, platform);
+  });
+  // The repo layer is trust-gated and read-only until trusted (SETTINGS §2): no quick form there.
+  const canAdd = $derived(layer !== 'repo');
+  // Nothing to dedupe against (no project, or tool_list failed) must not block Add; only a pending load does.
+  const dedupeAgainst = $derived(!pid || (slot?.error && !slot.data) ? [] : (slot?.data ?? undefined));
 
   $effect(() => {
     if (pid && (!slot || (slot.fetchedAt === null && !slot.loading && !slot.error))) void tools.load(pid);
@@ -35,10 +53,15 @@
 </script>
 
 <SectionForm sectionId="tools" {...props}>
+  {#snippet before()}
+    {#if canAdd}<AddToolForm {editor} merged={dedupeAgainst} {bindings} bind:open={adding} />{/if}
+  {/snippet}
   {#snippet after()}
     <section data-layer={layer} class="tools">
       <h2>Check if installed</h2>
-      <p class="muted">Tools you can open from New tab or the palette, from config files or plugins.</p>
+      <p class="muted">
+        Every tool from config files or plugins: programs like lazygit that open in a pane, or apps like Fork.
+      </p>
       {#if !pid}
         <EmptyState icon="folder" title="No project selected" />
       {:else if slot?.error && !slot.data}
@@ -49,10 +72,14 @@
         <EmptyState
           icon="wrench"
           title="No tools yet"
-          body="Tools are programs like lazygit that open in their own pane. Install a plugin that adds some."
+          body="Add a terminal program like lazygit, or an app like Fork."
         >
           {#snippet actions()}
-            <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
+            {#if canAdd}<Button size="sm" variant="primary" onclick={() => (adding = true)}>Add tool</Button
+              >{/if}
+            <Button size="sm" variant="ghost" onclick={() => ui.openSheet('plugin_install', {})}
+              >Install plugin</Button
+            >
           {/snippet}
         </EmptyState>
       {:else}
@@ -60,8 +87,14 @@
           <tbody>
             {#each slot.data as t (t.id)}
               {@const c = checks[t.id]}
+              {@const clash = t.keybinding
+                ? toolKeyConflict(t.keybinding, t.id, bindings, slot.data, platform)
+                : null}
               <tr>
-                <td><strong>{t.label}</strong> <span class="muted">{t.id}</span></td>
+                <td>
+                  <strong>{t.label}</strong> <span class="muted">{t.id}</span>
+                  {#if clash}<Badge tone="warn" title={clash}>{clash}</Badge>{/if}
+                </td>
                 <td><Badge tone="info">{t.kind}</Badge></td>
                 <td>
                   <Badge>{t.source.kind === 'plugin' ? `plugin ${t.source.plugin_id}` : t.source.layer}</Badge
