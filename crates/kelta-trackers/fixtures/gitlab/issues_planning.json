@@ -125,7 +125,7 @@
       "full": "grp/sub/proj#25"
     },
     "iteration": null,
-    "milestone": null,
+    "milestone": { "id": 13, "title": "v3", "state": "active", "start_date": null, "due_date": null },
     "due_date": null,
     "weight": null
   }

@@ -399,8 +399,12 @@ async fn planning_fields_come_from_iteration_milestone_labels_and_time_stats() {
     assert_eq!((sp.name.as_str(), sp.active, sp.ends_at.as_deref()), ("v1", true, Some("2999-12-31")));
     assert!(!c.sprint.as_ref().unwrap().active, "expired milestone");
     let sp = d.sprint.as_ref().unwrap();
-    assert_eq!((sp.name.as_str(), sp.active), ("Iteration", false), "closed untitled iteration");
-    assert!(e.sprint.is_none());
+    assert_eq!(
+        (sp.name.as_str(), sp.active),
+        ("2026-09-01 – 2026-09-14", false),
+        "closed untitled iteration named by dates"
+    );
+    assert!(!e.sprint.as_ref().unwrap().active, "undated open milestone is not the current sprint");
     // estimate: time estimate wins over weight, weight is the fallback
     assert_eq!(
         [a, b, c, d, e].map(|t| t.estimate.as_deref()),

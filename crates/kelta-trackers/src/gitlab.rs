@@ -89,13 +89,16 @@ fn sprint(v: &Value, today: &str) -> Option<Sprint> {
         s(obj, "start_date").is_none_or(|d| d <= today) && s(obj, "due_date").is_none_or(|d| d >= today);
     let active = match (is_iteration, obj.get("state")) {
         (true, Some(Value::Number(n))) => n.as_u64() == Some(2),
-        (true, Some(Value::String(st))) => matches!(st.as_str(), "current" | "started" | "active"),
-        (false, Some(Value::String(st))) => st == "active" && in_dates,
+        // Undated milestones (release versions) are never "the current sprint".
+        (false, Some(Value::String(st))) => st == "active" && s(obj, "due_date").is_some() && in_dates,
         _ => in_dates,
     };
     Some(Sprint {
         id: obj.get("id").and_then(idstr)?,
-        name: s(obj, "title").unwrap_or("Iteration").to_owned(),
+        // Cadence iterations have `title: null`: name them by their dates.
+        name: s(obj, "title").map(str::to_owned).unwrap_or_else(|| {
+            format!("{} – {}", s(obj, "start_date").unwrap_or("?"), s(obj, "due_date").unwrap_or("?"))
+        }),
         active,
         ends_at: s(obj, "due_date").map(str::to_owned),
     })
@@ -231,7 +234,7 @@ impl GitlabIssues {
             labels,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             project_hint: Some(project),
-            // No status-change date on the wire (label events need a request): closing date, else `updated_at`.
+            // shortcut: no status-change date without a resource_label_events request per issue; closed_at, else updated_at. Fetch events if age badges prove wrong.
             status_since: s(v, "closed_at").or_else(|| s(v, "updated_at")).map(str::to_owned),
             sprint: sprint(v, &today()),
             estimate: estimate(v),
