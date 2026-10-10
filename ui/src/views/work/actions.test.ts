@@ -9,6 +9,10 @@ import { layout, projects, toasts, ui } from '$lib/stores';
 import '../reviews/actions';
 import '../tickets/actions';
 import './actions';
+import { workItem } from '$lib/gen/fixtures';
+
+import { blockedReason } from './actions';
+import { REVIEW_READONLY } from './common';
 import { selectTicket } from './selection.svelte';
 
 let mock: MockControls;
@@ -71,5 +75,13 @@ describe('L9 actions', () => {
     await dispatch('work.start');
     expect(ui.sheet).toBeNull();
     expect(toasts.list.at(-1)?.toast.text).toMatch(/no repo rule matches/);
+  });
+
+  it('review items: push, rebase, fix and link are read-only in the menu and the work bar', () => {
+    const review = { ...workItem, kind: 'review' as const, pr_url: 'https://x/pull/1' };
+    for (const id of ['ship', 'rebase', 'fix', 'link'] as const)
+      expect(blockedReason(id, review)).toBe(REVIEW_READONLY);
+    expect(blockedReason('go_claude', review)).toBeNull();
+    expect(blockedReason('ship', { ...review, kind: 'ticket' })).toBeNull();
   });
 });

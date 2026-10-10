@@ -90,3 +90,48 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
 });
+
+test('Now open refreshes review items: a moved head reads Updated since your review', async ({ page }) => {
+  await boot(page);
+  // A local checkout of #309, which I approved at its current head.
+  const id = await page.evaluate(() => {
+    const mock = window.__keltaMock!;
+    const pr = mock.state.reviews.find((r) => r.review.ref.number === 309)!;
+    const w = structuredClone(mock.state.work[0]!);
+    Object.assign(w, {
+      id: 'review-309',
+      kind: 'review',
+      ticket: null,
+      review: pr.review.ref,
+      branch: 'kelta/pr-309',
+      pr_url: null,
+      session_ids: [],
+      state: { kind: 'active' },
+      review_due: false,
+      claude_replied: false,
+    });
+    mock.state.work.push(w);
+    mock.emit({ type: 'work.updated', work: structuredClone(w) });
+    return w.id;
+  });
+  await page.keyboard.press('Control+Shift+0');
+  const row = now(page).locator(`[data-row="w:${id}"]`);
+  await expect(row).toContainText('Reviewed');
+  // #101's head moved after my review: back in Review requests.
+  await expect(now(page).locator('[data-row^="r:"][data-row$="#101"]')).toContainText(
+    'Updated since your review',
+  );
+
+  // Someone pushes to #309 while Now is closed; opening Now asks the host again (`review_get`).
+  await page.evaluate(() => {
+    window.__kelta!.stores.ui.inboxActive = false;
+    const pr = window.__keltaMock!.state.reviews.find((r) => r.review.ref.number === 309)!;
+    pr.review.head_sha = '3'.repeat(40);
+  });
+  await expect(now(page)).toBeHidden();
+  const before = (await callsOf(page, 'review_get')).length;
+  await page.keyboard.press('Control+Shift+0');
+  await expect(row).toContainText('Updated since your review');
+  const gets = (await callsOf(page, 'review_get')).slice(before);
+  expect(gets.some((c) => (c.args as { review: { number: number } }).review.number === 309)).toBe(true);
+});
