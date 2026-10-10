@@ -27,7 +27,8 @@
   const projectOptions = [
     { value: '', label: 'Usual project for each ticket' },
     ...railProjects()
-      .filter((p) => p.repos.length > 0)
+      // Home is never a work_plan choice: forcing it would fall back to the usual project
+      .filter((p) => !p.builtin && p.repos.length > 0)
       .map((p) => ({ value: p.id, label: p.name })),
   ];
 

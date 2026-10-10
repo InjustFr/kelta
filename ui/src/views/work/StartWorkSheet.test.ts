@@ -202,6 +202,20 @@ describe('StartWorkSheet project', () => {
     expect(sentPlan().repo_id).toBe('core');
   });
 
+  it('starts nothing while the re-plan is in flight, then starts with the new plan', async () => {
+    const { onclose } = await mountSheet(undefined, true);
+    const form = screen.getByTestId('start-work-form');
+    await fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'billing' } });
+    await fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
+    expect((start() as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    expect(mock.calls.some((c) => c.cmd === 'work_start')).toBe(false);
+    await fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(sentPlan().project_id).toBe('billing');
+    expect(sentPlan().repo_id).toBe('core');
+  });
+
   it('keeps the refine acceptance criteria after switching project', async () => {
     refines[`${ticket.account}:${ticket.key}`] = {
       running: false,

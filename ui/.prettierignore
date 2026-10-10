@@ -4,3 +4,4 @@ src/lib/gen/
 test-results/
 playwright-report/
 src/assets/sprite.svg
+src/lib/theme/import/fixtures/

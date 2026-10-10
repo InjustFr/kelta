@@ -5,19 +5,12 @@ import { boot, callsOf, dispatch } from '../shell/helpers';
 
 test.use({ colorScheme: 'dark' });
 
-test('picking a dark theme with the keyboard re-themes the window', async ({ page }) => {
+test('picking a built-in dark theme with the keyboard re-themes the window', async ({ page }) => {
   await boot(page);
-  await page.evaluate(() => {
-    const mock = window.__keltaMock!;
-    (mock.state.settings.value as { themes: Record<string, unknown> }).themes = {
-      sol: { name: 'Solarized', base: 'dark', ui: { well: '#002b36', fg: '#93a1a1' }, terminal: {} },
-    };
-    mock.emit({ type: 'settings.changed', layers: ['global'], paths: ['themes'], requires_restart: [] });
-  });
   await dispatch(page, 'settings.open', { section: 'general' });
 
   const dark = page.getByRole('listbox', { name: /Dark theme/ });
-  await expect(dark.getByRole('option')).toHaveCount(2);
+  await expect(dark.getByRole('option')).toHaveCount(6);
   await expect(page.locator('[data-testid="field"][data-path="app.dark_theme"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="field"][data-path="app.theme"]')).toBeVisible();
 
@@ -25,12 +18,15 @@ test('picking a dark theme with the keyboard re-themes the window', async ({ pag
   expect(await well()).toBe('');
   await dark.getByRole('option', { selected: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(dark.locator('[data-theme-id="sol"]')).toBeFocused();
+  await expect(dark.locator('[data-theme-id="solarized-dark"]')).toBeFocused();
   expect(await callsOf(page, 'settings_set')).toHaveLength(0);
 
   await page.keyboard.press('Enter');
-  await expect(dark.locator('[data-theme-id="sol"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(dark.locator('[data-theme-id="solarized-dark"]')).toHaveAttribute('aria-selected', 'true');
   await expect.poll(well).toBe('#002b36');
+  expect(
+    await page.evaluate(() => document.documentElement.style.getPropertyValue('--k-term-selection')),
+  ).toBe('#073642');
 
   // Tab leaves the dark grid for the light one.
   await page.keyboard.press('Tab');
@@ -42,4 +38,26 @@ test('picking a dark theme with the keyboard re-themes the window', async ({ pag
   await page.getByRole('button', { name: 'Project', exact: true }).click();
   await expect(page.getByTestId('theme-note')).toHaveText('Themes are chosen in global settings.');
   await expect(page.getByTestId('theme-picker')).toHaveCount(0);
+});
+
+test('importing a VS Code theme adds its card, selects it and re-themes the window', async ({ page }) => {
+  await boot(page);
+  await dispatch(page, 'settings.open', { section: 'general' });
+  const theme = {
+    name: 'Night Owl',
+    type: 'dark',
+    colors: { 'editor.background': '#011627', 'editor.foreground': '#d6deeb' },
+  };
+  await page.getByTestId('theme-import-input').setInputFiles({
+    name: 'night-owl-color-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(`// exported\n${JSON.stringify(theme)}`),
+  });
+
+  const card = page.getByRole('listbox', { name: /Dark theme/ }).locator('[data-theme-id="night-owl"]');
+  await expect(card).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Imported Night Owl (used in dark mode)')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--k-well')))
+    .toBe('#011627');
 });
