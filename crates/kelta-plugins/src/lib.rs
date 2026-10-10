@@ -267,7 +267,7 @@ impl PluginHost {
         placement: Placement,
     ) -> Result<ToolHandle, KeltaError> {
         self.start();
-        self.open_tool(project, tool, ctx, placement).await
+        self.open_tool(project, tool, ctx, Some(placement)).await
     }
 
     /// `tool_close`.

@@ -52,7 +52,7 @@
 
   async function open(t: ToolInfo): Promise<void> {
     if (!projectId) return;
-    const r = await openTool(projectId, t);
+    const r = await openTool(projectId, t, {}, t.placement);
     if (r === true) onclose();
     else if (r) checks = { ...checks, [t.id]: r };
   }
