@@ -39,11 +39,18 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 ## 3. Core flows
 
 ### 3.1 Start work on a ticket
-Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
+Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]` (without `--project`: the default below; a guess shows the sheet), trigger action `start_work`, batch start (one Project field: "Usual project for each ticket" skips a ticket whose project is only a guess, or one project for all).
 
-1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required):
+The project belongs to the work item (where the session runs), not to the ticket. Entry points pass the item's own project (the ticket source's, a sub-task's parent's) or none, never the active project; `work_plan { project_id?, source }` picks the default, first match wins:
+- **Ticket:** (1) the project of an unfinished work item for this ticket, in any project: always a Resume there, with no picker (a closed project opens); (2) the caller's project; (3) the project of my most recent work item on a ticket of the same tracker account; (4) an open project whose tracker binding uses that account; (5) the active project, marked `project_guessed`.
+- **PR (Review locally):** (1) its work item's project; (2) the caller's project if it binds the PR's repo; (3) the first open project that does. None → refused with "No project has acme/web as a repository" and an **Open project settings** action.
+- **Choices** (`project_choices`): open, non-Home projects with a repository; for a PR, those binding its repo. None → refused with "Add a repository to a project first" and an **Add project** action.
+
+1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required, a guessed project included, even with `S`):
    ```
-   StartWorkPlan { project_id, source: Ticket{ticket}, repo_id (picker if >1; remembered per ticket; repo_rules),
+   StartWorkPlan { project_id, project_choices (picker if >1, first field; switching re-plans branch, worktree,
+     Claude and side effects for that project), project_guessed (hint "No usual project for <account> tickets yet",
+     focus on Project), source: Ticket{ticket}, repo_id (picker if >1; remembered per ticket; repo_rules),
      base: "main", branch: "feat/SHOP-142-rate-limit-login" (template; validated with git check-ref-format),
      branch_exists: Option<{has_worktree, choice: Reuse|Suffix}> , worktree_path, template_id: "claude+editor",
      claude: {profile: "default", model, effort, permission_mode, prompt (rendered, editable)},

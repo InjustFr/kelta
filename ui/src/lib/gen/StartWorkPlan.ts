@@ -10,7 +10,15 @@ export type StartWorkPlan = { project_id: ProjectId, source: WorkSource, repo_id
 /**
  * Repos the user may pick from (picker shown when > 1).
  */
-repo_choices: Array<string>, base: string, branch: string, branch_exists: BranchExists | null, worktree_path: string, template_id: string, claude: ClaudePlan, side_effects: SideEffects, 
+repo_choices: Array<string>, 
+/**
+ * Projects the user may pick from (picker shown when > 1), filled by `Core::work_plan`.
+ */
+project_choices: Array<ProjectId>, 
+/**
+ * `project_id` is only the active project: the sheet always shows so the user confirms it.
+ */
+project_guessed: boolean, base: string, branch: string, branch_exists: BranchExists | null, worktree_path: string, template_id: string, claude: ClaudePlan, side_effects: SideEffects, 
 /**
  * Existing work item → the sheet becomes "Resume".
  */

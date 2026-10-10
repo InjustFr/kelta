@@ -880,6 +880,10 @@ export const startWorkPlan: StartWorkPlan = {
     "prompt": "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing."
   },
   "existing": null,
+  "project_choices": [
+    "shop"
+  ],
+  "project_guessed": false,
   "project_id": "shop",
   "repo_choices": [
     "api",
@@ -2570,6 +2574,7 @@ export const ctlRequestHook: CtlRequest = {
 export const ctlRequestStart: CtlRequest = {
   "cmd": "start",
   "project": "shop",
+  "resolved": null,
   "ticket": "SHOP-142",
   "v": 1
 };
