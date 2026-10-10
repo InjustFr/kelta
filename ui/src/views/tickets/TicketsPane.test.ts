@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { sheetRegistry } from '$app/registry';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
+import type { PaneContent } from '$lib/gen';
+import { layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { selection } from '../work/selection.svelte';
 import TicketsPane from './TicketsPane.svelte';
@@ -24,16 +25,29 @@ beforeEach(async () => {
   reviews.lists = {};
   ui.sheets = [];
   work.byId = {};
+  layout.byProject = {};
+  settings.effective = {};
   await projects.load();
 });
 
-function mountBoard(mode: 'board' | 'list' = 'board', projectId = 'shop') {
+function mountBoard(
+  mode: 'board' | 'list' = 'board',
+  projectId = 'shop',
+  extra: Partial<Extract<PaneContent, { kind: 'tickets' }>> = {},
+) {
   return render(TicketsPane, {
     props: {
       projectId,
       tabId: 'tab-1',
       paneId: 'pane-1',
-      content: { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode, who: null },
+      content: {
+        kind: 'tickets',
+        scope: { kind: 'project', id: projectId },
+        view_id: null,
+        mode,
+        who: null,
+        ...extra,
+      },
       visible: true,
       focused: true,
     },
@@ -287,10 +301,16 @@ describe('TicketsPane workbench', () => {
     await waitFor(() => expect(card(container, 'SHOP-120')).not.toBeNull());
   });
 
-  it('groups by native status, cycles the grouping with g, and keeps Done collapsed', async () => {
+  it('groups by flow by default, cycles the grouping with g, and keeps Done collapsed', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
+    expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
+    await press('g');
     expect(groupNames(container)).toEqual(['Blocked 1', 'In Progress 1', 'In Review 1', 'To Do 2']);
+    await press('g');
+    expect(groupNames(container)).toEqual(['High 2', 'Medium 2', 'Low 1']);
+    await press('g');
+    expect(groupNames(container)).toEqual(['SHOP Sprint 12 4', 'SHOP Sprint 13 1']);
     await press('g');
     await waitFor(() =>
       expect(groupNames(container)).toEqual(['Ada Lovelace 3', 'Bob Martin 1', 'Unassigned 1']),
@@ -305,7 +325,7 @@ describe('TicketsPane workbench', () => {
     const { container } = mountBoard('list', 'billing');
     const key = (k: string) => container.querySelector(`[data-key="redmine-corp:${k}"]`);
     await waitFor(() => expect(key('4590')).not.toBeNull());
-    const done = container.querySelector<HTMLElement>('[data-group="Resolved"]');
+    const done = container.querySelector<HTMLElement>('[data-group="done"]');
     expect(done?.getAttribute('aria-expanded')).toBe('false');
     expect(key('4602')).toBeNull();
     await press('End');
@@ -385,5 +405,244 @@ describe('TicketsPane workbench', () => {
       expect(chip?.querySelector('[data-attention="done"]')).not.toBeNull(); // CI success = dot
     });
     expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
+  });
+});
+
+const keysIn = (c: HTMLElement) =>
+  [...c.querySelectorAll<HTMLElement>('[data-group], [data-key]')].map(
+    (e) => e.dataset.group ?? e.dataset.key,
+  );
+const row = (c: HTMLElement, key: string, account = 'jira-acme') =>
+  c.querySelector<HTMLElement>(`[data-key="${account}:${key}"]`) as HTMLElement;
+const savedContent = () => {
+  const root = layout.get('shop')?.tabs[0]?.root;
+  return root?.type === 'pane' && root.content.kind === 'tickets' ? root.content : null;
+};
+
+/** The pane inside a real layout, so persisted fields can be read back. */
+function inLayout(): void {
+  layout.byProject = {
+    shop: {
+      project_id: 'shop',
+      active_tab: 'tab-1',
+      rev: 0,
+      tabs: [
+        {
+          id: 'tab-1',
+          title: 'Tickets',
+          work_item_id: null,
+          focused_pane: 'pane-1',
+          zoomed_pane: null,
+          root: {
+            type: 'pane',
+            id: 'pane-1',
+            content: {
+              kind: 'tickets',
+              scope: { kind: 'project', id: 'shop' },
+              view_id: null,
+              mode: 'list',
+              who: null,
+            },
+          },
+        },
+      ],
+    },
+  } as unknown as typeof layout.byProject;
+}
+
+describe('TicketsPane list: group, sort, age, sprint, person', () => {
+  it('persists the grouping and the sort with the pane', async () => {
+    inLayout();
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    await press('g');
+    await fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'key' } });
+    expect(savedContent()).toMatchObject({ group: 'status', sort: 'key' });
+  });
+
+  it("opens with the pane's grouping and sorts within each group", async () => {
+    const { container } = mountBoard('list', 'shop', { group: 'priority', sort: 'key' });
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    expect(keysIn(container)).toEqual([
+      '1',
+      'jira-acme:SHOP-142',
+      'jira-acme:SHOP-160',
+      '2',
+      'jira-acme:SHOP-120',
+      'jira-acme:SHOP-151',
+      '3',
+      'jira-acme:SHOP-155',
+    ]);
+  });
+
+  it('shows the status age at 7, 14 and 21 days', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    const age = (k: string, acc?: string) => row(container, k, acc).querySelector<HTMLElement>('[data-age]');
+    expect(age('SHOP-142')).toBeNull(); // 3 days
+    expect(age('SHOP-151')?.dataset.age).toBe('old'); // 10 days
+    expect(age('SHOP-151')?.textContent).toBe('10d');
+    expect(age('SHOP-155')?.dataset.age).toBe('danger'); // 25 days
+    expect(age('SHOP-155')?.title).toBe('25 days in To Do');
+  });
+
+  it('turns the Doing header amber above tickets.wip_limit', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
+    const doing = () => container.querySelector<HTMLElement>('[data-group="doing"]');
+    await waitFor(() => expect(settings.value()).not.toBeNull());
+    expect(doing()?.classList.contains('wip')).toBe(false); // 1 in Doing, default limit 3
+    const global = settings.effective[''];
+    const value = settings.value()!;
+    settings.effective = {
+      '': { ...global!, data: { ...global!.data!, value: { ...value, tickets: { wip_limit: 0 } } as never } },
+    };
+    await tick();
+    expect(doing()?.classList.contains('wip')).toBe(true);
+    expect(doing()?.textContent).toContain('Above your limit of 0');
+  });
+
+  it('f s keeps the current sprint; rows carry a sprint chip unless grouped by sprint', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
+    expect(row(container, 'SHOP-142').querySelector('.sprint')?.textContent).toBe('SHOP Sprint 12');
+    await press('f');
+    await press('s');
+    await waitFor(() => expect(row(container, 'SHOP-155')).toBeNull());
+    expect(row(container, 'SHOP-142')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /Current sprint/ }).getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(screen.getByRole('button', { name: /Current sprint/ }));
+    await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
+    await press('f');
+    await press('j'); // not a chord: j moves on
+    expect(row(container, 'SHOP-155')).not.toBeNull();
+    for (let i = 0; i < 3; i++) await press('g'); // sprint
+    await waitFor(() => expect(container.querySelector('[data-group="SHOP Sprint 12"]')).toBeNull());
+    expect(row(container, 'SHOP-142').querySelector('.sprint')).toBeNull();
+  });
+
+  it('narrows to a person from the Who control, on top of Anyone, and persists it', async () => {
+    inLayout();
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    await fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'u-bob' } });
+    await waitFor(() => expect(row(container, 'SHOP-120')).not.toBeNull());
+    expect(row(container, 'SHOP-151')).toBeNull();
+    expect(screen.getByRole('tab', { name: /^Anyone/ }).getAttribute('aria-selected')).toBe('true');
+    expect(savedContent()).toMatchObject({ person: 'u-bob', who: 'anyone' });
+    await press('1'); // a who tab clears the person
+    expect(savedContent()).toMatchObject({ person: null, who: 'mine' });
+  });
+});
+
+describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
+  it('p opens the only PR in Kelta, P in the browser, several PRs ask', async () => {
+    const { container } = mountBoard('list', 'billing');
+    await waitFor(() => expect(row(container, '4567', 'redmine-corp')).not.toBeNull());
+    await fireEvent.click(row(container, '4567', 'redmine-corp'));
+    await press('P', { shiftKey: true });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'open_external').at(-1)?.args).toMatchObject({
+        url: expect.stringContaining('merge_requests/42'),
+      }),
+    );
+    await press('p');
+    await waitFor(() => expect(JSON.stringify(layout.get('billing'))).toContain('"review_detail"'));
+  });
+
+  it('several PRs open a picker, from p or the row PR chip', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
+    const chip = row(container, 'SHOP-142').querySelector<HTMLElement>('[data-pr] [role="button"]')!;
+    expect(chip.getAttribute('aria-label')).toBe('Open #309 (p)');
+    await fireEvent.click(chip);
+    const menu = await screen.findByRole('menu', { name: 'Open pull request' });
+    expect(menu.querySelectorAll('[role="menuitem"]').length).toBe(2);
+    await fireEvent.click(screen.getByRole('menuitem', { name: /#98/ }));
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"number":98'));
+  });
+
+  it('the row status chip opens the move menu', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    await fireEvent.click(
+      row(container, 'SHOP-151').querySelector<HTMLElement>('[data-status] [role="button"]')!,
+    );
+    expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
+  });
+
+  it('x and Shift+j select rows; m moves them all through the moves they share', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    await press('x');
+    await press('J', { shiftKey: true }); // extends to SHOP-155
+    expect(row(container, 'SHOP-151').classList.contains('picked')).toBe(true);
+    expect(row(container, 'SHOP-155').classList.contains('picked')).toBe(true);
+    await press('m');
+    const menu = await screen.findByRole('menu', { name: 'Move 2 tickets' });
+    await screen.findAllByRole('menuitem');
+    await fireEvent.keyDown(menu, { key: '1' });
+    await waitFor(() =>
+      expect(
+        mock.calls
+          .filter((c) => c.cmd === 'tracker_transition')
+          .map((c) => (c.args as { ticket: { key: string } }).ticket.key),
+      ).toEqual(['SHOP-151', 'SHOP-155']),
+    );
+    await waitFor(() => expect(container.querySelector('.picked')).toBeNull());
+  });
+
+  it('x toggles, Ctrl+click adds, Esc clears the selection', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    await press('x');
+    await fireEvent.click(row(container, 'SHOP-142'), { ctrlKey: true });
+    expect(container.querySelectorAll('.picked').length).toBe(2);
+    await press('x'); // the cursor is on SHOP-142 now
+    expect(container.querySelectorAll('.picked').length).toBe(1);
+    await press('Escape');
+    expect(container.querySelectorAll('.picked').length).toBe(0);
+  });
+
+  it('shows compact row actions; a missing PR disables its action with the reason', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    const acts = row(container, 'SHOP-151').querySelector<HTMLElement>('[data-acts]')!;
+    const pr = acts.querySelector('[aria-label="No pull request linked"]');
+    expect(pr?.getAttribute('aria-disabled')).toBe('true');
+    await fireEvent.click(pr!);
+    expect(screen.queryByRole('menu')).toBeNull();
+    await fireEvent.click(acts.querySelector('[aria-label="Move (m)"]')!);
+    expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    await fireEvent.click(acts.querySelector('[aria-label="Start work (s)"]')!);
+    await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
+  });
+
+  it('a read-only tracker refuses assign and comment with the reason', async () => {
+    render(TicketsPane, {
+      props: {
+        projectId: 'shop',
+        tabId: 't',
+        paneId: 'p',
+        content: { kind: 'tickets', scope: { kind: 'all' }, view_id: null, mode: 'list', who: 'anyone' },
+        visible: true,
+        focused: true,
+      },
+    });
+    const key = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('[data-key="gitlab-corp:#88"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    await fireEvent.click(key);
+    await press('a');
+    await press('c');
+    expect(mock.calls.some((c) => c.cmd === 'tracker_assign')).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(toasts.list.map((t) => t.toast.text)).toEqual([
+      "gitlab-corp can't change assignees from Kelta. Open #88 in the browser (o).",
+      "gitlab-corp can't take comments from Kelta. Open #88 in the browser (o).",
+    ]);
   });
 });

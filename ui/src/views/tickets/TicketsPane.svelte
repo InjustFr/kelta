@@ -3,10 +3,10 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, TicketItem, TicketsMode, Transition, Who } from '$lib/gen';
+  import type { Column, PrLink, TicketItem, TicketSort, TicketsMode, Transition, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
-  import { layout, projects, tickets, toasts, ui, work } from '$lib/stores';
+  import { layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -36,10 +36,22 @@
   import MoveDialogs from './MoveDialogs.svelte';
   import MoveMenu from './MoveMenu.svelte';
   import StatusChip from './StatusChip.svelte';
-  import { GROUP_BYS, groupTickets, type GroupBy, type TicketGroup } from './group';
+  import {
+    GROUP_BYS,
+    SORTS,
+    ageDays,
+    ageLevel,
+    commonByTarget,
+    flowOf,
+    groupTickets,
+    sortTickets,
+    type GroupBy,
+    type TicketGroup,
+  } from './group';
   import { MoveController } from './move.svelte';
   import PrChip from './PrChip.svelte';
-  import { ensureReviews, mainPr } from './prs';
+  import { ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems } from './prs';
+  import RowButton from './RowButton.svelte';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
@@ -47,10 +59,19 @@
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
   const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
   const GROUP_LABELS: Record<GroupBy, string> = {
+    flow: 'By flow',
     status: 'By status',
+    priority: 'By priority',
+    sprint: 'By sprint',
     assignee: 'By assignee',
     source: 'By source',
     none: 'No grouping',
+  };
+  const SORT_LABELS: Record<TicketSort, string> = {
+    priority: 'Priority',
+    updated: 'Updated',
+    age: 'Age in status',
+    key: 'Key',
   };
   const move = new MoveController();
 
@@ -85,15 +106,26 @@
   let modeOverride = $state<TicketsMode | undefined>(undefined);
   const wantedMode = $derived(modeOverride ?? content.mode);
   const mode = $derived<TicketsMode>(wantedMode === 'board' && project?.tracker ? 'board' : 'list');
-  // shortcut: grouping is per pane instance (PaneContent has no field), upgrade = a `group` field in the proto.
-  let groupBy = $state<GroupBy>('status');
+  let groupOverride = $state<GroupBy | undefined>(undefined);
+  let sortOverride = $state<TicketSort | undefined>(undefined);
+  const sort = $derived<TicketSort>(sortOverride ?? content.sort ?? 'priority');
+  let personOverride = $state<string | null | undefined>(undefined);
+  /** Assignee user id the list narrows to (on top of Anyone); client-side. */
+  const person = $derived(personOverride !== undefined ? personOverride : (content.person ?? null));
+  /** "Current sprint" quick filter (`f s`), client-side on `sprint.active`. */
+  let currentSprint = $state(false);
 
-  function persist(patch: { view_id?: string | null; mode?: TicketsMode; who?: Who | null }): void {
+  function persist(patch: Partial<Omit<typeof content, 'kind' | 'scope'>>): void {
     const current = layout.get(projectId);
     if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
     layout.update(projectId, (l) => ({
       ...l,
-      tabs: l.tabs.map((t) => ({ ...t, root: replacePaneContent(t.root, paneId, { ...content, ...patch }) })),
+      // Merged onto the stored content: two changes in one tick must not drop the first.
+      tabs: l.tabs.map((t) => {
+        const stored = findPane(t.root, paneId)?.pane.content;
+        const base = stored?.kind === 'tickets' ? stored : content;
+        return { ...t, root: replacePaneContent(t.root, paneId, { ...base, ...patch }) };
+      }),
     }));
   }
 
@@ -104,7 +136,25 @@
 
   function setWho(w: Who): void {
     whoOverride = w;
-    persist({ who: w });
+    personOverride = null;
+    persist({ who: w, person: null });
+  }
+
+  /** A person loads Anyone and keeps that assignee's tickets; `null` = everyone in the who. */
+  function setPerson(id: string | null): void {
+    personOverride = id;
+    if (id) whoOverride = 'anyone';
+    persist(id ? { person: id, who: 'anyone' } : { person: null });
+  }
+
+  function setGroup(g: GroupBy): void {
+    groupOverride = g;
+    persist({ group: g });
+  }
+
+  function setSort(s: TicketSort): void {
+    sortOverride = s;
+    persist({ sort: s });
   }
 
   function setMode(m: TicketsMode): void {
@@ -122,14 +172,27 @@
   let filter = $state('');
   const shown = $derived.by(() => {
     const needle = filter.trim().toLowerCase();
-    if (needle === '') return items;
     return items.filter((i) => {
       const t = i.ticket;
-      return `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
-        .toLowerCase()
-        .includes(needle);
+      if (person && t.assignee?.id !== person) return false;
+      if (currentSprint && !t.sprint?.active) return false;
+      return (
+        needle === '' ||
+        `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
+          .toLowerCase()
+          .includes(needle)
+      );
     });
   });
+
+  // shortcut: people come from the loaded first page per source, upgrade = a tracker user search.
+  const people = $derived.by(() => {
+    const all: Record<string, string> = person ? { [person]: person } : {};
+    for (const i of tickets.list(scope, viewId, 'anyone').data?.items ?? items)
+      if (i.ticket.assignee) all[i.ticket.assignee.id] = i.ticket.assignee.name;
+    return Object.entries(all).sort((a, b) => a[1].localeCompare(b[1]));
+  });
+  const hasSprints = $derived(items.some((i) => i.ticket.sprint));
 
   $effect(() => {
     const [s, v, w, tab] = [scope, viewId, who, whoTab];
@@ -142,6 +205,7 @@
         if (o !== tab && !l.data && !l.loading) void tickets.load(s, v, false, o);
       }
       ensureReviews();
+      if (settings.value() === null) void settings.load().catch(() => undefined);
     });
   });
 
@@ -182,9 +246,24 @@
   let toggled = $state<Record<string, boolean>>({});
   // shortcut: no Source grouping across all projects (views are per project), add project groups if asked.
   const groupBys = $derived(scope.kind === 'all' ? GROUP_BYS.filter((g) => g !== 'source') : GROUP_BYS);
-  const groups = $derived(groupTickets(shown, groupBy, views));
+  const groupBy = $derived.by<GroupBy>(() => {
+    const g = groupOverride ?? content.group ?? 'flow';
+    return groupBys.includes(g) ? g : 'flow';
+  });
+  const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
+  const sorted = $derived(sortTickets(shown, sort));
+  const groups = $derived(
+    groupTickets(sorted, groupBy, views, (item) => {
+      const w = workOf(item);
+      return flowOf(
+        item,
+        { work: w, needsYou: sessionsLamp(w?.session_ids ?? []) === 'needs_input' },
+        Date.now(),
+      );
+    }),
+  );
   const rows = $derived.by<Row[]>(() => {
-    if (groupBy === 'none') return shown.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
+    if (groupBy === 'none') return sorted.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
     const out: Row[] = [];
     for (const group of groups) {
       const open = toggled[`${groupBy}:${group.id}`] ?? group.category !== 'done';
@@ -290,9 +369,22 @@
   let root = $state<HTMLDivElement>();
   let filterInput = $state<HTMLInputElement>();
   let sourceBtn = $state<HTMLElement>();
-  let moveMenu = $state<{ x: number; y: number; item: TicketItem; transitions: Transition[] | null } | null>(
+  /** One ticket, or a selection (`items`, with each ticket's own moves in `lists`). */
+  let moveMenu = $state.raw<{
+    x: number;
+    y: number;
+    items: TicketItem[];
+    transitions: Transition[] | null;
+    lists: Transition[][];
+  } | null>(null);
+  let prMenu = $state<{ x: number; y: number; prs: PrLink[]; projectId: string; browser: boolean } | null>(
     null,
   );
+  /** Multi-selection (`x`, Shift+j/k), as row keys. */
+  let picked = $state<string[]>([]);
+  const pickedItems = $derived(shown.filter((i) => picked.includes(keyOf(i))));
+  /** First key of a two-key chord (`f s`). */
+  let chord: string | null = null;
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
 
@@ -323,18 +415,76 @@
     void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId, { preview });
   }
 
-  /** Opens at once (loading) so the menu, not the pane, gets a digit typed while transitions load. */
-  async function openMoveMenu(item: TicketItem): Promise<void> {
+  /**
+   * Opens at once (loading) so the menu, not the pane, gets a digit typed while transitions load.
+   * Several tickets: only the moves common to all, matched by target status name.
+   */
+  async function openMoveMenu(list: TicketItem[]): Promise<void> {
+    const [item] = list;
+    if (!item) return;
     const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
-    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, transitions: null };
-    const slot = await tickets.loadTransitions(item.ticket.ref);
-    if (moveMenu?.item !== item) return;
-    if (slot.data) moveMenu.transitions = slot.data;
-    else {
+    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, items: list, transitions: null, lists: [] };
+    const slots = await Promise.all(list.map((i) => tickets.loadTransitions(i.ticket.ref)));
+    if (moveMenu?.items !== list) return;
+    const failed = slots.findIndex((s) => !s.data);
+    if (failed < 0) {
+      const lists = slots.map((s) => s.data ?? []);
+      moveMenu = { ...moveMenu, lists, transitions: commonByTarget(lists) };
+    } else {
       moveMenu = null;
       root?.focus();
-      toasts.error(slot.error ?? 'No transitions', `Moving ${item.ticket.ref.key}`);
+      toasts.error(slots[failed]?.error ?? 'No transitions', `Moving ${list[failed]?.ticket.ref.key ?? ''}`);
     }
+  }
+
+  /** Applies a move to every ticket of the menu (each through its own transition); stops at the first failure. */
+  async function applyMove(t: Transition): Promise<void> {
+    const m = moveMenu;
+    if (!m) return;
+    if (m.items.length === 1) {
+      void move.moveViaTransition(m.items[0]!.ticket, t);
+      return;
+    }
+    for (const [n, i] of m.items.entries()) {
+      const own = m.lists[n]?.find((x) => x.to.name === t.to.name);
+      if (i.ticket.status.name === t.to.name || !own) continue;
+      if (!(await move.moveViaTransition(i.ticket, own))) return;
+    }
+    picked = [];
+  }
+
+  /** `p` / `P`: the only PR at once, else a picker. */
+  function openPrOf(item: TicketItem, browser: boolean): void {
+    const pid = item.project_ids[0] ?? projectId;
+    if (!openPrs(item.ticket.ref.key, item.prs, pid, browser)) return;
+    const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
+    prMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, prs: item.prs, projectId: pid, browser };
+  }
+
+  /** The tracker can do it, else a toast that says so and the way out. */
+  function can(item: TicketItem, cap: 'assign' | 'comment'): boolean {
+    if (item.caps[cap]) return true;
+    const what = cap === 'assign' ? 'change assignees' : 'take comments';
+    toasts.info(
+      `${item.ticket.ref.account} can't ${what} from Kelta. Open ${item.ticket.ref.key} in the browser (o).`,
+    );
+    return false;
+  }
+
+  function togglePick(key: string): void {
+    picked = picked.includes(key) ? picked.filter((k) => k !== key) : [...picked, key];
+  }
+
+  /** Shift+j/k: adds the current row and the next one to the selection. */
+  function extend(delta: number): void {
+    const from = selKey;
+    step(delta);
+    const add = [from, selKey].filter((k): k is string => k !== null && !k.startsWith('group:'));
+    picked = [...new Set([...picked, ...add])];
+  }
+
+  function pickOrMove(item: TicketItem): void {
+    void openMoveMenu(picked.length > 0 && picked.includes(keyOf(item)) ? pickedItems : [item]);
   }
 
   function openSourceMenu(): void {
@@ -365,14 +515,43 @@
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const item = cur;
+    const first = chord;
+    chord = null;
+    if (first === 'f' && e.key === 's') {
+      currentSprint = !currentSprint;
+      e.preventDefault();
+      return;
+    }
     switch (e.key) {
       case 'j':
       case 'ArrowDown':
-        step(1);
+        if (e.shiftKey) extend(1);
+        else step(1);
         break;
       case 'k':
       case 'ArrowUp':
-        step(-1);
+        if (e.shiftKey) extend(-1);
+        else step(-1);
+        break;
+      case 'J':
+        extend(1);
+        break;
+      case 'K':
+        extend(-1);
+        break;
+      case 'x':
+        if (item && mode === 'list') togglePick(keyOf(item));
+        break;
+      case 'Escape':
+        if (picked.length === 0) return;
+        picked = [];
+        break;
+      case 'f':
+        chord = 'f';
+        break;
+      case 'p':
+      case 'P':
+        if (item) openPrOf(item, e.key === 'P');
         break;
       case 'Home':
         jump(false);
@@ -411,22 +590,23 @@
         if (project?.tracker) openSourceMenu();
         break;
       case 'g':
-        groupBy = groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'status';
+        setGroup(groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'flow');
         break;
       case 'R':
         refresh();
         break;
       case 'm':
-        if (item) void openMoveMenu(item);
+        if (picked.length > 0) void openMoveMenu(pickedItems);
+        else if (item) void openMoveMenu([item]);
         break;
       case 'a':
-        if (item) void assign(item, 'me');
+        if (item && can(item, 'assign')) void assign(item, 'me');
         break;
       case 'A':
-        if (item) void assign(item, 'none');
+        if (item && can(item, 'assign')) void assign(item, 'none');
         break;
       case 'c':
-        if (item) commenting = item;
+        if (item && can(item, 'comment')) commenting = item;
         break;
       case 'o':
         if (item) browse(item);
@@ -515,7 +695,29 @@
           value={whoTab ?? undefined}
           onchange={setWho}
         />
+        {#if people.length > 0 || person}
+          <Select
+            label="Person"
+            value={person ?? ''}
+            options={[
+              { value: '', label: 'Any person' },
+              ...people.map(([value, label]) => ({ value, label })),
+            ]}
+            onchange={(id) => setPerson(id === '' ? null : id)}
+          />
+        {/if}
       </div>
+    {/if}
+    {#if hasSprints || currentSprint}
+      <button
+        type="button"
+        class="quick"
+        aria-pressed={currentSprint}
+        title="Only tickets in an active sprint (f s)"
+        onclick={() => (currentSprint = !currentSprint)}
+      >
+        {#if currentSprint}<Icon name="check" size={12} />{/if}Current sprint
+      </button>
     {/if}
     <span class="spacer"></span>
     {#if project?.tracker}
@@ -537,7 +739,13 @@
         label="Group (g)"
         value={groupBy}
         options={groupBys.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
-        onchange={(g) => (groupBy = g)}
+        onchange={setGroup}
+      />
+      <Select
+        label="Sort"
+        value={sort}
+        options={SORTS.map((x) => ({ value: x, label: SORT_LABELS[x] }))}
+        onchange={setSort}
       />
     {/if}
     {#if project?.tracker}
@@ -611,11 +819,14 @@
         >
           {#snippet row(r)}
             {#if r.kind === 'group'}
+              {@const overWip =
+                groupBy === 'flow' && r.group.id === 'doing' && r.group.items.length > wipLimit}
               <button
                 type="button"
                 tabindex="-1"
                 class="k-group head"
                 class:selected={selKey === r.key}
+                class:wip={overWip}
                 aria-expanded={r.open}
                 data-group={r.group.id}
                 onclick={() => {
@@ -626,26 +837,88 @@
                 <Icon name={r.open ? 'chevron-down' : 'chevron-right'} size={12} />
                 {r.group.label}
                 <span class="count k-num">{r.group.items.length}</span>
+                {#if overWip}<span class="wip-note">Above your limit of {wipLimit}</span>{/if}
               </button>
             {:else}
               {@const item = r.item}
+              {@const t = item.ticket}
               {@const pr = prOf(item)}
+              {@const isPicked = picked.includes(r.key)}
+              {@const age = ageLevel(t, Date.now())}
               <button
                 type="button"
                 tabindex="-1"
                 class="k-row"
                 class:selected={cur === item}
+                class:picked={isPicked}
                 aria-current={cur === item ? 'true' : undefined}
+                aria-pressed={picked.length > 0 ? isPicked : undefined}
                 data-key={r.key}
-                onclick={() => (selKey = r.key)}
+                onclick={(e) => {
+                  selKey = r.key;
+                  if (e.metaKey || e.ctrlKey) togglePick(r.key);
+                }}
                 ondblclick={() => openDetail(item)}
               >
-                <span class="k-row-lamp"><Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} /></span>
-                <span class="k-row-key">{item.ticket.ref.key}</span>
-                <span class="k-row-title">{item.ticket.title}</span>
+                <span class="k-row-lamp"
+                  >{#if isPicked}<Icon name="check" size={12} />{:else}<Lamp
+                      level={sessionsLamp(workOf(item)?.session_ids ?? [])}
+                    />{/if}</span
+                >
+                <span class="k-row-key">{t.ref.key}</span>
+                <span class="k-row-title">{t.title}</span>
+                <span class="acts" data-acts>
+                  <RowButton
+                    icon="arrow-right"
+                    label="Move (m)"
+                    onclick={() => {
+                      selKey = r.key;
+                      pickOrMove(item);
+                    }}
+                  />
+                  <RowButton
+                    icon="git-pull-request"
+                    label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
+                    disabled={item.prs.length === 0}
+                    onclick={() => openPrOf(item, false)}
+                  />
+                  <RowButton
+                    icon="play"
+                    label={hasWork(item) ? 'Resume work (s)' : 'Start work (s)'}
+                    onclick={() => start(item)}
+                  />
+                </span>
                 <span class="meta">
-                  {#if pr}<span class="pr" data-pr><PrChip {pr} /></span>{/if}
-                  <span class="status-slot"><StatusChip status={item.ticket.status} /></span>
+                  {#if pr}<span class="pr" data-pr
+                      ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={() => openPrOf(item, false)}
+                        ><PrChip {pr} /></RowButton
+                      ></span
+                    >{/if}
+                  {#if t.sprint && groupBy !== 'sprint'}
+                    <span
+                      class="sprint"
+                      class:active={t.sprint.active}
+                      title={t.sprint.active ? `${t.sprint.name} (current)` : t.sprint.name}
+                      >{t.sprint.name}</span
+                    >
+                  {/if}
+                  <span class="status-slot" data-status
+                    ><RowButton
+                      label={`${t.status.name}: move ${t.ref.key} (m)`}
+                      onclick={() => {
+                        selKey = r.key;
+                        pickOrMove(item);
+                      }}><StatusChip status={t.status} /></RowButton
+                    ></span
+                  >
+                  <span class="age-slot"
+                    >{#if age}<span
+                        class="aged {age}"
+                        data-age={age}
+                        title={`${ageDays(t, Date.now())} days in ${t.status.name}`}
+                        >{ageDays(t, Date.now())}d</span
+                      >{/if}</span
+                  >
                   {#if showSource}<span class="source-slot"><Badge>{sourceOf(item)}</Badge></span>{/if}
                   {#if whoTab !== 'mine'}
                     <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
@@ -741,6 +1014,9 @@
       ['Enter', 'open'],
       ['1/2/3', 'who'],
       ['m', 'move to'],
+      ['x', 'select'],
+      ['p/P', 'PR, in browser'],
+      ['f s', 'current sprint'],
       ['a/A', 'assign me, unassign'],
       ['s/S', 'start, start now'],
       ['v', 'source'],
@@ -752,14 +1028,35 @@
 </div>
 
 {#if moveMenu}
+  {@const lead = moveMenu.items[0]!.ticket}
+  <!-- shortcut: a selection borrows the first ticket's flow strip and names the count as its key; U3's StatusPicker replaces it. -->
   <MoveMenu
-    ticket={moveMenu.item.ticket}
+    ticket={moveMenu.items.length === 1
+      ? lead
+      : { ...lead, ref: { ...lead.ref, key: `${moveMenu.items.length} tickets` } }}
     transitions={moveMenu.transitions}
     x={moveMenu.x}
     y={moveMenu.y}
-    onselect={(t) => moveMenu && void move.moveViaTransition(moveMenu.item.ticket, t)}
+    onselect={(t) => void applyMove(t)}
     onclose={() => {
       moveMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if prMenu}
+  {@const m = prMenu}
+  <Menu
+    items={prMenuItems(m.prs)}
+    x={m.x}
+    y={m.y}
+    label="Open pull request"
+    onselect={(url) => {
+      const pr = m.prs.find((p) => p.url === url);
+      if (pr) openPr(pr, m.projectId, m.browser);
+    }}
+    onclose={() => {
+      prMenu = null;
       root?.focus();
     }}
   />
@@ -802,6 +1099,9 @@
   }
 
   .who {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-3);
     font-variant-numeric: tabular-nums;
   }
 
@@ -839,6 +1139,7 @@
 
   @container (width < 560px) {
     .source-slot,
+    .sprint,
     .meta .k-avatar {
       display: none;
     }
@@ -893,6 +1194,95 @@
   .age {
     min-width: 52px;
     text-align: right;
+  }
+
+  /* Status age: quiet at 7 days, --k-warn at 14, --k-danger at 21; text tint only (DESIGN §6.11). */
+  .age-slot {
+    display: inline-flex;
+    justify-content: flex-end;
+    width: 28px;
+  }
+
+  .aged {
+    font-size: var(--k-font-size-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--k-fg-muted);
+  }
+
+  .aged.warn {
+    color: var(--k-warn);
+  }
+
+  .aged.danger {
+    color: var(--k-danger);
+    font-weight: var(--k-weight-strong);
+  }
+
+  .sprint {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
+  }
+
+  .sprint.active {
+    color: var(--k-fg-muted);
+  }
+
+  /* Compact row actions: on the selected row, on hover and on focus-within (DESIGN §7). */
+  .acts {
+    display: none;
+    flex: none;
+    align-items: center;
+    gap: var(--k-space-1);
+  }
+
+  .k-row:hover .acts,
+  .k-row.selected .acts,
+  .k-row:focus-within .acts {
+    display: inline-flex;
+  }
+
+  .k-row.picked {
+    background: var(--k-bg-selected);
+  }
+
+  .k-row.picked .k-row-lamp {
+    color: var(--k-accent);
+  }
+
+  .head.wip {
+    color: var(--k-warn);
+  }
+
+  .wip-note {
+    font-weight: 400;
+    font-size: var(--k-font-size-xs);
+  }
+
+  .quick {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    height: 22px;
+    padding: 0 var(--k-space-3);
+    border: 0;
+    border-radius: var(--k-radius);
+    background: transparent;
+    color: var(--k-fg-chrome);
+    cursor: pointer;
+  }
+
+  .quick:hover {
+    background: var(--k-bg-hover);
+    color: var(--k-fg);
+  }
+
+  .quick[aria-pressed='true'] {
+    color: var(--k-fg);
+    font-weight: var(--k-weight-strong);
+    box-shadow: inset 0 -2px 0 var(--k-accent);
   }
 
   /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */

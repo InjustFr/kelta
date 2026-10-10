@@ -1,14 +1,34 @@
-// Tickets list grouping: by native status (ordered by category), assignee, source or none.
+// Tickets list grouping (TICKETS.md T5/T6): Flow (default), native status, priority, sprint, assignee,
+// source or none; sort within groups; status age.
 
-import type { Status, StatusCategory, TicketItem } from '$lib/gen';
+import type {
+  Status,
+  StatusCategory,
+  Ticket,
+  TicketGroupBy,
+  TicketItem,
+  TicketSort,
+  WorkItem,
+} from '$lib/gen';
 
-export type GroupBy = 'status' | 'assignee' | 'source' | 'none';
-export const GROUP_BYS: readonly GroupBy[] = ['status', 'assignee', 'source', 'none'];
+import { mainPr } from './prs';
+
+export type GroupBy = TicketGroupBy;
+export const GROUP_BYS: readonly GroupBy[] = [
+  'flow',
+  'status',
+  'priority',
+  'sprint',
+  'assignee',
+  'source',
+  'none',
+];
+export const SORTS: readonly TicketSort[] = ['priority', 'updated', 'age', 'key'];
 
 export interface TicketGroup {
   id: string;
   label: string;
-  /** Status grouping only: the category that orders and colours the group. */
+  /** The category that orders and colours the group; `done` starts collapsed. */
   category: StatusCategory | null;
   items: TicketItem[];
 }
@@ -36,34 +56,138 @@ export function flowOrder(statuses: Status[]): Status[] {
   return [...seen.values()].sort((a, b) => FLOW_ORDER.indexOf(a.category) - FLOW_ORDER.indexOf(b.category));
 }
 
+// ---- flow ------------------------------------------------------------------------------------
+
+export type Flow = 'doing' | 'waiting' | 'ready' | 'backlog' | 'done';
+const FLOWS: readonly Flow[] = ['doing', 'waiting', 'ready', 'backlog', 'done'];
+const FLOW_LABELS: Record<Flow, string> = {
+  doing: 'Doing',
+  waiting: 'Waiting',
+  ready: 'Ready',
+  backlog: 'Backlog',
+  done: 'Done in the last 7 days',
+};
+const BLOCKED = /block|on hold|waiting|impediment/i;
+const BACKLOG = /backlog|triage|icebox/i;
+const DAY = 86_400_000;
+
+/** What the flow grouping knows beyond the ticket: its local work item and whether Claude waits on me. */
+export interface FlowSignals {
+  work: WorkItem | null;
+  needsYou: boolean;
+}
+
+/** The flow group of a ticket; `null` = done more than 7 days ago (left out of Flow). */
+export function flowOf(item: TicketItem, s: FlowSignals, now: number): Flow | null {
+  const t = item.ticket;
+  if (t.status.category === 'done') return now - since(t) <= 7 * DAY ? 'done' : null;
+  const pr = mainPr(item.prs);
+  const open = pr?.state === 'open';
+  if (s.needsYou || BLOCKED.test(t.status.name) || (open && (pr.ci === 'failure' || pr.ci === 'error')))
+    return 'waiting';
+  if (
+    s.work?.state.kind === 'active' ||
+    s.work?.state.kind === 'starting' ||
+    t.status.category === 'in_progress'
+  )
+    return 'doing';
+  if (t.status.category === 'in_review' || (open && !pr.draft && pr.review === 'review_required'))
+    return 'waiting';
+  if (t.status.category === 'unknown' || BACKLOG.test(t.status.name)) return 'backlog';
+  return 'ready';
+}
+
+// ---- age and sort ----------------------------------------------------------------------------
+
+/** When the ticket entered its status (ms); providers without it fall back to `updated_at`. */
+function since(t: Ticket): number {
+  return Date.parse(t.status_since ?? t.updated_at) || 0;
+}
+
+/** Whole days in the current status. */
+export function ageDays(t: Ticket, now: number): number {
+  return Math.max(0, Math.floor((now - since(t)) / DAY));
+}
+
+/** Age badge tone at 7 / 14 / 21 days in a non-done status; `null` = no badge. */
+export function ageLevel(t: Ticket, now: number): 'old' | 'warn' | 'danger' | null {
+  if (t.status.category === 'done') return null;
+  const d = ageDays(t, now);
+  return d >= 21 ? 'danger' : d >= 14 ? 'warn' : d >= 7 ? 'old' : null;
+}
+
+const byKey = (a: TicketItem, b: TicketItem): number =>
+  a.ticket.ref.key.localeCompare(b.ticket.ref.key, undefined, { numeric: true });
+const byUpdated = (a: TicketItem, b: TicketItem): number =>
+  Date.parse(b.ticket.updated_at) - Date.parse(a.ticket.updated_at);
+/** No priority sorts after every rank. */
+const rank = (i: TicketItem): number => i.ticket.priority_rank ?? 256;
+
+/** Sorted copy: priority (then updated), updated (newest), age (longest in status), key (natural). */
+export function sortTickets(items: readonly TicketItem[], sort: TicketSort): TicketItem[] {
+  const cmp =
+    sort === 'priority'
+      ? (a: TicketItem, b: TicketItem) => rank(a) - rank(b) || byUpdated(a, b)
+      : sort === 'updated'
+        ? byUpdated
+        : sort === 'age'
+          ? (a: TicketItem, b: TicketItem) => since(a.ticket) - since(b.ticket) || byKey(a, b)
+          : byKey;
+  return [...items].sort(cmp);
+}
+
+// ---- grouping --------------------------------------------------------------------------------
+
 /**
- * Groups in display order. `sources` maps a view id to its label and gives the source order;
- * a ticket sits under its first view.
+ * Groups in display order, items kept in input order. `sources` maps a view id to its label and gives
+ * the source order (a ticket sits under its first view); `flow` classifies for the Flow grouping.
  */
 export function groupTickets(
-  items: TicketItem[],
+  items: readonly TicketItem[],
   by: GroupBy,
   sources: readonly { id: string; label: string }[] = [],
+  flow: (item: TicketItem) => Flow | null = (i) => flowOf(i, { work: null, needsYou: false }, Date.now()),
 ): TicketGroup[] {
-  if (by === 'none') return [{ id: 'all', label: 'All', category: null, items }];
-  const groups = new Map<string, TicketGroup>();
+  if (by === 'none') return [{ id: 'all', label: 'All', category: null, items: [...items] }];
+  const groups = new Map<string, TicketGroup & { order: number }>();
   for (const item of items) {
     const t = item.ticket;
-    const [id, label, category] =
-      by === 'status'
-        ? [t.status.name, t.status.name, t.status.category]
-        : by === 'assignee'
-          ? [t.assignee?.id ?? '', t.assignee?.name ?? 'Unassigned', null]
-          : [item.view_ids[0] ?? '', sources.find((s) => s.id === item.view_ids[0])?.label ?? 'Other', null];
-    const g = groups.get(id) ?? { id, label, category, items: [] };
-    g.items.push(item);
-    groups.set(id, g);
+    let g: [string, string, StatusCategory | null, number];
+    if (by === 'flow') {
+      const f = flow(item);
+      if (!f) continue;
+      g = [f, FLOW_LABELS[f], f === 'done' ? 'done' : null, FLOWS.indexOf(f)];
+    } else if (by === 'status') {
+      g = [t.status.name, t.status.name, t.status.category, GROUP_ORDER.indexOf(t.status.category)];
+    } else if (by === 'priority') {
+      const r = t.priority_rank;
+      g = [
+        r === null ? '' : String(r),
+        t.priority ?? (r === null ? 'No priority' : `Priority ${r}`),
+        null,
+        rank(item),
+      ];
+    } else if (by === 'sprint') {
+      // Active sprints first, then the others, then no sprint.
+      g = [t.sprint?.id ?? '', t.sprint?.name ?? 'No sprint', null, t.sprint ? (t.sprint.active ? 0 : 1) : 2];
+    } else if (by === 'assignee') {
+      g = [t.assignee?.id ?? '', t.assignee?.name ?? 'Unassigned', null, t.assignee ? 0 : 1];
+    } else {
+      const at = sources.findIndex((s) => s.id === item.view_ids[0]);
+      g = [item.view_ids[0] ?? '', sources[at]?.label ?? 'Other', null, at < 0 ? sources.length : at];
+    }
+    const [id, label, category, order] = g;
+    const group = groups.get(id) ?? { id, label, category, order, items: [] };
+    group.items.push(item);
+    groups.set(id, group);
   }
-  const rank = (g: TicketGroup): number => {
-    if (by === 'status') return GROUP_ORDER.indexOf(g.category ?? 'unknown');
-    if (by === 'assignee') return g.id === '' ? 1 : 0; // Unassigned last
-    const i = sources.findIndex((s) => s.id === g.id);
-    return i < 0 ? sources.length : i;
-  };
-  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+  return [...groups.values()]
+    .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+    .map(({ order: _, ...g }) => g);
+}
+
+/** Transitions common to every list, matched by target status name, from the first list. */
+export function commonByTarget<T extends { to: { name: string } }>(lists: readonly (readonly T[])[]): T[] {
+  const [first = [], ...rest] = lists;
+  return first.filter((t) => rest.every((l) => l.some((o) => o.to.name === t.to.name)));
 }
