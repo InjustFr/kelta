@@ -5,6 +5,7 @@
 //! `Conflict`). Request changes is a note (+ unapprove). Gate: pending `review_requested` todos
 //! (count + max id).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -30,6 +31,9 @@ use crate::common::{MAX_LOGS, feedback_error, host_matches, linked_tickets, log_
 const STALE_AFTER_DAYS: i64 = 90;
 const PER_PAGE: &str = "100";
 
+/// `(repo, iid, head sha)`.
+type DiffKey = (String, u64, String);
+
 #[derive(Default)]
 struct TodoGate {
     disabled: bool,
@@ -47,6 +51,9 @@ pub struct GitlabHost {
     /// Major version from `GET /version` (cached; `None` = not fetched or unknown).
     major: Mutex<Option<u32>>,
     gate: Mutex<TodoGate>,
+    /// Requested MRs' `(additions, deletions)` by `(repo, iid, head sha)`: a diff only changes
+    /// with its head, so `/changes` (the full diff) is fetched once per head, not every poll.
+    diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
 }
 
 impl GitlabHost {
@@ -77,6 +84,7 @@ impl GitlabHost {
             me: Mutex::new(None),
             major: Mutex::new(None),
             gate: Mutex::new(TodoGate::default()),
+            diff_sizes: Mutex::new(HashMap::new()),
         })
     }
 
@@ -207,10 +215,17 @@ impl GitlabHost {
     /// list has none). Best effort, like the detail.
     async fn request_state(&self, review: &mut Review, me: &User) {
         let url = self.mr_url(&review.r#ref.repo, &format!("/{}", review.r#ref.number));
+        let key = (review.r#ref.repo.clone(), review.r#ref.number, review.head_sha.clone());
+        let cached = self.diff_sizes.lock().get(&key).copied();
         let (reviewers, approvals, changes) = tokio::join!(
             self.json(HttpRequest::get(format!("{url}/reviewers"))),
             self.json(HttpRequest::get(format!("{url}/approvals"))),
-            self.json(HttpRequest::get(format!("{url}/changes"))),
+            async {
+                match cached {
+                    Some(_) => None,
+                    None => self.json(HttpRequest::get(format!("{url}/changes"))).await.ok(),
+                }
+            },
         );
         // `approvers` / `approved_by` / `/reviewers` wrap the user, `suggested_approvers` does not.
         let is_me = |x: &Value| {
@@ -234,13 +249,19 @@ impl GitlabHost {
                     || list(&a, "suggested_approvers").iter().any(is_me));
         }
         // shortcut: GitLab truncates huge diffs (`overflow`), so a very large MR reads smaller; upgrade via `/diffs` paging if it matters.
-        if let Some(files) =
-            changes.ok().and_then(|c| c.body.get("changes").and_then(Value::as_array).cloned())
-        {
-            let (a, d) = files
-                .iter()
-                .map(|c| diff_counts(s(c, "diff").unwrap_or("")))
-                .fold((0, 0), |x, y| (x.0 + y.0, x.1 + y.1));
+        let size = cached.or_else(|| {
+            let files = changes?.body.get("changes")?.as_array()?.clone();
+            Some(
+                files
+                    .iter()
+                    .map(|c| diff_counts(s(c, "diff").unwrap_or("")))
+                    .fold((0, 0), |x, y| (x.0 + y.0, x.1 + y.1)),
+            )
+        });
+        if let Some((a, d)) = size {
+            if !key.2.is_empty() {
+                self.diff_sizes.lock().insert(key, (a, d));
+            }
             (review.additions, review.deletions) = (Some(a), Some(d));
         }
     }
@@ -382,6 +403,10 @@ impl CodeHost for GitlabHost {
         if q.kind == ReviewKind::ReviewRequested {
             let me = self.me().await?;
             futures::future::join_all(list.iter_mut().map(|r| self.request_state(r, &me))).await;
+            // Bounded by the current list: closed or re-pushed MRs drop out.
+            self.diff_sizes.lock().retain(|(repo, n, sha), _| {
+                list.iter().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
+            });
         }
         Ok(list)
     }

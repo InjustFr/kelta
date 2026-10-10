@@ -55,6 +55,7 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
         .respond_with(reply(
             json!({ "changes": [{ "new_path": "a.rs", "diff": "@@ -1 +1,2 @@\n-x\n+y\n+z\n" }] }),
         ))
+        .expect(1)
         .mount(&server)
         .await;
     let h = gl(&server);
@@ -64,6 +65,8 @@ async fn review_requested_list_uses_reviewer_username_updated_after_and_draft_no
     assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-29T10:00:00Z"));
     assert!(list[0].blocking, "one approval left and I am an approver");
     assert!(list[1].requested_at.is_none() && !list[1].blocking);
+    let again = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    assert_eq!(again[0].additions, Some(2), "same head: size from cache, /changes fetched once");
     let q = &queries(&server, "GET", "/api/v4/merge_requests").await[0];
     assert!(q.contains("updated_after=20"), "{q}");
     assert!(!q.contains("wip="));
