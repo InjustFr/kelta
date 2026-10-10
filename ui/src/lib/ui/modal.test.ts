@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
+import { focusModal, modalKeydown } from './modal';
 import ModalHarness from './ModalHarness.test.svelte';
 
 // FLOW §7.1: the same keyboard rules for every Dialog and Sheet.
@@ -48,4 +49,23 @@ describe.each(['dialog', 'sheet'] as const)('%s keyboard', (kind) => {
     modal.dispatchEvent(ev);
     expect(onsubmit).not.toHaveBeenCalled();
   });
+});
+
+// FLOW §4.6: a destructive footer action (Force remove) is never reached by ⌘↵ or first focus.
+it('⌘↵ and first focus skip a danger-only footer', () => {
+  const el = document.createElement('div');
+  el.tabIndex = -1;
+  el.innerHTML =
+    '<footer><button class="k-button ghost">Cancel</button><button class="k-button danger">Force remove</button></footer>';
+  document.body.append(el);
+  const force = el.querySelector<HTMLButtonElement>('.danger')!;
+  const click = vi.fn();
+  force.addEventListener('click', click);
+  focusModal(el);
+  expect(document.activeElement).toBe(el);
+  const ev = new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, cancelable: true });
+  modalKeydown(ev, el, () => {});
+  expect(click).not.toHaveBeenCalled();
+  expect(ev.defaultPrevented).toBe(false);
+  el.remove();
 });

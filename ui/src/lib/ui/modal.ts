@@ -7,7 +7,8 @@ const FOCUSABLE = 'button, input, textarea, select, [tabindex="0"]';
 const MAIN = [
   '[autofocus]',
   'input:not(:disabled), textarea:not(:disabled), select:not(:disabled)',
-  'footer .k-button.primary:not(:disabled), footer .k-button.danger:not(:disabled)',
+  // Never a danger button: Force remove and the like stay a deliberate click (FLOW §4.6).
+  'footer .k-button.primary:not(:disabled)',
 ];
 
 /** Focuses the main input of a modal; returns the cleanup that restores the previous focus. */
@@ -29,9 +30,7 @@ export function modalKeydown(e: KeyboardEvent, el: HTMLElement | undefined, oncl
   if (!el) return;
   // A form handling ⌘↵ itself (StartWorkSheet) has already prevented the default.
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.defaultPrevented) {
-    const primary =
-      el.querySelector<HTMLButtonElement>('footer .k-button.primary:not(:disabled)') ??
-      el.querySelector<HTMLButtonElement>('footer .k-button.danger:not(:disabled)');
+    const primary = el.querySelector<HTMLButtonElement>('footer .k-button.primary:not(:disabled)');
     if (primary) {
       e.preventDefault();
       e.stopPropagation();
