@@ -133,6 +133,9 @@ impl Authed {
             && let Some(r) = &self.secret
         {
             self.secrets.invalidate(r);
+            if self.scheme == AuthScheme::OAuth {
+                self.secrets.invalidate(&crate::oauth::grant_ref(r));
+            }
         }
     }
 }
