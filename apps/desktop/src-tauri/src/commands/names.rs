@@ -76,6 +76,7 @@ pub const COMMANDS: &[&str] = &[
     "tracker_assignable_users",
     "tracker_priorities",
     "tracker_set_priority",
+    "tracker_refine",
     "tracker_search",
     "tracker_sources",
     "next_up_list",

@@ -35,6 +35,8 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
 | `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
+| `dark_theme` | str | `bezel-dark` | scope global; theme id used in dark mode (built-in or `[themes.<id>]` with `base = "dark"`); an unknown id or a theme of the other base falls back to `bezel-dark` |
+| `light_theme` | str | `bezel-light` | scope global; same for light mode, fallback `bezel-light` |
 
 ### [window]
 | `decorations` | enum(auto\|native\|none\|custom) | `auto` | restart; auto = none on Hyprland/Sway, native elsewhere |
@@ -220,6 +222,21 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 |---|---|---|---|
 | `client_ids` | map<str,str> | `{}` | web host (`github.com`, `gitlab.com`, `gitlab.acme.example`) → OAuth App client id / GitLab application id. Public values. A host without one offers no "Sign in with GitHub / GitLab" (docs/user/oauth.md). |
 
+### [themes.<id>]  (map; scope global only; category General)
+A theme is a named, **partial** set of colour overrides on top of a Bezel base: unset tokens keep the Bezel value. The UI sets the overrides as inline custom properties on `<html>` (`ui/src/lib/theme`), tokens.css stays the base. Built-ins: `bezel-dark`, `bezel-light`; a user theme with a built-in id wins. Every colour is `#rrggbb` (schema `pattern`; a bad value rejects the whole file like any schema error, and the UI also ignores a non-hex value per token and lowercases the rest).
+
+| Key | Type | Notes |
+|---|---|---|
+| `name` | str | required, display name |
+| `base` | enum(dark\|light) | required; the slot of the other mode ignores the theme |
+| `ui.<token>` | `#rrggbb` | `bezel`, `bezel_raised`, `well`, `bg_float`, `fg`, `fg_muted`, `fg_subtle`, `fg_chrome`, `border`, `border_strong`, `danger`, `warn`, `ok`, `info` → `--k-<token>` (`_` → `-`). Not themable: lamps, swatches, hover/active/overlay/shadow, `*_fg` |
+| `ui.accent` | `#rrggbb` | never writes `--k-accent`: the `--k-project` hue when the active project has no colour (red and grey are still dropped, DESIGN §9) |
+| `terminal.background` / `terminal.foreground` | `#rrggbb` | fallback `ui.well` / `ui.fg`, then the Bezel palette; also sets `--k-term-bg` / `--k-term-fg` |
+| `terminal.cursor` / `terminal.selection` | `#rrggbb` | fallback the Bezel palette; also sets `--k-term-cursor` / `--k-term-selection` |
+| `terminal.ansi` | list<`#rrggbb`> | exactly 16 (black..white, then the brights) or omitted |
+
+A build without themes rejects a config that has `themes` (`deny_unknown_fields`). First paint shows Bezel until settings load.
+
 ### [[session_templates]]  (by_id; scope global+project+repo)
 `{ id, label, layout: TemplateNode, enabled = true }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
 ```toml
@@ -391,6 +408,17 @@ Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`
 #:schema https://kelta.dev/schema/0.1/settings.schema.json
 [app]
 theme = "system"
+dark_theme = "solarized"
+
+[themes.solarized]
+name = "Solarized"
+base = "dark"
+[themes.solarized.ui]
+well = "#002b36"
+fg = "#93a1a1"
+accent = "#268bd2"
+[themes.solarized.terminal]
+background = "#002b36"
 
 [window]
 decorations = "auto"

@@ -23,6 +23,7 @@
     assign: 'Assign to me',
     unassign: 'Unassign',
     comment: 'Comment',
+    refine: 'Refine with Claude',
     branch: 'Copy branch',
     browser: 'Open in browser',
   };

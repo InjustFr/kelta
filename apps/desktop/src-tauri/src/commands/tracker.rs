@@ -97,6 +97,15 @@ pub async fn tracker_set_priority(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_refine(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    project_id: Option<ProjectId>,
+) -> Res<String> {
+    core.tracker_refine(&ticket, project_id.as_ref()).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_search(core: State<'_, Arc<Core>>, scope: Scope, text: String) -> Res<Vec<TicketItem>> {
     core.tracker_search(scope, &text).await
 }

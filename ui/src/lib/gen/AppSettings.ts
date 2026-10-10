@@ -11,4 +11,12 @@ restore_mode: RestoreMode,
 /**
  * Ask before quitting while Claude is working or waiting for you.
  */
-confirm_quit_with_running: boolean, log_level: LogLevel, };
+confirm_quit_with_running: boolean, log_level: LogLevel, 
+/**
+ * Theme id used in dark mode (`bezel-dark` or a `[themes.<id>]` with `base = "dark"`).
+ */
+dark_theme: string, 
+/**
+ * Theme id used in light mode (`bezel-light` or a `[themes.<id>]` with `base = "light"`).
+ */
+light_theme: string, };

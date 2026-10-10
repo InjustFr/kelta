@@ -21,8 +21,8 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   tools: ['tools'],
 };
 
-/** Top-level keys edited by the plugin/tool lane's sections (not rendered here). */
-export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins'];
+/** Top-level keys edited by the plugin/tool lane's sections or the theme picker (not rendered here). */
+export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins', 'themes'];
 
 export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   general: 'Theme, session restore and quit behaviour.',

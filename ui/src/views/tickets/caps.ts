@@ -3,7 +3,8 @@
 
 import type { TicketItem } from '$lib/gen';
 
-export type TicketAction = 'start' | 'move' | 'pr' | 'assign' | 'unassign' | 'comment' | 'branch' | 'browser';
+export type TicketAction =
+  'start' | 'move' | 'pr' | 'assign' | 'unassign' | 'comment' | 'refine' | 'branch' | 'browser';
 
 /** Action bar order, with the key that runs each one in the detail. */
 export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
@@ -13,6 +14,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'assign', key: 'a' },
   { id: 'unassign', key: 'A' },
   { id: 'comment', key: 'c' },
+  { id: 'refine', key: 'r' },
   { id: 'branch', key: 'y' },
   { id: 'browser', key: 'o' },
 ];

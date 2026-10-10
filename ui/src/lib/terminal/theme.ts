@@ -1,13 +1,14 @@
 // Terminal colour themes. The same palette is applied to xterm and pushed to Rust with
 // `terminal_set_palette` so the model answers OSC 4/10/11/12 queries with the colours on screen.
 // Source of truth for the Bezel terminal palettes (DESIGN §5); tokens.css mirrors bg/fg/cursor/selection.
-// The cursor is neutral: switching project never re-pushes the palette.
+// The cursor is neutral: switching project never re-pushes the palette. A selected theme passes
+// its resolved `Colors` instead of a mode (lib/theme).
 
 import type { TerminalPalette } from '$lib/gen';
 
 export type ThemeMode = 'dark' | 'light';
 
-interface Colors {
+export interface Colors {
   foreground: string;
   background: string;
   cursor: string;
@@ -85,18 +86,20 @@ const NAMES = [
   'brightWhite',
 ] as const;
 
-function colors(mode: ThemeMode): Colors {
-  return mode === 'dark' ? DARK : LIGHT;
+/** The Bezel base palette for a mode, or the given (theme-resolved) colours. */
+export function colors(theme: ThemeMode | Colors): Colors {
+  if (typeof theme !== 'string') return theme;
+  return theme === 'dark' ? DARK : LIGHT;
 }
 
 /** Palette pushed to Rust (`#rrggbb`, 16 ANSI colours). */
-export function terminalPalette(mode: ThemeMode): TerminalPalette {
+export function terminalPalette(mode: ThemeMode | Colors): TerminalPalette {
   const c = colors(mode);
   return { foreground: c.foreground, background: c.background, cursor: c.cursor, ansi: [...c.ansi] };
 }
 
-/** xterm `ITheme` for the mode. */
-export function xtermTheme(mode: ThemeMode): Record<string, string> {
+/** xterm `ITheme` for the mode or the resolved colours. */
+export function xtermTheme(mode: ThemeMode | Colors): Record<string, string> {
   const c = colors(mode);
   const theme: Record<string, string> = {
     foreground: c.foreground,

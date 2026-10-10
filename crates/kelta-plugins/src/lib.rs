@@ -26,7 +26,7 @@ pub mod web;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 
-use kelta_proto::api::{CoreApi, GrantStore, PluginSettingsSource, SettingsSource, UiBridge};
+use kelta_proto::api::{CoreApi, GrantStore, PluginSettingsSource, SecretResolver, SettingsSource, UiBridge};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, UiEvent};
@@ -56,6 +56,8 @@ pub struct Wiring {
     pub settings: Option<Arc<dyn SettingsSource>>,
     /// `settings.set` of a plugin's own namespace.
     pub settings_writer: Option<SettingsWriter>,
+    /// `secret_headers` of `http` actions and `net.fetch`, resolved host-side.
+    pub secrets: Option<Arc<dyn SecretResolver>>,
 }
 
 pub struct PluginHost {
@@ -116,6 +118,9 @@ impl PluginHost {
         }
         if w.settings_writer.is_some() {
             cur.settings_writer = w.settings_writer;
+        }
+        if w.secrets.is_some() {
+            cur.secrets = w.secrets;
         }
     }
 

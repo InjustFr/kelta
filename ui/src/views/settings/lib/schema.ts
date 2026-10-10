@@ -202,6 +202,14 @@ export const COPY: Record<string, { label?: string; help?: string }> = {
     help: 'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
   },
   'app.confirm_quit_with_running': { label: 'Ask before quitting while sessions run' },
+  'app.dark_theme': {
+    label: 'Dark theme',
+    help: 'Theme id used in dark mode: bezel-dark or a [themes.<id>] with base = "dark".',
+  },
+  'app.light_theme': {
+    label: 'Light theme',
+    help: 'Theme id used in light mode: bezel-light or a [themes.<id>] with base = "light".',
+  },
 };
 
 const ACRONYMS: Record<string, string> = {

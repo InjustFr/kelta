@@ -7,6 +7,7 @@
   import { settings, toasts, work } from '$lib/stores';
   import { Button, Select, Sheet, TextInput } from '$lib/ui';
 
+  import { withCriteria } from '../tickets/refine.svelte';
   import { batch, claudeSlots, startsNow } from './batch.svelte';
   import { projectForTicket } from './startWork';
 
@@ -50,6 +51,7 @@
           toasts.info(`${m.ref.key} already has a work item`);
           continue;
         }
+        withCriteria(plan, m.ref);
         plan.template_id = template;
         plan.claude = { ...plan.claude, model, effort };
         const item = work.upsert(await workStart({ plan }));

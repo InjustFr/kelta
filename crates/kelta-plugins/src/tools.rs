@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::{BusEvent, UiEvent, bus};
+use kelta_proto::events::{BusEvent, Toast, UiEvent, bus};
 use kelta_proto::ext::{
     EmbedMode, Permission, ProxiedRequest, StopSpec, ToolCheck, ToolDef, ToolHandle, ToolInfo, ToolKind,
     ToolSource, WebLifecycle,
@@ -26,7 +26,7 @@ use crate::PluginHost;
 use crate::context::{CtxSpec, project_root};
 use crate::registry::Entry;
 use crate::template::Vars;
-use crate::util::{is_loopback_host, signal_group, truncate};
+use crate::util::{ByteRing, is_loopback_host, signal_group, truncate};
 use crate::web::{self, Launch, ServerProc};
 
 /// UI event name carrying a web tool handle to the pane (`plugin.event` with the tool instance id).
@@ -34,7 +34,11 @@ pub const TOOL_HANDLE_EVENT: &str = "kelta.tool_handle";
 /// UI event name for a web tool that exited (`{code, log}`).
 pub const TOOL_EXITED_EVENT: &str = "kelta.tool_exited";
 
-/// Detached launch: own process group (no terminal signals from Kelta), no stdio.
+/// A launcher failing later than this is not a failed launch: the app ran, then quit or crashed.
+const LAUNCH_WINDOW: Duration = Duration::from_secs(10);
+
+/// Detached launch: own process group (no terminal signals from Kelta), stdin/stdout null, stderr
+/// piped for `launch_failure`.
 // shortcut: no setsid (needs unsafe pre_exec); a GUI-launched Kelta has no controlling tty anyway.
 pub(crate) fn external_command(
     program: &str,
@@ -48,7 +52,7 @@ pub(crate) fn external_command(
         .envs(env)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .process_group(0)
         .kill_on_drop(false);
     cmd
@@ -360,19 +364,21 @@ impl PluginHost {
         self.check_tool_permission(r, Some(&command)).await?;
         let env = self.launch_env(project, vars, &def.env)?;
         let cwd = self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?;
-        let mut child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env)
-            .spawn()
-            .map_err(|e| match e.kind() {
+        let child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env).spawn().map_err(
+            |e| match e.kind() {
                 std::io::ErrorKind::NotFound => KeltaError::not_found(format!("`{command}` not found")),
                 _ => KeltaError::internal(format!("cannot start `{command}`: {e}")),
-            })?;
-        // Reap (no zombie from a quick-exiting launcher like `open`) and log failed launches.
+            },
+        )?;
+        // Reap (no zombie from a quick-exiting launcher like `open`) and toast failed launches.
         let id = r.id.clone();
+        let label = if def.label.is_empty() { r.id.to_string() } else { def.label.clone() };
+        let core = self.core.clone();
         tokio::spawn(async move {
-            if let Ok(s) = child.wait().await
-                && !s.success()
+            if let Some(why) = launch_failure(&id, child, LAUNCH_WINDOW).await
+                && let Some(core) = core.upgrade()
             {
-                tracing::warn!(tool = %id, status = ?s, "external tool exited with error");
+                core.toast(Toast::error(truncate(&format!("Open {label}: {why}"), 300)));
             }
         });
         self.publish(
@@ -658,6 +664,34 @@ async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) ->
     }
 }
 
+/// Waits for a launcher, draining its stderr into a 4 KiB tail meanwhile. Returns why it failed
+/// (last non-empty stderr line, else its status) when it exits non-zero within `window`.
+async fn launch_failure(id: &ToolId, mut child: tokio::process::Child, window: Duration) -> Option<String> {
+    let started = std::time::Instant::now();
+    let log = Arc::new(Mutex::new(ByteRing::new(4096)));
+    let drain = child.stderr.take().map(|e| tokio::spawn(web::pump(e, log.clone(), None)));
+    let s = child.wait().await.ok()?;
+    if s.success() {
+        return None;
+    }
+    tracing::warn!(tool = %id, status = ?s, "external tool exited with error");
+    if started.elapsed() >= window {
+        return None;
+    }
+    // A backgrounded grandchild may keep stderr open: give the drain a moment, not forever.
+    if let Some(d) = drain {
+        let _ = tokio::time::timeout(Duration::from_millis(500), d).await;
+    }
+    let text = log.lock().text();
+    Some(match text.lines().rev().map(str::trim).find(|l| !l.is_empty()) {
+        Some(line) => line.to_owned(),
+        None => match s.code() {
+            Some(c) => format!("exited with status {c}"),
+            None => format!("exited with {s}"),
+        },
+    })
+}
+
 #[cfg(test)]
 mod external_tests {
     use super::*;
@@ -696,6 +730,35 @@ mod external_tests {
         let st = external_command("kelta-fake-tool", &[], &dir, &env).status().await.unwrap();
         assert!(st.success());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    async fn failure_of(script: &str, window: Duration) -> Option<String> {
+        let child =
+            external_command("sh", &["-c".into(), script.into()], &std::env::temp_dir(), &BTreeMap::new())
+                .spawn()
+                .unwrap();
+        tokio::time::timeout(Duration::from_secs(10), launch_failure(&ToolId::new("t"), child, window))
+            .await
+            .expect("launch_failure blocked")
+    }
+
+    #[tokio::test]
+    async fn launch_failure_reports_last_stderr_line_or_status() {
+        assert_eq!(
+            failure_of("printf 'first\\nlast\\n\\n' >&2; exit 3", LAUNCH_WINDOW).await.as_deref(),
+            Some("last")
+        );
+        assert_eq!(failure_of("exit 3", LAUNCH_WINDOW).await.as_deref(), Some("exited with status 3"));
+        assert_eq!(failure_of("echo boom >&2; exit 0", LAUNCH_WINDOW).await, None);
+        // Failed after the window: the app ran, not a failed launch.
+        assert_eq!(failure_of("sleep 0.3; echo boom >&2; exit 3", Duration::from_millis(50)).await, None);
+    }
+
+    #[tokio::test]
+    async fn launch_failure_drains_a_chatty_stderr() {
+        assert_eq!(failure_of("yes boom | head -c 100000 >&2; exit 0", LAUNCH_WINDOW).await, None);
+        let why = failure_of("yes boom | head -c 100000 >&2; echo done >&2; exit 1", LAUNCH_WINDOW).await;
+        assert_eq!(why.as_deref(), Some("done"));
     }
 
     #[test]

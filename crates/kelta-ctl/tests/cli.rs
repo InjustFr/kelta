@@ -14,7 +14,12 @@ fn tmp() -> tempfile::TempDir {
 
 fn run(args: &[&str], env: &[(&str, &Path)], extra_env: &[(&str, &str)], stdin: &[u8]) -> Output {
     let mut c = Command::new(BIN);
-    c.args(args).env_remove("KELTA_SOCK").env_remove("KELTA_SESSION_ID").env_remove("KELTA_HOOK_TOKEN");
+    // Strip the host's Kelta session env (tests often run inside a Kelta terminal).
+    c.args(args)
+        .env_remove("KELTA_SOCK")
+        .env_remove("KELTA_SESSION_ID")
+        .env_remove("KELTA_HOOK_TOKEN")
+        .env_remove("KELTA_USER_STATUSLINE");
     for (k, v) in env {
         c.env(k, v);
     }

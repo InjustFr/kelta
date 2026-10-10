@@ -285,6 +285,7 @@ pub trait SecretResolver: Send + Sync {
   async fn ticket_comment(&self, ticket: &TicketRef, markdown: &str, session: Option<&SessionId>) -> Result<(), KeltaError>;
   // work & editor (core delegates to kelta-work)
   async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
+  async fn ticket_for_session(&self, id: &SessionId) -> Option<TicketRef>;  // MCP get_ticket: the work item's ticket, or a running refine's (T10); default via work_for_session
   async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft, origin: ShipOrigin /*Ui|Mcp*/) -> Result<WorkItem, KeltaError>;
   async fn editor_open(&self, target: EditorTarget, path: &Path, line: Option<u32>) -> Result<(), KeltaError>;
   async fn editor_diff(&self, target: EditorTarget, old: &Path, proposed: &Path, close: bool) -> Result<(), KeltaError>; // IDE bridge openDiff, nvim RPC only (§8.5)
@@ -492,6 +493,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_assignable_users` | `{ticket, query}` | `Vec<User>` (assignee picker; `Unsupported` if the provider cannot list) | |
 | `tracker_priorities` | `{ticket}` | `Vec<String>` (priority names, highest first; `Unsupported` where priorities cannot be set) | |
 | `tracker_set_priority` | `{ticket, priority}` | `Ticket` | |
+| `tracker_refine` | `{ticket, project_id?}` | `String` (Markdown proposal of a one-shot `claude -p` in the project's primary repo: acceptance criteria, open questions, sub-tasks; MCP `get_ticket` resolves to the ticket for that run) | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette; searched by each tracker) | |
 | **reviews** | | | `commands/review.rs` (L3) |

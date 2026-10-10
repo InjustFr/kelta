@@ -136,6 +136,20 @@ fn plugin_defaults_layer_and_validation() {
 }
 
 #[test]
+fn plugin_secret_default_is_never_applied() {
+    let svc = env().load();
+    svc.set_plugin_schemas(vec![(
+        PluginId::new("evil"),
+        json!({"type": "object", "properties": {
+            "qa_token": {"type": "string", "x-kelta-secret": true, "default": "gh-cli"},
+            "url": {"type": "string", "default": "u"}
+        }}),
+    )]);
+    let eff = svc.effective_doc(None).unwrap();
+    assert_eq!(eff.value["plugins"]["evil"], json!({"url": "u"}));
+}
+
+#[test]
 fn by_id_override_disable_and_append() {
     let e = env();
     e.global(
@@ -431,6 +445,49 @@ fn schema_violations_report_the_key_position() {
     );
     assert!(issues.iter().any(|i| i.issue.path == "terminal.bogus" && i.issue.line == Some(6)), "{issues:?}");
     assert_eq!(svc.effective(None).app.theme, kelta_proto::settings::Theme::System, "whole file rejected");
+}
+
+#[test]
+fn themes_validate_colours_and_stay_global() {
+    let e = env();
+    e.global(
+        "[app]\ndark_theme = \"x\"\n\n[themes.x]\nname = \"X\"\nbase = \"dark\"\n[themes.x.ui]\nwell = \"#002B36\"\n",
+    );
+    let svc = e.load();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    let s = svc.effective(None);
+    assert_eq!(s.app.dark_theme, "x");
+    assert_eq!(s.themes["x"].ui.well.as_deref(), Some("#002B36"));
+
+    let ansi15 = vec!["\"#000000\""; 15].join(", ");
+    e.global(&format!(
+        "[themes.x]\nname = \"X\"\nbase = \"dark\"\n[themes.x.ui]\nfg = \"#12345\"\n[themes.x.terminal]\nansi = [{ansi15}]\n"
+    ));
+    let svc = e.load();
+    let issues = svc.issues();
+    assert!(
+        issues.iter().any(|i| i.issue.path == "themes.x.ui.fg" && i.display().contains("config.toml:5:")),
+        "{issues:?}"
+    );
+    assert!(
+        issues.iter().any(|i| i.issue.path == "themes.x.terminal.ansi" && i.issue.line == Some(7)),
+        "{issues:?}"
+    );
+    assert!(svc.effective(None).themes.is_empty(), "whole file rejected");
+
+    let e = env();
+    e.project("shop", "[app]\ndark_theme = \"x\"\n\n[themes.x]\nname = \"X\"\nbase = \"dark\"\n");
+    let paths: Vec<String> = e.load().issues().into_iter().map(|i| i.issue.path).collect();
+    for p in ["app.dark_theme", "themes.x.name", "themes.x.base"] {
+        assert!(paths.iter().any(|x| x == p), "{p} not rejected: {paths:?}");
+    }
+    let e = env();
+    e.project("shop", "");
+    e.repo_file("[app]\nlight_theme = \"y\"\n[themes.y]\nname = \"Y\"\nbase = \"light\"\n");
+    let paths: Vec<String> = e.load().issues().into_iter().map(|i| i.issue.path).collect();
+    for p in ["app.light_theme", "themes.y.name", "themes.y.base"] {
+        assert!(paths.iter().any(|x| x == p), "{p} not rejected: {paths:?}");
+    }
 }
 
 #[test]

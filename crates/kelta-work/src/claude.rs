@@ -124,7 +124,7 @@ pub struct LaunchSpec {
     pub extra_args: Vec<String>,
 }
 
-fn enum_str<T: serde::Serialize>(v: &T) -> String {
+pub fn enum_str<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
 }
 

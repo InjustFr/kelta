@@ -12,7 +12,6 @@ use ts_rs::TS;
 use crate::events::ToastLevel;
 use crate::ids::{PluginId, ScreenInstanceId, SessionId, ToolId, ToolInstanceId};
 use crate::model::{Attention, CloseOnExit, Placement};
-use crate::secret::SecretRef;
 use crate::settings::{Layer, SessionTemplate};
 use crate::tracker::StatusCategory;
 
@@ -385,7 +384,7 @@ pub enum ActionDef {
         #[serde(default)]
         body: Option<String>,
         #[serde(default)]
-        secret_headers: BTreeMap<String, SecretRef>,
+        secret_headers: BTreeMap<String, SecretHeader>,
         #[serde(default)]
         timeout_ms: Option<u64>,
     },
@@ -407,6 +406,20 @@ pub enum ActionDef {
     },
     Command {
         id: String,
+    },
+}
+
+/// Value of a `secret_headers` entry (PLUGINS §3.1). In a plugin, a string names one of the
+/// plugin's own `x-kelta-secret` settings; in user config, it is a SecretRef. The header is
+/// `format` with `{secret}` replaced by the resolved value (default `{secret}`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(untagged)]
+pub enum SecretHeader {
+    Name(String),
+    Setting {
+        setting: String,
+        #[serde(default)]
+        format: Option<String>,
     },
 }
 

@@ -198,7 +198,10 @@ fn plugin_defaults_value(fragments: &[(PluginId, Value)]) -> Value {
         let mut t = Map::new();
         if let Some(props) = schema.get("properties").and_then(Value::as_object) {
             for (k, p) in props {
-                if let Some(d) = p.get("default") {
+                // A plugin must never pick its own SecretRef: the user fills secret fields.
+                if p.get("x-kelta-secret").and_then(Value::as_bool) != Some(true)
+                    && let Some(d) = p.get("default")
+                {
                     t.insert(k.clone(), d.clone());
                 }
             }

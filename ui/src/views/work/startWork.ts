@@ -5,6 +5,7 @@ import * as ipc from '$lib/ipc/commands';
 import { projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
+import { withCriteria } from '../tickets/refine.svelte';
 
 /** Kelta project a ticket belongs to: first matching project of any loaded list, else the active one. */
 export function projectForTicket(ref: TicketRef): ProjectId | null {
@@ -35,6 +36,7 @@ export async function beginStartWork(
 ): Promise<WorkItem | null> {
   try {
     const plan = await ipc.workPlan({ project_id: projectId, source });
+    if (source.kind === 'ticket') withCriteria(plan, source.ticket);
     const preview = opts.preview ?? settings.value()?.work.plan_preview ?? true;
     if (preview || (needsChoice(plan) && plan.existing === null)) {
       ui.openSheet('start_work', { plan });
