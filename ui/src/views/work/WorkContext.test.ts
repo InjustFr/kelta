@@ -298,4 +298,12 @@ describe('context bar: work item segment', () => {
     render(WorkContext, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();
   });
+
+  it('a phase without a lamp keeps its label at narrow widths: the chip is never empty', async () => {
+    const w = mock.state.work.find((x) => x.state.kind === 'merged') as WorkItem;
+    mountHeader(w);
+    const phase = await screen.findByTestId('work-phase');
+    await waitFor(() => expect(phase.textContent).toContain('Merged'));
+    expect(phase.querySelector('.phase-label')?.classList.contains('lampless')).toBe(true);
+  });
 });

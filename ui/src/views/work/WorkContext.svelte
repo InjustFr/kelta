@@ -150,7 +150,7 @@
         void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
     >
       <Lamp level={phase.lamp} title={phase.label} />
-      <span class="phase-label"
+      <span class="phase-label" class:lampless={phase.lamp === 'none'}
         >{phase.label}{#if phase.detail}<span class="detail">{phase.detail}</span>{/if}</span
       >
     </Button>
@@ -366,7 +366,8 @@
   }
 
   @container contextbar (max-width: 760px) {
-    .phase-label {
+    /* A phase without a lamp (merged, closed...) has nothing else to show: keep its label. */
+    .phase-label:not(.lampless) {
       display: none;
     }
   }

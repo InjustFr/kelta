@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Tab } from '$lib/gen';
 import { appInfo as sampleAppInfo } from '$lib/gen/fixtures';
@@ -13,10 +13,15 @@ import ContextBar from './ContextBar.svelte';
 import { jumplist } from './jumplist';
 import { activateProject, selectTab } from './nav';
 
+// The native title call (core:window:allow-set-title); jsdom has no Tauri window.
+const setTitle = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ setTitle }) }));
+
 const SHOP_CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
 const LAZYDOCKER = '0199a6b2-0000-7000-8000-000000000004';
 
 beforeEach(async () => {
+  setTitle.mockClear();
   setTransport(createMockTransport().transport);
   ui.view = null;
   layout.byProject = {};
@@ -56,6 +61,9 @@ describe('context bar', () => {
     expect(bar().textContent).not.toMatch(/Live status off|ctx|Claude \d/);
     // Native decorations: the window title follows the breadcrumb.
     expect(document.title).toBe('Shop › SHOP-142 Rate-limit login attempts');
+    await waitFor(() =>
+      expect(setTitle).toHaveBeenLastCalledWith('Shop › SHOP-142 Rate-limit login attempts'),
+    );
   });
 
   it('plain terminal: ❯ its OSC 2 title and the cwd, nothing more', async () => {
@@ -119,12 +127,19 @@ describe('context bar', () => {
     ui.view = 'now';
     render(ContextBar);
     await waitFor(() => expect(crumb()).toBe('Now'));
+    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Now'));
     const under = screen.getByTestId('context-underneath');
     expect(under.textContent).toContain('‹ Shop › SHOP-142 Rate-limit login');
     expect(screen.queryByTestId('context-work')).toBeNull();
     await fireEvent.click(under);
     expect(ui.view).toBeNull();
     expect(projects.activeId).toBe('shop');
+  });
+
+  it('no project and no view: the native window title is Kelta', async () => {
+    projects.list = projects.list.map((p) => ({ ...p, active: false }));
+    render(ContextBar);
+    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Kelta'));
   });
 
   it('‹ names the jumplist target', async () => {

@@ -7,7 +7,7 @@
 
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import { appInfo, getTransport, hasTransport } from '$lib/ipc';
+  import { appInfo } from '$lib/ipc';
   import { layout, projects, toasts, tools, ui, work } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Icon, IconButton, Kbd, Menu, type MenuItem } from '$lib/ui';
@@ -104,7 +104,8 @@
   $effect(() => {
     const t = title;
     document.title = t;
-    if (custom || !hasTransport() || getTransport().kind !== 'tauri') return;
+    // Outside a Tauri window getCurrentWindow() throws; the catch swallows it.
+    if (custom) return;
     import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(t))
       .catch(() => {});
