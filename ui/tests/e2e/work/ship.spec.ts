@@ -21,7 +21,7 @@ async function claudeStatus(page: Page, status: string): Promise<void> {
 test.describe('ship', () => {
   test('refused while Claude works, then ⌘↵ ships and the toast key opens the PR', async ({ page }) => {
     await boot(page);
-    const header = page.getByTestId('work-header');
+    const header = page.getByTestId('context-work');
     await dispatch(page, 'work.ship', { id: SHOP_142 });
     const dialog = page.getByRole('dialog', { name: /^Ship SHOP-142/ });
     await expect(dialog).toContainText('Claude is working in this worktree. Ship when it stops.');

@@ -98,6 +98,12 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
             }
         });
 
+    // macOS custom chrome: the system traffic lights over the context bar's 72px inset, no title bar.
+    #[cfg(target_os = "macos")]
+    if eff == decorations::Effective::Custom {
+        b = b.decorations(true).title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    }
+
     let saved = s.window.restore_geometry.then(|| geometry::load(&core.dirs().data)).flatten();
     let maximized = saved.is_some_and(|g| g.maximized);
     if let Some(g) = saved.filter(|g| g.visible_on(&monitors(app))) {

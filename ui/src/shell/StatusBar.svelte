@@ -7,7 +7,7 @@
   import { claudeSlots } from '../views/work/batch.svelte';
   import { sessionLabel } from '../views/work/live';
   import { attentionLabel, chordFor } from './labels';
-  import { focusedPane, focusedSession, focusedSessionId, revealSession } from './nav';
+  import { focusedPane, focusedSessionId, revealSession } from './nav';
   import { clock, itemCost, latestWindow, meter as bar, usd } from './usage';
 
   interface Props {
@@ -34,10 +34,6 @@
       .filter((h): h is { id: string; verb: string; chord: string } => !!h.chord),
   );
 
-  const session = $derived(view ? null : focusedSession());
-  const hooksOff = $derived(
-    session?.kind.type === 'claude' && session.lifecycle === 'live' && session.claude?.hooks_active !== true,
-  );
   // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
   const METER: { lamp: LampLevel; label: string }[] = [
     { lamp: 'needs_input', label: 'need input' },
@@ -105,9 +101,6 @@
   {/if}
   {#if restart}
     <span class="seg warn" title="Some settings need a restart">Restart needed</span>
-  {/if}
-  {#if hooksOff}
-    <span class="seg warn" data-testid="status-hooks">Live status off</span>
   {/if}
   {#if slots.live > 0 || slots.queued > 0}
     <span

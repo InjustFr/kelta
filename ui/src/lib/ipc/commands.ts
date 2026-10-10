@@ -84,6 +84,7 @@ import type {
   UpdateStatus,
   User,
   ValidationIssue,
+  WorkflowInfo,
   WorkItem,
   WorkItemId,
   WorkSource,
@@ -229,6 +230,10 @@ export interface Commands {
   tracker_priorities: { args: { ticket: TicketRef }; result: string[] };
   tracker_set_priority: { args: { ticket: TicketRef; priority: string }; result: Ticket };
   tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
+  /** Saved Claude workflows a run on the ticket can use (#233): its project's primary repo, then home. */
+  workflows_list: { args: { ticket: TicketRef }; result: WorkflowInfo[] };
+  /** Claims the ticket, then runs the workflow in a background Claude session (new tab, no focus). */
+  workflow_run: { args: { ticket: TicketRef; workflow: string }; result: SessionInfo };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
   /** The scope's team: people in its cached tickets and PRs, identities merged (cache only, #240). */
@@ -422,6 +427,8 @@ export const COMMAND_NAMES = [
   'tracker_priorities',
   'tracker_set_priority',
   'tracker_refine',
+  'workflows_list',
+  'workflow_run',
   'tracker_search',
   'tracker_sources',
   'team_people',
@@ -647,6 +654,8 @@ export const trackerAssignableUsers = wrap('tracker_assignable_users');
 export const trackerPriorities = wrap('tracker_priorities');
 export const trackerSetPriority = wrap('tracker_set_priority');
 export const trackerRefine = wrap('tracker_refine');
+export const workflowsList = wrap('workflows_list');
+export const workflowRun = wrap('workflow_run');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
 export const teamPeople = wrap('team_people');

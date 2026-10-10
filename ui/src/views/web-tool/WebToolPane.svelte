@@ -126,7 +126,7 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
-    min-height: var(--k-tabbar-height);
+    min-height: var(--k-toolbar-height);
     padding: 0 var(--k-space-3);
     background: var(--k-bezel-raised);
   }

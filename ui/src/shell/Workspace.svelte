@@ -31,14 +31,14 @@
   let width = $state(0);
   let height = $state(0);
 
-  const HeaderComponent = $derived(lazyComponents.get('tabheader:work').component as AnyComponent | null);
+  const BriefComponent = $derived(lazyComponents.get('tabheader:brief').component as AnyComponent | null);
 
   $effect(() => {
     if (!current && !failure) void layout.ensure(projectId).catch(() => {});
   });
 
   $effect(() => {
-    if (tab?.work_item_id) lazyComponents.ensure('tabheader:work', tabHeaderRegistry.work);
+    if (tab?.work_item_id) lazyComponents.ensure('tabheader:brief', tabHeaderRegistry.brief);
   });
 
   function ratioOf(g: GutterSpec): number {
@@ -102,10 +102,8 @@
       </EmptyState>
     {/if}
   {:else}
-    {#if tab.work_item_id && HeaderComponent}
-      <div class="tab-header" data-testid="tab-header">
-        <HeaderComponent {projectId} tabId={tab.id} workItemId={tab.work_item_id} />
-      </div>
+    {#if tab.work_item_id && BriefComponent}
+      <BriefComponent {projectId} tabId={tab.id} workItemId={tab.work_item_id} />
     {/if}
     <div class="panes" bind:clientWidth={width} bind:clientHeight={height} data-testid="panes">
       {#each geometry.panes as placed (placed.pane.id)}
@@ -148,11 +146,6 @@
     min-height: 0;
     margin: calc(var(--k-gap) / 2);
     background: var(--k-bezel);
-  }
-
-  .tab-header {
-    flex: none;
-    margin-bottom: 0;
   }
 
   .loading {

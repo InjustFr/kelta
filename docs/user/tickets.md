@@ -93,13 +93,16 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
+| `w` | run a saved Claude workflow on the ticket, in the background |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |
 
 ## Grouping and sorting
 
-`Shift+g` cycles the grouping; the pane remembers it, and the sort, with its other settings.
+`Shift+g` cycles the grouping; the pane remembers it, and the sort, with its other settings. The **View** menu
+in the toolbar holds the grouping, the sort, the person filter and the Current sprint toggle; a dot on it says a
+person or the sprint is narrowing the list. `?` lists every key of the pane.
 
 | Group by | Groups |
 |---|---|
@@ -113,11 +116,11 @@ Within a group the sort is Priority (then most recently updated), Updated, Age i
 Each ticket carries the provider's priority, how long it has been in its status, its sprint, estimate and due date.
 GitHub and Gitea have no native priority: they rank from `priority:` style labels, and GitHub reads priority, sprint and estimate from Projects v2 fields.
 
-- **Age badge**: a ticket not done shows `7d`, `14d`, `21d`... in its row after a week in the same status, in place of
-  the last-update time; the text warms at 14 days and turns red at 21. Providers that do not date a status change fall back to the last update.
+- **Age**: a ticket not done shows `7d`, `14d`, `21d`... in its row after a week in the same status; the text warms
+  at 14 days and turns red at 21. The last-update time is in the row's tooltip. Providers that do not date a status change fall back to the last update.
 - **WIP limit**: when more tickets are in Doing than `tickets.wip_limit` (default 3, [Settings](../SETTINGS.md)) the
   group header says so in the warning colour. It only warns; nothing is blocked.
-- **Sprint**: rows show the sprint name unless you group by sprint. `f` then `s` keeps the active sprint only (a quick
+- **Sprint**: the row's tooltip names the sprint unless you group by sprint. `f` then `s` keeps the active sprint only (a quick
   filter, separate from the per-source current iteration below).
 
 ## The detail column
@@ -128,7 +131,7 @@ which is also what `g` does in a narrow pane.
 
 ## Next step
 
-A ticket with work under way shows the work's phase in its row, with its lamp (Claude working, Claude needs
+A ticket with work under way shows its lamp and a work icon in its row; hover either for the phase (Claude working, Claude needs
 you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. With the
 detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
 the detail instead.
@@ -137,15 +140,16 @@ From top to bottom: key, title, status (a button: it opens the status picker), t
 assignee, priority, sprint, estimate, due date, labels and last update, the pull requests, the description (task
 lists are shown, not editable) and the last 20 comments with a box to add one (`Cmd+Enter` posts).
 
-The action bar lists every action with its key: Move `m`, Start or Resume work `s`, Open PR `p`, Assign `a`,
-Comment `c`, Copy branch `y`, Open in browser `o`. An action the tracker cannot do (a tracker without assignment
+The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign `a` and Comment `c`; More
+(`Cmd+.`, `Ctrl+Shift+.` on Linux) holds Unassign `A`, Refine with Claude `r`, Copy branch `y` and Open in browser
+`o`. Hover a button for its key; every key works without the bar. An action the tracker cannot do (a tracker without assignment
 or comments), or that has nothing to act on (no pull request yet, no branch yet), stays visible but dimmed; hover
 it or press its key to read why. The selected or hovered row shows the same actions in small form (Move, pull
 request, Start work).
 
 ## Pull requests
 
-A row shows the pull request linked to the ticket as `#12` (`!12` on GitLab) with one lamp for CI and review:
+A row shows the pull request linked to the ticket as a pull request icon with one lamp for CI and review (hover it for `#12`, `!12` on GitLab):
 halo dot changes requested, diamond CI failed, ring CI running, dot approved (or passed with no review needed),
 small dot waiting for review. Hover it for both states. A ticket links to the pull requests of its work item and to any pull request in your
 review lists whose branch or title carries the ticket key. The detail lists each with its title, state, CI,
@@ -199,6 +203,11 @@ to order and colour them.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
+- **Hand a ticket to a workflow**: `w` lists your saved Claude Code workflows (`.claude/workflows/*.js` in the
+  project's main repository, then `~/.claude/workflows/`). Pick one and Kelta claims the ticket for it, then starts
+  Claude in a new tab that stays in the background, told to run that workflow on the ticket. The row shows the
+  workflow and its phase (`kelta-ticket-pass · Starting`) as it reports progress; the toast's **Open** shows the
+  session and **Peek** its last lines. A ticket someone is already working on is refused.
 
 ## Tickets from any Claude session
 

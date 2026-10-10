@@ -33,6 +33,7 @@ pub mod status;
 pub mod store;
 pub mod team;
 pub mod templates;
+mod workflows;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -716,8 +717,10 @@ impl CoreApi for Core {
         self.work.for_session(id).await
     }
     async fn ticket_for_session(&self, id: &SessionId) -> Option<TicketRef> {
+        // A refine run, a session linked to a ticket (a workflow run, #233), else its work item's.
         let refine = self.refines.lock().get(id).cloned();
-        match refine {
+        let linked = refine.or_else(|| self.sessions.lock().get(id).and_then(|e| e.ticket.clone()));
+        match linked {
             Some(t) => Some(t),
             None => self.work.for_session(id).await.and_then(|w| w.ticket),
         }
@@ -738,6 +741,9 @@ impl CoreApi for Core {
     }
     async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.work.feedback(id).await
+    }
+    async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
+        self.work.fix_checks(review).await
     }
     async fn work_claim(
         &self,

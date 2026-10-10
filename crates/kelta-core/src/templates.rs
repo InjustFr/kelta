@@ -87,7 +87,7 @@ pub fn claude_args(
     a
 }
 
-fn write_private(path: &Path, text: &str) -> Result<(), KeltaError> {
+pub(crate) fn write_private(path: &Path, text: &str) -> Result<(), KeltaError> {
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     if let Some(dir) = path.parent() {
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
@@ -139,6 +139,30 @@ impl Core {
             .find(|p| p.id == s.editor.default && p.enabled)
             .or_else(|| s.editor.presets.iter().find(|p| p.enabled))
             .cloned()
+    }
+
+    /// A standalone Claude session: the hooks file, a `--session-id`, and resume on restore.
+    pub(crate) async fn spawn_claude(
+        &self,
+        id: SessionId,
+        base: SpawnRequest,
+        s: &Settings,
+        profile: Option<&str>,
+        prompt: Option<&str>,
+    ) -> Result<SessionInfo, KeltaError> {
+        let file = self.dirs.session_runtime(&id.sid8()).join("claude-settings.json");
+        let hooks = claude_hooks_settings(&self.dirs.stable_ctl(), &s.claude.extra_hooks);
+        write_private(&file, &serde_json::to_string_pretty(&hooks)?)?;
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let req = SpawnRequest {
+            id: None,
+            kind: SessionKind::Claude,
+            program: Some(s.claude.binary.clone()),
+            args: claude_args(&s.claude, profile, &uuid, &file, prompt),
+            restore: RestorePolicy::ClaudeResume { uuid },
+            ..base
+        };
+        self.spawn_session_with_id(id, req).await
     }
 
     /// Spawn one template leaf; returns the pane content (+ the session) or `None` when skipped.
@@ -193,26 +217,12 @@ impl Core {
                 Ok(Some((term(&info), Some(info))))
             }
             "claude" => {
-                let id = self.fresh_session_id();
-                let run = self.dirs.session_runtime(&id.sid8());
-                let file = run.join("claude-settings.json");
-                let hooks = claude_hooks_settings(&self.dirs.stable_ctl(), &s.claude.extra_hooks);
-                write_private(&file, &serde_json::to_string_pretty(&hooks)?)?;
-                let uuid = uuid::Uuid::new_v4().to_string();
                 let prompt = match s.claude.prompt_templates.get("standalone") {
                     Some(t) => Some(render(t, vars, Mode::Lenient)?),
                     None => None,
                 };
-                let args = claude_args(&s.claude, profile.as_deref(), &uuid, &file, prompt.as_deref());
-                let req = SpawnRequest {
-                    id: None,
-                    kind: SessionKind::Claude,
-                    program: Some(s.claude.binary.clone()),
-                    args,
-                    restore: RestorePolicy::ClaudeResume { uuid },
-                    ..base
-                };
-                let info = self.spawn_session_with_id(id, req).await?;
+                let id = self.fresh_session_id();
+                let info = self.spawn_claude(id, base, s, profile.as_deref(), prompt.as_deref()).await?;
                 Ok(Some((term(&info), Some(info))))
             }
             "editor" => {

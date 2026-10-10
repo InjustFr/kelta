@@ -193,7 +193,8 @@ test.describe('terminal pane', () => {
     }, SESSIONS.shopClaude);
     const badge = page.getByTestId('hooks-badge').first();
     await expect(badge).toContainText('Live status off');
-    await expect(page.getByTestId('status-hooks')).toContainText('Live status off');
+    // Once, in the pane header: the status bar no longer repeats it (#248).
+    await expect(page.getByText('Live status off')).toHaveCount(1);
     const tabs = await page.getByTestId('rail-row').count();
     await badge.getByRole('button', { name: 'Fix' }).click();
     await expect(page.getByTestId('rail-row')).toHaveCount(tabs + 1);
@@ -308,7 +309,7 @@ test.describe('terminal pane', () => {
     await expect(page.getByText('This pane crashed')).toBeVisible();
     await expect(page.getByText('boom from diagnostics')).toBeVisible();
     // The app (and the terminals of other tabs) are unaffected.
-    await expect(page.getByTestId('tabbar')).toBeVisible();
+    await expect(page.getByTestId('contextbar')).toBeVisible();
     await page.getByRole('button', { name: 'Close pane' }).last().click();
     await page.getByTestId('rail-row').first().click();
     await waitForAttached(page, 2);

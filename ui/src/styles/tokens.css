@@ -36,9 +36,9 @@
   --k-rail-width-compact: 64px; /* sidebar below 1100px window width */
   --k-sidebar-row-height: 44px; /* two lines: name + status word (global views) */
   --k-rail-item: 32px; /* rail session and tool rows: one line */
-  --k-tabbar-height: 40px; /* also .k-toolbar */
-  --k-work-header-height: 44px;
-  --k-statusbar-height: 28px; /* also WindowChrome */
+  --k-contextbar-height: 30px; /* the bar above the panes; the window's title bar in custom chrome */
+  --k-toolbar-height: 40px; /* .k-toolbar: a view's filters */
+  --k-statusbar-height: 28px;
   --k-pane-header-height: 32px;
   --k-control-height: 32px;
   --k-control-height-sm: 28px; /* smallest target anywhere */

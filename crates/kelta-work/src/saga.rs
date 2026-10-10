@@ -64,6 +64,9 @@ pub(crate) struct Journal {
     /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
     #[serde(default)]
     pub pending_prompt: Option<String>,
+    /// `head sha:failed check names` the `fix_checks` trigger action last sent (once per failure).
+    #[serde(default)]
+    pub checks_sent: Option<String>,
 }
 
 impl Journal {

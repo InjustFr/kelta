@@ -115,16 +115,14 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Work bar (tab header, above all panes, survives pane zoom) | key, title, ticket status chip (opens the status picker), phase lamp + label + detail, branch, `↑a ↓b`, `+ins −del` (and a `dirty` tag), primary button, **Work ⌘.** menu. Mockup `f2-work-tab.png`. Clicking the phase label opens the existing `WorkItemPane` (saga steps, sessions) as a split down: this is the missing UI path to it. |
+| Context bar, the work bar (above the rail and all panes, survives pane zoom; DESIGN §6.3) | key, title, ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`#482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, ports, armed, `+ins −del`, uncommitted changes in its tooltip), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
 | Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
-No status strip segment: the work bar is always visible above the focused tab's panes and says the same thing.
+No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/ReturnBrief.svelte` the return strip; `WorkItemPane` has no header of its own.
 
-`WorkItemHeader.svelte` becomes the work bar; no new pane type.
-
-![Work tab with the work bar and the work menu open](images/flow/f2-work-tab.png)
+![Work tab with the work bar and the work menu open (before the context bar, #248)](images/flow/f2-work-tab.png)
 
 ### 2.5 The work menu (`⌘.`)
 

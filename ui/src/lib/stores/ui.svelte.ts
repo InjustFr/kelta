@@ -22,6 +22,7 @@ export type SheetKey =
   | 'work_dialog'
   | 'tracker.source_picker'
   | 'tickets.move'
+  | 'workflow_run'
   | 'groom';
 export type OverlayKey = 'palette' | 'switcher';
 /** The cross-project places on the rail (SPEC §1), shown outside any project. */

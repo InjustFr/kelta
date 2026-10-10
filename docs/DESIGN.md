@@ -48,7 +48,8 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-radius-lg: 8px;       /* floating: menus, palette, dialogs, sheets, toasts */
 
   --k-rail-width: 44px;
-  --k-tabbar-height: 30px;
+  --k-contextbar-height: 30px;
+  --k-toolbar-height: 40px; /* .k-toolbar: a global view's or a list pane's filters */
   --k-statusbar-height: 22px;
   --k-pane-header-height: 22px;
   --k-control-height: 26px;
@@ -314,11 +315,18 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 - Focus: 2px `--k-focus` outline inset 2px.
 - Drag-over: 2px accent insertion line.
 
-### 6.3 Tab bar (`shell/TabBar.svelte`)
+### 6.3 Context bar (`shell/ContextBar.svelte`)
 
-- `--k-tabbar-height`, `--k-bezel`. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
-- Left: `▌project › title`, a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row title in `--k-fg` 600 (ellipsis). Right: the `+` ghost button and its menu. The context bar (#248) replaces this bar.
-- Window chrome: macOS custom chrome reserves a 72px leading inset for the traffic lights and the empty bar area is `data-tauri-drag-region`. GNOME custom chrome adds a 30px controls cluster on the right. Hyprland/Sway: no title bar, the tab bar is the top edge.
+One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It describes the selected rail row; the status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
+
+- Always: `‹` (`nav.back`, its tooltip names the jumplist target), the breadcrumb, `+` on the right (New session, Tickets, Reviews; tools live in the rail). The breadcrumb is `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
+- Work tab: the mono key and the title, then the ticket status chip (status picker), the phase chip with its lamp (opens `WorkItemPane` as a split below), the PR chip `PR #482 ●` (CI lamp; opens the PR, as `⌘.` `o`), `↑a ↓b`, the cost (`--k-warn` over budget), `⎇` (branch, worktree, ports, armed, `+ins −del` and uncommitted changes in its tooltip), then on the right the primary button (its blocked reason in the tooltip) and `Work ⌘.`. The return strip sits directly under the bar.
+- Claude session: `✻ name`, then the cwd and the model on the right. Terminal: `❯ title` (OSC 2) and the cwd. Home: `Home › ❯ zsh` and the cwd (`Home` alone on the welcome screen).
+- Tool tab: `Tools › ⚒ tool`; in Home a muted "for you", else a context chip `▌project › KEY` (goes to that tab) and the cwd; on the right the return chip `↩ <back target> <tool key>` (`nav.back`, what pressing the tool's key again does).
+- Global view: its name, and on the right the "underneath" chip `‹ project › row` that leaves the view. The view's own 40px `.k-toolbar` (filters) stays under the bar.
+- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, the lamp meter, restart, prefix (status strip); row lamps and peek (rail).
+- Narrow bars (container queries) drop, in order: `⎇` and the cwd/model, the cost unless over budget, `↑↓`, the PR chip's `PR` word, the ticket chip, the title (the key stays), the phase label (its lamp stays), the `Work` label (its icon stays). `‹`, the key, the primary button and `+` never drop.
+- Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the context bar is the top edge.
 
 ### 6.4 Panes (`shell/PaneHost.svelte`)
 
@@ -355,15 +363,20 @@ One row grammar for all three, so they read as one instrument:
 
 - Rows `ROW_HEIGHT` (32px, `$lib/ui`), no row borders, no zebra.
 - Selected: `--k-bg-selected` plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
-- Tickets meta, right to left of the title: PR chip, sprint chip (when not grouped by sprint), status chip (a button), age badge, source chip, assignee initials (20px circle on `--k-bezel`, hidden on Mine), updated (11, tabular).
-- Age badge: `7d` tabular text after 7 days in a non-done status, `--k-fg-subtle`; `--k-warn` text from 14, `--k-danger` text from 21. No fill, no border (a lamp must stay the only coloured shape). Its slot is reserved so titles and chips line up.
-- Sprint chip: flat chip (§6.11), name in `--k-fg-subtle`, `--k-fg-muted` for the active sprint.
+- Tickets rows are a CSS grid on fixed tracks every row shares (`TicketRow.svelte`), so optional data never shifts a column: lamp (16px) | key (mono 13 `--k-fg-muted`, as wide as the longest key in view, capped at 12 characters) | title (14, `1fr`, takes all spare width) | signals (90px) | status (112px) | age (44px, right-aligned, tabular) | source (124px, 12 `--k-fg-subtle`, truncated, only with more than one source and a grouping other than Source) | assignee initials (20px circle on `--k-bezel`, Team and Unassigned only). Each cell carries its own left padding inside its track, so a dropped track takes no gap with it.
+- One baseline: text cells align on their baseline and the line is centred in the row (`--k-row-height`); lamps, signal icons and status dots are centred on the row.
+- Title first: the sprint, the work phase in words, the PR state, who it waits on and the updated time live in the row tooltip and the detail column, not in the row.
+- Signals: fixed slots, icons with tooltips (and the words for screen readers), `--k-fg-subtle`: local work (`git-branch`; `circle-alert` in `--k-lamp-error` when the work failed), the pull request (`git-pull-request` plus the PR lamp, a button opening it), waiting on someone (`clock`, `--k-warn` when late), marked for a batch start (`layers`, `--k-accent`). An error keeps the error lamp in the lamp track too.
+- Status: a 7px dot in the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`) centred on the cap height, then the tracker's own status name (12, `--k-fg-muted`); a button opening the StatusPicker. No chip, no bar: the bordered pill appears only in the detail header, where it is the picker.
+- Narrow lists: below 720px of list width the source and assignee tracks drop (the split view at 1440 leaves the list about 670px, so the age stays); below 480px the age drops; below 420px the signals drop too (they stay in the row tooltip and the lamp's). Key, title and status never drop.
+- Age: `7d` tabular text after 7 days in a non-done status, `--k-fg-subtle`; `--k-warn` text from 14, `--k-danger` text from 21. No fill, no border (a lamp must stay the only coloured shape). Empty below 7 days; its track stays.
 - Compact row actions (Move, pull request, Start) appear in the row on the selected row, on hover and on focus-within; they are icon buttons with a tooltip carrying the key, and take no space when hidden.
 - Multi-select: marked rows get `--k-bg-selected` and an accent lamp; `Esc` clears.
 - Reviews meta: `+214 −38` in mono tabular (`--k-ok` / `--k-danger`), checks lamp. Toolbar: filter, then the For me / Team / Mine tabs (tabular counts, omitted when unknown). Team rows show `@author` (or "you") in place of the name; grouped by ticket (`G`), each group has a 12/600 `--k-fg-muted` header `SHOP-142 Checkout timeout` with a tabular count, not selectable (`j` `k` skip it).
 - Inbox: grouped by lamp (needs input first) under 12/600 `--k-fg-muted` sentence-case headers that carry the lamp shape.
-- Toolbar 30px `--k-bezel-raised`: filter input left (most-used control), then Who tabs (Mine, Unassigned, Anyone, with tabular counts, omitted when unknown), then the source menu, the Group select and the list/board toggle on the right.
-- Tickets are grouped (Flow by default: Doing, Waiting, Ready, Backlog, Done in the last 7 days; Status orders in progress, in review, to do, unknown, done; Done collapsed) under 12/600 `--k-fg-muted` sentence-case headers with a tabular count, 26px. The status chip is flat text with a 2px left bar in the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`) and always shows the tracker's own status name. The PR chip is mono `#N` / `!N` with one lamp for CI and review (changes requested `needs_input`, CI failed `error`, running `working`, approved or passed without required review `done`, awaiting review `activity`); its label names both. The source chip appears only with more than one source and a grouping other than Source.
+- Toolbar `--k-bezel-raised`, at most six controls, in two groups. Left, what you look at: the source menu (`v`, only when there is a choice), then the Who tabs (Mine, Unassigned, Team, with tabular counts, omitted when unknown). Right, how it is arranged: one View menu (a floating panel holding Person, Group, Sort and the Current sprint toggle; an accent dot on the button while a person or the sprint narrows the list), the list/board toggle (one source in effect), the filter input and an icon-only Refresh. Keys are unchanged (`/`, `1`-`3`, `v`, `Shift+G`, `f s`, `Shift+R`).
+- Key hints under the list: one line, the five most useful keys (`j k`, Enter with what it will do, `s`, `m`, `/`) and `?`, which opens the full key list in a dialog.
+- Tickets are grouped (Flow by default: Doing, Waiting, Ready, Backlog, Done in the last 7 days; Status orders in progress, in review, to do, unknown, done; Done collapsed) under 12/600 `--k-fg-muted` sentence-case headers with a tabular count, 26px. The PR lamp is one lamp for CI and review (changes requested `needs_input`, CI failed `error`, running `working`, approved or passed without required review `done`, awaiting review `activity`); its label names both, with the `#N` / `!N` number.
 - Doing header: turns `--k-warn` with a short note ("Above your limit of 3") when the count passes `tickets.wip_limit`; nothing else changes.
 - Split view: below ~720px pane width there is no detail column. Wider, the detail sits on the right (`--k-well`, §6.9) and the side with the keyboard shows a 2px `--k-focus` inset bar on its left edge.
 - StatusPicker (`m`, status chips, detail, work bar, palette): the header is the ticket's workflow on one line of native status names in category order, the current one `--k-fg` 600 with its category bar, the rest `--k-fg-subtle`. Below, the legal transitions numbered `1`-`9` with the digit as a mono kbd hint on the right; the digit moves at once. The same menu filters as you type, shows the tracker's message and Open in browser on an error, and with several tickets lists only the statuses they all share.
@@ -378,7 +391,7 @@ One row grammar for all three, so they read as one instrument:
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
 - Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the StatusPicker of §6.8. Order: key, title, status, action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated; assignee `u` and priority `!` are buttons opening a filtered picker), Pull request rows, description, comments with a compose box.
 - Pull request rows: one line each, `#N` chip, title filling, then CI lamp and review state in words; wraps under the title when narrow.
-- Action bar: ghost `sm` Buttons with the key as chord hint: Start / Resume work (primary), Move `m`, Open PR `p`, Assign to me `a` (Unassign `A` when assigned), Comment `c`, Refine with Claude `r`, Copy branch `y`, Open in browser `o`. A refine shows its proposal under the sub-tasks as mono pre-wrapped Markdown on `--k-bezel-raised`, with Post as comment (primary), Copy and Discard. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
+- Action bar: the primary `sm` Button (Start / Resume work), then one row of quiet ghost `sm` Buttons: Move `m`, Open PR `p`, Assign to me `a`, Comment `c`, and More (`Cmd+.`, `Ctrl+Shift+.` on Linux), a menu with Unassign `Shift+A`, Refine with Claude `r`, Copy branch `y`, Open in browser `o`. Keys show in the tooltips and in the menu, not as caps on the buttons; every key works without the bar. Plugin actions follow. A refine shows its proposal under the sub-tasks as mono pre-wrapped Markdown on `--k-bezel-raised`, with Post as comment (primary), Copy and Discard. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
 - Embedded in the split view (Tickets and Reviews, list | detail on `--k-well` with a 1px `--k-border` gap, 720px and wider) the detail drops the pane padding it would double, and shows the 2px `--k-focus` bar when it holds the keys.
 
 ### 6.10 Board
@@ -389,7 +402,8 @@ One row grammar for all three, so they read as one instrument:
 
 ### 6.11 Chips and badges
 
-- Flat: radius 2, `--k-bezel-raised` fill, `--k-fg-muted` text 11-12, no coloured fill (a filled colour pill would compete with lamps). Status category may add a 2px left bar in ok / warn / info.
+- Flat: radius 2, `--k-bezel-raised` fill, `--k-fg-muted` text 11-12, no coloured fill (a filled colour pill would compete with lamps).
+- Status: no chip. A 7px category dot (ok / warn / info / `--k-border-strong`) before the status name; in the detail header it sits inside the bordered Button that opens the picker.
 - Counts in chips are tabular.
 
 ### 6.12 Forms (Button, TextInput, Select, Toggle, Tabs, Kbd)
@@ -443,6 +457,6 @@ One row grammar for all three, so they read as one instrument:
 ## 10. Rollout and checks
 
 1. Replace `tokens.css`; update `theme.ts` arrays; add the token/theme parity unit test.
-2. Edit AttentionDot, ProjectRail, TabBar, PaneHost, StatusBar, Button, Toggle, Kbd, HtmlContent, list rows, Board; set `--k-project` in Shell.
+2. Edit AttentionDot, ProjectRail, ContextBar, PaneHost, StatusBar, Button, Toggle, Kbd, HtmlContent, list rows, Board; set `--k-project` in Shell.
 3. Run `VITE_IPC=mock pnpm --filter @kelta/ui dev` and screenshot both themes with Playwright; `pnpm --filter @kelta/ui run e2e`; `bash scripts/ci-local.sh` (bundle budgets, no-timers).
 4. Check the 1px gap and lamp shapes at 100% zoom on a 1x Linux display.

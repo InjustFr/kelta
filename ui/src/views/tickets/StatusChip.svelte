@@ -3,28 +3,32 @@
 
   import { categoryBar } from './group';
 
-  // Flat status chip (DESIGN §6.11): the native name, the category as a 2px left bar.
+  // Status (DESIGN §6.11): a dot in the category colour, then the tracker's own status name.
   let { status }: { status: Status } = $props();
 </script>
 
-<span class="chip" style:--bar={categoryBar(status.category)} title={status.name}>{status.name}</span>
+<span class="chip" title={status.name}
+  ><span class="dot" style:background={categoryBar(status.category)}></span>{status.name}</span
+>
 
 <style>
   .chip {
-    display: inline-flex;
-    align-items: center;
-    flex: none;
+    display: inline-block;
     max-width: 140px;
-    height: 20px;
-    padding: 0 6px 0 8px;
     overflow: hidden;
-    border-radius: var(--k-radius-sm);
-    box-shadow: inset 2px 0 0 var(--bar);
-    background: var(--k-bezel-raised);
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-xs);
-    line-height: 1;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  /* Centred on the cap height (0.7em), where the status name's capitals sit, at any size. */
+  .dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    vertical-align: calc(0.35em - 3.5px);
   }
 </style>

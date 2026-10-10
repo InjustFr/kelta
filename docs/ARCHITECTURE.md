@@ -148,6 +148,12 @@ keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the 
     | Gate | `report_progress{key: KEY, phase: "Gate", state: "running"}`; on `passed = false`: `state: "blocked", note: "gate failed: <step>"` |
     | Merge | `report_progress{key: KEY, phase: "Merge", state: "running"}`, then after step 4 (worktree removed) `release_ticket{key: KEY, outcome: "merged", sha: <merge sha>}`; on `merged = false`: `report_progress{key: KEY, phase: "Merge", state: "failed", note: <notes>}` |
     | Any stage agent returning nothing (crash) | the orchestrator calls `report_progress{key: KEY, phase: <stage>, state: "failed"}` |
+- **Launch from Kelta (#233):** `workflows_list{ticket}` lists the saved workflows a run can use: `*.js` files in `<primary repo>/.claude/workflows/` (only the primary repo: the run's cwd, where Claude resolves names) then `~/.claude/workflows/`, a repo one shadowing a home one of the same name. `name` and `description` come from the file's `export const meta = { … }` literal, read by a small scanner (the first top-level `name:` / `description:` string, `'`, `"` or backtick; the JS never runs); a file without a `name` is skipped. The list is read again each time the picker opens (no watcher). `workflow_run{ticket, workflow}` (`Core::workflow_run`):
+  1. the project is the one start work picks for the ticket (SPEC §3.1, `Core::ticket_project`: the rules without building a plan; none → `Add a repository to a project first`);
+  2. Kelta claims first, through `WorkService::claim` with the default worktree and branch (the primary repo and its checkout) and `run = {name: <workflow>, run_id: <workflow>-<sid8>, session_id: <the new session>, phase: "Starting", state: running}`, so the chip shows at once and a second launch fails with the usual `Conflict: <key> is held by …` and spawns nothing;
+  3. it writes `ticket.md` (`ticket_markdown` of `tracker_get`) and `args.json` (`{"ticket": {key, title, url, file}, "run": <run id>}`, serde) to the session's private run dir, renders `claude.prompt_templates.workflow` with `{workflow}`, `{ticket.key}`, `{ticket.title}`, `{ticket.url}`, `{file}`, `{args}`, and spawns a plain Claude session (default profile, hooks file, `--session-id`, `RestorePolicy::ClaudeResume`) in the primary repo; a failure here calls `work_release` (ends the claim, never touches the repo);
+  4. the session is linked to the ticket (`session_link(sid, None, Some(ticket))`: MCP `get_ticket` resolves for it) and opens in a new tab `<workflow> · <key>` with `focus: false`.
+  The workflow takes the claim over by passing `args.run` as its `run.id` (same run id: same work item, its own worktree and branch). One that never calls the tools keeps `Starting` until its session exits, then the claim turns `orphaned`. Restoring the session resumes the Claude conversation, not the workflow. The run starts even when `claude.max_live` is reached; as a live Claude it counts against later starts. The UI toasts `<workflow> started on <key>` with Open (`session.reveal`) and Peek (`session.peek`).
 
     The pick stage keeps moving the board item to In Progress and the merge stage to Done: Kelta never moves a ticket on claim or release.
 - **Web-tool proxy:** kelta-plugins serves the proxy (`proxy::ensure_listener`) on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
@@ -440,7 +446,7 @@ pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: 
 pub enum Placement { NewTab, SplitRight, SplitDown, ReplaceFocused, Focused /*focus existing pane with same content if any*/ }
 ```
 
-- Window = ProjectRail (Inbox, open projects, Home, "+") + active project workspace (TabBar + LayoutNode tree) + StatusBar.
+- Window = ProjectRail (Inbox, open projects, Home, "+") + active project workspace (LayoutNode tree) + StatusBar, under the ContextBar.
 - Only the active project workspace is mounted. A session is shown in **at most one pane**; opening it elsewhere moves it.
 - Layout is saved by the UI via `layout_save` debounced 500 ms after a change (timer exists only while dirty) with optimistic `rev` (stale rev → `Conflict`, UI refetches).
 - Project switch never touches processes; detached xterm instances go to the LRU (§9.4).
@@ -532,6 +538,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_set_priority` | `{ticket, priority}` | `Ticket` | |
 | `tracker_refine` | `{ticket, project_id?}` | `String` (Markdown proposal of a one-shot `claude -p` in the project's primary repo: acceptance criteria, open questions, sub-tasks; MCP `get_ticket` resolves to the ticket for that run) | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
+| `workflows_list` | `{ticket}` | `Vec<WorkflowInfo>` (`name`, `description`, `path`, `source`: `repo` or `home`; MCP "Launch from Kelta") | |
+| `workflow_run` | `{ticket, workflow}` | `SessionInfo` (claims the ticket, then a background Claude session; `Conflict` when the ticket is held) | |
 | `team_people` | `{scope}` | `Vec<Person>` (people in the scope's cached tickets and review lists, identities merged; reads caches only) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette; searched by each tracker) | |
 | **reviews** | | | `commands/review.rs` (L3) |

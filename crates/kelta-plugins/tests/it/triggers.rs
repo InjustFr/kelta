@@ -561,3 +561,29 @@ do = [{ action = "toast", text = "{branch} {worktree} {work.id} {project.id}" }]
     env.host.enable(&PluginId::new("acts"), false).await.unwrap();
     assert!(!env.host.commands().await.unwrap().iter().any(|c| c.id.starts_with("acts/")));
 }
+
+#[tokio::test]
+async fn fix_checks_sends_a_failed_ci_run_to_the_owning_claude() {
+    let env = common::Env::new().with_settings(|st| {
+        st.triggers = vec![trigger(
+            "autofix",
+            bus::PR_CI_CHANGED,
+            &[("payload.state", s("failure"))],
+            vec![ActionDef::FixChecks],
+        )];
+    });
+    let review = kelta_proto::samples::review();
+    for state in ["success", "failure"] {
+        let payload = json!({ "review": review, "state": state, "previous": "pending" });
+        env.host.on_event(&ev(bus::PR_CI_CHANGED, payload)).await;
+    }
+    env.host.settle().await;
+    let calls: Vec<_> = env.core.calls().into_iter().filter(|c| c.method == "work_fix_checks").collect();
+    assert_eq!(calls.len(), 1, "only the failure");
+    assert_eq!(calls[0].args["review"]["url"], review.url);
+    // Off any `pr.*` event there is no PR to fix.
+    let off = trigger("bad", "custom.x", &[], vec![ActionDef::FixChecks]);
+    let env = common::Env::new().with_settings(|st| st.triggers = vec![off]);
+    let run = env.host.trigger_test("bad", json!({})).await.unwrap();
+    assert!(!run.ok && run.detail.unwrap_or_default().contains("fix_checks needs"));
+}

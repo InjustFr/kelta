@@ -597,6 +597,19 @@
             "id"
           ],
           "type": "object"
+        },
+        {
+          "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+          "properties": {
+            "action": {
+              "const": "fix_checks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -972,7 +985,8 @@
           "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
           "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
           "standalone": "{task}",
-          "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
+          "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing.",
+          "workflow": "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}."
         },
         "queue_hold_pct": null
       },
@@ -1142,7 +1156,8 @@
             "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
             "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
             "standalone": "{task}",
-            "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
+            "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing.",
+            "workflow": "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}."
           },
           "type": "object"
         },
@@ -1763,6 +1778,19 @@
                   "required": [
                     "action",
                     "id"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+                  "properties": {
+                    "action": {
+                      "const": "fix_checks",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action"
                   ],
                   "type": "object"
                 }
@@ -4884,6 +4912,19 @@
                   "required": [
                     "action",
                     "id"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+                  "properties": {
+                    "action": {
+                      "const": "fix_checks",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action"
                   ],
                   "type": "object"
                 }

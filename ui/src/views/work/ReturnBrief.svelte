@@ -1,0 +1,147 @@
+<script lang="ts">
+  // The return strip under the context bar (#248): where you left a work item, decided when the item
+  // is (re)focused; leaving it stamps `left_at` (no timers).
+  import { untrack } from 'svelte';
+
+  import type { TabHeaderProps } from '$app/registry';
+  import { workLeft } from '$lib/ipc/commands';
+  import { settings, work } from '$lib/stores';
+  import { terminalPool } from '$lib/terminal';
+  import { Button } from '$lib/ui';
+
+  import { focusedSessionId } from '../../shell/nav';
+  import { runWorkAction } from './actions';
+  import { claudeOf } from './live';
+  import { returnBrief } from './phase';
+
+  let { workItemId }: TabHeaderProps = $props();
+
+  const item = $derived(work.get(workItemId));
+
+  let briefFor = $state<string | null>(null);
+  let briefEl = $state<HTMLElement>();
+  // The strip takes the keyboard once per return, so `x` / `v` never land in the Claude or nvim pane.
+  let briefFocus = false;
+  $effect(() => {
+    const id = workItemId;
+    untrack(() => {
+      const w = work.get(id);
+      const mins = settings.value()?.work.return_brief_after_mins ?? 20;
+      briefFor = w && returnBrief(w, claudeOf(w)?.status ?? null, Date.now(), mins) ? id : null;
+      briefFocus = briefFor !== null;
+    });
+    return () =>
+      void workLeft({ id }).then(
+        (w) => work.upsert(w),
+        () => {},
+      );
+  });
+  const brief = $derived(
+    briefFor === workItemId && item && claudeOf(item)?.status !== 'working' ? item : null,
+  );
+
+  $effect(() => {
+    const el = briefEl;
+    if (el && briefFocus) {
+      briefFocus = false;
+      // After the Shell's own give-the-keyboard-back-to-the-terminal microtask (closing the switcher).
+      setTimeout(() => el.focus());
+    }
+  });
+
+  function dismissBrief(): void {
+    briefFor = null;
+    const sid = focusedSessionId();
+    if (sid) terminalPool.focus(sid);
+  }
+
+  function briefKey(e: KeyboardEvent): void {
+    if (e.metaKey || e.ctrlKey || e.altKey || !brief) return;
+    if (e.key === 'x') dismissBrief();
+    else if (e.key === 'v') void runWorkAction('review_delta', brief);
+    else return;
+    e.preventDefault();
+  }
+</script>
+
+{#if brief}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="brief"
+    role="region"
+    aria-label="Where you left off"
+    data-testid="return-brief"
+    tabindex="-1"
+    bind:this={briefEl}
+    onkeydown={briefKey}
+  >
+    <div class="brief-text">
+      {#if brief.next_note}<div class="note"><b>next:</b> {brief.next_note}</div>{/if}
+      {#if brief.delta}
+        <div class="since">
+          <span class="ins">+{brief.delta.insertions}</span>/<span class="del">−{brief.delta.deletions}</span> since
+          you reviewed
+        </div>
+      {/if}
+      {#if brief.claude_message}
+        <details>
+          <summary>{brief.claude_message.split('\n')[0]}</summary>
+          <pre>{brief.claude_message}</pre>
+        </details>
+      {/if}
+    </div>
+    {#if brief.delta}
+      <Button
+        size="sm"
+        variant="secondary"
+        chord="v"
+        onclick={() => void runWorkAction('review_delta', brief)}>Review changes</Button
+      >
+    {/if}
+    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>Dismiss</Button>
+  </div>
+{/if}
+
+<style>
+  .brief {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--k-space-3);
+    padding: var(--k-space-2) var(--k-space-4);
+    border-bottom: 1px solid var(--k-border);
+    background: var(--k-bg-elev);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .brief-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+  }
+
+  .brief summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--k-fg-muted);
+    cursor: pointer;
+  }
+
+  .brief pre {
+    max-height: 30vh;
+    margin: var(--k-space-1) 0 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    font: inherit;
+  }
+
+  .ins {
+    color: var(--k-ok);
+  }
+
+  .del {
+    color: var(--k-danger);
+  }
+</style>

@@ -8,8 +8,11 @@ import { setTransport } from '$lib/ipc/transport';
 import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
+import { sheetRegistry } from '$app/registry';
+
 import { acceptanceCriteria, refines, withCriteria } from './refine.svelte';
 import TicketDetail from './TicketDetail.svelte';
+import { NO_WORKFLOWS, workflows } from './workflow.svelte';
 
 let mock: MockControls;
 const itemOf = (key: string): TicketItem => mock.state.tickets.find((i) => i.ticket.ref.key === key)!;
@@ -26,6 +29,7 @@ beforeEach(async () => {
   work.byId = {};
   reviews.lists = {};
   for (const k of Object.keys(refines)) delete refines[k];
+  for (const k of Object.keys(workflows)) delete workflows[k];
   await projects.load();
 });
 
@@ -38,6 +42,46 @@ const action = (name: string) =>
   within(screen.getByRole('toolbar', { name: 'Ticket actions' })).getByRole('button', { name });
 
 describe('TicketDetail', () => {
+  it('w opens the workflow picker; Enter runs the workflow on the ticket and toasts Open and Peek', async () => {
+    const ref = itemOf('SHOP-151').ticket.ref;
+    const detail = mount('SHOP-151');
+    await waitFor(() => expect(workflows[ticketKey(ref)]).toHaveLength(2));
+    await fireEvent.keyDown(detail, { key: 'w' });
+    await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
+    Element.prototype.scrollIntoView ??= () => {}; // not in jsdom
+    const Sheet = (await sheetRegistry.workflow_run()).default;
+    render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet('workflow_run') } });
+    const input = screen.getByRole('textbox', { name: 'Run workflow on SHOP-151' });
+    expect(screen.getByText('triage')).toBeTruthy();
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(mock.calls.find((c) => c.cmd === 'workflow_run')?.args).toEqual({
+        ticket: ref,
+        workflow: 'kelta-ticket-pass',
+      }),
+    );
+    expect(ui.sheet).toBeNull();
+    await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toBe('kelta-ticket-pass started on SHOP-151'));
+    const toast = toasts.list.at(-1)!.toast;
+    expect([toast.action?.command, toast.secondary?.command]).toEqual(['session.reveal', 'session.peek']);
+  });
+
+  it('turns Run workflow off with the reason when no workflow is found', async () => {
+    mock.state.workflows = [];
+    const detail = mount('SHOP-151');
+    await waitFor(() => expect(workflows[ticketKey(itemOf('SHOP-151').ticket.ref)]).toEqual([]));
+    await fireEvent.click(action('More'));
+    const entry = within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', {
+      name: /Run workflow…/,
+    });
+    expect(entry.getAttribute('aria-disabled')).toBe('true');
+    expect(entry.getAttribute('title')).toBe(NO_WORKFLOWS);
+    await fireEvent.keyDown(screen.getByRole('menu', { name: 'More actions' }), { key: 'Escape' });
+    await fireEvent.keyDown(detail, { key: 'w' });
+    expect(toasts.list.at(-1)?.toast.text).toBe(NO_WORKFLOWS);
+    expect(ui.sheet).toBeNull();
+  });
+
   it('shows the header from the item at once, then the meta grid, PRs, description and comments', async () => {
     mount('SHOP-142');
     expect(screen.getByRole('heading', { level: 1, name: 'Rate-limit login attempts' })).toBeTruthy();
@@ -47,8 +91,22 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'Shift+A', 'c', 'r', 'y', 'o']);
+    ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+Shift+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
+    // the rest under More (Mod+.), each with its key
+    await fireEvent.keyDown(screen.getByTestId('ticket-detail'), {
+      key: '>',
+      code: 'Period',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    const more = screen.getByRole('menu', { name: 'More actions' });
+    expect(
+      within(more)
+        .getAllByRole('menuitem')
+        .map((b) => b.querySelector('.label')?.textContent),
+    ).toEqual(['Unassign', 'Refine with Claude', 'Run workflow…', 'Copy branch', 'Open in browser']);
+    await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
     expect(meta.textContent?.replace(/\s+/g, ' ')).toContain('Estimate 5');
@@ -82,11 +140,15 @@ describe('TicketDetail', () => {
       ['Assign to me', 'This tracker does not let Kelta change the assignee.'],
       ['Comment', 'This tracker does not let Kelta add comments.'],
       ['Open PR', 'No pull request is linked to this ticket yet.'],
-      ['Copy branch', 'No branch yet. Start work first.'],
     ]) {
       expect(action(name!).getAttribute('aria-disabled')).toBe('true');
       expect(action(name!).title).toBe(reason);
     }
+    await fireEvent.click(action('More'));
+    const branch = screen.getByRole('menuitem', { name: /^Copy branch/ });
+    expect(branch.getAttribute('aria-disabled')).toBe('true');
+    expect(branch.title).toBe('No branch yet. Start work first.');
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(action('Move').getAttribute('aria-disabled')).toBeNull();
     expect(screen.queryByLabelText(/Add a comment/)).toBeNull();
     await fireEvent.click(action('Assign to me'));

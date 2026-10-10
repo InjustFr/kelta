@@ -1,12 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { boot } from './helpers';
 
-test('the bar above the panes names the project and the tab, with no tab list or tool strip', async ({
-  page,
-}) => {
+test('the context bar names the project and the row, with no tab list or tool strip', async ({ page }) => {
   await boot(page);
-  const bar = page.getByTestId('tabbar');
-  await expect(bar.getByTestId('tabbar-context')).toHaveText(/Shop\s*›\s*SHOP-142 Rate-limit login/);
+  const bar = page.getByTestId('contextbar');
+  await expect(bar.getByTestId('context-crumb')).toHaveText(/Shop\s*›\s*SHOP-142\s*Rate-limit login/);
   await expect(bar.locator('[role="tab"]')).toHaveCount(0);
   await expect(page.getByTestId('tool-strip')).toHaveCount(0);
   await expect(bar.getByTestId('tab-plus')).toBeVisible();
