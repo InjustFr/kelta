@@ -396,4 +396,14 @@ async fn claude_cost_rolls_up_to_the_work_item() {
     }
     h.core.session_apply_hook(&s.id, end).await.unwrap();
     assert!((cost(&h).await - 2.2).abs() < 1e-9);
+    // SIGKILL with no SessionEnd: the exit saves the 0.3 spent since.
+    h.core.session_set_usage(&s.id, usage(1.0)).await.unwrap();
+    h.core.session_kill(&s.id, true).await.unwrap();
+    for _ in 0..100 {
+        if (cost(&h).await - 2.5).abs() < 1e-9 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("killed session's cost not saved: {}", cost(&h).await);
 }

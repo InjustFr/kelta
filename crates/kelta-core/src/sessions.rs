@@ -1585,7 +1585,7 @@ impl Core {
             Keep,
             Continue(u16, u16),
         }
-        let (next, info, http_ref) = {
+        let (next, info, http_ref, cost) = {
             let mut s = self.sessions.lock();
             let Some(e) = s.get_mut(id) else { return };
             e.timers.cancel();
@@ -1596,6 +1596,14 @@ impl Core {
                 e.info.attention = Attention::None;
             }
             let http_ref = std::mem::take(&mut e.http_ref);
+            // Save spend no SessionEnd flushed (crash, SIGKILL) before Remove/restart drops the entry.
+            let cost = e.info.work_item_id.clone().zip(
+                e.info
+                    .claude
+                    .as_mut()
+                    .and_then(|c| c.usage.as_mut())
+                    .map(|u| std::mem::take(&mut u.unsaved_usd)),
+            );
             let next = if quitting {
                 Next::Nothing
             } else if e.restarting {
@@ -1617,8 +1625,16 @@ impl Core {
             } else {
                 Next::Keep
             };
-            (next, e.info.clone(), http_ref)
+            (next, e.info.clone(), http_ref, cost)
         };
+        if let Some((item, usd)) = cost.filter(|c| c.1 > 0.0) {
+            let work = self.work.clone();
+            self.rt.spawn(async move {
+                if let Err(e) = work.add_cost(&item, usd).await {
+                    tracing::warn!(error = %e, "claude cost not saved");
+                }
+            });
+        }
         self.exits.notify_waiters();
         self.release_http_ref(http_ref);
         if quitting {
