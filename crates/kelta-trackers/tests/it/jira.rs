@@ -752,3 +752,18 @@ async fn a_server_error_on_lookups_is_retried_and_either_story_points_field_coun
     let t = p.list(&jql_view(), None).await.unwrap().items.remove(0);
     assert_eq!((t.sprint.is_some(), t.estimate.as_deref()), (true, Some("3 pts")));
 }
+
+#[tokio::test]
+async fn search_ands_an_escaped_text_clause_onto_the_view_jql() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    let mut v = view("v");
+    v.jql = Some("project = SHOP ORDER BY rank".into());
+    v.who = Some(Who::Mine);
+    cloud(&server).search(&v, r#"say "hi""#).await.unwrap();
+    let all = bodies(&server, "POST", "/rest/api/3/search/jql").await;
+    assert_eq!(
+        all.last().unwrap()["jql"],
+        r#"((project = SHOP) AND assignee = currentUser()) AND text ~ "say \"hi\"" ORDER BY rank"#
+    );
+}

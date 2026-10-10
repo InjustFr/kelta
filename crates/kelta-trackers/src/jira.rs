@@ -702,6 +702,23 @@ impl Tracker for JiraTracker {
         self.fetch_ticket(&api, &t.key).await
     }
 
+    async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
+        let jql = compose_jql(&self.base_jql(view).await?, view.who, view.current_iteration);
+        let (cond, order) = split_order_by(&jql);
+        // Only the JQL string is escaped: the text itself is Lucene syntax, Jira's to read.
+        let text = format!("text ~ \"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""));
+        let jql =
+            if cond.is_empty() { format!("{text} {order}") } else { format!("({cond}) AND {text} {order}") };
+        let view = TrackerView {
+            jql: Some(jql.trim_end().to_owned()),
+            who: None,
+            current_iteration: false,
+            status: None,
+            ..view.clone()
+        };
+        Ok(self.list(&view, None).await?.items)
+    }
+
     async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {
         let key = project.jql.as_deref().and_then(project_key_from_jql);
         let key = common::create_in(project, "jql project", key.as_deref())?;

@@ -490,7 +490,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_comment` | `{ticket, markdown}` | `()` | |
 | `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
-| `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette) | |
+| `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette; searched by each tracker) | |
 | **reviews** | | | `commands/review.rs` (L3) |
 | `review_list` | `{scope, kind: ReviewKind, refresh: bool}` | `ReviewPage{items: Vec<ReviewItem{review, project_ids}>, stale, errors}` | |
 | `review_get` | `{review: ReviewRef}` | `ReviewDetail` | |

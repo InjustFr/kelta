@@ -574,3 +574,18 @@ async fn sources_keep_the_repos_when_projects_are_not_readable() {
     let hits = gh(&server).sources("").await.unwrap();
     assert_eq!(hits.len(), 3);
 }
+
+#[tokio::test]
+async fn search_turns_a_repo_view_into_an_issue_search() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search/issues"))
+        .and(query_param("q", "repo:acme/shop is:open login is:issue"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/search.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut v = view("repo");
+    v.repo = Some("acme/shop".into());
+    assert_eq!(gh(&server).search(&v, "login").await.unwrap().len(), 2);
+}
