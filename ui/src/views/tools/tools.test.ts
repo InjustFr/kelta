@@ -253,7 +253,7 @@ describe('tool scope', () => {
       ]);
     };
     const opens = () => c.calls.filter((x) => x.cmd === 'tool_open');
-    return { id, open, opens };
+    return { c, id, open, opens };
   }
 
   it('user: one Home tab from a project, a work item or a global view; another open only focuses it', async () => {
@@ -303,6 +303,17 @@ describe('tool scope', () => {
     await open();
     expect(opens()).toHaveLength(2);
     expect(opens()[1].args).toMatchObject({ project_id: 'billing' });
+  });
+
+  it('a live instance in no pane does not mask a shown one: the second open focuses, no third session', async () => {
+    const { c, open, opens } = await scoped('project');
+    await open();
+    // Hide the first instance: its tab closes, its session keeps running.
+    c.state.layouts.shop.tabs = c.state.layouts.shop.tabs.filter((t) => !isToolTab(t));
+    await layout.load('shop');
+    await open();
+    await open();
+    expect(opens()).toHaveLength(2);
   });
 
   it('project: from Home or a global view it asks which project', async () => {

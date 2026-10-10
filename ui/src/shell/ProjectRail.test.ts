@@ -90,6 +90,16 @@ describe('ProjectRail', () => {
     expect(r.queryByTestId('rail-background')).toBeNull();
   });
 
+  it('an exited tool session is no tool instance: its tab is a closable row in its band', async () => {
+    const r = await setup(true);
+    sessions.apply({
+      type: 'session.updated',
+      session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'exited' },
+    });
+    await expect.poll(() => bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
+    expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
+  });
+
   it('tools: running PTY tools carry a lamp, web and external ones ↗, missing ones dimmed; a sub-line focuses its pane', async () => {
     const r = await setup();
     const row = (id: string) => r.container.querySelector(`[data-testid="rail-tool"][data-tool-id="${id}"]`)!;
@@ -107,6 +117,7 @@ describe('ProjectRail', () => {
     sessions.apply({ type: 'session.updated', session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'live' } });
 
     ui.view = 'reviews';
+    await expect.poll(() => r.queryAllByTestId('rail-tool-instance').length).toBe(1);
     await fireEvent.click(r.getByTestId('rail-tool-instance'));
     expect(ui.view).toBeNull();
     expect(projects.activeId).toBe('shop');

@@ -73,17 +73,22 @@ export function liveToolPane(
   workItemId: WorkItemId | null,
   scope: ToolScope = 'work',
 ): PaneLocation | null {
+  const l = layout.get(projectId);
   const live = sessions
     .forProject(projectId)
-    .find(
+    .filter(
       (s) =>
         s.kind.type === 'tool' &&
         s.kind.tool_id === toolId &&
         s.lifecycle === 'live' &&
         (scope !== 'work' || (s.work_item_id ?? null) === workItemId),
     );
-  const l = layout.get(projectId);
-  return live && l ? findSession(l, live.id) : null;
+  // A live instance in no pane (kept running) must not mask a shown one.
+  for (const s of live) {
+    const at = l && findSession(l, s.id);
+    if (at) return at;
+  }
+  return null;
 }
 
 registerAction('tools.open', async (args) => {

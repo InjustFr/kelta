@@ -82,8 +82,9 @@ export function railTools(): ToolInfo[] {
 export function paneTool(p: PaneNode): string | null {
   if (p.content.kind === 'web') return webTools[p.content.tool_instance_id]?.toolId ?? '';
   const id = paneSession(p);
-  const kind = id ? sessions.get(id)?.kind : null;
-  return kind?.type === 'tool' ? kind.tool_id : null;
+  const s = id ? sessions.get(id) : null;
+  // A dead tool session is no tool instance: its tab falls back to a closable row in its band.
+  return s?.kind.type === 'tool' && s.lifecycle === 'live' ? s.kind.tool_id : null;
 }
 
 /** A tab made only of tool panes: the rail lists it under Tools, not in its project's band. */
