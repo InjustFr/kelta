@@ -56,7 +56,7 @@ async fn branch_script_installs_opens_for_the_work_item_and_runs_its_script() {
 
     // Out of the box the `script` setting is `echo`: run.sh prints the branch and the worktree. A cleared
     // setting (`""`) falls back to `echo` instead of running the branch name as a command.
-    for script in ["echo", ""] {
+    for script in ["echo", "", "  "] {
         let args = json!([script, w.branch, worktree]);
         let out =
             call(PluginMethod::ExecRun, json!({ "command": "./run.sh", "args": args, "cwd": worktree }))

@@ -76,7 +76,7 @@ async function run(kelta) {
   running = true;
   $('run').disabled = true;
   try {
-    const { script = 'echo' } = await kelta.settings.get();
+    const script = (await kelta.settings.get()).script?.trim() || 'echo';
     text($('status'), `Running ${script}…`);
     const res = await kelta.exec('./run.sh', [script, w.branch, w.worktree], { cwd: w.worktree });
     text($('status'), `Exit ${res.code}`);
