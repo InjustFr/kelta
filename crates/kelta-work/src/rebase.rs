@@ -154,8 +154,16 @@ impl WorkService {
                     RebaseOnto::RemoteBranch => {
                         let base_ref = format!("{remote}/{}", item.base);
                         let tree = format!("{onto_ref}^{{tree}}");
-                        let args =
-                            ["commit-tree", tree.as_str(), "-p", base_ref.as_str(), "-p", onto_ref.as_str(), "-m", "kelta rebase upstream"];
+                        let args = [
+                            "commit-tree",
+                            tree.as_str(),
+                            "-p",
+                            base_ref.as_str(),
+                            "-p",
+                            onto_ref.as_str(),
+                            "-m",
+                            "kelta rebase upstream",
+                        ];
                         git::run_ok(wt, &args, REBASE_TIMEOUT).await?.stdout.trim().to_owned()
                     }
                 };
