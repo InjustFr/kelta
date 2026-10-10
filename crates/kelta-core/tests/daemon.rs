@@ -14,7 +14,8 @@ use kelta_core::{Core, CoreDeps};
 use kelta_proto::api::{CoreApi, TerminalHost};
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::ids::ProjectId;
-use kelta_proto::model::{Lifecycle, RestorePolicy, SessionKind, SpawnRequest};
+use kelta_proto::model::{Lifecycle, RestorePolicy, SessionKind, SessionStatus, SpawnRequest, StatusChange};
+use kelta_proto::settings::RestoreMode;
 use kelta_proto::settings::Settings;
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::testing::{FakeSecrets, FakeUiBridge, RecordingSink};
@@ -22,8 +23,12 @@ use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::{self, DaemonTerminalHost};
 
 fn app(root: &Path, term: Arc<DaemonTerminalHost>) -> Arc<Core> {
+    app_with(root, term, Settings::defaults())
+}
+
+fn app_with(root: &Path, term: Arc<DaemonTerminalHost>, settings: Settings) -> Arc<Core> {
     let mut deps = CoreDeps::new(Dirs::under(root), CliArgs::default(), FakeUiBridge::new());
-    deps.config = Some(MemConfig::new(Settings::defaults(), vec![project("shop", root)]));
+    deps.config = Some(MemConfig::new(settings, vec![project("shop", root)]));
     deps.terminal = Some(term);
     deps.secrets = Some(FakeSecrets::new());
     deps.trackers = Some(Arc::new(Factory::default()));
@@ -105,6 +110,36 @@ async fn sessions_survive_an_app_restart() {
     );
 
     // Quit with nothing running: keltad leaves after its grace.
+    core.shutdown().await.unwrap();
+    term.close();
+    keltad.join().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let sock = Dirs::under(root).keltad_socket();
+    let l = daemon::bind(&sock).unwrap();
+    let host = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
+
+    let mut settings = Settings::defaults();
+    settings.app.restore_mode = RestoreMode::None;
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app_with(root, term.clone(), settings);
+    // A Claude that stays up (the PATH stub exits at once).
+    std::fs::write(root.join("bin/claude"), "#!/bin/sh\nexec sleep 60\n").unwrap();
+    let claude = core.session_spawn(req(SessionKind::Claude)).await.unwrap();
+    let working = StatusChange {
+        status: SessionStatus::Working,
+        preview: None,
+        file_edited: None,
+        raw_event: "t".into(),
+    };
+    core.session_apply_hook(&claude.id, working).await.unwrap();
+    assert!(core.quit_needs_confirm(), "restore_mode none: quit kills the working Claude");
+
     core.shutdown().await.unwrap();
     term.close();
     keltad.join().unwrap();

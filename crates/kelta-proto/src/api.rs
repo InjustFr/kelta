@@ -66,9 +66,14 @@ pub trait TerminalHost: Send + Sync {
         false
     }
     /// After an app restart, route a still-running session's events to `events`. Returns the
-    /// environment it was spawned with (hook tokens), `None` when no such session is running.
-    fn adopt(&self, _id: &SessionId, _events: Arc<dyn TerminalEvents>) -> Option<BTreeMap<String, String>> {
-        None
+    /// environment it was spawned with (hook tokens), `Ok(None)` when no such session is running,
+    /// `Err` when the host could not tell (it may still be running).
+    fn adopt(
+        &self,
+        _id: &SessionId,
+        _events: Arc<dyn TerminalEvents>,
+    ) -> Result<Option<BTreeMap<String, String>>, KeltaError> {
+        Ok(None)
     }
 }
 

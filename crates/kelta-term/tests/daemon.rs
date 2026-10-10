@@ -57,8 +57,8 @@ fn attach_after_client_reconnect() {
     let b = DaemonTerminalHost::connect(&sock).unwrap();
     assert!(b.persistent());
     let ev_b = Arc::new(Events::default());
-    assert!(b.adopt(&SessionId::new("ghost"), ev_b.clone()).is_none());
-    let env = b.adopt(&id, ev_b.clone()).expect("session still running");
+    assert!(b.adopt(&SessionId::new("ghost"), ev_b.clone()).unwrap().is_none());
+    let env = b.adopt(&id, ev_b.clone()).unwrap().expect("session still running");
     assert_eq!(env.get("KELTA_HOOK_TOKEN").map(String::as_str), Some("tok"));
     let view_b = Frames::default();
     b.attach(&id, 100, 30, Box::new(view_b.clone())).unwrap();
@@ -77,7 +77,7 @@ fn attach_after_client_reconnect() {
     b.kill(&id, KillSignal::Kill).unwrap();
     ev_b.wait_exit(T);
     assert!(ev_a.exited().is_none());
-    assert!(b.adopt(&id, ev_b.clone()).is_none(), "exited sessions are not adopted");
+    assert!(b.adopt(&id, ev_b.clone()).unwrap().is_none(), "exited sessions are not adopted");
     b.kill(&id, KillSignal::Kill).unwrap(); // closes it
     assert!(b.stats().sessions.is_empty());
 
@@ -99,11 +99,23 @@ fn running_session_keeps_keltad_alive() {
     assert!(!daemon.is_finished());
     let b = DaemonTerminalHost::connect(&sock).unwrap();
     let ev = Arc::new(Events::default());
-    b.adopt(&SessionId::new("s2"), ev.clone()).unwrap();
+    b.adopt(&SessionId::new("s2"), ev.clone()).unwrap().unwrap();
     b.kill(&SessionId::new("s2"), KillSignal::Kill).unwrap();
     ev.wait_exit(T);
     drop(b);
     daemon.join().unwrap();
+}
+
+#[test]
+fn unreachable_keltad_is_an_adopt_error_not_a_stopped_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let sock = tmp.path().join("run/keltad.sock");
+    let _daemon = start_daemon(&sock);
+    let h = DaemonTerminalHost::connect(&sock).unwrap();
+    h.close();
+    std::fs::remove_file(&sock).unwrap();
+    // core kills what it did not adopt: "could not ask" must not read as "not running".
+    assert!(h.adopt(&SessionId::new("s4"), Arc::new(Events::default())).is_err());
 }
 
 #[test]

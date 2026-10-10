@@ -230,7 +230,7 @@ impl DaemonTerminalHost {
             .spawn(move || rc.read_loop(reader, &ev_tx))?;
         let seq = c.next_seq();
         if let Err(e) = c.call_seq(seq, &Req::Hello { v: PROTOCOL_VERSION }, &[]) {
-            // shortcut: an older keltad left running by a previous version keeps its sessions unreachable until they exit.
+            // shortcut: an older keltad left running by a previous version keeps its sessions unreachable until they exit, and core respawns the kept ones from Dormant beside them (duplicate Claude --resume); kill the stale keltad's sessions here if that bites.
             c.closing.store(true, Ordering::SeqCst);
             let _ = c.w.lock().shutdown(std::net::Shutdown::Both);
             return Err(e);
@@ -372,16 +372,19 @@ impl TerminalHost for DaemonTerminalHost {
         true
     }
 
-    fn adopt(&self, id: &SessionId, events: Arc<dyn TerminalEvents>) -> Option<BTreeMap<String, String>> {
-        let c = self.conn().ok()?;
+    fn adopt(
+        &self,
+        id: &SessionId,
+        events: Arc<dyn TerminalEvents>,
+    ) -> Result<Option<BTreeMap<String, String>>, KeltaError> {
+        let c = self.conn()?;
         // Registered first: events flow as soon as keltad re-routes them.
         c.events.lock().insert(id.clone(), events);
         let seq = c.next_seq();
         let env = c
             .call_seq(seq, &Req::Adopt { id: id.clone() }, &[])
-            .ok()
-            .and_then(|v| serde_json::from_value::<Option<BTreeMap<String, String>>>(v).ok().flatten());
-        if env.is_none() {
+            .and_then(|v| Ok(serde_json::from_value::<Option<BTreeMap<String, String>>>(v)?));
+        if !matches!(env, Ok(Some(_))) {
             c.events.lock().remove(id);
         }
         env
