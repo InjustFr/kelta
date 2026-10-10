@@ -3,6 +3,7 @@
 //! `ProviderFactory` lives in `kelta_http::provider` because its signature takes `kelta_http::HttpCtx`
 //! (proto cannot depend on kelta-http without a cycle). See `docs/contract-requests/S0.md`.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -77,6 +78,20 @@ pub trait TerminalHost: Send + Sync {
     fn history_delete(&self, id: &SessionId);
     /// Per-session bytes, lines, inflight.
     fn stats(&self) -> TerminalStats;
+    /// The host outlives the app (keltad): quit leaves restorable sessions running.
+    fn persistent(&self) -> bool {
+        false
+    }
+    /// After an app restart, route a still-running session's events to `events`. Returns the
+    /// environment it was spawned with (hook tokens), `Ok(None)` when no such session is running,
+    /// `Err` when the host could not tell (it may still be running).
+    fn adopt(
+        &self,
+        _id: &SessionId,
+        _events: Arc<dyn TerminalEvents>,
+    ) -> Result<Option<BTreeMap<String, String>>, KeltaError> {
+        Ok(None)
+    }
 }
 
 /// Receives encoded frames for one attached view. `false` = channel closed → auto-detach.

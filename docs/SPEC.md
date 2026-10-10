@@ -33,6 +33,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 - Several projects are open at once; open set and order persist. `kelta-ctl open <path>` opens/creates and focuses.
 - Per-project groupings: tabs, layouts, sessions, work items, tools, triggers, settings overrides, tickets/reviews views.
 - Aggregated views: **Inbox** = "My tickets" (all open projects' tracker views, grouped by project) + "Review requests" (all configured code-host accounts, grouped by project, unmatched items in **Other**) + "My PRs" + "Needs input" (sessions across projects).
+- **Quitting Kelta** leaves the sessions running in the `keltad` session daemon (`terminal.session_host = "daemon"`); the next start re-attaches every live one where it was (shells, Claude, nvim keep their process and scrollback). Sessions that ended meanwhile restore as below.
 - Close project: sessions keep running unless "Close and stop sessions" is chosen. Remove project: moves config to `projects/.trash/`.
 
 ## 3. Core flows

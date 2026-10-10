@@ -10,11 +10,13 @@
 //!   queries, events for core, OSC 7/9/777 pre-scan ([`prescan`]).
 //! - [`snapshot`]: ANSI repaint for (re-)attaching views; [`flow`]: HIGH/LOW watermarks.
 //! - [`login_env`]: login environment resolution (`resolve_login_env`).
+//! - [`daemon`]: keltad (this host in its own process) and the `DaemonTerminalHost` client.
 //!
 //! Sessions stay in the host after their process exits (history trimmed to the 200-line text
 //! tail; re-attach shows the exit banner) until `kill` closes them or a new `spawn` reuses the id.
 
 pub mod backend;
+pub mod daemon;
 pub mod flow;
 pub mod frames;
 mod history;
