@@ -1,15 +1,19 @@
 name: ci
 
-# Runs on ready (non-draft) pull requests only; verify locally first with scripts/ci-local.sh.
-# Jobs run only for the areas the PR touches.
+# Runs on ready (non-draft) pull requests and on push to main (ticket passes merge after scripts/ci-local.sh;
+# this confirms on the runners). PR jobs run only for the areas the PR touches.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore: ["docs/**", "**/*.md", "LICENSE"]
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**/*.md", "LICENSE"]
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A new PR push cancels the previous run; every main commit and manual run keeps its own.
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -25,11 +29,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    # A manual run (workflow_dispatch) always runs every job.
+    # A push to main or a manual run (workflow_dispatch) runs every job.
     outputs:
-      rust: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
-      ui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.ui == 'true' }}
-      packaging: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.packaging == 'true' }}
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      ui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.ui == 'true' }}
+      packaging: ${{ github.event_name != 'pull_request' || steps.filter.outputs.packaging == 'true' }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -69,22 +73,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # shortcut: macOS skipped on PRs while PTY tests hang there (#101); restore to both OSes once #101 merges.
-        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-24.04","macos-14"]') || fromJSON('["ubuntu-24.04"]') }}
+        # macOS minutes cost 10x: PRs (checked locally first) run Linux only, main and manual runs both OSes.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04","macos-14"]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Linux system packages
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config neovim \
+          sudo apt-get install -y --no-install-recommends pkg-config \
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
             libssl-dev libxdo-dev patchelf
+      - run: sudo bash scripts/install-nvim.sh
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # nextest gives every test its own process and the per-test timeouts in .config/nextest.toml.
+      - name: cargo-nextest (pinned, as in docker/ubuntu-build.Dockerfile)
+        run: curl -fsSL "https://get.nexte.st/0.9.148/${{ runner.os == 'macOS' && 'mac' || 'linux' }}" | tar -xz -C ~/.cargo/bin
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
