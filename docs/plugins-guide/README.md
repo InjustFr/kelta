@@ -79,6 +79,9 @@ import { connect } from "@kelta/plugin-sdk";
 const kelta = await connect();
 ```
 
+Screens that act on a ticket, a PR or a branch (actions, `params`, `work.*`, `exec.run`, events): see
+[Act on a ticket, a PR or a branch](acting-on-work.md).
+
 ## 5. Settings
 
 `[contributes.settings] schema = "settings.schema.json"` mounts a flat JSON Schema at `plugins.<id>`; Kelta

@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "script": {
+      "type": "string",
+      "default": "echo",
+      "description": "Command line run in the worktree, with the branch and the worktree path as arguments"
+    }
+  }
+}
