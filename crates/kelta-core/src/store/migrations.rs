@@ -131,8 +131,13 @@ const V5: &str = r#"
 ALTER TABLE work_items ADD COLUMN claude_at TEXT;
 "#;
 
+/// v6: Claude spend of a work item's ended sessions (`WorkItem.cost_usd`).
+const V6: &str = r#"
+ALTER TABLE work_items ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

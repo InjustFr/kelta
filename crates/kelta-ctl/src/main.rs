@@ -5,6 +5,8 @@
 //!
 //! - `hook` reads ≤ 1 MiB of stdin, relays it with `KELTA_SESSION_ID` / `KELTA_HOOK_TOKEN` to
 //!   `KELTA_SOCK` and ALWAYS exits 0, silently.
+//! - `statusline` relays Claude's statusline JSON the same way without waiting for an answer, then
+//!   runs the user's own statusline (`KELTA_USER_STATUSLINE`) on the same stdin and prints its output.
 //! - Other commands print the JSON result on stdout (exit 0) or the JSON error on stderr (exit 1).
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -28,6 +30,7 @@ const USAGE: &str = "usage: kelta-ctl <command>
   editor-open <file>[:line]                open a file in the editor
   plugin install <src>                     install a plugin (path, git URL or archive)
   hook                                     (internal) relay a Claude Code hook from stdin
+  statusline                               (internal) relay Claude Code's statusline, print the user's
   version                                  print versions";
 
 const PROTOCOL: u32 = 1;
@@ -36,6 +39,8 @@ const MAX_HOOK_STDIN: u64 = 1024 * 1024;
 /// Response line cap.
 const MAX_RESPONSE: u64 = 16 * 1024 * 1024;
 const HOOK_TIMEOUT: Duration = Duration::from_secs(2);
+/// Claude waits on the statusline: the relay never holds it longer than this.
+const STATUSLINE_TIMEOUT: Duration = Duration::from_millis(50);
 const CMD_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn main() -> ExitCode {
@@ -46,6 +51,7 @@ fn main() -> ExitCode {
             let _ = hook();
             ExitCode::SUCCESS
         }
+        Some("statusline") => statusline(),
         Some("--version") | Some("-V") => {
             println!("kelta-ctl {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
@@ -132,6 +138,48 @@ fn hook() -> Result<(), String> {
     }
     let req = envelope("hook", json!({ "session": session, "token": token, "payload": payload }));
     request(&req, HOOK_TIMEOUT).map(|_| ())
+}
+
+// ---- statusline --------------------------------------------------------------------------------
+
+fn statusline() -> ExitCode {
+    let mut input = Vec::new();
+    let _ = std::io::stdin().lock().take(MAX_HOOK_STDIN).read_to_end(&mut input);
+    // Never fail the user's statusline: a relay error is swallowed.
+    let _ = relay_status(&input);
+    let Some(cmd) = std::env::var("KELTA_USER_STATUSLINE").ok().filter(|c| !c.trim().is_empty()) else {
+        return ExitCode::SUCCESS;
+    };
+    // stdout is inherited: the user's output reaches Claude byte for byte.
+    let child =
+        std::process::Command::new("/bin/sh").arg("-c").arg(cmd).stdin(std::process::Stdio::piped()).spawn();
+    let Ok(mut child) = child else { return ExitCode::FAILURE };
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(&input);
+    }
+    match child.wait() {
+        Ok(st) => ExitCode::from(st.code().unwrap_or(1).clamp(0, 255) as u8),
+        Err(_) => ExitCode::FAILURE,
+    }
+}
+
+/// One `hook` frame named `Status`, fire-and-forget (Kelta's answer is not read).
+fn relay_status(input: &[u8]) -> Result<(), String> {
+    let session = std::env::var("KELTA_SESSION_ID").map_err(|_| "KELTA_SESSION_ID unset")?;
+    let token = std::env::var("KELTA_HOOK_TOKEN").map_err(|_| "KELTA_HOOK_TOKEN unset")?;
+    let mut payload: Value = serde_json::from_slice(input).map_err(|e| e.to_string())?;
+    let obj = payload.as_object_mut().ok_or("statusline payload is not a JSON object")?;
+    obj.insert("hook_event_name".into(), json!("Status"));
+    let mut line = serde_json::to_vec(&envelope(
+        "hook",
+        json!({ "session": session, "token": token, "payload": payload }),
+    ))
+    .map_err(|e| e.to_string())?;
+    line.push(b'\n');
+    // shortcut: connect() itself has no timeout (a full listen backlog would block on Linux); Kelta accepts in a loop.
+    let mut stream = UnixStream::connect(socket_path()).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(Some(STATUSLINE_TIMEOUT)).map_err(|e| e.to_string())?;
+    stream.write_all(&line).map_err(|e| e.to_string())
 }
 
 // ---- commands ----------------------------------------------------------------------------------

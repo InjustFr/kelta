@@ -888,6 +888,7 @@
         ],
         "append_system_prompt": "",
         "binary": "claude",
+        "budget_usd": null,
         "extra_args": [],
         "extra_hooks": {},
         "hook_transport": "command",
@@ -945,6 +946,15 @@
           "description": "Resolved in the login PATH.",
           "type": "string",
           "x-kelta-exec": true
+        },
+        "budget_usd": {
+          "default": null,
+          "description": "Spend per work item (USD) past which its cost chip turns red; set it per project.",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "extra_args": {
           "default": [],

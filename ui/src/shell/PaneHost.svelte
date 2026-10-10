@@ -3,10 +3,11 @@
   import type { PaneNode, Rect } from '$lib/layout';
   import type { ProjectId, TabId } from '$lib/gen';
   import { pluginEnable } from '$lib/ipc/commands';
-  import { lampOf, plugins, sessions, toasts } from '$lib/stores';
+  import { lampOf, plugins, sessions, settings, toasts, work } from '$lib/stores';
   import { Badge, Button, ErrorState, Icon, IconButton, Lamp, Menu, Spinner, type MenuItem } from '$lib/ui';
 
   import { prompts } from './confirm.svelte';
+  import { ctxHot, itemCost, overBudget, usd } from './usage';
   import EmptyPane from './EmptyPane.svelte';
   import { lazyComponents } from './lazy.svelte';
   import { chordFor, paneIcon, paneTitle, statusLabel } from './labels';
@@ -41,6 +42,14 @@
   );
   const status = $derived(session ? statusLabel(session.status) : '');
   const level = $derived(session ? lampOf(session.attention, session.status === 'working') : 'none');
+  const usage = $derived(session?.claude?.usage ?? null);
+  // The budget is per work item: compare the item's whole spend, else this session's.
+  const overBudgetNow = $derived.by(() => {
+    if (!session || !usage) return false;
+    const item = session.work_item_id ? work.get(session.work_item_id) : null;
+    const cost = item ? itemCost(item, sessions.all) : usage.cost_usd;
+    return overBudget(cost, settings.value(projectId)?.claude.budget_usd);
+  });
 
   let menu = $state<{ x: number; y: number } | null>(null);
   let boundaryKey = $state(0);
@@ -155,6 +164,20 @@
       {#if status}
         <span class="status" data-testid="pane-status"
           >{#if level !== 'none'}<Lamp {level} label={status} />{:else}{status}{/if}</span
+        >
+      {/if}
+      {#if usage}
+        <span class="usage" data-testid="pane-usage"
+          >{#if usage.context_pct !== null}<span
+              class:hot={ctxHot(usage)}
+              title={ctxHot(usage) ? 'Compacts soon' : 'Context window used'}
+              >ctx {Math.round(usage.context_pct)}%</span
+            > ·
+          {/if}<span
+            class:over={overBudgetNow}
+            title={overBudgetNow ? 'Over budget' : 'Spent by this session'}>{usd(usage.cost_usd)}</span
+          >
+          · +{usage.lines_added}/−{usage.lines_removed}</span
         >
       {/if}
       {#if hooksInactive}
@@ -332,6 +355,23 @@
 
   .spacer {
     flex: 1;
+  }
+
+  .usage {
+    overflow: hidden;
+    min-width: 0;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hot {
+    color: var(--k-warn);
+  }
+
+  .over {
+    color: var(--k-danger);
   }
 
   .hooks {

@@ -13,8 +13,8 @@ use kelta_proto::events::{BusEvent, Notification, Toast, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    AttachInfo, Attention, ClaudeMeta, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy, SessionInfo,
-    SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
+    AttachInfo, Attention, ClaudeMeta, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy,
+    SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
 };
 use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
@@ -99,6 +99,12 @@ impl SessionEntry {
             updated_at: kelta_proto::now_rfc3339(),
         })
     }
+}
+
+/// Spend between two statusline costs of one session; a drop means Claude reset its counter
+/// (`/clear`, a new process), so the new value is all new spend.
+fn cost_growth(prev: f64, now: f64) -> f64 {
+    if now >= prev { now - prev } else { now }
 }
 
 fn lifecycle_str(l: Lifecycle) -> &'static str {
@@ -635,6 +641,10 @@ impl Core {
             mcp_token: mcp_token.as_deref(),
             mcp_url: mcp_url.as_deref(),
         });
+        // `kelta-ctl statusline` runs the user's own statusline after relaying Claude's JSON.
+        if is_claude && let Some(cmd) = spawn_env::user_statusline(&env, &cwd) {
+            env.insert("KELTA_USER_STATUSLINE".into(), cmd);
+        }
         // Claude IDE bridge: the lock file goes where this claude process looks (its own env).
         if is_claude && settings.claude.ide_bridge {
             let opened = spawn_env::claude_config_dir(&env)
@@ -689,9 +699,7 @@ impl Core {
             claude: is_claude.then(|| ClaudeMeta {
                 session_uuid: claude_uuid.clone().unwrap_or_default(),
                 model: spawn_env::arg_value(&args, "--model"),
-                preview: None,
-                files_touched: Vec::new(),
-                hooks_active: false,
+                ..ClaudeMeta::default()
             }),
             editor: match &spec.kind {
                 SessionKind::Editor { adapter } => Some(EditorMeta {
@@ -1296,6 +1304,46 @@ impl Core {
         Ok(())
     }
 
+    /// Keep the last statusline snapshot; the growth of its cost since the previous one is unsaved spend.
+    pub(crate) fn set_usage(&self, id: &SessionId, mut usage: ClaudeUsage) -> Result<(), KeltaError> {
+        let info = {
+            let mut s = self.sessions.lock();
+            let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
+            let Some(c) = e.info.claude.as_mut() else { return Ok(()) };
+            // The first snapshot of a process is its baseline (a resumed Claude restores its old cost).
+            usage.unsaved_usd =
+                c.usage.as_ref().map_or(0.0, |p| p.unsaved_usd + cost_growth(p.cost_usd, usage.cost_usd));
+            if c.usage.as_ref() == Some(&usage) {
+                return Ok(());
+            }
+            c.usage = Some(usage);
+            e.info.clone()
+        };
+        self.emit(UiEvent::SessionUpdated { session: info });
+        Ok(())
+    }
+
+    /// Move a session's unsaved Claude spend to its work item (`cost_usd`): SessionEnd and quit.
+    pub(crate) async fn flush_cost(&self, id: &SessionId) -> Result<(), KeltaError> {
+        let taken = self.sessions.lock().get_mut(id).and_then(|e| {
+            let item = e.info.work_item_id.clone()?;
+            let usd = std::mem::take(&mut e.info.claude.as_mut()?.usage.as_mut()?.unsaved_usd);
+            Some((item, usd, e.info.clone()))
+        });
+        let Some((item, usd, info)) = taken.filter(|t| t.1 > 0.0) else { return Ok(()) };
+        if let Err(e) = self.work.add_cost(&item, usd).await {
+            // Keep the spend for the next flush.
+            if let Some(u) =
+                self.sessions.lock().get_mut(id).and_then(|e| e.info.claude.as_mut()?.usage.as_mut())
+            {
+                u.unsaved_usd += usd;
+            }
+            return Err(e);
+        }
+        self.emit(UiEvent::SessionUpdated { session: info });
+        Ok(())
+    }
+
     /// Update the Claude uuid learned from a hook payload (resume policy follows it).
     pub(crate) fn learn_claude_uuid(&self, id: &SessionId, uuid: &str) {
         let changed = {
@@ -1617,6 +1665,12 @@ impl Core {
 
     pub(crate) async fn quit_flow(&self) -> Result<(), KeltaError> {
         self.quitting.store(true, std::sync::atomic::Ordering::SeqCst);
+        let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
+        for id in ids {
+            if let Err(e) = self.flush_cost(&id).await {
+                tracing::warn!(error = %e, session = %id, "claude cost not saved");
+            }
+        }
         if let Err(e) = self.work.quit_hook().await {
             tracing::warn!(error = %e, "work quit hook failed");
         }

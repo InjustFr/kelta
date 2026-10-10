@@ -400,7 +400,7 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`, a
+    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`, `cost_usd`, a
     /// stored `claude_uuid`) are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
@@ -412,11 +412,21 @@ impl WorkService {
                 item.claude_replied = cur.claude_replied;
                 item.claude_uuid = cur.claude_uuid.or(item.claude_uuid.take());
                 item.claude_at = cur.claude_at;
+                item.cost_usd = cur.cost_usd;
             }
             self.store.put_item(item).await?;
         }
         self.publish_updated(item);
         Ok(())
+    }
+
+    /// Add Claude spend to the item's `cost_usd` (core, on SessionEnd and quit).
+    pub async fn add_cost(&self, id: &WorkItemId, usd: f64) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| {
+            w.cost_usd += usd;
+            true
+        })
+        .await
     }
 
     /// Field-level write: re-load under the write lock, apply `f`, save when it returns true, publish.

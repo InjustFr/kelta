@@ -31,3 +31,26 @@ fn fixtures_round_trip() {
     let stray: Vec<_> = present.difference(&expected).collect();
     assert!(stray.is_empty(), "fixtures without a registered type: {stray:?}");
 }
+
+/// Ticket #135: Claude Code's statusline JSON, with and without `rate_limits` (API-key accounts).
+#[test]
+fn statusline_fixtures_parse() {
+    let read = |name: &str| -> kelta_proto::hooks::HookPayload {
+        serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join(name)).unwrap()).unwrap()
+    };
+    let u = read("hook_statusline.json").usage().unwrap();
+    assert_eq!(u.context_pct, Some(72.0));
+    assert_eq!(u.cost_usd, 1.8412);
+    assert_eq!((u.lines_added, u.lines_removed), (210, 40));
+    let five = u.five_hour.unwrap();
+    assert_eq!((five.used_percentage, five.resets_at), (64.2, 1_791_637_800));
+    assert_eq!(u.seven_day.unwrap().used_percentage, 31.0);
+    assert_eq!(u.unsaved_usd, 0.0);
+
+    let api = read("hook_statusline_api_key.json").usage().unwrap();
+    assert_eq!((api.five_hour, api.seven_day), (None, None));
+    assert_eq!(api.cost_usd, 1.8412);
+
+    // Not a statusline: no usage.
+    assert_eq!(read("hook_stop.json").usage(), None);
+}

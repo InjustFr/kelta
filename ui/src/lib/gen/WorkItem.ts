@@ -40,4 +40,8 @@ sent_threads?: Array<string>,
 /**
  * Kelta-driven rebase in progress, or done and awaiting its force push.
  */
-rebase?: RebaseState | null, };
+rebase?: RebaseState | null, 
+/**
+ * Claude spend of the item's ended sessions (USD), summed across sessions and resumes.
+ */
+cost_usd: number, };
