@@ -42,7 +42,8 @@ export async function beginStartWork(
     }
     const item = plan.existing ? await ipc.workResume({ id: plan.existing }) : await ipc.workStart({ plan });
     work.upsert(item);
-    toasts.info(plan.existing ? `Resumed ${item.branch}` : `Started ${item.branch}`);
+    const verb = plan.existing ? 'Resumed' : item.state.kind === 'queued' ? 'Queued' : 'Started';
+    toasts.info(`${verb} ${item.branch}`);
     void activateProject(item.project_id);
     return item;
   } catch (err) {

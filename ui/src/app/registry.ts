@@ -58,6 +58,7 @@ export const tabHeaderRegistry: Record<TabHeaderKey, LazyComponent> = {
 /** Sheets (modal side panels) opened through `ui.openSheet(key, props)`. */
 export type RegisteredSheetKey =
   | 'start_work'
+  | 'start_batch'
   | 'work_new'
   | 'link_ticket'
   | 'onboarding'
@@ -74,6 +75,7 @@ export type RegisteredSheetKey =
   | 'tickets.move';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
+  start_batch: () => import('../views/work/BatchStartSheet.svelte'),
   work_new: () => import('../views/work/NewWorkSheet.svelte'),
   link_ticket: () => import('../views/work/LinkTicketSheet.svelte'),
   onboarding: () => import('../views/onboarding/OnboardingSheet.svelte'),

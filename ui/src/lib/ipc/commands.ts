@@ -253,6 +253,10 @@ export interface Commands {
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
   work_left: { args: { id: WorkItemId }; result: WorkItem };
+  /** Start a queued item now, over `claude.max_live`. */
+  work_start_now: { args: { id: WorkItemId }; result: WorkItem };
+  /** The queued item starts next. */
+  work_queue_front: { args: { id: WorkItemId }; result: WorkItem };
   /** Review notes (#133) with `+N/−M since feedback`. */
   work_notes: { args: { id: WorkItemId }; result: ReviewNotes };
   work_note_resolve: { args: { id: WorkItemId; note: number }; result: ReviewNotes };
@@ -394,6 +398,8 @@ export const COMMAND_NAMES = [
   'work_mark_reviewed',
   'work_set_note',
   'work_left',
+  'work_start_now',
+  'work_queue_front',
   'work_notes',
   'work_note_resolve',
   'work_notes_send',
@@ -603,6 +609,8 @@ export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
+export const workStartNow = wrap('work_start_now');
+export const workQueueFront = wrap('work_queue_front');
 export const workNotes = wrap('work_notes');
 export const workNoteResolve = wrap('work_note_resolve');
 export const workNotesSend = wrap('work_notes_send');

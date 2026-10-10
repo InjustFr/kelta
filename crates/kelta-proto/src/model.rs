@@ -533,6 +533,10 @@ pub enum WorkKind {
 pub enum WorkState {
     Planned,
     Starting,
+    /// Worktree ready, waiting for a Claude slot (`claude.max_live`); lowest `pos` starts first.
+    Queued {
+        pos: i32,
+    },
     Active,
     PrOpen,
     /// The PR was merged on the host. `detail`: why the ticket was not moved to Done yet

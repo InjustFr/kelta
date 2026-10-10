@@ -52,7 +52,10 @@ impl WorkService {
             _ if prompt.is_some() && !matches!(item.state, WorkState::Active | WorkState::PrOpen) => {
                 Err(KeltaError::conflict("work item has not finished starting"))
             }
-            WorkState::Planned | WorkState::Starting | WorkState::Failed { .. } => {
+            WorkState::Planned
+            | WorkState::Starting
+            | WorkState::Queued { .. }
+            | WorkState::Failed { .. } => {
                 if let WorkState::Failed { step, .. } = item.state.clone() {
                     self.set_step(&mut item, &step, StepStatus::Pending, None).await?;
                 }
