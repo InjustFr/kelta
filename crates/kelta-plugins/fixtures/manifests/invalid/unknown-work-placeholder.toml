@@ -1,0 +1,12 @@
+# expect: unknown placeholder `{work.nope}`
+id = "badwork"
+name = "X"
+version = "1.2.3"
+kelta_api = "^0.1"
+description = "d"
+author = "a"
+license = "MIT"
+[[contributes.ticket_actions]]
+id = "t"
+title = "T"
+do = [{ action = "toast", text = "{work.nope}" }]
