@@ -1,3 +1,4 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
@@ -6,6 +7,7 @@ import { activeTab } from '$lib/layout';
 import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
 
 import { confirms } from './confirm.svelte';
+import NewSessionSheet from './NewSessionSheet.svelte';
 import {
   activateProject,
   closeFocusedPane,
@@ -166,6 +168,14 @@ describe('panes and tabs', () => {
     await splitFocused('row');
     expect(ui.view).toBeNull();
     expect(calls('session_spawn')).toHaveLength(1);
+  });
+
+  it('a new session started from a global view shows its project, even the active one', async () => {
+    openView('tickets');
+    render(NewSessionSheet, { onclose: () => {} });
+    await fireEvent.click(await screen.findByTestId('new-session-start'));
+    await waitFor(() => expect(ui.view).toBeNull());
+    expect(calls('session_spawn_template')).toHaveLength(1);
   });
 
   it('toggles zoom on the focused pane', () => {
