@@ -18,6 +18,7 @@ use kelta_work::WorkService;
 pub fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .args(["-c", "commit.gpgsign=false", "-c", "user.name=Kelta Test", "-c", "user.email=test@kelta.dev"])
+        .args(["-c", "maintenance.auto=false", "-c", "core.fsync=none"])
         .args(args)
         .current_dir(dir)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -25,6 +26,11 @@ pub fn git(dir: &Path, args: &[&str]) -> String {
         .expect("git runs");
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8_lossy(&out.stdout).trim().to_owned()
+}
+
+fn append(path: &Path, text: &str) {
+    use std::io::Write;
+    std::fs::OpenOptions::new().append(true).open(path).unwrap().write_all(text.as_bytes()).unwrap();
 }
 
 pub fn has_git() -> bool {
@@ -57,24 +63,31 @@ impl Fx {
         std::fs::create_dir_all(&repo).unwrap();
         git(&remote, &["init", "-q", "--bare", "-b", "main"]);
         git(&repo, &["init", "-q", "-b", "main"]);
-        // Kelta's own git calls (rebase) commit too: give the repo an identity (CI has no global one).
-        git(&repo, &["config", "user.name", "Kelta Test"]);
-        git(&repo, &["config", "user.email", "test@kelta.dev"]);
+        // Config written directly: every git spawn costs ~15 ms on macOS. No auto-maintenance (it forks
+        // two processes after each commit/fetch/push, Kelta's own calls included). Kelta's own git
+        // calls (rebase) commit too: give the repo an identity (CI has no global one).
+        let quiet = "[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n[core]\n\tfsync = none\n";
+        append(&remote.join("config"), quiet);
+        append(
+            &repo.join(".git/config"),
+            &format!(
+                "{quiet}[user]\n\tname = Kelta Test\n\temail = test@kelta.dev\n\
+                 [remote \"origin\"]\n\turl = {}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\
+                 [branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n",
+                remote.display()
+            ),
+        );
         std::fs::write(repo.join("README.md"), "hello\n").unwrap();
         std::fs::write(repo.join(".gitignore"), ".env\n.env.*\n").unwrap();
+        std::fs::write(repo.join(".env"), "SECRET=1\n").unwrap();
         git(&repo, &["add", "."]);
         git(&repo, &["commit", "-q", "-m", "init"]);
-        git(&repo, &["remote", "add", "origin", remote.to_str().unwrap()]);
-        git(&repo, &["push", "-q", "-u", "origin", "main"]);
-        std::fs::write(repo.join(".env"), "SECRET=1\n").unwrap();
         // Review head: a commit only reachable through refs/pull/87/head on the remote.
-        git(&repo, &["checkout", "-q", "-b", "pr-src"]);
         std::fs::write(repo.join("feature.txt"), "feature\n").unwrap();
         git(&repo, &["add", "feature.txt"]);
         git(&repo, &["commit", "-q", "-m", "feature"]);
-        git(&repo, &["push", "-q", "origin", "HEAD:refs/pull/87/head"]);
-        git(&repo, &["checkout", "-q", "main"]);
-        git(&repo, &["branch", "-q", "-D", "pr-src"]);
+        git(&repo, &["push", "-q", "origin", "HEAD~1:refs/heads/main", "HEAD:refs/pull/87/head"]);
+        git(&repo, &["reset", "-q", "--hard", "HEAD~1"]);
 
         // Kelta dirs contain a space (macOS "Application Support").
         let dirs = Dirs::under(&root.join("kelta home"));

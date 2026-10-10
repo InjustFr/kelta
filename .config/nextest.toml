@@ -1,0 +1,19 @@
+# The slowest tests start first so they run alongside the short ones instead of being the tail of the run.
+# The RSS checks (kelta-term `history`, `resources`) need no isolation: nextest runs each test in its own
+# process and they measure only that process.
+[[profile.default.overrides]]
+filter = 'package(kelta-term) & binary(history)'
+priority = 100
+
+[[profile.default.overrides]]
+filter = 'package(kelta-work) & test(=saga::crash_after_every_step_resumes_without_duplicates)'
+priority = 90
+
+[[profile.default.overrides]]
+filter = '''
+(package(kelta-term) & (binary(resources) | test(=pty::flood_keeps_inflight_bounded_and_ends_with_a_snapshot)
+                        | test(=pty::acked_views_never_time_out)))
+| (package(kelta-work) & (test(/^fix_loop::/) | test(/^ship::/) | test(=saga::collision_suffix_and_reuse)))
+| (package(kelta-secrets) & test(=command_refs_run_without_a_shell))
+'''
+priority = 80

@@ -165,25 +165,32 @@ fn resize_delivers_sigwinch() {
 
 #[test]
 fn input_echo_and_eagain_queue() {
-    for b in backends() {
-        let h = host(b);
-        let dir = tempfile::tempdir().unwrap();
-        let out = dir.path().join("in.bin");
-        let script =
-            format!("stty raw -echo; echo READY; sleep 1; head -c 300000 > '{}'; echo DONE", out.display());
-        let ev = sh(&h, "eagain", &script);
-        wait_text(&h, "eagain", "READY");
-        // The child does not read for a second: most of this is queued (EAGAIN) and drained later.
-        let blob: Vec<u8> = (0..300_000u32).map(|i| b'a' + (i % 26) as u8).collect();
-        let t0 = Instant::now();
-        for c in blob.chunks(10_000) {
-            h.write(&SessionId::new("eagain"), c).unwrap();
+    // Backends side by side: each waits out the child's `sleep 1`.
+    std::thread::scope(|s| {
+        for b in backends() {
+            s.spawn(move || {
+                let h = host(b);
+                let dir = tempfile::tempdir().unwrap();
+                let out = dir.path().join("in.bin");
+                let script = format!(
+                    "stty raw -echo; echo READY; sleep 1; head -c 300000 > '{}'; echo DONE",
+                    out.display()
+                );
+                let ev = sh(&h, "eagain", &script);
+                wait_text(&h, "eagain", "READY");
+                // The child does not read for a second: most of this is queued (EAGAIN) and drained later.
+                let blob: Vec<u8> = (0..300_000u32).map(|i| b'a' + (i % 26) as u8).collect();
+                let t0 = Instant::now();
+                for c in blob.chunks(10_000) {
+                    h.write(&SessionId::new("eagain"), c).unwrap();
+                }
+                assert!(t0.elapsed() < Duration::from_millis(500), "write blocked");
+                wait_text(&h, "eagain", "DONE");
+                assert_eq!(std::fs::read(&out).unwrap(), blob);
+                assert_eq!(ev.wait_exit(T), (Some(0), None));
+            });
         }
-        assert!(t0.elapsed() < Duration::from_millis(500), "write blocked");
-        wait_text(&h, "eagain", "DONE");
-        assert_eq!(std::fs::read(&out).unwrap(), blob);
-        assert_eq!(ev.wait_exit(T), (Some(0), None));
-    }
+    });
 }
 
 #[test]
