@@ -60,6 +60,8 @@ describe('PeekPopover', () => {
   });
 
   it('sends a typed reply as a bracketed paste then Enter', async () => {
+    // No menu: the hook says waiting_user, so the numbered tail is not a menu.
+    sessions.upsert({ ...sessions.get(ASKING)!, status: 'waiting_user' });
     render(PeekPopover);
     peek.open(ASKING, null, true);
     flushSync();
@@ -67,6 +69,18 @@ describe('PeekPopover', () => {
     await fireEvent.input(input, { target: { value: 'use \x1bpostgres' } });
     await fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(writes()).toEqual(['\x1b[200~use postgres\x1b[201~', '\r']));
+  });
+
+  it('never sends a typed reply over a menu (the Enter would confirm option 1)', async () => {
+    render(PeekPopover);
+    peek.open(ASKING, null, true);
+    flushSync();
+    await waitFor(() => expect(screen.getByTestId('peek-menu')).toBeTruthy());
+    const input = screen.getByTestId('peek-reply');
+    await fireEvent.input(input, { target: { value: 'no, use the staging db' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    expect(writes()).toEqual([]);
+    expect(screen.getByTestId('peek')).toBeTruthy();
   });
 
   it('Esc closes; Tab moves to the next session needing input', async () => {

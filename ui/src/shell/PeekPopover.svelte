@@ -94,7 +94,8 @@
     if (e.key === 'Escape') peek.close();
     else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) jump();
     else if (e.key === 'Tab' && !e.shiftKey) peek.next();
-    else if (e.key === 'Enter' && live && reply.trim()) void run(() => sendReply(id, reply));
+    // Never paste over a menu: it ignores the paste and the \r confirms the highlighted option.
+    else if (e.key === 'Enter' && live && !menu && reply.trim()) void run(() => sendReply(id, reply));
     else if (menu && !reply && menu.some((o) => o.key === e.key))
       void run(() => sessionWrite(id, e.key)); // digits go raw
     else return;
@@ -147,7 +148,7 @@
       />
     {/if}
     <footer>
-      {#if live}<span><Kbd chord="enter" /> Send</span>{/if}
+      {#if live && !menu}<span><Kbd chord="enter" /> Send</span>{/if}
       <span><Kbd chord="tab" /> Next waiting</span>
       <span><Kbd chord="mod+enter" /> Go to</span>
       <span><Kbd chord="escape" /> Close</span>
