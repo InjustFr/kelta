@@ -617,8 +617,8 @@ impl Core {
         Ok(TicketPage { items, next, stale, errors })
     }
 
-    /// `tracker_search`: each list query of a scope searched by its tracker. A tracker that cannot search
-    /// (or fails to) and an empty `text` fall back to the cached first page, filtered by key and title.
+    /// `tracker_search`: each list query of a scope searched by its tracker, plus its cached first page
+    /// filtered by key and title (all of it for an empty `text`).
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
         self.rt.capture();
         if let Scope::Project { id } = &scope
@@ -630,17 +630,20 @@ impl Core {
         let needle = key.to_lowercase();
         let queries = self.ticket_queries(&scope, None, None);
         let found = futures::future::join_all(queries.iter().map(|q| async {
+            let mut items = Vec::new();
             if !key.is_empty()
                 && let Ok(t) = self.tracker_of(&q.account)
-                && let Ok(items) = t.search(&q.view, key).await
+                && let Ok(found) = t.search(&q.view, key).await
             {
-                return items;
+                items = found;
             }
+            // the cached page always joins in: provider searches skip keys and recently-Done tickets
             let (page, _, _) = self.load_ticket_query(q, None, false).await;
             let hit = |t: &Ticket| {
                 t.r#ref.key.to_lowercase().contains(&needle) || t.title.to_lowercase().contains(&needle)
             };
-            page.map(|p| p.items).unwrap_or_default().into_iter().filter(hit).collect()
+            items.extend(page.map(|p| p.items).unwrap_or_default().into_iter().filter(hit));
+            items
         }))
         .await;
         let pages =

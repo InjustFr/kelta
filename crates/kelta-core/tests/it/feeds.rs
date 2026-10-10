@@ -665,6 +665,16 @@ async fn all_scope_pages_each_query_and_search_reaches_past_the_first_page() {
 }
 
 #[tokio::test]
+async fn search_by_key_prefix_still_reads_the_cached_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // FakeTracker::search matches titles only, like Jira `text ~`: the key hits come from the cache
+    let hits = e.h.core.tracker_search(Scope::Project { id: "shop".into() }, "SHOP-14").await.unwrap();
+    let keys: Vec<_> = hits.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
+    assert!(keys.contains(&"SHOP-141") && keys.contains(&"SHOP-142"), "{keys:?}");
+}
+
+#[tokio::test]
 async fn visible_list_refreshes_after_a_saga_transition() {
     use kelta_proto::model::{OpenPaneRequest, PaneContent, Placement, TicketsMode};
     let tmp = tempfile::tempdir().unwrap();

@@ -138,6 +138,26 @@ async fn drained_window_on_a_2xx_blocks_following_calls() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn drained_search_quota_does_not_block_the_account() {
+    let server = MockServer::start().await;
+    let reset = time::OffsetDateTime::now_utc().unix_timestamp() + 90;
+    let drained = |status| {
+        ResponseTemplate::new(status)
+            .insert_header("x-ratelimit-resource", "search")
+            .insert_header("x-ratelimit-remaining", "0")
+            .insert_header("x-ratelimit-reset", reset.to_string().as_str())
+    };
+    Mock::given(path("/ok")).respond_with(drained(200)).mount(&server).await;
+    Mock::given(path("/limited")).respond_with(drained(403)).expect(1).mount(&server).await;
+    let c = ctx();
+    c.send_text(HttpRequest::get(format!("{}/ok", server.uri()))).await.unwrap();
+    assert!(c.blocked_for().is_none());
+    let e = c.send_text(HttpRequest::get(format!("{}/limited", server.uri()))).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::RateLimited);
+    assert!(c.blocked_for().is_none());
+}
+
+#[tokio::test(start_paused = true)]
 async fn transient_502_is_retried_with_jittered_backoff_for_get_only() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
