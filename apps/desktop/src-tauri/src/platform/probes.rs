@@ -376,7 +376,8 @@ mod tests {
         std::fs::write(&exe, "#!/bin/sh\necho 'faketool 3.4.5'\n").unwrap();
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
         // A test thread forking while the script was open for writing makes exec fail with ETXTBSY
-        // until that child execs; wait it out so the probe sees the script, not the race.
+        // until that child execs; wait it out so the probe sees the script, not the race. This first exec
+        // also pays macOS's slow first-run scan of a fresh file outside the probe's 3 s limit.
         for _ in 0..50 {
             match std::process::Command::new(&exe).output() {
                 Err(e) if e.raw_os_error() == Some(26) => tokio::time::sleep(Duration::from_millis(20)).await,
