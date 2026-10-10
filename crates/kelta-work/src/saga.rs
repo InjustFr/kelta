@@ -494,6 +494,11 @@ impl WorkService {
             return Err(KeltaError::invalid(format!("work item {id} has no start journal")));
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
+        // A queued item that goes back through the saga keeps its place in the queue.
+        let queued_pos = match item.state {
+            WorkState::Queued { pos } => Some(pos),
+            _ => None,
+        };
         item.state = WorkState::Starting;
         self.save(&mut item).await?;
         for step in WORK_STEPS {
@@ -509,7 +514,11 @@ impl WorkService {
                     .any(|s| matches!(s.kind, SlotKind::Claude { .. }))
                 && !self.admit(&env.core, id)
             {
-                item.state = WorkState::Queued { pos: self.next_queue_pos().await? };
+                let pos = match queued_pos {
+                    Some(p) => p,
+                    None => self.next_queue_pos().await?,
+                };
+                item.state = WorkState::Queued { pos };
                 self.save(&mut item).await?;
                 return Ok(item);
             }

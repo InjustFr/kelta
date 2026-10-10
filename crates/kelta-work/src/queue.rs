@@ -50,12 +50,17 @@ impl WorkService {
         let live = sessions
             .iter()
             .filter(|s| s.kind == SessionKind::Claude && s.lifecycle == Lifecycle::Live)
-            .filter(|s| s.work_item_id.as_ref().is_none_or(|w| !starting.contains(w)))
+            // The item's own Claude (a step retry on an Active item) does not compete for its slot.
+            .filter(|s| s.work_item_id.as_ref().is_none_or(|w| w != id && !starting.contains(w)))
             .count()
             + starting.len();
+        // Windows already reset are stale (same rule as the UI's `latestWindow`).
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let five_hour = sessions
             .iter()
-            .filter_map(|s| s.claude.as_ref()?.usage.as_ref()?.five_hour.as_ref().map(|w| w.used_percentage))
+            .filter_map(|s| s.claude.as_ref()?.usage.as_ref()?.five_hour.as_ref())
+            .filter(|w| w.resets_at > now)
+            .map(|w| w.used_percentage)
             .reduce(f64::max);
         let ok = may_start(live, settings.claude.max_live, five_hour, settings.claude.queue_hold_pct);
         if ok {

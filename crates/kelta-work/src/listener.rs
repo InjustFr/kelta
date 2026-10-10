@@ -81,6 +81,10 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     {
                         tracing::debug!(error = %e.message, "rebase re-read on Stop failed");
                     }
+                    // Usage may have changed (a 5h window reset): re-check a held queue.
+                    if stop {
+                        svc.kick_queue();
+                    }
                 });
                 last_hook.insert(key, task);
             }

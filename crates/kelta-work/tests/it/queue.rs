@@ -52,6 +52,9 @@ async fn cap_queues_with_worktrees_then_dequeues_in_order() {
         states,
         [WorkState::Active, WorkState::Active, WorkState::Queued { pos: 0 }, WorkState::Queued { pos: 1 }]
     );
+    // Start work again on a queued item: it keeps its place.
+    let again = w.resume(&items[2].id).await.unwrap();
+    assert_eq!(again.state, WorkState::Queued { pos: 0 });
     assert_eq!(live_claude(&fx).len(), 2);
     assert_eq!(fx.worktree_count(), 5, "main + one worktree per item, queued ones included");
     let q = &items[2];
@@ -122,10 +125,16 @@ async fn hold_threshold_keeps_items_queued() {
     let sid = live_claude(&fx)[0].id.clone();
     let mut s = fx.core.sessions().into_iter().find(|s| s.id == sid).unwrap();
     s.claude.as_mut().unwrap().usage = Some(kelta_proto::model::ClaudeUsage {
-        five_hour: Some(kelta_proto::model::RateWindow { used_percentage: 91.0, resets_at: 0 }),
+        five_hour: Some(kelta_proto::model::RateWindow { used_percentage: 91.0, resets_at: i64::MAX }),
         ..Default::default()
     });
-    fx.core.insert_session(s);
+    fx.core.insert_session(s.clone());
     let b = start(&w, "h/b").await;
     assert_eq!(b.state, WorkState::Queued { pos: 0 }, "held above 80% of the 5h window");
+
+    // The window resets: its stale 91% no longer holds, and the next exit drains the queue.
+    s.claude.as_mut().unwrap().usage.as_mut().unwrap().five_hour.as_mut().unwrap().resets_at = 0;
+    fx.core.insert_session(s);
+    fx.core.exit_session(&sid, 0);
+    wait_active(&fx, &b.id).await;
 }
