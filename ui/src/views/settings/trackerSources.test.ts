@@ -1,6 +1,7 @@
 // Settings → Sources (each source's Board block, label, projects, routes), Settings → Projects'
 // "Fed by", and the hand-offs of settings.open.
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
@@ -150,6 +151,13 @@ describe('Settings → Sources', () => {
     mountSources();
     await waitFor(() => expect(seen).toHaveBeenCalled());
     expect((seen.mock.contexts[0] as HTMLElement).dataset.sourceCard).toBe('billing');
+    // a save replaces the sources list: it must not scroll back to the card
+    const label = card('shop').getByLabelText('Label');
+    await fireEvent.input(label, { target: { value: 'Renamed' } });
+    await fireEvent.change(label);
+    await waitFor(() => expect(shop()?.label).toBe('Renamed'));
+    await tick();
+    expect(seen).toHaveBeenCalledTimes(1);
     await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
     expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: {} });
   });

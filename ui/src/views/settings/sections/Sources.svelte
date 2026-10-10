@@ -40,13 +40,13 @@
     MATCH.find((m) => r.match[m.value] != null)?.value ?? 'component';
 
   // Settings → Sources from a toast or a "Fed by" link: that source's card comes into view.
-  const wanted = takeSourceRequest();
+  let wanted = takeSourceRequest();
   $effect(() => {
-    if (!wanted || !all.some((s) => s.id === wanted)) return;
+    const id = wanted;
+    if (!id || !all.some((s) => s.id === id)) return;
+    wanted = null; // once: later saves replace `all` and must not scroll back
     void tick().then(() =>
-      document
-        .querySelector(`[data-source-card="${CSS.escape(wanted)}"]`)
-        ?.scrollIntoView?.({ block: 'start' }),
+      document.querySelector(`[data-source-card="${CSS.escape(id)}"]`)?.scrollIntoView?.({ block: 'start' }),
     );
   });
 
