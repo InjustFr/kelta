@@ -401,8 +401,15 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     )
     .await;
     let log: String = (1..=60).map(|i| format!("line {i}\n")).collect();
+    // GitHub answers a 302 to a signed blob URL on another host ("localhost" vs "127.0.0.1").
+    let blob = server.uri().replace("127.0.0.1", "localhost") + "/blob/9";
     Mock::given(method("GET"))
         .and(path("/repos/acme/shop/actions/jobs/9/logs"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", blob.as_str()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/blob/9"))
         .respond_with(ResponseTemplate::new(200).set_body_string(log))
         .mount(&server)
         .await;
@@ -424,6 +431,9 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     let tail = c.log_tail.as_deref().unwrap();
     assert_eq!(tail.lines().count(), 40);
     assert!(tail.starts_with("line 21") && tail.ends_with("line 60"));
+    let blob_req =
+        server.received_requests().await.unwrap().into_iter().find(|r| r.url.path() == "/blob/9").unwrap();
+    assert!(!blob_req.headers.contains_key("authorization"), "the token never goes to the blob host");
 }
 
 #[tokio::test]

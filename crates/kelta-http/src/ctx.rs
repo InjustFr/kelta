@@ -482,8 +482,9 @@ pub fn status_error(status: u16, headers: &BTreeMap<String, String>, body: &str)
     while !body.is_char_boundary(cut) {
         cut -= 1;
     }
-    let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}"))
-        .with_detail(serde_json::json!({ "status": status, "body": &body[..cut] }));
+    let mut e = KeltaError::new(code, format!("HTTP {status}: {snippet}")).with_detail(
+        serde_json::json!({ "status": status, "body": &body[..cut], "location": headers.get("location") }),
+    );
     if code == ErrorCode::RateLimited {
         e.retry_after_ms =
             wait_hint(headers).or_else(|| linear_reset(status, headers, body)).map(|d| d.as_millis() as u64);

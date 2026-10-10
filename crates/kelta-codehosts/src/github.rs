@@ -228,9 +228,16 @@ impl GithubHost {
             return None;
         }
         let id = run.get("id").and_then(Value::as_u64)?;
-        // 302 to a signed blob URL; reqwest follows it and drops the Authorization header.
+        // 302 to a signed blob URL on another host: the client stops cross-host redirects, so
+        // fetch the `location` ourselves without credentials.
         let url = self.repo_url(repo, &format!("/actions/jobs/{id}/logs"));
-        let text = self.auth.send_text(HttpRequest::get(url)).await.ok()?.body;
+        let text = match self.auth.send_text(HttpRequest::get(url)).await {
+            Ok(r) => r.body,
+            Err(e) => {
+                let loc = e.detail.as_ref()?.get("location")?.as_str()?;
+                self.auth.http().send_text(HttpRequest::get(loc)).await.ok()?.body
+            }
+        };
         Some(log_tail(&text))
     }
 
