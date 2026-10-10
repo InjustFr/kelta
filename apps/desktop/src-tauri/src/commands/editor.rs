@@ -29,3 +29,18 @@ pub async fn editor_send_selection(
 ) -> Res<()> {
     core.work().send_selection(&editor_session, &claude_session).await
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn editor_quickfix(
+    core: State<'_, Arc<Core>>,
+    target: EditorTarget,
+    files: Vec<PathBuf>,
+) -> Res<()> {
+    core.work().editor_quickfix(target, &files).await
+}
+
+/// Terminal file links: which of these absolute paths exist (one call per hovered line).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn fs_exists(paths: Vec<PathBuf>) -> Res<Vec<bool>> {
+    Ok(paths.iter().map(|p| p.is_absolute() && p.exists()).collect())
+}

@@ -87,6 +87,15 @@ vim.t.kelta_ide_diff = { file = proposed, buf = vim.api.nvim_get_current_buf() }
 return proposed
 "#;
 
+/// `nvim_exec_lua` body: replace the quickfix list with `files` (line 1 each), so `]q` / `[q` walk them.
+pub const LUA_QUICKFIX: &str = r#"
+local title, files = ...
+local items = {}
+for _, f in ipairs(files) do items[#items + 1] = { filename = f, lnum = 1 } end
+vim.fn.setqflist({}, ' ', { title = title, items = items })
+return #items
+"#;
+
 /// `nvim_exec_lua` body: `:wall | mksession! <file>`.
 pub const LUA_MKSESSION: &str = r#"
 local file = ...

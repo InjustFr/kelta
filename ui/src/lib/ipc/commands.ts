@@ -236,6 +236,9 @@ export interface Commands {
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
+  editor_quickfix: { args: { target: EditorTarget; files: string[] }; result: null };
+  /** Which absolute paths exist (terminal file links). */
+  fs_exists: { args: { paths: string[] }; result: boolean[] };
   // ---- tools / plugins / triggers ----------------------------------------------------------
   tool_list: { args: { project_id: ProjectId }; result: ToolInfo[] };
   tool_check: { args: { tool_id: ToolId }; result: ToolCheck };
@@ -362,6 +365,8 @@ export const COMMAND_NAMES = [
   'work_mark_reviewed',
   'editor_open',
   'editor_send_selection',
+  'editor_quickfix',
+  'fs_exists',
   'tool_list',
   'tool_check',
   'tool_open',
@@ -560,6 +565,8 @@ export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
+export const editorQuickfix = wrap('editor_quickfix');
+export const fsExists = wrap('fs_exists');
 
 // ---- tools / plugins / triggers -------------------------------------------------------------
 export const toolList = wrap('tool_list');

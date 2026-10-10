@@ -117,6 +117,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
 | `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
+| `editor.quickfix_claude` (palette "Quickfix: files Claude touched": the focused tab's Claude `files_touched` become its nvim's quickfix list, `]q` / `[q`) | unbound | unbound | |
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
 | `settings.open` | Cmd+, | Ctrl+Shift+, | `,` |
