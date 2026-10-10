@@ -155,6 +155,11 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `prompt` | `text`, `yes = [ActionDef]`, `no? = [ActionDef]` | in-app confirm toast with buttons | — |
 | `command` | `id` | run a contributed command | (that command's) |
 
+A command's `when` decides where the palette offers it: `terminal` with a focused terminal pane; `ticket` /
+`review` with a ticket / review detail pane focused, run with that ticket / PR; `work` with a focused work
+item tab, run with that item (as a work action, §4); `always` (or none) everywhere. Ticket, review and work
+commands are hidden on list panes and while Now or another global view is shown (no single subject).
+
 ### 3.2 Examples
 
 ```toml
@@ -226,11 +231,11 @@ Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~
 | `activation` | list(`onStartup`\|`onCommand:<id>`\|`onScreen:<id>`\|`onEvent:<glob>`\|`onProjectOpen`) | no | v0.1: controls when triggers subscribe and screens are offered; nothing runs before activation |
 | `[[contributes.tools]]` | ToolDef | | namespaced `<plugin>/<id>` |
 | `[[contributes.triggers]]` | TriggerDef | | namespaced |
-| `[[contributes.commands]]` | `{id, title, do: [ActionDef], when?: "terminal"\|"ticket"\|"review"\|"always"}` | | palette entries |
+| `[[contributes.commands]]` | `{id, title, do: [ActionDef], when?: "terminal"\|"ticket"\|"review"\|"work"\|"always"}` | | palette entries (§3.1) |
 | `[[contributes.keybindings]]` | `{command, key: Chord}` | | user bindings win; conflicts reported |
 | `[[contributes.session_templates]]` | session template | | |
-| `[[contributes.screens]]` | ScreenDef | | §4.1 |
-| `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]` | `{id, title, do: [ActionDef]}` | | after the built-ins of the ticket detail action bar / the review detail buttons (one ghost button, or a `Plugins ▾` menu when there are several; no key). Ticket actions get the ticket and its work item (`{branch}`, `{worktree}`, `{work.*}`); review actions get `{pr.*}`. They run in the ticket's work item's project, else the ticket's or PR's first project, the pane's, then the active project; an action with an `open_screen`, `open_tool` or `spawn_session` step shows that project first |
+| `[[contributes.screens]]` | ScreenDef | | §4.1; each gets an `Open <title>` palette entry (command `<plugin>/open:<screen>`, no `ui.open` needed: the user opens it), project screens in the active project, global ones in Home, that project shown first |
+| `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]`, `[[contributes.work_actions]]` | `{id, title, do: [ActionDef]}` | | commands `<plugin>/<id>` with `when = ticket\|review\|work` (also in the palette, §3.1). Ticket/review actions come after the built-ins of the ticket detail action bar / the review detail buttons (one ghost button, or a `Plugins ▾` menu when there are several; no key); work actions after a separator at the end of the work menu (⌘., no letters), with the work item (`{branch}`, `{worktree}`, `{work.*}`) in its project. Ticket actions get the ticket and its work item (`{branch}`, `{worktree}`, `{work.*}`); review actions get `{pr.*}`. They run in the ticket's work item's project, else the ticket's or PR's first project, the pane's, then the active project; an action with an `open_screen`, `open_tool` or `spawn_session` step shows that project first |
 | `[contributes.settings]` | `{schema = "settings.schema.json"}` | | flat JSON Schema mounted at `plugins.<id>`, validated, rendered in Settings |
 | `[provider]` | ProviderDef | | process (KPP) tracker / code-host provider, §9; needs the `provider` permission |
 

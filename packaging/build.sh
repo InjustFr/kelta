@@ -34,5 +34,7 @@ fi
 pnpm install --frozen-lockfile
 if [[ "$(uname)" == Darwin ]]; then bundles=dmg; else bundles=deb,appimage; fi
 cd apps/desktop/src-tauri
-../../../ui/node_modules/.bin/tauri build --config ../../../packaging/tauri.release.json \
+# CI=true makes tauri pass --skip-jenkins to bundle_dmg.sh: no Finder AppleScript, which otherwise
+# opens the volume in Finder and leaves it mounted (on the Desktop) after every build.
+CI=true ../../../ui/node_modules/.bin/tauri build --config ../../../packaging/tauri.release.json \
   --bundles "$bundles" "${target[@]}"

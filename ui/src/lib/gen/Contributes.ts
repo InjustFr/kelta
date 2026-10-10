@@ -8,4 +8,8 @@ import type { SettingsContribution } from "./SettingsContribution";
 import type { ToolDef } from "./ToolDef";
 import type { TriggerDef } from "./TriggerDef";
 
-export type Contributes = { tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, keybindings: Array<KeybindingDef>, session_templates: Array<SessionTemplate>, screens: Array<ScreenDef>, ticket_actions: Array<ActionButtonDef>, review_actions: Array<ActionButtonDef>, settings: SettingsContribution | null, };
+export type Contributes = { tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, keybindings: Array<KeybindingDef>, session_templates: Array<SessionTemplate>, screens: Array<ScreenDef>, ticket_actions: Array<ActionButtonDef>, review_actions: Array<ActionButtonDef>, 
+/**
+ * Rows of the work menu (⌘.), after the built-ins.
+ */
+work_actions: Array<ActionButtonDef>, settings: SettingsContribution | null, };

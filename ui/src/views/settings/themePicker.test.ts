@@ -38,7 +38,7 @@ describe('ThemePicker', () => {
       within(grid('Dark theme'))
         .getAllByRole('option')
         .map((o) => o.dataset.themeId),
-    ).toEqual(['bezel-dark', 'sol']);
+    ).toEqual(['bezel-dark', 'solarized-dark', 'gruvbox-dark', 'nord', 'dracula', 'catppuccin-mocha', 'sol']);
     expect(card('Dark theme', 'bezel-dark').getAttribute('aria-selected')).toBe('true');
     expect(card('Dark theme', 'sol').getAttribute('aria-selected')).toBe('false');
     expect((card('Dark theme', 'sol').querySelector('.strip') as HTMLElement).style.background).toBe(
@@ -51,8 +51,8 @@ describe('ThemePicker', () => {
   it('moves focus with arrows without writing, and writes the slot on Enter', async () => {
     render(ThemePicker);
     const before = writes().length;
-    card('Dark theme', 'bezel-dark').focus();
-    await fireEvent.keyDown(card('Dark theme', 'bezel-dark'), { key: 'ArrowRight' });
+    card('Dark theme', 'catppuccin-mocha').focus();
+    await fireEvent.keyDown(card('Dark theme', 'catppuccin-mocha'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(card('Dark theme', 'sol'));
     expect(card('Dark theme', 'sol').tabIndex).toBe(0);
     expect(writes()).toHaveLength(before);
@@ -82,7 +82,7 @@ describe('ThemePicker', () => {
         ['settings_reset', 'app.dark_theme'],
       ]),
     );
-    await waitFor(() => expect(within(grid('Dark theme')).getAllByRole('option')).toHaveLength(1));
+    await waitFor(() => expect(within(grid('Dark theme')).getAllByRole('option')).toHaveLength(6));
     expect(settings.value()?.app.dark_theme).toBe('bezel-dark');
     expect(card('Dark theme', 'bezel-dark').getAttribute('aria-selected')).toBe('true');
   });
@@ -122,6 +122,14 @@ describe('ThemePicker', () => {
       await waitFor(() => expect(card('Dark theme', 'night-owl').getAttribute('aria-selected')).toBe('true'));
     });
 
+    it('imports a terminal theme file with no extension', async () => {
+      render(ThemePicker);
+      await pick('background = #fdf6e3\npalette = 4=#268bd2\n', 'solarized-day');
+      await waitFor(() => expect(lastToast()).toBe('Imported Solarized Day (used in light mode)'));
+      expect(writes().at(-2)).toMatchObject({ args: { path: 'themes.solarized-day' } });
+      expect(writes().at(-1)).toMatchObject({ args: { path: 'app.light_theme', value: 'solarized-day' } });
+    });
+
     it('asks before replacing a user theme with the same id', async () => {
       render(ThemePicker);
       const before = writes().length;
@@ -146,6 +154,12 @@ describe('ThemePicker', () => {
       await pick('{"include": "./dark_plus.json"}');
       await waitFor(() =>
         expect(lastToast()).toMatch(/^Could not import the theme: This theme extends \.\/dark_plus\.json\./),
+      );
+      await pick('background #000000', 'notes');
+      await waitFor(() =>
+        expect(lastToast()).toBe(
+          'Could not import the theme: Kelta could not recognise this theme file. Supported: VS Code, iTerm2, Ghostty, Kitty, Alacritty, base16.',
+        ),
       );
       await pick('x'.repeat(5 * 1024 * 1024 + 1));
       await waitFor(() =>

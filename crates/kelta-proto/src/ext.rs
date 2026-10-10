@@ -431,6 +431,7 @@ pub enum CommandWhen {
     Terminal,
     Ticket,
     Review,
+    Work,
     Always,
 }
 
@@ -559,7 +560,7 @@ pub struct KeybindingDef {
     pub key: Chord,
 }
 
-/// Button on ticket/review detail panes.
+/// Button on ticket/review detail panes, row of the work menu.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionButtonDef {
@@ -587,6 +588,8 @@ pub struct Contributes {
     pub screens: Vec<ScreenDef>,
     pub ticket_actions: Vec<ActionButtonDef>,
     pub review_actions: Vec<ActionButtonDef>,
+    /// Rows of the work menu (⌘.), after the built-ins.
+    pub work_actions: Vec<ActionButtonDef>,
     pub settings: Option<SettingsContribution>,
 }
 

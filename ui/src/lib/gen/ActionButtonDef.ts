@@ -2,6 +2,6 @@
 import type { ActionDef } from "./ActionDef";
 
 /**
- * Button on ticket/review detail panes.
+ * Button on ticket/review detail panes, row of the work menu.
  */
 export type ActionButtonDef = { id: string, title: string, do: Array<ActionDef>, };

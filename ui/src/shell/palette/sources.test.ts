@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { sheetRegistry } from '$app/registry';
 
+import type { ActionButtonDef, PaneContent, PluginInfo, ScreenDef, TemplateCtx } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, sessions, settings, tools, ui, work } from '$lib/stores';
+import { layout, plugins, projects, reviews, sessions, settings, tools, ui, work } from '$lib/stores';
+import { idle } from '$lib/stores/loadable';
+import { reviewKey } from '$lib/stores/reducers';
 
 import '../actions';
 import '../../views/tools/actions';
@@ -14,6 +17,7 @@ import Switcher from './Switcher.svelte';
 import {
   actionItems,
   buildItems,
+  commandItems,
   GROUP_ORDER,
   itemText,
   projectItems,
@@ -34,6 +38,153 @@ beforeEach(async () => {
   await Promise.all([projects.load(), sessions.load(), work.load(), settings.load()]);
   await tools.load('shop');
   await plugins.load();
+  ui.view = null;
+});
+
+/** The active project's only tab: one pane showing `content`, the tab owned by `workItemId`. */
+function focus(content: PaneContent, workItemId: string | null = null): void {
+  const id = projects.activeId!;
+  const root = { type: 'pane', id: 'pane-1', content };
+  layout.byProject = {
+    [id]: {
+      project_id: id,
+      active_tab: 'tab-1',
+      rev: 0,
+      tabs: [
+        {
+          id: 'tab-1',
+          title: 'T',
+          work_item_id: workItemId,
+          focused_pane: 'pane-1',
+          zoomed_pane: null,
+          root,
+        },
+      ],
+    },
+  } as unknown as typeof layout.byProject;
+}
+
+const say = (id: string): ActionButtonDef => ({
+  id,
+  title: id,
+  do: [{ action: 'toast', text: 'x', level: null }],
+});
+
+/** One enabled plugin `qa` with one ticket, review and work action and two screens. */
+function withPlugin(enabled = true): void {
+  const base = mock.state.plugins[0] as PluginInfo;
+  const screen = (id: string, scope: ScreenDef['scope']): ScreenDef => ({
+    id,
+    title: id.toUpperCase(),
+    icon: null,
+    entry: 'x.html',
+    scope,
+    placement: ['tab'],
+    keep_alive: false,
+    min_width: null,
+  });
+  const p = {
+    ...base,
+    id: 'qa',
+    name: 'QA',
+    enabled,
+    contributes: {
+      ...base.contributes,
+      commands: [],
+      screens: [screen('stats', 'project'), screen('all', 'global')],
+      ticket_actions: [say('t')],
+      review_actions: [say('r')],
+      work_actions: [say('w')],
+    },
+  };
+  plugins.plugins = { ...idle(), data: [p], fetchedAt: Date.now() };
+}
+
+const qa = () => commandItems().filter((i) => i.detail === 'QA');
+const runs = () =>
+  mock.calls
+    .filter((c) => c.cmd === 'command_run')
+    .map((c) => c.args as { command_id: string; ctx: TemplateCtx });
+
+describe('plugin subject actions in the palette', () => {
+  it('lists a ticket action only on a ticket detail pane and runs it with that ticket', async () => {
+    withPlugin();
+    const ticket = { account: 'jira-acme', key: 'SHOP-142', id: '1' };
+    focus({
+      kind: 'tickets',
+      scope: { kind: 'project', id: 'shop' },
+      view_id: null,
+      mode: 'list',
+      who: null,
+    } as PaneContent);
+    expect(qa().map((i) => i.label)).toEqual(['Open STATS', 'Open ALL']);
+    focus({ kind: 'ticket_detail', ticket });
+    const t = qa().find((i) => i.label === 't')!;
+    await t.run();
+    await waitFor(() => expect(runs()).toHaveLength(1));
+    expect(runs()[0]).toMatchObject({ command_id: 'qa/t', ctx: { ticket } });
+    // Now hides the project: its focused ticket detail is no subject.
+    ui.view = 'now';
+    expect(qa().map((i) => i.label)).toEqual(['Open STATS', 'Open ALL']);
+  });
+
+  it('runs a ticket action with its work item and a review action with the pr.* vars', async () => {
+    withPlugin();
+    const w = work.all.find((x) => x.ticket && x.state.kind !== 'finished')!;
+    focus({ kind: 'ticket_detail', ticket: w.ticket! });
+    await qa()
+      .find((i) => i.label === 't')!
+      .run();
+    await waitFor(() => expect(runs()).toHaveLength(1));
+    expect(runs()[0]).toMatchObject({
+      ctx: { ticket: w.ticket, work_item_id: w.id, extra: { project_id: w.project_id } },
+    });
+    const rv = mock.state.reviews[0]!.review;
+    reviews.details[reviewKey(rv.ref)] = { ...idle(), data: { review: rv } } as never;
+    focus({ kind: 'review_detail', review: rv.ref });
+    await qa()
+      .find((i) => i.label === 'r')!
+      .run();
+    await waitFor(() => expect(runs()).toHaveLength(2));
+    expect(runs()[1]!.ctx).toMatchObject({
+      review: rv.ref,
+      extra: { 'pr.head': rv.source_branch, 'pr.base': rv.target_branch, 'pr.title': rv.title },
+    });
+  });
+
+  it('lists a work action only with a focused work item and runs it with the item and its project', async () => {
+    withPlugin();
+    focus({ kind: 'empty' });
+    expect(qa().some((i) => i.label === 'w')).toBe(false);
+    const w = work.all[0]!;
+    focus({ kind: 'empty' }, w.id);
+    await qa()
+      .find((i) => i.label === 'w')!
+      .run();
+    await waitFor(() => expect(runs()).toHaveLength(1));
+    expect(runs()[0]).toMatchObject({
+      command_id: 'qa/w',
+      ctx: { work_item_id: w.id, extra: { project_id: w.project_id } },
+    });
+  });
+
+  it('opens project screens in the active project and global ones in Home', async () => {
+    withPlugin();
+    const active = projects.activeId; // the run shows the screen's project
+    expect(active).toBe('shop');
+    for (const i of qa()) await i.run();
+    await waitFor(() => expect(runs()).toHaveLength(2));
+    expect(runs().map((r) => [r.command_id, r.ctx.extra.project_id])).toEqual([
+      ['qa/open:stats', active],
+      ['qa/open:all', 'home'],
+    ]);
+  });
+
+  it('a disabled plugin contributes nothing', () => {
+    withPlugin(false);
+    focus({ kind: 'empty' }, work.all[0]!.id);
+    expect(qa()).toEqual([]);
+  });
 });
 
 describe('palette sources', () => {
