@@ -37,6 +37,13 @@ async fn branch_script_installs_opens_for_the_work_item_and_runs_its_script() {
         let PaneContent::PluginScreen { screen_id, params, .. } = req.content else { panic!("{cmd}") };
         assert_eq!((screen_id.as_str(), params), ("run", json!({ "work": w.id, "ticket": key })), "{cmd}");
     }
+    // A ticket without a work item: `{work.id}` expands to "", so the screen looks the item up by ticket.
+    let ctx = TemplateCtx { ticket: w.ticket.clone(), ..Default::default() };
+    env.host.command_run("branch-script/run-on-ticket", ctx).await.unwrap();
+    let PaneContent::PluginScreen { params, .. } = env.core.opened().pop().unwrap().1.content else {
+        panic!()
+    };
+    assert_eq!(params, json!({ "work": "", "ticket": key }));
 
     let id = PluginId::new("branch-script");
     let i = env.host.screen_open(&id, "run", Some(&w.project_id), json!({ "work": w.id })).await.unwrap();
@@ -47,13 +54,18 @@ async fn branch_script_installs_opens_for_the_work_item_and_runs_its_script() {
     let got = call(PluginMethod::WorkGet, json!({ "id": w.id })).await.unwrap();
     assert_eq!((got["branch"].clone(), got["worktree"].clone()), (json!(w.branch), json!(worktree)));
 
-    // Out of the box the `script` setting is `echo`: run.sh prints the branch and the worktree.
-    let args = json!(["echo", w.branch, worktree]);
-    let out = call(PluginMethod::ExecRun, json!({ "command": "./run.sh", "args": args, "cwd": worktree }))
-        .await
-        .unwrap();
-    assert_eq!(
-        out,
-        json!({ "code": 0, "stdout": format!("{} {}\n", w.branch, worktree.display()), "stderr": "" })
-    );
+    // Out of the box the `script` setting is `echo`: run.sh prints the branch and the worktree. A cleared
+    // setting (`""`) falls back to `echo` instead of running the branch name as a command.
+    for script in ["echo", ""] {
+        let args = json!([script, w.branch, worktree]);
+        let out =
+            call(PluginMethod::ExecRun, json!({ "command": "./run.sh", "args": args, "cwd": worktree }))
+                .await
+                .unwrap();
+        assert_eq!(
+            out,
+            json!({ "code": 0, "stdout": format!("{} {}\n", w.branch, worktree.display()), "stderr": "" }),
+            "script {script:?}"
+        );
+    }
 }
