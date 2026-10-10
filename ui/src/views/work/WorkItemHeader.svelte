@@ -10,6 +10,7 @@
   import { Badge, Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
+  import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
   import { itemCost, overBudget, usd } from '../../shell/usage';
   import StatusChip from '../tickets/StatusChip.svelte';
   import StatusPicker from '../tickets/StatusPicker.svelte';
@@ -88,6 +89,20 @@
     if (ref) untrack(() => void tickets.loadDetail(ref));
   });
 
+  // Enabled plugins' work actions (PLUGINS §4): after the built-ins, no letters.
+  const plugin = $derived(pluginActions('work'));
+  let pluginRunning = $state(false);
+
+  async function runPlugin(commandId: string): Promise<void> {
+    if (!item) return;
+    pluginRunning = true;
+    try {
+      await runPluginAction(commandId, workCtx(item));
+    } finally {
+      pluginRunning = false;
+    }
+  }
+
   const menuItems = $derived.by((): MenuItem[] => {
     if (!item || !phase) return [];
     const out: MenuItem[] = [
@@ -113,6 +128,9 @@
         danger: a.id === 'finish',
       });
     }
+    plugin.forEach((a, i) =>
+      out.push({ id: `plugin:${a.command_id}`, label: a.title, detail: a.plugin, separator: i === 0 }),
+    );
     return out;
   });
 
@@ -125,6 +143,7 @@
   function onMenu(id: string): void {
     if (!item) return;
     if (id === 'primary') void runPrimary(item);
+    else if (id.startsWith('plugin:')) void runPlugin(id.slice('plugin:'.length));
     else void runWorkAction(id as (typeof WORK_ACTIONS)[number]['id'], item);
   }
 
@@ -231,6 +250,7 @@
           title="Work menu"
           data-testid="work-menu-button"
           chord={menuChord}
+          loading={pluginRunning}
           onclick={() => (workUi.menu = item.id)}>Work</Button
         >
       </span>

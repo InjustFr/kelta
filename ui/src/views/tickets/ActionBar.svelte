@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { ProjectId, TemplateCtx, TicketItem } from '$lib/gen';
-  import { work } from '$lib/stores';
+  import type { ProjectId, TicketItem } from '$lib/gen';
   import { Button } from '$lib/ui';
 
+  import { ticketCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
 
@@ -21,18 +21,7 @@
   let { item, branch, resume, onrun, projectId = null }: Props = $props();
 
   /** Plugin actions run where the ticket's work runs, else in the ticket's (or the pane's) project. */
-  const pluginCtx = $derived.by((): Partial<TemplateCtx> => {
-    const project_id =
-      (item.work_item_id ? work.get(item.work_item_id)?.project_id : undefined) ??
-      item.project_ids[0] ??
-      projectId ??
-      undefined;
-    return {
-      ticket: item.ticket.ref,
-      work_item_id: item.work_item_id,
-      extra: project_id ? { project_id } : {},
-    };
-  });
+  const pluginCtx = $derived(ticketCtx(item.ticket.ref, item.work_item_id, item.project_ids, projectId));
 
   const LABELS: Record<TicketAction, string> = {
     start: 'Start work',

@@ -72,7 +72,8 @@
         },
         "on": "ticket.transitioned"
       }
-    ]
+    ],
+    "work_actions": []
   },
   "description": "Burndown chart of the active sprint for the current project",
   "homepage": null,
