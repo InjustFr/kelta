@@ -907,6 +907,7 @@ export const startWorkPlan: StartWorkPlan = {
     }
   },
   "template_id": "claude+editor",
+  "ticket_source": null,
   "worktree_path": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -936,6 +937,7 @@ export const workItem: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1024,6 +1026,7 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1054,6 +1057,7 @@ export const workItemFailed: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1144,6 +1148,7 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1174,6 +1179,7 @@ export const workItemMerged: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [],
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -1263,6 +1269,7 @@ export const workItemMerged: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1334,6 +1341,7 @@ export const workItemRebaseStopped: WorkItem = {
   "repo_id": "api",
   "review": null,
   "review_due": false,
+  "run": null,
   "sent_threads": [
     "PRRT_kwDOA1"
   ],
@@ -1424,6 +1432,7 @@ export const workItemRebaseStopped: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -2206,6 +2215,7 @@ export const settingsDefault: Settings = {
       }
     }
   ],
+  "sources": [],
   "terminal": {
     "bell": "attention",
     "confirm_multiline_paste": true,
@@ -3471,6 +3481,14 @@ export const uiEventTicketsChanged: UiEvent = {
   "type": "tickets.changed"
 };
 
+export const uiEventTicketsChangedSource: UiEvent = {
+  "scope": {
+    "id": "product",
+    "kind": "source"
+  },
+  "type": "tickets.changed"
+};
+
 export const uiEventReviewsChanged: UiEvent = {
   "new_keys": [
     {
@@ -3514,6 +3532,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "repo_id": "api",
     "review": null,
     "review_due": false,
+    "run": null,
     "sent_threads": [],
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
@@ -3602,6 +3621,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "ticket_source": null,
     "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }
@@ -3784,6 +3804,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_project_removed": uiEventProjectRemoved,
   "ui_event_layout_changed": uiEventLayoutChanged,
   "ui_event_tickets_changed": uiEventTicketsChanged,
+  "ui_event_tickets_changed_source": uiEventTicketsChangedSource,
   "ui_event_reviews_changed": uiEventReviewsChanged,
   "ui_event_work_updated": uiEventWorkUpdated,
   "ui_event_settings_changed": uiEventSettingsChanged,

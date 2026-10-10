@@ -105,11 +105,14 @@ const mine = await kelta.reviews.list({ kind: 'authored' }); // your own PRs (pr
 ## 5. Running a script and showing its result
 
 ```js
+const MAX_RUNS = 10;
+const w = item; // `load()` can replace `item` mid-run: keep the one this run started on
 const { script = 'echo' } = await kelta.settings.get();
-const res = await kelta.exec('./run.sh', [script, item.branch, item.worktree], { cwd: item.worktree });
+const res = await kelta.exec('./run.sh', [script, w.branch, w.worktree], { cwd: w.worktree });
 text($('status'), `Exit ${res.code}`);
+const output = (res.stdout + res.stderr).slice(-2000); // a kv value is capped at 64 KiB
 const runs = (await kelta.kv.get('runs')) ?? [];
-runs.unshift({ at: new Date().toLocaleString(), branch: item.branch, code: res.code, output });
+runs.unshift({ at: new Date().toLocaleString(), branch: w.branch, code: res.code, output });
 await kelta.kv.set('runs', runs.slice(0, MAX_RUNS));
 ```
 
@@ -118,13 +121,18 @@ such as `./run.sh` must be a file inside the plugin directory; a bare name is lo
 `PATH`, so a Kelta launched from the Dock still finds Homebrew tools. `cwd` defaults to the plugin directory;
 pass the worktree. A non-zero exit is a result (`{code, stdout, stderr}`), not an error; stdout and stderr are
 capped at 64 KiB each, and the call fails with `timeout` after `timeout_ms` (default 60 s). `run.sh` runs the
-`script` setting with the branch and worktree as arguments:
+`script` setting with the branch and worktree as arguments, and falls back to `echo` when the setting is
+empty (`settings.get` then returns `""`, which the JS default does not replace):
 
 ```sh
+script=${1:-echo}
+shift
 exec sh -c "$script \"\$@\"" run.sh "$@"
 ```
 
-`kv.*` values are capped at 64 KiB, so the example keeps the last 2000 characters of each run.
+`kv.*` values are capped at 64 KiB, so the example keeps the last 2000 characters of each run. The example
+also keeps a `running` flag so that `load()`, called again on `work.updated`, leaves the Run button disabled
+until the current run ends.
 
 To show a program the user watches or types into (a deploy log, a REPL), open it as a tool instead: declare a
 `kind = "pty"` tool and run `{ action = "open_tool", tool = "<plugin>/<id>" }` or `kelta.tools.open(id)`. It

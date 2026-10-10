@@ -38,5 +38,6 @@
     }
   },
   "template_id": "claude+editor",
+  "ticket_source": null,
   "worktree_path": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 }

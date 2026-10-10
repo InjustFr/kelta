@@ -45,6 +45,16 @@ impl WorkStore for MemWorkStore {
             .collect())
     }
 
+    async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError> {
+        let mut items = self.items.lock();
+        let held = crate::api::claim_holder(items.values(), item);
+        let r = item.clone().claim_over(held);
+        if let Ok(w) = &r {
+            items.insert(w.id.clone(), w.clone());
+        }
+        Ok(r)
+    }
+
     async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError> {
         self.items.lock().remove(id);
         self.steps.lock().remove(id);

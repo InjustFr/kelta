@@ -19,7 +19,10 @@ use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
-use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
+use kelta_proto::settings::{
+    AccountKind, ColumnSpec, ProjectConfig, Settings, Source, TrackerBinding, TrackerView,
+    sources_from_trackers,
+};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
     AccountError, Assignee, Column, Cursor, Page, SourceHit, StatusCategory, Ticket, TicketDetail,
@@ -65,18 +68,25 @@ struct FetchGate {
     done: AtomicU64,
 }
 
-/// One tracker list query shared by the projects that use it.
+/// One tracker list query shared by the sources (and their projects) that use it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TicketQuery {
     pub account: AccountId,
     pub view: TrackerView,
     pub projects: Vec<ProjectId>,
+    pub sources: Vec<String>,
     pub cache_key: String,
 }
 
 fn hash16(s: &str) -> String {
     let d = Sha256::digest(s.as_bytes());
     d.iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+/// The source's tracker, or one of its views, uses `account`.
+pub(crate) fn uses_account(s: &Source, account: &AccountId) -> bool {
+    let b = &s.tracker;
+    &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
 }
 
 pub fn tickets_key(account: &AccountId, view: &TrackerView) -> String {
@@ -402,19 +412,49 @@ impl Core {
     // Tickets
     // =========================================================================================
 
-    /// The list queries behind a scope (one per distinct `(account, view)`). `view_id` None = every
-    /// view of each project (the union). `who` overrides `view.who`.
-    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
-        let projects: Vec<Arc<ProjectConfig>> = match scope {
-            Scope::Project { id } => self.cfg.project(id).into_iter().collect(),
-            Scope::All => {
-                let open = self.open_projects();
-                self.project_configs().into_iter().filter(|p| open.contains(&p.id)).collect()
+    /// The ticket sources: the global `[[sources]]` plus, in memory, the deprecated
+    /// `[project.tracker]` blocks still on disk (moved at the next launch).
+    pub fn sources(&self) -> Vec<Source> {
+        let legacy: Vec<ProjectConfig> =
+            self.project_configs().iter().filter(|p| p.tracker.is_some()).map(|p| (**p).clone()).collect();
+        sources_from_trackers(&self.cfg.effective(None).sources, &legacy)
+    }
+
+    /// A project's board: its first source's, with that source's routes for it as `repo_rules`.
+    // shortcut: a project fed by two sources sees only the first one's binding; slice 5 routes per ticket.
+    pub(crate) fn project_binding(&self, project: &ProjectId) -> Option<TrackerBinding> {
+        self.sources().iter().find(|s| s.projects.contains(project)).map(|s| s.binding_for(project))
+    }
+
+    /// `NotFound` for a project or source scope that does not exist.
+    fn check_scope(&self, scope: &Scope) -> Result<(), KeltaError> {
+        match scope {
+            Scope::Project { id } if !self.project_exists(id) => {
+                Err(KeltaError::not_found(format!("project {id}")))
             }
-        };
+            Scope::Source { id } if !self.sources().iter().any(|s| &s.id == id) => {
+                Err(KeltaError::not_found(format!("source {id}")))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The list queries behind a scope (one per distinct `(account, view)`): the sources listing the
+    /// project, that source, or every source. `view_id` None = every view of each source (the
+    /// union). `who` overrides `view.who`.
+    pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
+        let known: HashSet<ProjectId> = self.project_configs().iter().map(|p| p.id.clone()).collect();
+        let sources = self.sources().into_iter().filter(|s| match scope {
+            Scope::Project { id } => s.projects.contains(id),
+            Scope::Source { id } => &s.id == id,
+            Scope::All => true,
+        });
         let mut out: Vec<TicketQuery> = Vec::new();
-        for p in projects {
-            let Some(b) = &p.tracker else { continue };
+        for s in sources {
+            let b = &s.tracker;
+            // unknown project ids (project removed) are ignored
+            let projects: Vec<ProjectId> =
+                s.projects.iter().filter(|p| known.contains(*p)).cloned().collect();
             // an unknown view id (source removed or renamed) falls back to the union
             let views: Vec<TrackerView> = match view_id.and_then(|v| b.views.iter().find(|x| x.id == v)) {
                 Some(v) => vec![v.clone()],
@@ -427,11 +467,23 @@ impl Core {
                 let account = view.account.clone().unwrap_or_else(|| b.account.clone());
                 let key = tickets_key(&account, &view);
                 match out.iter_mut().find(|q| q.cache_key == key) {
-                    Some(q) if !q.projects.contains(&p.id) => q.projects.push(p.id.clone()),
-                    Some(_) => {}
-                    None => {
-                        out.push(TicketQuery { account, view, projects: vec![p.id.clone()], cache_key: key })
+                    Some(q) => {
+                        for p in &projects {
+                            if !q.projects.contains(p) {
+                                q.projects.push(p.clone());
+                            }
+                        }
+                        if !q.sources.contains(&s.id) {
+                            q.sources.push(s.id.clone());
+                        }
                     }
+                    None => out.push(TicketQuery {
+                        account,
+                        view,
+                        projects: projects.clone(),
+                        sources: vec![s.id.clone()],
+                        cache_key: key,
+                    }),
                 }
             }
         }
@@ -474,10 +526,13 @@ impl Core {
         Ok(page)
     }
 
-    fn emit_tickets_changed(&self, projects: &[ProjectId]) {
+    fn emit_tickets_changed(&self, projects: &[ProjectId], sources: &[String]) {
         self.emit(UiEvent::TicketsChanged { scope: Scope::All });
         for p in projects {
             self.emit(UiEvent::TicketsChanged { scope: Scope::Project { id: p.clone() } });
+        }
+        for id in sources {
+            self.emit(UiEvent::TicketsChanged { scope: Scope::Source { id: id.clone() } });
         }
     }
 
@@ -491,7 +546,7 @@ impl Core {
             let r = core.fetch_tickets(&q, None).await;
             core.feeds.inflight.lock().remove(&q.cache_key);
             if r.is_ok() {
-                core.emit_tickets_changed(&q.projects);
+                core.emit_tickets_changed(&q.projects, &q.sources);
             }
         });
     }
@@ -578,11 +633,7 @@ impl Core {
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         self.rt.capture();
-        if let Scope::Project { id } = &scope
-            && !self.project_exists(id)
-        {
-            return Err(KeltaError::not_found(format!("project {id}")));
-        }
+        self.check_scope(&scope)?;
         let queries = self.ticket_queries(&scope, view_id.as_deref(), who);
         if queries.is_empty() {
             return Ok(TicketPage::default());
@@ -645,11 +696,7 @@ impl Core {
     /// filtered by key and title (all of it for an empty `text`).
     pub async fn tracker_search(&self, scope: Scope, text: &str) -> Result<Vec<TicketItem>, KeltaError> {
         self.rt.capture();
-        if let Scope::Project { id } = &scope
-            && !self.project_exists(id)
-        {
-            return Err(KeltaError::not_found(format!("project {id}")));
-        }
+        self.check_scope(&scope)?;
         let key = text.trim();
         let needle = key.to_lowercase();
         let queries = self.ticket_queries(&scope, None, None);
@@ -761,16 +808,14 @@ impl Core {
         Ok(d)
     }
 
-    /// The project whose binding or one of its views uses a ticket's account (active first, then open, then any).
+    /// A project fed by a source whose binding or one of its views uses a ticket's account (active
+    /// first, then open, then any).
     pub(crate) fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
+        let sources: Vec<Source> = self.sources().into_iter().filter(|s| uses_account(s, account)).collect();
         let all: Vec<Arc<ProjectConfig>> = self
             .project_configs()
             .into_iter()
-            .filter(|p| {
-                p.tracker.as_ref().is_some_and(|b| {
-                    &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
-                })
-            })
+            .filter(|p| sources.iter().any(|s| s.projects.contains(&p.id)))
             .collect();
         let active = self.active_project();
         let open = self.open_projects();
@@ -782,11 +827,8 @@ impl Core {
     }
 
     fn binding_of(&self, project: &ProjectId) -> Result<TrackerBinding, KeltaError> {
-        self.cfg
-            .project(project)
-            .ok_or_else(|| KeltaError::not_found(format!("project {project}")))?
-            .tracker
-            .clone()
+        self.cfg.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
+        self.project_binding(project)
             .ok_or_else(|| KeltaError::invalid(format!("project {project} has no tracker")))
     }
 
@@ -809,7 +851,7 @@ impl Core {
     /// Jira/Redmine/GitLab/Linear workflows differ per project, issue type, team or role at the same status.
     pub async fn tracker_transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError> {
         self.rt.capture();
-        let status = self.cached_ticket(t).await.map(|x| x.status.id);
+        let status = self.cached_ticket(t).await.map(|(x, _)| x.status.id);
         let fresh = self.focused_interval();
         if let Some((s, at, list)) = self.feeds.transitions.lock().get(t)
             && *s == status
@@ -835,7 +877,7 @@ impl Core {
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let tracker = self.tracker_of(&t.account)?;
-        let from = self.cached_ticket(t).await.map(|x| x.status);
+        let from = self.cached_ticket(t).await.map(|(x, _)| x.status);
         let ticket = tracker.transition(t, transition_id, fields).await?;
         self.after_ticket_write(&ticket).await;
         self.publish_from(
@@ -863,7 +905,7 @@ impl Core {
                 KeltaError::not_found(format!("no project uses tracker account {}", t.account))
             })?,
         };
-        let binding = project.tracker.clone().unwrap_or_default();
+        let binding = self.project_binding(&project.id).unwrap_or_default();
         let (label, categories, names) = match binding.columns.iter().find(|c| c.id == column_id) {
             Some(s) => (
                 if s.label.is_empty() { s.id.clone() } else { s.label.clone() },
@@ -972,23 +1014,26 @@ impl Core {
         Ok(ticket)
     }
 
-    async fn cached_ticket(&self, t: &TicketRef) -> Option<Ticket> {
-        let keys: Vec<String> = self
+    /// A ticket from the cached view pages, with the sources of every view that lists it (the views
+    /// are a map: only the union is stable, the page returned is the first found).
+    pub(crate) async fn cached_ticket(&self, t: &TicketRef) -> Option<(Ticket, Vec<String>)> {
+        let keys: Vec<(String, Vec<String>)> = self
             .feeds
             .views
             .lock()
             .values()
             .filter(|q| q.account == t.account)
-            .map(|q| q.cache_key.clone())
+            .map(|q| (q.cache_key.clone(), q.sources.clone()))
             .collect();
-        for k in keys {
+        let mut found: Option<(Ticket, Vec<String>)> = None;
+        for (k, sources) in keys {
             if let Some((page, _)) = self.cache_get::<Page<Ticket>>(&k).await
                 && let Some(x) = page.items.into_iter().find(|x| &x.r#ref == t)
             {
-                return Some(x);
+                found.get_or_insert_with(|| (x, Vec::new())).1.extend(sources);
             }
         }
-        None
+        found
     }
 
     /// After a write, before its bus event: patch cached pages and notify views (the event's
@@ -997,7 +1042,7 @@ impl Core {
         self.feeds.transitions.lock().remove(&ticket.r#ref);
         let queries: Vec<TicketQuery> =
             self.feeds.views.lock().values().filter(|q| q.account == ticket.r#ref.account).cloned().collect();
-        let mut projects = Vec::new();
+        let (mut projects, mut sources) = (Vec::new(), Vec::new());
         for q in queries {
             if let Some((mut page, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
                 let mut hit = false;
@@ -1010,8 +1055,9 @@ impl Core {
                 }
             }
             projects.extend(q.projects.clone());
+            sources.extend(q.sources.clone());
         }
-        self.emit_tickets_changed(&projects);
+        self.emit_tickets_changed(&projects, &sources);
     }
 
     /// `ticket.transitioned` / `ticket.assigned` from anywhere (`tracker_*`, the work saga,
@@ -1029,16 +1075,21 @@ impl Core {
     // Reviews
     // =========================================================================================
 
-    /// Code-host accounts behind a scope: the project's repo bindings, or every configured one.
+    /// Code-host accounts behind a scope: the repo bindings of the project (or of the source's
+    /// projects), or every configured one.
     pub fn review_accounts(&self, scope: &Scope) -> Vec<AccountId> {
+        let hosts = |id: &ProjectId| -> Vec<AccountId> {
+            let p = self.cfg.project(id);
+            p.iter()
+                .flat_map(|p| &p.repos)
+                .filter_map(|r| r.code_host.as_ref().map(|c| c.account.clone()))
+                .collect()
+        };
         let mut out: Vec<AccountId> = match scope {
-            Scope::Project { id } => self
-                .cfg
-                .project(id)
-                .map(|p| {
-                    p.repos.iter().filter_map(|r| r.code_host.as_ref().map(|c| c.account.clone())).collect()
-                })
-                .unwrap_or_default(),
+            Scope::Project { id } => hosts(id),
+            Scope::Source { .. } => {
+                self.scope_projects(scope).unwrap_or_default().iter().flat_map(hosts).collect()
+            }
             Scope::All => self
                 .accounts_settings()
                 .accounts
@@ -1050,6 +1101,17 @@ impl Core {
         out.sort();
         out.dedup();
         out
+    }
+
+    /// The projects a scope narrows to (`None` = all).
+    fn scope_projects(&self, scope: &Scope) -> Option<Vec<ProjectId>> {
+        match scope {
+            Scope::Project { id } => Some(vec![id.clone()]),
+            Scope::Source { id } => {
+                Some(self.sources().into_iter().filter(|s| &s.id == id).flat_map(|s| s.projects).collect())
+            }
+            Scope::All => None,
+        }
     }
 
     pub(crate) fn review_bindings(&self) -> Vec<(AccountId, String, ProjectId)> {
@@ -1444,11 +1506,7 @@ impl Core {
         refresh: bool,
     ) -> Result<ReviewPage, KeltaError> {
         self.rt.capture();
-        if let Scope::Project { id } = &scope
-            && !self.project_exists(id)
-        {
-            return Err(KeltaError::not_found(format!("project {id}")));
-        }
+        self.check_scope(&scope)?;
         let accounts = self.review_accounts(&scope);
         let results =
             futures::future::join_all(accounts.iter().map(|a| self.load_reviews(a, kind, refresh))).await;
@@ -1469,10 +1527,10 @@ impl Core {
             allow.as_ref().is_none_or(|g| g.is_match(&r.r#ref.repo))
                 && !deny.as_ref().is_some_and(|g| g.is_match(&r.r#ref.repo))
         });
-        if let Scope::Project { id } = &scope {
+        if let Some(ids) = self.scope_projects(&scope) {
             all.retain(|r| {
                 bindings.iter().any(|(a, repo, p)| {
-                    p == id && a == &r.r#ref.account && repo.eq_ignore_ascii_case(&r.r#ref.repo)
+                    ids.contains(p) && a == &r.r#ref.account && repo.eq_ignore_ascii_case(&r.r#ref.repo)
                 })
             });
         }
@@ -1686,7 +1744,7 @@ impl Core {
             let q = self.feeds.views.lock().get(&key.query).cloned();
             let Some(q) = q else { return Ok(()) };
             self.fetch_tickets(&q, None).await?;
-            self.emit_tickets_changed(&q.projects);
+            self.emit_tickets_changed(&q.projects, &q.sources);
             return Ok(());
         }
         let kind =

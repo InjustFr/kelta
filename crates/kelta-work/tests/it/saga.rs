@@ -211,6 +211,38 @@ async fn ticket_with_work_item_in_a_removed_project_plans_in_the_requested_one()
 }
 
 #[tokio::test]
+async fn a_started_item_keeps_the_plans_ticket_source() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let mut plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    plan.ticket_source = Some("product".into());
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.ticket_source.as_deref(), Some("product"));
+    assert_eq!(w.list(Some(&project())).await.unwrap()[0].ticket_source.as_deref(), Some("product"));
+}
+
+#[tokio::test]
+async fn route_repo_sets_the_plan_repo_unless_an_item_or_the_project_says_otherwise() {
+    need_git!();
+    let fx = Fx::new();
+    let mut p = samples::project_info();
+    p.id = kelta_proto::ids::ProjectId::new("routed");
+    p.repos[0].path = fx.repo.clone();
+    let mut web = p.repos[0].clone();
+    web.id = "web".into();
+    web.primary = false;
+    p.repos.push(web);
+    fx.core.add_project(p.clone());
+    let w = fx.service();
+    let plan = |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into));
+    assert_eq!(plan(Some("web")).await.unwrap().repo_id, "web", "the route's repo");
+    assert_eq!(plan(Some("gone")).await.unwrap().repo_id, "api", "not in the project: primary");
+    w.start(plan(None).await.unwrap()).await.unwrap();
+    assert_eq!(plan(Some("web")).await.unwrap().repo_id, "api", "the work item's repo wins");
+}
+
+#[tokio::test]
 async fn ticket_with_work_item_in_another_project_resumes_there() {
     need_git!();
     let fx = Fx::new();

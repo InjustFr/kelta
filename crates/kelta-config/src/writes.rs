@@ -12,7 +12,10 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{ProjectDraft, ProjectPatch, RepoDraft};
 use kelta_proto::schema::SCHEMA_BASE_URL;
-use kelta_proto::settings::{EffectiveSettings, Layer, LayerDoc, ProjectConfig, TrustInfo, ValidationIssue};
+use kelta_proto::settings::{
+    EffectiveSettings, Layer, LayerDoc, ProjectConfig, Source, SourceRoute, TrackerBinding, TrustInfo,
+    ValidationIssue, sources_from_trackers,
+};
 use serde_json::{Value, json};
 use toml_edit::DocumentMut;
 
@@ -492,14 +495,17 @@ impl ConfigService {
         if !draft.repos.is_empty() {
             set(&mut doc, &["project", "repos"], repos_json(&draft.repos))?;
         }
-        if let Some(t) = &draft.tracker {
-            let v = edit::prune_empty(&serde_json::to_value(t)?);
-            if v.as_object().is_some_and(|m| !m.is_empty()) {
-                set(&mut doc, &["project", "tracker"], v)?;
-            }
-        }
         let text = format!("#:schema {SCHEMA_BASE_URL}/project.schema.json\n{doc}");
         self.commit_text_locked(&g, &Target { path, kind: FileKind::Project }, ensure_newline(text))?;
+        if let Some(t) = draft.tracker.as_ref().filter(|t| **t != TrackerBinding::default()) {
+            let p = ProjectConfig {
+                id: draft.suggested_id.clone(),
+                name: draft.name.clone(),
+                tracker: Some(t.clone()),
+                ..ProjectConfig::default()
+            };
+            self.update_sources(&g, |s| *s = sources_from_trackers(s, std::slice::from_ref(&p)))?;
+        }
         drop(g);
         self.project_arc(&id)
     }
@@ -534,11 +540,45 @@ impl ConfigService {
                 set(&mut doc, "repos", repos_json(repos))?;
             }
         }
+        // The board lives in `[[sources]]` (written first, so a failure keeps the old block);
+        // a deprecated `[project.tracker]` block is superseded either way.
         if patch.remove_tracker {
+            self.update_sources(&g, |s| {
+                for src in s.iter_mut() {
+                    src.projects.retain(|p| p != id);
+                    src.routes.retain(|r| &r.project != id);
+                }
+            })?;
             edit::remove_path(&mut doc, &["project".to_owned(), "tracker".to_owned()]);
         } else if let Some(t) = &patch.tracker {
-            let v = edit::prune_empty(&serde_json::to_value(t)?);
-            set(&mut doc, "tracker", v)?;
+            let name = self
+                .inner
+                .read()
+                .projects
+                .get(id.as_str())
+                .map(|e| e.config.name.clone())
+                .unwrap_or_default();
+            self.update_sources(&g, |s| match s.iter_mut().find(|src| src.projects.contains(id)) {
+                Some(src) => {
+                    src.tracker = TrackerBinding { repo_rules: Vec::new(), ..t.clone() };
+                    src.routes.retain(|r| &r.project != id);
+                    src.routes.extend(t.repo_rules.iter().map(|r| SourceRoute {
+                        r#match: r.r#match.clone(),
+                        project: id.clone(),
+                        repo: r.repo.clone(),
+                    }));
+                }
+                None => {
+                    let p = ProjectConfig {
+                        id: id.clone(),
+                        name,
+                        tracker: Some(t.clone()),
+                        ..ProjectConfig::default()
+                    };
+                    *s = sources_from_trackers(s, std::slice::from_ref(&p));
+                }
+            })?;
+            edit::remove_path(&mut doc, &["project".to_owned(), "tracker".to_owned()]);
         }
         self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
         drop(g);
@@ -553,6 +593,85 @@ impl ConfigService {
         drop(g);
         let _ = self.reload();
         Ok(())
+    }
+
+    /// Read-modify-write of the global `[[sources]]` under the gate; no write when `f` changes nothing.
+    fn update_sources(
+        &self,
+        g: &MutexGuard<'_, ()>,
+        f: impl FnOnce(&mut Vec<Source>),
+    ) -> Result<(), KeltaError> {
+        let target = self.resolve_target(Layer::Global, None, None)?;
+        let mut doc = self.read_doc(&target)?;
+        let value = toml_io::parse(&doc.to_string()).map_err(|i| KeltaError::invalid(i.message))?.value;
+        let before: Vec<Source> = match value.get("sources") {
+            Some(v) => serde_json::from_value(v.clone()).map_err(|e| {
+                KeltaError::invalid(format!("fix `sources` in the global settings first: {e}"))
+            })?,
+            None => Vec::new(),
+        };
+        let mut sources = before.clone();
+        f(&mut sources);
+        if sources == before {
+            return Ok(());
+        }
+        let segs = ["sources".to_owned()];
+        if sources.is_empty() {
+            edit::remove_path(&mut doc, &segs);
+        } else {
+            let v = edit::prune_empty(&serde_json::to_value(&sources)?);
+            edit::set_path(&mut doc, &segs, &v).map_err(KeltaError::invalid)?;
+            // `[sources.tracker]` and `[[sources.routes]]` read better than one long inline table
+            let aot = doc.get_mut("sources").and_then(toml_edit::Item::as_array_of_tables_mut);
+            for t in aot.into_iter().flat_map(|a| a.iter_mut()) {
+                if let Some(i) = t.get_mut("tracker")
+                    && let Some(inline) = i.as_inline_table().cloned()
+                {
+                    *i = toml_edit::Item::Table(inline.into_table());
+                }
+                if let Some(i) = t.get_mut("routes")
+                    && let Some(a) = i.as_array().cloned()
+                {
+                    let tables =
+                        a.iter().filter_map(|r| r.as_inline_table().cloned().map(|r| r.into_table()));
+                    *i = toml_edit::Item::ArrayOfTables(tables.collect());
+                }
+            }
+        }
+        self.commit_text_locked(g, &target, Self::finish_text(&target, &doc))
+    }
+
+    /// Moves every loaded project's deprecated `[project.tracker]` to the global `[[sources]]`
+    /// (#238). Nothing is removed before its copy exists: each project file is copied to
+    /// `projects/.trash/<id>-tracker-<secs>.toml`, then the global file is written, then the blocks
+    /// are stripped. Idempotent: a block already in `[[sources]]` only joins it. Returns the
+    /// number of blocks moved.
+    pub fn migrate_project_trackers(&self) -> Result<usize, KeltaError> {
+        let g = self.gate.lock();
+        let found: Vec<(PathBuf, ProjectConfig)> = self
+            .inner
+            .read()
+            .projects
+            .values()
+            // an account-less block is no valid source: it stays on the read path, untouched
+            .filter(|e| e.config.tracker.as_ref().is_some_and(|t| !t.account.as_str().is_empty()))
+            .map(|e| (e.file.path.clone(), (*e.config).clone()))
+            .collect();
+        if found.is_empty() {
+            return Ok(0);
+        }
+        for (path, p) in &found {
+            std::fs::copy(path, trash_path(&self.dirs, &format!("{}-tracker", p.id))?)?;
+        }
+        let projects: Vec<ProjectConfig> = found.iter().map(|(_, p)| p.clone()).collect();
+        self.update_sources(&g, |s| *s = sources_from_trackers(s, &projects))?;
+        for (path, _) in &found {
+            let target = Target { path: path.clone(), kind: FileKind::Project };
+            let mut doc = self.read_doc(&target)?;
+            edit::remove_path(&mut doc, &["project".to_owned(), "tracker".to_owned()]);
+            self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
+        }
+        Ok(found.len())
     }
 
     /// Tools are personal (#243): move every project file's `[[tools]]` to the global file, once.

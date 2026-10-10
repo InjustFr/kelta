@@ -74,7 +74,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         Scope, Layout, Tab, SplitDir, LayoutNode, TicketsMode, PaneContent, Placement,
         OpenPaneRequest, PaneRef, WorkKind, WorkState, StepStatus, WorkStepStatus, WorkItem,
         WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, FinishOpts,
-        GitStatus, EditorTarget, TemplateCtx, RebaseState, RebaseOnto, RebaseOp, SendFile,
+        GitStatus, EditorTarget, TemplateCtx, RebaseState, RunClaim, RunState, RebaseOnto, RebaseOp, SendFile,
         FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta, NoteState, ReviewNote, ReviewNotes,
         NextUpItem, NextUp,
         // tracker / codehost

@@ -41,15 +41,15 @@ export function lampOf(level: Attention, working: boolean): LampLevel {
   return working && level !== 'needs_input' && level !== 'error' ? 'working' : level;
 }
 
-/** Stable key for a `Scope` (`all` or `project:<id>`). */
+/** Stable key for a `Scope` (`all`, `project:<id>` or `source:<id>`). */
 export function scopeKey(scope: Scope): string {
-  return scope.kind === 'all' ? 'all' : `project:${scope.id}`;
+  return scope.kind === 'all' ? 'all' : `${scope.kind}:${scope.id}`;
 }
 
 /** Whether data loaded for `loaded` is affected by a change announced for `changed`. */
 export function scopeAffects(changed: Scope, loaded: Scope): boolean {
   if (changed.kind === 'all' || loaded.kind === 'all') return true;
-  return changed.id === loaded.id;
+  return changed.kind === loaded.kind && changed.id === loaded.id;
 }
 
 export function reviewKey(r: ReviewRef): string {

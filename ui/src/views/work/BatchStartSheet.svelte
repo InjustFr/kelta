@@ -51,7 +51,7 @@
     for (const m of marked) {
       try {
         const plan = await workPlan({
-          project_id: forced || m.projectId,
+          project_id: forced || null,
           // a plain copy: the marks are $state proxies, which the mock IPC cannot clone
           source: { kind: 'ticket', ticket: { ...m.ref } },
         });

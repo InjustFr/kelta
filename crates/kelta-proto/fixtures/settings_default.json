@@ -372,6 +372,7 @@
       }
     }
   ],
+  "sources": [],
   "terminal": {
     "bell": "attention",
     "confirm_multiline_paste": true,
