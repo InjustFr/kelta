@@ -274,6 +274,7 @@ pub struct FakeCodeHost {
     reviews: Mutex<Vec<ReviewDetail>>,
     approvals: Mutex<Vec<(ReviewRef, String)>>,
     comments: Mutex<Vec<(ReviewRef, String, bool)>>,
+    pending: Mutex<Vec<(ReviewRef, String, u32, String)>>,
     errors: Mutex<VecDeque<KeltaError>>,
     calls: Mutex<Vec<String>>,
     changed: Mutex<bool>,
@@ -310,11 +311,13 @@ impl FakeCodeHost {
                         reviewers: vec![],
                         checks: vec![],
                         files: vec![],
+                        pending_comments: 0,
                     })
                     .collect(),
             ),
             approvals: Mutex::new(Vec::new()),
             comments: Mutex::new(Vec::new()),
+            pending: Mutex::new(Vec::new()),
             errors: Mutex::new(VecDeque::new()),
             calls: Mutex::new(Vec::new()),
             changed: Mutex::new(true),
@@ -338,6 +341,11 @@ impl FakeCodeHost {
 
     pub fn approvals(&self) -> Vec<(ReviewRef, String)> {
         self.approvals.lock().clone()
+    }
+
+    /// `(review, path, line, body)` of the pending line comments.
+    pub fn pending_comments(&self) -> Vec<(ReviewRef, String, u32, String)> {
+        self.pending.lock().clone()
     }
 
     /// `(review, body, request_changes)`.
@@ -432,6 +440,19 @@ impl CodeHost for FakeCodeHost {
         Ok(())
     }
 
+    async fn add_pending_comment(
+        &self,
+        r: &ReviewRef,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> Result<(), KeltaError> {
+        self.enter(&format!("add_pending_comment:{}", r.number))?;
+        self.find(r)?;
+        self.pending.lock().push((r.clone(), path.to_owned(), line, body.to_owned()));
+        Ok(())
+    }
+
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError> {
         self.enter("create")?;
         let mut reviews = self.reviews.lock();
@@ -452,6 +473,7 @@ impl CodeHost for FakeCodeHost {
             reviewers: vec![],
             checks: vec![],
             files: vec![],
+            pending_comments: 0,
         });
         Ok(review)
     }

@@ -111,6 +111,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         secrets::secret_set,
         secrets::secret_delete,
         secrets::secret_backends_status,
+        secrets::secret_unlock,
         settings::account_test,
         // projects
         project::project_list,
@@ -140,6 +141,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         session::session_mark_seen,
         session::session_link,
         session::session_text_tail,
+        session::session_history_search,
         session::terminal_set_palette,
         // tickets
         tracker::tracker_list,
@@ -166,6 +168,9 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_create_pr,
         work::work_finish,
         work::work_status,
+        work::work_status_all,
+        work::work_diff,
+        work::work_mark_reviewed,
         editor::editor_open,
         editor::editor_send_selection,
         // tools / plugins / triggers

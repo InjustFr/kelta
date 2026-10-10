@@ -16,9 +16,9 @@ use kelta_proto::model::{
     AttachInfo, Attention, ClaudeMeta, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy, SessionInfo,
     SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
 };
-use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode};
+use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
-use kelta_proto::term::{ClipboardKind, KillSignal, PtySpawnSpec, TerminalEvent};
+use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
 
 use crate::Core;
@@ -321,7 +321,51 @@ impl Core {
         Ok(())
     }
 
+    /// keltad: sessions that kept running while the app was closed come back Live (same process,
+    /// same hook token) instead of respawning from Dormant; what keltad holds that core does not
+    /// know any more is killed.
+    pub(crate) fn adopt_live_sessions(&self) {
+        if !self.terminal.persistent() {
+            return;
+        }
+        let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
+        let mut adopted = HashSet::new();
+        let mut failed = false;
+        for id in ids {
+            let env = match self.terminal.adopt(&id, Arc::new(EventSink { core: self.me.clone() })) {
+                Ok(Some(env)) => env,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::warn!(error = %e, session = %id, "keltad adopt failed");
+                    failed = true;
+                    continue;
+                }
+            };
+            let hook = env.get("KELTA_HOOK_TOKEN").cloned().unwrap_or_default();
+            // shortcut: KELTA_MCP_URL keeps the previous run's port, so MCP / http hooks of an adopted Claude fail until it restarts; pin the port to fix.
+            let mcp = env.get("KELTA_MCP_TOKEN").cloned();
+            if let Some(e) = self.sessions.lock().get_mut(&id) {
+                e.info.lifecycle = Lifecycle::Live;
+                e.hook_token = hook.clone();
+                e.mcp_token = mcp.clone();
+            }
+            self.server.register_session(&id, &hook, mcp.as_deref());
+            self.persist_session(&id);
+            adopted.insert(id);
+        }
+        // A failed adopt may be a slow reply for a session core keeps: never kill on a guess.
+        if failed {
+            return;
+        }
+        for s in self.terminal.stats().sessions {
+            if !adopted.contains(&s.id) {
+                let _ = self.terminal.kill(&s.id, KillSignal::Kill);
+            }
+        }
+    }
+
     fn delete_row(&self, id: &SessionId) {
+        self.terminal.history_delete(id);
         let id = id.clone();
         self.store.exec("session_delete", move |c| q::session_delete(c, &id));
     }
@@ -401,9 +445,13 @@ impl Core {
 
     /// Any Claude session Working/NeedsInput (quit confirmation, `app.confirm_quit_with_running`).
     pub fn quit_needs_confirm(&self) -> bool {
-        self.cfg.effective(None).app.confirm_quit_with_running
+        let cfg = self.cfg.effective(None);
+        // Same rule as quit_flow: keltad keeps restorable sessions running, the rest are killed.
+        let survives = self.quit_persistent() && cfg.app.restore_mode != RestoreMode::None;
+        cfg.app.confirm_quit_with_running
             && self.sessions.lock().values().any(|e| {
-                matches!(e.info.kind, SessionKind::Claude)
+                !(survives && e.restore != RestorePolicy::None)
+                    && matches!(e.info.kind, SessionKind::Claude)
                     && e.info.lifecycle == Lifecycle::Live
                     && matches!(e.info.status, SessionStatus::Working | SessionStatus::NeedsInput)
             })
@@ -829,6 +877,14 @@ impl Core {
         self.terminal.detach(id, generation);
     }
 
+    /// The window is gone: drop every view so sessions release their view-side memory (background mode).
+    pub fn detach_all_views(&self) {
+        let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
+        for id in &ids {
+            self.terminal.detach(id, kelta_proto::api::ANY_VIEW);
+        }
+    }
+
     pub(crate) fn write_session(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
         let lifecycle = self.get_info(id)?.lifecycle;
         if lifecycle != Lifecycle::Live {
@@ -1020,12 +1076,40 @@ impl Core {
             (e.info.lifecycle, e.text_tail.clone())
         };
         if lifecycle == Lifecycle::Dormant {
+            // The on-disk history log is newer than the tail stored at quit (and survives a crash).
+            let disk = self.terminal.history_tail(id, max_lines).unwrap_or_default();
+            if !disk.is_empty() {
+                return Ok(disk);
+            }
             return Ok(tail_lines(&stored.unwrap_or_default(), max_lines));
         }
         match self.terminal.text_tail(id, max_lines) {
             Ok(t) => Ok(t),
             Err(e) => stored.map(|t| tail_lines(&t, max_lines)).ok_or(e),
         }
+    }
+
+    /// Search the on-disk history of one session, or of every session of `project_id`.
+    pub fn session_history_search(
+        &self,
+        project_id: &ProjectId,
+        session_id: Option<&SessionId>,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError> {
+        let ids: Vec<SessionId> = {
+            let s = self.sessions.lock();
+            if let Some(id) = session_id
+                && !s.get(id).is_some_and(|e| &e.info.project_id == project_id)
+            {
+                return Err(KeltaError::not_found(format!("session {id} in project {project_id}")));
+            }
+            s.values()
+                .filter(|e| &e.info.project_id == project_id && session_id.is_none_or(|id| &e.info.id == id))
+                .map(|e| e.info.id.clone())
+                .collect()
+        };
+        self.terminal.history_search(&ids, query, limit.clamp(1, 1000))
     }
 
     // =========================================================================================
@@ -1094,6 +1178,13 @@ impl Core {
 
     /// Apply the notification rules for a session event.
     pub(crate) fn maybe_notify(&self, kind: NotifyKind, info: &SessionInfo, body: Option<&str>) {
+        // kelta-work sends "KEY ready to review" / "Claude replied" for hook-driven work item Claude.
+        if kind == NotifyKind::ClaudeDone
+            && info.work_item_id.is_some()
+            && info.status_source == StatusSource::Hook
+        {
+            return;
+        }
         let settings = self.cfg.effective(Some(&info.project_id));
         let visible = self.is_visible(&info.id);
         let window = self.bridge.window_state();
@@ -1141,6 +1232,16 @@ impl Core {
         let ns = &settings.notifications;
         if !ns.enabled
             || crate::notifier::in_quiet_hours(&ns.quiet_hours, crate::notifier::local_minute_of_day())
+        {
+            return Ok(());
+        }
+        // About a session Louis is looking at right now: nothing to tell.
+        let w = self.bridge.window_state();
+        if ns.only_when_unfocused
+            && w.exists
+            && w.visible
+            && w.focused
+            && n.session_id.as_ref().is_some_and(|s| self.is_visible(s))
         {
             return Ok(());
         }
@@ -1495,18 +1596,28 @@ impl Core {
     // Quit
     // =========================================================================================
 
+    /// The next run adopts keltad's sessions: the host is keltad and the (restart-only)
+    /// `terminal.session_host` still says so, else kept sessions would run twice.
+    fn quit_persistent(&self) -> bool {
+        self.terminal.persistent() && self.cfg.effective(None).terminal.session_host == SessionHost::Daemon
+    }
+
     pub(crate) async fn quit_flow(&self) -> Result<(), KeltaError> {
         self.quitting.store(true, std::sync::atomic::Ordering::SeqCst);
         if let Err(e) = self.work.quit_hook().await {
             tracing::warn!(error = %e, "work quit hook failed");
         }
+        // keltad: kept sessions stay running and are adopted on the next start.
+        let persistent = self.quit_persistent();
+        let restoring = self.cfg.effective(None).app.restore_mode != RestoreMode::None;
         let live: Vec<(SessionId, bool)> = self
             .sessions
             .lock()
             .values()
             .filter(|e| e.info.lifecycle != Lifecycle::Dormant)
             .map(|e| {
-                (e.info.id.clone(), e.info.lifecycle == Lifecycle::Live && e.restore != RestorePolicy::None)
+                let keep = e.info.lifecycle == Lifecycle::Live && e.restore != RestorePolicy::None;
+                (e.info.id.clone(), keep && (restoring || !persistent))
             })
             .collect();
         let mut to_kill = Vec::new();
@@ -1529,7 +1640,7 @@ impl Core {
                 self.delete_row(id);
             }
             let is_live = self.sessions.lock().get(id).is_some_and(|e| e.info.lifecycle == Lifecycle::Live);
-            if is_live {
+            if is_live && !(persistent && *keep) {
                 to_kill.push(id.clone());
             }
         }
@@ -1542,6 +1653,24 @@ impl Core {
                 if live {
                     let _ = self.terminal.kill(id, KillSignal::Kill);
                 }
+            }
+        }
+        if persistent {
+            // close what keltad would otherwise hold for nobody (exited and killed sessions)
+            let kept: HashSet<&SessionId> = live.iter().filter(|(_, k)| *k).map(|(id, _)| id).collect();
+            for s in self.terminal.stats().sessions {
+                if !kept.contains(&s.id) {
+                    let _ = self.terminal.kill(&s.id, KillSignal::Kill);
+                }
+            }
+        }
+        // Sessions that do not survive the quit lose their history log; their readers wrote the
+        // screen at exit (after `delete_row` above), so delete again now.
+        // shortcut: a reader still exiting after the SIGKILL fallback can leave an orphan log (the
+        // global cap removes it eventually); sweep logs without a session row at startup if they pile up.
+        for (id, keep) in &live {
+            if !keep {
+                self.terminal.history_delete(id);
             }
         }
         self.store.flush().await

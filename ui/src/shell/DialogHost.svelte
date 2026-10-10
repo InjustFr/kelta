@@ -39,7 +39,7 @@
         prompts.answer(text);
       }}
     >
-      <TextInput label={req.label} bind:value={text} />
+      <TextInput label={req.label} type={req.type ?? 'text'} autocomplete="off" bind:value={text} />
     </form>
     {#snippet actions()}
       <Button onclick={() => prompts.answer(null)}>Cancel</Button>

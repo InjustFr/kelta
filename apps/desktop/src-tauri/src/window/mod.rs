@@ -236,6 +236,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
                 b.clear_subscribers();
             }
+            if let Some(c) = core(app) {
+                c.detach_all_views();
+            }
         }
         _ => {}
     }

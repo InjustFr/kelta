@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { paneComponent, paneRegistry, settingsSections, sheetRegistry, tabHeaderRegistry } from './registry';
 
-// The first import compiles every lazy view: far over vitest's 5 s default on a loaded machine.
-describe('registries', { timeout: 60_000 }, () => {
+// Each test imports (and cold-transforms) every lazy view; 5 s is too short on a loaded machine.
+describe('registries', { timeout: 30_000 }, () => {
   it('every pane kind except empty has a lazy view', async () => {
     const kinds = Object.keys(paneRegistry).sort();
     expect(kinds).toEqual(
@@ -26,7 +26,7 @@ describe('registries', { timeout: 60_000 }, () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  });
+  }, 90_000); // cold-transforms every view
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
@@ -35,7 +35,7 @@ describe('registries', { timeout: 60_000 }, () => {
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {
       expect(typeof (await load()).default).toBe('function');
     }
-  });
+  }, 60_000); // cold transforms (the work bar pulls in the work actions)
 
   it('settings sections are unique, ordered per BUILD_PLAN §2.4 and load', async () => {
     const ids = settingsSections.map((s) => s.id);
@@ -60,5 +60,5 @@ describe('registries', { timeout: 60_000 }, () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  });
+  }, 90_000); // cold-transforms every section
 });

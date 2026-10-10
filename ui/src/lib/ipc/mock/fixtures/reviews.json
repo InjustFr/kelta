@@ -20,7 +20,7 @@
       "target_branch": "main",
       "ci": "pending",
       "decision": "review_required",
-      "my_state": null,
+      "my_state": "pending",
       "mergeable": true,
       "labels": [],
       "kind": "review_requested",
@@ -190,5 +190,71 @@
       "deletions": 0
     },
     "project_ids": []
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "github-acme",
+        "repo": "acme/shop-web",
+        "number": 101
+      },
+      "title": "Lazy-load the cart drawer",
+      "url": "https://github.com/acme/shop-web/pull/101",
+      "author": {
+        "id": "u-dee",
+        "name": "Dee Ng",
+        "login": "dee",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "2222222222222222222222222222222222222222",
+      "source_branch": "feat/pr-101",
+      "target_branch": "main",
+      "ci": "success",
+      "decision": "review_required",
+      "my_state": "approved",
+      "mergeable": true,
+      "labels": [],
+      "kind": "review_requested",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": [],
+      "additions": 220,
+      "deletions": 31,
+      "reviewed_head": "1111111111111111111111111111111111111111"
+    },
+    "project_ids": ["shop"]
+  },
+  {
+    "review": {
+      "ref": {
+        "account": "github-acme",
+        "repo": "acme/shop-api",
+        "number": 309
+      },
+      "title": "Retry failed webhooks",
+      "url": "https://github.com/acme/shop-api/pull/309",
+      "author": {
+        "id": "u-eli",
+        "name": "Eli Park",
+        "login": "eli",
+        "avatar_url": null
+      },
+      "draft": false,
+      "head_sha": "2222222222222222222222222222222222222222",
+      "source_branch": "feat/pr-309",
+      "target_branch": "main",
+      "ci": "success",
+      "decision": "review_required",
+      "my_state": "approved",
+      "mergeable": true,
+      "labels": [],
+      "kind": "review_requested",
+      "updated_at": "2026-10-09T07:30:00Z",
+      "linked_tickets": [],
+      "additions": 220,
+      "deletions": 31,
+      "reviewed_head": "2222222222222222222222222222222222222222"
+    },
+    "project_ids": ["shop"]
   }
 ]

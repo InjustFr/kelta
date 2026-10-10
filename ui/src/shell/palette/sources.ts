@@ -9,14 +9,25 @@ import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { plugins, projects, reviews, sessions, settings, tools } from '$lib/stores';
-import { attentionRank } from '$lib/stores/reducers';
+import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
+import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
+import { goToWork } from '../../views/work/nav';
+import { workKey } from '../../views/work/phase';
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
 import { activateProject, focusedPane, openContent, revealSession } from '../nav';
 
 export type PaletteGroup =
-  'Sessions' | 'Projects' | 'Actions' | 'Tools' | 'Commands' | 'Tickets' | 'Reviews' | 'Settings';
+  | 'Work items'
+  | 'Sessions'
+  | 'Projects'
+  | 'Actions'
+  | 'Tools'
+  | 'Commands'
+  | 'Tickets'
+  | 'Reviews'
+  | 'Settings';
 
 export interface PaletteItem {
   id: string;
@@ -25,11 +36,13 @@ export interface PaletteItem {
   detail?: string;
   kbd?: string;
   icon: string;
+  lamp?: LampLevel;
   run: () => void | Promise<void>;
 }
 
 /** Display order of the groups when the query is empty. */
 export const GROUP_ORDER: readonly PaletteGroup[] = [
+  'Work items',
   'Sessions',
   'Projects',
   'Actions',
@@ -45,13 +58,19 @@ export function itemText(item: PaletteItem): string {
   return `${item.label} ${item.detail ?? ''}`;
 }
 
+/** Detail segments are separated by space, not middle dots (DESIGN §3). */
+const SEP = '\u2002\u2002';
+
 function projectName(id: ProjectId): string {
   return projects.byId(id)?.name ?? id;
 }
 
 function sessionDetail(s: SessionInfo): string {
-  const status = statusLabel(s.status);
-  return [projectName(s.project_id), sessionKindName(s.kind), status].filter(Boolean).join(' · ');
+  const kind = sessionKindName(s.kind);
+  // The kind only adds information when the session was renamed ("claude" titled "claude" says it twice).
+  return [projectName(s.project_id), kind === s.name ? null : kind, statusLabel(s.status)]
+    .filter(Boolean)
+    .join(SEP);
 }
 
 export function sessionItems(): PaletteItem[] {
@@ -63,11 +82,29 @@ export function sessionItems(): PaletteItem[] {
     .map((s) => ({
       id: `session:${s.id}`,
       group: 'Sessions' as const,
-      label: s.name,
+      label: sessionLabel(s),
       detail: sessionDetail(s),
       icon: sessionIcon(s.kind),
+      lamp: lampOf(s.attention, s.status === 'working'),
       run: () => void revealSession(s.id),
     }));
+}
+
+/** Every unfinished work item: `[lamp] KEY title`, the phase as meta; matches key, title, branch. */
+export function workItems(): PaletteItem[] {
+  return unfinishedWork().map((w) => {
+    const phase = phaseNow(w);
+    return {
+      id: `work:${w.id}`,
+      group: 'Work items' as const,
+      label: `${workKey(w)} ${workTitle(w)}`,
+      detail: `${phase.label} · ${w.branch}`,
+      icon: 'git-branch',
+      lamp: phase.lamp === 'none' ? undefined : phase.lamp,
+      // work_resume recreates a closed tab and resumes Claude.
+      run: () => void goToWork(w),
+    };
+  });
 }
 
 export function projectItems(): PaletteItem[] {
@@ -102,7 +139,7 @@ export function toolItems(): PaletteItem[] {
   return tools.list(id).map((t) => ({
     id: `tool:${t.id}`,
     group: 'Tools' as const,
-    label: `Open tool: ${t.label}`,
+    label: `Open ${t.label}`,
     detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
     kbd: t.keybinding ?? undefined,
     icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
@@ -196,7 +233,7 @@ export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
     id: `ticket:${hit.ticket.ref.account}:${hit.ticket.ref.key}`,
     group: 'Tickets' as const,
     label: `${hit.ticket.ref.key} ${hit.ticket.title}`,
-    detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(' · '),
+    detail: [hit.ticket.status.name, hit.project_ids.map(projectName).join(', ')].filter(Boolean).join(SEP),
     icon: 'ticket',
     run: () => {
       const project = hit.project_ids[0] ?? projects.activeId;
@@ -213,6 +250,7 @@ export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
 /** Every synchronous item, in display order. */
 export function buildItems(): PaletteItem[] {
   return [
+    ...workItems(),
     ...sessionItems(),
     ...projectItems(),
     ...actionItems(),

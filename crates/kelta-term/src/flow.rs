@@ -79,7 +79,7 @@ impl Flow {
 
     /// Detach `generation` (stale generations are ignored). Returns true when a view was dropped.
     pub fn detach(&mut self, generation: u32) -> bool {
-        if !self.attached || generation != self.generation {
+        if !self.attached || (generation != self.generation && generation != kelta_proto::api::ANY_VIEW) {
             return false;
         }
         self.drop_view();
@@ -295,5 +295,10 @@ mod tests {
         assert!(!f.paused());
         assert_eq!(f.inflight(), 0);
         assert_eq!(f.deadline(), None);
+        // A stale generation is ignored; ANY_VIEW drops the current view.
+        let g = f.attach();
+        assert!(!f.detach(g.wrapping_sub(1)));
+        assert!(f.detach(kelta_proto::api::ANY_VIEW));
+        assert!(!f.attached());
     }
 }

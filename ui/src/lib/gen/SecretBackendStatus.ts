@@ -2,6 +2,6 @@
 
 export type SecretBackendStatus = { 
 /**
- * `keychain` | `secret-service` | `gh-cli` | `glab-cli` | `command` | `env`.
+ * `keychain` | `secret-service` | `encrypted-file` | `gh-cli` | `glab-cli` | `command` | `env`.
  */
 backend: string, available: boolean, detail: string | null, };

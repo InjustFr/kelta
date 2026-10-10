@@ -16,6 +16,7 @@
   import DialogHost from './DialogHost.svelte';
   import InboxHost from './InboxHost.svelte';
   import { lazyComponents } from './lazy.svelte';
+  import { projectAccent } from './accent';
   import { activateProject, focusedPane, focusedSessionId } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
@@ -23,6 +24,7 @@
   import TabBar from './TabBar.svelte';
   import ToastHost from './ToastHost.svelte';
   import WindowChrome from './WindowChrome.svelte';
+  import { startupUnlock } from './unlock';
   import Workspace from './Workspace.svelte';
 
   let prefixArmed = $state(false);
@@ -42,6 +44,14 @@
     const root = document.documentElement;
     if (themeSetting === 'system') delete root.dataset.theme;
     else root.dataset.theme = themeSetting;
+  });
+
+  $effect(() => {
+    // The window takes the hue of the active project; the terminal palette is not re-pushed.
+    const accent = projectAccent(projects.active?.color);
+    const style = document.documentElement.style;
+    if (accent) style.setProperty('--k-project', accent);
+    else style.removeProperty('--k-project');
   });
 
   $effect(() => {
@@ -66,8 +76,13 @@
   });
 
   $effect(() => {
-    terminalPool.setCapacity(settings.value()?.terminal.max_live_views ?? 4);
+    terminalPool.setCapacity(settings.value()?.terminal.max_live_views ?? 2);
   });
+
+  // ---- encrypted secrets file ------------------------------------------------------------------
+
+  const unlockOnce = startupUnlock();
+  $effect(() => unlockOnce(settings.value()));
 
   // ---- layouts ---------------------------------------------------------------------------------
 
@@ -232,7 +247,7 @@
     display: flex;
     min-height: 0;
     min-width: 0;
-    background: var(--k-bg);
+    background: var(--k-bezel);
   }
 
   .main {

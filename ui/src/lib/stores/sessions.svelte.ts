@@ -27,6 +27,11 @@ export class SessionsStore {
     return this.all.filter((s) => s.attention === 'needs_input' || s.status === 'needs_input');
   }
 
+  /** True when Claude (or any session) in the project is busy: feeds the `working` lamp. */
+  workingIn(projectId: ProjectId): boolean {
+    return this.all.some((s) => s.project_id === projectId && s.status === 'working');
+  }
+
   next(projectOrder: readonly ProjectId[], afterId: SessionId | null): SessionInfo | null {
     return nextNeedingInput(this.all, projectOrder, afterId);
   }

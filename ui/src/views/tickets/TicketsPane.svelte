@@ -15,6 +15,7 @@
     ErrorState,
     Icon,
     IconButton,
+    Lamp,
     Menu,
     Tabs,
     VirtualList,
@@ -23,7 +24,9 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError, statusTone } from '../work/common';
+  import { sessionsLamp } from '../../shell/nav';
   import { openContent } from '../work/nav';
+  import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -34,7 +37,7 @@
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
-  const ROW_HEIGHT = 34;
+  const ROW_HEIGHT = 26;
   const move = new MoveController();
 
   // ---- scope, view and mode -----------------------------------------------------------------
@@ -345,13 +348,14 @@
     void move.moveToColumn(item.ticket, column);
   }
 
-  const hasWork = (item: TicketItem): boolean =>
-    item.work_item_id !== null || work.forTicket(item.ticket.ref) !== null;
+  const workOf = (item: TicketItem) =>
+    work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
+  const hasWork = (item: TicketItem): boolean => item.work_item_id !== null || workOf(item) !== null;
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="pane"
+  class="k-listpane"
   data-testid="tickets-pane"
   data-mode={mode}
   bind:this={root}
@@ -360,7 +364,15 @@
   aria-label="Tickets"
   {onkeydown}
 >
-  <header class="bar">
+  <header class="k-toolbar">
+    <input
+      class="k-filter"
+      bind:this={filterInput}
+      bind:value={filter}
+      placeholder="Filter (/)"
+      aria-label="Filter tickets"
+      onkeydown={filterKeys}
+    />
     {#if views.length > 1}
       <Tabs
         label="Views"
@@ -368,18 +380,10 @@
         value={viewId ?? undefined}
         onchange={setView}
       />
-    {:else}
-      <span class="title">{views[0]?.label ?? (scope.kind === 'all' ? 'All projects' : 'Tickets')}</span>
+    {:else if views[0] || scope.kind === 'all'}
+      <span class="title">{views[0]?.label ?? 'All projects'}</span>
     {/if}
     <span class="spacer"></span>
-    <input
-      class="filter"
-      bind:this={filterInput}
-      bind:value={filter}
-      placeholder="Filter (/)"
-      aria-label="Filter tickets"
-      onkeydown={filterKeys}
-    />
     {#if project?.tracker}
       <Tabs
         label="Display mode"
@@ -395,11 +399,7 @@
   </header>
 
   {#if noTracker}
-    <EmptyState
-      icon="ticket"
-      title="No tracker bound"
-      body={`${project?.name ?? 'This project'} has no tracker. Bind one to see your tickets.`}
-    >
+    <EmptyState icon="ticket" title={`No tracker bound to ${project?.name ?? 'this project'}.`}>
       {#snippet actions()}
         <Button variant="primary" onclick={() => void dispatch('settings.open', { section: 'projects' })}>
           Bind a tracker
@@ -431,11 +431,7 @@
       onretry={refresh}
     />
     {#if items.length === 0}
-      <EmptyState
-        icon="ticket"
-        title={`Nothing assigned to you in ${viewLabel}`}
-        body="Switch view or refresh."
-      >
+      <EmptyState icon="ticket" title={`Nothing assigned to you in ${viewLabel}.`}>
         {#snippet actions()}
           {#if views.length > 1}
             <Button
@@ -449,7 +445,7 @@
         {/snippet}
       </EmptyState>
     {:else if shown.length === 0}
-      <EmptyState icon="search" title="No ticket matches the filter" body={`Nothing matches "${filter}".`}>
+      <EmptyState icon="search" title={`No tickets match "${filter}".`}>
         {#snippet actions()}<Button onclick={() => (filter = '')}>Clear filter</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list'}
@@ -467,26 +463,26 @@
             <button
               type="button"
               tabindex="-1"
-              class="row"
+              class="k-row"
               class:selected={cur === item}
               aria-current={cur === item ? 'true' : undefined}
               data-key={keyOf(item)}
               onclick={() => (selKey = keyOf(item))}
               ondblclick={() => openDetail(item)}
             >
-              <span class="key">{item.ticket.ref.key}</span>
-              <span class="ttl">{item.ticket.title}</span>
+              <span class="k-row-key">{item.ticket.ref.key}</span>
+              <span class="k-row-title">{item.ticket.title}</span>
               {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
               {#if scope.kind === 'all'}
                 <Badge>{item.project_ids[0] ?? 'Other'}</Badge>
               {/if}
               {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
-              {#if item.ticket.priority}<span class="prio">{item.ticket.priority}</span>{/if}
               <Badge tone={statusTone(item.ticket.status.category)}>{item.ticket.status.name}</Badge>
-              <span class="who" title={item.ticket.assignee?.name ?? 'Unassigned'}>
+              <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}>
                 {item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}
               </span>
-              <span class="age">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
+              {#if item.ticket.priority}<span class="k-row-meta">{item.ticket.priority}</span>{/if}
+              <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
             </button>
           {/snippet}
         </VirtualList>
@@ -509,7 +505,7 @@
             ondragleave={() => (overLane = null)}
             ondrop={(e) => drop(e, lane.column)}
           >
-            <h3>{lane.column?.name ?? 'Other'} <Badge>{lane.cards.length}</Badge></h3>
+            <h3>{lane.column?.name ?? 'Other'} <span class="count k-num">{lane.cards.length}</span></h3>
             <div class="cards">
               {#each lane.cards as item (keyOf(item))}
                 <button
@@ -528,19 +524,21 @@
                   onclick={() => (selKey = keyOf(item))}
                   ondblclick={() => openDetail(item)}
                 >
-                  <span class="card-top">
+                  <span class="card-row first">
                     <span class="key">{item.ticket.ref.key}</span>
+                    <Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} />
                     {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
-                    <span class="who">{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
-                    >
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
-                  {#if item.ticket.labels.length > 0 || item.ticket.priority}
-                    <span class="card-meta">
-                      {#if item.ticket.priority}<span class="prio">{item.ticket.priority}</span>{/if}
-                      {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
-                    </span>
-                  {/if}
+                  <span class="card-row">
+                    <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
+                      >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
+                    >
+                    {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
+                    <span class="spacer"></span>
+                    {#if item.ticket.priority}<span class="k-row-meta">{item.ticket.priority}</span>{/if}
+                    <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
+                  </span>
                 </button>
               {/each}
             </div>
@@ -565,9 +563,19 @@
     {/if}
   {/if}
 
-  <footer class="hints" aria-hidden="true">
-    j/k move · Enter open · / filter · m move · a assign me · c comment · o browser · s start work · R refresh
-  </footer>
+  <KeyHints
+    hints={[
+      ['j/k', 'move'],
+      ['Enter', 'open'],
+      ['/', 'filter'],
+      ['m', 'move to'],
+      ['a', 'assign me'],
+      ['c', 'comment'],
+      ['o', 'browser'],
+      ['s', 'start work'],
+      ['R', 'refresh'],
+    ]}
+  />
 </div>
 
 {#if menu}
@@ -595,142 +603,39 @@
 <MoveDialogs {move} />
 
 <style>
-  .pane {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    outline: none;
-    background: var(--k-bg);
-    color: var(--k-fg);
-  }
-
-  .pane:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--k-focus);
-  }
-
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-  }
-
-  .title {
-    font-weight: 600;
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .filter {
-    width: 180px;
-    height: 24px;
-    padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    background: var(--k-bg-sunken);
-    color: var(--k-fg);
-    font: inherit;
-  }
-
-  .list {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    width: 100%;
-    height: 100%;
-    padding: 0 var(--k-space-3);
-    border: 0;
-    border-bottom: 1px solid var(--k-border);
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: default;
-  }
-
-  .row:hover {
-    background: var(--k-bg-hover);
-  }
-
-  .selected {
-    background: var(--k-bg-selected);
-  }
-
-  .key {
-    flex: none;
-    min-width: 72px;
-    font-family: var(--k-font-mono);
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
-  }
-
-  .ttl {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .prio,
-  .age {
-    flex: none;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .who {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--k-bg-sunken);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
-  }
-
+  /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */
   .board {
     flex: 1;
     min-height: 0;
     display: flex;
     gap: var(--k-space-3);
     padding: var(--k-space-3);
+    background: var(--k-well);
     overflow: auto;
   }
 
   .lane {
-    flex: 0 0 260px;
+    flex: 0 0 264px;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    background: var(--k-bg-sunken);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bezel);
   }
 
   .lane.over {
-    border-color: var(--k-accent);
+    box-shadow: inset 0 2px 0 var(--k-accent);
   }
 
   .lane h3 {
     display: flex;
     align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     margin: 0;
-    padding: var(--k-space-2) var(--k-space-3);
+    padding: var(--k-space-3) var(--k-space-3) var(--k-space-2);
     font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg-muted);
   }
 
   .cards {
@@ -739,49 +644,51 @@
     display: flex;
     flex-direction: column;
     gap: var(--k-space-2);
-    padding: var(--k-space-2);
+    padding: 0 var(--k-space-2) var(--k-space-2);
     overflow: auto;
   }
 
   .card {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-1);
-    padding: var(--k-space-2);
+    gap: var(--k-space-2);
+    padding: var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius-sm);
-    background: var(--k-bg-elev);
+    background: var(--k-well);
     color: inherit;
-    font: inherit;
     text-align: left;
     cursor: grab;
   }
 
   .card.selected {
-    border-color: var(--k-accent);
     background: var(--k-bg-selected);
+    box-shadow: inset 2px 0 0 var(--k-accent);
   }
 
-  .card-top,
-  .card-meta {
+  .card-row {
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
   }
 
-  .card-top .key {
-    flex: 1;
-    min-width: 0;
+  /* Fixed to chip height on every card so titles line up across lanes. */
+  .card-row.first {
+    height: 18px;
+  }
+
+  .key {
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
   }
 
   .card-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
     overflow-wrap: anywhere;
-  }
-
-  .hints {
-    padding: var(--k-space-1) var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
   }
 </style>

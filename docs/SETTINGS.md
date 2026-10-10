@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]
@@ -58,8 +58,11 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `cursor_blink` | bool | `false` | focused pane only |
 | `scrollback` | table {shell, claude, editor, tool, setup, custom: int} | `{3000, 3000, 500, 500, 1000, 3000}` | Rust model lines |
 | `view_scrollback` | int (100..10000) | `1000` | xterm lines + snapshot history |
-| `max_live_views` | int (1..12) | `4` | hidden xterm instances kept (LRU) |
+| `max_live_views` | int (1..12) | `2` | hidden xterm instances kept (LRU) |
 | `memory_cap_mb` | int (32..2048) | `160` | total scrollback budget across sessions |
+| `history_log` | bool | `true` | append scrolled-off lines (plain text) to `<data>/history/` per session: search + restore (ARCH §9.6) |
+| `history_log_mb` | int (1..1024) | `16` | per-session log cap (two rotated halves) |
+| `history_log_total_mb` | int (16..65536) | `512` | cap of all session logs; oldest files deleted first |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |
 | `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click paste |
@@ -71,6 +74,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `shell` | str | `""` | empty = `$SHELL` |
 | `env` | map<str,str> | `{}` | added to every session |
 | `minimum_contrast_ratio` | float | `1` | xterm option |
+| `session_host` | enum(inprocess\|daemon) | `daemon` | restart; global. `daemon` = PTYs live in `keltad`: sessions survive quit and re-attach on the next start (falls back to `inprocess` when keltad cannot start) |
 
 ### [linux.graphics]  (x-kelta-scope global, x-kelta-restart; read by `platform::pre_init` with a minimal TOML parse)
 | `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds; auto also turns compositing off without a GPU render node (`/dev/dri/renderD*`) |
@@ -113,7 +117,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
 | `follow_claude_edits` | enum(off\|reload\|open) | `reload` | |
-| `review_args` | list<str> | `[]` | appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]` |
+| `review_args` | list<str> | `[]` | the diff editor's arguments: appended for review sessions and used by `work_diff` (Review diff, `d`) for own work items, e.g. `["-c","DiffviewOpen {range}"]`. `{range}` renders `<remote>/<base>` for own items (merge base to working tree, uncommitted work included) and `<remote>/<base>...HEAD` for review checkouts. Empty: Review diff runs `git diff $(git merge-base <remote>/<base> HEAD)` in a shell |
 | `presets` | list<EditorPreset> by id | §2.1 | x-kelta-merge by_id, x-kelta-exec |
 
 EditorPreset: `{ id: str, label: str, command: str, args: list<Template>, open: enum(rpc|keys|command|none), open_keys: Template?, open_cmd: list<Template>?, external: bool = false, restore: enum(mksession|none) = none, enabled: bool = true }`. Placeholders: `{sock}`, `{path}` (initial path, default `.`), `{file}`, `{line}`, `{cwd}`, `{sid8}`.
@@ -216,6 +220,24 @@ layout = { session = "shell" }
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
 
+Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+
+```toml
+[[tools]]                    # embedded: TUI in a pane next to the current one, focused if already open
+id = "lazydocker"
+label = "Docker"
+command = "lazydocker"       # kind defaults to "pty"
+keybinding = "mod+shift+d"
+
+[[tools]]                    # external: launched detached, cwd = project root, never killed by Kelta
+id = "fork"
+label = "Fork"
+kind = "external"
+command = "open"
+args = ["-a", "Fork", "."]
+check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the app is absent
+```
+
 ### [plugins]
 | `dev_paths` | list<path> | `[]` | unpacked plugin dirs loaded in dev mode (global only; still require grants) |
 | `disabled` | list<PluginId> | `[]` | |
@@ -294,13 +316,15 @@ Config holds only `SecretRef` strings, never tokens:
 | SecretRef | Resolution |
 |---|---|
 | `keyring:<name>` | OS keyring via keyring-core: service `dev.kelta`, user `<name>`. macOS Keychain (`apple-native-keyring-store`, `keychain` feature); Linux Secret Service (`zbus-secret-service-keyring-store`). |
+| `file:<name>` | entry `<name>` of `<data>/secrets.enc`: 0600, XChaCha20-Poly1305 over a JSON map, key = Argon2id(passphrase, per-file salt; 19 MiB, t=2, p=1), header authenticated. Locked until the passphrase is entered in the UI (startup prompt when an account uses `file:`, or Settings → Accounts → Secret storage); the derived key stays in memory for the run (zeroized on drop), the passphrase is wiped after derivation. Writes are serialized and atomic (temp file + rename). |
 | `gh-cli` | `gh auth token --hostname <host of base_url>` (read-only reuse; never copied) |
 | `glab-cli` | plaintext `config.yml` token for host (glab path search order), else `glab auth status --show-token --hostname <host>` |
 | `command:<argv>` | argv split shell-words, exec without a shell, 5 s timeout, stdout trimmed (e.g. `command:pass show jira/acme`, `command:op read op://…`, `command:secret-tool lookup service kelta account jira`) |
 | `env:<VAR>` | process env (login env included) |
 
 - Resolution runs off the UI thread with a 5 s timeout, result cached in memory only (zeroized on drop), invalidated on settings change or 401. Never written to disk, never sent to the UI, never logged.
-- `secret_set` writes only `keyring:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- `secret_set` / `secret_delete` write only `keyring:` and `file:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `file:`/`command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- `secret_unlock {passphrase, create}` (UI IPC only, no ctl equivalent) unlocks the encrypted file for the run; `create` makes it when missing (`not_found` otherwise). `secret_backends_status` reports it as `encrypted-file` (available = unlocked) and Diagnostics warns while an existing file is locked. A wrong passphrase and a modified file give the same `needs_auth` error.
 - macOS dev builds: Keychain prompts on each rebuild — CONTRIBUTING recommends `env:` refs in development.
 
 ## 6. Templates and placeholders

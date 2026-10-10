@@ -32,7 +32,9 @@
     onbeforetest,
   }: Props = $props();
 
-  type Kind = 'none' | 'keyring' | 'gh-cli' | 'glab-cli' | 'command' | 'env';
+  type Kind = 'none' | 'keyring' | 'file' | 'gh-cli' | 'glab-cli' | 'command' | 'env';
+  /** Sources whose token Kelta stores itself ("Set token…"). */
+  const stored = (k: Kind): k is 'keyring' | 'file' => k === 'keyring' || k === 'file';
 
   function parse(ref: string): { kind: Kind; arg: string } {
     if (!ref) return { kind: 'none', arg: '' };
@@ -40,7 +42,8 @@
     const i = ref.indexOf(':');
     if (i > 0) {
       const k = ref.slice(0, i);
-      if (k === 'keyring' || k === 'command' || k === 'env') return { kind: k, arg: ref.slice(i + 1) };
+      if (k === 'keyring' || k === 'file' || k === 'command' || k === 'env')
+        return { kind: k, arg: ref.slice(i + 1) };
     }
     return { kind: 'command', arg: ref };
   }
@@ -61,6 +64,7 @@
 
   const options = $derived([
     { value: 'keyring', label: 'OS keychain (keyring)' },
+    { value: 'file', label: 'Encrypted file (passphrase)' },
     ...(accountKind === 'github' || accountKind === null
       ? [{ value: 'gh-cli', label: 'GitHub CLI (gh)' }]
       : []),
@@ -80,7 +84,7 @@
 
   function pick(k: Kind): void {
     // the old argument belongs to the old source: never carry it over
-    if (k !== kind) arg = k === 'keyring' ? (accountId ?? '') : '';
+    if (k !== kind) arg = stored(k) ? (accountId ?? '') : '';
     kind = k;
     const ref = build(k, arg);
     if (ref !== null || k === 'none') onchange(ref);
@@ -92,7 +96,8 @@
   }
 
   async function saveToken(): Promise<void> {
-    const ref = build('keyring', arg);
+    if (!stored(kind)) return;
+    const ref = build(kind, arg);
     if (!ref || !token) return;
     busy = true;
     error = null;
@@ -101,7 +106,7 @@
       token = '';
       tokenOpen = false;
       if (value !== ref) onchange(ref);
-      toasts.info('Token stored in the keychain');
+      toasts.info(kind === 'file' ? 'Token stored in the encrypted file' : 'Token stored in the keychain');
     } catch (err) {
       error = toIpcError('secret_set', err).message;
     } finally {
@@ -135,16 +140,16 @@
       onchange={(k) => pick(k as Kind)}
       id={accountId ? `secret-kind-${accountId}` : undefined}
     />
-    {#if kind === 'keyring' || kind === 'command' || kind === 'env'}
+    {#if stored(kind) || kind === 'command' || kind === 'env'}
       <TextInput
         bind:value={arg}
         disabled={readonly}
         aria-label="Secret reference argument"
-        placeholder={kind === 'keyring' ? 'name' : kind === 'env' ? 'VARIABLE' : 'pass show jira/acme'}
+        placeholder={stored(kind) ? 'name' : kind === 'env' ? 'VARIABLE' : 'pass show jira/acme'}
         onchange={commitArg}
       />
     {/if}
-    {#if kind === 'keyring' && !readonly}
+    {#if stored(kind) && !readonly}
       <Button size="sm" onclick={() => (tokenOpen = !tokenOpen)}>Set token…</Button>
     {/if}
     {#if accountId}
@@ -164,7 +169,9 @@
         type="password"
         autocomplete="off"
         aria-label="Token"
-        placeholder="Paste the token (stored in the OS keychain, never in config.toml)"
+        placeholder={kind === 'file'
+          ? 'Paste the token (stored in the encrypted file, never in config.toml)'
+          : 'Paste the token (stored in the OS keychain, never in config.toml)'}
       />
       <Button size="sm" variant="primary" type="submit" loading={busy} disabled={!token || !arg.trim()}
         >Save</Button

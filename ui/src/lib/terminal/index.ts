@@ -16,7 +16,7 @@ export { frames, FrameScheduler } from './raf';
 export type { TerminalViewDeps, TerminalView, ViewState, ViewRequest } from './view';
 
 export interface TerminalViewPoolOptions {
-  /** `terminal.max_live_views` (default 4, 1..12): hidden views kept alive beyond the visible ones. */
+  /** `terminal.max_live_views` (default 2, 1..12): hidden views kept alive beyond the visible ones. */
   capacity: number;
   /** View factory (tests inject fakes). The default creates xterm-backed views lazily. */
   createView?: (sessionId: SessionId) => PoolView | Promise<PoolView>;

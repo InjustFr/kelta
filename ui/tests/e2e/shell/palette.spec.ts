@@ -1,4 +1,4 @@
-// Command palette, project switcher and attention.next across projects.
+// Command palette, project switcher and Next waiting (attention.next) across projects.
 import { expect, test } from '@playwright/test';
 
 import { activeProject, boot, callsOf, dispatch, SESSIONS } from './helpers';
@@ -36,7 +36,7 @@ test.describe('palette', () => {
     await input.fill('kelta tools');
     await expect(page.getByTestId('palette-item').first()).toContainText('Kelta tools');
     await input.fill('lazygit');
-    await expect(page.getByTestId('palette-item').first()).toContainText('Open tool: lazygit');
+    await expect(page.getByTestId('palette-item').first()).toContainText('Open lazygit');
     await input.fill('settings keys');
     await expect(page.getByTestId('palette-item').first()).toContainText('Settings: Keys');
     await input.fill('zzzzqqq');
@@ -74,54 +74,15 @@ test.describe('palette', () => {
     await expect(page.locator('[data-testid="workspace"][data-project-id="kelta-tools"]')).toBeVisible();
   });
 
-  test('attention.next cycles through sessions needing input across projects', async ({ page }) => {
+  test('Next waiting walks the Now queue across projects, cycling', async ({ page }) => {
     await boot(page);
-    // Only the billing Claude session needs input: attention.next brings it to the front.
+    // First waiting row: Claude replied on the billing scratch item.
     await page.keyboard.press('Control+Shift+U');
     await expect.poll(() => activeProject(page)).toBe('billing');
-    await expect(
-      page.locator('[data-testid="pane"][data-focused="true"] [data-testid="terminal-pane"]'),
-    ).toHaveAttribute('data-session-id', SESSIONS.billingClaude);
-
-    // Make the shop Claude session need input too: next from billing wraps around to shop.
-    await page.evaluate((id) => {
-      const mock = window.__keltaMock!;
-      const s = mock.state.sessions.find((x) => x.id === id)!;
-      mock.emit({
-        type: 'session.updated',
-        session: { ...s, status: 'needs_input', attention: 'needs_input', seen: false },
-      });
-    }, SESSIONS.shopClaude);
-    await expect
-      .poll(() =>
-        page.evaluate((id) => window.__kelta!.stores.sessions.get(id)?.attention, SESSIONS.shopClaude),
-      )
-      .toBe('needs_input');
+    // Then SHOP-155 to review: its closed work tab is recreated around its Claude session.
     await dispatch(page, 'attention.next');
     await expect.poll(() => activeProject(page)).toBe('shop');
-    await expect(
-      page.locator('[data-testid="pane"][data-focused="true"] [data-testid="terminal-pane"]'),
-    ).toHaveAttribute('data-session-id', SESSIONS.shopClaude);
+    await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
-  });
-
-  test('attention.next says so when nothing needs input', async ({ page }) => {
-    await boot(page);
-    await page.evaluate((id) => {
-      const mock = window.__keltaMock!;
-      const s = mock.state.sessions.find((x) => x.id === id)!;
-      mock.emit({
-        type: 'session.updated',
-        session: { ...s, status: 'running', attention: 'none', seen: true },
-      });
-    }, SESSIONS.billingClaude);
-    await expect
-      .poll(() =>
-        page.evaluate((id) => window.__kelta!.stores.sessions.get(id)?.attention, SESSIONS.billingClaude),
-      )
-      .toBe('none');
-    await dispatch(page, 'attention.next');
-    await expect(page.getByTestId('toasts')).toContainText('No session needs input');
-    expect(await activeProject(page)).toBe('shop');
   });
 });

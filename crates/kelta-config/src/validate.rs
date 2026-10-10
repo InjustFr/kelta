@@ -125,7 +125,7 @@ pub fn secret_issues(value: &Value) -> Vec<RawIssue> {
         .map(|p| {
             RawIssue::new(
                 &p,
-                "expected keyring:<name>, gh-cli, glab-cli, command:<argv> or env:<VAR> (secret values never go in config files)",
+                "expected keyring:<name>, file:<name>, gh-cli, glab-cli, command:<argv> or env:<VAR> (secret values never go in config files)",
             )
         })
         .collect()

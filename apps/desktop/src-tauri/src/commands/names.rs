@@ -28,6 +28,7 @@ pub const COMMANDS: &[&str] = &[
     "secret_set",
     "secret_delete",
     "secret_backends_status",
+    "secret_unlock",
     "account_test",
     // projects
     "project_list",
@@ -57,6 +58,7 @@ pub const COMMANDS: &[&str] = &[
     "session_mark_seen",
     "session_link",
     "session_text_tail",
+    "session_history_search",
     "terminal_set_palette",
     // tickets
     "tracker_list",
@@ -83,6 +85,9 @@ pub const COMMANDS: &[&str] = &[
     "work_create_pr",
     "work_finish",
     "work_status",
+    "work_status_all",
+    "work_diff",
+    "work_mark_reviewed",
     "editor_open",
     "editor_send_selection",
     // tools / plugins / triggers

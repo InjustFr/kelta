@@ -6,6 +6,7 @@ import type { OptionAsMeta } from "./OptionAsMeta";
 import type { Osc52 } from "./Osc52";
 import type { Renderer } from "./Renderer";
 import type { ScrollbackSettings } from "./ScrollbackSettings";
+import type { SessionHost } from "./SessionHost";
 import type { ShiftEnter } from "./ShiftEnter";
 
 export type TerminalSettings = { 
@@ -21,6 +22,18 @@ renderer: Renderer, cursor_style: CursorStyle,
  * Focused pane only.
  */
 cursor_blink: boolean, scrollback: ScrollbackSettings, view_scrollback: number, max_live_views: number, memory_cap_mb: number, 
+/**
+ * Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+ */
+history_log: boolean, 
+/**
+ * Per-session log cap (two rotated halves).
+ */
+history_log_mb: number, 
+/**
+ * Cap of all session logs; oldest files are deleted first.
+ */
+history_log_total_mb: number, 
 /**
  * macOS.
  */
@@ -40,4 +53,8 @@ shift_enter: { [key in string]: ShiftEnter }, keyboard_protocol: KeyboardProtoco
 /**
  * Empty = `$SHELL`.
  */
-shell: string, env: { [key in string]: string }, minimum_contrast_ratio: number, };
+shell: string, env: { [key in string]: string }, minimum_contrast_ratio: number, 
+/**
+ * `daemon` = sessions survive quit (keltad).
+ */
+session_host: SessionHost, };

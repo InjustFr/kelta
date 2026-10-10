@@ -14,7 +14,7 @@
 </script>
 
 <div class="inbox" data-testid="inbox-host">
-  <svelte:boundary onerror={(e) => console.error('[kelta] inbox crashed', e)}>
+  <svelte:boundary onerror={(e) => console.error('[kelta] Now crashed', e)}>
     {#if Component}
       <Component
         projectId="inbox"
@@ -25,12 +25,12 @@
         focused={true}
       />
     {:else if entry.error}
-      <ErrorState error={entry.error} title="Could not load the inbox" />
+      <ErrorState error={entry.error} title="Could not load Now" />
     {:else}
       <div class="loading"><Spinner size={16} /></div>
     {/if}
     {#snippet failed(error)}
-      <ErrorState error={error instanceof Error ? error : String(error)} title="The inbox crashed" />
+      <ErrorState error={error instanceof Error ? error : String(error)} title="Now crashed" />
     {/snippet}
   </svelte:boundary>
 </div>

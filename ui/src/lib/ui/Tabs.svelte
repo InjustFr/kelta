@@ -54,7 +54,6 @@
   .k-tabs {
     display: flex;
     gap: var(--k-space-1);
-    border-bottom: 1px solid var(--k-border);
   }
 
   button {
@@ -62,20 +61,25 @@
     align-items: center;
     gap: var(--k-space-2);
     height: var(--k-control-height);
-    padding: 0 var(--k-space-4);
+    padding: 0 var(--k-space-3);
     border: none;
-    border-bottom: 2px solid transparent;
+    box-shadow: inset 0 -2px 0 transparent;
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-chrome);
     cursor: pointer;
   }
 
   button[aria-selected='true'] {
     color: var(--k-fg);
-    border-bottom-color: var(--k-accent);
+    font-weight: var(--k-weight-strong);
+    box-shadow: inset 0 -2px 0 var(--k-accent);
   }
 
   button:hover:not(:disabled) {
     color: var(--k-fg);
+  }
+
+  button:focus-visible {
+    outline-offset: -2px;
   }
 </style>

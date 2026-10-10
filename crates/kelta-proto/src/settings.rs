@@ -165,7 +165,7 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
-    /// Confirm quit if a Claude session is Working/NeedsInput.
+    /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
@@ -350,6 +350,17 @@ impl ScrollbackSettings {
     }
 }
 
+/// Where terminal sessions live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionHost {
+    /// PTYs in the app process: quitting ends them.
+    Inprocess,
+    /// PTYs in `keltad`: sessions survive quit and re-attach on the next start.
+    #[default]
+    Daemon,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct TerminalSettings {
@@ -372,6 +383,14 @@ pub struct TerminalSettings {
     pub max_live_views: u32,
     #[schemars(range(min = 32, max = 2048))]
     pub memory_cap_mb: u32,
+    /// Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+    pub history_log: bool,
+    /// Per-session log cap (two rotated halves).
+    #[schemars(range(min = 1, max = 1024))]
+    pub history_log_mb: u32,
+    /// Cap of all session logs; oldest files are deleted first.
+    #[schemars(range(min = 16, max = 65536))]
+    pub history_log_total_mb: u32,
     /// macOS.
     pub option_as_meta: OptionAsMeta,
     pub copy_on_select: bool,
@@ -389,6 +408,9 @@ pub struct TerminalSettings {
     #[schemars(extend("x-kelta-exec" = true))]
     pub env: BTreeMap<String, String>,
     pub minimum_contrast_ratio: f64,
+    /// `daemon` = sessions survive quit (keltad).
+    #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
+    pub session_host: SessionHost,
 }
 
 impl Default for TerminalSettings {
@@ -403,8 +425,11 @@ impl Default for TerminalSettings {
             cursor_blink: false,
             scrollback: ScrollbackSettings::default(),
             view_scrollback: 1000,
-            max_live_views: 4,
+            max_live_views: 2,
             memory_cap_mb: 160,
+            history_log: true,
+            history_log_mb: 16,
+            history_log_total_mb: 512,
             option_as_meta: OptionAsMeta::Both,
             copy_on_select: false,
             primary_selection: true,
@@ -419,6 +444,7 @@ impl Default for TerminalSettings {
             shell: String::new(),
             env: BTreeMap::new(),
             minimum_contrast_ratio: 1.0,
+            session_host: SessionHost::Daemon,
         }
     }
 }
@@ -811,7 +837,9 @@ pub struct EditorSettings {
     /// Preset id.
     pub default: String,
     pub follow_claude_edits: FollowEdits,
-    /// Appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]`.
+    /// The diff editor's arguments: appended for review sessions and used by Review diff on own work
+    /// items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
+    /// base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
     #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
     pub review_args: Vec<String>,
     #[schemars(extend("x-kelta-merge" = "by_id", "x-kelta-exec" = true))]
@@ -1546,7 +1574,7 @@ mod tests {
         let v = serde_json::to_value(&d).unwrap();
         let back: Settings = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
-        assert_eq!(d.terminal.max_live_views, 4);
+        assert_eq!(d.terminal.max_live_views, 2);
         assert_eq!(d.editor.presets.len(), 6);
         assert_eq!(d.session_templates.len(), 5);
     }
@@ -1613,7 +1641,7 @@ install_hint = "brew install lazydocker"
 id = "isl"
 label = "Sapling ISL"
 kind = "web"
-start = { command = "sl", args = ["web", "--port", "{port}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
+start = { command = "sl", args = ["web", "--no-open", "--foreground", "--json", "--port", "{port}", "--cwd", "{repo.path}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
 embed = "auto"
 url_is_secret = true
 
