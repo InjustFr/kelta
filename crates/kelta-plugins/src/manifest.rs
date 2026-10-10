@@ -310,7 +310,11 @@ pub fn validate(m: &PluginManifest) -> Vec<String> {
             errors.push(format!("contributes.screens `{}`: `placement` must not be empty", s.id));
         }
     }
-    for (kind, list) in [("ticket_actions", &c.ticket_actions), ("review_actions", &c.review_actions)] {
+    for (kind, list) in [
+        ("ticket_actions", &c.ticket_actions),
+        ("review_actions", &c.review_actions),
+        ("work_actions", &c.work_actions),
+    ] {
         let mut seen = HashSet::new();
         for b in list {
             if !is_command_id(&b.id) || !seen.insert(b.id.clone()) {

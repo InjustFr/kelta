@@ -4,15 +4,28 @@
 
 import { dispatch, hasAction } from '$lib/actions';
 import { settingsSections } from '$app/registry';
-import type { CommandDef, ProjectId, SessionInfo, TicketItem } from '$lib/gen';
+import type { CommandDef, ProjectId, SessionInfo, TemplateCtx, TicketItem } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
-import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools, ui } from '$lib/stores';
-import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
+import {
+  plugins,
+  projects,
+  reviews,
+  sessions,
+  settings,
+  tickets,
+  toasts,
+  tools,
+  ui,
+  work,
+} from '$lib/stores';
+import { attentionRank, lampOf, reviewKey, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
+import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
+import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
 import { startWorkOnTicket } from '../../views/work/startWork';
@@ -136,31 +149,56 @@ export function actionItems(): PaletteItem[] {
 }
 
 export function toolItems(): PaletteItem[] {
-  const id = projects.activeId;
-  if (!id) return [];
-  return tools.list(id).map((t) => ({
-    id: `tool:${t.id}`,
-    group: 'Tools' as const,
-    label: `Open ${t.label}`,
-    detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
-    kbd: t.keybinding ?? undefined,
-    icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
-    run: () => void dispatch('tools.open', { tool_id: t.id }),
-  }));
+  // Tools are global: any project's list is the same one.
+  return tools.list(projects.activeId ?? projects.home?.id ?? 'home').flatMap((t) => {
+    const item = {
+      id: `tool:${t.id}`,
+      group: 'Tools' as const,
+      label: `Open ${t.label}`,
+      detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
+      kbd: t.keybinding ?? undefined,
+      icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
+      run: () => void dispatch('tools.open', { tool_id: t.id }),
+    };
+    if (!t.needs_project) return [item];
+    const forProject = {
+      ...item,
+      id: `tool-for:${t.id}`,
+      label: `Open ${t.label} for project…`,
+      kbd: undefined,
+      run: () => void dispatch('tools.open', { tool_id: t.id, pick_project: true }),
+    };
+    return [item, forProject];
+  });
 }
 
-function commandApplies(cmd: CommandDef): boolean {
-  if (!cmd.enabled) return false;
+/**
+ * The ctx a command runs with, `null` when it does not apply. Ticket/review/work commands need their
+ * subject: a ticket/review detail pane or the focused work item; none on lists or in a global view
+ * (the focused pane would be the hidden project's).
+ */
+function commandCtx(cmd: CommandDef): Partial<TemplateCtx> | null {
+  if (!cmd.enabled) return null;
   const pane = focusedPane();
+  const content = ui.view ? null : pane?.content;
   switch (cmd.when) {
     case 'terminal':
-      return pane !== null && paneSession(pane) !== null;
+      return pane !== null && paneSession(pane) !== null ? {} : null;
     case 'ticket':
-      return pane?.content.kind === 'tickets' || pane?.content.kind === 'ticket_detail';
-    case 'review':
-      return pane?.content.kind === 'reviews' || pane?.content.kind === 'review_detail';
+      if (content?.kind !== 'ticket_detail') return null;
+      return ticketCtx(content.ticket, work.forTicket(content.ticket)?.id ?? null, [], projects.activeId);
+    case 'review': {
+      if (content?.kind !== 'review_detail') return null;
+      // The pane's own review once loaded; its ref alone before (no `{pr.*}` yet).
+      const rv = reviews.details[reviewKey(content.review)]?.data?.review;
+      return rv ? reviewCtx(rv, projects.activeId) : { review: content.review };
+    }
+    case 'work': {
+      const w = focusedWorkItem();
+      return w ? workCtx(w) : null;
+    }
     default:
-      return true;
+      return {};
   }
 }
 
@@ -168,7 +206,8 @@ function commandApplies(cmd: CommandDef): boolean {
 export function commandItems(): PaletteItem[] {
   const out: PaletteItem[] = [];
   const add = (cmd: CommandDef, origin: string): void => {
-    if (!commandApplies(cmd)) return;
+    const ctx = commandCtx(cmd);
+    if (!ctx) return;
     out.push({
       id: `command:${origin}:${cmd.id}`,
       group: 'Commands',
@@ -176,13 +215,36 @@ export function commandItems(): PaletteItem[] {
       detail: origin,
       kbd: cmd.keybinding ?? undefined,
       icon: 'zap',
-      run: () => void dispatch(`plugin.command.${cmd.id}`),
+      run: () => void dispatch(`plugin.command.${cmd.id}`, { ctx }),
     });
   };
   for (const cmd of settings.value()?.commands ?? []) add(cmd, 'config');
   for (const p of plugins.plugins.data ?? []) {
     if (!p.enabled) continue;
     for (const cmd of p.contributes.commands) add(cmd, p.name);
+    for (const kind of ['ticket', 'review', 'work'] as const) {
+      for (const b of p.contributes[`${kind}_actions`]) {
+        add(
+          { id: `${p.id}/${b.id}`, title: b.title, do: b.do, when: kind, keybinding: null, enabled: true },
+          p.name,
+        );
+      }
+    }
+    for (const s of p.contributes.screens) {
+      // `<plugin>/open:<screen>` is generated by the backend; global screens open in Home.
+      const project = s.scope === 'global' ? (projects.home?.id ?? 'home') : projects.activeId;
+      out.push({
+        id: `command:${p.name}:${p.id}/open:${s.id}`,
+        group: 'Commands',
+        label: `Open ${s.title}`,
+        detail: p.name,
+        icon: 'zap',
+        run: () =>
+          void dispatch(`plugin.command.${p.id}/open:${s.id}`, {
+            ctx: project ? { extra: { project_id: project } } : {},
+          }),
+      });
+    }
   }
   return out;
 }

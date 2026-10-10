@@ -38,6 +38,8 @@ export class UiStore {
   /** Initial query for the palette (e.g. "Move SHOP-142 to…"). */
   paletteQuery = $state('');
   sheets = $state<SheetEntry[]>([]);
+  /** The switcher runs as `pickProject`'s picker (its placeholder and pending answer) while set. */
+  pick = $state<{ placeholder: string; resolve: (id: string | null) => void } | null>(null);
   /** Window visibility/focus as seen by the webview. */
   focused = $state(true);
   /** Global view shown instead of the active project (`null` = the project). */
@@ -53,13 +55,33 @@ export class UiStore {
   }
 
   openOverlay(key: OverlayKey, query = ''): void {
+    this.#settlePick(null);
     this.overlay = key;
     this.paletteQuery = query;
   }
 
   closeOverlay(): void {
+    this.#settlePick(null);
     this.overlay = null;
     this.paletteQuery = '';
+  }
+
+  /** The switcher as a project picker (no Home): the picked project id, or null when closed. */
+  pickProject(placeholder: string): Promise<string | null> {
+    this.openOverlay('switcher');
+    return new Promise((resolve) => (this.pick = { placeholder, resolve }));
+  }
+
+  /** Answer of the open `pickProject` picker. */
+  resolvePick(id: string): void {
+    this.#settlePick(id);
+    this.closeOverlay();
+  }
+
+  #settlePick(id: string | null): void {
+    const p = this.pick;
+    this.pick = null;
+    p?.resolve(id);
   }
 
   toggleOverlay(key: OverlayKey): void {

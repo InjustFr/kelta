@@ -1,29 +1,79 @@
 # Kelta
 
-Claude Code and nvim side by side in built-in terminals, with your tracker tickets and pull request
-reviews next to them, many projects in one window, and a very small memory footprint.
+Pick a ticket, get Claude Code and nvim side by side in its own worktree, review the pull requests waiting on
+you, all in one light desktop window.
 
-Open source (MIT). Desktop app built with Tauri v2, Svelte 5 and Rust. macOS 13+ and Ubuntu 24.04+
-(Hyprland, Sway, GNOME).
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/InjustFr/kelta?include_prereleases&sort=date)](https://github.com/InjustFr/kelta/releases)
+![Platforms: macOS 13+, Linux](https://img.shields.io/badge/platforms-macOS%2013%2B%20%7C%20Linux-lightgrey.svg)
 
-<!-- screenshots: add docs/images/*.png and link them here -->
+![A work item: Claude Code and nvim side by side in the SHOP-142 worktree](docs/images/readme/work-item.webp)
+
+| Tickets, from every project | Reviews, list and detail |
+|---|---|
+| ![The Tickets view grouped by flow, with the ticket detail on the right](docs/images/readme/tickets.webp) | ![The Reviews view with a pull request's detail on the right](docs/images/readme/reviews.webp) |
+
+## Why Kelta
+
+- **One key from ticket to code.** Select a ticket, press `s`: Kelta creates the worktree and branch, moves the
+  ticket to In progress, and opens Claude (already briefed on the ticket) next to nvim.
+- **Review without leaving the app.** The pull requests you are asked to review sit next to your tickets: read,
+  approve, request changes, or check one out in a worktree with Claude and a diff in nvim.
+- **Many projects, one light window.** Every project and session stays live when you switch. About 220 MB for 3
+  projects and 10 live sessions, 60 MB with the window closed.
 
 ## Features
 
-- Work your tickets without opening the tracker (Jira, Redmine, GitHub Issues, GitLab Issues, Gitea/Forgejo Issues, Linear): pick
-  one or several sources, see Mine, Unassigned or Anyone, move status to status, and start a ticket in a git worktree with
-  Claude Code and nvim side by side.
-- Review the pull requests and merge requests you are asked to review (GitHub, GitLab, Bitbucket Cloud, Gitea/Forgejo).
-- Several projects in one window. Switching never stops a session.
-- Tools (lazygit, lazydocker, `sl web`), triggers and plugins. See [docs/user](docs/user) and
-  [docs/plugins-guide](docs/plugins-guide).
-- Closing the window keeps sessions running on macOS (background mode). `kelta-ctl toggle` brings it back.
-- Budget: about 220 MB total for 3 projects and 10 live sessions, 60 MB with the window closed.
+Kelta is pre-1.0 (v0.1). It runs on macOS 13+ first, and on Ubuntu 24.04+ (Hyprland, Sway, GNOME). Desktop app
+built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below.
 
-## Try the latest build
+**Tickets & work items**
 
-`bash scripts/nightly-local.sh` builds on the maintainer's Mac and publishes unsigned builds to the rolling
-[nightly prerelease](https://github.com/InjustFr/kelta/releases/tag/nightly):
+- Jira, Redmine, GitHub Issues and Projects v2, GitLab, Gitea/Forgejo and Linear, several sources per project:
+  [working with tickets](docs/user/tickets.md#sources).
+- **Tickets**, **Now** and **Reviews** on the rail work across every open project; Now shows what waits on you:
+  [first launch](docs/user/getting-started.md#first-launch).
+- A keyboard-first list grouped by flow (Doing, Waiting, Ready), with a detail column, status moves and bulk
+  moves, or a board: [keys](docs/user/tickets.md#keys).
+- Start work in the right project: Kelta proposes the ticket's project and remembers your pick:
+  [starting a session](docs/user/tickets.md#starting-a-session).
+
+**Reviews**
+
+- Review requests and your own PRs (GitHub, GitLab, Bitbucket Cloud, Gitea/Forgejo) with CI, review state and
+  linked tickets: [pull requests](docs/user/tickets.md#pull-requests),
+  [Bitbucket](docs/user/bitbucket.md), [Gitea](docs/user/gitea.md).
+- Approve, comment, request changes, or review locally in a worktree:
+  [review list and actions](docs/SPEC.md#33-pr--mr-review-list-and-actions).
+
+**Claude integration**
+
+- Claude's state (working, needs you, done) on every pane, tab and project, from Claude Code hooks:
+  [next step](docs/user/tickets.md#next-step).
+- Kelta's MCP ticket tools in any Claude session, not only the ones Kelta starts:
+  [tickets from any Claude session](docs/user/tickets.md#tickets-from-any-claude-session).
+- Refine a ticket with Claude (`r`): acceptance criteria, open questions and sub-tasks to post or keep:
+  [keys](docs/user/tickets.md#keys).
+
+**Tools**
+
+- lazygit, lazydocker, k9s, `sl web` or an app like Fork, defined once in Global settings and opened from the tab
+  bar where you are: [tools](docs/user/tools.md).
+
+**Themes**
+
+- Dark and light theme slots, and import from VS Code, iTerm2, Ghostty or Kitty: [themes](docs/user/themes.md).
+
+**Plugins**
+
+- Tools, palette commands, screens, and actions on tickets, PRs and work items:
+  [writing a plugin](docs/plugins-guide/README.md), [act on a ticket, a PR or a branch](docs/plugins-guide/acting-on-work.md).
+
+## Install
+
+Builds are unsigned test builds of `main`, published to the rolling `nightly` prerelease on the
+[Releases page](https://github.com/InjustFr/kelta/releases) by `bash scripts/nightly-local.sh` (it runs on the
+maintainer's Mac). Expect rough edges; if no build is listed yet, [build from source](#build-from-source).
 
 | Platform | File |
 |---|---|
@@ -31,35 +81,37 @@ Open source (MIT). Desktop app built with Tauri v2, Svelte 5 and Rust. macOS 13+
 | Linux, any distro | `kelta_*_amd64.AppImage`, `kelta_*_aarch64.AppImage` (arm64) |
 | Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb`, `kelta_*_arm64.deb` |
 
-The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached. The builds are for testing; expect rough edges.
+The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached.
 
-### macOS
-
-The app is not signed. Open the dmg, drag Kelta to Applications, then either right-click the app and
-choose **Open** the first time, or remove the quarantine flag:
+**macOS.** Open the dmg and drag Kelta to Applications. The app is not signed: right-click it and choose
+**Open** the first time, or remove the quarantine flag:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Kelta.app
 ```
 
-### Linux
+Closing the window keeps sessions running (background mode); `kelta-ctl toggle` brings it back.
 
-```sh
-chmod +x kelta_*_amd64.AppImage
-./kelta_*_amd64.AppImage
-```
+**Linux.** `chmod +x kelta_*_amd64.AppImage && ./kelta_*_amd64.AppImage`, or
+`sudo apt install ./kelta_*_amd64.deb`. It needs `libwebkit2gtk-4.1` and GTK 3.
 
-or `sudo apt install ./kelta_*_amd64.deb`. It needs `libwebkit2gtk-4.1` and GTK 3.
-
-Wayland notes:
-
-- Hyprland and Sway: the window has no title bar (`window.decorations = "auto"`). Bind
-  `kelta-ctl toggle` to a key. See [docs/user/compositors.md](docs/user/compositors.md).
-- NVIDIA proprietary driver: Kelta turns off the DMABUF renderer and explicit sync for you. If the
-  window stays blank, run `kelta --safe-graphics` ([docs/user/graphics.md](docs/user/graphics.md)).
+- Hyprland and Sway: no title bar (`window.decorations = "auto"`); bind `kelta-ctl toggle` to a key
+  ([compositors](docs/user/compositors.md)).
+- NVIDIA proprietary driver: Kelta turns off the DMABUF renderer and explicit sync; if the window stays blank,
+  run `kelta --safe-graphics` ([graphics](docs/user/graphics.md)).
 - GTK3 renders at integer scales, so fractional scaling can blur text.
-- Notifications need a notification daemon (mako, dunst, swaync) and stored tokens need a Secret
-  Service provider. See [docs/user/keyring-and-notifications.md](docs/user/keyring-and-notifications.md).
+- Notifications need a daemon (mako, dunst, swaync) and stored tokens a Secret Service provider
+  ([keyring and notifications](docs/user/keyring-and-notifications.md)).
+
+## Quick start
+
+1. **Add a project**: `+` in the rail, or `kelta-ctl open ~/code/shop`.
+2. **Add a ticket source**: an account in Settings > Accounts, then **Add source** in Settings > Projects >
+   Tracker.
+3. **Start work on a ticket**: **Tickets** (`Cmd+Shift+B`), select one, press `s`.
+4. **Review a PR**: **Reviews** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
+
+The details are in [getting started](docs/user/getting-started.md).
 
 ## Build from source
 
@@ -73,9 +125,8 @@ cargo run -p kelta-desktop          # dev build (uses the Vite dev server: pnpm 
 bash packaging/build.sh             # installers: deb + AppImage on Linux, dmg on macOS
 ```
 
-Before a pull request run `bash scripts/ci-local.sh`: it checks only what your change affects (`--full` runs
-everything). Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security: see [SECURITY.md](SECURITY.md).
+## Contributing, security, license
 
-## License
-
-MIT
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Before a pull request run `bash scripts/ci-local.sh`.
+- Security: report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+- License: [MIT](LICENSE).

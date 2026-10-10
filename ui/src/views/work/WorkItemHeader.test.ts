@@ -2,11 +2,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { sheetRegistry, type RegisteredSheetKey } from '$app/registry';
-import type { WorkItem } from '$lib/gen';
+import type { PluginInfo, WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { layout, projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { layout, plugins, projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { idle } from '$lib/stores/loadable';
 
 import { workUi } from './ui.svelte';
 import WorkItemHeader from './WorkItemHeader.svelte';
@@ -134,6 +135,44 @@ describe('work bar', () => {
     expect(mark.title).toBe('Nothing to review');
     await fireEvent.keyDown(menu, { key: 'c' }); // disabled: nothing runs, the menu stays
     expect(screen.getByRole('menu', { name: 'Work' })).toBeTruthy();
+  });
+
+  it('plugin work actions come after the built-ins, without letters, and run with the work item', async () => {
+    const base = mock.state.plugins[0] as PluginInfo;
+    const deploy = {
+      id: 'deploy',
+      title: 'Deploy to QA',
+      do: [{ action: 'toast' as const, text: '{branch}', level: null }],
+    };
+    plugins.plugins = {
+      ...idle(),
+      data: [
+        { ...base, id: 'qa', name: 'QA', contributes: { ...base.contributes, work_actions: [deploy] } },
+        {
+          ...base,
+          id: 'off',
+          name: 'Off',
+          enabled: false,
+          contributes: { ...base.contributes, work_actions: [deploy] },
+        },
+      ],
+      fetchedAt: Date.now(),
+    };
+    const w = item(0);
+    mountHeader(w);
+    const menu = await openMenu();
+    const entries = within(menu).getAllByRole('menuitem');
+    expect(entries.length).toBe(21); // the 20 built-ins, then the enabled plugin's action
+    const last = entries.at(-1)!;
+    expect(last.textContent).toContain('Deploy to QA');
+    expect(last.textContent).toContain('QA');
+    await fireEvent.click(last);
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'command_run')).toBe(true));
+    expect(mock.calls.find((c) => c.cmd === 'command_run')?.args).toMatchObject({
+      command_id: 'qa/deploy',
+      ctx: { work_item_id: w.id, ticket: w.ticket, repo_id: w.repo_id, extra: { project_id: w.project_id } },
+    });
+    plugins.plugins = { ...idle(), data: [], fetchedAt: Date.now() };
   });
 
   it('review checkouts are read-only: p r f l ⇧T ⇧M are gated', async () => {

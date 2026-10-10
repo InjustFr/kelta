@@ -30,8 +30,8 @@ const TERMINAL: Record<Exclude<keyof ThemeTerminal, 'ansi'>, string[]> = {
   cursor: ['terminalCursor.foreground', 'editorCursor.foreground'],
   selection: ['terminal.selectionBackground', 'editor.selectionBackground'],
 };
-const HUES = ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
-const ANSI = [...HUES.map((h) => `terminal.ansi${h}`), ...HUES.map((h) => `terminal.ansiBright${h}`)];
+export const HUES = ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
+export const ANSI = [...HUES.map((h) => `terminal.ansi${h}`), ...HUES.map((h) => `terminal.ansiBright${h}`)];
 const BASES: Record<string, ThemeBase> = {
   dark: 'dark',
   hc: 'dark',
@@ -97,8 +97,9 @@ export function themeId(name: string, fileName: string): string {
   return id in BUILTIN ? `${id}-custom` : id;
 }
 
-const stem = (fileName: string) => fileName.replace(/^.*[\\/]/, '').replace(/\.jsonc?$/i, '');
-const titleCase = (s: string) =>
+export const stem = (fileName: string) =>
+  fileName.replace(/^.*[\\/]/, '').replace(/\.(jsonc?|itermcolors|conf|toml|ya?ml)$/i, '');
+export const titleCase = (s: string) =>
   s
     .split(/[-_.\s]+/)
     .filter(Boolean)

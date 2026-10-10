@@ -67,7 +67,8 @@
         },
         "on": "ticket.transitioned"
       }
-    ]
+    ],
+    "work_actions": []
   },
   "description": "Burndown chart",
   "dev": false,

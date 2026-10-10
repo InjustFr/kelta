@@ -1,6 +1,6 @@
 <script lang="ts">
   // Settings > Tools quick form: appends a plain `[[tools]]` entry (Terminal = pty, App = external
-  // `open -a`) to the edited layer. Everything else stays in the full editor below.
+  // `open -a`) to the global layer (tools are personal). Everything else stays in the full editor below.
   import type { JsonValue, ToolInfo } from '$lib/gen';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
@@ -18,7 +18,7 @@
 
   interface Props {
     editor: SettingsEditor;
-    /** Merged tool list of the project (ids are deduped against it, not only the edited layer). */
+    /** Merged tool list: global + plugin tools (ids are deduped against it and the global layer). */
     merged: readonly ToolInfo[] | undefined;
     bindings: Record<string, string[]>;
     open: boolean;

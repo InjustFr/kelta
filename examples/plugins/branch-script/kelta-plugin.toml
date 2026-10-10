@@ -1,0 +1,33 @@
+# Example plugin: an action on work items and tickets that opens a screen, which runs a script on the
+# branch's worktree (docs/plugins-guide/acting-on-work.md). Install it from Settings → Plugins → Install
+# (choose this directory), or with `kelta-ctl plugin install examples/plugins/branch-script`.
+id = "branch-script"
+name = "Branch script"
+version = "0.1.0"
+kelta_api = "^0.1"
+description = "Runs a script of your choice on a work item's branch and worktree, and keeps the last runs"
+author = "Kelta contributors"
+license = "MIT"
+platforms = ["macos", "linux"]
+permissions = ["work.read", "exec:run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"]
+
+[[contributes.screens]]
+id = "run"
+title = "Branch script"
+icon = "play"
+entry = "dist/index.html"
+scope = "project"
+placement = ["tab", "pane"]
+
+[[contributes.work_actions]]
+id = "run-on-work"
+title = "Run script on this branch"
+do = [{ action = "open_screen", screen = "run", params = { work = "{work.id}", ticket = "{ticket.key}" } }]
+
+[[contributes.ticket_actions]]
+id = "run-on-ticket"
+title = "Run script on this branch"
+do = [{ action = "open_screen", screen = "run", params = { work = "{work.id}", ticket = "{ticket.key}" } }]
+
+[contributes.settings]
+schema = "settings.schema.json"

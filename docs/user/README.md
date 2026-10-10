@@ -14,4 +14,5 @@
 - [Sapling ISL (`sl web`)](sapling-isl.md)
 - [Wayland notes](wayland.md)
 
-Plugin authors: [docs/plugins-guide](../plugins-guide/README.md).
+Plugin authors: [docs/plugins-guide](../plugins-guide/README.md), including
+[Act on a ticket, a PR or a branch](../plugins-guide/acting-on-work.md).

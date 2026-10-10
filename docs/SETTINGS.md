@@ -297,9 +297,11 @@ Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; d
 A project's Tracker section (Settings > Projects) and `ProjectInfo.tracker` show the first source listing the project, with its routes for that project as `repo_rules`. Saving it replaces that source's tracker and the project's routes; removing it takes the project out of the source, which stays.
 
 ### [[tools]], [[triggers]], [[commands]]
-Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
+Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.
 
-The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+The first 6 enabled tools are buttons in the tab bar strip (config order, icon and `label`, tooltip with the `keybinding`, pressed while running in the current work item; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global layer; the Project layer shows the merged list and **Go to Global**). A tool opens where you are: the shown project and its focused work item, else Home (from Tickets, Now or Reviews). A tool whose template fields (`command`, `args`, `cwd`, `env`, `url`, `start.*`) use a `{project.*}` or `{repo.*}` placeholder, even in a fallback like `{worktree|project.root}`, needs a project: with no project in context a project picker asks which one, and the palette adds "Open <label> for project…", which always asks.
+
+Migration (once, on load): each `projects/<id>.toml` that has `[[tools]]` is copied to `projects/.trash/`, then its entries move to `config.toml`. A new id is appended unchanged (placeholders kept), an identical entry or an `id`/`enabled`-only override is dropped, and a different definition under a taken id becomes `<id>-<project id>` labelled "<label> (<project name>)". A toast "Tools moved to your global settings" offers **Review** (Settings → Tools). Repo files are never rewritten. No tool is built in or auto-detected.
 
 ```toml
 [[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),
@@ -370,9 +372,6 @@ DATABASE_URL = "postgres://localhost/shop_dev"
 setup = ["pnpm install --frozen-lockfile"]
 [claude.profiles.default]
 model = "sonnet"
-[[tools]]
-id = "lazydocker"
-enabled = true
 ```
 
 Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys valid for every kind:
@@ -402,7 +401,7 @@ A block still on disk (hand-written, restored from `.trash`, or a failed move) i
 
 ## 4. Repo-local `.kelta/config.toml`
 
-Allowed top-level keys: `tools`, `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`tools`, `triggers`, `commands`, `worktree.setup`, `env`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
+Allowed top-level keys: `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`triggers`, `commands`, `worktree.setup`, `env`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
 
 ## 5. Secrets
 

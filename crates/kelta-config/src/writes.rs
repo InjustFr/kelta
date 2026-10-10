@@ -110,6 +110,33 @@ fn trash_path(dirs: &Dirs, id: &str) -> Result<PathBuf, KeltaError> {
     Ok(dest)
 }
 
+/// Add one project tool entry to the global list, unless it is an override or already there.
+fn merge_project_tool(tools: &mut Vec<Value>, entry: &Value, project: &str, name: &str) {
+    let Some(m) = entry.as_object() else { return };
+    if m.keys().all(|k| k == "id" || k == "enabled") {
+        return;
+    }
+    let id = m.get("id").and_then(Value::as_str).unwrap_or_default();
+    let label = m.get("label").and_then(Value::as_str).unwrap_or(id);
+    for n in 0.. {
+        let cand = match n {
+            0 => entry.clone(),
+            _ => {
+                let suffix = if n == 1 { project.to_owned() } else { format!("{project}-{n}") };
+                let mut c = m.clone();
+                c.insert("id".into(), json!(format!("{id}-{suffix}")));
+                c.insert("label".into(), json!(format!("{label} ({name})")));
+                Value::Object(c)
+            }
+        };
+        match tools.iter().find(|t| t.get("id") == cand.get("id")) {
+            None => return tools.push(cand),
+            Some(t) if *t == cand => return,
+            Some(_) => {}
+        }
+    }
+}
+
 fn repos_json(repos: &[RepoDraft]) -> Value {
     let any_primary = repos.iter().any(|r| r.primary);
     Value::Array(repos.iter().enumerate().map(|(i, r)| repo_json(r, !any_primary && i == 0)).collect())
@@ -645,6 +672,56 @@ impl ConfigService {
             self.commit_text_locked(&g, &target, Self::finish_text(&target, &doc))?;
         }
         Ok(found.len())
+    }
+
+    /// Tools are personal (#243): move every project file's `[[tools]]` to the global file, once.
+    /// A new id is appended unchanged, an identical entry or an `id`/`enabled`-only override is
+    /// dropped, a different definition under a taken id becomes `<id>-<project>`. Each project
+    /// file is copied to `projects/.trash/` first. Returns the number of project entries moved.
+    pub(crate) fn migrate_project_tools(dirs: &Dirs) -> Result<usize, KeltaError> {
+        let mut projects = Vec::new();
+        for (stem, path) in Self::project_files(dirs) {
+            let Some(text) = read_optional(&path)? else { continue };
+            // an unparsable file or a malformed `tools` is left alone: validation reports it
+            let Ok(parsed) = toml_io::parse(&text) else { continue };
+            let Some(Value::Array(entries)) = parsed.value.get("tools") else { continue };
+            let name = parsed.value.pointer("/project/name").and_then(Value::as_str).unwrap_or(&stem);
+            projects.push((stem.clone(), name.to_owned(), path, text.clone(), entries.clone()));
+        }
+        if projects.is_empty() {
+            return Ok(0);
+        }
+        let global = Target { path: dirs.global_config(), kind: FileKind::Global };
+        let gtext = read_optional(&global.path)?.unwrap_or_default();
+        let gvalue = toml_io::parse(&gtext).map_err(|i| KeltaError::invalid(i.message))?.value;
+        let mut tools = match gvalue.get("tools") {
+            None => Vec::new(),
+            Some(Value::Array(a)) => a.clone(),
+            Some(_) => return Err(KeltaError::invalid("global `tools` is not a list")),
+        };
+        let before = tools.len();
+        let mut moved = 0;
+        for (stem, name, _, _, entries) in &projects {
+            moved += entries.len();
+            for e in entries {
+                merge_project_tool(&mut tools, e, stem, name);
+            }
+        }
+        for (stem, _, path, _, _) in &projects {
+            std::fs::copy(path, trash_path(dirs, stem)?)?;
+        }
+        if tools.len() != before {
+            let mut doc = gtext.parse::<DocumentMut>().map_err(|e| KeltaError::invalid(e.to_string()))?;
+            edit::set_path(&mut doc, &["tools".to_owned()], &Value::Array(tools))
+                .map_err(KeltaError::invalid)?;
+            write_atomic(&global.path, &Self::finish_text(&global, &doc))?;
+        }
+        for (_, _, path, text, _) in &projects {
+            let mut doc = text.parse::<DocumentMut>().map_err(|e| KeltaError::invalid(e.to_string()))?;
+            edit::remove_path(&mut doc, &["tools".to_owned()]);
+            write_atomic(path, &ensure_newline(doc.to_string()))?;
+        }
+        Ok(moved)
     }
 
     // -----------------------------------------------------------------------------------------

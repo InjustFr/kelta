@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Settings → Tools: a quick Add tool form, the generic keyed-list editor for `[[tools]]` of the
-  // edited layer (global or project), then the merged list (config layers + plugins) with an
-  // install check and key-conflict warnings.
+  // Settings → Tools: tools are personal, so the Add tool form and the `[[tools]]` editor live at the
+  // Global layer only (other layers show a note and Go to Global). Then the merged list (global +
+  // plugins) with an install check and key-conflict warnings.
   import type { SettingsSectionProps } from '$app/registry';
   import type { ToolCheck } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -34,8 +34,7 @@
     const v = editor.valueOf('keys.bindings');
     return effectiveBindings(isRecord(v) ? (v as Record<string, string[]>) : {}, platform);
   });
-  // The repo layer is trust-gated and read-only until trusted (SETTINGS §2): no quick form there.
-  const canAdd = $derived(layer !== 'repo');
+  const canAdd = $derived(editor.layer === 'global');
   // Nothing to dedupe against (no project, or tool_list failed) must not block Add; only a pending load does.
   const dedupeAgainst = $derived(!pid || (slot?.error && !slot.data) ? [] : (slot?.data ?? undefined));
 
@@ -54,7 +53,16 @@
 
 <SectionForm sectionId="tools" {...props}>
   {#snippet before()}
-    {#if canAdd}<AddToolForm {editor} merged={dedupeAgainst} {bindings} bind:open={adding} />{/if}
+    {#if canAdd}
+      <AddToolForm {editor} merged={dedupeAgainst} {bindings} bind:open={adding} />
+    {:else}
+      <p class="personal" data-testid="tools-personal">
+        Tools are personal: they live in your global settings.
+        <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
+          >Go to Global</Button
+        >
+      </p>
+    {/if}
   {/snippet}
   {#snippet after()}
     <section data-layer={layer} class="tools">
@@ -127,6 +135,14 @@
   }
 
   .muted {
+    color: var(--k-fg-muted);
+  }
+
+  .personal {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-3);
+    margin: 0;
     color: var(--k-fg-muted);
   }
 

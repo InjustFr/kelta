@@ -1484,6 +1484,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Docker",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "layer",
@@ -1498,6 +1499,7 @@ export const toolInfos: ToolInfo[] = [
     "keybinding": null,
     "kind": "pty",
     "label": "Kubernetes",
+    "needs_project": false,
     "placement": "split_right",
     "source": {
       "kind": "plugin",
@@ -1593,7 +1595,8 @@ export const pluginInfo: PluginInfo = {
         },
         "on": "ticket.transitioned"
       }
-    ]
+    ],
+    "work_actions": []
   },
   "description": "Burndown chart",
   "dev": false,
@@ -1690,7 +1693,8 @@ export const pluginInstallPreview: PluginInstallPreview = {
           },
           "on": "ticket.transitioned"
         }
-      ]
+      ],
+      "work_actions": []
     },
     "description": "Burndown chart of the active sprint for the current project",
     "homepage": null,
@@ -2384,7 +2388,8 @@ export const pluginManifest: PluginManifest = {
         },
         "on": "ticket.transitioned"
       }
-    ]
+    ],
+    "work_actions": []
   },
   "description": "Burndown chart of the active sprint for the current project",
   "homepage": null,
