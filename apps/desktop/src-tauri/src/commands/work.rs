@@ -2,6 +2,7 @@
 //!
 //! Thin delegation to `kelta_work::WorkService` (through `Core::work()`).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use kelta_core::Core;
@@ -40,9 +41,11 @@ pub async fn work_retry_step(core: State<'_, Arc<Core>>, id: WorkItemId, step: S
     core.work().retry_step(&id, &step).await
 }
 
+/// A UI Ship counts as review (FLOW §2.3); Claude's own MCP `create_pr` does not.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_create_pr(core: State<'_, Arc<Core>>, id: WorkItemId, draft: PrDraft) -> Res<WorkItem> {
-    core.work().create_pr(&id, draft).await
+    core.work().create_pr(&id, draft).await?;
+    core.work().mark_reviewed(&id).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -63,4 +66,21 @@ pub async fn work_link(
     apply_side_effects: bool,
 ) -> Res<WorkItem> {
     core.work().link(&id, ticket, apply_side_effects).await
+}
+
+/// Every unfinished item, keyed by id (one fetch per repo, 5 min floor).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_status_all(core: State<'_, Arc<Core>>) -> Res<BTreeMap<WorkItemId, GitStatus>> {
+    core.work().status_all().await
+}
+
+/// The review diff session (the UI places it zoomed in the work tab).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_diff(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<SessionInfo> {
+    core.work().diff(&id).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_mark_reviewed(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().mark_reviewed(&id).await
 }

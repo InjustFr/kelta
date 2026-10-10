@@ -121,9 +121,9 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
-    padding: var(--k-space-1) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    min-height: var(--k-tabbar-height);
+    padding: 0 var(--k-space-3);
+    background: var(--k-bezel-raised);
   }
 
   .label {
@@ -151,7 +151,8 @@
     max-height: 50vh;
     overflow: auto;
     padding: var(--k-space-3);
-    background: var(--k-bg-sunken);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bezel-raised);
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-sm);
     white-space: pre-wrap;

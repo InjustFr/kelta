@@ -18,4 +18,13 @@ title: string | null,
  * Set by `work_link` on an item with a PR: the next Ship/Push prefixes the ticket key to the PR
  * title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
  */
-pr_title_needs_key: boolean, };
+pr_title_needs_key: boolean, 
+/**
+ * Claude stopped with changes Louis has not looked at (FLOW §2.3). Set only from a real `Stop`
+ * hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
+ */
+review_due: boolean, 
+/**
+ * Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+ */
+claude_replied: boolean, };

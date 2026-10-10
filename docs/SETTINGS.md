@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]
@@ -60,6 +60,9 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `view_scrollback` | int (100..10000) | `1000` | xterm lines + snapshot history |
 | `max_live_views` | int (1..12) | `4` | hidden xterm instances kept (LRU) |
 | `memory_cap_mb` | int (32..2048) | `160` | total scrollback budget across sessions |
+| `history_log` | bool | `true` | append scrolled-off lines (plain text) to `<data>/history/` per session: search + restore (ARCH §9.6) |
+| `history_log_mb` | int (1..1024) | `16` | per-session log cap (two rotated halves) |
+| `history_log_total_mb` | int (16..65536) | `512` | cap of all session logs; oldest files deleted first |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |
 | `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click paste |
@@ -113,7 +116,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
 | `follow_claude_edits` | enum(off\|reload\|open) | `reload` | |
-| `review_args` | list<str> | `[]` | appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]` |
+| `review_args` | list<str> | `[]` | the diff editor's arguments: appended for review sessions and used by `work_diff` (Review diff, `d`) for own work items, e.g. `["-c","DiffviewOpen {range}"]`. `{range}` renders `<remote>/<base>` for own items (merge base to working tree, uncommitted work included) and `<remote>/<base>...HEAD` for review checkouts. Empty: Review diff runs `git diff $(git merge-base <remote>/<base> HEAD)` in a shell |
 | `presets` | list<EditorPreset> by id | §2.1 | x-kelta-merge by_id, x-kelta-exec |
 
 EditorPreset: `{ id: str, label: str, command: str, args: list<Template>, open: enum(rpc|keys|command|none), open_keys: Template?, open_cmd: list<Template>?, external: bool = false, restore: enum(mksession|none) = none, enabled: bool = true }`. Placeholders: `{sock}`, `{path}` (initial path, default `.`), `{file}`, `{line}`, `{cwd}`, `{sid8}`.

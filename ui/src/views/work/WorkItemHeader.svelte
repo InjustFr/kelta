@@ -2,19 +2,23 @@
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
-  import type { GitStatus } from '$lib/gen';
-  import { openExternal, workRetryStep, workStatus } from '$lib/ipc/commands';
-  import { tickets, toasts, work } from '$lib/stores';
+  import { effectiveChords } from '$lib/keys/manager';
+  import { settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
-  import { Badge, Button, Icon, Menu, type MenuItem } from '$lib/ui';
+  import { terminalPool } from '$lib/terminal';
+  import { Badge, Button, currentPlatform, Icon, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
+  import { focusedSessionId } from '../../shell/nav';
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
   import { MoveController } from '../tickets/move.svelte';
-  import { statusTone, type Tone } from './common';
+  import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
+  import { statusTone } from './common';
   import CreatePrDialog from './CreatePrDialog.svelte';
   import FinishDialog from './FinishDialog.svelte';
-  import { linkToTicket } from './actions';
+  import { phaseNow, workTitle } from './live';
   import { openContent } from './nav';
+  import { workKey } from './phase';
+  import { workUi } from './ui.svelte';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
 
@@ -23,31 +27,16 @@
   const ticketRef = $derived(item?.ticket ?? null);
   const detail = $derived(ticketRef ? tickets.details[ticketKey(ticketRef)]?.data : null);
   const transitions = $derived(ticketRef ? (tickets.transitions[ticketKey(ticketRef)]?.data ?? []) : []);
+  const phase = $derived(item ? phaseNow(item) : null);
+  const git = $derived(work.git[workItemId] ?? null);
+  const primaryBlocked = $derived(item && phase?.primary ? blockedReason(phase.primary, item, phase) : null);
+  const menuChord = $derived(
+    effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
+  );
 
-  let git = $state<GitStatus | null>(null);
-  let gitError = $state(false);
-  let creating = $state(false);
-  let finishing = $state(false);
-  let menu = $state<{ x: number; y: number } | null>(null);
+  let statusMenu = $state<{ x: number; y: number } | null>(null);
   let statusBtn = $state<HTMLElement>();
-  let retrying = $state(false);
-
-  async function refreshGit(): Promise<void> {
-    if (!item || item.state.kind === 'finished') return;
-    try {
-      git = await workStatus({ id: workItemId });
-      gitError = false;
-    } catch {
-      gitError = true;
-    }
-  }
-
-  // Ahead/behind are read when the tab gains focus (no polling): on mount, on window focus and
-  // whenever the work item changes state.
-  $effect(() => {
-    void item?.state.kind;
-    untrack(() => void refreshGit());
-  });
+  let workBtn = $state<HTMLElement>();
 
   $effect(() => {
     const ref = ticketRef;
@@ -59,26 +48,7 @@
     }
   });
 
-  const stateInfo = $derived.by((): { label: string; tone: Tone } => {
-    switch (item?.state.kind) {
-      case 'planned':
-        return { label: 'Planned', tone: 'neutral' };
-      case 'starting':
-        return { label: 'Starting', tone: 'info' };
-      case 'active':
-        return { label: 'Active', tone: 'info' };
-      case 'pr_open':
-        return { label: 'PR open', tone: 'accent' };
-      case 'finished':
-        return { label: 'Finished', tone: 'ok' };
-      case 'failed':
-        return { label: `Failed: ${item.state.step}`, tone: 'danger' };
-      default:
-        return { label: 'Unknown', tone: 'neutral' };
-    }
-  });
-
-  const menuItems = $derived<MenuItem[]>(
+  const statusItems = $derived<MenuItem[]>(
     transitions.map((t) => ({
       id: t.id,
       label: t.name === t.to.name ? t.name : `${t.name} → ${t.to.name}`,
@@ -86,39 +56,70 @@
     })),
   );
 
-  function openMenu(): void {
-    const r = statusBtn?.getBoundingClientRect();
-    menu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+  const menuItems = $derived.by((): MenuItem[] => {
+    if (!item || !phase) return [];
+    const out: MenuItem[] = [
+      {
+        id: 'primary',
+        label: phase.primaryLabel || 'No next action',
+        kbd: 'enter',
+        disabled: !phase.primary || primaryBlocked !== null,
+        title: primaryBlocked ?? undefined,
+      },
+    ];
+    for (const a of WORK_ACTIONS) {
+      if (!a.key) continue;
+      const reason = blockedReason(a.id, item, phase);
+      out.push({
+        id: a.id,
+        label: a.label({ item, phase }),
+        kbd: a.key === 'F' ? 'shift+f' : a.key,
+        key: a.key,
+        disabled: reason !== null,
+        title: reason ?? undefined,
+        separator: a.id === 'review_diff' || a.id === 'go_claude' || a.id === 'finish',
+        danger: a.id === 'finish',
+      });
+    }
+    return out;
+  });
+
+  const menuPos = $derived.by(() => {
+    if (workUi.menu !== workItemId) return null;
+    const r = workBtn?.getBoundingClientRect();
+    return { x: r ? r.right - 280 : 40, y: (r?.bottom ?? 40) + 2 };
+  });
+
+  function onMenu(id: string): void {
+    if (!item) return;
+    if (id === 'primary') void runPrimary(item);
+    else void runWorkAction(id as (typeof WORK_ACTIONS)[number]['id'], item);
   }
 
-  function menuSelect(id: string): void {
+  /** ⌘. is used from inside Claude or nvim: closing the menu gives the keyboard back. */
+  function closeMenu(): void {
+    workUi.menu = null;
+    const sid = focusedSessionId();
+    if (sid) terminalPool.focus(sid);
+  }
+
+  function openStatusMenu(): void {
+    const r = statusBtn?.getBoundingClientRect();
+    statusMenu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+  }
+
+  function statusSelect(id: string): void {
     const t = transitions.find((x) => x.id === id);
     if (t && detail) void move.moveViaTransition(detail.ticket, t);
   }
-
-  function browse(url: string | null | undefined): void {
-    if (url) openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
-  }
-
-  async function retryFailed(): Promise<void> {
-    if (item?.state.kind !== 'failed') return;
-    retrying = true;
-    try {
-      work.upsert(await workRetryStep({ id: item.id, step: item.state.step }));
-    } catch (err) {
-      toasts.error(err, 'Retry');
-    } finally {
-      retrying = false;
-    }
-  }
 </script>
 
-<svelte:window onfocus={() => void refreshGit()} />
-
-{#if item}
-  <div class="header" role="toolbar" aria-label="Work item" data-testid="work-header">
+{#if item && phase}
+  <div class="bar" role="toolbar" aria-label="Work item" data-testid="work-header" data-phase={phase.id}>
+    <span class="lamp"><Lamp level={phase.lamp} title={phase.label} /></span>
+    <span class="key" data-testid="work-key">{workKey(item)}</span>
+    <span class="ttl" title={workTitle(item)}>{workTitle(item)}</span>
     {#if ticketRef}
-      <span class="key">{ticketRef.key}</span>
       <button
         type="button"
         class="status"
@@ -126,148 +127,191 @@
         aria-haspopup="menu"
         title="Move to…"
         disabled={!detail}
-        onclick={openMenu}
+        onclick={openStatusMenu}
       >
         <Badge tone={statusTone(detail?.ticket.status.category ?? 'unknown')}>
           {detail?.ticket.status.name ?? '…'}
         </Badge>
         <Icon name="chevron-down" size={12} />
       </button>
-    {:else if item.review}
-      <span class="key">{item.review.repo}#{item.review.number}</span>
-    {:else}
-      <span class="key" data-testid="work-key">wip</span>
-      {#if item.title}<span class="title">{item.title}</span>{/if}
     {/if}
-    <Badge tone={stateInfo.tone} title="Work item state">{stateInfo.label}</Badge>
+    <button
+      type="button"
+      class="phase"
+      title="Steps and sessions"
+      data-testid="work-phase"
+      onclick={() =>
+        void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
+    >
+      <span class="label">{phase.label}</span>
+      {#if phase.detail}<span class="detail">{phase.detail}</span>{/if}
+    </button>
     <span class="branch" title={item.worktree}>
       <Icon name="git-branch" size={12} />
       <code>{item.branch}</code>
     </span>
-    {#if git}
+    {#if git && !git.missing}
       <span
-        class="git"
-        title={`${git.ahead} ahead, ${git.behind} behind ${item.base}${git.dirty ? ', uncommitted changes' : ''}${git.unpushed ? ', unpushed commits' : ''}`}
+        class="num"
+        title={`${git.ahead} ahead, ${git.behind} behind ${item.base}, ${git.files} files changed since the merge base`}
       >
         <span data-testid="ahead">↑{git.ahead}</span>
         <span data-testid="behind">↓{git.behind}</span>
-        {#if git.dirty}<span class="dirty" aria-label="Uncommitted changes">●</span>{/if}
+        {#if git.insertions || git.deletions}
+          <span class="ins">+{git.insertions}</span><span class="del">−{git.deletions}</span>
+        {/if}
       </span>
-    {:else if gitError}
-      <button type="button" class="link" onclick={() => void refreshGit()}>status unavailable, retry</button>
+      {#if git.dirty}<span class="tag" title="Part of the diff is uncommitted">dirty</span>{/if}
+    {:else if work.gitError}
+      <button type="button" class="link" onclick={() => void work.refreshStatus()}
+        >status unavailable, retry</button
+      >
     {/if}
     <span class="spacer"></span>
-    {#if item.state.kind === 'failed'}
-      <Button size="sm" loading={retrying} onclick={() => void retryFailed()}>Retry {item.state.step}</Button>
+    {#if phase.primary}
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={primaryBlocked !== null}
+        title={primaryBlocked ?? undefined}
+        onclick={() => void runPrimary(item)}
+      >
+        {phase.primaryLabel}
+      </Button>
     {/if}
-    {#if item.state.kind !== 'finished'}
-      {#if item.pr_url}
-        <Button size="sm" icon="git-pull-request" onclick={() => browse(item.pr_url)}>Open PR</Button>
-      {:else}
-        <Button size="sm" icon="git-pull-request" onclick={() => (creating = true)}>Create PR</Button>
-      {/if}
-    {/if}
-    {#if ticketRef}
+    <span bind:this={workBtn}>
       <Button
         size="sm"
         variant="ghost"
-        icon="ticket"
-        onclick={() => ticketRef && void openContent(projectId, { kind: 'ticket_detail', ticket: ticketRef })}
+        aria-haspopup="menu"
+        title="Work menu"
+        data-testid="work-menu-button"
+        onclick={() => (workUi.menu = item.id)}
       >
-        Ticket
+        Work {#if menuChord}<Kbd chord={menuChord} />{/if}
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        icon="external-link"
-        onclick={() => browse(detail?.ticket.url)}
-        disabled={!detail}
-      >
-        Browser
-      </Button>
-    {:else if item.review}
-      <Button
-        size="sm"
-        variant="ghost"
-        icon="external-link"
-        onclick={() => browse(item.pr_url)}
-        disabled={!item.pr_url}
-      >
-        Browser
-      </Button>
-    {:else if item.state.kind !== 'finished'}
-      <Button size="sm" variant="ghost" icon="ticket" onclick={() => linkToTicket(item.id)}
-        >Link ticket</Button
-      >
-    {/if}
-    {#if item.state.kind !== 'finished'}
-      <Button size="sm" variant="danger" onclick={() => (finishing = true)}>Finish</Button>
-    {/if}
+    </span>
   </div>
 {:else}
-  <div class="header" data-testid="work-header">
+  <div class="bar" data-testid="work-header">
     <span class="muted">Work item not found</span>
   </div>
 {/if}
 
-{#if menu}
+{#if statusMenu}
   <Menu
-    items={menuItems}
-    x={menu.x}
-    y={menu.y}
+    items={statusItems}
+    x={statusMenu.x}
+    y={statusMenu.y}
     label="Move to"
-    onselect={menuSelect}
-    onclose={() => (menu = null)}
+    onselect={statusSelect}
+    onclose={() => (statusMenu = null)}
   />
 {/if}
-{#if creating && item}
-  <CreatePrDialog {item} onclose={() => (creating = false)} />
+{#if menuPos}
+  <Menu items={menuItems} x={menuPos.x} y={menuPos.y} label="Work" onselect={onMenu} onclose={closeMenu} />
 {/if}
-{#if finishing && item}
-  <FinishDialog {item} onclose={() => (finishing = false)} />
+{#if workUi.ship === workItemId && item}
+  <CreatePrDialog {item} onclose={() => (workUi.ship = null)} />
+{/if}
+{#if workUi.finish === workItemId && item}
+  <FinishDialog {item} onclose={() => (workUi.finish = null)} />
 {/if}
 <MoveDialogs {move} />
 
 <style>
-  .header {
+  .bar {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--k-space-2);
+    gap: var(--k-space-2) var(--k-space-4);
+    min-height: var(--k-tabbar-height);
     padding: var(--k-space-1) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-chrome);
     font-size: var(--k-font-size-sm);
+    white-space: nowrap;
+  }
+
+  .lamp {
+    display: inline-flex;
+    justify-content: center;
+    flex: none;
+    width: 10px;
+  }
+
+  .key,
+  .branch code,
+  .num {
+    font-family: var(--k-font-mono);
+    font-variant-numeric: tabular-nums;
   }
 
   .key {
-    font-family: var(--k-font-mono);
+    color: var(--k-fg-muted);
+  }
+
+  .ttl {
+    min-width: 0;
+    max-width: 32ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 600;
   }
 
-  .title {
+  .phase {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--k-space-2);
     min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--k-fg);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .phase:hover .label {
+    text-decoration: underline;
+  }
+
+  .phase .detail {
+    max-width: 40ch;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--k-fg-muted);
   }
 
   .branch {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-1);
+    min-width: 0;
+    overflow: hidden;
     color: var(--k-fg-muted);
   }
 
-  .git {
+  .num {
     display: inline-flex;
-    gap: var(--k-space-1);
-    font-family: var(--k-font-mono);
+    gap: var(--k-space-2);
     color: var(--k-fg-muted);
   }
 
-  .dirty {
-    color: var(--k-warn);
+  .ins {
+    color: var(--k-ok);
+  }
+
+  .del {
+    color: var(--k-danger);
+  }
+
+  .tag {
+    padding: 0 var(--k-space-1);
+    border-radius: 2px;
+    background: var(--k-bg-sunken);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
   }
 
   .spacer {

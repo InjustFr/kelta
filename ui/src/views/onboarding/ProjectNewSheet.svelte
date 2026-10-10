@@ -13,16 +13,8 @@
   import Sheet from '$lib/ui/Sheet.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
-  import {
-    PALETTE,
-    bindTracker,
-    hasIssues,
-    newRepo,
-    removeRepo,
-    setPrimary,
-    slugify,
-    validateDraft,
-  } from './draft';
+  import ColorPicker from './ColorPicker.svelte';
+  import { bindTracker, hasIssues, newRepo, removeRepo, setPrimary, slugify, validateDraft } from './draft';
 
   let { onclose, path: initialPath }: SheetProps = $props();
 
@@ -133,18 +125,8 @@
         hint="Becomes projects/&lt;id&gt;.toml."
       />
 
-      <div class="colors" role="group" aria-label="Colour">
-        {#each PALETTE as c (c)}
-          <button
-            type="button"
-            class="swatch"
-            class:on={draft.color === c}
-            style:background={c}
-            aria-label={c}
-            aria-pressed={draft.color === c}
-            onclick={() => draft && (draft.color = draft.color === c ? null : c)}
-          ></button>
-        {/each}
+      <div class="row">
+        <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
         <input
           class="icon"
           aria-label="Icon (1-2 characters)"
@@ -187,8 +169,8 @@
             {#if draft.code_host_hints.find((h) => h.repo_id === repo.id)}
               {@const hint = draft.code_host_hints.find((h) => h.repo_id === repo.id)!}
               <p class="hint">
-                {hint.kind} · {hint.host}/{hint.repo}
-                {#if hint.account}· account {hint.account}{:else}· no matching account yet{/if}
+                {hint.kind}&ensp;<code>{hint.host}/{hint.repo}</code>&ensp;{#if hint.account}account {hint.account}{:else}no
+                  matching account yet{/if}
               </p>
             {/if}
           </div>
@@ -292,27 +274,14 @@
     gap: var(--k-space-3);
   }
 
-  .colors {
+  .row {
     display: flex;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     align-items: center;
-  }
-
-  .swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-  }
-
-  .swatch.on {
-    border-color: var(--k-fg);
   }
 
   .icon {
     width: 56px;
-    margin-left: var(--k-space-3);
   }
 
   .hint {

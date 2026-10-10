@@ -1,4 +1,6 @@
 <script lang="ts" module>
+  import type { LampLevel } from '$lib/stores';
+
   export interface PickerItem {
     id: string;
     label: string;
@@ -6,11 +8,12 @@
     icon?: string;
     kbd?: string;
     group?: string;
+    lamp?: LampLevel;
   }
 </script>
 
 <script lang="ts">
-  import { Icon, Kbd, Sheet, Spinner } from '$lib/ui';
+  import { Icon, Kbd, Lamp, Sheet, Spinner } from '$lib/ui';
 
   interface Props {
     title: string;
@@ -38,12 +41,18 @@
     testid = 'picker',
   }: Props = $props();
 
+  // One header per group: groups keep the order of their best hit, items keep score order inside.
+  const shown = $derived.by(() => {
+    const order = [...new Set(items.map((i) => i.group))];
+    return [...items].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+  });
+
   let selected = $state(0);
   let list = $state<HTMLElement>();
 
   $effect(() => {
     // New results: select the first one.
-    void items;
+    void shown;
     selected = 0;
   });
 
@@ -55,28 +64,29 @@
   function onkeydown(e: KeyboardEvent): void {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
       e.preventDefault();
-      selected = items.length === 0 ? 0 : (selected + 1) % items.length;
+      selected = shown.length === 0 ? 0 : (selected + 1) % shown.length;
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) {
       e.preventDefault();
-      selected = items.length === 0 ? 0 : (selected - 1 + items.length) % items.length;
+      selected = shown.length === 0 ? 0 : (selected - 1 + shown.length) % shown.length;
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const item = items[selected];
+      const item = shown[selected];
       if (item) onpick(item.id);
     }
   }
 </script>
 
-<Sheet {title} side="top" width={640} {onclose}>
+<Sheet {title} side="top" width={600} {onclose}>
   <div class="picker" data-testid={testid}>
     <div class="input">
-      <Icon name="search" size={15} />
+      <Icon name="search" size={14} />
       <input
         type="text"
         {placeholder}
         value={query}
         oninput={(e) => onquery(e.currentTarget.value)}
         {onkeydown}
+        class="k-mono"
         spellcheck="false"
         autocomplete="off"
         aria-label={title}
@@ -85,8 +95,8 @@
       {#if busy}<Spinner size={14} />{/if}
     </div>
     <div class="list" bind:this={list} role="listbox" aria-label="Results">
-      {#each items as item, i (item.id)}
-        {#if item.group && item.group !== items[i - 1]?.group}
+      {#each shown as item, i (item.id)}
+        {#if item.group && item.group !== shown[i - 1]?.group}
           <div class="group" role="presentation">{item.group}</div>
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -101,6 +111,9 @@
           onpointermove={() => (selected = i)}
           onclick={() => onpick(item.id)}
         >
+          <span class="lamp-slot"
+            >{#if item.lamp}<Lamp level={item.lamp} />{/if}</span
+          >
           <Icon name={item.icon ?? 'command'} size={14} />
           <span class="label">{item.label}</span>
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
@@ -117,7 +130,7 @@
   .picker {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-3);
+    gap: var(--k-space-2);
     margin: calc(var(--k-space-4) * -1) calc(var(--k-space-5) * -1);
   }
 
@@ -125,19 +138,20 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-5);
+    height: 36px;
+    padding: 0 var(--k-space-5);
     border-bottom: 1px solid var(--k-border);
-    color: var(--k-fg-muted);
+    color: var(--k-fg-subtle);
   }
 
   input {
     flex: 1;
     min-width: 0;
-    height: 28px;
+    height: 100%;
     border: none;
     background: transparent;
     color: var(--k-fg);
-    font-size: var(--k-font-size-lg);
+    font-size: var(--k-font-size);
   }
 
   input:focus-visible {
@@ -147,16 +161,14 @@
   .list {
     max-height: 52vh;
     overflow-y: auto;
-    padding: 0 var(--k-space-3) var(--k-space-3);
+    padding: 0 var(--k-space-2) var(--k-space-2);
   }
 
   .group {
     padding: var(--k-space-3) var(--k-space-3) var(--k-space-1);
-    color: var(--k-fg-subtle);
-    font-size: var(--k-font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-strong);
   }
 
   .row {
@@ -166,11 +178,23 @@
     height: var(--k-row-height);
     padding: 0 var(--k-space-3);
     border-radius: var(--k-radius-sm);
+    color: var(--k-fg);
     cursor: pointer;
+  }
+
+  .lamp-slot {
+    display: inline-flex;
+    flex: none;
+    width: 10px;
+  }
+
+  .row > :global(.k-icon) {
+    color: var(--k-fg-subtle);
   }
 
   .row.selected {
     background: var(--k-bg-selected);
+    box-shadow: inset 2px 0 0 var(--k-accent);
   }
 
   .label {
@@ -189,14 +213,13 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .label + :global(.k-kbd) {
+  .row :global(.k-kbd) {
     margin-left: auto;
   }
 
   .empty {
     margin: 0;
-    padding: var(--k-space-5);
-    color: var(--k-fg-subtle);
-    text-align: center;
+    padding: var(--k-space-4) var(--k-space-3);
+    color: var(--k-fg-muted);
   }
 </style>

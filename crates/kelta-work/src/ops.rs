@@ -203,7 +203,7 @@ impl WorkService {
                         .await;
                     item.session_ids.retain(|s| s != &sid);
                     let _ = svc.save_journal(&id, &j);
-                    let _ = svc.save(&item).await;
+                    let _ = svc.save(&mut item).await;
                 }
                 Err(e) => core.toast(Toast::error(format!("Could not restart Claude: {}", e.message))),
             }
@@ -315,9 +315,14 @@ impl WorkService {
                 .await?
             }
         };
-        item.pr_url = Some(review.url.clone());
-        item.state = WorkState::PrOpen;
-        self.save(&item).await?;
+        // Re-load: the push took a while and hooks may have written the item meanwhile.
+        let item = self
+            .update(id, |w| {
+                w.pr_url = Some(review.url.clone());
+                w.state = WorkState::PrOpen;
+                true
+            })
+            .await?;
         env.core.publish(
             BusEvent::new(bus::PR_CREATED, serde_json::json!({ "review": review }))
                 .with_project(item.project_id.clone())
@@ -454,7 +459,7 @@ impl WorkService {
         item.ticket = Some(detail.ticket.r#ref.clone());
         item.pr_title_needs_key = item.pr_url.is_some();
         self.save_journal(id, &j)?;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         if apply_side_effects {
             let ctx = self.item_ctx(&env, &item, &j);
             if let Some(p) = j.plan.as_mut() {
@@ -485,7 +490,7 @@ impl WorkService {
     ) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
         let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
-        let mut item = self.load(id).await?;
+        let item = self.load(id).await?;
         if item.state == WorkState::Finished {
             return Ok(item);
         }
@@ -597,8 +602,14 @@ impl WorkService {
             let _ = std::fs::remove_dir_all(dir);
         }
         let _ = std::fs::remove_file(self.journal_path(id));
-        item.state = WorkState::Finished;
-        self.save(&item).await?;
+        let item = self
+            .update(id, |w| {
+                w.state = WorkState::Finished;
+                w.review_due = false;
+                w.claude_replied = false;
+                true
+            })
+            .await?;
         env.core.publish(
             BusEvent::new(bus::WORK_FINISHED, serde_json::json!({ "work_item_id": item.id, "opts": opts }))
                 .with_project(item.project_id.clone())
@@ -607,7 +618,12 @@ impl WorkService {
         Ok(item)
     }
 
-    async fn dirty_report(&self, env: &Env, item: &WorkItem, j: &Journal) -> Result<DirtyReport, KeltaError> {
+    pub(crate) async fn dirty_report(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        j: &Journal,
+    ) -> Result<DirtyReport, KeltaError> {
         let entries = git::dirty_files(&item.worktree).await?;
         // Only files Kelta copied (journal) and the user left byte-identical are ours to delete.
         let (mut files, mut copies) = (Vec::new(), Vec::new());
@@ -635,22 +651,7 @@ impl WorkService {
     pub(crate) async fn status_impl(&self, id: &WorkItemId) -> Result<GitStatus, KeltaError> {
         let item = self.load(id).await?;
         let env = self.env(&item.project_id, &item.repo_id)?;
-        if !item.worktree.is_dir() {
-            return Err(KeltaError::not_found(format!("worktree {} is gone", item.worktree.display())));
-        }
-        let upstream = match git::upstream(&item.worktree).await? {
-            Some(u) => Some(u),
-            None => {
-                let rb = format!("{}/{}", env.repo.remote, item.base);
-                git::ref_exists(&item.worktree, &rb).await?.then_some(rb)
-            }
-        };
-        let (ahead, behind) = match upstream {
-            Some(u) => git::ahead_behind(&item.worktree, &u).await?,
-            None => (0, 0),
-        };
-        let report = self.dirty_report(&env, &item, &self.load_journal(id)).await?;
-        Ok(GitStatus { ahead, behind, dirty: !report.files.is_empty(), unpushed: report.unpushed > 0 })
+        self.git_status(&env, &item).await
     }
 
     // ---- editors -----------------------------------------------------------------------------
@@ -881,7 +882,7 @@ impl WorkService {
             let msg = "interrupted (Kelta quit during start)".to_owned();
             self.set_step(&mut item, &step, StepStatus::Failed, Some(msg.clone())).await?;
             item.state = WorkState::Failed { step, message: msg };
-            self.save(&item).await?;
+            self.save(&mut item).await?;
         }
         Ok(())
     }
@@ -896,11 +897,11 @@ impl WorkService {
     }
 }
 
-struct DirtyReport {
-    files: Vec<String>,
+pub(crate) struct DirtyReport {
+    pub files: Vec<String>,
     /// Untracked `worktree.include` copies (ours, removed with the worktree).
-    copies: Vec<String>,
-    unpushed: u32,
+    pub copies: Vec<String>,
+    pub unpushed: u32,
 }
 
 /// `@path#Lx-y ` (path relative to the Claude session's cwd when inside it).

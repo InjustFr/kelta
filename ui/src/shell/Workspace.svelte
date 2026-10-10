@@ -122,12 +122,12 @@
     position: relative;
     flex: 1;
     min-height: 0;
-    background: var(--k-bg-sunken);
+    background: var(--k-bezel);
   }
 
   .tab-header {
     flex: none;
-    border-bottom: 1px solid var(--k-border);
+    margin-bottom: var(--k-gap);
   }
 
   .loading {

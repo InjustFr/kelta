@@ -2,7 +2,7 @@
 // Typed copies of crates/kelta-proto/fixtures/*.json. Type-checking this file (svelte-check /
 // tsc) catches serde ↔ ts-rs drift; fixtures.test.ts round-trips them at runtime.
 
-import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
+import type { AccountConfig, AccountTestResult, AppInfo, AttachInfo, BlockingOutcome, BusEvent, Column, CtlCommand, CtlRequest, CtlResponse, Diagnostics, EditorPreset, EditorTarget, EffectiveSettings, FinishOpts, GitStatus, HistoryHit, HookPayload, KeltaError, LayerDoc, Layout, LayoutSaveResult, LoginEnv, Notification, OpenPaneRequest, PaneRef, PerfSnapshot, PluginGrant, PluginInfo, PluginInstallPreview, PluginManifest, PrCreate, PrDraft, ProjectDraft, ProjectInfo, ProjectPatch, ProxiedRequest, ProxiedResponse, ReviewDetail, ReviewPage, ReviewQuery, ScreenOpenResult, SecretBackendStatus, SessionInfo, SessionTemplate, Settings, SettingsDiff, SpawnRequest, StartWorkPlan, StatusChange, SubscribeResult, TemplateCtx, TerminalLimits, TerminalPalette, TerminalStats, Ticket, TicketDetail, TicketPage, ToolCheck, ToolDef, ToolHandle, ToolInfo, Transition, TriggerDef, TriggerInfo, TriggerRun, TrustInfo, UiEvent, ValidationIssue, WorkItem, WorkSource } from './index';
 
 export const keltaError: KeltaError = {
   "code": "unsupported",
@@ -615,6 +615,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
@@ -642,6 +643,7 @@ export const reviewDetail: ReviewDetail = {
       "path": "src/prices.rs"
     }
   ],
+  "pending_comments": 0,
   "review": {
     "additions": 120,
     "author": {
@@ -667,6 +669,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
@@ -727,6 +730,7 @@ export const startWorkPlan: StartWorkPlan = {
 export const workItem: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -737,6 +741,7 @@ export const workItem: WorkItem = {
   "project_id": "shop",
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -831,6 +836,7 @@ export const workItem: WorkItem = {
 export const workItemFailed: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -841,6 +847,7 @@ export const workItemFailed: WorkItem = {
   "project_id": "shop",
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -946,7 +953,11 @@ export const finishOpts: FinishOpts = {
 export const gitStatus: GitStatus = {
   "ahead": 2,
   "behind": 0,
+  "deletions": 7,
   "dirty": true,
+  "files": 3,
+  "insertions": 41,
+  "missing": false,
   "unpushed": true
 };
 
@@ -1502,6 +1513,7 @@ export const settingsDefault: Settings = {
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "work.menu": ".",
       "work.new": "w",
       "work.start": "s"
     },
@@ -1660,6 +1672,9 @@ export const settingsDefault: Settings = {
     "env": {},
     "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
     "font_size": 13.0,
+    "history_log": true,
+    "history_log_mb": 16,
+    "history_log_total_mb": 512,
     "keyboard_protocol": "legacy",
     "letter_spacing": 0.0,
     "line_height": 1.15,
@@ -2206,6 +2221,9 @@ export const terminalStats: TerminalStats = {
 };
 
 export const terminalLimits: TerminalLimits = {
+  "history_log": true,
+  "history_log_mb": 16,
+  "history_log_total_mb": 512,
   "memory_cap_mb": 160,
   "scrollback": {
     "claude": 3000,
@@ -2216,6 +2234,11 @@ export const terminalLimits: TerminalLimits = {
     "tool": 500
   },
   "view_scrollback": 1000
+};
+
+export const historyHit: HistoryHit = {
+  "line": "error[E0308]: mismatched types",
+  "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203"
 };
 
 export const loginEnv: LoginEnv = {
@@ -2770,6 +2793,7 @@ export const uiEventWorkUpdated: UiEvent = {
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -2780,6 +2804,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "project_id": "shop",
     "repo_id": "api",
     "review": null,
+    "review_due": false,
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
       "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -3018,6 +3043,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "notification": notification,
   "terminal_stats": terminalStats,
   "terminal_limits": terminalLimits,
+  "history_hit": historyHit,
   "login_env": loginEnv,
   "proxied_request": proxiedRequest,
   "proxied_response": proxiedResponse,

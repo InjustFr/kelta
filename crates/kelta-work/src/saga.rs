@@ -167,6 +167,9 @@ impl WorkService {
         if let Some(WorkSource::Branch { task: Some(task), .. }) = j.plan.as_ref().map(|p| &p.source) {
             c.set("task", task.clone());
         }
+        // `editor.review_args`: own work diffs merge base to working tree, a review the PR's commits.
+        let range = format!("{}/{}", env.repo.remote, item.base);
+        c.set("range", if item.kind == WorkKind::Review { format!("{range}...HEAD") } else { range });
         if let Some(t) = &j.ticket {
             plan::add_ticket(&mut c, t);
             c.set("key", t.branch_key.clone());
@@ -438,6 +441,8 @@ impl WorkService {
             created_at: kelta_proto::now_rfc3339(),
             title: title.filter(|t| !t.is_empty()),
             pr_title_needs_key: false,
+            review_due: false,
+            claude_replied: false,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -445,7 +450,7 @@ impl WorkService {
             self.store.set_step(&item.id, step, StepStatus::Pending, None).await?;
         }
         item.steps = self.merged_steps(&item.id, &[]).await?;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         Ok(item.id)
     }
 
@@ -457,7 +462,7 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         item.state = WorkState::Starting;
-        self.save(&item).await?;
+        self.save(&mut item).await?;
         for step in WORK_STEPS {
             let status =
                 item.steps.iter().find(|s| s.step == *step).map(|s| s.status).unwrap_or(StepStatus::Pending);
@@ -480,7 +485,7 @@ impl WorkService {
                     tracing::warn!(work_item = %id, step, error = %e.message, "start work step failed");
                     self.set_step(&mut item, step, StepStatus::Failed, Some(e.message.clone())).await?;
                     item.state = WorkState::Failed { step: (*step).to_owned(), message: e.message.clone() };
-                    self.save(&item).await?;
+                    self.save(&mut item).await?;
                     env.core.toast(Toast {
                         level: ToastLevel::Error,
                         text: format!("Start work failed at {step}: {}", e.message),
@@ -530,7 +535,7 @@ impl WorkService {
             let mut out = self.run_saga_locked(id).await?;
             if !matches!(out.state, WorkState::Failed { .. }) {
                 out.state = state;
-                self.save(&out).await?;
+                self.save(&mut out).await?;
             }
             return Ok(out);
         }
@@ -700,6 +705,10 @@ impl WorkService {
     ) -> Result<Option<String>, KeltaError> {
         let repo = env.repo.path.as_path();
         let detail;
+        if !item.worktree.exists() {
+            // Deleted outside Kelta (Recreate): drop the stale registration first.
+            git::worktree_prune(repo).await?;
+        }
         if let Some(w) = git::worktree_at(repo, &item.worktree).await? {
             if w.branch.as_deref() != Some(item.branch.as_str()) {
                 return Err(KeltaError::conflict(format!(

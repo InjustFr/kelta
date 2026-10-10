@@ -554,6 +554,13 @@ pub struct WorkItem {
     /// title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
     #[serde(default)]
     pub pr_title_needs_key: bool,
+    /// Claude stopped with changes Louis has not looked at (FLOW §2.3). Set only from a real `Stop`
+    /// hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
+    #[serde(default)]
+    pub review_due: bool,
+    /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+    #[serde(default)]
+    pub claude_replied: bool,
 }
 
 /// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` |
@@ -639,10 +646,23 @@ pub struct FinishOpts {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GitStatus {
+    /// Commits on HEAD not in `<remote>/<base>`.
     pub ahead: u32,
+    /// Commits on `<remote>/<base>` not in HEAD.
     pub behind: u32,
     pub dirty: bool,
     pub unpushed: bool,
+    /// Diffstat from the merge base with `<remote>/<base>` to the working tree (untracked files
+    /// count in `files` only).
+    #[serde(default)]
+    pub files: u32,
+    #[serde(default)]
+    pub insertions: u32,
+    #[serde(default)]
+    pub deletions: u32,
+    /// The worktree directory is gone (deleted outside Kelta).
+    #[serde(default)]
+    pub missing: bool,
 }
 
 /// `{"kind":"session","id":..}` | `{"kind":"work_item","id":..}`.

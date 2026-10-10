@@ -212,6 +212,7 @@ async fn mcp_initialize_list_and_call() {
             "open_in_editor",
             "create_pr",
             "list_review_requests",
+            "add_review_comment",
             "notify"
         ]
     );
@@ -293,6 +294,54 @@ async fn mcp_initialize_list_and_call() {
 }
 
 #[tokio::test]
+async fn add_review_comment_goes_to_the_pending_review_of_the_session_pr() {
+    let e = common::env();
+    let session = samples::session_info();
+    let sid = session.id.clone();
+    e.fake.insert_session(session);
+    let review = samples::review();
+    let host = Arc::new(FakeCodeHost::with_reviews(vec![review.clone()]));
+    e.fake.add_code_host(review.r#ref.account.clone(), host.clone());
+    let mut work = samples::work_item();
+    let repo = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git").arg("-C").arg(repo.path()).args(args).status().unwrap();
+        assert!(ok.success());
+    };
+    git(&["init", "-q"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"]);
+    work.worktree = repo.path().to_path_buf();
+    work.review = Some(review.r#ref.clone());
+    e.fake.add_work_item(work);
+    e.server.register_session(&sid, "ht", Some("mt"));
+    let port = e.server.ensure_http().await.unwrap();
+
+    // checkout behind the PR head: refused, nothing posted
+    let args = json!({"path": "src/prices.rs", "line": 12, "body": "stale"});
+    let (text, err) = call(port, sid.as_str(), "mt", "add_review_comment", args).await;
+    assert!(err && text.contains("behind"), "{text}");
+    assert!(host.pending_comments().is_empty());
+    let head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo.path())
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    host.set_head(&review.r#ref, String::from_utf8(head.stdout).unwrap().trim());
+
+    let args = json!({"path": "src/prices.rs", "line": 12, "body": "cache never expires"});
+    let (text, err) = call(port, sid.as_str(), "mt", "add_review_comment", args).await;
+    assert!(!err && text.contains("Pending comment"), "{text}");
+    let got = host.pending_comments();
+    assert_eq!((got[0].0.clone(), got[0].1.as_str(), got[0].2), (review.r#ref, "src/prices.rs", 12));
+
+    let bad = json!({"path": "a.rs", "line": 0, "body": "x"});
+    let (text, err) = call(port, sid.as_str(), "mt", "add_review_comment", bad).await;
+    assert!(err && text.contains("line"), "{text}");
+    e.server.release_http();
+}
+
+#[tokio::test]
 async fn ticket_tools_without_link() {
     let e = common::env();
     let sid = SessionId::new("plain");
@@ -309,5 +358,8 @@ async fn ticket_tools_without_link() {
     }
     let (_, err) = call(port, "plain", "mt", "create_pr", json!({})).await;
     assert!(err);
+    let args = json!({"path": "a.rs", "line": 1, "body": "x"});
+    let (text, err) = call(port, "plain", "mt", "add_review_comment", args).await;
+    assert!(err && text.contains("under review"), "{text}");
     e.server.release_http();
 }

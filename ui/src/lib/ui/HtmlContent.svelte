@@ -37,19 +37,25 @@
 
 <style>
   .k-html {
-    line-height: 1.55;
+    max-width: var(--k-measure);
+    line-height: var(--k-line-height-read);
     overflow-wrap: anywhere;
   }
 
   .k-html :global(p) {
-    margin: 0 0 0.7em;
+    margin: 0 0 0.75em;
+  }
+
+  .k-html :global(a) {
+    color: var(--k-accent);
+    text-decoration: underline;
   }
 
   .k-html :global(pre),
   .k-html :global(code) {
     font-family: var(--k-font-mono);
     font-size: 0.92em;
-    background: var(--k-bg-sunken);
+    background: var(--k-bezel-raised);
     border-radius: var(--k-radius-sm);
   }
 
@@ -68,9 +74,9 @@
   }
 
   .k-html :global(blockquote) {
-    margin: 0 0 0.7em;
+    margin: 0 0 0.75em;
     padding-left: var(--k-space-4);
-    border-left: 3px solid var(--k-border-strong);
+    border-left: 2px solid var(--k-border-strong);
     color: var(--k-fg-muted);
   }
 

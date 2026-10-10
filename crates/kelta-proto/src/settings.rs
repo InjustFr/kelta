@@ -165,7 +165,7 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
-    /// Confirm quit if a Claude session is Working/NeedsInput.
+    /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
@@ -372,6 +372,14 @@ pub struct TerminalSettings {
     pub max_live_views: u32,
     #[schemars(range(min = 32, max = 2048))]
     pub memory_cap_mb: u32,
+    /// Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+    pub history_log: bool,
+    /// Per-session log cap (two rotated halves).
+    #[schemars(range(min = 1, max = 1024))]
+    pub history_log_mb: u32,
+    /// Cap of all session logs; oldest files are deleted first.
+    #[schemars(range(min = 16, max = 65536))]
+    pub history_log_total_mb: u32,
     /// macOS.
     pub option_as_meta: OptionAsMeta,
     pub copy_on_select: bool,
@@ -405,6 +413,9 @@ impl Default for TerminalSettings {
             view_scrollback: 1000,
             max_live_views: 4,
             memory_cap_mb: 160,
+            history_log: true,
+            history_log_mb: 16,
+            history_log_total_mb: 512,
             option_as_meta: OptionAsMeta::Both,
             copy_on_select: false,
             primary_selection: true,
@@ -811,7 +822,9 @@ pub struct EditorSettings {
     /// Preset id.
     pub default: String,
     pub follow_claude_edits: FollowEdits,
-    /// Appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]`.
+    /// The diff editor's arguments: appended for review sessions and used by Review diff on own work
+    /// items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
+    /// base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
     #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
     pub review_args: Vec<String>,
     #[schemars(extend("x-kelta-merge" = "by_id", "x-kelta-exec" = true))]
@@ -1617,7 +1630,7 @@ install_hint = "brew install lazydocker"
 id = "isl"
 label = "Sapling ISL"
 kind = "web"
-start = { command = "sl", args = ["web", "--port", "{port}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
+start = { command = "sl", args = ["web", "--no-open", "--foreground", "--json", "--port", "{port}", "--cwd", "{repo.path}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
 embed = "auto"
 url_is_secret = true
 

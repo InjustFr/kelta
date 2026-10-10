@@ -28,7 +28,9 @@ use crate::model::{
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
 use crate::settings::{ProjectConfig, Settings, TrackerBinding};
-use crate::term::{KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats};
+use crate::term::{
+    HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
+};
 use crate::tracker::{
     Assignee, Column, Cursor, Page, Ticket, TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition,
     User,
@@ -58,6 +60,17 @@ pub trait TerminalHost: Send + Sync {
     fn set_limits(&self, limits: TerminalLimits);
     /// Plain text (search, persistence).
     fn text_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>;
+    /// Last lines of the on-disk history log (§9.6); works for sessions the host no longer runs.
+    fn history_tail(&self, id: &SessionId, max_lines: u32) -> Result<String, KeltaError>;
+    /// Case-insensitive substring search over the history logs of `ids`, newest `limit` hits.
+    fn history_search(
+        &self,
+        ids: &[SessionId],
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<HistoryHit>, KeltaError>;
+    /// Delete a session's history log (the session row is gone).
+    fn history_delete(&self, id: &SessionId);
     /// Per-session bytes, lines, inflight.
     fn stats(&self) -> TerminalStats;
 }
@@ -106,9 +119,21 @@ pub trait CodeHost: Send + Sync {
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
+    /// `approve`, `comment` and `request_changes` also publish my pending review (see
+    /// `add_pending_comment`), so its line comments go out with the decision.
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError>;
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
     async fn request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError>;
+    /// Adds a line comment (new-side `line` of `path`) to my pending (draft) review, creating it.
+    async fn add_pending_comment(
+        &self,
+        _r: &ReviewRef,
+        _path: &str,
+        _line: u32,
+        _body: &str,
+    ) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("pending review comments"))
+    }
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError>;
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError>;
     /// `pull/N/head:…` | `merge-requests/N/head:…`.

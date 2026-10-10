@@ -10,7 +10,6 @@ import { terminalUi } from '$lib/terminal/ui.svelte';
 import type { TerminalView } from '$lib/terminal/view';
 
 import {
-  attentionNext,
   closeFocusedPane,
   currentTab,
   cycleProject,
@@ -72,7 +71,8 @@ registerAction('pane.focus_up', () => focusDirection('up'));
 registerAction('pane.focus_right', () => focusDirection('right'));
 registerAction('pane.zoom', () => toggleZoomFocused());
 registerAction('pane.close', () => closeFocusedPane());
-registerAction('attention.next', () => attentionNext());
+// Next waiting walks Now's queue (FLOW §3.4); loaded on first use.
+registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting());
 registerAction('terminal.search', () => {
   const id = focusedSessionId();
   if (id) terminalUi.searchSession = id;
