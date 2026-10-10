@@ -4,7 +4,7 @@ import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
-import { headerParts, nowSections, waitingCount, type NowInput } from './groups';
+import { headerParts, nowSections, readyByProject, waitingCount, type NowInput } from './groups';
 
 let n = 0;
 function entry(id: PhaseId, section: NowSection, patch: Partial<WorkItem> = {}) {
@@ -196,12 +196,42 @@ describe('header and badge', () => {
       tickets: [ticket('T-1', 'todo')],
     });
     expect(headerParts(sections, 1)).toEqual([
-      'Claude: 1 asks, 2 ready',
-      'Teammates: 3 PRs',
+      'Claude: 1 asks',
+      '2 LLM diffs',
+      '3 PRs waiting',
       '1 working',
       '1 up next',
     ]);
     expect(waitingCount(sections)).toBe(6);
+    expect(readyByProject(sections)).toEqual(new Map([['shop', 2]]));
     expect(headerParts(nowSections(empty), 0)).toEqual([]);
+  });
+});
+
+describe('Ready for review', () => {
+  it('oldest wait first, the smaller delta first on ties', () => {
+    const delta = (lines: number) => ({
+      lines,
+      files: 1,
+      tests: 0,
+      generated: 0,
+      insertions: lines,
+      deletions: 0,
+    });
+    const at = '2026-10-10T08:00:00Z';
+    const sections = nowSections({
+      ...empty,
+      work: [
+        entry('to_review', 'to_review', { id: 'big', claude_at: at, delta: delta(300) }),
+        entry('to_review', 'to_review', { id: 'newer', claude_at: '2026-10-10T09:00:00Z', delta: delta(1) }),
+        entry('to_review', 'to_review', { id: 'small', claude_at: at, delta: delta(20) }),
+      ],
+    });
+    expect(sections[0]!.label).toBe('Ready for review');
+    expect(sections[0]!.rows.map((r) => (r.type === 'work' ? r.item.id : ''))).toEqual([
+      'small',
+      'big',
+      'newer',
+    ]);
   });
 });

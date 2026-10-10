@@ -14,7 +14,7 @@ pub fn publish(core: &Core, ev: BusEvent) {
         bus::WORK_UPDATED => match ev.payload.get("work").cloned().map(serde_json::from_value::<WorkItem>) {
             Some(Ok(work)) => {
                 core.note_work_pr(&work);
-                core.emit(UiEvent::WorkUpdated { work });
+                core.emit(UiEvent::WorkUpdated { work: Box::new(work) });
             }
             _ => tracing::warn!("work.updated without a work item"),
         },

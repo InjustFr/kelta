@@ -20,7 +20,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::Layer;
 use parking_lot::Mutex;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::PluginHost;
 use crate::context::{CtxSpec, project_root};
@@ -276,6 +276,9 @@ impl PluginHost {
     ) -> Result<BTreeMap<String, String>, KeltaError> {
         let mut env = Self::expand_env(vars, &self.settings(Some(project)).env)?;
         env.extend(Self::expand_env(vars, tool_env)?);
+        if let Some(Value::Object(w)) = vars.get("work.env") {
+            env.extend(w.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_owned()))));
+        }
         if let Some(p) = self.core().and_then(|c| c.login_path()) {
             env.entry("PATH".to_owned()).or_insert(p);
         }

@@ -298,11 +298,20 @@ impl CodeHost for BitbucketHost {
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let me = self.me().await?;
         let pr = |tail: &str| self.pr_url(&r.repo, &format!("/{}{tail}", r.number));
-        let (pull, statuses, diffstat) = tokio::join!(
+        let (pull, statuses, diffstat, comments) = tokio::join!(
             self.json(HttpRequest::get(pr("")?)),
             self.paged(HttpRequest::get(pr("/statuses")?).query("pagelen", PAGELEN)),
             self.paged(HttpRequest::get(pr("/diffstat")?).query("pagelen", PAGELEN)),
+            self.paged(HttpRequest::get(pr("/comments")?).query("pagelen", PAGELEN)),
         );
+        // My pending (draft) comments; best effort like statuses and diffstat.
+        let pending_comments = comments
+            .unwrap_or_default()
+            .iter()
+            .filter(|c| c.get("pending").and_then(Value::as_bool) == Some(true))
+            .filter(|c| c.get("deleted").and_then(Value::as_bool) != Some(true))
+            .filter(|c| c.pointer("/user/uuid").and_then(Value::as_str) == Some(me.id.as_str()))
+            .count() as u32;
         let pull = pull?.body;
         let mine = pull.pointer("/author/uuid").and_then(Value::as_str) == Some(me.id.as_str());
         let kind = if mine { ReviewKind::Authored } else { ReviewKind::ReviewRequested };
@@ -366,7 +375,7 @@ impl CodeHost for BitbucketHost {
         };
         Ok(ReviewDetail {
             state,
-            pending_comments: 0,
+            pending_comments,
             body_html: markdown::to_html(s(&pull, "description").unwrap_or("")),
             review,
             reviewers,

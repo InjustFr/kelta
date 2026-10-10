@@ -15,7 +15,7 @@
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { openFromNow } from '../work/nav';
-  import { workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
+  import { deltaParts, testsMissing, workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -65,6 +65,8 @@
     /** Work rows: Claude context use and spend. */
     ctx?: { text: string; hot: boolean } | null;
     cost?: { text: string; over: boolean } | null;
+    /** The meta part shown as a warning (`tests: none` when source changed). */
+    warn?: string;
     age: string;
     /** Second line of the selected row. */
     more: string;
@@ -79,10 +81,14 @@
 
   const age = (iso: string): string => relativeTime(Date.parse(iso));
 
-  // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket.
+  // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket. `R` marks reviewed on a
+  // row that has something to review, else refreshes.
   const NOW_KEYS: Partial<Record<string, WorkActionId>> = {
+    v: 'review_delta',
+    V: 'review_diff',
+    R: 'mark_reviewed',
+    b: 'edit_note',
     p: 'ship',
-    x: 'mark_reviewed',
     f: 'fix',
     r: 'rebase',
     c: 'rebase_continue',
@@ -98,7 +104,9 @@
         const git = work.git[item.id];
         const pr = prOf(item);
         const meta: string[] = [];
-        if (git && (git.insertions || git.deletions))
+        const delta = phase.section === 'to_review' ? item.delta : null;
+        if (delta) meta.push(...deltaParts(delta));
+        else if (git && (git.insertions || git.deletions))
           meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
         if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
@@ -109,16 +117,23 @@
             (a) =>
               a.key && Object.values(NOW_KEYS).includes(a.id) && blockedReason(a.id, item, phase) === null,
           ).map((a) => ({ key: a.key!, label: a.label({ item, phase }) })),
+          ...(item.claude_message && phase.section === 'to_review'
+            ? [{ key: 'm', label: expanded === row.id ? 'Hide message' : 'Full message' }]
+            : []),
           { key: 'g', label: 'Go to work tab' },
         ];
         const claude = claudeOf(item)?.claude;
         const u = claude?.usage;
         const spent = itemCost(item, sessions.all);
         const preview = claude?.preview ?? '';
+        const said = item.claude_message?.trim().split('\n')[0] || preview;
         const more =
-          (phase.section === 'needs_you' || phase.section === 'to_review') && preview
-            ? preview
-            : phase.detail;
+          phase.section === 'to_review'
+            ? [item.next_note ? `next: ${item.next_note}` : '', said].filter(Boolean).join('  ·  ') ||
+              phase.detail
+            : phase.section === 'needs_you' && preview
+              ? preview
+              : phase.detail;
         return {
           lamp: phase.lamp,
           id: workKey(item),
@@ -138,7 +153,9 @@
                   over: overBudget(spent, settings.value(item.project_id)?.claude.budget_usd),
                 }
               : null,
-          age: age(item.created_at),
+          warn: delta && testsMissing(delta) ? 'tests: none' : undefined,
+          // Ready for review: how long it has waited since Claude stopped.
+          age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
           more,
           actions,
         };
@@ -216,9 +233,12 @@
     | { type: 'section'; id: string; section: Section; count: number }
     | { type: 'row'; id: string; row: NowRow }
     | { type: 'detail'; id: string; row: NowRow }
+    | { type: 'msg'; id: string; text: string }
     | { type: 'more'; id: string; count: number };
 
   let selId = $state<string | null>(null);
+  /** Row whose full Claude message is unfolded under its detail line (`m`). */
+  let expanded = $state<string | null>(null);
 
   const visible = $derived(
     summary.sections
@@ -235,6 +255,10 @@
       for (const row of s.rows) {
         out.push({ type: 'row', id: row.id, row });
         if (row === cur) out.push({ type: 'detail', id: `d:${row.id}`, row });
+        if (row === cur && expanded === row.id && row.type === 'work')
+          (row.item.claude_message ?? '')
+            .split('\n')
+            .forEach((text, i) => out.push({ type: 'msg', id: `m:${row.id}:${i}`, text }));
       }
       if (s.more > 0) out.push({ type: 'more', id: `m:${s.id}`, count: s.more });
     }
@@ -323,13 +347,17 @@
         queueMicrotask(() => filterEl?.focus());
         break;
       case 'R':
-        refresh();
+        if (cur?.type === 'work' && blockedReason('mark_reviewed', cur.item) === null) letter(cur, 'R');
+        else refresh();
+        break;
+      case 'm':
+        if (cur?.type === 'work' && cur.item.claude_message) expanded = expanded === cur.id ? null : cur.id;
         break;
       case 'N':
         toasts.info('New work item: not available yet');
         break;
       default:
-        if (!cur || !'pxfrcanso'.includes(e.key) || e.key.length !== 1) return;
+        if (!cur || !'vVbpfrcanso'.includes(e.key) || e.key.length !== 1) return;
         letter(cur, e.key);
     }
     e.preventDefault();
@@ -418,6 +446,8 @@
                 {l.section.label}
                 <span class="count">{l.count}</span>
               </div>
+            {:else if l.type === 'msg'}
+              <div class="row msgline" data-testid="now-message">{l.text}</div>
             {:else if l.type === 'more'}
               <button type="button" tabindex="-1" class="row moreline" onclick={showAllOnBoard}>
                 {l.count} more, show all on Board
@@ -441,7 +471,7 @@
                   <span class="ttl">{v.title}</span>
                   {#if v.project}<span class="proj">{v.project}</span>{/if}
                   <span class="reason">{v.reason}</span>
-                  {#each v.meta as m (m)}<span class="meta">{m}</span>{/each}
+                  {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}
                   {#if v.ctx}<span
                       class="meta"
                       class:hot={v.ctx.hot}
@@ -645,6 +675,20 @@
 
   .meta.over {
     color: var(--k-danger);
+  }
+
+  .meta.warn {
+    color: var(--k-warn);
+  }
+
+  .msgline {
+    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
+    background: var(--k-bg-selected);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .age {

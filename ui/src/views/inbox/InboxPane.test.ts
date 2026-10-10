@@ -6,6 +6,7 @@ import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
+import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
 import InboxPane from './InboxPane.svelte';
 import { nextWaiting, nowSummary } from './now';
@@ -55,9 +56,10 @@ describe('Now', () => {
       'up_next',
     ]);
     const header = screen.getByTestId('now-header');
-    expect(header.textContent).toContain('Claude: 1 asks, 1 ready');
+    expect(header.textContent).toContain('Claude: 1 asks');
+    expect(header.textContent).toContain('1 LLM diff');
     // #311, #98, #7 and #101 (updated since my review).
-    expect(header.textContent).toMatch(/Teammates: 4 PRs/);
+    expect(header.textContent).toMatch(/4 PRs waiting/);
     expect(header.title).toBe(nowSummary().header);
     // A work item shows once; its sessions are not listed as plain sessions.
     expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(
@@ -74,8 +76,17 @@ describe('Now', () => {
     await fireEvent.keyDown(pane, { key: 'j' });
     const details = screen.getAllByTestId('now-detail');
     expect(details).toHaveLength(1);
-    expect(details[0]!.textContent).toContain('Fixed the race in CartServiceTest');
-    expect(within(details[0]!).getByText('Review diff')).toBeTruthy();
+    // Ready for review: the next: note and the first line of Claude's full message, the delta chip.
+    expect(details[0]!.textContent).toContain('next: check the retry path against staging');
+    expect(details[0]!.textContent).toContain('Added the retry wrapper');
+    expect(within(details[0]!).getByText('Review changes')).toBeTruthy();
+    const row = container.querySelector('.row[aria-current="true"]')!;
+    expect(row.textContent).toContain('212 lines');
+    expect(row.querySelector('.meta.warn')?.textContent).toBe('tests: none');
+    // m unfolds the whole message.
+    await fireEvent.keyDown(pane, { key: 'm' });
+    const lines = screen.getAllByTestId('now-message').map((l) => l.textContent);
+    expect(lines).toContain('I left the backoff constant at 3 tries; say if you want it configurable.');
   });
 
   it('Enter on To review opens the diff in the work tab and leaves Now (B1)', async () => {
@@ -95,15 +106,35 @@ describe('Now', () => {
     });
   });
 
-  it('x marks reviewed; a blocked key flashes its reason', async () => {
-    mountNow();
+  it('R marks reviewed and the row leaves Ready for review; a blocked key flashes its reason', async () => {
+    const { container } = mountNow();
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: 'j' });
     await fireEvent.keyDown(pane, { key: 'c' });
     expect(toasts.list.at(-1)?.toast.text).toMatch(/Only while a rebase is stopped/);
-    await fireEvent.keyDown(pane, { key: 'x' });
+    await fireEvent.keyDown(pane, { key: 'R' });
     await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
+    await waitFor(() => expect(sectionIds(container)).not.toContain('to_review'));
+  });
+
+  it('v opens the delta since the last look, V the whole diff, b edits the next: note', async () => {
+    mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'j' });
+    await fireEvent.keyDown(pane, { key: 'v' });
+    const diffs = () =>
+      mock.calls.filter((c) => c.cmd === 'work_diff').map((c) => c.args as { delta?: boolean });
+    await waitFor(() => expect(diffs()[0]?.delta).toBe(true));
+    ui.inboxActive = true;
+    await fireEvent.keyDown(pane, { key: 'V' });
+    await waitFor(() => expect(diffs()).toHaveLength(2));
+    expect(diffs()[1]!.delta).toBeUndefined();
+    await fireEvent.keyDown(pane, { key: 'b' });
+    await waitFor(() => expect(prompts.current?.value).toBe('check the retry path against staging'));
+    prompts.answer('ship it');
+    await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.next_note).toBe('ship it'));
   });
 
   it('Enter on a review request opens it in the project Reviews tab, reused (B1)', async () => {

@@ -201,6 +201,7 @@ const PLAIN_ROOTS: &[&str] = &[
     "ticket",
     "pr",
     "session",
+    "work",
 ];
 const FILTERS: &[&str] = &["slug", "shell", "json"];
 
@@ -211,6 +212,7 @@ fn sub_allowed(root: &str) -> Option<&'static [&'static str]> {
         "ticket" => Some(&["key", "title", "url", "file"]),
         "pr" => Some(&["url", "number", "head", "base", "title"]),
         "session" => Some(&["id", "name", "cwd"]),
+        "work" => Some(&["port"]),
         _ => None,
     }
 }
@@ -233,7 +235,7 @@ fn placeholder_known(name: &str, extra: &[&str]) -> bool {
         return false;
     }
     match (sub, sub_allowed(root)) {
-        (None, _) => !matches!(root, "ticket" | "pr" | "session"),
+        (None, _) => !matches!(root, "ticket" | "pr" | "session" | "work"),
         (Some(s), Some(allowed)) => allowed.contains(&s),
         (Some(_), None) => false,
     }

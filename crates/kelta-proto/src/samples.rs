@@ -291,6 +291,11 @@ pub fn work_item() -> WorkItem {
         claude_at: None,
         sent_threads: Vec::new(),
         rebase: None,
+        claude_message: None,
+        delta: None,
+        next_note: None,
+        left_at: None,
+        port_base: Some(20140),
         cost_usd: 3.5,
     }
 }
@@ -528,7 +533,7 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
                 new_keys: vec![review_ref()],
             },
         ),
-        ("ui_event_work_updated", UiEvent::WorkUpdated { work: work_item() }),
+        ("ui_event_work_updated", UiEvent::WorkUpdated { work: Box::new(work_item()) }),
         (
             "ui_event_settings_changed",
             UiEvent::SettingsChanged {

@@ -53,6 +53,16 @@ pub fn git_env() -> BTreeMap<&'static str, String> {
 
 /// Run `git <args>` in `cwd` with `timeout`.
 pub async fn run(cwd: &Path, args: &[&str], timeout: Duration) -> Result<Output, KeltaError> {
+    run_env(cwd, args, &[], timeout).await
+}
+
+/// [`run`] with extra environment (`GIT_INDEX_FILE`, ...).
+pub async fn run_env(
+    cwd: &Path,
+    args: &[&str],
+    extra: &[(&str, &str)],
+    timeout: Duration,
+) -> Result<Output, KeltaError> {
     let mut cmd = Command::new("git");
     cmd.args(args)
         .current_dir(cwd)
@@ -64,6 +74,7 @@ pub async fn run(cwd: &Path, args: &[&str], timeout: Duration) -> Result<Output,
     for (k, v) in git_env() {
         cmd.env(k, v);
     }
+    cmd.envs(extra.iter().copied());
     // Never let a GUI askpass pop up.
     cmd.env_remove("GIT_ASKPASS").env_remove("SSH_ASKPASS");
     let mut child = cmd.spawn().map_err(|e| {
@@ -114,7 +125,17 @@ pub async fn run(cwd: &Path, args: &[&str], timeout: Duration) -> Result<Output,
 
 /// Run and require exit 0 (stderr in the error message).
 pub async fn run_ok(cwd: &Path, args: &[&str], timeout: Duration) -> Result<Output, KeltaError> {
-    let out = run(cwd, args, timeout).await?;
+    run_env_ok(cwd, args, &[], timeout).await
+}
+
+/// [`run_env`] requiring exit 0.
+pub async fn run_env_ok(
+    cwd: &Path,
+    args: &[&str],
+    extra: &[(&str, &str)],
+    timeout: Duration,
+) -> Result<Output, KeltaError> {
+    let out = run_env(cwd, args, extra, timeout).await?;
     if out.ok() {
         Ok(out)
     } else {
@@ -310,18 +331,46 @@ pub async fn dirty_files(worktree: &Path) -> Result<Vec<String>, KeltaError> {
     Ok(files)
 }
 
-/// Hash of HEAD, the tracked diff to the working tree and the untracked paths: equal hashes mean
-/// nothing changed in between (in-process comparison only).
-/// shortcut: an untracked file edited in place keeps the hash, hash its content if that matters.
-pub async fn fingerprint(worktree: &Path) -> Result<u64, KeltaError> {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    for args in
-        [&["rev-parse", "HEAD"][..], &["diff", "HEAD"], &["ls-files", "-z", "--others", "--exclude-standard"]]
-    {
-        run_ok(worktree, args, LOCAL_TIMEOUT).await?.stdout.hash(&mut h);
+/// Commits the whole working tree (tracked plus untracked non-ignored files) on top of HEAD and
+/// points `refname` at it. HEAD, the index and the stash are untouched: `add -A` runs on a copy of
+/// the index (`GIT_INDEX_FILE`), so only changed files are hashed.
+pub async fn snapshot(worktree: &Path, refname: &str) -> Result<String, KeltaError> {
+    let git_path = |name: String| async move {
+        let out = run_ok(worktree, &["rev-parse", "--git-path", &name], LOCAL_TIMEOUT).await?;
+        Ok::<_, KeltaError>(worktree.join(out.stdout.trim()))
+    };
+    // A unique name: a Stop and a Mark reviewed may snapshot the same worktree at once.
+    let tmp_name = format!("kelta-snapshot-{}.index", uuid::Uuid::new_v4().simple());
+    let (index, tmp) = (git_path("index".into()).await?, git_path(tmp_name).await?);
+    match std::fs::copy(&index, &tmp) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(KeltaError::internal(format!("copy {}: {e}", index.display()))),
     }
-    Ok(h.finish())
+    let tmp_s = tmp.to_string_lossy().into_owned();
+    let res = async {
+        let env = [("GIT_INDEX_FILE", tmp_s.as_str())];
+        run_env_ok(worktree, &["add", "-A"], &env, LOCAL_TIMEOUT).await?;
+        let tree = run_env_ok(worktree, &["write-tree"], &env, LOCAL_TIMEOUT).await?.stdout.trim().to_owned();
+        let head = rev(worktree, "HEAD").await?;
+        let mut args = vec!["commit-tree", "--no-gpg-sign", "-m", "kelta snapshot", &tree];
+        if let Some(h) = &head {
+            args.extend(["-p", h]);
+        }
+        // A fixed identity: commit-tree fails without user.name/email and this is not the user's commit.
+        let ident = [
+            ("GIT_AUTHOR_NAME", "Kelta"),
+            ("GIT_AUTHOR_EMAIL", "kelta@localhost"),
+            ("GIT_COMMITTER_NAME", "Kelta"),
+            ("GIT_COMMITTER_EMAIL", "kelta@localhost"),
+        ];
+        let commit = run_env_ok(worktree, &args, &ident, LOCAL_TIMEOUT).await?.stdout.trim().to_owned();
+        run_ok(worktree, &["update-ref", refname, &commit], LOCAL_TIMEOUT).await?;
+        Ok(commit)
+    }
+    .await;
+    let _ = std::fs::remove_file(&tmp);
+    res
 }
 
 /// Is `path` tracked in the index of `worktree`?

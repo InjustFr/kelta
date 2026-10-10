@@ -5,9 +5,10 @@
 
 import { registerAction } from '$lib/actions';
 import type { TicketRef, WorkItem } from '$lib/gen';
-import { openExternal, workDiff, workMarkReviewed, workRetryStep } from '$lib/ipc/commands';
+import { openExternal, workDiff, workMarkReviewed, workRetryStep, workSetNote } from '$lib/ipc/commands';
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
+import { prompts } from '../../shell/confirm.svelte';
 import { currentTab, revealSession } from '../../shell/nav';
 import {
   askClaudeToResolve,
@@ -60,10 +61,27 @@ async function goClaude({ item }: Ctx): Promise<void> {
   await goToWork(item);
 }
 
-async function reviewDiff({ item }: Ctx): Promise<void> {
+async function reviewDiff(
+  { item }: Ctx,
+  args: { delta?: boolean; from?: string | null } = {},
+): Promise<void> {
   await goToWork(item);
-  const s = sessions.upsert(await workDiff({ id: item.id }));
+  const s = sessions.upsert(await workDiff({ id: item.id, ...args }));
   showZoomedInWorkTab(item, s);
+}
+
+/** `v`: own items since the last review; a review item since the PR head I reviewed. */
+const reviewDelta = (c: Ctx): Promise<void> =>
+  reviewDiff(c, c.item.kind === 'review' ? { from: prOf(c.item)?.reviewed_head ?? null } : { delta: true });
+
+async function editNote({ item }: Ctx): Promise<void> {
+  const note = await prompts.ask({
+    title: 'Next step',
+    label: 'next:',
+    value: item.next_note ?? '',
+    confirmLabel: 'Save',
+  });
+  if (note !== null) work.upsert(await workSetNote({ id: item.id, note }));
 }
 
 async function openTicket({ item }: Ctx): Promise<void> {
@@ -74,11 +92,23 @@ async function openTicket({ item }: Ctx): Promise<void> {
 
 export const WORK_ACTIONS: readonly WorkAction[] = [
   {
+    id: 'review_delta',
+    key: 'v',
+    label: () => 'Review changes since last look',
+    blocked: (c) =>
+      c.phase.id === 'missing'
+        ? 'Worktree missing'
+        : c.item.kind === 'review' && !prOf(c.item)?.reviewed_head
+          ? 'Not reviewed yet'
+          : null,
+    run: reviewDelta,
+  },
+  {
     id: 'review_diff',
-    key: 'd',
-    label: () => 'Review diff in nvim',
+    key: 'V',
+    label: () => 'Review the whole diff in nvim',
     blocked: (c) => (c.phase.id === 'missing' ? 'Worktree missing' : null),
-    run: reviewDiff,
+    run: (c) => reviewDiff(c),
   },
   {
     id: 'ship',
@@ -94,7 +124,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'mark_reviewed',
-    key: 'x',
+    key: 'R',
     label: () => 'Mark reviewed',
     blocked: (c) => (c.item.review_due ? null : 'Nothing to review'),
     run: async ({ item }) => void work.upsert(await workMarkReviewed({ id: item.id })),
@@ -140,6 +170,13 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     label: (c) => (c.item.state.kind === 'failed' ? `Skip ${c.item.state.step}` : 'Skip step'),
     blocked: (c) => (c.item.state.kind === 'failed' ? null : 'Only when a start step failed'),
     run: (c) => step(c, `skip:${failedStep(c)}`),
+  },
+  {
+    id: 'edit_note',
+    key: 'b',
+    label: (c) => (c.item.next_note ? 'Edit next: note…' : 'Add next: note…'),
+    blocked: () => null,
+    run: editNote,
   },
   { id: 'go_claude', key: 'g', label: () => 'Go to Claude', blocked: () => null, run: goClaude },
   {

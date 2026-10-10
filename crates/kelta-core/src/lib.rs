@@ -637,6 +637,9 @@ impl CoreApi for Core {
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.work.for_session(id).await
     }
+    async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
+        Core::work_get(self, id).await
+    }
     async fn work_create_pr(
         &self,
         id: &WorkItemId,

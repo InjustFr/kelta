@@ -1171,10 +1171,23 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     work_mark_reviewed: ({ id }) => {
       const w = work(id);
-      if (w.review_due) {
+      if (w.review_due || w.delta) {
         w.review_due = false;
+        w.delta = null;
         emit({ type: 'work.updated', work: clone(w) });
       }
+      return clone(w);
+    },
+    work_set_note: ({ id, note }) => {
+      const w = work(id);
+      w.next_note = note?.trim() || null;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_left: ({ id }) => {
+      const w = work(id);
+      w.left_at = new Date().toISOString();
+      emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
     editor_open: () => null,
@@ -1183,6 +1196,8 @@ export function createMockTransport(options: MockOptions = {}): {
       session(claude_session);
       return null;
     },
+    editor_quickfix: () => null,
+    fs_exists: ({ paths }) => paths.map((p) => p.startsWith('/')),
     // ---- tools / plugins / triggers --------------------------------------------------------
     tool_list: ({ project_id }) => {
       project(project_id);

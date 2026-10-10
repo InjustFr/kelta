@@ -377,9 +377,11 @@ pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, t
   rebase: Option<RebaseState{onto, pre_head, remote_sha: Option<String>, conflicts: Vec<PathBuf>, step: u32, total: u32}> }
 pub enum WorkSource { Ticket{ ticket }, Review{ review }, Branch{ name, task: Option<String>, repo: Option<String> } } // Branch with empty name: name from work.scratch_branch_template + task slug; task is the {task} of claude.prompt_templates.standalone; no tracker steps
 // review_due / claude_replied (FLOW §2.3): set only by kelta-work from a real `Stop` hook of the item's
-// Claude (changes = the worktree fingerprint — HEAD, tracked diff, untracked paths — moved since the last
-// `UserPromptSubmit` (kept in memory; after a restart: ahead of <remote>/<base> or dirty) → review_due, else
-// claude_replied; never for review checkouts; hooks of one session apply in order), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr` (`origin = ui`; MCP `create_pr` is `origin = mcp`), Finish and
+// Claude (each `Stop` snapshots the whole working tree — tracked plus untracked non-ignored, through a
+// temporary index, HEAD/index/stash untouched — to `refs/kelta/wi/<id>/last`; a non-empty
+// `git diff <reviewed> <last>` (`refs/kelta/wi/<id>/reviewed`, else the merge base with <base>) → review_due
+// + `delta` (ReviewDelta chip), else claude_replied; never for review checkouts; hooks of one session apply
+// in order; `claude_message` keeps the full last message). Both refs are deleted by Finish and the startup prune, cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr` (`origin = ui`; MCP `create_pr` is `origin = mcp`), Finish and
 // `work_mark_reviewed`; claude_replied by Finish. Store writes: `save` never writes these two (it keeps the
 // stored values); `update(id, |w| ..)` re-loads under a write lock held only around load-modify-save and is
 // their only writer. Long operations (`create_pr`, `finish`) end with `update` of their own fields.
@@ -508,8 +510,10 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_link` | `{id, ticket: TicketRef, apply_side_effects: bool}` | `WorkItem` | scratch (Branch) items only; becomes Ticket-kind, branch never renamed; side effects = `work.on_start`, plus `work.on_pr` when a PR exists (then `pr_title_needs_key`) |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, diverged, remote_new, files, insertions, deletions, missing}` (on demand, no fetch; ahead/behind and diffstat against `<remote>/<base>`, never the branch's upstream; diffstat from the merge base to the working tree, untracked files count in `files`; `missing` = worktree deleted outside Kelta; re-reads a recorded rebase). `diverged` = own rewrite: the recorded `remote_sha` is still the remote tip, is in `pre_head` and not in HEAD. `remote_new` = commits on `<remote>/<branch>` in neither HEAD nor `pre_head` | |
 | `work_status_all` | `{}` | `Map<WorkItemId, GitStatus>` for every unfinished item: one `git fetch <remote>` per repo first, at most every 5 min (UI: startup, window focus, Now open) | |
-| `work_diff` | `{id}` | `SessionInfo`: the review diff session in the item's worktree (editor with `editor.review_args`, `{range}` = `<remote>/<base>`; empty → a shell running `git diff $(git merge-base <base> HEAD)`). The UI places it split down, zoomed, in the work tab | |
-| `work_mark_reviewed` | `{id}` | `WorkItem` (clears `review_due`) | |
+| `work_diff` | `{id, delta?: bool, from?: String}` | `SessionInfo`: the review diff session in the item's worktree (editor with `editor.review_args`, `{range}` = `<remote>/<base>`; empty → a shell running `git diff $(git merge-base <base> HEAD)`). `delta`: `{range}` = `<reviewed>..<last>` (shell: `git diff <reviewed> <last>`), `Invalid` when nothing changed since the last review. `from` (review items, the reviewed PR head): `{range}` = `<from>..HEAD`, or `git range-diff <from>...HEAD` in a shell after a force push. The UI places it split down, zoomed, in the work tab | |
+| `work_mark_reviewed` | `{id}` | `WorkItem` (clears `review_due` and `delta`; `refs/kelta/wi/<id>/reviewed` = `last`) | |
+| `work_set_note` | `{id, note: Option<String>}` | `WorkItem` (`next_note`; blank clears) | |
+| `work_left` | `{id}` | `WorkItem` (`left_at` = now; the return strip's clock) | |
 | `work_send` | `{id, prompt, files: Vec<SendFile{name, content}>, threads?: Vec<String>}` | `WorkItem` | files (`name.md`, not `ticket.md`/`context.md`) go to the item's private Claude run dir, never the worktree; `prompt` is rendered (`{file}`, `{pr.url}`, `{onto}`…) then pasted (bracketed + Enter) into a live Claude whose hook status is `Done`/`WaitingUser`, or passed to `claude --resume <uuid> -- <prompt>` (dead / closed tab / dormant; the `--continue` fallback keeps it). `Conflict{reason: claude_busy}` while `Working`/`NeedsInput`/`Running`, `Conflict{reason: hooks_inactive}` when the live session's status is not from hooks. `threads` → `WorkItem.sent_threads` |
 | `work_feedback` | `{id}` | `Feedback{threads, reviews, failed_checks, reviewers}` (`CodeHost::feedback` of the item's PR) | |
 | `work_rerequest_review` | `{id}` | `Vec<String>` (logins asked again) | |
@@ -518,6 +522,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_push` | `{id, force}` | `WorkItem` (`rebase` cleared) | plain `git push -u` or, only when `diverged`, `git push --force-with-lease=<branch>:<remote_sha> --force-if-includes`, in a visible transient pane; refused while Claude works. Failures are diagnosed by a fetch: `Conflict{reason: non_fast_forward}` / `Conflict{reason: lease_rejected}`, never retried, never a plain `--force` |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
+| `editor_quickfix` | `{target: EditorTarget, files}` | `()`; nvim (RPC) only, `setqflist` with the files (relative to the editor cwd) at line 1 | `commands/editor.rs` (L6) |
+| `fs_exists` | `{paths}` | `Vec<bool>` per absolute path (relative = `false`); terminal file links | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
 | `tool_list` | `{project_id}` | `Vec<ToolInfo{id, label, icon, kind: Pty|Web, installed: Option<bool>, source: Layer|Plugin}>` | |
 | `tool_check` | `{tool_id}` | `ToolCheck{installed, version?, install_hint?}` | |

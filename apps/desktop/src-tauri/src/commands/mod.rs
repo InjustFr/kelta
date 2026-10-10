@@ -184,8 +184,12 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_status_all,
         work::work_diff,
         work::work_mark_reviewed,
+        work::work_set_note,
+        work::work_left,
         editor::editor_open,
         editor::editor_send_selection,
+        editor::editor_quickfix,
+        editor::fs_exists,
         // tools / plugins / triggers
         tool::tool_list,
         tool::tool_check,

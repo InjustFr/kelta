@@ -239,7 +239,18 @@
     "min_secs": 30,
     "when_closed": "off"
   },
+  "ports": {
+    "range": "20000-29999"
+  },
   "reviews": {
+    "ignore_globs": [
+      "*.lock",
+      "package-lock.json",
+      "pnpm-lock.yaml",
+      "go.sum",
+      "*.min.js",
+      "*.snap"
+    ],
     "include_drafts": false,
     "include_team_requests": true,
     "repos_allow": [],
@@ -424,12 +435,14 @@
       "draft": false,
       "title_template": "{ticket.key}: {ticket.title}"
     },
+    "return_brief_after_mins": 20,
     "review_template": "review",
     "scratch_branch_template": "wip/{slug}"
   },
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
     "cleanup": "ask",
+    "env_template": "",
     "fetch_timeout_secs": 20,
     "include": [
       ".env",
@@ -439,6 +452,7 @@
     "setup": [],
     "setup_blocking": true,
     "slug_max": 40,
+    "teardown": "",
     "type_map": {
       "bug": "fix",
       "default": "chore",

@@ -14,7 +14,7 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
     AttachInfo, Attention, ClaudeMeta, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy,
-    SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
+    SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, WorkItem,
 };
 use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
@@ -523,19 +523,9 @@ impl Core {
         self.new_session_id()
     }
 
-    async fn ticket_key(&self, ticket: Option<&TicketRef>, work_item: Option<&WorkItemId>) -> Option<String> {
-        if let Some(t) = ticket {
-            return Some(t.key.clone());
-        }
-        let w = work_item?;
-        let w = w.clone();
-        self.store
-            .call(move |c| q::work_get(c, &w))
-            .await
-            .ok()
-            .flatten()
-            .and_then(|w| w.ticket)
-            .map(|t| t.key)
+    pub(crate) async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
+        let w = id.clone();
+        self.store.call(move |c| q::work_get(c, &w)).await.ok().flatten()
     }
 
     pub(crate) async fn spawn_with(
@@ -610,7 +600,12 @@ impl Core {
                 self.dirs.data.join("sessions").join(format!("{id}.vim")),
             ),
         };
-        let ticket_key = self.ticket_key(ticket.as_ref(), spec.work_item_id.as_ref()).await;
+        let work = match &spec.work_item_id {
+            Some(w) => self.work_get(w).await,
+            None => None,
+        };
+        let ticket_key =
+            ticket.as_ref().or_else(|| work.as_ref().and_then(|w| w.ticket.as_ref())).map(|t| t.key.clone());
 
         // Lazy HTTP server for MCP / http hooks.
         let mut http_ref = false;
@@ -645,6 +640,8 @@ impl Core {
         if is_claude && let Some(cmd) = spawn_env::user_statusline(&env, &cwd) {
             env.insert("KELTA_USER_STATUSLINE".into(), cmd);
         }
+        // Kelta vars layer: the item's port block and compose namespace.
+        env.extend(work.iter().flat_map(WorkItem::env));
         // Claude IDE bridge: the lock file goes where this claude process looks (its own env).
         if is_claude && settings.claude.ide_bridge {
             let opened = spawn_env::claude_config_dir(&env)

@@ -71,6 +71,8 @@ pub struct Settings {
     pub worktree: WorktreeSettings,
     #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
     pub work: WorkSettings,
+    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
+    pub ports: PortsSettings,
     #[schemars(extend("x-kelta-category" = "Reviews", "x-kelta-order" = 10))]
     pub reviews: ReviewsSettings,
     #[schemars(extend("x-kelta-category" = "Tools", "x-kelta-order" = 13))]
@@ -908,6 +910,12 @@ pub struct WorktreeSettings {
     pub setup_blocking: bool,
     pub fetch_timeout_secs: u32,
     pub cleanup: Cleanup,
+    /// Worktree file ending in `.kelta` (e.g. `.env.kelta`), rendered at start work to the same path
+    /// without `.kelta` (`{port}`, `{port.1}`…`{port.9}`); an existing different file is kept.
+    pub env_template: String,
+    /// Run in a visible pane on Finish, in the worktree; failure stops the Finish.
+    #[schemars(extend("x-kelta-exec" = true))]
+    pub teardown: String,
 }
 
 impl Default for WorktreeSettings {
@@ -928,6 +936,8 @@ impl Default for WorktreeSettings {
             setup_blocking: true,
             fetch_timeout_secs: 20,
             cleanup: Cleanup::Ask,
+            env_template: String::new(),
+            teardown: String::new(),
         }
     }
 }
@@ -1023,6 +1033,9 @@ pub struct WorkSettings {
     /// Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
     /// the task's first line.
     pub scratch_branch_template: String,
+    /// Refocusing a work item after this many minutes away shows the return strip (`next:` note,
+    /// Claude's last message, the delta since review). 0 turns it off.
+    pub return_brief_after_mins: u32,
 }
 
 impl Default for WorkSettings {
@@ -1036,6 +1049,7 @@ impl Default for WorkSettings {
             on_merge: OnMerge::default(),
             pr: PrSettings::default(),
             scratch_branch_template: "wip/{slug}".into(),
+            return_brief_after_mins: 20,
         }
     }
 }
@@ -1053,6 +1067,9 @@ pub struct ReviewsSettings {
     pub ticket_key_regex: String,
     pub repos_allow: Vec<String>,
     pub repos_deny: Vec<String>,
+    /// Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
+    /// and `-diff` attributes.
+    pub ignore_globs: Vec<String>,
 }
 
 impl Default for ReviewsSettings {
@@ -1063,7 +1080,24 @@ impl Default for ReviewsSettings {
             ticket_key_regex: "[A-Z][A-Z0-9]+-\\d+|#\\d+".into(),
             repos_allow: Vec::new(),
             repos_deny: Vec::new(),
+            ignore_globs: ["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]
+                .map(String::from)
+                .to_vec(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct PortsSettings {
+    /// `first-last`: each work item gets the next free block of 10 (`KELTA_PORT`, `KELTA_PORT_1..9`);
+    /// empty = no ports.
+    pub range: String,
+}
+
+impl Default for PortsSettings {
+    fn default() -> Self {
+        Self { range: "20000-29999".into() }
     }
 }
 
@@ -1342,6 +1376,7 @@ impl Default for Settings {
             editor: EditorSettings::default(),
             worktree: WorktreeSettings::default(),
             work: WorkSettings::default(),
+            ports: PortsSettings::default(),
             reviews: ReviewsSettings::default(),
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),

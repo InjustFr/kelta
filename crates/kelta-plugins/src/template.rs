@@ -17,6 +17,7 @@ const STRUCTURED: &[(&str, &[&str])] = &[
     ("session", &["id", "name", "cwd", "kind", "status", "visible"]),
     ("plugin", &["dir", "id"]),
     ("app", &["focused"]),
+    ("work", &["port"]),
 ];
 
 /// Scalar roots.

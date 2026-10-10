@@ -1,7 +1,7 @@
 // The one derived state of a work item (FLOW §2.2): label, lamp, next action and Now section.
 // Pure; used by Now, the work bar, the tab lamp, the rail tile and the palette.
 
-import type { GitStatus, Review, SessionInfo, WorkItem } from '$lib/gen';
+import type { GitStatus, Review, ReviewDelta, SessionInfo, WorkItem } from '$lib/gen';
 
 /** Lamp shapes (DESIGN §6.1). `working` is derived, not an Attention level. */
 export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'none';
@@ -16,7 +16,9 @@ export type WorkActionId =
   | 'resolve'
   | 'go_claude'
   | 'review_diff'
+  | 'review_delta'
   | 'mark_reviewed'
+  | 'edit_note'
   | 'ship'
   | 'fix'
   | 'rebase'
@@ -88,6 +90,24 @@ function p(
 }
 
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+/** `1.8k` for big counts. */
+const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${n}`);
+
+/** The delta chip parts: `212 lines`, `9 files`, `tests: none`, `+1.8k generated`. */
+export function deltaParts(d: ReviewDelta): string[] {
+  return [
+    plural(d.lines, 'line').replace(/^\d+/, short(d.lines)),
+    plural(d.files, 'file'),
+    `tests: ${d.tests ? d.tests : 'none'}`,
+    ...(d.generated ? [`+${short(d.generated)} generated`] : []),
+  ];
+}
+
+/** Source files changed and no test touched: the chip's `tests: none` reads as a warning. */
+export const testsMissing = (d: ReviewDelta): boolean => d.files > 0 && d.tests === 0;
+
+export const deltaChip = (d: ReviewDelta): string => deltaParts(d).join(' · ');
 
 /** A failed start step as a gerund for "Failed …" / "Retry …" (common.ts holds the checklist
  *  wording); unknown ids read as words. */
@@ -190,7 +210,15 @@ export function phaseOf(
   }
 
   if (item.review_due)
-    return p('to_review', 'To review', 'Claude finished', 'done', 'review_diff', 'Review diff', 'to_review');
+    return p(
+      'to_review',
+      'To review',
+      item.delta ? deltaChip(item.delta) : 'Claude finished',
+      'done',
+      'review_delta',
+      'Review changes',
+      'to_review',
+    );
   if (item.claude_replied)
     return p(
       'replied',
@@ -267,4 +295,19 @@ export function workKey(item: Pick<WorkItem, 'ticket' | 'review'>): string {
   if (item.ticket) return item.ticket.key;
   if (item.review) return `#${item.review.number}`;
   return 'wip';
+}
+
+/**
+ * The return strip: Louis comes back to an item after `afterMins` away (0 = off) and there is
+ * something to brief him on. Never while Claude is working.
+ */
+export function returnBrief(
+  item: WorkItem,
+  claudeStatus: string | null,
+  now: number,
+  afterMins: number,
+): boolean {
+  if (!afterMins || !item.left_at || claudeStatus === 'working') return false;
+  if (!item.next_note && !item.claude_message && !item.delta) return false;
+  return now - Date.parse(item.left_at) >= afterMins * 60_000;
 }

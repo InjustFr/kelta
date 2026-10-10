@@ -159,6 +159,11 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `setup_blocking` | bool | `true` | Claude waits for setup exit 0 |
 | `fetch_timeout_secs` | int | `20` | |
 | `cleanup` | enum(ask\|auto\|never) | `ask` | on PR merged / ticket done |
+| `env_template` | str | `""` | worktree path ending in `.kelta` (e.g. `.env.kelta`, read from the worktree, else the main checkout), rendered at start work (`include_files` step, before the copies) to the same path without `.kelta`. Placeholders `{port}`, `{port.1}`…`{port.9}`; other braces stay verbatim. An existing target that differs is kept, with a warning |
+| `teardown` | str (x-kelta-exec) | `""` | run on Finish in a pane below, in the worktree, with the item's env (e.g. `docker compose down`); failure stops the Finish unless forced |
+
+### [ports]
+| `range` | str | `"20000-29999"` | `first-last`. Each new work item takes the next free block of 10 (no other item's block, first port bindable), freed on Finish; `""` = no ports. Every session, setup/teardown and tool process of the item gets `KELTA_PORT`, `KELTA_PORT_1..9` and `COMPOSE_PROJECT_NAME=kelta-<key-slug>` (ticket key, else branch). The WorkItem header shows the block |
 
 ### [work]
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
@@ -171,12 +176,14 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `pr.title_template` | Template | `"{ticket.key}: {ticket.title}"` | prefills the Ship dialog title for ticket items; other items use the last commit subject |
 | `pr.body_template` | Template | `"{ticket.url}\n\n{closes}"` | `{closes}` = `Closes #n` for GitHub issues |
 | `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
+| `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return strip (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
 
 ### [reviews]
 | `include_team_requests` | bool | `true` | |
 | `include_drafts` | bool | `false` | review requests only: my own (authored) PRs always include drafts |
 | `ticket_key_regex` | str | `"[A-Z][A-Z0-9]+-\\d+|#\\d+"` | linked tickets; applied at startup and on reload (an invalid pattern keeps the previous one) |
 | `repos_allow` / `repos_deny` | list<glob> | `[]` / `[]` | |
+| `ignore_globs` | list<glob> | `["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]` | counted as generated (not review lines) in the Ready for review chip, with `linguist-generated` / `-diff` attributes |
 
 ### [web]
 | `embed_default` | enum(auto\|iframe\|proxy\|external) | `auto` | |
@@ -352,7 +359,7 @@ Config holds only `SecretRef` strings, never tokens:
 
 Simple `{path}` substitution (no expressions). Filters: `{x|slug}`, `{x|shell}` (POSIX single-quote), `{x|json}`, `{a|b}` = first non-empty of `a` or `b` (e.g. `{worktree|project.root}`). Unknown placeholder → validation error at load time. In commands typed into a shell (a session template's `command`), every value is POSIX-quoted by default (`|shell` is implied; writing it does not quote twice), so a ticket title cannot run as shell code.
 
-Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `config_dir`, `data_dir`, `home`, `user`.
+Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`.
 
 ## 7. Hot reload
 

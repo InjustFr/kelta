@@ -13,6 +13,7 @@ import type { SessionId } from '$lib/gen';
 import {
   clipboardRead,
   clipboardWrite,
+  fsExists,
   openExternal,
   sessionAck,
   sessionAttach,
@@ -22,6 +23,7 @@ import {
 } from '$lib/ipc/commands';
 
 import { fontStack, type TerminalConfig } from './config';
+import { fileLinkProvider } from './filelinks';
 import { AckBatcher, FrameHandler } from './frames';
 import { encodeKittyKey } from './kitty';
 import { baseCharacter, macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
@@ -49,6 +51,10 @@ export interface TerminalViewDeps {
   onKey: (event: KeyboardEvent) => boolean;
   /** Reports failures the user should see (clipboard, links). */
   onError?: (err: unknown, context: string) => void;
+  /** Directories a relative `path:line` link resolves against (session cwd, then worktree root). */
+  fileRoots?: (sessionId: SessionId) => string[];
+  /** Opens a `path:line` link in the session's nvim; `focusEditor` when Shift is held. */
+  openFile?: (sessionId: SessionId, path: string, line: number, focusEditor: boolean) => void;
 }
 
 export interface ViewState {
@@ -141,6 +147,18 @@ export class TerminalView implements PoolView {
     this.term.loadAddon(new Unicode11Addon());
     this.term.unicode.activeVersion = '11';
     this.term.loadAddon(new WebLinksAddon((event, uri) => this.#openLink(event, uri)));
+    const { fileRoots, openFile } = deps;
+    if (fileRoots && openFile) {
+      const files = fileLinkProvider(this.term, {
+        roots: () => fileRoots(id),
+        exists: (paths) => fsExists({ paths }),
+        open: (event, path, line) => {
+          if (this.#linkModifier(event)) openFile(id, path, line, event.shiftKey);
+        },
+      });
+      const registered = this.term.registerLinkProvider(files);
+      this.#disposers.push(() => registered.dispose(), files.dispose);
+    }
     for (const d of installQueryHandlers(this.term.parser)) this.#disposers.push(() => d.dispose());
 
     this.term.attachCustomKeyEventHandler((event) => this.#handleKey(event));
@@ -610,10 +628,13 @@ export class TerminalView implements PoolView {
     );
   }
 
+  /** Links open with Cmd (macOS) / Ctrl (Linux) so a stray click in an application does not navigate. */
+  #linkModifier(event: MouseEvent): boolean {
+    return this.#deps.platform === 'macos' ? event.metaKey : event.ctrlKey;
+  }
+
   #openLink(event: MouseEvent, uri: string): void {
-    // Opening needs Cmd (macOS) / Ctrl (Linux) so a stray click in an application does not navigate.
-    const held = this.#deps.platform === 'macos' ? event.metaKey : event.ctrlKey;
-    if (!held) return;
+    if (!this.#linkModifier(event)) return;
     openExternal({ url: uri }).catch((err) => this.#deps.onError?.(err, 'Opening link failed'));
   }
 

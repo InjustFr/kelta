@@ -1,5 +1,6 @@
 //! Durable Claude signals on work items (FLOW §2.3): `review_due` / `claude_replied` from real
-//! `Stop` hooks (changes = worktree moved since the last prompt), cleared by `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
+//! `Stop` hooks (changes = a non-empty delta since Louis's last review, `review.rs`), cleared by
+//! `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
 //! session id (B3). Everything travels in `work.updated`.
 
 use kelta_proto::error::KeltaError;
@@ -9,7 +10,7 @@ use kelta_proto::hooks::{HookPayload, names};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{SessionKind, WorkItem, WorkKind, WorkState};
 
-use crate::{WorkService, git};
+use crate::WorkService;
 
 /// Short name of an item in notifications: ticket key, `#n` for a review, else the branch.
 pub(crate) fn item_key(item: &WorkItem) -> String {
@@ -46,30 +47,16 @@ impl WorkService {
         }
         // Review checkouts are someone else's code: no "to review" signal for them.
         let own = item.kind != WorkKind::Review;
-        let changes = match event {
-            names::USER_PROMPT_SUBMIT if own => {
-                // A missing worktree just leaves no mark (Stop then falls back).
-                match git::fingerprint(&item.worktree).await {
-                    Ok(fp) => self.prompt_marks.lock().insert(item.id.clone(), fp),
-                    Err(_) => self.prompt_marks.lock().remove(&item.id),
-                };
-                None
-            }
-            // Changes since the prompt; without a mark (Kelta restarted) anything ahead of base or dirty.
+        // Stop: snapshot, then what changed since Louis's last look (`None` = nothing new).
+        let delta = match event {
             names::STOP if own => {
-                let mark = self.prompt_marks.lock().get(&item.id).copied();
-                match mark {
-                    Some(m) => Some(git::fingerprint(&item.worktree).await? != m),
-                    None => {
-                        let env = self.env(&item.project_id, &item.repo_id)?;
-                        let st = self.git_status(&env, &item).await?;
-                        Some(st.ahead > 0 || st.dirty)
-                    }
-                }
+                let env = self.env(&item.project_id, &item.repo_id)?;
+                Some(self.stop_delta(&env, &item).await?)
             }
             _ => None,
         };
         let uuid = hook.session_id.filter(|u| !u.is_empty());
+        let message = hook.last_assistant_message;
         let item = self
             .update(&item.id, |w| {
                 let before = (w.review_due, w.claude_replied, w.claude_uuid.clone());
@@ -79,10 +66,14 @@ impl WorkService {
                 if asks || event == names::STOP {
                     w.claude_at = Some(kelta_proto::now_rfc3339());
                 }
-                match (event, changes) {
+                if event == names::STOP {
+                    w.claude_message.clone_from(&message);
+                }
+                match (event, delta) {
                     (names::USER_PROMPT_SUBMIT, _) => (w.review_due, w.claude_replied) = (false, false),
-                    (names::STOP, Some(true)) => (w.review_due, w.claude_replied) = (true, false),
-                    (names::STOP, Some(false)) => w.claude_replied = true,
+                    (names::STOP, Some(d)) => {
+                        (w.review_due, w.claude_replied, w.delta) = (d.is_some(), d.is_none(), d);
+                    }
                     _ => {}
                 }
                 asks || event == names::STOP
@@ -92,12 +83,12 @@ impl WorkService {
         // Core leaves the "finished" notification of a work item's Claude to us.
         if event == names::STOP && core.settings(Some(&item.project_id)).notifications.claude_done {
             let key = item_key(&item);
-            let title = match changes {
-                Some(true) => format!("{key} ready to review"),
-                Some(false) => format!("{key}: Claude replied"),
+            let title = match delta {
+                Some(Some(_)) => format!("{key} ready to review"),
+                Some(None) => format!("{key}: Claude replied"),
                 None => format!("{key}: Claude finished"),
             };
-            let body = hook.last_assistant_message.map(|m| m.chars().take(200).collect());
+            let body = message.map(|m| m.chars().take(200).collect());
             // Core drops it when the session's pane is visible in the focused window.
             core.notify(Notification {
                 title,
@@ -111,8 +102,21 @@ impl WorkService {
         Ok(())
     }
 
-    /// `work_mark_reviewed`: Louis looked at Claude's changes.
+    /// `work_mark_reviewed`: Louis looked at Claude's changes; `reviewed` = `last`, so the next
+    /// delta starts here (best effort: a git failure still clears the flag).
     pub async fn mark_reviewed(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
-        self.update(id, |w| std::mem::replace(&mut w.review_due, false)).await
+        let item = self.load(id).await?;
+        if item.kind != WorkKind::Review
+            && item.worktree.is_dir()
+            && let Err(e) = self.stamp_reviewed(&item).await
+        {
+            tracing::warn!(work_item = %id, error = %e.message, "reviewed ref not stamped");
+        }
+        self.update(id, |w| {
+            let changed = w.review_due || w.delta.is_some();
+            (w.review_due, w.delta) = (false, None);
+            changed
+        })
+        .await
     }
 }

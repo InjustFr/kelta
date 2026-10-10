@@ -101,7 +101,10 @@ test.describe('project switching', () => {
     // kelta-tools' Claude finished long ago: "done" comes from review_due, not the seen flag.
     await expect(tools).toHaveAttribute('data-attention', 'none');
     await expect(page.getByTestId('inbox-badge')).toBeVisible();
-    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: Claude: 1 asks, 1 ready/);
+    await expect(page.getByTestId('rail-inbox')).toHaveAttribute(
+      'title',
+      /^Now: Claude: 1 asks\u2002\u20021 LLM diff/,
+    );
 
     // A Claude stop with changes lights the tile.
     await page.evaluate(() => {

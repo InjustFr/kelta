@@ -1,6 +1,6 @@
 //! Work item operations after start: resume, create PR, finish, status; editor ops; app lifecycle.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,9 +11,9 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
-    CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, PaneContent, Placement,
-    RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest, StepStatus, WorkItem,
-    WorkKind, WorkSource, WorkState,
+    CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, OpenPaneRequest,
+    PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
+    StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore};
 use kelta_proto::tracker::TicketRef;
@@ -711,6 +711,16 @@ impl WorkService {
             verified_clean = report.files.is_empty() && report.unpushed == 0;
         }
 
+        if !env.settings.worktree.teardown.trim().is_empty()
+            && item.worktree.is_dir()
+            && let Err(e) = self.teardown(&env, &item).await
+        {
+            if !opts.force {
+                return Err(e);
+            }
+            env.core.toast(Toast::warn(e.message));
+        }
+
         for sid in &item.session_ids {
             if env.core.session_get(sid).is_some_and(|s| s.lifecycle != Lifecycle::Exited)
                 && let Err(e) = env.core.session_kill(sid, opts.force).await
@@ -780,6 +790,7 @@ impl WorkService {
                 }
             }
         }
+        crate::review::delete_refs(&repo, id).await;
         for dir in [&j.claude_run, &j.editor_run].into_iter().flatten() {
             let _ = std::fs::remove_dir_all(dir);
         }
@@ -787,6 +798,7 @@ impl WorkService {
         let item = self
             .update(id, |w| {
                 w.state = WorkState::Finished;
+                w.port_base = None;
                 w.review_due = false;
                 w.claude_replied = false;
                 true
@@ -798,6 +810,31 @@ impl WorkService {
                 .with_work_item(item.id.clone()),
         );
         Ok(item)
+    }
+
+    /// `worktree.teardown` in a pane below (kept open when it fails), before sessions are killed.
+    async fn teardown(&self, env: &Env, item: &WorkItem) -> Result<(), KeltaError> {
+        let cmd = &env.settings.worktree.teardown;
+        let mut rx = env.core.subscribe();
+        let info = self
+            .spawn_script(env, item, "teardown", std::slice::from_ref(cmd), CloseOnExit::OnSuccess)
+            .await?;
+        let pane = OpenPaneRequest {
+            content: PaneContent::Terminal { session_id: info.id.clone() },
+            placement: Placement::SplitDown,
+            focus: false,
+            tab_title: None,
+            work_item_id: Some(item.id.clone()),
+        };
+        if let Err(e) = env.core.layout_open(&item.project_id, pane).await {
+            tracing::warn!(error = %e.message, "teardown pane");
+        }
+        match await_exit(&env.core, &mut rx, &info.id, Duration::from_secs(600)).await? {
+            0 => Ok(()),
+            code => Err(KeltaError::upstream(format!(
+                "teardown `{cmd}` failed (exit {code}); fix it, or Finish with force to skip it"
+            ))),
+        }
     }
 
     pub(crate) async fn finish_merged_impl(
@@ -973,6 +1010,28 @@ impl WorkService {
             .map(|_| ())
     }
 
+    pub(crate) async fn editor_quickfix_impl(
+        &self,
+        target: EditorTarget,
+        files: &[PathBuf],
+    ) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        let info = self.editor_session(&core, &target).await?;
+        let sock = self
+            .editor_socket(&info)
+            .await
+            .ok_or_else(|| KeltaError::unsupported("the quickfix list needs an nvim (RPC) editor session"))?;
+        let files: Vec<rmpv::Value> =
+            files.iter().map(|f| rmpv::Value::from(info.cwd.join(f).to_string_lossy().as_ref())).collect();
+        let mut c = NvimClient::connect(&sock).await?;
+        c.exec_lua(
+            crate::nvim::LUA_QUICKFIX,
+            vec![rmpv::Value::from("Files Claude touched"), rmpv::Value::Array(files)],
+        )
+        .await
+        .map(|_| ())
+    }
+
     pub(crate) async fn send_selection_impl(
         &self,
         editor_session: &SessionId,
@@ -1102,9 +1161,15 @@ impl WorkService {
                 repos.push(r.path.clone());
             }
         }
+        // Review refs of finished (or deleted) items go with the prune, so their objects can be collected.
+        let keep: HashSet<String> =
+            items.iter().filter(|w| w.state != WorkState::Finished).map(|w| w.id.to_string()).collect();
         for r in repos {
             if let Err(e) = git::worktree_prune(&r).await {
                 tracing::warn!(repo = %r.display(), error = %e.message, "git worktree prune failed");
+            }
+            if let Err(e) = crate::review::prune_refs(&r, &keep).await {
+                tracing::warn!(repo = %r.display(), error = %e.message, "review refs prune failed");
             }
         }
         // Sagas interrupted by a quit/crash become Failed so the UI offers Retry / Skip.
