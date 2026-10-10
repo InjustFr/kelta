@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   import { Menu, type MenuItem } from '$lib/ui';
 
   // A menu with a filter that asks `load` for its items as the filter changes (TICKETS.md T8: the
@@ -40,7 +42,8 @@
           },
         );
       },
-      items === null ? 0 : 200,
+      // untracked: each answer writes `items`, and tracking it would reload forever
+      untrack(() => items) === null ? 0 : 200,
     );
     return () => clearTimeout(timer);
   });
