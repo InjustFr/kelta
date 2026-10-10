@@ -154,6 +154,13 @@ fn fake_old_keltad() {
     }
     // SAFETY: plain syscall.
     unsafe { libc::setsid() };
+    // Linux names a process after the thread that forked it: libtest's thread is named after the
+    // test, so take back the exec name (`ps -o comm=`) a real keltad has.
+    #[cfg(target_os = "linux")]
+    // SAFETY: PR_SET_NAME reads a NUL-terminated string that outlives the call.
+    unsafe {
+        libc::prctl(libc::PR_SET_NAME, c"keltad".as_ptr());
+    }
     let pid = std::process::id().to_string();
     std::fs::write(Path::new(&sock).with_extension("old"), &pid).unwrap();
     if std::env::var_os(FAKE_PIDFILE_ENV).is_some() {
