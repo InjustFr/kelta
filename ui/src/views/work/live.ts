@@ -49,7 +49,7 @@ export function phaseNow(item: WorkItem): Phase {
   return phaseOf(item, claudeOf(item), prOf(item), work.git[item.id] ?? null);
 }
 
-/** Title for rows and the palette: the ticket or PR title when a list has it, else the branch. */
+/** Title for rows and the palette: the ticket or PR title when a list has it, else the scratch task title or branch. */
 export function workTitle(item: WorkItem): string {
   if (item.ticket) {
     const key = ticketKey(item.ticket);
@@ -58,7 +58,7 @@ export function workTitle(item: WorkItem): string {
     for (const l of Object.values(tickets.lists))
       for (const it of l.data?.items ?? []) if (ticketKey(it.ticket.ref) === key) return it.ticket.title;
   }
-  return prOf(item)?.title ?? item.branch;
+  return prOf(item)?.title ?? item.title ?? item.branch;
 }
 
 /** `KEY claude`, `KEY nvim` for sessions of a work item, so three `claude` rows tell apart. */

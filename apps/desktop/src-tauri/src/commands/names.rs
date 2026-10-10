@@ -84,6 +84,7 @@ pub const COMMANDS: &[&str] = &[
     "work_create_pr",
     "work_finish",
     "work_status",
+    "work_link",
     "work_status_all",
     "work_diff",
     "work_mark_reviewed",

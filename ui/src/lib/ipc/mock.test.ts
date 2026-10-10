@@ -239,6 +239,7 @@ describe('mock transport', () => {
       'session_attach',
       'session_write',
       'work_start',
+      'work_link',
       'layout_save',
       'project_create',
       'plugin_call',
@@ -253,9 +254,28 @@ describe('mock transport', () => {
       );
     }
     await eventsSubscribe(() => {});
-    const plan = await call('work_plan', { project_id: 'shop', source: { kind: 'branch', name: 'spike' } });
+    const plan = await call('work_plan', {
+      project_id: 'shop',
+      source: { kind: 'branch', name: 'spike', task: null, repo: null },
+    });
     const started = await call('work_start', { plan });
     expect(started.session_ids.length).toBeGreaterThan(0);
+    // Scratch item: wip/ branch from the task, title, no adoption, then linked to a ticket.
+    const task = { kind: 'branch' as const, name: '', task: 'Speed up search\nKeep ranking', repo: null };
+    const scratch = await call('work_plan', { project_id: 'shop', source: task });
+    expect(scratch.branch).toBe('wip/speed-up-search');
+    expect(scratch.claude.prompt).toBe('Speed up search\nKeep ranking');
+    const wip = await call('work_start', { plan: scratch });
+    expect(wip.title).toBe('Speed up search');
+    await expect(call('work_plan', { project_id: 'shop', source: task })).rejects.toMatchObject({
+      code: 'conflict',
+    });
+    const linked = await call('work_link', {
+      id: wip.id,
+      ticket: { account: 'jira-acme', key: 'SHOP-142', id: '10142' },
+      apply_side_effects: true,
+    });
+    expect(linked).toMatchObject({ kind: 'ticket', branch: 'wip/speed-up-search' });
     const layout = await call('layout_get', { project_id: 'shop' });
     await expect(call('layout_save', { layout })).resolves.toEqual({ rev: layout.rev + 1 });
     await expect(call('layout_save', { layout })).rejects.toMatchObject({ code: 'conflict' });

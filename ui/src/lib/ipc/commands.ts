@@ -195,6 +195,7 @@ export interface Commands {
   work_create_pr: { args: { id: WorkItemId; draft: PrDraft }; result: WorkItem };
   work_finish: { args: { id: WorkItemId; opts: FinishOpts }; result: WorkItem };
   work_status: { args: { id: WorkItemId }; result: GitStatus };
+  work_link: { args: { id: WorkItemId; ticket: TicketRef; apply_side_effects: boolean }; result: WorkItem };
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
   /** Spawns the review diff session; the UI places it zoomed in the work tab. */
@@ -309,6 +310,7 @@ export const COMMAND_NAMES = [
   'work_create_pr',
   'work_finish',
   'work_status',
+  'work_link',
   'work_status_all',
   'work_diff',
   'work_mark_reviewed',
@@ -493,6 +495,7 @@ export const workRetryStep = wrap('work_retry_step');
 export const workCreatePr = wrap('work_create_pr');
 export const workFinish = wrap('work_finish');
 export const workStatus = wrap('work_status');
+export const workLink = wrap('work_link');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');

@@ -127,6 +127,7 @@ keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the 
 
 - **Single instance:** a 2nd `kelta [args]` forwards argv to the running instance (`tauri-plugin-single-instance`) → `ctl.command` events.
 - **Control socket:** `<runtime>/ctl.sock` (mode 0600, dir 0700, owner verified; peer uid checked with `SO_PEERCRED` / `getpeereid`). Line-delimited JSON (§7.3).
+- **`kelta-ctl start --task "<text>" [--project <id>]`** sends `CtlCommand::StartTask{task, project}`: core plans `WorkSource::Branch{name: "", task}` for the project (default: active), runs the start-work saga without a sheet and focuses the project. Same branch rule and refusals as New work item (`⇧⌘N`); a ticket key and `--task` together are a usage error.
 - **Lazy HTTP server:** axum on `127.0.0.1:<random>`; starts on first need (first Claude session with `claude.mcp = true` or `claude.hook_transport = "http"`); stops when its consumer count reaches 0 (event-driven, no idle timer). Core and kelta-work each hold a consumer per Claude session they spawn (refcounted, so double counting is harmless). MCP is a hand-rolled stateless Streamable-HTTP subset (`POST` → `application/json`, `GET`/`DELETE` → 405, no `Mcp-Session-Id`): rmcp's transport keeps sessions alive with periodic SSE pings, which the no-periodic-timer rule (§13) forbids. MCP tools: `get_ticket`, `transition_ticket`, `add_ticket_comment`, `open_in_editor`, `create_pr`, `list_review_requests`, `add_review_comment{path, line, body}` (line comment on the pending review of the PR under review in the session's review-kind work item, via `CodeHost::add_pending_comment`; published by the user's a / c / m in the review detail), `notify` (PLUGINS §8).
 - **Web-tool proxy:** kelta-plugins serves `proxy::router()` on its own loopback listener per proxied tool instance (started on first open, stopped with the instance), so each web tool keeps a distinct origin and needs no kelta-server port.
 - **Session daemon (`keltad`):** `<runtime>/keltad.sock` (0600 in the 0700 runtime dir, peer uid checked on both ends). Core launches it from the stable copy `<data>/bin/<version>/keltad` (`keltad --socket <path>`, stderr → `<logs>/keltad.log`); it binds, forks into its own session, and the launcher connects once the parent exits. Messages: `u32 len` + `u32 json_len` + JSON head + raw bytes (input, frames). Each session's events go to the client that spawned or last adopted it. On quit, sessions core would restore stay running (no SIGHUP); the others are killed and closed. On start, core `adopt`s every persisted session keltad still runs (Live, same hook token) before any Dormant respawn and kills the rest. keltad exits 30 s after it has no client and no running session (one-shot grace armed by the disconnect / exit, no polling).
@@ -367,7 +368,9 @@ pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
   repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
-  created_at: String, review_due: bool, claude_replied: bool }
+  created_at: String, review_due: bool, claude_replied: bool,
+  title: Option<String> /*scratch: task's first line, ≤72 chars*/, pr_title_needs_key: bool /*set by work_link when a PR exists; the next Ship/Push prefixes the key (kelta_work::pr_title_with_key) unless the title has one*/ }
+pub enum WorkSource { Ticket{ ticket }, Review{ review }, Branch{ name, task: Option<String>, repo: Option<String> } } // Branch with empty name: name from work.scratch_branch_template + task slug; task is the {task} of claude.prompt_templates.standalone; no tracker steps
 // review_due / claude_replied (FLOW §2.3): set only by kelta-work from a real `Stop` hook of the item's
 // Claude (changes = the worktree fingerprint — HEAD, tracked diff, untracked paths — moved since the last
 // `UserPromptSubmit` (kept in memory; after a restart: ahead of <remote>/<base> or dirty) → review_due, else
@@ -482,13 +485,14 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_comment` | `{review, body}` | `()` | |
 | `review_request_changes` | `{review, body}` | `()` | publishes my pending line comments too (as do `review_approve` / `review_comment`) |
 | **work** | | | `commands/work.rs` (L6) |
-| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name}*/}` | `StartWorkPlan` (§SPEC 3.1) | |
+| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/}` | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |
 | `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
 | `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
 | `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
+| `work_link` | `{id, ticket: TicketRef, apply_side_effects: bool}` | `WorkItem` | scratch (Branch) items only; becomes Ticket-kind, branch never renamed; side effects = `work.on_start`, plus `work.on_pr` when a PR exists (then `pr_title_needs_key`) |
 | `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, files, insertions, deletions, missing}` (on demand, no fetch; ahead/behind and diffstat against `<remote>/<base>`, never the branch's upstream; diffstat from the merge base to the working tree, untracked files count in `files`; `missing` = worktree deleted outside Kelta) | |
 | `work_status_all` | `{}` | `Map<WorkItemId, GitStatus>` for every unfinished item: one `git fetch <remote>` per repo first, at most every 5 min (UI: startup, window focus, Now open) | |
 | `work_diff` | `{id}` | `SessionInfo`: the review diff session in the item's worktree (editor with `editor.review_args`, `{range}` = `<remote>/<base>`; empty → a shell running `git diff $(git merge-base <base> HEAD)`). The UI places it split down, zoomed, in the work tab | |

@@ -85,6 +85,7 @@
     "allow-work-create-pr",
     "allow-work-finish",
     "allow-work-status",
+    "allow-work-link",
     "allow-work-status-all",
     "allow-work-diff",
     "allow-work-mark-reviewed",

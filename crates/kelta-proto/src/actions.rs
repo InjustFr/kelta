@@ -82,6 +82,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("reviews.open", "Open reviews", ["cmd+shift+r"], ["ctrl+shift+r"], Some("r"), Global),
     a!("attention.next", "Next waiting", ["cmd+shift+u"], ["ctrl+shift+u"], Some("u"), Global),
     a!("work.start", "Start work", ["cmd+enter"], ["ctrl+enter"], Some("s"), TicketViews),
+    a!("work.new", "New work item", ["cmd+shift+n"], ["ctrl+shift+n"], Some("w"), Global),
     a!(
         "editor.send_selection",
         "Send selection to Claude",

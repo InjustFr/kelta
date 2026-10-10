@@ -559,7 +559,15 @@ export function createMockTransport(options: MockOptions = {}): {
       }
       return s;
     },
-    session_spawn_template: ({ project_id, template_id, placement }) => {
+    session_spawn_template: ({ project_id, template_id, placement, ctx }) => {
+      const item = ctx.work_item_id ? state.work.find((w) => w.id === ctx.work_item_id) : undefined;
+      const tabTitle = item
+        ? item.ticket
+          ? `${item.ticket.key} ${ticketItem(item.ticket).ticket.title}`
+          : item.title
+            ? `wip ${item.title}`
+            : item.branch
+        : template_id;
       const kinds: SessionKind[] =
         template_id === 'claude+editor'
           ? [{ type: 'claude' }, { type: 'editor', adapter: 'nvim' }]
@@ -575,8 +583,8 @@ export function createMockTransport(options: MockOptions = {}): {
           content: { kind: 'terminal', session_id: s.id },
           placement: i === 0 ? placement : 'split_right',
           focus: i === 0,
-          tab_title: i === 0 ? template_id : null,
-          work_item_id: null,
+          tab_title: i === 0 ? tabTitle : null,
+          work_item_id: item?.id ?? null,
         }).layout;
       });
       backendLayoutChange(project_id, layout);
@@ -791,7 +799,7 @@ export function createMockTransport(options: MockOptions = {}): {
       } else if (source.kind === 'review') {
         slug = `pr-${source.review.number}`;
       } else {
-        slug = source.name;
+        slug = source.name || (source.task ?? '').split('\n').find((l) => l.trim() !== '') || '';
       }
       slug = slug
         .toLowerCase()
@@ -804,16 +812,38 @@ export function createMockTransport(options: MockOptions = {}): {
               (w) => w.ticket && sameRef(w.ticket, source.ticket) && w.state.kind !== 'finished',
             )
           : undefined;
+      // Scratch items (FLOW §4.3): wip/{slug}, `{task}` prompt, never adopt an existing branch.
+      const scratch = source.kind === 'branch' && source.task != null;
+      const branch =
+        source.kind === 'review'
+          ? `kelta/${slug}`
+          : source.kind === 'branch'
+            ? source.name || `wip/${slug}`
+            : `feat/${slug}`;
+      if (scratch && slug === '') throw err('invalid_argument', 'describe the task or name the branch');
+      if (scratch && state.work.some((w) => w.branch === branch && w.state.kind !== 'finished')) {
+        throw err(
+          'conflict',
+          `Branch ${branch} has a work item. Edit the branch name or the task's first line.`,
+        );
+      }
+      const repoPick = (source.kind === 'branch' && p.repos.find((r) => r.id === source.repo)) || repo;
       return {
         ...plan,
         project_id,
         source,
-        repo_id: existing?.repo_id ?? repo?.id ?? plan.repo_id,
+        repo_id: existing?.repo_id ?? repoPick?.id ?? plan.repo_id,
         repo_choices: p.repos.map((r) => r.id),
         // An existing item shows its own branch and worktree, not a new plan's (B5).
-        branch: existing?.branch ?? (source.kind === 'review' ? `kelta/${slug}` : `feat/${slug}`),
-        worktree_path: existing?.worktree ?? `${repo?.path ?? '/tmp'}.worktrees/${slug}`,
+        branch: existing?.branch ?? branch,
+        worktree_path:
+          existing?.worktree ?? `${repoPick?.path ?? '/tmp'}.worktrees/${branch.replace(/\//g, '-')}`,
         existing: existing ? existing.id : null,
+        claude: scratch ? { ...plan.claude, prompt: source.task ?? '' } : plan.claude,
+        side_effects:
+          source.kind === 'branch'
+            ? { ...plan.side_effects, assign_me: false, transition_to: null, comment: null }
+            : plan.side_effects,
       };
     },
     work_start: ({ plan }) => {
@@ -851,6 +881,15 @@ export function createMockTransport(options: MockOptions = {}): {
         state: { kind: 'active' },
         steps,
         created_at: now,
+        title:
+          plan.source.kind === 'branch'
+            ? ((plan.source.task ?? '')
+                .split('\n')
+                .map((l) => l.trim())
+                .find((l) => l !== '')
+                ?.slice(0, 72) ?? null)
+            : null,
+        pr_title_needs_key: false,
         review_due: false,
         claude_replied: false,
       };
@@ -865,7 +904,11 @@ export function createMockTransport(options: MockOptions = {}): {
       for (const s of spawned) updateSession(session(s.id), { work_item_id: item.id });
       const key = item.ticket?.key ?? (item.review ? `#${item.review.number}` : item.branch);
       const title =
-        plan.source.kind === 'ticket' ? `${key} ${ticketItem(plan.source.ticket).ticket.title}` : key;
+        plan.source.kind === 'ticket'
+          ? `${key} ${ticketItem(plan.source.ticket).ticket.title}`
+          : item.title
+            ? `wip ${item.title}`
+            : key;
       let layout = layoutOf(plan.project_id);
       spawned.forEach((s, i) => {
         layout = openPane(layout, {
@@ -957,6 +1000,23 @@ export function createMockTransport(options: MockOptions = {}): {
           emit({ type: 'session.removed', id: sid });
         }
       }
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_link: ({ id, ticket, apply_side_effects }) => {
+      const w = work(id);
+      if (w.kind !== 'branch')
+        throw err('conflict', w.review ? 'Review checkout: read-only' : 'work item already has a ticket');
+      const t = ticketItem(ticket);
+      w.kind = 'ticket';
+      w.ticket = clone(t.ticket.ref);
+      w.pr_title_needs_key = w.pr_url !== null;
+      if (apply_side_effects)
+        t.ticket.status = {
+          ...t.ticket.status,
+          name: w.pr_url ? 'In Review' : 'In Progress',
+          category: 'in_progress',
+        };
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },

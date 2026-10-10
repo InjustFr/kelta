@@ -114,6 +114,8 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
 | `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
+| `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
+| `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
@@ -167,4 +169,4 @@ Desktop notifications (`tauri-plugin-notification`) fire only when the related p
   - GNOME: Settings → Keyboard → Custom Shortcuts → `kelta-ctl toggle`.
   Fractional scaling may blur text (GTK3 renders at integer scale) — documented. IME: Kelta never sets `GTK_IM_MODULE`; fcitx5/ibus in QA matrix.
 - **macOS:** Cmd modifier, custom app menu, Option-as-Meta setting, closing the window keeps sessions running (background mode), Dock click reopens, login PATH resolved for Dock launches.
-- `kelta-ctl` commands: `toggle`, `palette`, `open <path>`, `focus-project <id>`, `start <ticket key|url> [--project]`, `new --template <id> [--cwd <dir>] [--project <id>]`, `emit <custom.event> --json '{…}'`, `trust <repo path>`, `editor-open <file>[:line]`, `hook` (internal), `version`.
+- `kelta-ctl` commands: `toggle`, `palette`, `open <path>`, `focus-project <id>`, `start <ticket key|url> [--project]`, `start --task "<text>" [--project <id>]` (scratch work item, same saga as New work item), `new --template <id> [--cwd <dir>] [--project <id>]`, `emit <custom.event> --json '{…}'`, `trust <repo path>`, `editor-open <file>[:line]`, `hook` (internal), `version`.

@@ -151,6 +151,7 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     assert!(matches!(spawned[0].kind, SessionKind::Claude));
     assert!(matches!(&spawned[1].kind, SessionKind::Editor { adapter } if adapter == "nvim"));
     let args = h.term.with_session(&spawned[0].id, |s| s.spec.args.clone()).unwrap();
+    assert!(!args.iter().any(|a| a.contains("{task}")), "plain session must not get a prompt: {args:?}");
     let file = args.iter().position(|a| a == "--settings").map(|i| args[i + 1].clone()).unwrap();
     let hooks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     assert!(hooks["hooks"]["SessionStart"].is_array());

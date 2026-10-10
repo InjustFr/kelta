@@ -135,9 +135,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'link',
     key: 'l',
     label: () => 'Link to ticket…',
-    blocked: (c) =>
-      review(c) ? READ_ONLY : c.item.kind !== 'branch' ? 'Already linked to a ticket' : NOT_YET,
-    run: null,
+    blocked: (c) => (review(c) ? READ_ONLY : c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
+    run: async ({ item }) => ui.openSheet('link_ticket', { id: item.id }),
   },
   {
     id: 'open_ticket',
@@ -276,3 +275,13 @@ registerAction('work.start', async (args) => {
   const projectId = (args?.project_id as string | undefined) ?? selection.projectId;
   await startWorkOnTicket(ticket, projectId);
 });
+
+// Preloaded: ⇧⌘N then typing at once must not lose the first keys to the focused terminal.
+void import('./NewWorkSheet.svelte');
+
+/** New work item sheet (FLOW §4.3): task, wip/ branch, Claude. */
+export function newWorkItem(): void {
+  ui.openSheet('work_new');
+}
+
+registerAction('work.new', newWorkItem);
