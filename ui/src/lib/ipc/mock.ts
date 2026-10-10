@@ -1063,6 +1063,7 @@ export function createMockTransport(options: MockOptions = {}): {
         review_due: false,
         claude_replied: false,
         auto_finish: false,
+        nvim_kept: 0,
       };
       // Like the saga: sessions run in the worktree, bound to the item, in a new active tab that
       // carries the item (B5); the UI brings the project to the front once work_start returns.
@@ -1358,6 +1359,29 @@ export function createMockTransport(options: MockOptions = {}): {
       if (w.state.kind !== 'queued') throw err('conflict', 'work item is not queued');
       const pos = Math.min(...state.work.map((x) => (x.state.kind === 'queued' ? x.state.pos : Infinity)));
       w.state = { kind: 'queued', pos: pos - 1 };
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_park: ({ id }) => {
+      const w = work(id);
+      const mine = state.sessions.filter(
+        (s) =>
+          s.work_item_id === id &&
+          s.lifecycle === 'live' &&
+          (s.kind.type === 'claude' || s.kind.type === 'editor'),
+      );
+      if (mine.some((s) => s.kind.type === 'claude' && s.status === 'working'))
+        throw err('conflict', 'Claude is working');
+      if (mine.length === 0) throw err('conflict', 'nothing to park');
+      for (const s of mine)
+        updateSession(s, {
+          lifecycle: 'dormant',
+          status: 'unknown',
+          attention: 'none',
+          seen: true,
+          pid: null,
+        });
+      Object.assign(w, { parked_at: new Date().toISOString(), nvim_kept: 0 });
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },

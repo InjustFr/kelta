@@ -666,6 +666,13 @@ pub struct WorkItem {
     /// Merge when ready armed (`work_arm_merge`): the host merges the PR, then Kelta runs Finish once.
     #[serde(default)]
     pub auto_finish: bool,
+    /// When Park (`work_park`, #142) stopped the item's Claude; cleared when that Claude spawns again.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub parked_at: Option<String>,
+    /// Unsaved nvim buffers that kept nvim running at the last park (0 = nvim parked too, or none).
+    #[serde(default)]
+    pub nvim_kept: u32,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files

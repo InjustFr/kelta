@@ -316,6 +316,8 @@ pub fn work_item() -> WorkItem {
         port_base: Some(20140),
         cost_usd: 3.5,
         auto_finish: false,
+        parked_at: None,
+        nvim_kept: 0,
     }
 }
 

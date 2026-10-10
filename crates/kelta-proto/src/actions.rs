@@ -124,6 +124,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("work.open_ticket", "Work: Open ticket", [], [], None, Global),
     a!("work.open_pr", "Work: Open PR", [], [], None, Global),
     a!("work.finish", "Work: Finish", [], [], None, Global),
+    a!("work.park", "Work: Park", [], [], None, Global),
     a!("work.force_push", "Work: Force push…", [], [], None, Global),
     a!("work.rebase_ask_claude", "Work: Ask Claude to resolve conflicts", [], [], None, Global),
     a!("work.rerequest_review", "Work: Re-request review", [], [], None, Global),

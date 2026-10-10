@@ -261,6 +261,7 @@ describe('mock transport', () => {
       work_mark_reviewed: { id: work.id },
       work_set_note: { id: work.id, note: 'next: tests' },
       work_left: { id: work.id },
+      work_park: { id: work.id },
       work_queue_front: { id: queued.id },
       work_start_now: { id: queued.id },
       work_notes: { id: work.id },

@@ -195,6 +195,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_left,
         work::work_start_now,
         work::work_queue_front,
+        work::work_park,
         work::work_notes,
         work::work_note_resolve,
         work::work_notes_send,

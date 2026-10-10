@@ -672,6 +672,8 @@ pub struct ClaudeSettings {
     pub max_live: u32,
     /// Hold the queue while the 5h rate-limit usage (%) is at or above this; none = never hold.
     pub queue_hold_pct: Option<f64>,
+    /// Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).
+    pub auto_park_after_mins: u32,
 }
 
 impl Default for ClaudeSettings {
@@ -718,6 +720,7 @@ impl Default for ClaudeSettings {
             budget_usd: None,
             max_live: 4,
             queue_hold_pct: None,
+            auto_park_after_mins: 45,
         }
     }
 }

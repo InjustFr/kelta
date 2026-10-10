@@ -33,8 +33,8 @@ export function maxAttention(levels: Iterable<Attention>): Attention {
   return best;
 }
 
-/** What a lamp shows: an attention level, or `working` derived from session status (not an Attention). */
-export type LampLevel = Attention | 'working';
+/** What a lamp shows: an attention level, `working` derived from session status, or a parked work item (#142). */
+export type LampLevel = Attention | 'working' | 'parked';
 
 /** Precedence needs_input > error > working > done > activity (DESIGN §6.1). */
 export function lampOf(level: Attention, working: boolean): LampLevel {
