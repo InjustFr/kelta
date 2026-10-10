@@ -414,6 +414,28 @@ async fn suggestion_commits_and_update_branch_are_remote_new_never_force_pushed(
 }
 
 #[tokio::test]
+async fn rebase_onto_remote_after_a_rebase_onto_base_never_copies_base_commits() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = diverging(&fx, true).await;
+    w.rebase(&item.id, start(RebaseOnto::Base)).await.unwrap();
+    // The force push is not done yet: a reviewer commits a suggestion on the remote branch.
+    let mate = teammate(&fx);
+    git(&mate, &["checkout", "-q", &item.branch]);
+    commit(&mate, "mine.txt", "mine, as suggested\n", "Apply suggestion");
+    git(&mate, &["push", "-q", "origin", &item.branch]);
+
+    w.rebase(&item.id, start(RebaseOnto::RemoteBranch)).await.unwrap();
+    let own = git(&item.worktree, &["log", "--format=%s", &format!("origin/{}..HEAD", item.branch)]);
+    assert_eq!(own, "", "main's commits are not replayed onto the branch");
+    let out = w.rebase(&item.id, start(RebaseOnto::Base)).await.unwrap();
+    assert!(out.rebase.is_some_and(|r| r.total == 0), "force push pending");
+    let log = git(&item.worktree, &["log", "--format=%s", "origin/main..HEAD"]);
+    assert_eq!(log, "Apply suggestion\nmy work");
+    assert_eq!(std::fs::read_to_string(item.worktree.join("mine.txt")).unwrap(), "mine, as suggested\n");
+}
+
+#[tokio::test]
 async fn non_fast_forward_push_says_the_remote_has_commits() {
     need_git!();
     let fx = Fx::new();

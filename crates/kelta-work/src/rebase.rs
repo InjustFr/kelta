@@ -146,8 +146,25 @@ impl WorkService {
                 if git::rev(wt, &format!("refs/remotes/{onto_ref}")).await?.is_none() {
                     return Err(KeltaError::not_found(format!("{onto_ref} not found; fetch it first")));
                 }
-                let out =
-                    git::run(wt, &["-c", "core.editor=true", "rebase", &onto_ref], REBASE_TIMEOUT).await?;
+                // Onto the remote branch, replay only the item's own commits: the upstream is a
+                // throwaway merge of base and the remote branch, so base commits (already in HEAD
+                // after a rebase onto base) are excluded and already-pushed ones drop by patch-id.
+                let upstream = match onto {
+                    RebaseOnto::Base => onto_ref.clone(),
+                    RebaseOnto::RemoteBranch => {
+                        let base_ref = format!("{remote}/{}", item.base);
+                        let tree = format!("{onto_ref}^{{tree}}");
+                        let args =
+                            ["commit-tree", tree.as_str(), "-p", base_ref.as_str(), "-p", onto_ref.as_str(), "-m", "kelta rebase upstream"];
+                        git::run_ok(wt, &args, REBASE_TIMEOUT).await?.stdout.trim().to_owned()
+                    }
+                };
+                let out = git::run(
+                    wt,
+                    &["-c", "core.editor=true", "rebase", "--onto", &onto_ref, &upstream],
+                    REBASE_TIMEOUT,
+                )
+                .await?;
                 if !out.ok() && git::rebase_progress(wt).await?.is_none() {
                     return Err(KeltaError::upstream(format!(
                         "git rebase {onto_ref} failed: {}",

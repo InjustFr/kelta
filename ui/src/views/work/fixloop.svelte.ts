@@ -185,6 +185,10 @@ async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetch = fal
         command: 'work.force_push',
         args: { id: w.id },
       });
+    } else if (onto === 'remote_branch') {
+      // FLOW §4.4: the remote's commits are in, now the normal rebase onto base follows.
+      // shortcut: a remote rebase stopped on conflicts does not chain after Continue; the item then shows Behind.
+      await rebase(w, 'base', noFetch);
     } else {
       toast('info', `Rebased ${w.branch}.`);
     }

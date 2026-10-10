@@ -122,10 +122,11 @@ describe('WorkItemHeader', () => {
     expect(await screen.findByText('Remote has new commits (2)')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Force push…' })).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: `Rebase onto origin/${w.branch}` }));
+    // The rebase onto the remote branch is followed by the normal rebase onto base (FLOW §4.4).
     await waitFor(() =>
-      expect(mock.calls.filter((c) => c.cmd === 'work_rebase').at(-1)?.args).toMatchObject({
-        op: { kind: 'start', onto: 'remote_branch' },
-      }),
+      expect(
+        mock.calls.filter((c) => c.cmd === 'work_rebase').map((c) => (c.args as { op: { onto: string } }).op.onto),
+      ).toEqual(['remote_branch', 'base']),
     );
     await waitFor(() => expect(screen.queryByText('Remote has new commits (2)')).toBeNull());
   });
