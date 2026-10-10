@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings → General (global layer): one card grid per mode for `app.dark_theme` / `app.light_theme`.
   // Arrows only move focus; Enter, Space or a click writes the slot (no write per focused card).
-  // Import theme... converts a VS Code theme file (#231) and makes it the theme of its base slot.
+  // Import theme... converts a VS Code (#231) or terminal (#232) theme file and makes it the theme of its base slot.
   import { tick } from 'svelte';
 
   import type { JsonValue, ThemeDef } from '$lib/gen';
@@ -60,8 +60,8 @@
   async function importTheme(file: File): Promise<void> {
     const context = 'Could not import the theme';
     if (file.size > MAX_IMPORT_BYTES) return void toasts.error('The file is larger than 5 MB', context);
-    const { fromVscode, themeId } = await import('$lib/theme/import/vscode');
-    const def = fromVscode(await file.text(), file.name);
+    const { fromThemeFile, themeId } = await import('$lib/theme/import/terminal');
+    const def = fromThemeFile(await file.text(), file.name);
     if (def instanceof Error) return void toasts.error(def.message, context);
     const id = themeId(def.name, file.name);
     const existing = settings.value()?.themes?.[id];
@@ -177,13 +177,12 @@
   <div class="import">
     <Button icon="folder-open" onclick={() => fileInput?.click()}>Import theme...</Button>
     <p class="help">
-      VS Code colour theme (.json). Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings'
-      exports the theme you use now.
+      VS Code (.json), iTerm2 (.itermcolors), Ghostty, Kitty (.conf), Alacritty (.toml) or base16 (.yaml).
+      Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings' exports the theme you use now.
     </p>
     <input
       bind:this={fileInput}
       type="file"
-      accept=".json,.jsonc"
       hidden
       data-testid="theme-import-input"
       onchange={(e) => {

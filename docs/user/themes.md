@@ -38,6 +38,30 @@ is not changed: if the theme is for the other mode, switch the mode yourself.
 
 Kelta does not fix contrast: the card preview shows what you get.
 
+## From your terminal
+
+The same **Import theme...** button reads terminal colour schemes. The format is recognised from the file's
+content, not its name (Ghostty theme files have no extension):
+
+| App | File | Where to find it |
+|---|---|---|
+| iTerm2 | `.itermcolors` | Settings → Profiles → Colors → Color Presets... → Export, or [iterm2colorschemes.com](https://iterm2colorschemes.com) |
+| Ghostty | theme file (no extension) | `~/.config/ghostty/themes/`; `ghostty +list-themes` lists the built-in ones |
+| Kitty | `.conf` | `~/.config/kitty/` (`current-theme.conf` after `kitten themes`), or the kitty-themes repository |
+| Alacritty | `.toml` | `~/.config/alacritty/` (the file your `import` points to), or the alacritty-theme repository |
+| base16 / tinted-theming | `.yaml` | the tinted-theming `schemes` repository (`base16/*.yaml`) |
+
+- The 16 ANSI colours, background, foreground, cursor and selection are read. The window chrome is derived
+  from them as in the table above: well = background, accent = ANSI blue, danger/warn/ok/info = red, yellow,
+  green, blue. The base follows the background (light or dark).
+- base16 also fills the chrome: well `base00`, `bezel_raised` `base01`, border and selection `base02`,
+  `fg_subtle` `base04`, fg `base05`, accent `base0D`. ANSI uses the base16-shell order; `variant` sets the
+  base. The name comes from `name` (or the older `scheme`).
+- Missing ANSI colours are taken from Bezel, so the saved theme always has 16.
+- The name is the file's name in title case (`gruvbox-dark` → Gruvbox Dark), except for base16.
+- Alacritty: only `[colors.*]` sections are read, not dotted keys or inline tables; the old YAML format is
+  not supported. Windows Terminal and Terminal.app themes are not supported.
+
 ## The TOML format
 
 A theme is a partial set of `#rrggbb` overrides on top of the Bezel palette of its `base`. Tokens you leave out
