@@ -69,7 +69,7 @@ Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary show
 time of each step and the log path. The e2e suite runs alongside `qa.sh` (it uses the Vite dev server, not
 `ui/dist`) and writes its own `-e2e.log`, printed when it ends. `.config/nextest.toml` starts the slowest
 tests first so they do not become the tail of the run; give a new test that takes several seconds a priority
-there.
+there. It also stops a test still running after 90 s: it fails as `TIMEOUT` with its name.
 
 Integration tests live in one binary per crate (`crates/<name>/tests/it/main.rs`, one `mod` per file), which
 keeps `target/` small and links fast. Run a subset with a module filter:
@@ -92,14 +92,17 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    e2e, cargo-deny) for what the change affects (see QA). `scripts/linux-check.sh` runs only with `--linux` or
    `--full` (`--base <ref>` changes the base).
 2. Open the PR when it is ready. Draft PRs do not run CI; marking one ready does. A PR runs only the jobs for
-   what it changes (Rust, UI, packaging), and docs-only PRs run nothing. There is no CI on pushes to `main`
-   or to branches.
+   what it changes (Rust, UI, packaging), on Linux only, and docs-only PRs run nothing. Every push to `main`
+   runs every job on Linux and macOS: ticket passes merge after `ci-local.sh`, and this run confirms on the
+   runners. There is no CI on pushes to other branches. CI and `scripts/linux-check.sh` install the same
+   pinned Neovim (`scripts/install-nvim.sh`).
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
    macOS dmg here and the Linux deb + AppImage (arm64, and amd64 under QEMU) in Docker, moves the `nightly`
    tag to HEAD and uploads to the prerelease. It runs `bash scripts/ci-local.sh --full` first. Tags `v*` build
-   the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it.
+   the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A manual run of
+   `release` (or of `nightly` off `main`) builds without publishing.
 
 ## Packaging and benchmarks
 

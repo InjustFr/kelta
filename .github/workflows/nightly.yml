@@ -95,6 +95,8 @@ jobs:
 
   publish:
     needs: [linux, macos]
+    # A manual run on another branch only builds: the rolling prerelease is main's.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

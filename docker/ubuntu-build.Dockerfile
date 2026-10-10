@@ -7,10 +7,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential pkg-config curl ca-certificates git rsync file neovim python3 \
+      build-essential pkg-config curl ca-certificates git rsync file python3 \
       libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
       libssl-dev libxdo-dev patchelf \
     && rm -rf /var/lib/apt/lists/*
+
+# The Neovim CI installs (scripts/install-nvim.sh), not apt's older one.
+COPY scripts/install-nvim.sh /tmp/install-nvim.sh
+RUN bash /tmp/install-nvim.sh
 
 RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.99.0 -c rustfmt -c clippy
 
