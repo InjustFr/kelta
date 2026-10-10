@@ -7,6 +7,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, projects, toasts, work } from '$lib/stores';
 
+import { refines } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
 
 let mock: MockControls;
@@ -199,6 +200,20 @@ describe('StartWorkSheet project', () => {
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(sentPlan().project_id).toBe('billing');
     expect(sentPlan().repo_id).toBe('core');
+  });
+
+  it('keeps the refine acceptance criteria after switching project', async () => {
+    refines[`${ticket.account}:${ticket.key}`] = {
+      running: false,
+      text: '## Acceptance criteria\n- it works',
+      posted: false,
+    };
+    await mountSheet();
+    await fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'billing' } });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Prompt') as HTMLTextAreaElement).value).toContain('- it works'),
+    );
+    delete refines[`${ticket.account}:${ticket.key}`];
   });
 
   it('focuses a guessed project and says Kelta will remember it', async () => {

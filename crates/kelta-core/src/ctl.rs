@@ -329,7 +329,8 @@ impl Core {
                     self.emit(UiEvent::CtlCommand {
                         cmd: CtlCommand::Start {
                             ticket,
-                            project: Some(project.clone()),
+                            // A guess stays unset so the sheet's re-plan keeps its guess hint.
+                            project: if plan.project_guessed { None } else { Some(project.clone()) },
                             resolved: Some(tref),
                         },
                     });

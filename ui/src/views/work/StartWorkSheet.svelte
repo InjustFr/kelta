@@ -17,6 +17,7 @@
   import { Button, Icon, Select, Sheet, Spinner, TextInput, Toggle } from '$lib/ui';
 
   import { activateProject } from '../../shell/nav';
+  import { withCriteria } from '../tickets/refine.svelte';
   import { planValid, START_STEPS, stepLabel, validatePlan } from './common';
 
   interface Props extends SheetProps {
@@ -49,6 +50,7 @@
     switching = true;
     try {
       const next = await workPlan({ project_id: id, source: plan.source });
+      if (next.source.kind === 'ticket') withCriteria(next, next.source.ticket);
       plan = { ...next, project_choices: plan.project_choices, project_guessed: plan.project_guessed };
       origTransition = next.side_effects.transition_to;
       transitionOn = origTransition !== null;
