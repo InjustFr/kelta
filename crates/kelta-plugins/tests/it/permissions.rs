@@ -37,7 +37,7 @@ fn params() -> Value {
         "transition_id": "t1", "markdown": "hi", "assignee": { "kind": "me" },
         "review": { "account": "github-work", "repo": "acme/shop-api", "number": 1 },
         "head_sha": "abc", "body": "b",
-        "command": "htop", "session_id": "s-1", "text": "ls",
+        "command": "htop", "timeout_ms": 1, "session_id": "s-1", "text": "ls",
         "tool_id": "nope", "names": ["session.*"], "url": "https://api.example.com/x",
         "screen_id": "main", "title": "t", "key": "k", "value": 1,
     })
