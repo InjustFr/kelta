@@ -1,0 +1,23 @@
+---
+source: crates/kelta-work/tests/it/claude_files.rs
+expression: "claude::argv(&resume)"
+---
+[
+  "--resume",
+  "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "-n",
+  "SHOP-142 Rate-limit login",
+  "--model",
+  "opus",
+  "--effort",
+  "high",
+  "--permission-mode",
+  "acceptEdits",
+  "--settings",
+  "/tmp/kelta 501/s/6f1d2c3b/claude-settings.json",
+  "--allowedTools",
+  "mcp__kelta__*",
+  "--append-system-prompt-file",
+  "/tmp/kelta 501/s/6f1d2c3b/context.md",
+  "--verbose"
+]

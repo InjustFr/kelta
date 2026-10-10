@@ -1,0 +1,27 @@
+---
+source: crates/kelta-work/tests/it/claude_files.rs
+expression: argv
+---
+[
+  "--session-id",
+  "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "-n",
+  "SHOP-142 Rate-limit login",
+  "--model",
+  "opus",
+  "--effort",
+  "high",
+  "--permission-mode",
+  "acceptEdits",
+  "--settings",
+  "/tmp/kelta 501/s/6f1d2c3b/claude-settings.json",
+  "--mcp-config",
+  "/tmp/kelta 501/s/6f1d2c3b/mcp.json",
+  "--allowedTools",
+  "mcp__kelta__*",
+  "--append-system-prompt-file",
+  "/tmp/kelta 501/s/6f1d2c3b/context.md",
+  "--verbose",
+  "--",
+  "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta 501/s/6f1d2c3b/ticket.md."
+]

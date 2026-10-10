@@ -46,6 +46,11 @@ It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fm
 `-D warnings`, `cargo test --workspace` and the codegen drift check. The Playwright suite on mock IPC runs with
 `pnpm e2e`.
 
+Integration tests live in one binary per crate (`crates/<name>/tests/it/main.rs`, one `mod` per file), which
+keeps `target/` small and links fast. Run a subset with a module filter:
+`cargo test -p kelta-core --test it daemon::`. The RSS and thread-leak checks in `kelta-term`
+(`--test history`, `--test resources`) stay separate binaries because they measure the whole process.
+
 ### Linux check in Docker
 
 `scripts/linux-check.sh` repeats the checks on Ubuntu 24.04 (`docker/ubuntu-build.Dockerfile`), which is the

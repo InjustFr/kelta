@@ -4,7 +4,7 @@
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use kelta_term::model::TermModel;
 
-#[path = "../tests/common/workload.rs"]
+#[path = "../tests/it/common/workload.rs"]
 mod workload;
 
 fn parse(c: &mut Criterion) {

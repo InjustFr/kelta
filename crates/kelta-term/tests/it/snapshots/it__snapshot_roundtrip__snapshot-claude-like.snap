@@ -1,0 +1,34 @@
+---
+source: crates/kelta-term/tests/it/snapshot_roundtrip.rs
+expression: escape(&snap)
+---
+␛c␛[38;5;208m╭──────────────────────────────────────────╮␛[0m␍␊
+␛[38;5;208m│␛[0m ✻ Welcome to ␛[1mfake Claude Code␛[47G␛[0;38;5;208m│␛[0m␍␊
+␛[38;5;208m│␛[0m   session 00000000… ␛[38;5;208m│␛[0m␍␊
+␛[38;5;208m╰──────────────────────────────────────────╯␛[0m␍␊
+␛[2m> fix the bug␛[0m␍␊
+␛[38;5;208m✻␛[0m Thinking…␍␊
+␛[38;5;208m✻␛[0m Reading files…␍␊
+␛[38;5;208m✻␛[0m Editing src/main.rs…␍␊
+␛[38;5;208m✻␛[0m Bash(cargo test) — allowed␍␊
+␛[38;5;208m✻␛[0m Done.␍␊
+␍␊
+bye␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␍␊
+␛[13;1H␛[?2026l

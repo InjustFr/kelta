@@ -1,0 +1,15 @@
+---
+source: crates/kelta-work/tests/it/claude_files.rs
+expression: got
+---
+{
+  "mcpServers": {
+    "kelta": {
+      "headers": {
+        "Authorization": "Bearer ${KELTA_MCP_TOKEN}"
+      },
+      "type": "http",
+      "url": "http://127.0.0.1:51234/mcp/0192f0c1-0000-7000-8000-000000000001"
+    }
+  }
+}

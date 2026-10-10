@@ -4,6 +4,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
 
+#[path = "it/common/mod.rs"]
 mod common;
 
 use std::sync::Arc;
