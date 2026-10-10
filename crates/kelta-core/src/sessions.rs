@@ -950,6 +950,8 @@ impl Core {
 
     pub(crate) fn remove_session(&self, id: &SessionId) {
         let Some(entry) = self.sessions.lock().remove(id) else { return };
+        // Close it in the host too (frees the model; keltad drops the route). NotFound when Dormant.
+        let _ = self.terminal.kill(id, KillSignal::Kill);
         entry.timers.cancel();
         self.server.unregister_session(id);
         self.release_http_ref(entry.http_ref);

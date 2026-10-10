@@ -12,7 +12,7 @@ use std::time::Duration;
 use common::*;
 use kelta_proto::api::TerminalHost;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{KillSignal, LoginEnv, TerminalLimits};
+use kelta_proto::term::{KillSignal, TerminalLimits};
 use kelta_term::PtyTerminalHost;
 
 const T: Duration = Duration::from_secs(20);
@@ -137,7 +137,7 @@ fn spawn_kill_cycles_do_not_leak(h: &PtyTerminalHost) {
 
 #[test]
 fn memory_and_leaks() {
-    let h = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let h = PtyTerminalHost::new(TerminalLimits::default());
     // Sessions fill one after another.
     idle_sessions_stay_small(&h, false);
     spawn_kill_cycles_do_not_leak(&h);
@@ -151,6 +151,6 @@ fn memory_and_leaks() {
 #[test]
 #[ignore = "known unmet: concurrent fill leaves fragmented malloc pages resident"]
 fn idle_sessions_filled_concurrently() {
-    let h = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let h = PtyTerminalHost::new(TerminalLimits::default());
     idle_sessions_stay_small(&h, true);
 }
