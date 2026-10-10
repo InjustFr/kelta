@@ -76,23 +76,22 @@
   }
 </script>
 
-<Sheet {title} side="top" width={600} {onclose}>
+<Sheet {title} side="top" width={640} {onclose}>
   <div class="picker" data-testid={testid}>
     <div class="input">
-      <Icon name="search" size={14} />
+      <Icon name="search" size={16} />
       <input
         type="text"
         {placeholder}
         value={query}
         oninput={(e) => onquery(e.currentTarget.value)}
         {onkeydown}
-        class="k-mono"
         spellcheck="false"
         autocomplete="off"
         aria-label={title}
         data-testid="{testid}-input"
       />
-      {#if busy}<Spinner size={14} />{/if}
+      {#if busy}<Spinner size={16} />{/if}
     </div>
     <div class="list" bind:this={list} role="listbox" aria-label="Results">
       {#each shown as item, i (item.id)}
@@ -114,7 +113,7 @@
           <span class="lamp-slot"
             >{#if item.lamp}<Lamp level={item.lamp} />{/if}</span
           >
-          <Icon name={item.icon ?? 'command'} size={14} />
+          <Icon name={item.icon ?? 'command'} size={16} />
           <span class="label">{item.label}</span>
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
           {#if item.kbd}<Kbd chord={item.kbd} />{/if}
@@ -123,6 +122,11 @@
         <p class="empty">{empty}</p>
       {/each}
     </div>
+    <footer class="hints">
+      <span><Kbd chord="up" /><Kbd chord="down" /> Move</span>
+      <span><Kbd chord="enter" /> Run</span>
+      <span><Kbd chord="escape" /> Close</span>
+    </footer>
   </div>
 </Sheet>
 
@@ -138,7 +142,7 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    height: 36px;
+    height: 48px;
     padding: 0 var(--k-space-5);
     border-bottom: 1px solid var(--k-border);
     color: var(--k-fg-subtle);
@@ -151,7 +155,8 @@
     border: none;
     background: transparent;
     color: var(--k-fg);
-    font-size: var(--k-font-size);
+    font-family: var(--k-font-ui);
+    font-size: var(--k-font-size-lg);
   }
 
   input:focus-visible {
@@ -168,7 +173,7 @@
     padding: var(--k-space-3) var(--k-space-3) var(--k-space-1);
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-sm);
-    font-weight: var(--k-weight-strong);
+    font-weight: var(--k-weight-medium);
   }
 
   .row {
@@ -185,7 +190,7 @@
   .lamp-slot {
     display: inline-flex;
     flex: none;
-    width: 10px;
+    width: 12px;
   }
 
   .row > :global(.k-icon) {
@@ -215,6 +220,21 @@
 
   .row :global(.k-kbd) {
     margin-left: auto;
+  }
+
+  .hints {
+    display: flex;
+    gap: var(--k-space-5);
+    padding: var(--k-space-3) var(--k-space-5);
+    border-top: 1px solid var(--k-border);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+  }
+
+  .hints span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
   }
 
   .empty {
