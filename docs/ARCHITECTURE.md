@@ -360,7 +360,15 @@ pub enum Scope { Project{ id: ProjectId }, All }
 pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, ticket: Option<TicketRef>, review: Option<ReviewRef>,
   repo_id: String, worktree: PathBuf, branch: String, base: String, claude_uuid: Option<String>, nvim_socket: Option<PathBuf>,
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
-  created_at: String }
+  created_at: String, review_due: bool, claude_replied: bool }
+// review_due / claude_replied (FLOW §2.3): set only by kelta-work from a real `Stop` hook of the item's
+// Claude (changes = the worktree fingerprint — HEAD, tracked diff, untracked paths — moved since the last
+// `UserPromptSubmit` (kept in memory; after a restart: ahead of <remote>/<base> or dirty) → review_due, else
+// claude_replied; never for review checkouts; hooks of one session apply in order), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr`, Finish and
+// `work_mark_reviewed`; claude_replied by Finish. Store writes: `save` never writes these two (it keeps the
+// stored values); `update(id, |w| ..)` re-loads under a write lock held only around load-modify-save and is
+// their only writer. Long operations (`create_pr`, `finish`) end with `update` of their own fields.
+// claude_uuid follows the session id of any hook of the item's Claude (/clear, in-Claude /resume).
 pub enum WorkState { Planned, Starting, Active, PrOpen, Finished, Failed{ step: String, message: String } }
 ```
 
@@ -473,7 +481,10 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `work_retry_step` | `{id, step}` | `WorkItem` | `step` = a saga step id (re-run) or `skip:<step>` (mark skipped, continue) |
 | `work_create_pr` | `{id, draft: PrDraft}` | `WorkItem` | |
 | `work_finish` | `{id, opts: FinishOpts{remove_worktree, delete_branch, force, transition_to?}}` | `WorkItem` | |
-| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed}` (on demand) | |
+| `work_status` | `{id}` | `GitStatus{ahead, behind, dirty, unpushed, files, insertions, deletions, missing}` (on demand, no fetch; ahead/behind and diffstat against `<remote>/<base>`, never the branch's upstream; diffstat from the merge base to the working tree, untracked files count in `files`; `missing` = worktree deleted outside Kelta) | |
+| `work_status_all` | `{}` | `Map<WorkItemId, GitStatus>` for every unfinished item: one `git fetch <remote>` per repo first, at most every 5 min (UI: startup, window focus, Now open) | |
+| `work_diff` | `{id}` | `SessionInfo`: the review diff session in the item's worktree (editor with `editor.review_args`, `{range}` = `<remote>/<base>`; empty → a shell running `git diff $(git merge-base <base> HEAD)`). The UI places it split down, zoomed, in the work tab | |
+| `work_mark_reviewed` | `{id}` | `WorkItem` (clears `review_due`) | |
 | `editor_open` | `{target: EditorTarget /*Session{id}|WorkItem{id}*/, path, line?}` | `()` | `commands/editor.rs` (L6) |
 | `editor_send_selection` | `{editor_session, claude_session}` | `()` | `commands/editor.rs` (L6) |
 | **tools / plugins / triggers** | | | `commands/tool.rs`, `plugin.rs`, `trigger.rs` (L8) |
@@ -593,7 +604,7 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 | UserPromptSubmit | Working | Activity |
 | PermissionRequest; Notification `permission_prompt` \| `elicitation_dialog` \| `agent_needs_input` | NeedsInput | NeedsInput |
 | Notification `idle_prompt` | WaitingUser | NeedsInput if unseen |
-| Stop | Done (preview = `last_assistant_message`, 200 chars) | Done if pane not visible |
+| Stop | Done (preview = `last_assistant_message`, 200 chars) | Done if pane not visible. A work item's Claude: kelta-work sets `review_due`/`claude_replied` and notifies "KEY ready to review" / "KEY: Claude replied" (core skips its generic "finished" notification); the tab and rail `done` lamp of a work item comes from `review_due` |
 | StopFailure | Error | Error |
 | SessionEnd / PTY exit | Exited | — |
 | PostToolUse `Edit\|Write\|MultiEdit` | unchanged (`StatusChange.status = Unknown`); `file_edited = tool_input.file_path` → bus `claude.file_edited` | — |
@@ -734,7 +745,8 @@ projects_open(project_id PK, ord, active)              -- open set + order; conf
 layouts(project_id PK, json, rev, updated_at)
 sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)
 work_items(id PK, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base, claude_uuid, nvim_socket,
-           tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at)
+           tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at,
+           review_due /*v2*/, claude_replied /*v2*/)
 work_steps(work_item_id, step, status /*pending|running|done|failed|skipped*/, detail, updated_at, PK(work_item_id, step))
 seen_reviews(account, repo, number, head_sha, first_seen, PK(account, repo, number))
 provider_cache(key PK, etag, body_json, fetched_at)

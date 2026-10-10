@@ -730,6 +730,7 @@ export const startWorkPlan: StartWorkPlan = {
 export const workItem: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -739,6 +740,7 @@ export const workItem: WorkItem = {
   "project_id": "shop",
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -832,6 +834,7 @@ export const workItem: WorkItem = {
 export const workItemFailed: WorkItem = {
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
+  "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
   "created_at": "2026-10-09T12:00:00Z",
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -841,6 +844,7 @@ export const workItemFailed: WorkItem = {
   "project_id": "shop",
   "repo_id": "api",
   "review": null,
+  "review_due": false,
   "session_ids": [
     "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
     "01928f6e-2b4c-7a10-9c3d-5e6f70819204"
@@ -945,7 +949,11 @@ export const finishOpts: FinishOpts = {
 export const gitStatus: GitStatus = {
   "ahead": 2,
   "behind": 0,
+  "deletions": 7,
   "dirty": true,
+  "files": 3,
+  "insertions": 41,
+  "missing": false,
   "unpushed": true
 };
 
@@ -1501,6 +1509,7 @@ export const settingsDefault: Settings = {
       "terminal.paste": "]",
       "terminal.search": "/",
       "tickets.open": "t",
+      "work.menu": ".",
       "work.start": "s"
     },
     "prefix_timeout_ms": 1000
@@ -2778,6 +2787,7 @@ export const uiEventWorkUpdated: UiEvent = {
   "work": {
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
+    "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "created_at": "2026-10-09T12:00:00Z",
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -2787,6 +2797,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "project_id": "shop",
     "repo_id": "api",
     "review": null,
+    "review_due": false,
     "session_ids": [
       "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
       "01928f6e-2b4c-7a10-9c3d-5e6f70819204"

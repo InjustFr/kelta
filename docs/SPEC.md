@@ -99,7 +99,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `palette.open` | Cmd+K | Ctrl+Shift+K | `:` |
 | `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
 | `project.goto.1..9` | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
-| `inbox.open` | Cmd+0 | Ctrl+Shift+0 | `0` |
+| `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
 | `project.next` / `project.prev` | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
 | `tab.next` / `tab.prev` | Cmd+Shift+] / [ | Ctrl+Shift+] / [ | `n` / `N` |
 | `session.new` | Cmd+T | Ctrl+Shift+T | `c` |
@@ -109,7 +109,9 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
 | `tickets.open` | Cmd+Shift+J | Ctrl+Shift+J | `t` |
 | `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
-| `attention.next` (next session needing input, any project) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
+| `attention.next` ("Next waiting": walks the first four sections of Now, any project, cycling) | Cmd+Shift+U | Ctrl+Shift+U | `u` |
+| `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
+| `work.next`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.conflicts`, `work.skip_step`, `work.go_claude`, `work.link`, `work.open_ticket`, `work.open_pr`, `work.finish` (palette "Work: …", focused item), `work.finish_merged` | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |

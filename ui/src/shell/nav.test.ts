@@ -8,7 +8,6 @@ import { layout, projects, sessions, toasts, ui, work } from '$lib/stores';
 import { confirms } from './confirm.svelte';
 import {
   activateProject,
-  attentionNext,
   closeFocusedPane,
   currentTab,
   cycleProject,
@@ -20,6 +19,7 @@ import {
   requestCloseTab,
   revealSession,
   splitFocused,
+  projectAttention,
   tabAttention,
   toggleZoomFocused,
 } from './nav';
@@ -108,22 +108,20 @@ describe('sessions', () => {
     expect(calls('session_kill')).toEqual([]);
   });
 
-  it('attention.next goes to the session needing input in another project', async () => {
-    await attentionNext();
-    expect(projects.activeId).toBe('billing');
-    expect(focusedSessionId()).toBe(BILLING_CLAUDE);
-  });
-
-  it('attention.next tells when nothing needs input', async () => {
-    for (const s of sessions.all) sessions.upsert({ ...s, status: 'running', attention: 'none' });
-    await attentionNext();
-    expect(toasts.list.at(-1)?.toast.text).toBe('No session needs input');
-    expect(projects.activeId).toBe('shop');
+  it('a work tab shows done from review_due, not from the session seen flag', () => {
+    const tab = layout.get('shop')!.tabs[0]!;
+    const item = work.get(tab.work_item_id!)!;
+    sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, status: 'done', attention: 'done', seen: false });
+    expect(tabAttention(tab)).toBe('none');
+    work.upsert({ ...item, review_due: true });
+    expect(tabAttention(tab)).toBe('done');
+    expect(projectAttention('shop')).toBe('done');
   });
 
   it('computes tab attention from the sessions shown in the tab', async () => {
     const tab = layout.get('shop')!.tabs[0]!;
-    expect(tabAttention(tab)).toBe('working'); // the shop Claude session is working (attention: activity)
+    // A work tab: the item's phase (Claude working) outranks its sessions' activity.
+    expect(tabAttention(tab)).toBe('working');
     sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, attention: 'needs_input' });
     expect(tabAttention(tab)).toBe('needs_input');
   });

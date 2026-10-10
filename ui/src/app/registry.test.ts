@@ -34,7 +34,7 @@ describe('registries', () => {
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {
       expect(typeof (await load()).default).toBe('function');
     }
-  });
+  }, 60_000); // cold transforms (the work bar pulls in the work actions)
 
   it('settings sections are unique, ordered per BUILD_PLAN §2.4 and load', async () => {
     const ids = settingsSections.map((s) => s.id);

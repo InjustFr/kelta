@@ -1,0 +1,52 @@
+{
+  "0199a6b2-0000-7000-8000-00000000a001": {
+    "ahead": 2,
+    "behind": 1,
+    "dirty": true,
+    "unpushed": true,
+    "files": 3,
+    "insertions": 41,
+    "deletions": 7,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a002": {
+    "ahead": 0,
+    "behind": 3,
+    "dirty": true,
+    "unpushed": false,
+    "files": 2,
+    "insertions": 12,
+    "deletions": 3,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a003": {
+    "ahead": 3,
+    "behind": 0,
+    "dirty": false,
+    "unpushed": false,
+    "files": 5,
+    "insertions": 120,
+    "deletions": 14,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a004": {
+    "ahead": 1,
+    "behind": 0,
+    "dirty": true,
+    "unpushed": true,
+    "files": 3,
+    "insertions": 41,
+    "deletions": 7,
+    "missing": false
+  },
+  "0199a6b2-0000-7000-8000-00000000a005": {
+    "ahead": 0,
+    "behind": 0,
+    "dirty": false,
+    "unpushed": false,
+    "files": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "missing": false
+  }
+}

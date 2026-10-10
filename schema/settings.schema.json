@@ -1954,7 +1954,7 @@
         },
         "review_args": {
           "default": [],
-          "description": "Appended for review sessions, e.g. `[\"-c\",\"DiffviewOpen origin/{base}...HEAD\"]`.",
+          "description": "The diff editor's arguments: appended for review sessions and used by Review diff on own work\nitems, e.g. `[\"-c\",\"DiffviewOpen {range}\"]` (`{range}` = `<remote>/<base>` for own items, merge\nbase to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.",
           "items": {
             "type": "string"
           },
@@ -2026,6 +2026,7 @@
           "terminal.paste": "]",
           "terminal.search": "/",
           "tickets.open": "t",
+          "work.menu": ".",
           "work.start": "s"
         },
         "prefix_timeout_ms": 1000
@@ -2090,6 +2091,7 @@
             "terminal.paste": "]",
             "terminal.search": "/",
             "tickets.open": "t",
+            "work.menu": ".",
             "work.start": "s"
           },
           "description": "ActionId → single key after the prefix.",

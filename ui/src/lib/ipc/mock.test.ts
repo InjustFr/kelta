@@ -44,10 +44,10 @@ const PANE_KINDS = [
 ];
 
 describe('mock fixtures', () => {
-  it('has 3 projects + Home, 10 sessions, tickets for every provider, reviews and work items', () => {
+  it('has 3 projects + Home, 11 sessions, tickets for every provider, reviews and work items', () => {
     expect(MOCK_FIXTURES.projects.filter((p) => !p.builtin)).toHaveLength(3);
     expect(MOCK_FIXTURES.projects.filter((p) => p.builtin)).toHaveLength(1);
-    expect(MOCK_FIXTURES.sessions).toHaveLength(10);
+    expect(MOCK_FIXTURES.sessions).toHaveLength(11);
     const accounts = new Set(MOCK_FIXTURES.tickets.map((t) => t.ticket.ref.account));
     expect([...accounts].sort()).toEqual(['github-oss', 'gitlab-corp', 'jira-acme', 'redmine-corp']);
     expect(MOCK_FIXTURES.reviews.length).toBeGreaterThanOrEqual(5);
@@ -206,6 +206,9 @@ describe('mock transport', () => {
       work_retry_step: { id: work.id, step: 'persist' },
       work_create_pr: { id: work.id, draft: { title: null, body: null, draft: null } },
       work_status: { id: work.id },
+      work_status_all: {},
+      work_diff: { id: work.id },
+      work_mark_reviewed: { id: work.id },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },
       editor_send_selection: { editor_session: s.sessions[1]!.id, claude_session: session.id },
       tool_list: { project_id: 'shop' },
@@ -306,6 +309,26 @@ describe('mock transport', () => {
     ).resolves.toMatchObject({
       state: { kind: 'finished' },
     });
+  });
+
+  it('work_start opens a focused tab bound to the item, sessions in the worktree (B5)', async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport(transport);
+    const ticket = controls.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-151')!.ticket.ref;
+    const plan = await call('work_plan', { project_id: 'shop', source: { kind: 'ticket', ticket } });
+    const item = await call('work_start', { plan });
+    const layout = controls.state.layouts['shop']!;
+    const tab = layout.tabs.find((t) => t.work_item_id === item.id)!;
+    expect(layout.active_tab).toBe(tab.id);
+    expect(tab.title).toBe('SHOP-151 Checkout: show tax breakdown');
+    for (const id of item.session_ids) {
+      const s = controls.state.sessions.find((x) => x.id === id)!;
+      expect([s.cwd, s.work_item_id]).toEqual([plan.worktree_path, item.id]);
+    }
+    // Planning again shows the existing item's branch, not a fresh one.
+    controls.state.work.find((w) => w.id === item.id)!.branch = 'feat/custom';
+    const again = await call('work_plan', { project_id: 'shop', source: { kind: 'ticket', ticket } });
+    expect([again.existing, again.branch]).toEqual([item.id, 'feat/custom']);
   });
 
   it('reset restores the fixtures', async () => {

@@ -1123,6 +1123,13 @@ impl Core {
 
     /// Apply the notification rules for a session event.
     pub(crate) fn maybe_notify(&self, kind: NotifyKind, info: &SessionInfo, body: Option<&str>) {
+        // kelta-work sends "KEY ready to review" / "Claude replied" for hook-driven work item Claude.
+        if kind == NotifyKind::ClaudeDone
+            && info.work_item_id.is_some()
+            && info.status_source == StatusSource::Hook
+        {
+            return;
+        }
         let settings = self.cfg.effective(Some(&info.project_id));
         let visible = self.is_visible(&info.id);
         let window = self.bridge.window_state();
@@ -1170,6 +1177,16 @@ impl Core {
         let ns = &settings.notifications;
         if !ns.enabled
             || crate::notifier::in_quiet_hours(&ns.quiet_hours, crate::notifier::local_minute_of_day())
+        {
+            return Ok(());
+        }
+        // About a session Louis is looking at right now: nothing to tell.
+        let w = self.bridge.window_state();
+        if ns.only_when_unfocused
+            && w.exists
+            && w.visible
+            && w.focused
+            && n.session_id.as_ref().is_some_and(|s| self.is_visible(s))
         {
             return Ok(());
         }

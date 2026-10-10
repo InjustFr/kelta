@@ -116,7 +116,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
 | `follow_claude_edits` | enum(off\|reload\|open) | `reload` | |
-| `review_args` | list<str> | `[]` | appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]` |
+| `review_args` | list<str> | `[]` | the diff editor's arguments: appended for review sessions and used by `work_diff` (Review diff, `d`) for own work items, e.g. `["-c","DiffviewOpen {range}"]`. `{range}` renders `<remote>/<base>` for own items (merge base to working tree, uncommitted work included) and `<remote>/<base>...HEAD` for review checkouts. Empty: Review diff runs `git diff $(git merge-base <remote>/<base> HEAD)` in a shell |
 | `presets` | list<EditorPreset> by id | §2.1 | x-kelta-merge by_id, x-kelta-exec |
 
 EditorPreset: `{ id: str, label: str, command: str, args: list<Template>, open: enum(rpc|keys|command|none), open_keys: Template?, open_cmd: list<Template>?, external: bool = false, restore: enum(mksession|none) = none, enabled: bool = true }`. Placeholders: `{sock}`, `{path}` (initial path, default `.`), `{file}`, `{line}`, `{cwd}`, `{sid8}`.
