@@ -194,3 +194,45 @@ async fn invalid_plugins_are_listed_with_their_problems() {
     assert!(!list[0].problems.is_empty());
     assert!(env.host.inspect(env.plugins_dir().join("broken").to_str().unwrap()).await.is_err());
 }
+
+#[tokio::test]
+async fn failed_install_leaves_no_tmp_copy() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = common::Env::new();
+    let src = tempfile::tempdir().unwrap();
+    std::fs::write(src.path().join("kelta-plugin.toml"), common::manifest("unreadable", &[], "")).unwrap();
+    let secret = src.path().join("secret.txt");
+    std::fs::write(&secret, "x").unwrap();
+    let p = env.host.inspect(src.path().to_str().unwrap()).await.unwrap();
+    std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o000)).unwrap();
+    assert!(env.host.install(src.path().to_str().unwrap(), &p.sha256, vec![]).await.is_err());
+    let left: Vec<_> = std::fs::read_dir(env.plugins_dir())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().starts_with(".tmp-"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+#[tokio::test]
+async fn rejects_an_archive_with_an_escaping_symlink() {
+    let env = common::Env::new();
+    let work = tempfile::tempdir().unwrap();
+    let p = work.path().join("src/p");
+    std::fs::create_dir_all(&p).unwrap();
+    std::fs::write(p.join("kelta-plugin.toml"), common::manifest("esc", &[], "")).unwrap();
+    std::os::unix::fs::symlink("/etc", p.join("esc")).unwrap();
+    let tar = work.path().join("esc.tar.gz");
+    let status = Command::new("tar")
+        .arg("-czf")
+        .arg(&tar)
+        .arg("-C")
+        .arg(work.path().join("src"))
+        .arg("p")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let e = env.host.inspect(tar.to_str().unwrap()).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
+    assert!(e.message.contains("symlink"), "{}", e.message);
+}
