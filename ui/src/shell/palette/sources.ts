@@ -14,7 +14,7 @@ import { currentPlatform } from '$lib/ui';
 
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
-import { workKey, type Lamp } from '../../views/work/phase';
+import { workKey } from '../../views/work/phase';
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
 import { activateProject, focusedPane, openContent, revealSession } from '../nav';
 

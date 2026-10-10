@@ -8,7 +8,7 @@
   import { terminalPool } from '$lib/terminal';
   import { Badge, Button, currentPlatform, Icon, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
-    import { focusedSessionId } from '../../shell/nav';
+  import { focusedSessionId } from '../../shell/nav';
   import MoveDialogs from '../tickets/MoveDialogs.svelte';
   import { MoveController } from '../tickets/move.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';

@@ -10,7 +10,7 @@
   import { projects, reviews, tickets, toasts, work } from '$lib/stores';
   import { Button, EmptyState, ErrorState, IconButton, Kbd, Lamp, VirtualList, relativeTime } from '$lib/ui';
 
-    import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
+  import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { openFromNow } from '../work/nav';
