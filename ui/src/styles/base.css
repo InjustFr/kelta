@@ -23,6 +23,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
   cursor: default;
+  font-variant-numeric: tabular-nums;
 }
 
 #app {
@@ -77,8 +78,8 @@ pre,
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -137,13 +138,13 @@ pre,
   gap: var(--k-space-3);
   height: var(--k-tabbar-height);
   flex: none;
-  padding: 0 var(--k-space-3);
+  padding: 0 var(--k-space-4);
   background: var(--k-bezel-raised);
   font-size: var(--k-font-size-sm);
 }
 
 .k-toolbar .k-select select {
-  height: 22px;
+  height: var(--k-control-height-sm);
 }
 
 /* Toolbar selects keep their label for screen readers only. */
@@ -156,8 +157,8 @@ pre,
 }
 
 .k-filter {
-  width: 180px;
-  height: 22px;
+  width: 240px;
+  height: var(--k-control-height-sm);
   padding: 0 var(--k-space-3);
   border: 1px solid var(--k-border);
   border-radius: var(--k-radius);
@@ -170,7 +171,7 @@ pre,
   align-items: center;
   gap: var(--k-space-3);
   width: 100%;
-  height: 100%;
+  height: var(--k-row-height);
   padding: 0 var(--k-space-3);
   border: 0;
   background: transparent;
@@ -193,12 +194,12 @@ pre,
   flex: none;
   display: inline-flex;
   justify-content: center;
-  width: 10px;
+  width: 12px;
 }
 
 .k-row-key {
   flex: none;
-  width: 76px;
+  width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--k-font-mono);
@@ -236,11 +237,11 @@ pre,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--k-bezel);
-  font-size: 10px;
+  font-size: var(--k-font-size-xs);
   color: var(--k-fg-muted);
 }
 
@@ -271,7 +272,7 @@ pre,
   min-width: 0;
 }
 
-@container (max-width: 480px) {
+@container (max-width: 560px) {
   .k-meta {
     grid-template-columns: auto 1fr;
   }

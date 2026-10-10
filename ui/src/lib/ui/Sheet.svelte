@@ -14,7 +14,7 @@
     actions?: Snippet;
   }
 
-  let { title, side = 'right', width = 520, onclose, children, actions }: Props = $props();
+  let { title, side = 'right', width = 560, onclose, children, actions }: Props = $props();
 
   const uid = $props.id();
   const titleId = `k-sheet-${uid}`;

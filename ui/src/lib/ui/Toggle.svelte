@@ -37,9 +37,9 @@
 
   .track {
     position: relative;
-    width: 28px;
-    height: 16px;
-    border-radius: 8px;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
     background: var(--k-bezel);
     box-shadow: inset 0 0 0 1px var(--k-border-strong);
     transition: background var(--k-duration) ease-out;
@@ -50,8 +50,8 @@
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: var(--k-well);
     box-shadow: 0 0 0 1px var(--k-border-strong);
@@ -64,7 +64,7 @@
   }
 
   input:checked + .track .thumb {
-    transform: translateX(12px);
+    transform: translateX(16px);
     box-shadow: none;
   }
 
@@ -72,10 +72,10 @@
   input:checked + .track .thumb::after {
     content: '';
     position: absolute;
-    top: 3px;
-    left: 5.5px;
+    top: 4px;
+    left: 7.5px;
     width: 1px;
-    height: 6px;
+    height: 8px;
     background: var(--k-accent);
   }
 

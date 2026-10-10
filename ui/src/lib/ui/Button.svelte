@@ -3,6 +3,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   import Icon from './Icon.svelte';
+  import Kbd from './Kbd.svelte';
   import Spinner from './Spinner.svelte';
 
   interface Props extends HTMLButtonAttributes {
@@ -10,6 +11,8 @@
     size?: 'sm' | 'md';
     icon?: string;
     loading?: boolean;
+    /** Chord shown after the label (decorative: the accessible name stays the label). */
+    chord?: string;
     children?: Snippet;
   }
 
@@ -18,6 +21,7 @@
     size = 'md',
     icon,
     loading = false,
+    chord,
     disabled = false,
     type = 'button',
     children,
@@ -35,9 +39,10 @@
   {#if loading}
     <Spinner size={12} />
   {:else if icon}
-    <Icon name={icon} size={14} />
+    <Icon name={icon} size={size === 'sm' ? 14 : 16} />
   {/if}
   {#if children}<span class="label">{@render children()}</span>{/if}
+  {#if chord}<span class="chord" aria-hidden="true"><Kbd {chord} /></span>{/if}
 </button>
 
 <style>
@@ -50,6 +55,8 @@
     padding: 0 var(--k-space-4);
     border-radius: var(--k-radius);
     border: 1px solid var(--k-border);
+    font-size: var(--k-font-size);
+    font-weight: var(--k-weight-medium);
     background: var(--k-bezel-raised);
     color: var(--k-fg);
     white-space: nowrap;
@@ -58,9 +65,14 @@
   }
 
   .k-button.sm {
-    height: 22px;
+    height: var(--k-control-height-sm);
     padding: 0 var(--k-space-3);
     font-size: var(--k-font-size-sm);
+  }
+
+  .chord {
+    display: inline-flex;
+    margin-left: var(--k-space-2);
   }
 
   .k-button:not(.primary, .danger, .ghost):hover:not(:disabled) {

@@ -15,7 +15,7 @@
     actions?: Snippet;
   }
 
-  let { title, tone = 'default', width = 440, onclose, children, actions }: Props = $props();
+  let { title, tone = 'default', width = 480, onclose, children, actions }: Props = $props();
 
   const uid = $props.id();
   const titleId = `k-dialog-${uid}`;

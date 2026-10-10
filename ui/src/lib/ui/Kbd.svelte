@@ -24,13 +24,16 @@
 
   kbd {
     display: inline-block;
-    min-width: 12px;
-    padding: 0 2px;
-    border-bottom: 1px solid var(--k-border-strong);
+    min-width: 18px;
+    min-height: 18px;
+    padding: 0 4px;
+    border: 1px solid var(--k-border);
+    border-bottom-width: 2px;
+    border-radius: var(--k-radius-sm);
     color: inherit;
     font-size: var(--k-font-size-xs);
     font-family: var(--k-font-mono);
     text-align: center;
-    line-height: 15px;
+    line-height: 16px;
   }
 </style>

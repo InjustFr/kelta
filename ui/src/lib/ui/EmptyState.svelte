@@ -16,7 +16,7 @@
 </script>
 
 <div class="k-empty" role="status">
-  <p class="title"><Icon name={icon} size={14} />{title}</p>
+  <p class="title"><Icon name={icon} size={20} />{title}</p>
   {#if body}<p class="body">{body}</p>{/if}
   {#if actions}<div class="actions">{@render actions()}</div>{/if}
 </div>
@@ -28,7 +28,8 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--k-space-2);
-    padding: var(--k-space-5);
+    max-width: 480px;
+    padding: var(--k-space-7) var(--k-space-6);
     color: var(--k-fg-muted);
   }
 
@@ -38,6 +39,8 @@
     gap: var(--k-space-3);
     margin: 0;
     color: var(--k-fg);
+    font-size: var(--k-font-size-lg);
+    font-weight: var(--k-weight-strong);
   }
 
   .title :global(.k-icon) {
@@ -46,7 +49,8 @@
 
   .body {
     margin: 0;
-    max-width: var(--k-measure);
+    max-width: 52ch;
+    color: var(--k-fg-muted);
   }
 
   .actions {

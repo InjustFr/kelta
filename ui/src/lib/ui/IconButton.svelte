@@ -2,6 +2,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   import Icon from './Icon.svelte';
+  import { currentPlatform, formatChord } from './format';
 
   interface Props extends HTMLButtonAttributes {
     icon: string;
@@ -9,9 +10,15 @@
     label: string;
     size?: 'sm' | 'md';
     active?: boolean;
+    /** Shown in the tooltip, e.g. `Close pane (⌘W)`. The accessible name stays `label`. */
+    chord?: string;
   }
 
-  let { icon, label, size = 'md', active = false, type = 'button', ...rest }: Props = $props();
+  let { icon, label, size = 'md', active = false, chord, type = 'button', ...rest }: Props = $props();
+
+  const tip = $derived(
+    chord ? `${label} (${formatChord(chord).join(currentPlatform() === 'macos' ? '' : '+')})` : label,
+  );
 </script>
 
 <button
@@ -21,9 +28,9 @@
   class:active
   aria-label={label}
   aria-pressed={active || undefined}
-  title={label}
+  title={tip}
 >
-  <Icon name={icon} size={size === 'sm' ? 14 : 16} />
+  <Icon name={icon} size={16} />
 </button>
 
 <style>
@@ -43,8 +50,8 @@
   }
 
   .k-icon-button.sm {
-    width: 20px;
-    height: 20px;
+    width: var(--k-control-height-sm);
+    height: var(--k-control-height-sm);
   }
 
   .k-icon-button:hover:not(:disabled),
