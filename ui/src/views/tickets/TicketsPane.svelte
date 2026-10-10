@@ -236,9 +236,11 @@
   const hasSprints = $derived(items.some((i) => i.ticket.sprint));
 
   // `team_people` reads the core's cache: ask again once the lists it reads have loaded.
+  // A primitive stamp: the lists record changes on every load, which would re-ask on each one.
+  const teamStamp = $derived(`${list.fetchedAt}|${tickets.list(listScope, viewId, 'anyone').fetchedAt}`);
   $effect(() => {
+    void teamStamp;
     const s = listScope;
-    void [list.fetchedAt, tickets.list(s, viewId, 'anyone').fetchedAt];
     if (!noSource) untrack(() => void tickets.loadTeam(s));
   });
 
