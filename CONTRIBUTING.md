@@ -65,9 +65,7 @@ untracked files), see `scripts/affected.py`:
 - Everything when `scripts/` changed, with `--full`, or when the detection fails. Release tags and the
   nightly use `--full`.
 
-Heavy steps (clippy, tests, linux-check) wait for one of `KELTA_GATE_SLOTS` (default 2) machine-wide
-slots under `${TMPDIR}/kelta-gate/` and print how long they waited, so parallel worktrees queue instead of
-overloading the CPU. Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary shows the
+Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary shows the
 time of each step and the log path. The e2e suite runs alongside `qa.sh` (it uses the Vite dev server, not
 `ui/dist`) and writes its own `-e2e.log`, printed when it ends. `.config/nextest.toml` starts the slowest
 tests first so they do not become the tail of the run; give a new test that takes several seconds a priority

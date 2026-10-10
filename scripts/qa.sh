@@ -3,7 +3,7 @@
 # Usage: qa.sh [all|ui|rust] [package...]   (default all; CI runs the halves in separate jobs)
 # Packages limit the Rust steps to those workspace packages (default: the whole workspace); scripts/ci-local.sh
 # passes the affected ones. Rust tests use cargo-nextest (--retries 1, retried passes print as FLAKY) when it
-# is installed, else cargo test. Heavy cargo steps wait for a machine-wide slot (scripts/gate-slot.pl).
+# is installed, else cargo test.
 # With `all`, the UI checks run in the background during the Rust steps; their log prints when they end.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -60,7 +60,6 @@ bash scripts/check-no-timers.test.sh
 python3 scripts/affected_test.py
 
 if want rust; then
-  slot() { perl scripts/gate-slot.pl "$@"; }
   if [ ${#pkgs[@]} -eq 0 ]; then
     scope=(--workspace) fmt_scope=(--all) doc_scope=(--workspace)
   else
@@ -75,19 +74,19 @@ if want rust; then
   cargo fmt "${fmt_scope[@]}" -- --check
 
   section "cargo clippy ${scope[*]} --all-targets --locked -- -D warnings"
-  slot cargo clippy "${scope[@]}" --all-targets --locked -- -D warnings
+  cargo clippy "${scope[@]}" --all-targets --locked -- -D warnings
 
   # --no-fail-fast: one run lists every failing test, not just the first failing binary.
   if command -v cargo-nextest >/dev/null 2>&1; then
     section "cargo nextest run ${scope[*]} --locked --no-fail-fast --retries 1"
-    slot cargo nextest run "${scope[@]}" --locked --no-fail-fast --retries 1 --no-tests=warn
+    cargo nextest run "${scope[@]}" --locked --no-fail-fast --retries 1 --no-tests=warn
     if [ ${#doc_scope[@]} -gt 0 ]; then
       section "cargo test --doc ${doc_scope[*]} --locked"
-      slot cargo test --doc "${doc_scope[@]}" --locked --no-fail-fast
+      cargo test --doc "${doc_scope[@]}" --locked --no-fail-fast
     fi
   else
     section "cargo test ${scope[*]} --locked --no-fail-fast (cargo-nextest not installed)"
-    slot cargo test "${scope[@]}" --locked --no-fail-fast
+    cargo test "${scope[@]}" --locked --no-fail-fast
   fi
 fi
 

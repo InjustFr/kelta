@@ -7,7 +7,6 @@
 # packages/ or the pnpm/eslint config changed, e2e when the UI, apps/desktop or kelta-proto changed, cargo-deny
 # when Cargo.lock or deny.toml changed. --full (release tags, nightly) runs every step, as does a change under
 # scripts/ or a failed detection. scripts/linux-check.sh (Ubuntu in Docker) runs only with --linux or --full.
-# Heavy steps wait for one of KELTA_GATE_SLOTS (default 2) machine-wide slots.
 # Each run logs to its own file under ${TMPDIR}/kelta-gate/logs/ (e2e, which runs alongside qa, in its own
 # -e2e.log, printed when it ends). Stops at the first failing step. Exit code 0 only when every step that ran passed.
 set -euo pipefail
@@ -105,7 +104,7 @@ if [ "$(uname -s)" = Linux ]; then
   skip linux-check "host is Linux"
 elif [ "$linux" = 1 ]; then
   if command -v docker >/dev/null 2>&1; then
-    run linux-check perl scripts/gate-slot.pl bash scripts/linux-check.sh ${qa_args[@]+"${qa_args[@]}"}  # bash 3.2: empty array is unbound under set -u
+    run linux-check bash scripts/linux-check.sh ${qa_args[@]+"${qa_args[@]}"}  # bash 3.2: empty array is unbound under set -u
   elif [ "$full" = 0 ]; then
     echo "ci-local: docker not found but --linux was given" >&2
     run linux-check false
