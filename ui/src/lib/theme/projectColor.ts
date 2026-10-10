@@ -49,9 +49,11 @@ export function parseProjectColor(
     const slot = stored.slice(6);
     return Object.hasOwn(SLOTS, slot) ? { slot: slot as Slot } : null;
   }
-  if (!/^#[0-9a-f]{6}$/i.test(stored)) return null;
-  const legacy = LEGACY_SWATCHES[stored.toLowerCase()];
-  return legacy ? { slot: legacy } : { hex: stored };
+  // `#rgb` reads as `#rrggbb`, like the config does at load
+  const hex = /^#[0-9a-f]{3}$/i.test(stored) ? stored.replace(/[0-9a-f]/gi, '$&$&') : stored;
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  const legacy = LEGACY_SWATCHES[hex.toLowerCase()];
+  return legacy ? { slot: legacy } : { hex };
 }
 
 /** The colour to paint: the active theme's slot colour, the custom hex as typed, or null. */
