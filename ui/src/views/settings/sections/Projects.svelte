@@ -1,10 +1,12 @@
 <script lang="ts">
   // Projects: create from a folder, rename / recolour, remove (the config file moves to
-  // projects/.trash/), their ticket sources, plus the environment variables of the layer being edited.
+  // projects/.trash/), the sources feeding each, plus the environment variables of the layer being edited.
   import type { SettingsSectionProps } from '$app/registry';
+  import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
-  import { projects, toasts, ui } from '$lib/stores';
+  import { projects, settings, toasts, ui } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
   import Button from '$lib/ui/Button.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -14,9 +16,10 @@
 
   import ColorPicker from '../../onboarding/ColorPicker.svelte';
   import SectionForm from '../SectionForm.svelte';
-  import TrackerSources from '../TrackerSources.svelte';
 
   let props: SettingsSectionProps = $props();
+
+  const fedBy = (id: string) => (settings.value()?.sources ?? []).filter((s) => s.projects.includes(id));
 
   const editable = $derived(projects.list.filter((p) => !p.builtin));
   let editing = $state<string | null>(null);
@@ -26,6 +29,22 @@
   let saving = $state(false);
   let removing = $state<ProjectInfo | null>(null);
   let killSessions = $state(false);
+  // the file's own `project.color` warning: a bad colour is dropped on load, so `p.color` cannot tell
+  let colorWarnings = $state<Record<string, string>>({});
+
+  async function colorWarning(id: string): Promise<string> {
+    try {
+      const doc = await ipc.settingsLayerGet({ layer: 'project', project_id: id, repo_id: null });
+      const issues = await ipc.settingsValidate({ layer: 'project', text: doc.text });
+      return issues.find((i) => i.severity === 'warning' && i.path === 'project.color')?.message ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  $effect(() => {
+    for (const p of editable) void colorWarning(p.id).then((m) => (colorWarnings[p.id] = m));
+  });
 
   function edit(p: ProjectInfo): void {
     editing = p.id;
@@ -103,19 +122,39 @@
                   <ColorPicker value={color} onchange={(c) => (color = c)} />
                   <input class="icon" aria-label="Icon" maxlength="2" placeholder="Icon" bind:value={icon} />
                 </div>
+                {#if colorWarnings[p.id]}
+                  <p class="warn" role="status" data-testid="color-warning">
+                    Colour ignored: {colorWarnings[p.id]}. Pick one to replace it.
+                  </p>
+                {/if}
                 <div class="row">
                   <Button type="submit" variant="primary" size="sm" loading={saving}>Save</Button>
                   <Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
                 </div>
               </form>
             {:else}
-              <span class="dot" style:background={p.color ?? 'var(--k-border)'}></span>
+              <span class="dot" style:background={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border)'}
+              ></span>
               <div class="info">
                 <strong>{p.name}</strong>
                 <span class="muted"
                   ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
                 >
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
+                {#if colorWarnings[p.id]}
+                  <span class="warn" data-testid="color-warning">Colour ignored: {colorWarnings[p.id]}</span>
+                {/if}
+                {#if fedBy(p.id).length > 0}
+                  <span class="muted" data-testid="fed-by"
+                    >Fed by {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
+                        type="button"
+                        class="link"
+                        onclick={() =>
+                          void dispatch('settings.open', { section: 'sources', source_id: s.id })}
+                        >{s.label}</button
+                      >{/each}</span
+                  >
+                {/if}
               </div>
               <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
               <IconButton icon="trash-2" label="Remove {p.name}" size="sm" onclick={() => (removing = p)} />
@@ -124,7 +163,6 @@
         {/each}
       </ul>
     {/if}
-    <TrackerSources projectId={props.projectId} />
     <h3 class="env">Environment</h3>
   {/snippet}
 </SectionForm>
@@ -217,5 +255,20 @@
 
   .icon {
     width: 56px;
+  }
+
+  .warn {
+    margin: 0;
+    color: var(--k-warn);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-accent);
+    font: inherit;
+    cursor: pointer;
   }
 </style>

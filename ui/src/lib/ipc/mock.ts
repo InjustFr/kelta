@@ -25,6 +25,8 @@ import type {
   ScreenInstanceId,
   SessionInfo,
   SessionKind,
+  Settings,
+  Source,
   SourceHit,
   StatusCategory,
   Ticket,
@@ -184,6 +186,23 @@ function rebaseAges(items: TicketItem[]): TicketItem[] {
   return items;
 }
 
+/** Default settings whose `[[sources]]` are the fixture projects' boards (as the core migrated them),
+ *  plus a GitLab board feeding no project (the project-less fixture tickets come from it). */
+function settingsWithSources(projects: ProjectInfo[]): JsonValue {
+  const sources: Source[] = projects.flatMap((p) =>
+    p.tracker
+      ? [{ id: p.id, label: `${p.name} board`, projects: [p.id], tracker: clone(p.tracker), routes: [] }]
+      : [],
+  );
+  const base = projects.find((p) => p.tracker)?.tracker;
+  if (base) {
+    const view = { ...base.views[0]!, id: 'ops', label: 'Ops issues', jql: null, account: null };
+    const tracker = { ...clone(base), account: 'gitlab-corp', views: [view], columns: [] };
+    sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [] });
+  }
+  return { ...clone(samples.settingsDefault), sources } as unknown as JsonValue;
+}
+
 function freshState(): MockState {
   return {
     projects: clone(FIXTURES.projects),
@@ -194,7 +213,7 @@ function freshState(): MockState {
     work: clone(FIXTURES.work),
     git: clone(FIXTURES.git),
     tools: clone(FIXTURES.tools),
-    settings: { value: clone(samples.settingsDefault) as unknown as JsonValue, sources: {} },
+    settings: { value: settingsWithSources(FIXTURES.projects), sources: {} },
     approved: new Set(),
     comments: {},
     remoteNew: {},
@@ -378,6 +397,22 @@ export function createMockTransport(options: MockOptions = {}): {
     queueMicrotask(() => a.channel.onmessage(f));
   };
 
+  const sourcesNow = (): Source[] => (state.settings.value as unknown as Settings).sources;
+  /** `ProjectInfo.tracker` is the first source feeding the project (core `project_binding`). */
+  const syncProjectTrackers = (): void => {
+    for (const p of state.projects) {
+      const tracker = sourcesNow().find((s) => s.projects.includes(p.id))?.tracker ?? null;
+      if (JSON.stringify(tracker) === JSON.stringify(p.tracker)) continue;
+      p.tracker = clone(tracker);
+      emit({ type: 'project.updated', project: clone(p) });
+    }
+  };
+  const source = (id: string): Source => {
+    const s = sourcesNow().find((x) => x.id === id);
+    if (!s) throw err('not_found', `source ${id}`);
+    return s;
+  };
+
   const project = (id: string): ProjectInfo => {
     const p = state.projects.find((x) => x.id === id);
     if (!p) throw err('not_found', `project not found: ${id}`);
@@ -495,6 +530,7 @@ export function createMockTransport(options: MockOptions = {}): {
     };
     if (value === undefined) delete state.settings.sources[path];
     else state.settings.sources[path] = layer;
+    if (path.split('.')[0] === 'sources') syncProjectTrackers();
     emit({ type: 'settings.changed', layers: [layer], paths: [path], requires_restart: [] });
     return clone(state.settings);
   };
@@ -558,7 +594,7 @@ export function createMockTransport(options: MockOptions = {}): {
     settings_validate: ({ text }) =>
       text.includes('=') || text.trim() === ''
         ? []
-        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1 }],
+        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1, severity: 'error' as const }],
     settings_write_raw: () => clone(state.settings),
     settings_open_file: ({ project_id }) =>
       spawn(
@@ -623,6 +659,10 @@ export function createMockTransport(options: MockOptions = {}): {
       };
       state.projects.push(p);
       emit({ type: 'project.updated', project: clone(p) });
+      if (draft.tracker) {
+        const s = { id: p.id, label: p.name, projects: [p.id], tracker: draft.tracker, routes: [] };
+        settingsWith('global', 'sources', [...sourcesNow(), s] as unknown as JsonValue);
+      }
       return clone(p);
     },
     project_update: ({ id, patch }) => {
@@ -810,15 +850,25 @@ export function createMockTransport(options: MockOptions = {}): {
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope, view_id, cursor, who }) => {
-      // the view the core would query for this ticket's project (`view_id`, else the first)
-      const viewOf = (t: TicketItem) => {
-        const pid = scope.kind === 'all' ? t.project_ids[0] : scope.id;
-        const views = state.projects.find((p) => p.id === pid)?.tracker?.views ?? [];
-        return views.find((v) => v.id === view_id) ?? views[0];
-      };
+      // the sources of the scope that feed one of the ticket's projects; the view the core would
+      // query (`view_id` inside the first one, else its first view)
+      const inScope = sourcesNow().filter((s) =>
+        scope.kind === 'all'
+          ? true
+          : scope.kind === 'source'
+            ? s.id === scope.id
+            : s.projects.includes(scope.id),
+      );
       const items = state.tickets
-        .filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))
-        .map((t) => ({ item: t, view: viewOf(t) }))
+        .map((t) => {
+          // a project-less ticket comes from the sources feeding no project
+          const from = inScope.filter((s) =>
+            t.project_ids.length ? s.projects.some((p) => t.project_ids.includes(p)) : !s.projects.length,
+          );
+          const views = from[0]?.tracker.views ?? [];
+          return { item: t, from, view: views.find((v) => v.id === view_id) ?? views[0] };
+        })
+        .filter(({ from }) => from.length > 0)
         .filter(({ item, view }) => {
           const w = who ?? view?.who;
           return w === 'mine'
@@ -827,7 +877,11 @@ export function createMockTransport(options: MockOptions = {}): {
               ? !item.ticket.assignee
               : true;
         })
-        .map(({ item, view }) => ({ ...item, view_ids: view ? [view.id] : [] }));
+        .map(({ item, view, from }) => ({
+          ...item,
+          view_ids: view ? [view.id] : [],
+          source_ids: from.map((s) => s.id),
+        }));
       // `view_id` null = the union of the views (WP2), which keeps done tickets
       const filtered =
         view_id === 'sprint' || view_id == null
@@ -851,11 +905,10 @@ export function createMockTransport(options: MockOptions = {}): {
         detail.children = [clone(ticketItem({ ...ticket, key: 'SHOP-160', id: '10160' }))];
       return detail;
     },
-    tracker_columns: ({ project_id }) => {
-      const p = project(project_id);
-      if (!p.tracker) throw err('invalid_argument', `project ${project_id} has no tracker`);
-      if (p.tracker.columns.length === 0) return defaultColumns();
-      return p.tracker.columns.map((c, order) => ({
+    tracker_columns: ({ source_id }) => {
+      const { tracker } = source(source_id);
+      if (tracker.columns.length === 0) return defaultColumns();
+      return tracker.columns.map((c, order) => ({
         id: c.id,
         name: c.label,
         category: c.categories[0] ?? 'unknown',
@@ -878,10 +931,11 @@ export function createMockTransport(options: MockOptions = {}): {
       }
       return updateTicket(ticket, t.to.category, t.to.name);
     },
-    tracker_move: ({ ticket, column_id, project_id }) => {
+    tracker_move: ({ ticket, column_id, source_id }) => {
       const item = ticketItem(ticket);
-      const projectId = project_id ?? item.project_ids[0];
-      const columns = projectId ? handlers.tracker_columns({ project_id: projectId }) : defaultColumns();
+      const sourceId =
+        source_id ?? sourcesNow().find((s) => s.projects.includes(item.project_ids[0] ?? ''))?.id;
+      const columns = sourceId ? handlers.tracker_columns({ source_id: sourceId }) : defaultColumns();
       const col = (columns as Column[]).find((c) => c.id === column_id);
       if (!col) throw err('not_found', `column ${column_id} not found`);
       if (col.category === item.ticket.status.category) return clone(item.ticket);
@@ -1355,18 +1409,19 @@ export function createMockTransport(options: MockOptions = {}): {
       const w = work(id);
       if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
       const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
-      if (claude?.lifecycle === 'live') {
-        if (claude.status === 'working' || claude.status === 'needs_input' || claude.status === 'running') {
-          throw err('conflict', 'Claude is busy; send when it stops.', { reason: 'claude_busy' });
-        }
-        if (claude.status_source !== 'hook') {
-          throw err('conflict', "Kelta can't tell whether Claude is idle (status hooks inactive).", {
-            reason: 'hooks_inactive',
-          });
-        }
-      }
       void files;
-      if (claude) updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      // Never refused: held while Claude works, copied when Kelta cannot tell it is idle.
+      const live = claude?.lifecycle === 'live';
+      if (live && claude.status_source !== 'hook') {
+        const text =
+          "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready.";
+        emit({ type: 'toast', toast: { level: 'info', text, action: null } });
+      } else if (live && (claude.status === 'working' || claude.status === 'needs_input')) {
+        const text = 'Claude is working: it gets your message when it stops.';
+        emit({ type: 'toast', toast: { level: 'info', text, action: null } });
+      } else if (claude) {
+        updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      }
       if (threads) w.sent_threads = [...threads];
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);

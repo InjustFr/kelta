@@ -63,17 +63,17 @@ describe('IPC errors', () => {
 });
 
 describe('ticket workbench args', () => {
-  it('pass who, project_id and the sources query through', async () => {
+  it('pass who, source_id and the sources query through', async () => {
     const { transport, controls } = createMockTransport();
     setTransport(transport);
     const ticket = controls.state.tickets[0]!.ticket.ref;
     await commands.trackerList({ scope: { kind: 'all' }, refresh: false, who: 'mine' });
-    await commands.trackerMove({ ticket, column_id: 'todo', project_id: 'shop' });
+    await commands.trackerMove({ ticket, column_id: 'todo', source_id: 'shop' });
     const hits = await commands.trackerSources({ account_id: 'jira-acme', query: '' });
     expect(hits.length).toBeGreaterThan(0);
     expect(controls.calls.slice(-3).map((c) => c.args)).toMatchObject([
       { who: 'mine' },
-      { project_id: 'shop' },
+      { source_id: 'shop' },
       { account_id: 'jira-acme', query: '' },
     ]);
   });

@@ -411,7 +411,7 @@ impl Core {
                 t.action = Some(kelta_proto::events::ToastAction {
                     label: "Review".into(),
                     command: "settings.open".into(),
-                    args: Some(serde_json::json!({ "section": "projects" })),
+                    args: Some(serde_json::json!({ "section": "sources" })),
                 });
                 t
             }
@@ -799,6 +799,9 @@ impl CoreApi for Core {
     }
     fn toast(&self, t: Toast) {
         self.emit(UiEvent::Toast { toast: t });
+    }
+    async fn clipboard_copy(&self, text: String) -> Result<(), KeltaError> {
+        self.clipboard_write(kelta_proto::term::ClipboardKind::Clipboard, text).await
     }
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError> {
         self.rt.capture();

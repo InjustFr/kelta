@@ -8,7 +8,7 @@ use kelta_config::ConfigService;
 use kelta_proto::api::SettingsSource;
 use kelta_proto::dirs::CliArgs;
 use kelta_proto::ids::{PluginId, ProjectId};
-use kelta_proto::settings::{Layer, RuntimeOverrides};
+use kelta_proto::settings::{Layer, RuntimeOverrides, Severity};
 use kelta_proto::testing::MemTrustStore;
 use serde_json::json;
 
@@ -474,4 +474,35 @@ fn unknown_template_and_preset_ids_are_rejected() {
         svc.issues()
     );
     assert_eq!(svc.effective(None).editor.default, "nvim");
+}
+
+#[test]
+fn a_bad_project_colour_is_a_warning() {
+    let e = env();
+    let write = |id: &str, color: &str| {
+        let text = format!(
+            "[project]\nid = \"{id}\"\nname = \"{id}\"\ncolor = \"{color}\"\n\n[terminal]\nfont_size = 15\n"
+        );
+        std::fs::write(e.dirs.projects_dir().join(format!("{id}.toml")), text).unwrap();
+    };
+    write("bad", "red");
+    write("short", "#abc");
+    write("slot", "theme:bright-cyan");
+    write("hex", "#5E8C4A");
+    let svc = e.load();
+    let color = |id: &str| {
+        svc.projects().iter().find(|p| p.id == pid(id)).map(|p| p.color.clone()).expect("project listed")
+    };
+    assert_eq!(color("bad"), None);
+    assert_eq!(color("short").as_deref(), Some("#aabbcc"));
+    assert_eq!(color("slot").as_deref(), Some("theme:bright-cyan"));
+    assert_eq!(color("hex").as_deref(), Some("#5E8C4A"));
+    // the rest of the file still applies
+    assert_eq!(svc.effective(Some(&pid("bad"))).terminal.font_size, 15.0);
+    let issues = svc.issues();
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].issue.path, "project.color");
+    assert_eq!(issues[0].issue.line, Some(4));
+    assert!(issues[0].issue.message.contains("theme colour or #rrggbb"), "{issues:?}");
+    assert_eq!(issues[0].issue.severity, Severity::Warning);
 }

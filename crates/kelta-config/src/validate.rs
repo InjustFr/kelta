@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use kelta_proto::settings::{Layer, REPO_ALLOWED_KEYS, ValidationIssue};
+use kelta_proto::settings::{Layer, REPO_ALLOWED_KEYS, Severity, ValidationIssue};
 use serde_json::Value;
 
 use crate::path::{get, join_path, leaves, pointer_segments};
@@ -153,6 +153,62 @@ pub fn repo_key_issues(value: &Value) -> Vec<RawIssue> {
 pub const REPO_TOOLS_PERSONAL: &str = "`tools` is personal: add it in Settings → Tools";
 
 pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (global only)";
+
+pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
+
+/// Load-time reading of a global, project or repo document: `tools` outside the global file and a bad
+/// project colour are dropped from `value` and returned as warnings (the rest of the file still applies).
+/// Returns `(errors, warnings)`.
+pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (Vec<RawIssue>, Vec<RawIssue>) {
+    let mut warnings = Vec::new();
+    if layer != Layer::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some() {
+        warnings.push(RawIssue::new(
+            &["tools".to_owned()],
+            if layer == Layer::Repo { REPO_TOOLS_PERSONAL } else { PROJECT_TOOLS_GLOBAL },
+        ));
+    }
+    let errors = if layer == Layer::Project {
+        lenient_project_color(value, stem, &mut warnings)
+    } else {
+        layer_issues(layer, value, stem)
+    };
+    (errors, warnings)
+}
+
+/// [`position`] for non-blocking issues.
+pub fn position_warnings(text: &str, parsed: Option<&Parsed>, issues: Vec<RawIssue>) -> Vec<ValidationIssue> {
+    position(text, parsed, issues)
+        .into_iter()
+        .map(|i| ValidationIssue { severity: Severity::Warning, ..i })
+        .collect()
+}
+
+/// A project colour is cosmetic: `#rgb` reads as `#rrggbb`, and a bad one is reported in `warnings` and
+/// dropped so the project still loads. Returns the file's other issues.
+fn lenient_project_color(
+    value: &mut Value,
+    stem: Option<&str>,
+    warnings: &mut Vec<RawIssue>,
+) -> Vec<RawIssue> {
+    if let Some(c) = value.pointer_mut("/project/color")
+        && let Some(h) = c.as_str().and_then(|s| s.strip_prefix('#'))
+        && h.len() == 3
+        && h.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
+        *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
+    }
+    let path = ["project".to_owned(), "color".to_owned()];
+    let raw = layer_issues(Layer::Project, value, stem);
+    if !raw.iter().any(|i| i.path == path) {
+        return raw;
+    }
+    if let Some(p) = value.get_mut("project").and_then(Value::as_object_mut) {
+        p.remove("color");
+    }
+    warnings.push(RawIssue::new(&path, PROJECT_COLOR));
+    // schema problems hide the follow-up checks, so validate again without the colour
+    layer_issues(Layer::Project, value, stem)
+}
 
 /// Duplicate or missing ids in keyed lists, per layer.
 pub fn id_issues(value: &Value) -> Vec<RawIssue> {
@@ -745,6 +801,22 @@ mod tests {
         assert_eq!(project_issues(&ok, Some("other")).len(), 1);
         let bad = json!({"project": {"id": "Shop!", "repos": [{"id": "a", "path": "x"}, {"id": "a", "path": "y"}]}});
         assert_eq!(project_issues(&bad, None).len(), 2);
+    }
+
+    #[test]
+    fn project_color_is_a_theme_slot_or_a_hex() {
+        let issues = |c: &str| {
+            let v = json!({"project": {"id": "x", "name": "X", "color": c}});
+            layer_issues(Layer::Project, &v, Some("x"))
+        };
+        for ok in ["theme:green", "theme:bright-cyan", "#ff8800", "#5E8C4A", "#f80"] {
+            assert!(issues(ok).is_empty(), "{ok}: {:?}", issues(ok));
+        }
+        for bad in ["green", "theme:black", "theme:bright-white", "theme:", "#f8", "#ff880", "rgb(1,2,3)"] {
+            let i = issues(bad);
+            assert_eq!(i.len(), 1, "{bad}: {i:?}");
+            assert_eq!(join_path(&i[0].path), "project.color");
+        }
     }
 
     #[test]

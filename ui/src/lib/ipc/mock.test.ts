@@ -2,7 +2,15 @@
 // enums and invariants (JSON imports are not type-checked literally).
 import { describe, expect, it } from 'vitest';
 
-import type { CiState, ErrorCode, ReviewKind, SessionStatus, StatusCategory, WorkKind } from '$lib/gen';
+import type {
+  CiState,
+  ErrorCode,
+  ReviewKind,
+  SessionStatus,
+  Settings,
+  StatusCategory,
+  WorkKind,
+} from '$lib/gen';
 import { allPanes, validateLayout } from '$lib/layout';
 
 import { COMMAND_NAMES, call, eventsSubscribe } from './commands';
@@ -225,7 +233,7 @@ describe('mock transport', () => {
       terminal_set_palette: { palette: { foreground: '#fff', background: '#000', cursor: '#fff', ansi: [] } },
       tracker_list: { scope: { kind: 'all' }, refresh: false },
       tracker_get: { ticket },
-      tracker_columns: { project_id: 'shop' },
+      tracker_columns: { source_id: 'shop' },
       tracker_transitions: { ticket },
       tracker_transition: { ticket, transition_id: 'to-in_review' },
       tracker_move: { ticket, column_id: 'done' },
@@ -428,7 +436,8 @@ describe('mock transport', () => {
     expect(await keys('mine')).not.toContain('SHOP-120'); // Bob's
     expect(anyone).toEqual(expect.arrayContaining(['SHOP-120', 'SHOP-155']));
     // the view's own who applies when the call passes none; items name their view
-    controls.state.projects.find((p) => p.id === 'shop')!.tracker!.views[0]!.who = 'unassigned';
+    const sources = (controls.state.settings.value as unknown as Settings).sources;
+    sources.find((s) => s.id === 'shop')!.tracker.views[0]!.who = 'unassigned';
     expect(await keys()).toEqual(['SHOP-155']);
     const billing = await call('tracker_list', { scope: { kind: 'project', id: 'billing' }, refresh: false });
     expect(billing.items.map((i) => i.view_ids)).toEqual([['mine'], ['mine'], ['mine'], ['mine']]);

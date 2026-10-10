@@ -239,14 +239,22 @@ async fn authored_changes_emit_pr_events() {
     assert!(bus_names(&mut rx).iter().all(|ev| !ev.name.starts_with("pr.")));
     {
         let mut l = e.host.reviews.lock();
-        l[0].ci = CiState::Failure;
+        l[0].ci = CiState::Error;
         l[0].decision = Some(kelta_proto::codehost::ReviewDecision::Approved);
     }
     e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
-    let names: Vec<String> =
-        bus_names(&mut rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect();
-    assert_eq!(names, vec!["pr.ci_changed", "pr.approved", "pr.updated"]);
-    assert_eq!(e.h.ui.notifications().len(), 2, "ci failed + approved");
+    let pr_names = |rx: &mut _| -> Vec<String> {
+        bus_names(rx).into_iter().map(|ev| ev.name).filter(|n| n.starts_with("pr.")).collect()
+    };
+    assert_eq!(pr_names(&mut rx), vec!["pr.ci_changed", "pr.approved", "pr.updated"]);
+    assert_eq!(e.h.ui.notifications().len(), 2, "ci failed (errored rollup) + approved");
+    e.host.reviews.lock()[0].ci = CiState::Failure;
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(pr_names(&mut rx), vec!["pr.ci_changed", "pr.updated"]);
+    assert_eq!(e.h.ui.notifications().len(), 3, "error → failure notifies again");
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert!(pr_names(&mut rx).is_empty(), "failure → failure on the same head publishes nothing");
+    assert_eq!(e.h.ui.notifications().len(), 3);
 }
 
 #[tokio::test]
@@ -343,7 +351,12 @@ async fn tracker_move_resolves_columns() {
     }
     e.h.core.project_activate(&ProjectId::new("shop")).unwrap();
     let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
-    let cols = e.h.core.tracker_columns(&ProjectId::new("shop")).await.unwrap();
+    // the boards still on disk as `[project.tracker]` are sources (read path)
+    let source_of = |p: &str| {
+        e.h.core.sources().into_iter().find(|s| s.projects.contains(&ProjectId::new(p))).unwrap().id
+    };
+    let (shop_src, blog_src) = (source_of("shop"), source_of("blog"));
+    let cols = e.h.core.tracker_columns(&shop_src).await.unwrap();
     assert_eq!(
         cols.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
         vec!["todo", "late", "named", "weird"]
@@ -360,20 +373,20 @@ async fn tracker_move_resolves_columns() {
     // names win over categories
     let moved = e.h.core.tracker_move(&t, "named", None).await.unwrap();
     assert_eq!(moved.status.name, "In Review");
-    // two projects on one account: an explicit project picks its own columns (blog has no
-    // `late`; shop has no provider column `3` = In Progress)
-    let err = e.h.core.tracker_move(&t, "late", Some(&ProjectId::new("blog"))).await.unwrap_err();
+    // two sources on one account: an explicit source picks its own columns (blog's has no
+    // `late`; shop's has no provider column `3` = In Progress)
+    let err = e.h.core.tracker_move(&t, "late", Some(&blog_src)).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
     assert_eq!(e.h.core.tracker_move(&t, "3", None).await.unwrap_err().code, ErrorCode::NotFound);
-    let blog = Some(ProjectId::new("blog"));
-    let started = e.h.core.tracker_move(&t, "3", blog.as_ref()).await.unwrap();
+    let started = e.h.core.tracker_move(&t, "3", Some(&blog_src)).await.unwrap();
     assert_eq!(started.status.category, StatusCategory::InProgress);
     let moved = e.h.core.tracker_move(&t, "todo", None).await.unwrap();
     assert_eq!(moved.status.category, StatusCategory::Todo);
     assert!(bus_names(&mut rx).iter().any(|ev| ev.name == "ticket.transitioned"));
     // blog (no override) uses the provider's columns
-    let blog_cols = e.h.core.tracker_columns(&ProjectId::new("blog")).await.unwrap();
+    let blog_cols = e.h.core.tracker_columns(&blog_src).await.unwrap();
     assert_eq!(blog_cols.len(), 4);
+    assert_eq!(e.h.core.tracker_columns("nope").await.unwrap_err().code, ErrorCode::NotFound);
     // NeedsFields propagates with its detail
     e.tracker.require_fields("t5");
     let err = e.h.core.tracker_transition(&t, "t5", None, None).await.unwrap_err();
@@ -707,6 +720,7 @@ async fn global_tickets_view_is_polled_without_a_tickets_pane() {
     e.h.core.ui_set_global_view(Some(PaneContent::Tickets {
         scope: Scope::All,
         view_id: None,
+        source_id: None,
         mode: TicketsMode::List,
         who: Some(Who::Mine),
         group: None,
@@ -730,6 +744,7 @@ async fn visible_list_refreshes_after_a_saga_transition() {
     let content = PaneContent::Tickets {
         scope: shop.clone(),
         view_id: None,
+        source_id: None,
         mode: TicketsMode::List,
         who: None,
         group: None,

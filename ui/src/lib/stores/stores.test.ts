@@ -210,14 +210,14 @@ describe('TicketsStore', () => {
     expect(store.items(scope).length).toBeGreaterThan(1);
   });
 
-  it('move passes the project whose columns resolve it', async () => {
+  it('move passes the source whose columns resolve it', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'project' as const, id: 'shop' };
     await store.load(scope);
     const cols = (await store.loadColumns('shop')).data!;
     const ticket = store.items(scope)[0]!.ticket;
     await store.move(ticket, cols[0]!, 'shop');
-    expect(mock.calls.at(-1)).toMatchObject({ cmd: 'tracker_move', args: { project_id: 'shop' } });
+    expect(mock.calls.at(-1)).toMatchObject({ cmd: 'tracker_move', args: { source_id: 'shop' } });
   });
 
   it('moves optimistically and rolls back on error', async () => {

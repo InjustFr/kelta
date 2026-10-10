@@ -7,7 +7,7 @@ use kelta_proto::api::SettingsSource;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{CodeHostHint, ProjectDraft, ProjectPatch, RepoDraft};
-use kelta_proto::settings::{Layer, SettingsDiff};
+use kelta_proto::settings::{Layer, SettingsDiff, Severity};
 use serde_json::json;
 
 const GLOBAL: &str = "#:schema https://kelta.dev/schema/0.1/settings.schema.json\n# my config\n[app]\ntheme = \"dark\" # keep me\n\n# terminal block\n[terminal]\nfont_size = 13 # size\nrenderer = \"auto\"\n\n[notifications]\nenabled = true\n";
@@ -94,6 +94,39 @@ fn raw_write_validates_first() {
     assert_eq!((issues[0].line, issues[0].path.as_str()), (Some(2), "terminal.font_size"));
     assert!(svc.layer_validate(Layer::Global, "[terminal]\nfont_size = 12\n").unwrap().is_empty());
     assert!(svc.layer_validate(Layer::Default, "").is_err());
+    // a bad project colour and project `tools` do not block the editor: they come back as warnings
+    let text = "[project]\nid = \"shop\"\ncolor = \"red\"\n\n[[tools]]\nid = \"t\"\nlabel = \"T\"\ncommand = \"t\"\n";
+    let r = svc.layer_validate(Layer::Project, text).unwrap();
+    let got: Vec<_> = r.iter().map(|i| (i.path.as_str(), i.line, i.severity)).collect();
+    assert_eq!(
+        got,
+        [("tools", Some(5), Severity::Warning), ("project.color", Some(3), Severity::Warning)],
+        "{r:?}"
+    );
+}
+
+#[test]
+fn ipc_rejects_a_bad_project_colour() {
+    let e = env();
+    let svc = e.load();
+    let mut d = draft(&e, "shop");
+    d.color = Some("red".into());
+    assert_eq!(svc.project_create(&d).unwrap_err().code, ErrorCode::InvalidArgument);
+    assert!(!e.dirs.projects_dir().join("shop.toml").exists());
+
+    svc.project_create(&draft(&e, "shop")).unwrap();
+    let file = e.dirs.projects_dir().join("shop.toml");
+    let before = read(&file);
+    let patch = ProjectPatch { color: Some("red".into()), ..Default::default() };
+    let err = svc.project_update(&ProjectId::new("shop"), &patch).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+    assert!(err.message.contains("theme colour or #rrggbb"), "{err:?}");
+    assert_eq!(read(&file), before);
+    let ok = ProjectPatch { color: Some("theme:green".into()), ..Default::default() };
+    assert_eq!(
+        svc.project_update(&ProjectId::new("shop"), &ok).unwrap().color.as_deref(),
+        Some("theme:green")
+    );
 }
 
 #[test]

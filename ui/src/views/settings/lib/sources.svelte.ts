@@ -1,9 +1,9 @@
-// Ticket sources of a project (`[project.tracker].views`): add a discovered `SourceHit`, spot one
-// that is already there, and save the binding through `project_update`.
+// Ticket sources (`[[sources]]`, global): add a discovered `SourceHit` to a source's board, spot one
+// that is already there, create a source from a hit, and save the list to the global settings.
 
-import type { AccountKind, ProjectInfo, SourceHit, TrackerBinding, TrackerView } from '$lib/gen';
+import type { AccountKind, JsonValue, Source, SourceHit, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
-import { projects } from '$lib/stores';
+import { settings } from '$lib/stores';
 
 import { emptyBinding } from '../../onboarding/draft';
 
@@ -34,24 +34,34 @@ export function withSource(b: TrackerBinding | null, account: string, hit: Sourc
   return { ...base, views: [...base.views, view] };
 }
 
-export async function saveTracker(projectId: string, tracker: TrackerBinding): Promise<ProjectInfo> {
-  const info = await ipc.projectUpdate({
-    id: projectId,
-    patch: {
-      name: null,
-      color: null,
-      icon: null,
-      default_template: null,
-      repos: null,
-      // views may be store proxies; IPC needs plain data
-      tracker: $state.snapshot(tracker),
-      remove_tracker: false,
-    },
-  });
-  // The project.updated event does the same; applying now keeps "Added" right without waiting for it.
-  projects.apply({ type: 'project.updated', project: info });
-  return info;
+/** A new source labelled after the picked board, feeding `projectId` when given (none is valid). */
+export function newSource(
+  taken: readonly Source[],
+  account: string,
+  hit: SourceHit,
+  projectId?: string,
+): Source {
+  const slug =
+    hit.label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'source';
+  let id = slug;
+  for (let n = 2; taken.some((s) => s.id === id); n++) id = `${slug}-${n}`;
+  const projects = projectId ? [projectId] : [];
+  return { id, label: hit.label, projects, tracker: withSource(null, account, hit), routes: [] };
 }
+
+/** Replaces the global `[[sources]]` list (sources are global only: one layer holds them all). */
+export async function saveSources(next: readonly Source[]): Promise<void> {
+  // entries may be store proxies; IPC needs plain data
+  const value = $state.snapshot(next) as unknown as JsonValue;
+  settings.accept(null, await ipc.settingsSet({ layer: 'global', path: 'sources', value }));
+}
+
+/** The global sources with `id` replaced by `f(it)`. */
+export const withEdited = (all: readonly Source[], id: string, f: (s: Source) => Source): Source[] =>
+  all.map((s) => (s.id === id ? f(s) : s));
 
 const ITERATION: Record<string, string> = {
   jira: 'sprint',

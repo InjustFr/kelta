@@ -21,6 +21,7 @@ use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 pub struct ProjectInfo {
     pub id: ProjectId,
     pub name: String,
+    /// As stored: `theme:<slot>` (resolved against the active theme by the UI only) or a `#rrggbb` hex.
     pub color: Option<String>,
     pub icon: Option<String>,
     pub repos: Vec<RepoInfo>,
@@ -455,6 +456,11 @@ pub enum PaneContent {
     Tickets {
         scope: Scope,
         view_id: Option<String>,
+        /// `[[sources]]` id the list narrows to (`view_id` then narrows inside it); `None` = every
+        /// source of the scope.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        source_id: Option<String>,
         mode: TicketsMode,
         #[serde(default)]
         who: Option<Who>,

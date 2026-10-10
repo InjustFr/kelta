@@ -820,6 +820,10 @@ impl Default for ClaudeSettings {
                     "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.".to_owned(),
                 ),
                 (
+                    "checks".to_owned(),
+                    "Checks failed on {pr.url}. Their names, links and log tails are in {file}. Reproduce each failure locally, fix it, run the tests, and commit the fixes. Do not push.".to_owned(),
+                ),
+                (
                     "conflicts".to_owned(),
                     "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.".to_owned(),
                 ),
@@ -1820,6 +1824,11 @@ pub struct ProjectConfig {
     /// Must equal the file stem.
     pub id: ProjectId,
     pub name: String,
+    /// `theme:<slot>` follows the active theme's ANSI colour (`red`..`cyan`, `bright-red`..`bright-cyan`);
+    /// a `#rrggbb` hex stays as typed (`#rgb` reads as `#rrggbb`).
+    #[schemars(regex(
+        pattern = r"^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$"
+    ))]
     pub color: Option<String>,
     /// 1-2 chars or sprite icon name.
     pub icon: Option<String>,
@@ -1912,6 +1921,17 @@ pub struct ValidationIssue {
     pub message: String,
     pub line: Option<u32>,
     pub col: Option<u32>,
+    /// A warning never blocks loading or saving the file.
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    #[default]
+    Error,
+    Warning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -18,6 +18,7 @@
     prLabel,
     promptTemplate,
     rememberReviewers,
+    sendDeferred,
     type FeedbackEntry,
   } from './fixloop.svelte';
   import { openContent } from './nav';
@@ -35,8 +36,11 @@
     sessions.all.find((s) => s.work_item_id === id && s.kind.type === 'claude' && s.lifecycle === 'live') ??
       null,
   );
-  const busy = $derived(claude !== null && ['working', 'needs_input', 'running'].includes(claude.status));
-  const hooksInactive = $derived(claude !== null && !busy && claude.status_source !== 'hook');
+  const hooksInactive = $derived(claude !== null && claude.status_source !== 'hook');
+  // Held by core until Claude's next Stop.
+  const busy = $derived(
+    !hooksInactive && claude !== null && ['working', 'needs_input'].includes(claude.status),
+  );
 
   let feedback = $state<Feedback | null>(null);
   let loadError = $state<KeltaError | null>(null);
@@ -60,7 +64,7 @@
       .map(([kind, label]) => ({ kind, label, rows: entries.filter((e) => e.kind === kind) }))
       .filter((g) => g.rows.length > 0),
   );
-  const ready = $derived((feedback !== null || withoutFeedback) && !busy && !hooksInactive && !sending);
+  const ready = $derived((feedback !== null || withoutFeedback) && !sending);
 
   $effect(() => {
     untrack(() => void load());
@@ -71,7 +75,10 @@
     try {
       const fb = await ipc.workFeedback({ id });
       feedback = fb;
-      checked = Object.fromEntries(feedbackEntries(fb).map((e) => [e.key, true]));
+      const all = feedbackEntries(fb);
+      checked = Object.fromEntries(all.map((e) => [e.key, true]));
+      if (all.length > 0 && all.every((e) => e.kind === 'check') && prompt === promptTemplate('feedback'))
+        prompt = promptTemplate('checks');
       rememberReviewers(id, fb);
     } catch (err) {
       loadError = toIpcError('work_feedback', err).toKeltaError();
@@ -85,9 +92,11 @@
     try {
       const files = feedback ? [{ name: 'feedback.md', content: feedbackMarkdown(chosen) }] : [];
       const threads = chosen.flatMap((e) => (e.threadId ? [e.threadId] : []));
+      const deferred = sendDeferred(id);
       work.upsert(await ipc.workSend({ id, prompt, files, threads }));
       void work.refreshStatus();
-      toasts.info(`Sent ${chosen.length} feedback item${chosen.length === 1 ? '' : 's'} to Claude.`);
+      if (!deferred)
+        toasts.info(`Sent ${chosen.length} feedback item${chosen.length === 1 ? '' : 's'} to Claude.`);
       onclose();
     } catch (err) {
       sendError = isIpcError(err) ? err.message : toIpcError('work_send', err).message;
@@ -182,11 +191,9 @@
         {/if}
       </section>
 
-      {#if busy}
-        <p class="problem" role="status">Claude is busy; send when it stops.</p>
-      {:else if hooksInactive}
+      {#if hooksInactive}
         <div class="problem" role="status">
-          <p>Kelta can't tell whether Claude is idle (status hooks inactive).</p>
+          <p>Kelta can't tell whether Claude is idle (status hooks inactive): sending copies the prompt.</p>
           <div class="row-actions">
             <Button
               size="sm"
@@ -216,7 +223,7 @@
         disabled={!ready}
         loading={sending}
         chord={submitChord}
-        onclick={() => void send()}>Send to Claude</Button
+        onclick={() => void send()}>{busy ? 'Send when Claude stops' : 'Send to Claude'}</Button
       >
     {/snippet}
   </Sheet>

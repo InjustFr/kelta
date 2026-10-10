@@ -293,6 +293,7 @@ export const layout: Layout = {
             "kind": "project"
           },
           "sort": "age",
+          "source_id": null,
           "view_id": "mine",
           "who": "mine"
         },
@@ -498,6 +499,9 @@ export const ticketPage: TicketPage = {
           "url": "https://github.com/acme/shop-api/pull/90"
         }
       ],
+      "source_ids": [
+        "product"
+      ],
       "ticket": {
         "assignee": {
           "avatar_url": null,
@@ -637,6 +641,7 @@ export const ticketDetail: TicketDetail = {
         "shop"
       ],
       "prs": [],
+      "source_ids": [],
       "ticket": {
         "assignee": {
           "avatar_url": null,
@@ -782,6 +787,7 @@ export const reviewPage: ReviewPage = {
         "decision_head": null,
         "deletions": 14,
         "draft": false,
+        "failed_check_names": [],
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
         "kind": "review_requested",
         "labels": [],
@@ -841,6 +847,7 @@ export const reviewDetail: ReviewDetail = {
     "decision_head": null,
     "deletions": 14,
     "draft": false,
+    "failed_check_names": [],
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
     "kind": "review_requested",
     "labels": [],
@@ -1823,7 +1830,8 @@ export const validationIssues: ValidationIssue[] = [
     "col": 13,
     "line": 12,
     "message": "must be ≤ 40",
-    "path": "terminal.font_size"
+    "path": "terminal.font_size",
+    "severity": "error"
   }
 ];
 
@@ -1898,6 +1906,7 @@ export const settingsDefault: Settings = {
       }
     },
     "prompt_templates": {
+      "checks": "Checks failed on {pr.url}. Their names, links and log tails are in {file}. Reproduce each failure locally, fix it, run the tests, and commit the fixes. Do not push.",
       "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
       "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
@@ -3470,6 +3479,7 @@ export const uiEventLayoutChanged: UiEvent = {
               "kind": "project"
             },
             "sort": "age",
+            "source_id": null,
             "view_id": "mine",
             "who": "mine"
           },

@@ -195,6 +195,13 @@ match = { "payload.path" = "glob:*.rs" }
 debounce_ms = 1500
 do = [ { action = "run", command = "cargo", args = ["clippy", "-q"], cwd = "{session.cwd}", show = "toast_on_error" } ]
 
+# Red CI on my PR (an errored rollup too); Enter on its Checks failed row sends the failures to Claude
+[[triggers]]
+id = "red-ci"
+on = "pr.ci_changed"
+match = { "payload.state" = ["failure", "error"] }
+do = [ { action = "notify", title = "Checks failed: {payload.review.title}", body = "{payload.review.url}", urgency = "critical" } ]
+
 # Merge → done + offer cleanup
 [[triggers]]
 id = "done-on-merge"
@@ -403,7 +410,7 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | Method | Params → Result | Permission |
 |---|---|---|
 | `app.info` | `{}` → `{version, platform, theme}` | — |
-| `projects.current` / `projects.list` | `{}` → `ProjectInfo` / `[ProjectInfo]` | `projects.read` |
+| `projects.current` / `projects.list` | `{}` → `ProjectInfo` / `[ProjectInfo]`; `color` is the stored value, `theme:<slot>` (e.g. `theme:green`, resolved against the theme by the UI only) or a `#rrggbb` hex | `projects.read` |
 | `tickets.list` | `{scope: "project"\|"all", view_id?, cursor?}` → `TicketPage`: Kelta's Tickets list (union of the project's views, or `view_id`), items with `work_item_id`, `prs`, `caps`. `"all"` only for `scope = global` screens; a project screen always gets its project | `tickets.read` |
 | `tickets.get` / `tickets.transitions` / `tickets.columns` | `{ticket}` → `TicketDetail` (with `prs`, `caps`) / `{ticket}` / `{}` | `tickets.read` |
 | `tickets.transition` / `tickets.comment` / `tickets.assign` | `{ticket, transition_id}` / `{ticket, markdown}` / `{ticket, assignee}`; through core: Kelta's Tickets list refreshes, `ticket.transitioned` / `ticket.commented` / `ticket.assigned` fire | `tickets.write` |

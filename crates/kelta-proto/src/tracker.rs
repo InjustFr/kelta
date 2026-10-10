@@ -268,6 +268,9 @@ pub struct TicketItem {
     /// Ids of the binding views (sources) that returned this ticket.
     #[serde(default)]
     pub view_ids: Vec<String>,
+    /// Ids of the `[[sources]]` whose queries returned this ticket.
+    #[serde(default)]
+    pub source_ids: Vec<String>,
     /// Linked PRs: the work item's first, then key matches from the polled review feeds.
     #[serde(default)]
     pub prs: Vec<PrLink>,

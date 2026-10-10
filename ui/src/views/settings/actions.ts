@@ -1,6 +1,7 @@
 // settings.open (Mod+,): opens a Settings tab in the active project, or focuses the existing one.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
-// that project's raw TOML (the Edit TOML mode, for what the forms cannot edit).
+// that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
+// bring that source's card into view in Settings → Sources.
 
 import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
@@ -9,6 +10,15 @@ import { toasts, layout, projects } from '$lib/stores';
 import { activateProject } from '../../shell/nav';
 
 let tomlRequest: string | null = null;
+
+let sourceRequest: string | null = null;
+
+/** Source whose card the next Sources section shows, once. */
+export function takeSourceRequest(): string | null {
+  const id = sourceRequest;
+  sourceRequest = null;
+  return id;
+}
 
 /** Project whose TOML the next Settings pane opens on, once. */
 export function takeTomlRequest(): string | null {
@@ -22,6 +32,7 @@ registerAction('settings.open', async (args) => {
   const section = typeof args?.section === 'string' ? args.section : null;
   // PaneContent::Settings only carries a section, so the TOML target travels beside it.
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
+  sourceRequest = typeof args?.source_id === 'string' ? args.source_id : null;
   try {
     await layout.ensure(projectId);
     await activateProject(projectId); // from a global view the pane would open out of sight

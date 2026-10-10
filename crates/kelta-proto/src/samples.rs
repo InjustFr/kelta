@@ -115,6 +115,7 @@ pub fn review() -> Review {
         source_branch: "feat/SHOP-140-cache-prices".into(),
         target_branch: "main".into(),
         ci: CiState::Success,
+        failed_check_names: vec![],
         decision: Some(ReviewDecision::ReviewRequired),
         my_state: Some(MyReviewState::Pending),
         mergeable: Some(true),
@@ -259,6 +260,7 @@ pub fn layout() -> Layout {
                     content: PaneContent::Tickets {
                         scope: Scope::Project { id: ProjectId::new("shop") },
                         view_id: Some("mine".into()),
+                        source_id: None,
                         mode: TicketsMode::Board,
                         who: Some(Who::Mine),
                         group: Some(TicketGroupBy::Sprint),
@@ -831,6 +833,7 @@ pub fn all() -> Vec<Fixture> {
                     project_ids: vec![ProjectId::new("shop")],
                     work_item_id: Some(WorkItemId::new(WID)),
                     view_ids: vec!["mine".into()],
+                    source_ids: vec!["product".into()],
                     prs: vec![PrLink {
                         url: "https://github.com/acme/shop-api/pull/90".into(),
                         account: Some(AccountId::new("github-acme")),
@@ -1191,6 +1194,7 @@ pub fn all() -> Vec<Fixture> {
                 message: "must be ≤ 40".into(),
                 line: Some(12),
                 col: Some(13),
+                severity: Severity::Error,
             }]
         ),
         fx!(

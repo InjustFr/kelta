@@ -10,6 +10,7 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   terminal: ['terminal'],
   'linux-graphics': ['linux'],
   projects: ['env'],
+  sources: ['sources'],
   accounts: ['accounts'],
   claude: ['claude'],
   editors: ['editor'],
@@ -21,9 +22,8 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
   tools: ['tools'],
 };
 
-/** Top-level keys edited by the plugin/tool lane's sections, the theme picker or a project's
- * Tracker section (`sources`, written through `project_update`) — not rendered here. */
-export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins', 'themes', 'sources'];
+/** Top-level keys edited by the plugin/tool lane's sections or the theme picker (not rendered here). */
+export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins', 'themes'];
 
 export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   general: 'Theme, updates, session restore and quit behaviour.',
@@ -41,7 +41,8 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   notifications: 'Desktop notifications and quiet hours.',
   performance: 'Memory use and web view behaviour.',
   tools: 'Buttons that open programs like lazygit in a pane, or apps like Fork.',
-  projects: 'Folders Kelta manages, with their repositories and ticket sources.',
+  projects: 'Folders Kelta manages, with their repositories.',
+  sources: 'Boards you take tickets from, which projects they feed, and how tickets route to a repository.',
 };
 
 /** Visible section title; the registry label stays for ids and tests. */

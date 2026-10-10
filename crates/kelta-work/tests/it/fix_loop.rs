@@ -6,9 +6,11 @@ use std::process::Command;
 use std::sync::Arc;
 
 use crate::common::{Fx, git, has_git, project};
+use kelta_proto::api::CoreApi;
 use kelta_proto::api::WorkStore;
 use kelta_proto::codehost::ReviewKind;
 use kelta_proto::error::ErrorCode;
+use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::{AccountId, SessionId};
 use kelta_proto::model::{
     Lifecycle, RebaseOnto, RebaseOp, SendFile, SessionKind, SessionStatus, StatusSource, WorkItem, WorkKind,
@@ -17,6 +19,7 @@ use kelta_proto::model::{
 use kelta_proto::samples;
 use kelta_proto::testing::FakeCodeHost;
 use kelta_work::WorkService;
+use serde_json::json;
 
 macro_rules! need_git {
     () => {
@@ -48,6 +51,18 @@ fn set_status(fx: &Fx, sid: &SessionId, status: SessionStatus, source: StatusSou
     let mut s = fx.core.sessions().into_iter().find(|s| &s.id == sid).unwrap();
     (s.status, s.status_source) = (status, source);
     fx.core.insert_session(s);
+}
+
+/// The item's private Claude run dir: the parent of the `--settings` file Claude was spawned with.
+fn run_dir(fx: &Fx) -> std::path::PathBuf {
+    let call = fx
+        .core
+        .calls()
+        .into_iter()
+        .find(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude");
+    let args: Vec<String> = serde_json::from_value(call.unwrap().args["args"].clone()).unwrap();
+    let settings = args.windows(2).find(|a| a[0] == "--settings").map(|a| a[1].clone()).unwrap();
+    Path::new(&settings).parent().unwrap().to_path_buf()
 }
 
 fn brief() -> Vec<SendFile> {
@@ -117,18 +132,7 @@ async fn send_pastes_into_an_idle_claude_and_keeps_the_brief_out_of_the_worktree
     let out = w.send(&item.id, "Read {file}\x1b[201~ now", brief(), Some(vec!["T1".into()])).await.unwrap();
     assert_eq!(out.sent_threads, vec!["T1"]);
 
-    let settings = fx
-        .core
-        .calls()
-        .into_iter()
-        .find(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
-        .unwrap();
-    let args: Vec<String> = serde_json::from_value(settings.args["args"].clone()).unwrap();
-    let run = args
-        .windows(2)
-        .find(|a| a[0] == "--settings")
-        .map(|a| Path::new(&a[1]).parent().unwrap().to_path_buf())
-        .unwrap();
+    let run = run_dir(&fx);
     let file = run.join("feedback.md");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Review feedback\n");
     assert!(run.join("ticket.md").exists(), "next to ticket.md");
@@ -143,24 +147,84 @@ async fn send_pastes_into_an_idle_claude_and_keeps_the_brief_out_of_the_worktree
 }
 
 #[tokio::test]
-async fn send_never_types_into_a_busy_or_permission_prompting_claude() {
+async fn send_holds_for_a_busy_claude_until_its_stop() {
     need_git!();
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
     let sid = claude(&fx);
-    for (status, source, why) in [
-        (SessionStatus::Working, StatusSource::Hook, "claude_busy"),
-        (SessionStatus::NeedsInput, StatusSource::Hook, "claude_busy"),
-        (SessionStatus::Running, StatusSource::Hook, "claude_busy"),
-        (SessionStatus::Done, StatusSource::Heuristic, "hooks_inactive"),
-        (SessionStatus::WaitingUser, StatusSource::None, "hooks_inactive"),
+    for (status, content) in
+        [(SessionStatus::NeedsInput, "# Checks failed\n"), (SessionStatus::Working, "# Threads\n")]
+    {
+        set_status(&fx, &sid, status, StatusSource::Hook);
+        let sent = vec![SendFile { name: "feedback.md".into(), content: content.into() }];
+        let out = w.send(&item.id, "Fix {file}", sent, Some(vec!["T1".into()])).await.unwrap();
+        assert_eq!(out.sent_threads, vec!["T1"], "stored at send time while held");
+    }
+    assert!(fx.core.writes().is_empty(), "nothing typed mid-turn");
+    let held =
+        fx.core.toasts().iter().filter(|t| t.text.contains("it gets your message when it stops")).count();
+    assert_eq!(held, 2);
+    let file = run_dir(&fx).join("feedback.md");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "# Checks failed\n\n---\n\n# Threads\n",
+        "the held brief survives the later send"
+    );
+
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    fx.core.publish(
+        BusEvent::new(bus::CLAUDE_HOOK, json!({ "event": "Stop", "payload": { "hook_event_name": "Stop" } }))
+            .with_session(sid.clone()),
+    );
+    for _ in 0..500 {
+        if !fx.core.written_text(&sid).is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let one = format!("Fix {}", file.display());
+    assert_eq!(fx.core.written_text(&sid), format!("\x1b[200~{one}\n\n{one}\x1b[201~\r"), "both sends, once");
+}
+
+#[tokio::test]
+async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    let sid = claude(&fx);
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    let old = vec![SendFile { name: "feedback.md".into(), content: "# Old threads\n".into() }];
+    w.send(&item.id, "Fix {file}", old, None).await.unwrap();
+    set_status(&fx, &sid, SessionStatus::Working, StatusSource::Hook);
+    w.send(&item.id, "A review note, no file", vec![], None).await.unwrap();
+    let new = vec![SendFile { name: "feedback.md".into(), content: "# Checks failed\n".into() }];
+    w.send(&item.id, "Fix {file}", new, None).await.unwrap();
+    let file = run_dir(&fx).join("feedback.md");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Checks failed\n", "no stale feedback");
+}
+
+#[tokio::test]
+async fn send_copies_the_prompt_when_kelta_cannot_tell_claude_is_idle() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    let sid = claude(&fx);
+    for (status, source) in [
+        (SessionStatus::Done, StatusSource::Heuristic),
+        (SessionStatus::WaitingUser, StatusSource::None),
+        (SessionStatus::Working, StatusSource::Heuristic),
+        (SessionStatus::Running, StatusSource::Hook),
     ] {
         set_status(&fx, &sid, status, source);
-        let e = w.send(&item.id, "fix it", brief(), Some(vec!["T1".into()])).await.unwrap_err();
-        assert_eq!((e.code, reason(&e)), (ErrorCode::Conflict, why), "{status:?}/{source:?}");
+        let out = w.send(&item.id, "fix it", brief(), Some(vec!["T1".into()])).await.unwrap();
+        assert_eq!(out.sent_threads, vec!["T1"], "{status:?}/{source:?}");
     }
+    let copied: Vec<_> = fx.core.calls().into_iter().filter(|c| c.method == "clipboard_copy").collect();
+    assert_eq!(copied.len(), 4);
+    assert!(copied.iter().all(|c| c.args["text"] == "fix it"));
     assert!(fx.core.writes().is_empty(), "nothing typed");
-    assert!(w.list(None).await.unwrap()[0].sent_threads.is_empty());
+    assert!(fx.core.toasts().iter().any(|t| t.text
+        == "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready."));
     let e =
         w.send(&item.id, "x", vec![SendFile { name: "../x.md".into(), content: String::new() }], None).await;
     assert_eq!(e.unwrap_err().code, ErrorCode::InvalidArgument);

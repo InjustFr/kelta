@@ -12,7 +12,7 @@ have a stable path.
 2. Add an account (Settings > Accounts) for your tracker and code host. Tokens go to the OS keyring; if you have
    none, use `env:` or `command:` references ([keyring setup](keyring-and-notifications.md)).
 3. Click **Tickets** at the top of the rail (`Cmd+Shift+B`). It shows your tickets from every open project (Mine);
-   `2` and `3` switch to Unassigned and Anyone ([working with tickets](tickets.md)). Select one and press
+   `2` and `3` switch to Unassigned and Team ([working with tickets](tickets.md)). Select one and press
    **Start work**: Kelta creates a worktree in the ticket's project and opens Claude and nvim side by side. **Now**
    and **Reviews**, just below, show what waits on you and the PRs to review, across projects too.
 
