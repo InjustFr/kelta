@@ -11,6 +11,8 @@ it is focused and raises (or recreates) it otherwise. The window class and Wayla
 ```ini
 bind = SUPER, K, exec, kelta-ctl toggle
 bind = SUPER SHIFT, K, exec, kelta-ctl palette
+bind = SUPER, J, exec, kelta-ctl next
+bind = SUPER SHIFT, J, exec, kelta-ctl back
 windowrulev2 = workspace 2, class:^(dev.kelta.Kelta)$
 windowrulev2 = tile, class:^(dev.kelta.Kelta)$
 ```
@@ -22,6 +24,8 @@ Kelta detects `HYPRLAND_INSTANCE_SIGNATURE` and starts without a title bar.
 ```
 bindsym $mod+k exec kelta-ctl toggle
 bindsym $mod+Shift+k exec kelta-ctl palette
+bindsym $mod+j exec kelta-ctl next
+bindsym $mod+Shift+j exec kelta-ctl back
 for_window [app_id="dev.kelta.Kelta"] move container to workspace 2
 ```
 

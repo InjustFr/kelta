@@ -20,6 +20,8 @@ use serde_json::{Map, Value, json};
 const USAGE: &str = "usage: kelta-ctl <command>
   toggle                                   show/hide the Kelta window
   palette                                  open the command palette
+  next                                     jump to the next thing waiting on you
+  back                                     go back to where you were before the last jump
   open <path>                              open a directory as a project
   focus-project <id>                       focus a project
   start <ticket key|url> [--project <id>]  start work on a ticket
@@ -308,7 +310,7 @@ fn build(args: &[String]) -> Result<Value, String> {
     let cmd = args[0].as_str();
     let rest = &args[1..];
     Ok(match cmd {
-        "toggle" | "palette" => {
+        "toggle" | "palette" | "next" | "back" => {
             none(rest)?;
             envelope(cmd, json!({}))
         }
@@ -458,5 +460,7 @@ mod tests {
         let r = build(&s(&["plugin", "install", "https://example.com/p.tar.gz"])).unwrap();
         assert_eq!(r["cmd"], "plugin_install");
         assert_eq!(build(&s(&["focus-project", "shop"])).unwrap()["cmd"], "focus_project");
+        assert_eq!(build(&s(&["next"])).unwrap(), json!({"v":1,"cmd":"next"}));
+        assert_eq!(build(&s(&["back"])).unwrap(), json!({"v":1,"cmd":"back"}));
     }
 }
