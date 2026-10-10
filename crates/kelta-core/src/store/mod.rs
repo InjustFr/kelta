@@ -439,8 +439,11 @@ pub mod q {
         let tx = c.transaction().map_err(db_err)?;
         let at = kelta_proto::now_rfc3339();
         for t in ts {
-            tx.execute("INSERT OR IGNORE INTO seen_tickets (ticket_key, at) VALUES (?1, ?2)", params![ticket_key(t), at])
-                .map_err(db_err)?;
+            tx.execute(
+                "INSERT OR IGNORE INTO seen_tickets (ticket_key, at) VALUES (?1, ?2)",
+                params![ticket_key(t), at],
+            )
+            .map_err(db_err)?;
         }
         tx.commit().map_err(db_err)
     }

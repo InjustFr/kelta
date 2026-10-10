@@ -72,9 +72,15 @@ describe('groomQueue', () => {
 describe('against the mock transport', () => {
   let mock: MockControls;
   const ALL = { kind: 'all' } as const;
-  const ref = (key: string): TicketRef => mock.state.tickets.find((t) => t.ticket.ref.key === key)!.ticket.ref;
+  const ref = (key: string): TicketRef =>
+    mock.state.tickets.find((t) => t.ticket.ref.key === key)!.ticket.ref;
   const listed = (...keys: string[]) => {
-    mock.state.nextUp.items = keys.map((k, i) => ({ project_id: 'shop', ticket: ref(k), rank: i, snoozed_until: null }));
+    mock.state.nextUp.items = keys.map((k, i) => ({
+      project_id: 'shop',
+      ticket: ref(k),
+      rank: i,
+      snoozed_until: null,
+    }));
   };
   const listedKeys = () => nextUp.ordered().map((e) => e.ticket.key);
 
