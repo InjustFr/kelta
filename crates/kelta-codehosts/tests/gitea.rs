@@ -58,12 +58,14 @@ async fn review_requested_search_follows_link_pages_and_drops_drafts() {
 }
 
 #[tokio::test]
-async fn paging_never_follows_a_next_link_to_another_origin() {
+async fn paging_rebases_a_next_link_from_another_origin_onto_ours() {
     let server = MockServer::start().await;
     let other = MockServer::start().await;
     common(&server).await;
+    // Gitea behind a proxy with ROOT_URL on another origin: same path, other host
     let next = format!("{}/api/v1/repos/issues/search?page=2", other.uri());
     Mock::given(path("/api/v1/repos/issues/search"))
+        .and(query_param("page", "1"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("link", format!("<{next}>; rel=\"next\"").as_str())
@@ -71,8 +73,9 @@ async fn paging_never_follows_a_next_link_to_another_origin() {
         )
         .mount(&server)
         .await;
+    mount_page2(&server).await;
     let list = gt(&server).list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
-    assert_eq!(list.len(), 1, "first page only");
+    assert_eq!(list.len(), 2, "page 2 fetched from our server");
     assert!(other.received_requests().await.unwrap().is_empty(), "token never sent to the other host");
 }
 
