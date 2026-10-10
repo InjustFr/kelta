@@ -6,7 +6,11 @@ import type { ReviewKind } from "./ReviewKind";
 import type { ReviewRef } from "./ReviewRef";
 import type { User } from "./User";
 
-export type Review = { ref: ReviewRef, title: string, url: string, author: User, draft: boolean, head_sha: string, source_branch: string, target_branch: string, ci: CiState, decision: ReviewDecision | null, my_state: MyReviewState | null, mergeable: boolean | null, 
+export type Review = { ref: ReviewRef, title: string, url: string, author: User, draft: boolean, head_sha: string, source_branch: string, target_branch: string, ci: CiState, 
+/**
+ * Failing check names from the head rollup (GitHub; empty on GitLab, whose list has no jobs).
+ */
+failed_check_names: Array<string>, decision: ReviewDecision | null, my_state: MyReviewState | null, mergeable: boolean | null, 
 /**
  * Commit my last submitted review was left on; with `head_sha` it tells "updated since your review".
  */

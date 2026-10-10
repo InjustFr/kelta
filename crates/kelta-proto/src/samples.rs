@@ -123,6 +123,7 @@ pub fn review() -> Review {
         source_branch: "feat/SHOP-140-cache-prices".into(),
         target_branch: "main".into(),
         ci: CiState::Success,
+        failed_check_names: vec![],
         decision: Some(ReviewDecision::ReviewRequired),
         my_state: Some(MyReviewState::Pending),
         mergeable: Some(true),

@@ -790,6 +790,7 @@ export const reviewPage: ReviewPage = {
         "decision_head": null,
         "deletions": 14,
         "draft": false,
+        "failed_check_names": [],
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
         "kind": "review_requested",
         "labels": [],
@@ -854,6 +855,7 @@ export const reviewDetail: ReviewDetail = {
     "decision_head": null,
     "deletions": 14,
     "draft": false,
+    "failed_check_names": [],
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
     "kind": "review_requested",
     "labels": [],
@@ -1913,6 +1915,7 @@ export const settingsDefault: Settings = {
       }
     },
     "prompt_templates": {
+      "checks": "Checks failed on {pr.url}. Their names, links and log tails are in {file}. Reproduce each failure locally, fix it, run the tests, and commit the fixes. Do not push.",
       "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
       "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
       "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",

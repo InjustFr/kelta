@@ -81,6 +81,7 @@ async fn authored_list() {
     assert_eq!(r.decision, Some(ReviewDecision::ChangesRequested));
     assert_eq!(r.my_state, None);
     assert_eq!(r.mergeable, None);
+    assert_eq!(r.failed_check_names, ["test (ubuntu)", "e2e", "ci/jenkins"]);
 }
 
 #[tokio::test]
@@ -251,6 +252,7 @@ async fn detail_of_my_approved_and_failing_pull_requests() {
     assert_eq!(d.review.my_state, Some(MyReviewState::Approved));
     assert_eq!(d.review.decision, Some(ReviewDecision::Approved));
     assert_eq!(d.review.ci, CiState::Failure);
+    assert_eq!(d.review.failed_check_names, ["tests"], "Now's fresh detail keeps the names");
 
     let server = MockServer::start().await;
     mount_detail(&server, "github/pull_mine.json", "github/reviews.json", "github/check_runs.json").await;
@@ -409,7 +411,8 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
         "github/check_runs_actions.json",
     )
     .await;
-    let log: String = (1..=60).map(|i| format!("line {i}\n")).collect();
+    mount(&server, "GET", "/repos/acme/shop/commits/abc123/status", 200, "github/status_failed.json").await;
+    let log: String = (1..=100).map(|i| format!("line {i}\n")).collect();
     // GitHub answers a 302 to a signed blob URL on another host ("localhost" vs "127.0.0.1").
     let blob = server.uri().replace("127.0.0.1", "localhost") + "/blob/9";
     Mock::given(method("GET"))
@@ -434,12 +437,17 @@ async fn feedback_unresolved_threads_reviews_with_a_body_and_failed_check_logs()
     assert_eq!(f.reviews.len(), 2, "empty bodies dropped");
     assert_eq!(f.reviews[0].state, Some(MyReviewState::ChangesRequested));
     assert_eq!(f.reviewers, vec!["erin", "zed"], "me excluded");
-    assert_eq!(f.failed_checks.len(), 1);
+    assert_eq!(f.failed_checks.len(), 2, "the failed run and the failed legacy status");
     let c = &f.failed_checks[0];
     assert_eq!((c.name.as_str(), c.url.as_deref()), ("tests", Some("https://github.com/acme/shop/runs/9")));
     let tail = c.log_tail.as_deref().unwrap();
-    assert_eq!(tail.lines().count(), 40);
-    assert!(tail.starts_with("line 21") && tail.ends_with("line 60"));
+    assert_eq!(tail.lines().count(), 80);
+    assert!(tail.starts_with("line 21") && tail.ends_with("line 100"));
+    let st = &f.failed_checks[1];
+    assert_eq!(
+        (st.name.as_str(), st.url.as_deref(), st.log_tail.as_deref()),
+        ("ci/jenkins", Some("https://jenkins.test/job/7"), None)
+    );
     let blob_req =
         server.received_requests().await.unwrap().into_iter().find(|r| r.url.path() == "/blob/9").unwrap();
     assert!(!blob_req.headers.contains_key("authorization"), "the token never goes to the blob host");

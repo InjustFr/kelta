@@ -1419,18 +1419,19 @@ export function createMockTransport(options: MockOptions = {}): {
       const w = work(id);
       if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
       const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
-      if (claude?.lifecycle === 'live') {
-        if (claude.status === 'working' || claude.status === 'needs_input' || claude.status === 'running') {
-          throw err('conflict', 'Claude is busy; send when it stops.', { reason: 'claude_busy' });
-        }
-        if (claude.status_source !== 'hook') {
-          throw err('conflict', "Kelta can't tell whether Claude is idle (status hooks inactive).", {
-            reason: 'hooks_inactive',
-          });
-        }
-      }
       void files;
-      if (claude) updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      // Never refused: held while Claude works, copied when Kelta cannot tell it is idle.
+      const live = claude?.lifecycle === 'live';
+      if (live && claude.status_source !== 'hook') {
+        const text =
+          "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready.";
+        emit({ type: 'toast', toast: { level: 'info', text, action: null } });
+      } else if (live && (claude.status === 'working' || claude.status === 'needs_input')) {
+        const text = 'Claude is working: it gets your message when it stops.';
+        emit({ type: 'toast', toast: { level: 'info', text, action: null } });
+      } else if (claude) {
+        updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      }
       if (threads) w.sent_threads = [...threads];
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);

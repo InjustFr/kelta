@@ -34,7 +34,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name email } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
-commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state } } } } \
+commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state contexts(first:30){ nodes{ ... on CheckRun{ name conclusion } ... on StatusContext{ context state } } } } } } } \
 reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ combinedSlug } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
 latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
@@ -190,6 +190,19 @@ impl GithubHost {
             ci: ci_from_rollup(
                 n.pointer("/commits/nodes/0/commit/statusCheckRollup/state").and_then(Value::as_str),
             ),
+            failed_check_names: n
+                .pointer("/commits/nodes/0/commit/statusCheckRollup/contexts/nodes")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|c| {
+                    matches!(
+                        s(c, "conclusion").or(s(c, "state")),
+                        Some("FAILURE" | "TIMED_OUT" | "STARTUP_FAILURE" | "ACTION_REQUIRED" | "ERROR")
+                    )
+                })
+                .filter_map(|c| s(c, "name").or(s(c, "context")).map(str::to_owned))
+                .collect(),
             decision,
             my_state,
             mergeable: mergeable_from(s(n, "mergeable")),
@@ -240,6 +253,7 @@ impl GithubHost {
             source_branch: branch.clone(),
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
             ci: CiState::None,
+            failed_check_names: vec![],
             decision: None,
             my_state: None,
             mergeable: v.get("mergeable").and_then(Value::as_bool),
@@ -289,7 +303,7 @@ impl GithubHost {
                 self.auth.http().send_text(HttpRequest::get(loc)).await.ok()?.body
             }
         };
-        Some(log_tail(&text))
+        Some(log_tail(&text, true))
     }
 
     /// Fine-grained / app tokens cannot read `/notifications`.
@@ -662,6 +676,11 @@ impl CodeHost for GithubHost {
             }
         }
         review.ci = combine_ci(&checks);
+        review.failed_check_names = checks
+            .iter()
+            .filter(|c| matches!(c.state, CiState::Failure | CiState::Error))
+            .map(|c| c.name.clone())
+            .collect();
 
         let by_reviewer = latest_by_reviewer(&reviews);
         review.decision = Some(decision_from_reviews(&by_reviewer));
@@ -909,13 +928,17 @@ impl CodeHost for GithubHost {
             .collect();
 
         let sha = s(pr, "headRefOid").unwrap_or("");
-        let runs = self.check_runs(&r.repo, sha).await.map_err(&refused)?;
+        let (runs, statuses) = tokio::join!(
+            self.check_runs(&r.repo, sha),
+            self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status")))),
+        );
+        let runs = runs.map_err(&refused)?;
         let failed: Vec<&Value> = runs.iter().filter(|run| check_state(run) == CiState::Failure).collect();
         let mut tails = Vec::new();
         for run in failed.iter().take(MAX_LOGS) {
             tails.push(self.job_log_tail(&r.repo, run).await);
         }
-        let failed_checks = failed
+        let mut failed_checks: Vec<FailedCheck> = failed
             .iter()
             .enumerate()
             .map(|(i, run)| FailedCheck {
@@ -924,6 +947,17 @@ impl CodeHost for GithubHost {
                 log_tail: tails.get(i).cloned().flatten(),
             })
             .collect();
+        // Legacy commit statuses (Jenkins, CircleCI, ...): no log to read. Unreadable is ignored.
+        let statuses = statuses.map(|st| st.body).unwrap_or_default();
+        for c in statuses.get("statuses").and_then(Value::as_array).into_iter().flatten() {
+            if matches!(s(c, "state"), Some("failure" | "error")) {
+                failed_checks.push(FailedCheck {
+                    name: s(c, "context").unwrap_or("").to_owned(),
+                    url: s(c, "target_url").map(str::to_owned),
+                    log_tail: None,
+                });
+            }
+        }
         Ok(Feedback { threads, reviews, failed_checks, reviewers })
     }
 

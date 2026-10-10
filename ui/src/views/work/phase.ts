@@ -22,6 +22,7 @@ export type WorkActionId =
   | 'edit_note'
   | 'ship'
   | 'fix'
+  | 'fix_checks'
   | 'rebase'
   | 'rebase_continue'
   | 'rebase_abort'
@@ -292,8 +293,20 @@ function phaseRow(
     const onHead = !pr.decision_head || pr.decision_head === pr.head_sha;
     if (pr.decision === 'changes_requested' && onHead)
       return p('changes_requested', 'Changes requested', prLabel, 'error', 'fix', 'Fix with Claude', 'fix');
-    if (pr.ci === 'failure' || pr.ci === 'error')
-      return p('checks_failed', 'Checks failed', prLabel, 'error', 'fix', 'Fix with Claude', 'fix');
+    if (pr.ci === 'failure' || pr.ci === 'error') {
+      const names = pr.failed_check_names;
+      const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
+      const detail = shown ? `${prLabel} · ${shown}` : prLabel;
+      return p(
+        'checks_failed',
+        'Checks failed',
+        detail,
+        'error',
+        'fix_checks',
+        'Send failures to Claude',
+        'fix',
+      );
+    }
   }
   if (pr?.mergeable === false)
     return p(

@@ -151,6 +151,7 @@ impl BitbucketHost {
                 .unwrap_or("")
                 .to_owned(),
             ci: CiState::None,
+            failed_check_names: vec![],
             decision,
             decision_head: None,
             requested_at: None,

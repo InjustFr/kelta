@@ -396,6 +396,10 @@ pub trait CoreApi: Send + Sync {
     fn subscribe(&self) -> tokio::sync::broadcast::Receiver<BusEvent>;
     async fn notify(&self, n: Notification) -> Result<(), KeltaError>;
     fn toast(&self, t: Toast);
+    /// Writes `text` to the system clipboard (`work_send` to a Claude without Kelta's hooks).
+    async fn clipboard_copy(&self, _text: String) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("clipboard"))
+    }
     /// Plugin `net:` (allowlist checked by caller).
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>;
     /// `PATH` of the user's login shell (what pty sessions search); `None` when unknown.

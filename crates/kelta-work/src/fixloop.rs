@@ -6,11 +6,13 @@ use std::sync::Arc;
 use kelta_proto::api::{CodeHost, CoreApi};
 use kelta_proto::codehost::{Feedback, MergeMethod, ReviewRef};
 use kelta_proto::error::KeltaError;
+use kelta_proto::events::Toast;
 use kelta_proto::ids::WorkItemId;
 use kelta_proto::model::{
     Lifecycle, SendFile, SessionInfo, SessionKind, SessionStatus, StatusSource, WorkItem, WorkKind, WorkState,
 };
 
+use crate::notes::{Route, route};
 use crate::saga::{Env, Journal};
 use crate::template::{Mode, render};
 use crate::{WorkService, files};
@@ -91,7 +93,8 @@ fn valid_name(name: &str) -> bool {
 
 impl WorkService {
     /// `work_send`: brief files into the private run dir, then the prompt into the previous
-    /// conversation (paste when live and idle, `claude --resume <uuid> -- <prompt>` otherwise).
+    /// conversation through [`WorkService::deliver_prompt`] (pasted, held until `Stop`, or resumed),
+    /// or onto the clipboard when Kelta cannot tell when Claude is idle.
     pub(crate) async fn send_impl(
         &self,
         id: &WorkItemId,
@@ -114,14 +117,20 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         let mut j = self.load_journal(id);
-        // Refuse before writing anything (re-checked right before the paste).
-        if let Some(s) = claude_of(&env.core, &item, &j).filter(|s| s.lifecycle == Lifecycle::Live) {
-            check_idle(&s)?;
-        }
+        // Never refused: a live Claude Kelta cannot paste into (hooks inactive, so no `Stop` to hold
+        // the message for) gets the prompt on the clipboard instead.
+        let copy = claude_of(&env.core, &item, &j)
+            .is_some_and(|s| route(Some(&s)) == Route::Paste && check_idle(&s).is_err());
         let run = self.ensure_claude_run(&item, &mut j)?;
         self.save_journal(id, &j)?;
         for f in &sent {
-            files::write_private(&run.join(&f.name), f.content.as_bytes())?;
+            let path = run.join(&f.name);
+            // A held prompt that names this file still needs its brief: append. Any other (a review
+            // note) leaves the file stale, so overwrite.
+            let held = j.pending_prompt.as_deref().is_some_and(|p| p.contains(&*path.to_string_lossy()));
+            let old = if held { std::fs::read_to_string(&path).ok() } else { None };
+            let body = old.map_or_else(|| f.content.clone(), |o| format!("{o}\n---\n\n{}", f.content));
+            files::write_private(&path, body.as_bytes())?;
         }
         let mut ctx = self.item_ctx(&env, &item, &j);
         if let Some(f) = sent.first() {
@@ -136,16 +145,24 @@ impl WorkService {
             ctx.set("total", r.total.to_string());
         }
         let text = render(prompt, &ctx, Mode::Lenient)?;
-        let mut item = self.resume_item(id, Some(text)).await?;
-        if let Some(t) = threads {
-            item = self
-                .update(id, |w| {
+        if copy {
+            env.core.clipboard_copy(text).await?;
+            env.core.toast(Toast::info(
+                "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready.",
+            ));
+        } else {
+            self.deliver_prompt(id, &text).await?;
+        }
+        match threads {
+            Some(t) => {
+                self.update(id, |w| {
                     w.sent_threads = t;
                     true
                 })
-                .await?;
+                .await
+            }
+            None => self.load(id).await,
         }
-        Ok(item)
     }
 
     /// Code host + PR of a work item (its review ref, or its bound repo + `pr_url`).

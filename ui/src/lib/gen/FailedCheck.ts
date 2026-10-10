@@ -2,6 +2,6 @@
 
 export type FailedCheck = { name: string, url: string | null, 
 /**
- * Last 40 log lines when the host exposes them.
+ * Last 80 log lines (cleaned) when the host exposes them.
  */
 log_tail: string | null, };

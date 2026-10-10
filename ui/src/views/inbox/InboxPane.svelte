@@ -162,7 +162,9 @@
               phase.detail
             : phase.section === 'needs_you' && preview
               ? preview
-              : phase.detail;
+              : phase.id === 'checks_failed' && pr?.failed_check_names.length
+                ? `#${pr.ref.number} · ${pr.failed_check_names.join(', ')}`
+                : phase.detail;
         return {
           lamp: phase.lamp,
           id: workKey(item),
@@ -221,7 +223,13 @@
           reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
           meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
           age: age((!row.mine && r.requested_at) || r.updated_at),
-          more: `${r.source_branch} into ${r.target_branch}${r.ci === 'failure' ? ', checks failed' : ''}`,
+          more: `${r.source_branch} into ${r.target_branch}${
+            r.failed_check_names.length
+              ? `, checks failed: ${r.failed_check_names.join(', ')}`
+              : r.ci === 'failure'
+                ? ', checks failed'
+                : ''
+          }`,
           actions: [
             { key: 'enter', label: 'Open review' },
             ...(row.mine ? [] : [{ key: 's', label: 'Review locally' }]),

@@ -127,6 +127,7 @@ impl GiteaHost {
             source_branch: branch.clone(),
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
             ci: CiState::None,
+            failed_check_names: vec![],
             decision: None,
             decision_head: None,
             requested_at: None,

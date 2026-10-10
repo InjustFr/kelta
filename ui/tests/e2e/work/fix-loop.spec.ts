@@ -66,11 +66,12 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
   expect(sent.threads).toEqual(['PRRT_kwDOA1']);
   expect(sent.prompt).toContain('{file}');
 
-  // Claude is now working: a second send is refused in the sheet, nothing is typed.
+  // Claude is now working: a second send is held until it stops, never refused.
   await fromMenu(page, /Fix with Claude/);
-  await expect(sheet.getByText('Claude is busy; send when it stops.')).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /Send to Claude/ })).toBeDisabled();
-  await page.keyboard.press('Escape');
+  await expect(items).toHaveCount(3);
+  await sheet.getByRole('button', { name: /Send when Claude stops/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByTestId('toasts')).toContainText('it gets your message when it stops.');
   expect(errors).toEqual([]);
 });
 

@@ -1369,7 +1369,7 @@ impl Core {
                     bus::PR_CI_CHANGED,
                     serde_json::json!({ "review": r, "state": r.ci, "previous": p.ci }),
                 )));
-                if r.ci == CiState::Failure {
+                if matches!(r.ci, CiState::Failure | CiState::Error) {
                     self.review_notify(NotifyKind::CiFailedMine, "CI failed", r, project.clone());
                 }
             }
