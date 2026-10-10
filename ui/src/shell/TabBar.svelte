@@ -332,22 +332,14 @@
     inset: -2px;
   }
 
-  /* Plain tabs show the close button only on hover or focus, so their label is not padded by an
-     empty slot; the active tab always shows it. */
+  /* Plain tabs show the close button only on hover or focus, but its slot is always reserved so the
+     tab never changes width under the pointer; the active tab always shows it. */
   .tab:not(.active) .close {
-    display: none;
+    visibility: hidden;
   }
 
   .tab:not(.active):is(:hover, :focus-within) .close {
-    display: inline-flex;
-  }
-
-  .tab:not(.active) {
-    padding-right: var(--k-space-4);
-  }
-
-  .tab:not(.active):is(:hover, :focus-within) {
-    padding-right: 6px;
+    visibility: visible;
   }
 
   .close:hover {
