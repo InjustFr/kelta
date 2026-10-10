@@ -651,7 +651,7 @@ pub struct ClaudeSettings {
     pub extra_hooks: BTreeMap<String, serde_json::Value>,
     pub profiles: BTreeMap<String, ClaudeProfile>,
     pub prompt_templates: BTreeMap<String, String>,
-    /// v0.2; ignored in v0.1.
+    /// Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
     pub ide_bridge: bool,
 }
 

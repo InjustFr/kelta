@@ -13,17 +13,18 @@ use kelta_proto::codehost::{PrDraft, ReviewKind};
 use kelta_proto::events::Notification;
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::SessionId;
-use kelta_proto::model::{EditorTarget, Scope, WorkItem};
+use kelta_proto::model::{EditorTarget, Lifecycle, Scope, SessionKind, WorkItem};
 use kelta_proto::tracker::{TicketRef, Transition};
 use serde_json::{Value, json};
 
 /// Protocol revisions we speak, newest first.
 pub(crate) const PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
-const PARSE_ERROR: i64 = -32700;
+pub(crate) const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
-const METHOD_NOT_FOUND: i64 = -32601;
-const INVALID_PARAMS: i64 = -32602;
+pub(crate) const METHOD_NOT_FOUND: i64 = -32601;
+pub(crate) const INVALID_PARAMS: i64 = -32602;
+pub(crate) const INTERNAL_ERROR: i64 = -32603;
 
 const NO_TICKET: &str = "no ticket linked";
 
@@ -61,11 +62,11 @@ pub(crate) async fn handle_body(core: &Arc<dyn CoreApi>, sid: &SessionId, body: 
     }
 }
 
-fn error(id: Value, code: i64, message: &str) -> Value {
+pub(crate) fn error(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-fn result(id: Value, result: Value) -> Value {
+pub(crate) fn result(id: Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
@@ -359,12 +360,21 @@ async fn open_in_editor(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) 
             None => return Err("relative path but the session is unknown; pass an absolute path".to_owned()),
         }
     };
-    let target = match session.and_then(|s| s.work_item_id) {
-        Some(id) => EditorTarget::WorkItem { id },
-        None => EditorTarget::Session { id: sid.clone() },
-    };
-    core.editor_open(target, Path::new(&path), line).await.map_err(|e| e.message)?;
+    core.editor_open(editor_target(core, sid), Path::new(&path), line).await.map_err(|e| e.message)?;
     Ok(format!("Opened {}{}.", path.display(), line.map(|l| format!(":{l}")).unwrap_or_default()))
+}
+
+/// Editor pane of a Claude session: its work item's, else a live editor session of its project.
+pub(crate) fn editor_target(core: &Arc<dyn CoreApi>, sid: &SessionId) -> EditorTarget {
+    let Some(s) = core.session_get(sid) else { return EditorTarget::Session { id: sid.clone() } };
+    if let Some(id) = s.work_item_id {
+        return EditorTarget::WorkItem { id };
+    }
+    let editor = core
+        .session_list(Some(&s.project_id))
+        .into_iter()
+        .find(|e| matches!(e.kind, SessionKind::Editor { .. }) && e.lifecycle == Lifecycle::Live);
+    EditorTarget::Session { id: editor.map_or_else(|| sid.clone(), |e| e.id) }
 }
 
 async fn create_pr(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> ToolResult {

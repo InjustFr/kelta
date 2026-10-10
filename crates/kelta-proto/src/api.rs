@@ -229,6 +229,15 @@ pub trait CoreApi: Send + Sync {
         path: &Path,
         line: Option<u32>,
     ) -> Result<(), KeltaError>;
+    /// Claude IDE bridge `openDiff`: `old` next to `proposed` in the editor (nvim RPC only);
+    /// `close` closes that diff again.
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError>;
     // tools / plugins / bus / ui
     async fn tool_open(
         &self,
