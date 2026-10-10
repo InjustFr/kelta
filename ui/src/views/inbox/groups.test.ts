@@ -47,6 +47,7 @@ const ticket = (key: string, category: TicketItem['ticket']['status']['category'
   },
   project_ids: ['shop'],
   work_item_id: null,
+  view_ids: [],
 });
 
 const empty: NowInput = { work: [], sessions: [], requested: [], authored: [], tickets: [] };

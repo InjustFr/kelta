@@ -3,7 +3,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, TicketItem, TicketsMode } from '$lib/gen';
+  import type { Column, ProjectId, TicketItem, TicketsMode } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
   import { layout, projects, tickets, toasts, work } from '$lib/stores';
@@ -179,7 +179,13 @@
   // ---- actions ------------------------------------------------------------------------------
   let root = $state<HTMLDivElement>();
   let filterInput = $state<HTMLInputElement>();
-  let menu = $state<{ x: number; y: number; item: TicketItem; columns: Column[] } | null>(null);
+  let menu = $state<{
+    x: number;
+    y: number;
+    item: TicketItem;
+    columns: Column[];
+    projectId: ProjectId;
+  } | null>(null);
   let commenting = $state<TicketItem | null>(null);
 
   function refresh(): void {
@@ -218,7 +224,7 @@
     }
     const el = rowEl(keyOf(item));
     const r = (el ?? root)?.getBoundingClientRect();
-    menu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, columns: cols };
+    menu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, columns: cols, projectId: pid };
   }
 
   const menuItems = $derived<MenuItem[]>(
@@ -234,7 +240,7 @@
   function menuSelect(id: string): void {
     const m = menu;
     const col = m?.columns.find((c) => c.id === id);
-    if (m && col) void move.moveToColumn(m.item.ticket, col);
+    if (m && col) void move.moveToColumn(m.item.ticket, col, m.projectId);
   }
 
   function shiftLane(delta: number): void {
@@ -242,7 +248,7 @@
     const at = columns.findIndex((c) => c.id === columnFor(columns, cur.ticket.status)?.id);
     if (at < 0) return;
     const target = columns[at + delta];
-    if (target) void move.moveToColumn(cur.ticket, target);
+    if (target) void move.moveToColumn(cur.ticket, target, projectIdForColumns);
   }
 
   function onkeydown(e: KeyboardEvent): void {
@@ -344,7 +350,7 @@
     const item = items.find((i) => keyOf(i) === key);
     if (!item || !column) return;
     if (columnFor(columns, item.ticket.status)?.id === column.id) return;
-    void move.moveToColumn(item.ticket, column);
+    void move.moveToColumn(item.ticket, column, projectIdForColumns);
   }
 
   const workOf = (item: TicketItem) =>

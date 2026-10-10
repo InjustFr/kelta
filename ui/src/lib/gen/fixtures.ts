@@ -489,6 +489,9 @@ export const ticketPage: TicketPage = {
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://acme.atlassian.net/browse/SHOP-142"
       },
+      "view_ids": [
+        "mine"
+      ],
       "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
     }
   ],

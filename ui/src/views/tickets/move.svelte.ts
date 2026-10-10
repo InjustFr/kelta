@@ -1,7 +1,7 @@
 // Ticket moves (SPEC §3.4): optimistic board move with rollback, ambiguous-transition picker,
 // NeedsFields form and the "no transition" toast.
 
-import type { Column, JsonValue, Ticket, Transition } from '$lib/gen';
+import type { Column, JsonValue, ProjectId, Ticket, Transition } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { tickets, toasts } from '$lib/stores';
@@ -27,12 +27,12 @@ export class MoveController {
     this.dialog = null;
   }
 
-  /** Board/list move to a column: optimistic, rolled back by the store on any error. */
-  async moveToColumn(ticket: Ticket, column: Column): Promise<boolean> {
+  /** Board/list move to a column of `projectId`'s board: optimistic, rolled back by the store on any error. */
+  async moveToColumn(ticket: Ticket, column: Column, projectId: ProjectId | null = null): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     try {
-      await tickets.move(ticket, column);
+      await tickets.move(ticket, column, projectId);
       return true;
     } catch (err) {
       await this.#handle(err, ticket, column.name, column.category, null);

@@ -738,17 +738,27 @@ export function createMockTransport(options: MockOptions = {}): {
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope, view_id, cursor, who }) => {
-      const items = state.tickets.filter(
-        (t) =>
-          (scope.kind === 'all' || t.project_ids.includes(scope.id)) &&
-          (who === 'mine'
-            ? t.ticket.assignee?.id === ME.id
-            : who === 'unassigned'
-              ? !t.ticket.assignee
-              : true),
-      );
+      // the view the core would query for this ticket's project (`view_id`, else the first)
+      const viewOf = (t: TicketItem) => {
+        const pid = scope.kind === 'all' ? t.project_ids[0] : scope.id;
+        const views = state.projects.find((p) => p.id === pid)?.tracker?.views ?? [];
+        return views.find((v) => v.id === view_id) ?? views[0];
+      };
+      const items = state.tickets
+        .filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))
+        .map((t) => ({ item: t, view: viewOf(t) }))
+        .filter(({ item, view }) => {
+          const w = who ?? view?.who;
+          return w === 'mine'
+            ? item.ticket.assignee?.id === ME.id
+            : w === 'unassigned'
+              ? !item.ticket.assignee
+              : true;
+        })
+        .map(({ item, view }) => ({ ...item, view_ids: view ? [view.id] : [] }));
+      // `view_id` null = the union of the views (WP2), which keeps done tickets
       const filtered =
-        view_id === 'sprint'
+        view_id === 'sprint' || view_id == null
           ? items
           : items.filter((t) => t.ticket.status.category !== 'done' || view_id === 'all');
       const pageSize = 50;

@@ -26,7 +26,8 @@
       "project_hint": "SHOP"
     },
     "project_ids": ["shop"],
-    "work_item_id": "0199a6b2-0000-7000-8000-00000000a001"
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -55,7 +56,8 @@
       "project_hint": "SHOP"
     },
     "project_ids": ["shop"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -79,7 +81,8 @@
       "project_hint": "SHOP"
     },
     "project_ids": ["shop"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -108,7 +111,8 @@
       "project_hint": "SHOP"
     },
     "project_ids": ["shop"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -137,7 +141,8 @@
       "project_hint": "billing"
     },
     "project_ids": ["billing"],
-    "work_item_id": "0199a6b2-0000-7000-8000-00000000a002"
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -166,7 +171,8 @@
       "project_hint": "billing"
     },
     "project_ids": ["billing"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -195,7 +201,8 @@
       "project_hint": "billing"
     },
     "project_ids": ["billing"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -224,7 +231,8 @@
       "project_hint": "ada/kelta-tools"
     },
     "project_ids": ["kelta-tools"],
-    "work_item_id": "0199a6b2-0000-7000-8000-00000000a003"
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -253,7 +261,8 @@
       "project_hint": "ada/kelta-tools"
     },
     "project_ids": ["kelta-tools"],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": ["mine"]
   },
   {
     "ticket": {
@@ -282,7 +291,8 @@
       "project_hint": "ops/infra"
     },
     "project_ids": [],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": []
   },
   {
     "ticket": {
@@ -311,6 +321,7 @@
       "project_hint": "ops/infra"
     },
     "project_ids": [],
-    "work_item_id": null
+    "work_item_id": null,
+    "view_ids": []
   }
 ]

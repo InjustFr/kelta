@@ -343,7 +343,7 @@ describe('mock transport', () => {
   });
 
   it('tracker_list filters by who against the mock user', async () => {
-    const { transport } = createMockTransport();
+    const { transport, controls } = createMockTransport();
     setTransport(transport);
     const keys = async (who?: 'mine' | 'unassigned' | 'anyone') =>
       (await call('tracker_list', { scope: { kind: 'project', id: 'shop' }, refresh: false, who })).items.map(
@@ -355,6 +355,12 @@ describe('mock transport', () => {
     expect(await keys('mine')).not.toContain('SHOP-155');
     expect(await keys('mine')).not.toContain('SHOP-120'); // Bob's
     expect(anyone).toEqual(expect.arrayContaining(['SHOP-120', 'SHOP-155']));
+    // the view's own who applies when the call passes none; items name their view
+    controls.state.projects.find((p) => p.id === 'shop')!.tracker!.views[0]!.who = 'unassigned';
+    expect(await keys()).toEqual(['SHOP-155']);
+    const billing = await call('tracker_list', { scope: { kind: 'project', id: 'billing' }, refresh: false });
+    expect(billing.items.map((i) => i.view_ids)).toEqual([['mine'], ['mine'], ['mine']]);
+    expect(billing.items.map((i) => i.ticket.ref.key)).toContain('4602'); // done kept when view_id is null
   });
 
   it('tracker_sources filters fixture hits; accounts without hits are unsupported', async () => {

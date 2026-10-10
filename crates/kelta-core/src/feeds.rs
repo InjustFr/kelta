@@ -95,14 +95,14 @@ pub fn age_of(ts: &str) -> Duration {
     }
 }
 
-/// Merge pages from several queries: de-dup by ref, union of project ids.
+/// Merge pages from several queries: de-dup by ref, union of project ids and view ids.
 pub fn merge_tickets(
-    pages: Vec<(Vec<Ticket>, Vec<ProjectId>)>,
+    pages: Vec<(Vec<Ticket>, Vec<ProjectId>, String)>,
     work: &HashMap<TicketRef, WorkItemId>,
 ) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
-    for (tickets, projects) in pages {
+    for (tickets, projects, view_id) in pages {
         for t in tickets {
             match index.get(&t.r#ref) {
                 Some(&i) => {
@@ -111,11 +111,19 @@ pub fn merge_tickets(
                             out[i].project_ids.push(p.clone());
                         }
                     }
+                    if !out[i].view_ids.contains(&view_id) {
+                        out[i].view_ids.push(view_id.clone());
+                    }
                 }
                 None => {
                     index.insert(t.r#ref.clone(), out.len());
                     let work_item_id = work.get(&t.r#ref).cloned();
-                    out.push(TicketItem { ticket: t, project_ids: projects.clone(), work_item_id });
+                    out.push(TicketItem {
+                        ticket: t,
+                        project_ids: projects.clone(),
+                        work_item_id,
+                        view_ids: vec![view_id.clone()],
+                    });
                 }
             }
         }
@@ -447,7 +455,7 @@ impl Core {
                 if single {
                     next = p.next.clone();
                 }
-                pages.push((p.items, q.projects.clone()));
+                pages.push((p.items, q.projects.clone(), q.view.id.clone()));
             }
         }
         let work = self.work_by_ticket().await;
@@ -477,8 +485,17 @@ impl Core {
         query: &str,
     ) -> Result<Vec<SourceHit>, KeltaError> {
         self.rt.capture();
-        let r = self.tracker_of(account)?.sources(query).await;
-        self.note_account(account, &r);
+        // the core owns `view.account`: providers leave it None
+        let r = self.tracker_of(account)?.sources(query).await.map(|mut hits| {
+            for h in &mut hits {
+                h.view.account = Some(account.clone());
+            }
+            hits
+        });
+        // `Unsupported` says nothing about the account's health
+        if !matches!(&r, Err(e) if e.code == ErrorCode::Unsupported) {
+            self.note_account(account, &r);
+        }
         r
     }
 
@@ -489,12 +506,16 @@ impl Core {
         r
     }
 
-    /// The project bound to a ticket's account (active first, then open, then any).
+    /// The project whose binding or one of its views uses a ticket's account (active first, then open, then any).
     fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
         let all: Vec<Arc<ProjectConfig>> = self
             .project_configs()
             .into_iter()
-            .filter(|p| p.tracker.as_ref().is_some_and(|b| &b.account == account))
+            .filter(|p| {
+                p.tracker.as_ref().is_some_and(|b| {
+                    &b.account == account || b.views.iter().any(|v| v.account.as_ref() == Some(account))
+                })
+            })
             .collect();
         let active = self.active_project();
         let open = self.open_projects();

@@ -792,6 +792,7 @@ pub fn all() -> Vec<Fixture> {
                     ticket: ticket(),
                     project_ids: vec![ProjectId::new("shop")],
                     work_item_id: Some(WorkItemId::new(WID)),
+                    view_ids: vec!["mine".into()],
                 }],
                 next: Some(Cursor::Token("eyJuZXh0IjoyfQ".into())),
                 stale: false,

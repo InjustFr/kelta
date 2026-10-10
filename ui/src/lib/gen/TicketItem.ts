@@ -7,4 +7,8 @@ export type TicketItem = { ticket: Ticket,
 /**
  * Kelta projects this ticket belongs to (empty = "Other").
  */
-project_ids: Array<ProjectId>, work_item_id: WorkItemId | null, };
+project_ids: Array<ProjectId>, work_item_id: WorkItemId | null, 
+/**
+ * Ids of the binding views (sources) that returned this ticket.
+ */
+view_ids: Array<string>, };

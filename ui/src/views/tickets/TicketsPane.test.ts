@@ -78,6 +78,7 @@ describe('TicketsPane board', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_move').at(-1)?.args).toMatchObject({
       column_id: 'in_progress',
       ticket: { key: 'SHOP-151' },
+      project_id: 'shop',
     });
   });
 

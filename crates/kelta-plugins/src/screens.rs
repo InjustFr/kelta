@@ -256,6 +256,7 @@ impl PluginHost {
                             ticket,
                             project_ids: vec![pid.clone()],
                             work_item_id: None,
+                            view_ids: vec![view.id.clone()],
                         })
                         .collect(),
                     next: page.next,

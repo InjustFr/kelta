@@ -230,16 +230,30 @@ async fn who_override_view_account_and_sources() {
     e.tracker.assign(&t, Assignee::None).await.unwrap();
     let page = e.h.core.tracker_list(shop.clone(), None, Some(Who::Unassigned), None, true).await.unwrap();
     assert_eq!(page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), ["SHOP-142"]);
+    assert_eq!(page.items[0].view_ids, ["mine"]);
     assert_eq!(e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap().items.len(), 3);
-    assert_eq!(e.h.core.tracker_sources(&AccountId::new("jira-acme"), "sh").await.unwrap().len(), 2);
-    // a view's own account wins over the binding's
+    let jira = AccountId::new("jira-acme");
+    let hits = e.h.core.tracker_sources(&jira, "sh").await.unwrap();
+    assert_eq!(hits.len(), 2);
+    assert!(hits.iter().all(|h| h.view.account.as_ref() == Some(&jira)), "the core stamps the account");
+    // a provider without discovery leaves the account status alone
+    e.tracker.fail_next(kelta_proto::KeltaError::unsupported("no sources"));
+    assert_eq!(e.h.core.tracker_sources(&jira, "sh").await.unwrap_err().code, ErrorCode::Unsupported);
+    assert!(!e.h.ui.events().iter().any(|ev| matches!(ev, UiEvent::AccountStatusChanged { .. })));
+    // a view's own account wins over the binding's, and move finds the project through it
     {
         let mut ps = e.h.cfg.projects.write();
         let mut p = (*ps[0]).clone();
-        p.tracker.as_mut().unwrap().views[0].account = Some("github-work".into());
+        let b = p.tracker.as_mut().unwrap();
+        b.account = "github-work".into();
+        b.views[0].account = Some(jira.clone());
         ps[0] = Arc::new(p);
+        let mut blog = (*ps[1]).clone();
+        blog.tracker = None;
+        ps[1] = Arc::new(blog);
     }
-    assert_eq!(e.h.core.ticket_queries(&shop, None, None)[0].account.as_str(), "github-work");
+    assert_eq!(e.h.core.ticket_queries(&shop, None, None)[0].account, jira);
+    e.h.core.tracker_move(&t, "todo", None).await.unwrap();
 }
 
 #[tokio::test]

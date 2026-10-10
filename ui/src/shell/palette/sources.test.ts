@@ -85,6 +85,7 @@ describe('palette sources', () => {
         },
         project_ids: ['shop'],
         work_item_id: null,
+        view_ids: [],
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });

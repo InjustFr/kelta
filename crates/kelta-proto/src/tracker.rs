@@ -205,6 +205,9 @@ pub struct TicketItem {
     pub project_ids: Vec<ProjectId>,
     #[serde(default)]
     pub work_item_id: Option<WorkItemId>,
+    /// Ids of the binding views (sources) that returned this ticket.
+    #[serde(default)]
+    pub view_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
