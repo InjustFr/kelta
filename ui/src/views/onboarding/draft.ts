@@ -89,30 +89,40 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
     scope: null,
     labels: null,
     workflow_scope: null,
-    who: null,
+    who: 'mine',
     current_iteration: false,
     account: null,
   };
+  // who: 'mine' replaces the provider assignee fields (jql clause, assigned_to, scope).
   switch (kind) {
     case 'jira':
       return {
         ...base,
-        jql: hint
-          ? `project = ${hint} AND assignee = currentUser() AND statusCategory != Done`
-          : 'assignee = currentUser() AND statusCategory != Done',
+        jql: hint ? `project = ${hint} AND statusCategory != Done` : 'statusCategory != Done',
       };
     case 'redmine':
-      return { ...base, project_id: hint, assigned_to: 'me' };
+      return { ...base, project_id: hint };
     case 'github':
       return { ...base, repo: hint };
     case 'gitlab':
     case 'gitea':
-      return { ...base, project: hint, scope: 'assigned_to_me' };
+      return { ...base, project: hint };
     case 'linear':
-      return { ...base, team: hint, scope: 'assigned_to_me' };
+      return { ...base, team: hint };
     default:
       return base;
   }
+}
+
+/** A binding with no source yet. */
+export function emptyBinding(account: string): TrackerBinding {
+  return {
+    account,
+    views: [],
+    columns: [],
+    status_map: { start: null, review: null, done: null },
+    repo_rules: [],
+  };
 }
 
 export function bindTracker(
@@ -120,13 +130,7 @@ export function bindTracker(
   kind: AccountKind | string,
   hint: string | null,
 ): TrackerBinding {
-  return {
-    account,
-    views: [defaultView(kind, hint)],
-    columns: [],
-    status_map: { start: null, review: null, done: null },
-    repo_rules: [],
-  };
+  return { ...emptyBinding(account), views: [defaultView(kind, hint)] };
 }
 
 /** Default project colours (DESIGN §6.12): stored hex = light value; the chip shows `--k-swatch-<name>`. */

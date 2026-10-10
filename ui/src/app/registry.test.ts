@@ -42,6 +42,7 @@ describe('registries', { timeout: 30_000 }, () => {
         'ship',
         'start_work',
         'tool_picker',
+        'tracker.source_picker',
         'work_dialog',
         'work_new',
       ].sort(),

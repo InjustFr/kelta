@@ -1,6 +1,6 @@
 <script lang="ts">
   // Projects: create from a folder, rename / recolour, remove (the config file moves to
-  // projects/.trash/), plus the environment variables of the layer being edited.
+  // projects/.trash/), their ticket sources, plus the environment variables of the layer being edited.
   import type { SettingsSectionProps } from '$app/registry';
   import type { ProjectInfo } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -14,6 +14,7 @@
 
   import ColorPicker from '../../onboarding/ColorPicker.svelte';
   import SectionForm from '../SectionForm.svelte';
+  import TrackerSources from '../TrackerSources.svelte';
 
   let props: SettingsSectionProps = $props();
 
@@ -123,6 +124,7 @@
         {/each}
       </ul>
     {/if}
+    <TrackerSources projectId={props.projectId} />
     <h3 class="env">Environment</h3>
   {/snippet}
 </SectionForm>
