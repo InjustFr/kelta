@@ -88,7 +88,15 @@ impl GiteaHost {
             let Some(req) = next.take() else { break };
             let resp = self.json(req).await?;
             out.extend(resp.body.as_array().cloned().unwrap_or_default());
-            next = link_rel(&resp.headers, "next").map(HttpRequest::get);
+            // The token rides on every page, and Gitea builds `next` from its ROOT_URL (often another
+            // origin behind a proxy): keep only the part after `/api/v1/` and fetch it from our own API.
+            next = link_rel(&resp.headers, "next").and_then(|u| match u.find("/api/v1/") {
+                Some(i) => Some(HttpRequest::get(format!("{}{}", self.api, &u[i + "/api/v1".len()..]))),
+                None => {
+                    tracing::warn!("gitea: dropped a next page link outside /api/v1/");
+                    None
+                }
+            });
         }
         Ok(out)
     }

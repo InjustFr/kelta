@@ -114,6 +114,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         secrets::secret_unlock,
         secrets::oauth_device_start,
         secrets::oauth_device_finish,
+        secrets::oauth_device_cancel,
         settings::account_test,
         // projects
         project::project_list,

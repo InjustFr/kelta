@@ -93,7 +93,9 @@ impl BitbucketHost {
             let Some(req) = next.take() else { break };
             let body = self.json(req).await?.body;
             out.extend(body.get("values").and_then(Value::as_array).cloned().unwrap_or_default());
-            next = s(&body, "next").map(HttpRequest::get);
+            // The token rides on every page: never follow a `next` that leaves the API origin.
+            next =
+                s(&body, "next").filter(|u| u.starts_with(&format!("{}/", self.api))).map(HttpRequest::get);
         }
         Ok(out)
     }

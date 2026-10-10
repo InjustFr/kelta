@@ -105,13 +105,15 @@ async fn gitlab_device_flow_stores_refresh_token_and_expiry() {
     let server = MockServer::start().await;
     mount_device(&server, "/oauth/authorize_device").await;
     answer(&server, "/oauth/token", 400, json!({"error": "authorization_pending"})).await;
-    // a deploy's 502 page mid-poll does not end the sign-in
-    Mock::given(path("/oauth/token"))
-        .respond_with(ResponseTemplate::new(502).set_body_string("<html>502 Bad Gateway</html>"))
-        .up_to_n_times(1)
-        .expect(1)
-        .mount(&server)
-        .await;
+    // a deploy's 502 page or a CDN's 429 page mid-poll does not end the sign-in
+    for status in [502, 429] {
+        Mock::given(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(status).set_body_string("<html>try later</html>"))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
     answer(
         &server,
         "/oauth/token",
@@ -144,6 +146,22 @@ async fn expired_and_denied_end_the_flow() {
         assert_eq!(e.code, code, "{error}");
         assert!(secrets.resolve(&SecretRef::new("keyring:gl"), &SecretCtx::default()).await.is_err());
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_non_json_4xx_from_the_token_url_ends_the_flow_at_once() {
+    let server = MockServer::start().await;
+    mount_device(&server, "/oauth/authorize_device").await;
+    Mock::given(path("/oauth/token"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("<html>Not Found</html>"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let http = client();
+    let auth = device_start(&http, AccountKind::Gitlab, &server.uri(), "cid").await.unwrap();
+    let e =
+        device_finish(&http, &*FakeSecrets::new(), &SecretRef::new("keyring:gl"), auth).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "{}", e.message);
 }
 
 #[tokio::test(start_paused = true)]
@@ -214,6 +232,27 @@ async fn expiring_token_is_refreshed_before_use() {
             .unwrap();
     assert_eq!(g["refresh_token"], "REFRESH_NEW");
     assert_no_secret(&log.contents());
+}
+
+#[tokio::test]
+async fn refresh_keeps_the_rotated_refresh_token_when_the_token_copy_cannot_be_written() {
+    let server = MockServer::start().await;
+    Mock::given(path("/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": "glpat_NEW", "refresh_token": "REFRESH_NEW", "expires_in": 7200
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let secrets =
+        FakeSecrets::with(&[("keyring:gl", "glpat_OLD"), ("keyring:gl.oauth", &grant(&server, -10))]);
+    secrets.fail_set("keyring:gl");
+    let a = oauth_authed(&server, secrets.clone());
+    assert!(a.prepare(HttpRequest::get("http://h/")).await.is_err());
+    assert!(stored(&secrets, "keyring:gl.oauth").await.contains("REFRESH_NEW"));
+    // the grant alone carries the new token: no second refresh (expect(1) above)
+    let req = a.prepare(HttpRequest::get("http://h/")).await.unwrap();
+    assert!(req.headers.contains(&("Authorization".to_owned(), "Bearer glpat_NEW".to_owned())));
 }
 
 #[tokio::test]

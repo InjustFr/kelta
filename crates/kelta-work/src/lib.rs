@@ -400,15 +400,17 @@ impl WorkService {
         Ok(item)
     }
 
-    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`) are
-    /// never written here: `item` takes the stored ones, so a long operation's final save cannot
-    /// undo a hook that arrived while it ran (FLOW §2.3). Only [`Self::update`] writes them.
+    /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`, a
+    /// stored `claude_uuid`) are never written here: `item` takes the stored ones, so a long
+    /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
+    /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
         {
             let _w = self.write_lock.lock().await;
             if let Some(cur) = self.store.get_item(&item.id).await? {
                 item.review_due = cur.review_due;
                 item.claude_replied = cur.claude_replied;
+                item.claude_uuid = cur.claude_uuid.or(item.claude_uuid.take());
                 item.claude_at = cur.claude_at;
             }
             self.store.put_item(item).await?;
@@ -510,5 +512,28 @@ mod tests {
         assert!(w.list(None).await.unwrap().is_empty());
         let e = w.resume(&WorkItemId::new("nope")).await.unwrap_err();
         assert_eq!(e.code, kelta_proto::ErrorCode::NotFound);
+    }
+
+    #[tokio::test]
+    async fn save_keeps_a_claude_uuid_written_by_a_hook_meanwhile() {
+        let core = FakeCore::new();
+        let weak: Weak<dyn CoreApi> = Arc::downgrade(&(core.clone() as Arc<dyn CoreApi>));
+        let store = Arc::new(MemWorkStore::new());
+        let w = WorkService::new(weak, store.clone(), Dirs::under(&std::env::temp_dir()));
+        let mut stale = kelta_proto::samples::work_item();
+        stale.claude_uuid = None;
+        w.save(&mut stale).await.unwrap();
+        stale.claude_uuid = Some("first".into());
+        w.save(&mut stale).await.unwrap();
+        assert_eq!(stale.claude_uuid.as_deref(), Some("first"), "set while none is stored");
+        w.update(&stale.id, |i| {
+            i.claude_uuid = Some("after-clear".into());
+            true
+        })
+        .await
+        .unwrap();
+        w.save(&mut stale).await.unwrap();
+        let cur = store.get_item(&stale.id).await.unwrap().unwrap();
+        assert_eq!(cur.claude_uuid.as_deref(), Some("after-clear"));
     }
 }

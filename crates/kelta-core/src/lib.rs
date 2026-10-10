@@ -178,6 +178,8 @@ pub struct Core {
     pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
     /// Device-flow sign-ins between start and finish, by user code.
     pub(crate) oauth: Mutex<std::collections::HashMap<String, oauth::Pending>>,
+    /// Device-flow sign-ins being polled, by user code; `oauth_device_cancel` notifies.
+    pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -326,6 +328,7 @@ impl Core {
                 last_reload: Mutex::new(None),
                 claude_ver: Mutex::new(None),
                 oauth: Mutex::default(),
+                oauth_polling: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,

@@ -129,15 +129,36 @@ pub fn copy_includes(
     }
     let set = build_set(patterns)?;
     let mut copied = Vec::new();
-    for c in candidates {
+    let mut todo = candidates.to_vec();
+    while let Some(c) = todo.pop() {
         let rel = c.trim_end_matches('/');
-        if rel.is_empty() || !set.is_match(rel) {
+        if rel.is_empty() {
             continue;
         }
-        let src = repo.join(rel);
-        let dst = worktree.join(rel);
-        copy_tree(&src, &dst, &mut copied, rel)?;
+        if set.is_match(rel) {
+            copy_tree(&repo.join(rel), &worktree.join(rel), &mut copied, rel)?;
+        } else if c.ends_with('/') {
+            // git collapsed a fully untracked/ignored dir: a basename pattern may match inside it
+            // shortcut: walks every other unmatched ignored dir, upgrade to a git pathspec listing if starts get slow
+            let dir = repo.join(rel);
+            // gone or unreadable since git listed it: nothing to copy from there
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for entry in entries {
+                let entry = entry.map_err(|e| io_err(&dir, e))?;
+                let ft = entry.file_type().map_err(|e| io_err(&dir, e))?;
+                let name = entry.file_name();
+                // dependency/build dirs: a stray partial copy would fool `[ -d node_modules ] || npm install`
+                if ft.is_dir() && matches!(name.to_str(), Some("node_modules" | "target" | ".git")) {
+                    continue;
+                }
+                if !ft.is_symlink() {
+                    let slash = if ft.is_dir() { "/" } else { "" };
+                    todo.push(format!("{rel}/{}{slash}", name.to_string_lossy()));
+                }
+            }
+        }
     }
+    copied.sort();
     Ok(copied)
 }
 
@@ -258,6 +279,8 @@ mod tests {
         std::fs::write(repo.join(".env"), "A=1").unwrap();
         std::fs::write(repo.join(".env.local"), "B=1").unwrap();
         std::fs::write(repo.join("sub/.env"), "C=1").unwrap();
+        std::fs::create_dir_all(repo.join("sub/node_modules/pkg")).unwrap();
+        std::fs::write(repo.join("sub/node_modules/pkg/.env.example"), "D=1").unwrap();
         std::fs::write(repo.join("other.txt"), "x").unwrap();
         std::fs::write(repo.join(".worktreeinclude"), "# c\nother.txt\n").unwrap();
         let pats = include_patterns(&repo, &[".env".into(), ".env.*".into()]);
@@ -267,9 +290,14 @@ mod tests {
             .map(|s| (*s).to_owned())
             .collect();
         let copied = copy_includes(&repo, &wt, &cands, &[".env".into(), ".env.*".into()]).unwrap();
-        assert_eq!(copied, vec![".env", ".env.local"]);
+        assert_eq!(
+            copied,
+            vec![".env", ".env.local", "sub/.env"],
+            "basename patterns match inside collapsed dirs"
+        );
         assert!(wt.join(".env").exists());
         assert!(!wt.join("other.txt").exists());
+        assert!(!wt.join("sub/node_modules").exists(), "dependency dirs are never walked");
         // Never overwrites.
         std::fs::write(wt.join(".env"), "mine").unwrap();
         copy_includes(&repo, &wt, &cands, &pats).unwrap();

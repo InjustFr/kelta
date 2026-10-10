@@ -2,8 +2,9 @@
 //! expiring tokens (SETTINGS §5). Tokens go straight to the secret backend: never logged, never
 //! returned. Only the user code and the verification URL leave this module.
 //!
-//! An OAuth account (`auth = "oauth"`) keeps its access token at its `secret` ref and, next to it
-//! at `<secret>.oauth`, a JSON [`Grant`]: client id, token URL, refresh token and expiry.
+//! An OAuth account (`auth = "oauth"`) keeps, at `<secret>.oauth`, a JSON [`Grant`]: client id,
+//! token URL, access token, refresh token and expiry, written as one entry so a rotated refresh
+//! token is never stored apart from its access token. A copy of the access token sits at `secret`.
 
 use std::time::Duration;
 
@@ -61,6 +62,9 @@ pub struct DeviceAuth {
 struct Grant {
     client_id: String,
     token_url: String,
+    /// `None` in grants written before it moved here: the token is then read from `secret`.
+    #[serde(default)]
+    access_token: Option<String>,
     refresh_token: Option<String>,
     /// Unix seconds; `None` = does not expire (GitHub OAuth Apps).
     expires_at: Option<i64>,
@@ -123,10 +127,14 @@ async fn post_form<T: DeserializeOwned>(
     let status = res.status().as_u16();
     let body = res.bytes().await.map_err(map_reqwest_error)?;
     serde_json::from_slice(&body).map_err(|_| {
-        KeltaError::upstream(format!(
-            "unexpected answer from {} (HTTP {status})",
-            kelta_proto::redact::redact_url(url)
-        ))
+        let msg = format!("unexpected answer from {} (HTTP {status})", kelta_proto::redact::redact_url(url));
+        // a 5xx, timeout or rate-limit page is transient (Upstream keeps the device flow polling);
+        // another non-JSON 4xx (wrong server URL, a proxy login page) will not get better
+        if status >= 500 || matches!(status, 408 | 429) {
+            KeltaError::upstream(msg)
+        } else {
+            KeltaError::invalid(format!("{msg}: check the server URL"))
+        }
     })
 }
 
@@ -175,7 +183,13 @@ pub async fn device_start(
         expires_in: r.expires_in.unwrap_or(900),
         device_code: Secret::new(device_code),
         interval: r.interval.unwrap_or(5).max(1),
-        grant: Grant { client_id: client_id.to_owned(), token_url, refresh_token: None, expires_at: None },
+        grant: Grant {
+            client_id: client_id.to_owned(),
+            token_url,
+            access_token: None,
+            refresh_token: None,
+            expires_at: None,
+        },
     })
 }
 
@@ -202,7 +216,7 @@ pub async fn device_finish(
         ];
         let r: Resp = match post_form(http, &auth.grant.token_url, &form).await {
             Ok(r) => r,
-            // RFC 8628 §3.5: keep polling through transient failures; Upstream = a non-JSON body (a 5xx page)
+            // RFC 8628 §3.5: keep polling through transient failures; Upstream = a non-JSON 5xx page
             Err(e) if matches!(e.code, ErrorCode::Network | ErrorCode::Timeout | ErrorCode::Upstream) => {
                 continue;
             }
@@ -222,7 +236,8 @@ pub async fn device_finish(
     }
 }
 
-/// Write the access token at `secret` and the grant next to it. Returns the access token.
+/// Write the grant (access + refresh token in one entry), then the access token copy at `secret`.
+/// Returns the access token.
 async fn store(
     secrets: &dyn SecretResolver,
     secret: &SecretRef,
@@ -239,9 +254,10 @@ async fn store(
         grant.refresh_token = r.refresh_token;
     }
     grant.expires_at = r.expires_in.map(|s| now_unix() + s as i64);
-    secrets.set(secret, access.expose()).await?;
+    grant.access_token = Some(access.expose().to_owned());
     let blob = Secret::new(serde_json::to_string(&grant).map_err(|e| KeltaError::internal(e.to_string()))?);
     secrets.set(&grant_ref(secret), blob.expose()).await?;
+    secrets.set(secret, access.expose()).await?;
     tracing::info!(refresh = grant.refresh_token.is_some(), "oauth tokens stored");
     Ok(access)
 }
@@ -251,22 +267,24 @@ async fn read_grant(secrets: &dyn SecretResolver, secret: &SecretRef, ctx: &Secr
     serde_json::from_str(blob.expose()).ok()
 }
 
-/// For an OAuth secret: a refreshed access token when the stored one expires within a minute,
-/// `None` when it is still good (or has no grant, e.g. a token stored by hand). A failed refresh
-/// is `NeedsAuth`.
+/// For an OAuth secret: the grant's access token, refreshed first when it expires within a minute.
+/// `None` when the grant holds no token (no grant, e.g. a token stored by hand, or an older grant):
+/// the caller then reads `secret`. A failed refresh is `NeedsAuth`.
 pub async fn refreshed(
     http: &HttpClient,
     secrets: &dyn SecretResolver,
     secret: &SecretRef,
     ctx: &SecretCtx,
 ) -> Result<Option<Secret>, KeltaError> {
-    if !read_grant(secrets, secret, ctx).await.is_some_and(|g| g.expiring()) {
-        return Ok(None);
+    match read_grant(secrets, secret, ctx).await {
+        Some(g) if g.expiring() => {}
+        g => return Ok(g.and_then(|g| g.access_token).map(Secret::new)),
     }
     let _one_at_a_time = REFRESH.lock().await;
     // another request may have refreshed while this one waited
-    let Some(grant) = read_grant(secrets, secret, ctx).await.filter(Grant::expiring) else {
-        return Ok(None);
+    let grant = match read_grant(secrets, secret, ctx).await {
+        Some(g) if g.expiring() => g,
+        g => return Ok(g.and_then(|g| g.access_token).map(Secret::new)),
     };
     let Some(refresh_token) = grant.refresh_token.as_deref() else {
         return Err(sign_in_again("the OAuth token expired"));
