@@ -240,7 +240,7 @@ describe('return strip', () => {
     mountHeader(w);
     const strip = await screen.findByTestId('return-brief');
     expect(strip.textContent).toContain('next: check the retry path against staging');
-    expect(strip.textContent).toMatch(/\+1890\/−122 since you\s+reviewed/);
+    expect(strip.textContent).toMatch(/\+1890\/−122 since\s+you\s+reviewed/);
     expect(strip.textContent).toContain('Added the retry wrapper');
     await fireEvent.keyDown(strip, { key: 'v' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));

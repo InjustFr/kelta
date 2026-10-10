@@ -335,11 +335,13 @@ pub async fn dirty_files(worktree: &Path) -> Result<Vec<String>, KeltaError> {
 /// points `refname` at it. HEAD, the index and the stash are untouched: `add -A` runs on a copy of
 /// the index (`GIT_INDEX_FILE`), so only changed files are hashed.
 pub async fn snapshot(worktree: &Path, refname: &str) -> Result<String, KeltaError> {
-    let git_path = |name: &'static str| async move {
-        let out = run_ok(worktree, &["rev-parse", "--git-path", name], LOCAL_TIMEOUT).await?;
+    let git_path = |name: String| async move {
+        let out = run_ok(worktree, &["rev-parse", "--git-path", &name], LOCAL_TIMEOUT).await?;
         Ok::<_, KeltaError>(worktree.join(out.stdout.trim()))
     };
-    let (index, tmp) = (git_path("index").await?, git_path("kelta-snapshot.index").await?);
+    // A unique name: a Stop and a Mark reviewed may snapshot the same worktree at once.
+    let tmp_name = format!("kelta-snapshot-{}.index", uuid::Uuid::new_v4().simple());
+    let (index, tmp) = (git_path("index".into()).await?, git_path(tmp_name).await?);
     match std::fs::copy(&index, &tmp) {
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
