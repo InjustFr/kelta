@@ -27,6 +27,7 @@ pub mod rt;
 pub mod scheduler;
 pub mod sessions;
 pub mod spawn_env;
+mod start;
 pub mod status;
 pub mod store;
 pub mod templates;

@@ -231,7 +231,7 @@
         if (item) mergeWhenReady(item);
         break;
       case 's':
-        if (item) void reviewLocally(item.review.ref, item.project_ids[0] ?? projectId);
+        if (item) void reviewLocally(item.review.ref, item.project_ids[0]);
         break;
       case 'n':
         if (item) openNudge(item);

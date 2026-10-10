@@ -1003,7 +1003,19 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     // ---- work ------------------------------------------------------------------------------
-    work_plan: ({ project_id, source }) => {
+    work_plan: ({ project_id: asked, source }) => {
+      // Simplified SPEC §3.1: the existing item's project, else the caller's, else the active one (a guess).
+      const choices = state.projects.filter((x) => x.open && x.id !== 'home' && x.repos.length > 0);
+      const ref = source.kind === 'ticket' ? source.ticket : null;
+      const owner = ref
+        ? state.work.find((w) => w.ticket && sameRef(w.ticket, ref) && w.state.kind !== 'finished')
+        : undefined;
+      const guessed = source.kind === 'ticket' && !owner && asked === null;
+      const project_id =
+        owner?.project_id ??
+        asked ??
+        (choices.find((x) => x.active) ?? choices[0] ?? state.projects[0])?.id ??
+        'home';
       const p = project(project_id);
       const plan = clone(samples.startWorkPlan);
       const repo = p.repos.find((r) => r.primary) ?? p.repos[0];
@@ -1049,6 +1061,8 @@ export function createMockTransport(options: MockOptions = {}): {
         source,
         repo_id: existing?.repo_id ?? repoPick?.id ?? plan.repo_id,
         repo_choices: p.repos.map((r) => r.id),
+        project_choices: source.kind === 'branch' ? [] : choices.map((x) => x.id),
+        project_guessed: guessed,
         // An existing item shows its own branch and worktree, not a new plan's (B5).
         branch: existing?.branch ?? branch,
         worktree_path:

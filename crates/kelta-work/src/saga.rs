@@ -227,6 +227,14 @@ impl WorkService {
         project_id: &ProjectId,
         source: WorkSource,
     ) -> Result<StartWorkPlan, KeltaError> {
+        // A ticket or PR has one work item across projects: resume it where it lives. Branch sources
+        // stay per project, the same `wip/` name can exist in two repos.
+        if !matches!(source, WorkSource::Branch { .. }) {
+            let all = self.store.list_items(None).await?;
+            if let Some(w) = plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id) {
+                return Box::pin(self.build_plan(&w.project_id, source)).await;
+            }
+        }
         let core = self.api()?;
         let project = project_of(&core, project_id)?;
         if project.repos.is_empty() {
@@ -306,10 +314,10 @@ impl WorkService {
                     .repos
                     .iter()
                     .find(|x| x.code_host.as_ref().is_some_and(|c| c.repo == review.repo))
-                    .or_else(|| project.repos.iter().find(|x| x.primary))
-                    .or_else(|| project.repos.first())
                     .cloned()
-                    .ok_or_else(|| KeltaError::invalid("no repository"))?;
+                    .ok_or_else(|| {
+                        KeltaError::invalid(format!("{} has no repository {}", project.name, review.repo))
+                    })?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
                 plan::add_review(&mut ctx, &r);
                 ctx.set("key", "review");

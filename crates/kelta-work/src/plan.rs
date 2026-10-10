@@ -293,6 +293,8 @@ pub fn assemble(
         source,
         repo_id: repo.id.clone(),
         repo_choices: project.repos.iter().map(|r| r.id.clone()).collect(),
+        project_choices: Vec::new(),
+        project_guessed: false,
         base,
         branch,
         branch_exists,

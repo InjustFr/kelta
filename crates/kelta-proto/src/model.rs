@@ -889,6 +889,12 @@ pub struct StartWorkPlan {
     pub repo_id: String,
     /// Repos the user may pick from (picker shown when > 1).
     pub repo_choices: Vec<String>,
+    /// Projects the user may pick from (picker shown when > 1), filled by `Core::work_plan`.
+    #[serde(default)]
+    pub project_choices: Vec<ProjectId>,
+    /// `project_id` is only the active project: the sheet always shows so the user confirms it.
+    #[serde(default)]
+    pub project_guessed: bool,
     pub base: String,
     pub branch: String,
     pub branch_exists: Option<BranchExists>,

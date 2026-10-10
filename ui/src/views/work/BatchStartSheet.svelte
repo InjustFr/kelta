@@ -7,9 +7,9 @@
   import { settings, toasts, work } from '$lib/stores';
   import { Button, Select, Sheet, TextInput } from '$lib/ui';
 
+  import { railProjects } from '../../shell/nav';
   import { withCriteria } from '../tickets/refine.svelte';
   import { batch, claudeSlots, startsNow } from './batch.svelte';
-  import { projectForTicket } from './startWork';
 
   let { onclose }: SheetProps = $props();
 
@@ -22,6 +22,14 @@
   );
   let model = $state(profile?.model ?? 'opus');
   let effort = $state<ClaudeEffort>(profile?.effort ?? 'high');
+  // '' = each ticket in its usual project (SPEC §3.1); a guessed one is skipped.
+  let forced = $state('');
+  const projectOptions = [
+    { value: '', label: 'Usual project for each ticket' },
+    ...railProjects()
+      .filter((p) => p.repos.length > 0)
+      .map((p) => ({ value: p.id, label: p.name })),
+  ];
 
   const slots = $derived(claudeSlots());
   const now = $derived(startsNow(marked.length, slots.live, slots.max));
@@ -40,13 +48,16 @@
     let started = 0;
     let queued = 0;
     for (const m of marked) {
-      const pid = m.projectId ?? projectForTicket(m.ref);
-      if (!pid) {
-        toasts.warn(`${m.ref.key}: not bound to a project`);
-        continue;
-      }
       try {
-        const plan = await workPlan({ project_id: pid, source: { kind: 'ticket', ticket: m.ref } });
+        const plan = await workPlan({
+          project_id: forced || m.projectId,
+          // a plain copy: the marks are $state proxies, which the mock IPC cannot clone
+          source: { kind: 'ticket', ticket: { ...m.ref } },
+        });
+        if (!forced && plan.project_guessed) {
+          toasts.warn(`${m.ref.key} has no usual project: start it with s`);
+          continue;
+        }
         if (plan.existing) {
           toasts.info(`${m.ref.key} already has a work item`);
           continue;
@@ -82,6 +93,7 @@
     }}
   >
     <p class="keys">{marked.map((m) => m.ref.key).join(', ')}</p>
+    <Select label="Project" bind:value={forced} options={projectOptions} />
     <Select
       label="Template"
       bind:value={template}

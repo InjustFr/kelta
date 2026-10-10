@@ -738,7 +738,7 @@ impl Core {
     }
 
     /// The project whose binding or one of its views uses a ticket's account (active first, then open, then any).
-    fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
+    pub(crate) fn project_for_account(&self, account: &AccountId) -> Option<Arc<ProjectConfig>> {
         let all: Vec<Arc<ProjectConfig>> = self
             .project_configs()
             .into_iter()
@@ -1020,7 +1020,7 @@ impl Core {
         out
     }
 
-    fn review_bindings(&self) -> Vec<(AccountId, String, ProjectId)> {
+    pub(crate) fn review_bindings(&self) -> Vec<(AccountId, String, ProjectId)> {
         self.project_configs()
             .iter()
             .flat_map(|p| {

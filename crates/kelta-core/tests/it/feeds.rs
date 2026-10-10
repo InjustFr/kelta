@@ -616,6 +616,12 @@ async fn union_of_views_dedups_across_views_and_accounts() {
         let plan = plan.unwrap();
         assert_eq!(plan["source"]["ticket"]["account"], account, "{plan}");
     }
+    // without --project: the same default as the Start sheet (SPEC §3.1)
+    let plan = e.h.core.ctl(CtlCommand::Start { ticket: "TEAM-7".into(), project: None }).await.unwrap();
+    assert_eq!(
+        (&plan["source"]["ticket"]["account"], &plan["project_id"]),
+        (&"linear-team".into(), &"shop".into())
+    );
 }
 
 #[tokio::test]

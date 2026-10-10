@@ -11,9 +11,9 @@
     TransitionTarget,
     WorkItem,
   } from '$lib/gen';
-  import { openExternal, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
+  import { openExternal, workPlan, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
-  import { tickets, toasts, work } from '$lib/stores';
+  import { projects, tickets, toasts, work } from '$lib/stores';
   import { Button, Icon, Select, Sheet, Spinner, TextInput, Toggle } from '$lib/ui';
 
   import { activateProject } from '../../shell/nav';
@@ -27,8 +27,8 @@
 
   const seed = untrack(() => structuredClone($state.snapshot(initial)) as StartWorkPlan);
   let plan = $state<StartWorkPlan>(seed);
-  const origTransition: TransitionTarget | null = seed.side_effects.transition_to;
-  let transitionOn = $state(origTransition !== null);
+  let origTransition = $state<TransitionTarget | null>(seed.side_effects.transition_to);
+  let transitionOn = $state(seed.side_effects.transition_to !== null);
   let commentOn = $state(seed.side_effects.comment !== null);
   let commentText = $state(seed.side_effects.comment ?? '');
   let touched = $state(false);
@@ -41,6 +41,25 @@
   let retrying = $state<string | null>(null);
 
   const resuming = $derived(seed.existing !== null);
+  const projectName = (id: string): string => projects.byId(id)?.name ?? id;
+  let switching = $state(false);
+
+  /** Re-plans in `id`: branch, worktree, Claude and side effects follow its settings (edits are dropped). */
+  async function switchProject(id: string): Promise<void> {
+    switching = true;
+    try {
+      const next = await workPlan({ project_id: id, source: plan.source });
+      plan = { ...next, project_choices: plan.project_choices, project_guessed: plan.project_guessed };
+      origTransition = next.side_effects.transition_to;
+      transitionOn = origTransition !== null;
+      commentOn = next.side_effects.comment !== null;
+      commentText = next.side_effects.comment ?? '';
+    } catch (err) {
+      toasts.error(err, 'Switch project');
+    } finally {
+      switching = false;
+    }
+  }
   const isTicket = $derived(plan.source.kind === 'ticket');
   const subject = $derived(
     plan.source.kind === 'ticket'
@@ -228,8 +247,8 @@
     >
       {#if resuming}
         <p class="note" data-testid="resume-note">
-          A work item already exists for {subject} on branch <code>{plan.branch}</code>. Resume it: its tab
-          and sessions are focused or recreated.
+          A work item already exists for {subject} in {projectName(plan.project_id)} on branch
+          <code>{plan.branch}</code>. Resume it: its tab and sessions are focused or recreated.
         </p>
         <dl class="facts">
           <dt>Branch</dt>
@@ -238,6 +257,22 @@
           <dd><code>{plan.worktree_path}</code></dd>
         </dl>
       {:else}
+        {#if plan.project_choices.length > 1}
+          <div class="project" style:--bar={projects.byId(plan.project_id)?.color ?? 'transparent'}>
+            <Select
+              label="Project"
+              value={plan.project_id}
+              disabled={switching}
+              options={plan.project_choices.map((id) => ({ value: id, label: projectName(id) }))}
+              onchange={(id) => void switchProject(id)}
+            />
+            {#if plan.project_guessed && plan.source.kind === 'ticket'}
+              <p class="hint" data-testid="project-guess">
+                No usual project for {plan.source.ticket.account} tickets yet. Kelta will remember this one.
+              </p>
+            {/if}
+          </div>
+        {/if}
         {#if plan.repo_choices.length > 1}
           <Select
             label="Repository"
@@ -251,7 +286,7 @@
             label="Branch"
             bind:value={plan.branch}
             error={errors.branch ?? (touched ? errors.repo : null)}
-            autofocus
+            autofocus={!seed.project_guessed}
           />
         </div>
         {#if plan.branch_exists}
@@ -390,6 +425,20 @@
 
   legend {
     padding: 0 var(--k-space-1);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
+  .project {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+    padding-left: var(--k-space-2);
+    border-left: 3px solid var(--bar);
+  }
+
+  .hint {
+    margin: 0;
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
   }
