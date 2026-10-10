@@ -302,7 +302,7 @@
   .bar {
     flex-wrap: wrap;
     height: auto;
-    min-height: var(--k-tabbar-height);
+    min-height: var(--k-toolbar-height);
   }
 
   /* Same grammar as the tab bar: text, active = 600 + accent underline. */

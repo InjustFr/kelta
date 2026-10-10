@@ -18,7 +18,7 @@
   {#if tab && headerWorkId}
     {#await tabHeaderRegistry.work() then mod}
       {@const Header = mod.default}
-      <Header {projectId} tabId={tab.id} workItemId={headerWorkId} />
+      <div class="bar"><Header {projectId} tabId={tab.id} workItemId={headerWorkId} /></div>
     {/await}
   {/if}
   <div class="panes">
@@ -66,6 +66,13 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+  }
+
+  /* Stands in for the shell's context bar, which hosts the work segment. */
+  .bar {
+    display: flex;
+    height: 30px;
+    padding: 0 8px;
   }
 
   .panes {

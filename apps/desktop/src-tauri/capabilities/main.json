@@ -3,9 +3,7 @@
   "identifier": "main",
   "description": "Kelta main window: core defaults + every Kelta command. Local origin only (no remote URLs); plugin and tool iframes get nothing.",
   "local": true,
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -14,6 +12,7 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-start-resize-dragging",
+    "core:window:allow-set-title",
     "allow-app-info",
     "allow-app-ready",
     "allow-bench-mark",

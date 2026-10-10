@@ -2,7 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ui } from '$lib/stores';
 
-import { flushJump, JUMP_CAP, Jumplist, jumplist, navStep, noteFocus, SETTLE_MS } from './jumplist';
+import {
+  backTarget,
+  flushJump,
+  JUMP_CAP,
+  Jumplist,
+  jumplist,
+  navStep,
+  noteFocus,
+  SETTLE_MS,
+} from './jumplist';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
 
@@ -72,5 +81,18 @@ describe('Jumplist', () => {
     navStep(-1);
     expect([ui.view, jumplist.at]).toEqual(['reviews', 0]);
     ui.view = null;
+  });
+
+  it('backTarget names where nav.back lands: the last live place before here, without moving', () => {
+    const view = (v: 'now' | 'reviews') => ({ project: '', tab: '', pane: '', view: v });
+    jumplist.list = [view('reviews'), loc(1), view('now')];
+    jumplist.at = 2;
+    // Here is Now (recorded): back skips it and the dead pane, landing on Reviews.
+    expect(backTarget(view('now'))).toEqual(view('reviews'));
+    // A tool just opened from Now (not recorded yet): back is Now.
+    expect(backTarget(loc(9))).toEqual(view('now'));
+    expect(jumplist.at).toBe(2);
+    jumplist.at = 0;
+    expect(backTarget(view('reviews'))).toBeNull();
   });
 });

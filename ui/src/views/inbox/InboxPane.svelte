@@ -651,7 +651,7 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-4);
-    min-height: var(--k-tabbar-height);
+    min-height: var(--k-toolbar-height);
     padding: 0 var(--k-space-3);
     border-bottom: 1px solid var(--k-border);
     background: var(--k-bg-elev);

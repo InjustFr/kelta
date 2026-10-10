@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The shell root: project rail, tab bar, layout renderer, status bar, palette, project switcher,
+  // The shell root: context bar, project rail, layout renderer, status bar, palette, project switcher,
   // sheets, dialogs and toasts (SPEC §1, BUILD_PLAN §2.4).
   import { onMount } from 'svelte';
 
@@ -16,6 +16,7 @@
   import { startWorkOnTicket } from '../views/work/startWork';
 
   import { confirms, prompts } from './confirm.svelte';
+  import ContextBar from './ContextBar.svelte';
   import DialogHost from './DialogHost.svelte';
   import JumpHud from './JumpHud.svelte';
   import GlobalHost from './GlobalHost.svelte';
@@ -37,9 +38,7 @@
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
   import StatusBar from './StatusBar.svelte';
-  import TabBar from './TabBar.svelte';
   import ToastHost from './ToastHost.svelte';
-  import WindowChrome from './WindowChrome.svelte';
   import { startupUnlock } from './unlock';
   import Workspace from './Workspace.svelte';
   import { globalContent } from '../views/work/nav';
@@ -276,14 +275,13 @@
   const active = $derived(projects.active);
 </script>
 
-<WindowChrome />
+<ContextBar />
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
   <ProjectRail />
   <div class="main">
     {#if ui.view}
       <GlobalHost view={ui.view} />
     {:else if active}
-      <TabBar projectId={active.id} />
       <Workspace projectId={active.id} />
     {:else if projects.loaded}
       <EmptyState

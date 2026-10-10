@@ -31,8 +31,8 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(sheet).toBeHidden();
   await expect(now(page)).toBeHidden();
   await expect.poll(() => activeProject(page)).toBe('shop');
-  const header = page.getByTestId('work-header');
-  await expect(header).toContainText('SHOP-151');
+  const header = page.getByTestId('context-work');
+  await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
 
   // Claude stops with changes: review_due (the backend's Stop hook) and a fresh diffstat.
   await page.evaluate(() => {
@@ -55,7 +55,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
     mock.emit({ type: 'work.updated', work: structuredClone(w) });
   });
   await expect(header).toHaveAttribute('data-phase', 'to_review');
-  await expect(header).toContainText('+30');
+  await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /\+30 −4/);
 
   // Now: the item sits in Ready for review with Claude's last message; Enter opens the delta.
   await page.keyboard.press('Control+Shift+0');
@@ -77,7 +77,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
 test('the work menu opens from a terminal with its chord; letters never move', async ({ page }) => {
   await boot(page);
   // The shop tab hosts SHOP-142 (Claude + nvim); focus is in a terminal.
-  await expect(page.getByTestId('work-header')).toBeVisible();
+  await expect(page.getByTestId('context-work')).toBeVisible();
   await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
   await page.keyboard.press('Control+Shift+Period');
   const menu = page.getByRole('menu', { name: 'Work' });

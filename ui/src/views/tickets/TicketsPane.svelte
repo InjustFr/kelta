@@ -1222,7 +1222,7 @@
     flex-wrap: wrap;
     row-gap: var(--k-space-2);
     height: auto;
-    min-height: var(--k-tabbar-height);
+    min-height: var(--k-toolbar-height);
     padding-block: var(--k-space-2);
     white-space: nowrap;
   }

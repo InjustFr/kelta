@@ -44,15 +44,16 @@ export function paneComponent(kind: PaneKind): LazyComponent | null {
   return kind === 'empty' ? null : paneRegistry[kind];
 }
 
-/** Tab header components, keyed by tab flavour (`work` = tab linked to a work item). */
-export type TabHeaderKey = 'work';
+/** Work tab components (a tab linked to a work item): `work` = its segment of the context bar, `brief` = the return strip under the bar. */
+export type TabHeaderKey = 'work' | 'brief';
 export interface TabHeaderProps {
   projectId: string;
   tabId: string;
   workItemId: string;
 }
 export const tabHeaderRegistry: Record<TabHeaderKey, LazyComponent> = {
-  work: () => import('../views/work/WorkItemHeader.svelte'),
+  work: () => import('../views/work/WorkContext.svelte'),
+  brief: () => import('../views/work/ReturnBrief.svelte'),
 };
 
 /** Sheets (modal side panels) opened through `ui.openSheet(key, props)`. */
