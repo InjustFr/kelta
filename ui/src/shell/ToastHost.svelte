@@ -1,22 +1,11 @@
 <script lang="ts">
-  import { dispatch } from '$lib/actions';
-  import type { Toast as ToastData } from '$lib/gen';
-  import { toasts } from '$lib/stores';
+  import { effectiveChords } from '$lib/keys/manager';
+  import { settings, toasts } from '$lib/stores';
   import { Toast } from '$lib/ui';
 
-  async function run(id: number, action: NonNullable<ToastData['action']>): Promise<void> {
-    toasts.dismiss(id);
-    const args =
-      action.args && typeof action.args === 'object' && !Array.isArray(action.args)
-        ? (action.args as Record<string, unknown>)
-        : undefined;
-    try {
-      const handled = await dispatch(action.command, args);
-      if (!handled) toasts.warn(`No handler for “${action.label}”`);
-    } catch (err) {
-      toasts.error(err, action.label);
-    }
-  }
+  // The key that runs the last toast's action is printed on that toast's button (FLOW §7.1).
+  const runLastKey = $derived(effectiveChords('toast.run_last', settings.value()?.keys ?? null)[0] ?? null);
+  const lastId = $derived(toasts.lastActionable?.id ?? null);
 </script>
 
 <div class="toasts" aria-live="polite" data-testid="toasts">
@@ -24,7 +13,8 @@
     <Toast
       toast={entry.toast}
       ondismiss={() => toasts.dismiss(entry.id)}
-      onaction={(a) => void run(entry.id, a)}
+      onaction={() => void toasts.run(entry.id)}
+      kbd={entry.id === lastId ? runLastKey : null}
     />
   {/each}
 </div>

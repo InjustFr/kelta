@@ -1,12 +1,13 @@
-//! keltad: Kelta's session daemon (`keltad --socket <path>`). Binds the socket, forks into the
-//! background (the launcher's wait returns once the socket accepts), then serves until it has no
-//! client and no running session for `IDLE_GRACE`.
+//! keltad: Kelta's session daemon (`keltad --socket <path> --history <dir>`; without `--history`
+//! no on-disk scrollback log). Binds the socket, forks into the background (the launcher's wait
+//! returns once the socket accepts), then serves until it has no client and no running session
+//! for `IDLE_GRACE`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use kelta_proto::term::{LoginEnv, TerminalLimits};
+use kelta_proto::term::TerminalLimits;
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon;
 
@@ -45,13 +46,11 @@ fn main() -> ExitCode {
     let _ = std::env::set_current_dir("/");
     tracing_subscriber::fmt().with_ansi(false).with_writer(std::io::stderr).init();
     tracing::info!(socket = %sock.display(), pid = std::process::id(), "keltad started");
-    // Spawn specs carry the complete environment; the host's own login env is unused.
-    let (env, limits) = (LoginEnv::default(), TerminalLimits::default());
+    // Spawn specs carry the complete environment.
+    let limits = TerminalLimits::default();
     let host = match history {
-        Some(dir) => {
-            PtyTerminalHost::with_history_dir(env, limits, kelta_term::backend::default_backend(), dir)
-        }
-        None => PtyTerminalHost::new(env, limits),
+        Some(dir) => PtyTerminalHost::with_history_dir(limits, kelta_term::backend::default_backend(), dir),
+        None => PtyTerminalHost::new(limits),
     };
     daemon::serve(listener, host, IDLE_GRACE);
     ExitCode::SUCCESS

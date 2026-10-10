@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # BUILD_PLAN §1.5: no periodic timers or ad hoc threads outside allowlisted modules.
 # Portable between BSD and GNU userland (grep -E, awk, find only).
+# Usage: check-no-timers.sh [root]   (default: the repo; scripts/check-no-timers.test.sh passes a fixture)
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "${1:-$(dirname "${BASH_SOURCE[0]}")/..}"
 
 fail=0
 report() { printf 'check-no-timers: %s\n' "$*" >&2; fail=1; }
@@ -46,7 +47,9 @@ fi
 rs_dirs=()
 for d in crates apps; do [ -d "$d" ] && rs_dirs+=("$d"); done
 
-pattern='tokio::time::interval(_at)?|std::thread::(spawn|sleep)|thread::(spawn|sleep)[[:space:]]*[(]'
+# Bare `interval(` / `time::interval(` catch `use tokio::time::{interval, ..}` and `use tokio::time;`.
+# shortcut: bare `spawn(`/`sleep(` from `use std::thread::{..}` are not caught (too many false hits), add if it happens.
+pattern='tokio::time::interval(_at)?|(^|[^A-Za-z0-9_:.])(time::)?interval(_at)?[[:space:]]*[(]|std::thread::(spawn|sleep)|thread::(spawn|sleep)[[:space:]]*[(]'
 
 if [ ${#rs_dirs[@]} -gt 0 ]; then
   rs_files=$(find "${rs_dirs[@]}" -type f -name '*.rs' \
@@ -58,7 +61,14 @@ if [ ${#rs_dirs[@]} -gt 0 ]; then
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     awk -v F="$f" -v PAT="$pattern" '
-      /^[[:space:]]*#\[cfg\(test\)\]/ { exit }          # rest of file is the test module
+      # Skip only the #[cfg(test)] item: up to its closing brace, or its `;` when it has no body.
+      # shortcut: braces inside strings/chars are counted too, fine for test modules and helpers.
+      /^[[:space:]]*#\[cfg\(test\)\]/ { skip = 1; depth = 0; opened = 0; sub(/.*#\[cfg\(test\)\]/, "") }
+      skip {
+        o = gsub(/[{]/, "{"); c = gsub(/[}]/, "}"); depth += o - c; if (o) opened = 1
+        if ((opened && depth <= 0) || (!opened && $0 ~ /;[[:space:]]*$/)) skip = 0
+        next
+      }
       { prev2 = prev; prev = cur; cur = $0 }
       /^[[:space:]]*\/\// { next }
       $0 ~ PAT {

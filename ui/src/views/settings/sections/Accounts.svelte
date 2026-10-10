@@ -207,8 +207,20 @@
     void save(true);
   }
 
+  // Tokens Kelta stored (keyring:/file:, and the OAuth grant next to them) go with the account,
+  // unless another account still uses the same ref.
   async function remove(id: string): Promise<void> {
-    await editor.reset(joinPath(['accounts', id]));
+    const all = editor.valueOf('accounts');
+    const refs = Object.entries(isRecord(all) ? all : {}).map(([k, a]) => [k, isRecord(a) ? a.secret : null]);
+    const ref = refs.find(([k]) => k === id)?.[1];
+    if (!(await editor.reset(joinPath(['accounts', id])))) return;
+    if (typeof ref !== 'string' || !/^(keyring|file):./.test(ref)) return;
+    if (refs.some(([k, r]) => k !== id && r === ref)) return;
+    for (const r of [ref, `${ref}.oauth`]) {
+      await ipc
+        .secretDelete({ secret_ref: r })
+        .catch((err: unknown) => toasts.error(err, 'Could not delete the stored token'));
+    }
   }
 
   const accountsNode = $derived(editor.schema ? nodeAt(editor.schema, ['accounts']) : null);

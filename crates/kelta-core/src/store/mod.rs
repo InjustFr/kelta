@@ -464,8 +464,8 @@ pub mod q {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
-             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -474,7 +474,7 @@ pub mod q {
              session_ids_json = excluded.session_ids_json, review_due = excluded.review_due,
              claude_replied = excluded.claude_replied, title = excluded.title,
              pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
-             rebase_json = excluded.rebase_json",
+             rebase_json = excluded.rebase_json, claude_at = excluded.claude_at",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -499,6 +499,7 @@ pub mod q {
                 w.pr_title_needs_key,
                 serde_json::to_string(&w.sent_threads)?,
                 json_opt(&w.rebase)?,
+                w.claude_at,
             ],
         )
         .map_err(db_err)?;
@@ -516,7 +517,7 @@ pub mod q {
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
-        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json";
+        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -547,6 +548,7 @@ pub mod q {
             created_at: r.get(14)?,
             review_due: r.get(16)?,
             claude_replied: r.get(17)?,
+            claude_at: r.get(22)?,
             title: r.get(18)?,
             pr_title_needs_key: r.get(19)?,
             sent_threads: Vec::new(),
@@ -590,7 +592,18 @@ pub mod q {
             .map_err(db_err)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(db_err)?;
-        raws.into_iter().map(|r| finish_work(c, r)).collect()
+        // One undecodable row (older/newer build) must not hide every work item.
+        Ok(raws
+            .into_iter()
+            .filter_map(|r| {
+                let id = r.0.id.clone();
+                finish_work(c, r)
+                    .inspect_err(
+                        |e| tracing::warn!(work_item = %id, error = %e, "skipping unreadable work item"),
+                    )
+                    .ok()
+            })
+            .collect())
     }
 
     pub fn work_delete(c: &Connection, id: &WorkItemId) -> R<()> {

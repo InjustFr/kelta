@@ -950,6 +950,8 @@ impl Core {
 
     pub(crate) fn remove_session(&self, id: &SessionId) {
         let Some(entry) = self.sessions.lock().remove(id) else { return };
+        // Close it in the host too (frees the model; keltad drops the route). NotFound when Dormant.
+        let _ = self.terminal.kill(id, KillSignal::Kill);
         entry.timers.cancel();
         self.server.unregister_session(id);
         self.release_http_ref(entry.http_ref);
@@ -1267,8 +1269,11 @@ impl Core {
 
     /// `session_apply_hook`.
     pub(crate) fn apply_hook(&self, id: &SessionId, change: StatusChange) -> Result<(), KeltaError> {
+        if let Some(u) = &change.session_uuid {
+            self.learn_claude_uuid(id, u);
+        }
         let visible = self.is_visible(id);
-        let (state, timers, project) = {
+        let (state, timers) = {
             let mut s = self.sessions.lock();
             let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
             if let (Some(f), Some(c)) = (&change.file_edited, e.info.claude.as_mut())
@@ -1280,20 +1285,12 @@ impl Core {
                 }
             }
             e.heuristic = false;
-            (e.state(visible), e.timers.clone(), e.info.project_id.clone())
+            (e.state(visible), e.timers.clone())
         };
         let d = status::apply_hook(&state, &change);
         if d.hooks_active == Some(true) {
             timers.hooks.cancel();
             timers.quiet.cancel();
-        }
-        if let Some(f) = &change.file_edited {
-            let tool = change.raw_event.split_once(':').map(|(_, t)| t.to_owned());
-            self.publish_ev(
-                BusEvent::new(bus::CLAUDE_FILE_EDITED, serde_json::json!({ "path": f, "tool": tool }))
-                    .with_project(project)
-                    .with_session(id.clone()),
-            );
         }
         self.apply_decision(id, d, StatusSource::Hook, change.preview.clone());
         Ok(())

@@ -11,4 +11,8 @@ export type StatusChange = { status: SessionStatus, preview: string | null, file
 /**
  * `hook_event_name` (+ `:<notification_type>` for Notification).
  */
-raw_event: string, };
+raw_event: string, 
+/**
+ * Claude's conversation uuid from the hook payload (changes on `/clear`); core resumes it.
+ */
+session_uuid: string | null, };

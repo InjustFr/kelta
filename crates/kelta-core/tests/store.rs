@@ -63,15 +63,35 @@ async fn work_store_round_trip() {
     let mut w2 = w.clone();
     w2.state = WorkState::Failed { step: "x".into(), message: "y".into() };
     w2.review_due = true;
+    w2.claude_at = Some("2026-10-10T09:00:00Z".into());
     s.put_item(&w2).await.unwrap();
     let got = s.get_item(&w.id).await.unwrap().unwrap();
     assert_eq!((got.state, got.review_due, got.claude_replied), (w2.state.clone(), true, false));
+    assert_eq!(got.claude_at, w2.claude_at);
     assert_eq!(s.list_items(Some(&w.project_id)).await.unwrap().len(), 1);
     assert_eq!(s.list_items(Some(&"other".into())).await.unwrap().len(), 0);
     s.delete_item(&w.id).await.unwrap();
     assert!(s.get_item(&w.id).await.unwrap().is_none());
     assert!(s.steps(&w.id).await.unwrap().is_empty());
     assert!(s.get_item(&WorkItemId::new("nope")).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn corrupt_work_row_is_skipped_by_list_only() {
+    let s = Store::open_in_memory().unwrap();
+    let good = kelta_proto::samples::work_item();
+    let bad = kelta_proto::model::WorkItem { id: WorkItemId::new("bad"), ..good.clone() };
+    s.put_item(&good).await.unwrap();
+    s.put_item(&bad).await.unwrap();
+    s.call(|c| {
+        c.execute("UPDATE work_items SET state_json = '{\"kind\":\"from_the_future\"}' WHERE id = 'bad'", [])
+            .map_err(kelta_core::store::db_err)
+    })
+    .await
+    .unwrap();
+    let ids: Vec<WorkItemId> = s.list_items(None).await.unwrap().into_iter().map(|w| w.id).collect();
+    assert_eq!(ids, [good.id]);
+    assert!(s.get_item(&WorkItemId::new("bad")).await.is_err(), "a direct read still reports it");
 }
 
 #[tokio::test]

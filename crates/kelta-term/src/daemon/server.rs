@@ -292,12 +292,12 @@ mod tests {
     use std::io::Read;
     use std::os::unix::fs::PermissionsExt;
 
-    use kelta_proto::term::{LoginEnv, TerminalLimits};
+    use kelta_proto::term::TerminalLimits;
 
     use super::*;
 
     fn host() -> PtyTerminalHost {
-        PtyTerminalHost::new(LoginEnv::default(), TerminalLimits::default())
+        PtyTerminalHost::new(TerminalLimits::default())
     }
 
     #[test]

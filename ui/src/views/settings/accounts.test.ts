@@ -78,6 +78,26 @@ describe('browser sign-in', () => {
     release();
   });
 
+  it('cancels a pending sign-in when the wizard closes', async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport({
+      ...transport,
+      invoke: <T>(cmd: string, args?: Record<string, unknown> | Uint8Array) =>
+        cmd === 'oauth_device_finish' ? new Promise<T>(() => {}) : transport.invoke<T>(cmd, args),
+    });
+    await ipc.settingsSet({ layer: 'global', path: 'oauth.client_ids', value: { 'github.com': 'x' } });
+    const { unmount } = render(Accounts, { layer: 'global', projectId: null, repoId: null });
+    await fireEvent.click(await screen.findByTestId('add-account'));
+    await fireEvent.click(document.querySelector('[data-kind="github"]')!);
+    await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Sign in with GitHub' }));
+    await screen.findByTestId('user-code');
+    unmount();
+    expect(controls.calls.find((c) => c.cmd === 'oauth_device_cancel')?.args).toEqual({
+      user_code: 'WDJB-MJHT',
+    });
+  });
+
   it('reports a denied sign-in and offers to retry', async () => {
     const controls = await wizardAtToken({ 'github.com': 'x' });
     controls.failNext('oauth_device_finish', {
@@ -110,5 +130,31 @@ describe('browser sign-in', () => {
     const d = { ...emptyDraft('gitlab'), id: 'gl' };
     expect(oauthSecretRef(d)).toBe('keyring:gl');
     expect(oauthSecretRef({ ...d, secret: 'file:gl-work' })).toBe('file:gl-work');
+  });
+});
+
+describe('removing an account', () => {
+  it('deletes its stored token and grant unless another account shares the ref', async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport(transport);
+    const accounts = {
+      solo: { kind: 'github', secret: 'keyring:solo' },
+      a: { kind: 'github', secret: 'keyring:shared' },
+      b: { kind: 'gitlab', secret: 'keyring:shared' },
+      cli: { kind: 'github', secret: 'gh-cli' },
+    };
+    await ipc.settingsSet({ layer: 'global', path: 'accounts', value: accounts });
+    render(Accounts, { layer: 'global', projectId: null, repoId: null });
+    const deleted = (): unknown[] =>
+      controls.calls.filter((c) => c.cmd === 'secret_delete').map((c) => c.args);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Remove solo' }));
+    await vi.waitFor(() =>
+      expect(deleted()).toEqual([{ secret_ref: 'keyring:solo' }, { secret_ref: 'keyring:solo.oauth' }]),
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove a' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove cli' }));
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Remove cli' })).toBeNull());
+    expect(deleted()).toHaveLength(2);
   });
 });

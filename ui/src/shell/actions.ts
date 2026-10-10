@@ -55,6 +55,10 @@ registerAction('palette.open', () => ui.toggleOverlay('palette'));
 registerAction('project.switcher', () => ui.toggleOverlay('switcher'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoProjectIndex(n));
 registerAction('inbox.open', () => openInbox());
+registerAction('toast.run_last', async () => {
+  const last = toasts.lastActionable;
+  if (last) await toasts.run(last.id);
+});
 registerAction('project.next', () => cycleProject(1));
 registerAction('project.prev', () => cycleProject(-1));
 registerAction('tab.next', () => cycleTab(1));

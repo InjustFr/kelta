@@ -82,6 +82,8 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("reviews.open", "Open reviews", ["cmd+shift+r"], ["ctrl+shift+r"], Some("r"), Global),
     a!("attention.next", "Next waiting", ["cmd+shift+u"], ["ctrl+shift+u"], Some("u"), Global),
     a!("work.start", "Start work", ["cmd+enter"], ["ctrl+enter"], Some("s"), TicketViews),
+    // Linux: ctrl+shift+o is pane.split_down.
+    a!("toast.run_last", "Run last toast action", ["cmd+shift+o"], ["ctrl+shift+a"], Some("o"), Global),
     a!("work.new", "New work item", ["cmd+shift+n"], ["ctrl+shift+n"], Some("w"), Global),
     a!(
         "editor.send_selection",

@@ -227,9 +227,17 @@ impl Core {
             return Err(KeltaError::conflict(format!("project {} exists", draft.suggested_id)));
         }
         let cfg = self.cfg.project_create(draft)?;
+        self.refresh_trust();
         let id = cfg.id.clone();
         self.project_open(&id)?;
         self.project_activate(&id)
+    }
+
+    /// Load the stored trust of repos a project write just added.
+    /// shortcut: projects added by hand-editing TOML pick up their trust at the next start, refresh on
+    /// the config watcher if that shows up in practice.
+    fn refresh_trust(&self) {
+        futures::executor::block_on(self.config.refresh_trust());
     }
 
     /// `project_update`.
@@ -239,6 +247,7 @@ impl Core {
         }
         self.require(id)?;
         let cfg = self.cfg.project_update(id, patch)?;
+        self.refresh_trust();
         let info = self.info_from(Some(&cfg), id);
         self.emit(UiEvent::ProjectUpdated { project: info.clone() });
         self.resubscribe();

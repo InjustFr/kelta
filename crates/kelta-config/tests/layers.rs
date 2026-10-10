@@ -263,6 +263,11 @@ fn repo_local_disallowed_keys_are_errors_and_ignored() {
     assert_eq!(s.worktree.include, vec![".env".to_owned(), ".env.*".to_owned()]);
 }
 
+fn sha(text: &str) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(text).iter().map(|b| format!("{b:02x}")).collect()
+}
+
 #[test]
 fn untrusted_trusted_edited_untrusted_cycle() {
     let e = env();
@@ -285,8 +290,14 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     assert_eq!(doc.trusted, Some(false));
     assert!(doc.text.contains("pnpm install"), "the layer view still shows the file");
 
+    // trust binds to the reviewed content: no hash, or a stale one, is refused
+    assert!(block_on(svc.repo_trust(&p, "api", true, None)).is_err());
+    let stale = block_on(svc.repo_trust(&p, "api", true, Some(&sha("[env]\n")))).unwrap_err();
+    assert_eq!(stale.code, kelta_proto::ErrorCode::Conflict);
+    assert!(svc.effective(Some(&p)).worktree.setup.is_empty());
+
     // trust: active
-    let info = block_on(svc.repo_trust(&p, "api", true)).unwrap();
+    let info = block_on(svc.repo_trust(&p, "api", true, Some(&sha(&doc.text)))).unwrap();
     assert!(info.trusted);
     assert_eq!(info.path, path);
     let s = svc.effective(Some(&p));
@@ -309,7 +320,8 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     std::fs::write(&path, text).unwrap();
     svc.reload();
     assert!(svc.effective(Some(&p)).worktree.setup.is_empty());
-    block_on(svc.repo_trust(&p, "api", true)).unwrap();
+    let doc = svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap();
+    block_on(svc.repo_trust(&p, "api", true, Some(&sha(&doc.text)))).unwrap();
     assert_eq!(svc.effective(Some(&p)).worktree.setup, vec!["pnpm install --frozen-lockfile".to_owned()]);
 
     // the persistent store holds the hash; a fresh service picks it up
@@ -319,7 +331,7 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     assert_eq!(svc2.effective(Some(&p)).worktree.setup, vec!["pnpm install --frozen-lockfile".to_owned()]);
 
     // revoke
-    let info = block_on(svc2.repo_trust(&p, "api", false)).unwrap();
+    let info = block_on(svc2.repo_trust(&p, "api", false, None)).unwrap();
     assert!(!info.trusted);
     assert!(svc2.effective(Some(&p)).worktree.setup.is_empty());
 }

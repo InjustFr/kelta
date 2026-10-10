@@ -59,13 +59,17 @@ export function asOf(): { at: string; error: KeltaError | null } | null {
   return { at, error: bad.find((l) => l.error)?.error ?? null };
 }
 
-/** Startup, window focus and Now open (no polling): cached lists unless `force`, fresh git status. */
+/**
+ * Startup, window focus and Now open (no polling): cached lists unless `force`, fresh git status,
+ * and my review state + head of review items (FLOW §3.6).
+ */
 export async function refreshNow(force = false): Promise<void> {
   await Promise.allSettled([
     tickets.load(ALL, null, force),
     reviews.load(ALL, 'review_requested', force),
     reviews.load(ALL, 'authored', force),
     work.refreshStatus(),
+    ...unfinishedWork().flatMap((w) => (w.review ? [reviews.loadDetail(w.review)] : [])),
   ]);
 }
 

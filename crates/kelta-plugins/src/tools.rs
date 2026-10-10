@@ -441,6 +441,15 @@ impl PluginHost {
                 let port = web::free_port()?;
                 vars.set("port", json!(port));
                 let cwd = self.expand_cwd(start.cwd.as_deref(), &vars, project, ctx)?;
+                // Expanded and checked before the spawn: nothing below may fail with a live server.
+                let url_tpl = def.url.as_deref().map(|u| vars.expand(u)).transpose()?;
+                let stop_argv = match &start.stop {
+                    StopSpec::Command { command } => Some((vars.expand_all(command)?, cwd.clone())),
+                    StopSpec::Signal { .. } => None,
+                };
+                if let Some((argv, _)) = &stop_argv {
+                    self.check_tool_permission(r, argv.first().map(String::as_str)).await?;
+                }
                 let launch = Launch {
                     program,
                     args: vars.expand_all(&start.args)?,
@@ -451,15 +460,7 @@ impl PluginHost {
                     port,
                 };
                 let (proc_, ready_url) = web::start(&launch).await?;
-                let url = match (ready_url, &def.url) {
-                    (Some(u), _) => u,
-                    (None, Some(u)) => vars.expand(u)?,
-                    (None, None) => format!("http://127.0.0.1:{port}/"),
-                };
-                let stop_argv = match &start.stop {
-                    StopSpec::Command { command } => Some((vars.expand_all(command)?, cwd)),
-                    StopSpec::Signal { .. } => None,
-                };
+                let url = ready_url.or(url_tpl).unwrap_or_else(|| format!("http://127.0.0.1:{port}/"));
                 (Some(proc_), url, stop_argv)
             }
             _ => {
@@ -470,27 +471,7 @@ impl PluginHost {
                 (None, url, None)
             }
         };
-        let log_url = if secret { kelta_proto::redact::redact_url(&url) } else { url.clone() };
-        tracing::info!(tool = %r.id, url = %log_url, "web tool ready");
-
-        let pref = def.embed.unwrap_or(settings.web.embed_default);
-        let mut embed = self.decide_embed(pref, &url).await;
-        let mut public_url = url.clone();
-        if embed == EmbedMode::Proxy {
-            match crate::proxy::register(instance_id.as_str(), &url) {
-                Ok(_) => {
-                    let port = crate::proxy::ensure_listener(instance_id.as_str()).await?;
-                    public_url = format!(
-                        "http://127.0.0.1:{port}{}",
-                        crate::proxy::proxy_path(instance_id.as_str(), &url)
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e.message, "web proxy refused; opening externally");
-                    embed = EmbedMode::External;
-                }
-            }
-        }
+        // Registered before any fallible step so a failed open stops it via `close_tool` (stop spec included).
         let inst = Arc::new(WebInstance {
             tool_id: r.id.clone(),
             project_id: project.clone(),
@@ -505,41 +486,68 @@ impl PluginHost {
         if let Some(p) = proc_ {
             self.watch_exit(instance_id.clone(), inst, p);
         }
+        let res: Result<ToolHandle, KeltaError> = async {
+            let log_url = if secret { kelta_proto::redact::redact_url(&url) } else { url.clone() };
+            tracing::info!(tool = %r.id, url = %log_url, "web tool ready");
 
-        let handle = ToolHandle::Web { instance_id: instance_id.clone(), url: public_url, embed };
-        let label = if def.label.is_empty() { r.id.to_string() } else { def.label.clone() };
-        self.emit_ui(UiEvent::PluginEvent {
-            instance_id: ScreenInstanceId::new(instance_id.to_string()),
-            name: TOOL_HANDLE_EVENT.into(),
-            payload: json!({
-                "handle": handle,
-                "tool_id": r.id,
-                "label": label,
-                "project_id": project,
-                "lifecycle": def.lifecycle,
-            }),
-        });
-        if embed != EmbedMode::External {
-            core.layout_open(
-                project,
-                OpenPaneRequest {
-                    content: PaneContent::Web { tool_instance_id: instance_id.clone() },
-                    placement,
-                    focus: true,
-                    tab_title: Some(label),
-                    work_item_id: ctx.work_item_id.clone(),
-                },
-            )
-            .await?;
+            let pref = def.embed.unwrap_or(settings.web.embed_default);
+            let mut embed = self.decide_embed(pref, &url).await;
+            let mut public_url = url.clone();
+            if embed == EmbedMode::Proxy {
+                match crate::proxy::register(instance_id.as_str(), &url) {
+                    Ok(_) => {
+                        let port = crate::proxy::ensure_listener(instance_id.as_str()).await?;
+                        public_url = format!(
+                            "http://127.0.0.1:{port}{}",
+                            crate::proxy::proxy_path(instance_id.as_str(), &url)
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e.message, "web proxy refused; opening externally");
+                        embed = EmbedMode::External;
+                    }
+                }
+            }
+            let handle = ToolHandle::Web { instance_id: instance_id.clone(), url: public_url, embed };
+            let label = if def.label.is_empty() { r.id.to_string() } else { def.label.clone() };
+            self.emit_ui(UiEvent::PluginEvent {
+                instance_id: ScreenInstanceId::new(instance_id.to_string()),
+                name: TOOL_HANDLE_EVENT.into(),
+                payload: json!({
+                    "handle": handle,
+                    "tool_id": r.id,
+                    "label": label,
+                    "project_id": project,
+                    "lifecycle": def.lifecycle,
+                }),
+            });
+            if embed != EmbedMode::External {
+                core.layout_open(
+                    project,
+                    OpenPaneRequest {
+                        content: PaneContent::Web { tool_instance_id: instance_id.clone() },
+                        placement,
+                        focus: true,
+                        tab_title: Some(label),
+                        work_item_id: ctx.work_item_id.clone(),
+                    },
+                )
+                .await?;
+            }
+            self.publish(
+                BusEvent::new(
+                    bus::TOOL_OPENED,
+                    json!({ "tool_id": r.id, "instance_id": instance_id, "kind": "web", "embed": embed }),
+                )
+                .with_project(project.clone()),
+            );
+            Ok(handle)
         }
-        self.publish(
-            BusEvent::new(
-                bus::TOOL_OPENED,
-                json!({ "tool_id": r.id, "instance_id": instance_id, "kind": "web", "embed": embed }),
-            )
-            .with_project(project.clone()),
-        );
-        Ok(handle)
+        .await;
+        if res.is_err() {
+            let _ = self.close_tool(&instance_id).await;
+        }
+        res
     }
 
     fn watch_exit(&self, id: ToolInstanceId, inst: Arc<WebInstance>, p: ServerProc) {

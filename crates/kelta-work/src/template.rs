@@ -47,6 +47,16 @@ const FILTERS: &[&str] = &["slug", "shell", "json"];
 
 /// Render `template` with `ctx`.
 pub fn render(template: &str, ctx: &Ctx, mode: Mode) -> Result<String, KeltaError> {
+    render_with(template, ctx, mode, false)
+}
+
+/// Render a command line typed into a shell: each value is POSIX-quoted unless its expression
+/// already ends with `|shell`, so a ticket title cannot run commands (SETTINGS §6).
+pub fn render_shell(template: &str, ctx: &Ctx, mode: Mode) -> Result<String, KeltaError> {
+    render_with(template, ctx, mode, true)
+}
+
+fn render_with(template: &str, ctx: &Ctx, mode: Mode, quote: bool) -> Result<String, KeltaError> {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
     while let Some(i) = rest.find(['{', '}']) {
@@ -69,6 +79,9 @@ pub fn render(template: &str, ctx: &Ctx, mode: Mode) -> Result<String, KeltaErro
         };
         let expr = &tail[1..end];
         match eval(expr, ctx) {
+            Some(v) if quote && expr.rsplit('|').next().map(str::trim) != Some("shell") => {
+                out.push_str(&shell_quote(&v));
+            }
             Some(v) => out.push_str(&v),
             None => match mode {
                 Mode::Strict => {
@@ -291,6 +304,19 @@ mod tests {
         assert_eq!(render("a {{b}} c", &ctx, Mode::Strict).unwrap(), "a {b} c");
         assert!(render("{nope}", &ctx, Mode::Strict).is_err());
         assert_eq!(render("x {run}/t.md", &ctx, Mode::Lenient).unwrap(), "x {run}/t.md");
+    }
+
+    #[test]
+    fn shell_render_quotes_values() {
+        let ctx = Ctx::new().with("ticket.title", "$(curl x|sh) it's").with("base", "main");
+        let q = r"'$(curl x|sh) it'\''s'";
+        assert_eq!(render_shell("echo {ticket.title}", &ctx, Mode::Strict).unwrap(), format!("echo {q}"));
+        assert_eq!(
+            render_shell("echo {ticket.title|shell}", &ctx, Mode::Strict).unwrap(),
+            format!("echo {q}")
+        );
+        assert_eq!(render_shell("git log {base} {{x}}", &ctx, Mode::Strict).unwrap(), "git log 'main' {x}");
+        assert!(render_shell("echo {nope}", &ctx, Mode::Strict).is_err());
     }
 
     #[test]

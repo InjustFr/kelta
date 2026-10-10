@@ -1,5 +1,6 @@
 //! keltad: a quit + restart of the app re-attaches the still-running session instead of
-//! respawning it from Dormant; sessions that are not restored are not left behind.
+//! respawning it from Dormant; sessions that are not restored are not left behind, and closed
+//! sessions are freed in the host (in-process and keltad).
 #![allow(clippy::unwrap_used)] // fixture helpers outside #[test] fns
 #![allow(clippy::disallowed_methods)] // allowlisted: tests run keltad on a thread
 
@@ -14,19 +15,21 @@ use kelta_core::{Core, CoreDeps};
 use kelta_proto::api::{CoreApi, TerminalHost};
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::ids::ProjectId;
-use kelta_proto::model::{Lifecycle, RestorePolicy, SessionKind, SessionStatus, SpawnRequest, StatusChange};
+use kelta_proto::model::{
+    CloseOnExit, Lifecycle, RestorePolicy, SessionKind, SessionStatus, SpawnRequest, StatusChange,
+};
 use kelta_proto::settings::RestoreMode;
 use kelta_proto::settings::Settings;
-use kelta_proto::term::{LoginEnv, TerminalLimits};
+use kelta_proto::term::TerminalLimits;
 use kelta_proto::testing::{FakeSecrets, FakeUiBridge, RecordingSink};
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::{self, DaemonTerminalHost};
 
-fn app(root: &Path, term: Arc<DaemonTerminalHost>) -> Arc<Core> {
+fn app(root: &Path, term: Arc<dyn TerminalHost>) -> Arc<Core> {
     app_with(root, term, Settings::defaults())
 }
 
-fn app_with(root: &Path, term: Arc<DaemonTerminalHost>, settings: Settings) -> Arc<Core> {
+fn app_with(root: &Path, term: Arc<dyn TerminalHost>, settings: Settings) -> Arc<Core> {
     let mut deps = CoreDeps::new(Dirs::under(root), CliArgs::default(), FakeUiBridge::new());
     deps.config = Some(MemConfig::new(settings, vec![project("shop", root)]));
     deps.terminal = Some(term);
@@ -74,7 +77,7 @@ async fn sessions_survive_an_app_restart() {
     let root = tmp.path();
     let sock = Dirs::under(root).keltad_socket();
     let l = daemon::bind(&sock).unwrap();
-    let host = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let host = PtyTerminalHost::new(TerminalLimits::default());
     let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
 
     // First run: a shell (restored) and a setup session (never restored).
@@ -121,7 +124,7 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
     let root = tmp.path();
     let sock = Dirs::under(root).keltad_socket();
     let l = daemon::bind(&sock).unwrap();
-    let host = PtyTerminalHost::new(LoginEnv::inherited(), TerminalLimits::default());
+    let host = PtyTerminalHost::new(TerminalLimits::default());
     let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
 
     let mut settings = Settings::defaults();
@@ -136,11 +139,60 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
         preview: None,
         file_edited: None,
         raw_event: "t".into(),
+        session_uuid: None,
     };
     core.session_apply_hook(&claude.id, working).await.unwrap();
     assert!(core.quit_needs_confirm(), "restore_mode none: quit kills the working Claude");
 
     core.shutdown().await.unwrap();
+    term.close();
+    keltad.join().unwrap();
+}
+
+/// Every way a session closes (kill while Live, close_on_exit from the Exited handler, kill
+/// while Exited) leaves nothing in the host. The Exited-handler paths call `kill` before the
+/// reader marks the session exited (the on_exited race).
+async fn closed_sessions_leave_the_host(root: &Path, term: Arc<dyn TerminalHost>) {
+    let core = app(root, term.clone());
+    let gone = |id| core.session_get(id).is_none();
+    let live = core.session_spawn(req(SessionKind::Shell)).await.unwrap();
+    core.session_kill(&live.id, false).await.unwrap();
+    let mut always = req(SessionKind::Shell);
+    always.close_on_exit = CloseOnExit::Always;
+    let always = core.session_spawn(always).await.unwrap();
+    core.session_write(&always.id, b"exit\n").await.unwrap();
+    let mut never = req(SessionKind::Shell);
+    never.close_on_exit = CloseOnExit::Never;
+    let never = core.session_spawn(never).await.unwrap();
+    core.session_write(&never.id, b"exit\n").await.unwrap();
+    assert!(
+        eventually(|| core.session_get(&never.id).is_some_and(|s| s.lifecycle == Lifecycle::Exited)).await
+    );
+    let ids = || term.stats().sessions.into_iter().map(|s| s.id).collect::<Vec<_>>();
+    // The exited session stays (its tail is still shown) until closed; the others are gone.
+    assert!(eventually(|| ids() == [never.id.clone()]).await, "{:?}", ids());
+    core.session_kill(&never.id, false).await.unwrap();
+    assert!(gone(&live.id) && gone(&always.id) && gone(&never.id));
+    assert!(eventually(|| ids().is_empty()).await, "{:?}", ids());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn closed_sessions_are_freed_in_process() {
+    let tmp = tempfile::tempdir().unwrap();
+    closed_sessions_leave_the_host(tmp.path(), Arc::new(PtyTerminalHost::new(TerminalLimits::default())))
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn closed_sessions_are_freed_in_keltad() {
+    let tmp = tempfile::tempdir().unwrap();
+    let sock = Dirs::under(tmp.path()).keltad_socket();
+    let l = daemon::bind(&sock).unwrap();
+    let host = PtyTerminalHost::new(TerminalLimits::default());
+    let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    closed_sessions_leave_the_host(tmp.path(), term.clone()).await;
     term.close();
     keltad.join().unwrap();
 }

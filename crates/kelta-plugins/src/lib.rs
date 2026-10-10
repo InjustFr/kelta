@@ -529,6 +529,5 @@ mod tests {
         assert!(host.fragments().is_empty());
         let resp = uri::handle(&host, axum::http::Request::new(Vec::new()));
         assert_eq!(resp.status(), axum::http::StatusCode::NOT_FOUND);
-        let _ = proxy::router();
     }
 }

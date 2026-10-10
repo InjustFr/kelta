@@ -287,6 +287,7 @@ pub fn work_item() -> WorkItem {
         pr_title_needs_key: false,
         review_due: false,
         claude_replied: false,
+        claude_at: None,
         sent_threads: Vec::new(),
         rebase: None,
     }
@@ -735,6 +736,7 @@ pub fn all() -> Vec<Fixture> {
                 preview: Some("All tests pass.".into()),
                 file_edited: None,
                 raw_event: "Stop".into(),
+                session_uuid: None,
             }
         ),
         fx!(
@@ -826,6 +828,7 @@ pub fn all() -> Vec<Fixture> {
             ReviewDetail,
             ReviewDetail {
                 review: review(),
+                state: PrState::Open,
                 body_html: "<p>Caches prices for 60 s.</p>".into(),
                 reviewers: vec![Reviewer { user: user(), state: Some(MyReviewState::Pending) }],
                 checks: vec![CiCheck {
@@ -845,6 +848,23 @@ pub fn all() -> Vec<Fixture> {
             WorkItem {
                 state: WorkState::Failed { step: "worktree".into(), message: "branch exists".into() },
                 ..work_item()
+            }
+        ),
+        fx!(
+            "work_item_merged",
+            WorkItem,
+            WorkItem {
+                pr_url: Some("https://github.com/acme/shop-api/pull/90".into()),
+                state: WorkState::Merged { detail: Some("choose Done status".into()) },
+                ..work_item()
+            }
+        ),
+        fx!(
+            "finish_merged_report",
+            FinishMergedReport,
+            FinishMergedReport {
+                finished: vec![],
+                skipped: vec![SkippedItem { id: WorkItemId::new(WID), reason: "choose Done status".into() }],
             }
         ),
         fx!(

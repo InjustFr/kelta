@@ -18,7 +18,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kelta_proto::api::{SecretResolver, SettingsSource};
 use kelta_proto::error::{ErrorCode, KeltaError};
-use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{KEYRING_SERVICE, Secret, SecretBackendStatus, SecretCtx, SecretRef, SecretSource};
 use kelta_proto::settings::Settings;
 use keyring_core::CredentialStore;
@@ -64,19 +63,6 @@ pub struct Secrets {
     timeout: Duration,
     cache: Mutex<Cache>,
     file: Option<Arc<file::SecretFile>>,
-}
-
-/// `SecretCtx` for an account: the host of its `base_url` (GitHub's API host maps to `github.com`).
-pub fn secret_ctx(account: Option<AccountId>, base_url: Option<&str>) -> SecretCtx {
-    let host = base_url.and_then(host_of);
-    SecretCtx { account, host }
-}
-
-fn host_of(url: &str) -> Option<String> {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let authority = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    (!authority.is_empty()).then(|| authority.to_owned())
 }
 
 fn wipe(v: &mut [u8]) {

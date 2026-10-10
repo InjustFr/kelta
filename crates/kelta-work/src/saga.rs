@@ -23,14 +23,14 @@ use kelta_proto::model::{
     WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, SessionTemplate, Settings, TransitionTarget};
-use kelta_proto::tracker::{Assignee, Status, TicketRef};
+use kelta_proto::tracker::{Assignee, Status, TicketRef, Transition};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::claude::{self, ContextInfo, LaunchMode, LaunchSpec};
 use crate::layout::{self, SlotKind};
 use crate::plan::{self, TicketSnap};
-use crate::template::{Ctx, Mode, render, shell_quote, shell_words, slugify};
+use crate::template::{Ctx, Mode, render, render_shell, shell_quote, shell_words, slugify};
 use crate::{WorkService, editor, files, git};
 
 /// Default PTY size for sessions spawned before a view attaches (resized on attach).
@@ -455,6 +455,7 @@ impl WorkService {
             pr_title_needs_key: false,
             review_due: false,
             claude_replied: false,
+            claude_at: None,
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -516,7 +517,7 @@ impl WorkService {
 
     pub(crate) async fn retry(&self, id: &WorkItemId, step: &str) -> Result<WorkItem, KeltaError> {
         let lock = self.item_lock(id);
-        let _guard = lock.try_lock().map_err(|_| KeltaError::conflict("work item is busy"))?;
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
         let (name, skip) = match step.strip_prefix("skip:") {
             Some(s) => (s, true),
             None => (step, false),
@@ -541,7 +542,10 @@ impl WorkService {
             self.save_journal(id, &j)?;
             self.set_step(&mut item, name, StepStatus::Pending, None).await?;
         }
-        if matches!(item.state, WorkState::Active | WorkState::PrOpen) {
+        if matches!(
+            item.state,
+            WorkState::Active | WorkState::PrOpen | WorkState::Merged { .. } | WorkState::PrClosed
+        ) {
             // Re-running a finished saga step keeps the item's state afterwards.
             let state = item.state.clone();
             let mut out = self.run_saga_locked(id).await?;
@@ -1122,7 +1126,7 @@ impl WorkService {
                     .session_spawn(base_req(SessionKind::Shell, name.unwrap_or("shell").into()))
                     .await?;
                 if let Some(cmd) = command.as_ref().filter(|c| !c.trim().is_empty()) {
-                    let line = render(cmd, &ctx, Mode::Lenient)?;
+                    let line = render_shell(cmd, &ctx, Mode::Lenient)?;
                     env.core.session_write(&info.id, format!("{line}\r").as_bytes()).await?;
                 }
                 Ok(info.id)
@@ -1572,20 +1576,39 @@ pub(crate) async fn transition_ticket(
     project: &ProjectId,
     work: &WorkItemId,
 ) -> Result<String, KeltaError> {
-    let current = tracker.get(t).await.ok().map(|d| d.ticket.status);
-    if let Some(cur) = &current
-        && status_matches(cur, target)
-    {
-        return Ok(format!("already {}", cur.name));
-    }
-    let transitions = tracker.transitions(t).await?;
-    let pick = transitions.iter().find(|tr| match target {
+    apply_transition(core, tracker, t, target, project, work, false).await
+}
+
+/// [`transition_ticket`] that never guesses: `Conflict` unless exactly one transition fits and
+/// it needs no fields (automatic Done move on merge, FLOW §4.6).
+pub(crate) async fn transition_ticket_strict(
+    core: &Arc<dyn CoreApi>,
+    tracker: &dyn Tracker,
+    t: &TicketRef,
+    target: &TransitionTarget,
+    project: &ProjectId,
+    work: &WorkItemId,
+) -> Result<String, KeltaError> {
+    apply_transition(core, tracker, t, target, project, work, true).await
+}
+
+/// Transitions leading to `target`; strict = exactly one and it needs no fields, else `Conflict`.
+pub(crate) fn pick_transition<'a>(
+    transitions: &'a [Transition],
+    target: &TransitionTarget,
+    strict: bool,
+) -> Result<&'a Transition, KeltaError> {
+    let mut fits = transitions.iter().filter(|tr| match target {
         TransitionTarget::Category { category } => &tr.to.category == category,
         TransitionTarget::Name { name } => {
             tr.to.name.eq_ignore_ascii_case(name) || tr.name.eq_ignore_ascii_case(name)
         }
     });
-    let Some(tr) = pick else {
+    let first = fits.next();
+    if strict && (fits.next().is_some() || first.is_some_and(|tr| tr.needs_fields)) {
+        return Err(KeltaError::conflict("several statuses fit; choose one"));
+    }
+    first.ok_or_else(|| {
         let label = match target {
             TransitionTarget::Category { category } => serde_json::to_value(category)
                 .ok()
@@ -1593,8 +1616,27 @@ pub(crate) async fn transition_ticket(
                 .unwrap_or_default(),
             TransitionTarget::Name { name } => name.clone(),
         };
-        return Err(KeltaError::not_found(format!("no transition to {label}")));
-    };
+        KeltaError::not_found(format!("no transition to {label}"))
+    })
+}
+
+async fn apply_transition(
+    core: &Arc<dyn CoreApi>,
+    tracker: &dyn Tracker,
+    t: &TicketRef,
+    target: &TransitionTarget,
+    project: &ProjectId,
+    work: &WorkItemId,
+    strict: bool,
+) -> Result<String, KeltaError> {
+    let current = tracker.get(t).await.ok().map(|d| d.ticket.status);
+    if let Some(cur) = &current
+        && status_matches(cur, target)
+    {
+        return Ok(format!("already {}", cur.name));
+    }
+    let transitions = tracker.transitions(t).await?;
+    let tr = pick_transition(&transitions, target, strict)?;
     let ticket = tracker.transition(t, &tr.id, None).await?;
     core.publish(
         BusEvent::new(
@@ -1605,4 +1647,30 @@ pub(crate) async fn transition_ticket(
         .with_work_item(work.clone()),
     );
     Ok(format!("moved to {}", ticket.status.name))
+}
+
+#[cfg(test)]
+mod tests {
+    use kelta_proto::samples::status;
+    use kelta_proto::tracker::StatusCategory;
+
+    use super::*;
+
+    fn tr(id: &str, name: &str, category: StatusCategory, needs_fields: bool) -> Transition {
+        Transition { id: id.into(), name: name.into(), to: status(id, name, category), needs_fields }
+    }
+
+    #[test]
+    fn strict_pick_never_guesses_between_done_statuses() {
+        let done = TransitionTarget::Category { category: StatusCategory::Done };
+        let several =
+            [tr("1", "Done", StatusCategory::Done, false), tr("2", "Won't Do", StatusCategory::Done, false)];
+        assert_eq!(pick_transition(&several, &done, true).unwrap_err().code, ErrorCode::Conflict);
+        assert_eq!(pick_transition(&several, &done, false).unwrap().id, "1", "interactive keeps first");
+        let by_name = TransitionTarget::Name { name: "won't do".into() };
+        assert_eq!(pick_transition(&several, &by_name, true).unwrap().id, "2");
+        let fields = [tr("1", "Done", StatusCategory::Done, true)];
+        assert_eq!(pick_transition(&fields, &done, true).unwrap_err().code, ErrorCode::Conflict);
+        assert_eq!(pick_transition(&[], &done, true).unwrap_err().code, ErrorCode::NotFound);
+    }
 }
