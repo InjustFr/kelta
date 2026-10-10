@@ -907,6 +907,7 @@ export const startWorkPlan: StartWorkPlan = {
     }
   },
   "template_id": "claude+editor",
+  "ticket_source": null,
   "worktree_path": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
 
@@ -1025,6 +1026,7 @@ export const workItem: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1146,6 +1148,7 @@ export const workItemFailed: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1266,6 +1269,7 @@ export const workItemMerged: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -1428,6 +1432,7 @@ export const workItemRebaseStopped: WorkItem = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 };
@@ -3613,6 +3618,7 @@ export const uiEventWorkUpdated: UiEvent = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "ticket_source": null,
     "title": null,
     "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
   }

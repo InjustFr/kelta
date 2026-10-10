@@ -13,7 +13,7 @@
   } from '$lib/gen';
   import { openExternal, workPlan, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
-  import { projects, tickets, toasts, work } from '$lib/stores';
+  import { projects, settings, tickets, toasts, work } from '$lib/stores';
   import { Button, Icon, Select, Sheet, Spinner, TextInput, Toggle } from '$lib/ui';
 
   import { activateProject } from '../../shell/nav';
@@ -43,6 +43,9 @@
 
   const resuming = $derived(seed.existing !== null);
   const projectName = (id: string): string => projects.byId(id)?.name ?? id;
+  // The guess hint names the ticket's source, else its account.
+  const sourceName = (p: StartWorkPlan, account: string): string =>
+    settings.value()?.sources.find((s) => s.id === p.ticket_source)?.label || account;
   let switching = $state(false);
 
   /** Re-plans in `id`: branch, worktree, Claude and side effects follow its settings (edits are dropped). */
@@ -272,7 +275,8 @@
             />
             {#if plan.project_guessed && plan.source.kind === 'ticket'}
               <p class="hint" data-testid="project-guess">
-                No usual project for {plan.source.ticket.account} tickets yet. Kelta will remember this one.
+                No usual project for {sourceName(plan, plan.source.ticket.account)} tickets yet. Kelta will remember
+                this one.
               </p>
             {/if}
           </div>

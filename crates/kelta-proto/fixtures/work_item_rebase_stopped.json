@@ -124,6 +124,7 @@
     "id": "10142",
     "key": "SHOP-142"
   },
+  "ticket_source": null,
   "title": null,
   "worktree": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
 }

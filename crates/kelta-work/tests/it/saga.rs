@@ -70,27 +70,6 @@ async fn plan_templating_and_unicode_slug() {
 }
 
 #[tokio::test]
-async fn migrated_routes_still_pick_the_repo() {
-    need_git!();
-    let fx = Fx::new();
-    // the fixture's binding comes from a `[[sources]]` route: component `frontend` → repo `web`
-    let mut p = kelta_proto::api::CoreApi::project(&*fx.core, &project()).unwrap();
-    let mut web = p.repos[0].clone();
-    web.id = "web".into();
-    web.primary = false;
-    p.repos.push(web);
-    fx.core.add_project(p);
-    let mut d = fx.tracker.ticket("SHOP-141").unwrap();
-    d.ticket.labels = vec!["frontend".into()];
-    fx.core.add_tracker(
-        AccountId::new("jira-acme"),
-        Arc::new(kelta_proto::testing::FakeTracker::with_tickets(vec![d])),
-    );
-    let plan = fx.service().plan(&project(), ticket("SHOP-141")).await.unwrap();
-    assert_eq!(plan.repo_id, "web");
-}
-
-#[tokio::test]
 async fn invalid_branch_template_is_sanitized_or_rejected() {
     need_git!();
     let fx = Fx::new();
@@ -229,6 +208,38 @@ async fn ticket_with_work_item_in_a_removed_project_plans_in_the_requested_one()
     let plan = w.plan(&other.id, ticket("SHOP-141")).await.unwrap();
     assert_eq!(plan.project_id, other.id);
     assert!(plan.existing.is_none());
+}
+
+#[tokio::test]
+async fn a_started_item_keeps_the_plans_ticket_source() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let mut plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    plan.ticket_source = Some("product".into());
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.ticket_source.as_deref(), Some("product"));
+    assert_eq!(w.list(Some(&project())).await.unwrap()[0].ticket_source.as_deref(), Some("product"));
+}
+
+#[tokio::test]
+async fn route_repo_sets_the_plan_repo_unless_an_item_or_the_project_says_otherwise() {
+    need_git!();
+    let fx = Fx::new();
+    let mut p = samples::project_info();
+    p.id = kelta_proto::ids::ProjectId::new("routed");
+    p.repos[0].path = fx.repo.clone();
+    let mut web = p.repos[0].clone();
+    web.id = "web".into();
+    web.primary = false;
+    p.repos.push(web);
+    fx.core.add_project(p.clone());
+    let w = fx.service();
+    let plan = |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into));
+    assert_eq!(plan(Some("web")).await.unwrap().repo_id, "web", "the route's repo");
+    assert_eq!(plan(Some("gone")).await.unwrap().repo_id, "api", "not in the project: primary");
+    w.start(plan(None).await.unwrap()).await.unwrap();
+    assert_eq!(plan(Some("web")).await.unwrap().repo_id, "api", "the work item's repo wins");
 }
 
 #[tokio::test]

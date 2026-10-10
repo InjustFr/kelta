@@ -226,6 +226,7 @@ impl WorkService {
         &self,
         project_id: &ProjectId,
         source: WorkSource,
+        repo_hint: Option<String>,
     ) -> Result<StartWorkPlan, KeltaError> {
         // A ticket or PR has one work item across projects: resume it where it lives. Branch sources
         // stay per project, the same `wip/` name can exist in two repos.
@@ -237,7 +238,8 @@ impl WorkService {
             if let Some(w) =
                 plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id).filter(hosts)
             {
-                return Box::pin(self.build_plan(&w.project_id, source)).await;
+                // The route's repo belongs to the planned project: dropped here.
+                return Box::pin(self.build_plan(&w.project_id, source, None)).await;
             }
         }
         let project = project_of(&core, project_id)?;
@@ -248,7 +250,6 @@ impl WorkService {
         let items = self.store.list_items(Some(project_id)).await?;
         let existing = plan::existing_for(&items, &source).cloned();
         let slug_max = settings.worktree.slug_max as usize;
-        let rules = project.tracker.as_ref().map(|t| t.repo_rules.clone()).unwrap_or_default();
 
         match &source {
             WorkSource::Ticket { ticket } => {
@@ -263,7 +264,7 @@ impl WorkService {
                         .map(|w| w.repo_id.clone())
                         .next()
                 });
-                let repo_id = plan::select_repo(&project, &rules, Some(&snap), remembered.as_deref())
+                let repo_id = plan::select_repo(&project, repo_hint.as_deref(), remembered.as_deref())
                     .ok_or_else(|| KeltaError::invalid("no repository"))?;
                 let repo = repo_of(&project, &repo_id)?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
@@ -316,13 +317,13 @@ impl WorkService {
                         })
                     });
                     if let Some(w) = elsewhere {
-                        return Box::pin(self.build_plan(&w.project_id, source)).await;
+                        return Box::pin(self.build_plan(&w.project_id, source, None)).await;
                     }
                 }
                 if existing.is_none() && r.kind == ReviewKind::Authored {
                     // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
                     let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
-                    let mut plan = Box::pin(self.build_plan(project_id, source)).await?;
+                    let mut plan = Box::pin(self.build_plan(project_id, source, None)).await?;
                     plan.base = r.target_branch.clone();
                     plan.adopt_pr = Some(r.url.clone());
                     return Ok(plan);
@@ -373,10 +374,8 @@ impl WorkService {
             WorkSource::Branch { name, task, repo } => {
                 let repo_id = match repo {
                     Some(r) => r.clone(),
-                    None => {
-                        plan::select_repo(&project, &[], None, existing.as_ref().map(|w| w.repo_id.as_str()))
-                            .ok_or_else(|| KeltaError::invalid("no repository"))?
-                    }
+                    None => plan::select_repo(&project, None, existing.as_ref().map(|w| w.repo_id.as_str()))
+                        .ok_or_else(|| KeltaError::invalid("no repository"))?,
                 };
                 let repo = repo_of(&project, &repo_id)?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
@@ -502,6 +501,7 @@ impl WorkService {
             parked_at: None,
             nvim_kept: 0,
             run: None,
+            ticket_source: plan.ticket_source.clone(),
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;

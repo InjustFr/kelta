@@ -176,6 +176,7 @@ async fn work_store_round_trip() {
     assert_eq!(got.steps[0].detail.as_deref(), Some("boom"));
 
     assert!(!got.review_due && !got.claude_replied);
+    assert_eq!(got.ticket_source, None, "an item without a source loads with none");
 
     let mut w2 = w.clone();
     w2.state = WorkState::Failed { step: "x".into(), message: "y".into() };
@@ -186,8 +187,10 @@ async fn work_store_round_trip() {
         Some(kelta_proto::model::ReviewDelta { lines: 212, files: 9, generated: 1800, ..Default::default() });
     w2.next_note = Some("check the retry path".into());
     w2.left_at = Some("2026-10-10T09:30:00Z".into());
+    w2.ticket_source = Some("product".into());
     s.put_item(&w2).await.unwrap();
     let got = s.get_item(&w.id).await.unwrap().unwrap();
+    assert_eq!(got.ticket_source.as_deref(), Some("product"));
     assert_eq!((got.state.clone(), got.review_due, got.claude_replied), (w2.state.clone(), true, false));
     assert_eq!(got.claude_at, w2.claude_at);
     assert_eq!(

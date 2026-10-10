@@ -1659,6 +1659,20 @@ pub struct RepoMatch {
     pub kind: Option<String>,
 }
 
+impl RepoMatch {
+    /// Every field set matches the ticket (case-insensitive); an empty match never matches.
+    pub fn matches(&self, kind: Option<&str>, labels: &[String]) -> bool {
+        if self.component.is_none() && self.label.is_none() && self.kind.is_none() {
+            return false;
+        }
+        let has_label = |l: &str| labels.iter().any(|x| x.eq_ignore_ascii_case(l));
+        // Tickets carry no component field: components are matched against labels.
+        self.component.as_deref().is_none_or(has_label)
+            && self.label.as_deref().is_none_or(has_label)
+            && self.kind.as_deref().is_none_or(|k| kind.is_some_and(|tk| tk.eq_ignore_ascii_case(k)))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct RepoRule {
@@ -2066,6 +2080,22 @@ enabled = true
         assert_eq!(p.overrides.claude.profiles["default"].model, "sonnet");
         let tracker = p.project.tracker.unwrap();
         assert_eq!(tracker.status_map.review, Some(TransitionTarget::Name { name: "In Review".into() }));
+    }
+
+    #[test]
+    fn repo_match_on_component_label_and_type() {
+        let labels = vec!["Frontend".to_owned()];
+        let m = |c: Option<&str>, l: Option<&str>, k: Option<&str>| RepoMatch {
+            component: c.map(Into::into),
+            label: l.map(Into::into),
+            kind: k.map(Into::into),
+        };
+        assert!(m(Some("frontend"), None, None).matches(None, &labels), "components match labels");
+        assert!(m(None, Some("FRONTEND"), None).matches(None, &labels));
+        assert!(m(None, None, Some("bug")).matches(Some("Bug"), &[]));
+        assert!(!m(None, None, Some("bug")).matches(None, &labels));
+        assert!(!m(Some("frontend"), None, Some("bug")).matches(Some("Story"), &labels), "every field");
+        assert!(!m(None, None, None).matches(Some("Bug"), &labels), "an empty match never matches");
     }
 
     fn tracked(id: &str, name: &str, t: TrackerBinding) -> ProjectConfig {

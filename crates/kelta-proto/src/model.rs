@@ -684,6 +684,10 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub run: Option<RunClaim>,
+    /// `[[sources]]` id the ticket was started from (rule 4 of SPEC §3.1); `None` for older items.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
 }
 
 /// A background run's claim on a ticket and how far it got (MCP `claim_ticket` / `report_progress`).
@@ -951,6 +955,10 @@ pub struct StartWorkPlan {
     /// `project_id` is only the active project: the sheet always shows so the user confirms it.
     #[serde(default)]
     pub project_guessed: bool,
+    /// `[[sources]]` id of the ticket, set by `Core::work_plan`; copied to the work item at start.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub ticket_source: Option<String>,
     pub base: String,
     pub branch: String,
     pub branch_exists: Option<BranchExists>,

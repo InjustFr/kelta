@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StartWorkPlan, WorkItem } from '$lib/gen';
+import type { Source, StartWorkPlan, WorkItem } from '$lib/gen';
 import { workPlan } from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { applyUiEvent, projects, toasts, work } from '$lib/stores';
+import { applyUiEvent, projects, settings, toasts, work } from '$lib/stores';
 
 import { refines } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
@@ -230,11 +230,47 @@ describe('StartWorkSheet project', () => {
     delete refines[`${ticket.account}:${ticket.key}`];
   });
 
+  /** The mock's source of a ticket is its account: feed `billing` from jira-acme too, no last pick. */
+  function twoProjectSource(): void {
+    mock.state.work = [];
+    const billing = mock.state.projects.find((p) => p.id === 'billing')!;
+    billing.tracker = { ...billing.tracker!, account: 'jira-acme' };
+  }
+
   it('focuses a guessed project and says Kelta will remember it', async () => {
+    twoProjectSource();
     const plan = await workPlan({ project_id: null, source: { kind: 'ticket', ticket } });
     expect(plan.project_guessed).toBe(true);
     render(StartWorkSheet, { props: { plan, onclose: vi.fn() } });
     expect(screen.getByTestId('project-guess').textContent).toMatch(/No usual project for jira-acme tickets/);
     expect(document.activeElement).toBe(screen.getByLabelText('Project'));
+  });
+
+  it('names the source of the ticket in the guess hint', async () => {
+    twoProjectSource();
+    await settings.load();
+    const product = { id: 'jira-acme', label: 'Product board' } as Source;
+    settings.value()!.sources = [product];
+    const plan = await workPlan({ project_id: null, source: { kind: 'ticket', ticket } });
+    expect(plan.ticket_source).toBe('jira-acme');
+    render(StartWorkSheet, { props: { plan, onclose: vi.fn() } });
+    expect(screen.getByTestId('project-guess').textContent).toMatch(
+      /No usual project for Product board tickets/,
+    );
+  });
+
+  it('a route picks the project and repo, and a switch of project is never overridden', async () => {
+    twoProjectSource();
+    const shop = mock.state.projects.find((p) => p.id === 'shop')!;
+    shop.tracker!.repo_rules = [{ match: { component: null, label: null, type: 'story' }, repo: 'web' }];
+    const plan = await workPlan({ project_id: null, source: { kind: 'ticket', ticket } });
+    expect([plan.project_id, plan.repo_id, plan.project_guessed]).toEqual(['shop', 'web', false]);
+    const onclose = vi.fn();
+    render(StartWorkSheet, { props: { plan, onclose } });
+    await fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'billing' } });
+    await waitFor(() => expect(screen.queryByLabelText('Repository')).toBeNull());
+    await fireEvent.click(start());
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect([sentPlan().project_id, sentPlan().repo_id]).toEqual(['billing', 'core']);
   });
 });

@@ -459,7 +459,7 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, item.project_ids[0], { preview });
+    void startWorkOnTicket(item.ticket.ref, null, { preview });
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
