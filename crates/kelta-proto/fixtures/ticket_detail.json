@@ -26,6 +26,7 @@
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -44,6 +45,7 @@
           "id": "10143",
           "key": "SHOP-143"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -61,6 +63,7 @@
         "url": "https://acme.atlassian.net/browse/SHOP-143"
       },
       "view_ids": [],
+      "waiting": [],
       "work_item_id": null
     }
   ],
@@ -68,6 +71,7 @@
     {
       "author": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"
@@ -81,6 +85,7 @@
   "ticket": {
     "assignee": {
       "avatar_url": null,
+      "email": null,
       "id": "5b10ac8d82e05b22cc7d4ef5",
       "login": "ada",
       "name": "Ada Lovelace"
@@ -99,6 +104,7 @@
       "id": "10142",
       "key": "SHOP-142"
     },
+    "reporter": null,
     "sprint": {
       "active": true,
       "ends_at": "2026-10-16",

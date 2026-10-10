@@ -44,9 +44,15 @@ accounts, so one board can show Jira and GitHub tickets together.
 Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. Team is every open
 ticket of your sources; group it by Assignee (`Shift+g`) for a per-person view.
 
-The person menu next to the tabs narrows the list to one assignee (it lists the assignees of the loaded tickets,
-so it only knows people on the first page of each source). Choosing a person switches to Team and is remembered
+The person menu next to the tabs narrows the list to one team person. Kelta builds the team from tickets and pull
+requests it already loaded (assignees, reporters, PR authors and requested reviewers), and joins a tracker user to a
+code host user only when it can prove they are the same: you, the same login on the same host, or the same email.
+Otherwise the person stays apart and is marked "(tracker only)". Choosing a person switches to Team and is remembered
 with the pane; "Any person" clears it. Picking a tab clears it too.
+
+A row whose pull request waits on someone shows `waiting on Anna · 26h` (`+2` when several; hover for who and why)
+next to the PR chip. Reviews and Now show the same chip. A ticket that only waits on its assignee shows no chip:
+the avatar already says it.
 
 ## Current iteration
 

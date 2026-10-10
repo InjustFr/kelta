@@ -31,6 +31,7 @@ beforeEach(async () => {
   tickets.columns = {};
   tickets.details = {};
   tickets.transitions = {};
+  tickets.team = {};
   toasts.clear();
   reviews.lists = {};
   ui.sheets = [];
@@ -586,17 +587,38 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(row(container, 'SHOP-142').querySelector('.sprint')).toBeNull();
   });
 
-  it('narrows to a person from the Who control, on top of Anyone, and persists it', async () => {
+  it('narrows to a team person from the Who control, on top of Team, and persists it', async () => {
     inLayout();
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    await fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'u-bob' } });
+    await waitFor(() => expect(screen.getByRole('option', { name: /Bob.*\(tracker only\)/ })).toBeTruthy());
+    await fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'jira-acme:u-bob' } });
     await waitFor(() => expect(row(container, 'SHOP-120')).not.toBeNull());
     expect(row(container, 'SHOP-151')).toBeNull();
     expect(screen.getByRole('tab', { name: /^Team/ }).getAttribute('aria-selected')).toBe('true');
-    expect(savedContent()).toMatchObject({ person: 'u-bob', who: 'anyone' });
+    expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
     await press('1'); // a who tab clears the person
     expect(savedContent()).toMatchObject({ person: null, who: 'mine' });
+  });
+
+  it('a person id saved before team people still filters', async () => {
+    const { container } = mountBoard('list', 'shop', { who: 'anyone', person: 'u-bob' });
+    await waitFor(() => expect(row(container, 'SHOP-120')).not.toBeNull());
+    expect(row(container, 'SHOP-151')).toBeNull();
+    await waitFor(() =>
+      expect((screen.getByLabelText('Person') as HTMLSelectElement).value).toBe('jira-acme:u-bob'),
+    );
+  });
+
+  it('shows who the ticket PR waits on, and nothing for an assignment alone', async () => {
+    const wait = { person: 'gh:anna', name: 'Anna', since: '2026-10-09T10:00:00Z', matched: true } as const;
+    const byKey = (k: string) => mock.state.tickets.find((i) => i.ticket.ref.key === k)!;
+    byKey('SHOP-142').waiting = [{ ...wait, why: 'review' }];
+    byKey('SHOP-151').waiting = [{ ...wait, why: 'assigned', since: null }];
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
+    expect(row(container, 'SHOP-142').textContent).toMatch(/waiting on Anna/);
+    expect(row(container, 'SHOP-151').textContent).not.toMatch(/waiting on/);
   });
 });
 

@@ -31,7 +31,7 @@ pub const MAX_PAGES: u32 = 20;
 const USER: &str = "id name displayName avatarUrl";
 const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
     startedAt cycle { id name number isActive endsAt } state { id name type } \
-    assignee { id name displayName avatarUrl } labels { nodes { name } } team { key }";
+    assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key }";
 
 /// Linear's fixed priorities as (label, API value), highest first.
 const PRIORITIES: [(&str, u8); 5] =
@@ -146,6 +146,7 @@ impl LinearTracker {
             status,
             kind: None,
             assignee: v.get("assignee").and_then(user_from),
+            reporter: v.get("creator").and_then(user_from),
             labels: v
                 .pointer("/labels/nodes")
                 .and_then(Value::as_array)

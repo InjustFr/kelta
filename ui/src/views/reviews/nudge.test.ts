@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Review } from '$lib/gen';
+import type { Review, ReviewItem, Waiting } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
 import { nudgedRecently, pingBody, waitingChip } from './nudge';
@@ -13,11 +13,38 @@ const pr = (patch: Partial<Review>): Review => ({
 });
 
 describe('nudge', () => {
-  it('waiting chip: hours since the oldest wait, amber past the SLA', () => {
-    const r = pr({ waiting_on: ['anna'], requested_at: '2026-10-09T10:00:00Z' });
-    expect(waitingChip(r, 24, now)).toEqual({ label: 'waiting on @anna · 26h', late: true });
-    expect(waitingChip(r, 48, now)?.late).toBe(false);
-    expect(waitingChip(pr({ waiting_on: [] }), 24, now)).toBeNull();
+  const anna: Waiting = {
+    person: 'p:anna',
+    name: 'Anna',
+    why: 'review',
+    since: '2026-10-09T10:00:00Z',
+    matched: true,
+  };
+  const item = (patch: Partial<Review>, waiting: Waiting[]): ReviewItem => ({
+    review: pr(patch),
+    project_ids: [],
+    waiting,
+  });
+
+  it('waiting chip: hours since the wait, amber past the SLA on my PRs only', () => {
+    const mine = item({}, [anna]);
+    expect(waitingChip(mine, 24, now)).toMatchObject({ label: 'waiting on Anna · 26h', late: true });
+    expect(waitingChip(mine, 48, now)?.late).toBe(false);
+    expect(waitingChip(item({}, []), 24, now)).toBeNull();
+    expect(waitingChip(item({ kind: 'review_requested' }, [anna]), 24, now)?.late).toBe(false);
+  });
+
+  it('request rows name the author when changes were requested', () => {
+    const bob: Waiting = { person: 'p:bob', name: 'Bob', why: 'author', since: null, matched: true };
+    expect(waitingChip(item({ kind: 'review_requested' }, [bob]), 24, now)?.label).toBe(
+      'waiting on Bob (author)',
+    );
+  });
+
+  it('an author wait is never late and takes no fallback age on my PRs', () => {
+    const bob: Waiting = { person: 'p:bob', name: 'Bob', why: 'author', since: null, matched: true };
+    const old = item({ updated_at: '2026-09-01T00:00:00Z' }, [bob]);
+    expect(waitingChip(old, 24, now)).toMatchObject({ label: 'waiting on Bob (author)', late: false });
   });
 
   it('cooldown: 24 h after a nudge', () => {

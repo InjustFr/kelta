@@ -505,6 +505,7 @@ export const ticketPage: TicketPage = {
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -523,6 +524,7 @@ export const ticketPage: TicketPage = {
           "id": "10142",
           "key": "SHOP-142"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -542,6 +544,7 @@ export const ticketPage: TicketPage = {
       "view_ids": [
         "mine"
       ],
+      "waiting": [],
       "work_item_id": "01928f6e-3c5d-7b20-8d4e-6f7081920314"
     }
   ],
@@ -555,6 +558,7 @@ export const ticketPage: TicketPage = {
 export const ticket: Ticket = {
   "assignee": {
     "avatar_url": null,
+    "email": null,
     "id": "5b10ac8d82e05b22cc7d4ef5",
     "login": "ada",
     "name": "Ada Lovelace"
@@ -573,6 +577,7 @@ export const ticket: Ticket = {
     "id": "10142",
     "key": "SHOP-142"
   },
+  "reporter": null,
   "sprint": {
     "active": true,
     "ends_at": "2026-10-16",
@@ -645,6 +650,7 @@ export const ticketDetail: TicketDetail = {
       "ticket": {
         "assignee": {
           "avatar_url": null,
+          "email": null,
           "id": "5b10ac8d82e05b22cc7d4ef5",
           "login": "ada",
           "name": "Ada Lovelace"
@@ -663,6 +669,7 @@ export const ticketDetail: TicketDetail = {
           "id": "10143",
           "key": "SHOP-143"
         },
+        "reporter": null,
         "sprint": {
           "active": true,
           "ends_at": "2026-10-16",
@@ -680,6 +687,7 @@ export const ticketDetail: TicketDetail = {
         "url": "https://acme.atlassian.net/browse/SHOP-143"
       },
       "view_ids": [],
+      "waiting": [],
       "work_item_id": null
     }
   ],
@@ -687,6 +695,7 @@ export const ticketDetail: TicketDetail = {
     {
       "author": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"
@@ -700,6 +709,7 @@ export const ticketDetail: TicketDetail = {
   "ticket": {
     "assignee": {
       "avatar_url": null,
+      "email": null,
       "id": "5b10ac8d82e05b22cc7d4ef5",
       "login": "ada",
       "name": "Ada Lovelace"
@@ -718,6 +728,7 @@ export const ticketDetail: TicketDetail = {
       "id": "10142",
       "key": "SHOP-142"
     },
+    "reporter": null,
     "sprint": {
       "active": true,
       "ends_at": "2026-10-16",
@@ -777,10 +788,13 @@ export const reviewPage: ReviewPage = {
         "additions": 120,
         "author": {
           "avatar_url": null,
+          "email": null,
           "id": "bob",
           "login": "bob",
           "name": "Bob"
         },
+        "author_since": null,
+        "author_to_act": false,
         "blocking": false,
         "ci": "success",
         "decision": "review_required",
@@ -811,8 +825,10 @@ export const reviewPage: ReviewPage = {
         "unresolved_threads": null,
         "updated_at": "2026-10-09T12:00:00Z",
         "url": "https://github.com/acme/shop-api/pull/87",
-        "waiting_on": []
-      }
+        "waiting_on": [],
+        "waiting_since": null
+      },
+      "waiting": []
     }
   ],
   "stale": true
@@ -839,10 +855,13 @@ export const reviewDetail: ReviewDetail = {
     "additions": 120,
     "author": {
       "avatar_url": null,
+      "email": null,
       "id": "bob",
       "login": "bob",
       "name": "Bob"
     },
+    "author_since": null,
+    "author_to_act": false,
     "blocking": false,
     "ci": "success",
     "decision": "review_required",
@@ -873,13 +892,15 @@ export const reviewDetail: ReviewDetail = {
     "unresolved_threads": null,
     "updated_at": "2026-10-09T12:00:00Z",
     "url": "https://github.com/acme/shop-api/pull/87",
-    "waiting_on": []
+    "waiting_on": [],
+    "waiting_since": null
   },
   "reviewers": [
     {
       "state": "pending",
       "user": {
         "avatar_url": null,
+        "email": null,
         "id": "5b10ac8d82e05b22cc7d4ef5",
         "login": "ada",
         "name": "Ada Lovelace"
@@ -1864,6 +1885,7 @@ export const accountTestResult: AccountTestResult = {
   "ok": true,
   "user": {
     "avatar_url": null,
+    "email": null,
     "id": "5b10ac8d82e05b22cc7d4ef5",
     "login": "ada",
     "name": "Ada Lovelace"

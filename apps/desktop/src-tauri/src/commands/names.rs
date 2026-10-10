@@ -85,6 +85,7 @@ pub const COMMANDS: &[&str] = &[
     "tracker_refine",
     "tracker_search",
     "tracker_sources",
+    "team_people",
     "next_up_list",
     "next_up_put",
     "next_up_remove",

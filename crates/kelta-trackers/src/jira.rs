@@ -34,6 +34,7 @@ const LIST_FIELDS: &[&str] = &[
     "status",
     "issuetype",
     "assignee",
+    "reporter",
     "labels",
     "priority",
     "updated",
@@ -183,12 +184,14 @@ impl JiraTracker {
         let name = s(v, "displayName").or_else(|| s(v, "name")).unwrap_or(id);
         let avatar =
             v.get("avatarUrls").and_then(|a| a.get("48x48")).and_then(Value::as_str).map(str::to_owned);
-        Some(common::user_from(
+        let mut u = common::user_from(
             id,
             name,
             s(v, "emailAddress").or_else(|| s(v, "name")).map(str::to_owned),
             avatar,
-        ))
+        );
+        u.email = s(v, "emailAddress").map(str::to_owned);
+        Some(u)
     }
 
     fn status_from(v: &Value) -> Status {
@@ -259,6 +262,7 @@ impl JiraTracker {
             status: f.get("status").map(Self::status_from).unwrap_or_default(),
             kind: f.get("issuetype").and_then(|t| s(t, "name")).map(str::to_owned),
             assignee: f.get("assignee").and_then(Self::user_from),
+            reporter: f.get("reporter").and_then(Self::user_from),
             labels: f
                 .get("labels")
                 .and_then(Value::as_array)

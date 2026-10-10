@@ -63,7 +63,7 @@ pub fn user_from(
     login: Option<String>,
     avatar: Option<String>,
 ) -> User {
-    User { id: id.into(), name: name.into(), login, avatar_url: avatar }
+    User { id: id.into(), name: name.into(), login, avatar_url: avatar, email: None }
 }
 
 /// Configured `columns` of a binding as `Column`s (explicit configuration wins over discovery).

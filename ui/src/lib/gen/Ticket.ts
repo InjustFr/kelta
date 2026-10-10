@@ -4,7 +4,7 @@ import type { Status } from "./Status";
 import type { TicketRef } from "./TicketRef";
 import type { User } from "./User";
 
-export type Ticket = { ref: TicketRef, title: string, url: string, status: Status, kind: string | null, assignee: User | null, labels: Array<string>, priority: string | null, 
+export type Ticket = { ref: TicketRef, title: string, url: string, status: Status, kind: string | null, assignee: User | null, reporter?: User | null, labels: Array<string>, priority: string | null, 
 /**
  * RFC 3339.
  */
