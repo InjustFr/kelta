@@ -55,7 +55,7 @@
   const detail = $derived(slot?.data ?? null);
   const project = $derived(projectId ?? item.project_ids[0] ?? projects.activeId);
   // Start work never falls back to the active project: the backend picks the default (SPEC §3.1).
-  const ownProject = $derived(projectId ?? item.project_ids[0] ?? null);
+  const ownProject = $derived(item.project_ids[0] ?? null);
   const workItem = $derived(work.forTicket(ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null));
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
   const proposal = $derived(refines[key] ?? null);

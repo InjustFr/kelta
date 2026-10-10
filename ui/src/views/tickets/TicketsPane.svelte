@@ -527,7 +527,7 @@
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     // #141: Mod+Enter starts the marked tickets; Space marks on the board only (the list's Space splits).
     const mark =
-      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? projectId } : null;
+      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? null } : null;
     if (!side?.contains(target) && batchKey(e, mark)) {
       e.preventDefault();
       return;
