@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -51,6 +52,17 @@ pub struct Feeds {
     /// PRs whose merge / close was published in this process (live diff and check publish once).
     ended: Mutex<HashSet<ReviewRef>>,
     transitions: Mutex<HashMap<TicketRef, CachedTransitions>>,
+    /// Cold-cache list fetches by cache key: concurrent misses share one provider call.
+    fetches: Mutex<HashMap<String, Arc<FetchGate>>>,
+    /// The pane a global view on the rail shows outside any layout (`ui_set_global_view`).
+    global_view: Mutex<Option<PaneContent>>,
+}
+
+/// Single-flight of one ticket list: `done` counts the fetches made under `lock`.
+#[derive(Default)]
+struct FetchGate {
+    lock: tokio::sync::Mutex<()>,
+    done: AtomicU64,
 }
 
 /// One tracker list query shared by the projects that use it.
@@ -497,6 +509,8 @@ impl Core {
                 Err(e) => (None, false, err(e)),
             };
         }
+        let gate = self.feeds.fetches.lock().entry(q.cache_key.clone()).or_default().clone();
+        let seen = gate.done.load(Ordering::Acquire);
         let cached: Option<(Page<Ticket>, Duration)> = self.cache_get(&q.cache_key).await;
         if !refresh && let Some((page, age)) = &cached {
             let stale = *age > self.focused_interval();
@@ -505,8 +519,18 @@ impl Core {
             }
             return (Some(page.clone()), stale, None);
         }
+        // A fetch that ended after this call began (another caller's) answers it too.
+        let _flight = gate.lock.lock().await;
+        if gate.done.load(Ordering::Acquire) != seen
+            && let Some((page, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await
+        {
+            return (Some(page), false, None);
+        }
         match self.fetch_tickets(q, None).await {
-            Ok(p) => (Some(p), false, None),
+            Ok(p) => {
+                gate.done.fetch_add(1, Ordering::Release);
+                (Some(p), false, None)
+            }
             Err(e) => {
                 let stale = cached.is_some();
                 (cached.map(|(p, _)| p), stale, err(e))
@@ -936,6 +960,14 @@ impl Core {
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
         let ticket = self.tracker_of(&t.account)?.set_priority(t, priority).await?;
+        self.after_ticket_write(&ticket).await;
+        Ok(ticket)
+    }
+
+    /// MCP `close_ticket`: the provider's close, then the cached rows like any write.
+    pub async fn tracker_close(&self, t: &TicketRef) -> Result<Ticket, KeltaError> {
+        self.rt.capture();
+        let ticket = self.tracker_of(&t.account)?.close(t).await?;
         self.after_ticket_write(&ticket).await;
         Ok(ticket)
     }
@@ -1560,11 +1592,19 @@ impl Core {
     }
 
     /// Recompute subscriptions: visible panes of the active tab + notification rules.
+    /// `ui_set_global_view`: the rail's Tickets, Now or Reviews view (`None` = a project) is
+    /// polled like a visible pane.
+    pub fn ui_set_global_view(&self, content: Option<PaneContent>) {
+        *self.feeds.global_view.lock() = content;
+        self.resubscribe();
+    }
+
     pub(crate) fn resubscribe(&self) {
         let s = self.accounts_settings();
         let active = self.active_project();
-        let contents: Vec<PaneContent> =
+        let mut contents: Vec<PaneContent> =
             self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
+        contents.extend(self.feeds.global_view.lock().clone());
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
         let tickets = |scope: &Scope,
                        view: Option<&str>,

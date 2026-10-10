@@ -2,7 +2,7 @@
 
 import { trackerSearch } from '$lib/ipc/commands';
 import type { ProjectId } from '$lib/gen';
-import { toasts } from '$lib/stores';
+import { projects, toasts } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 import { openContent } from '../work/nav';
@@ -14,19 +14,28 @@ export function sameKey(k: string, key: string, repo: string): boolean {
   return k === key || (key.startsWith('#') && (k === repo.toLowerCase() + key || '#' + k === key));
 }
 
-export async function openLinkedTicket(key: string, projectId: ProjectId, repo: string): Promise<void> {
+export async function openLinkedTicket(
+  key: string,
+  projectId: ProjectId | null,
+  repo: string,
+): Promise<void> {
   try {
     // The search is fuzzy (`SHOP-1` also finds `SHOP-12`): only an exact key counts.
     const hits = (await trackerSearch({ scope: { kind: 'all' }, text: key })).filter((h) =>
       sameKey(h.ticket.ref.key, key, repo),
     );
-    const hit = hits.find((h) => h.project_ids.includes(projectId)) ?? hits[0];
+    const hit = (projectId && hits.find((h) => h.project_ids.includes(projectId))) || hits[0];
     if (!hit) {
       toasts.info(`${key} is not in any of your trackers`);
       return;
     }
-    // Land in the project on screen when the ticket belongs to it, else switch to its first project.
-    const target = hit.project_ids.includes(projectId) ? projectId : (hit.project_ids[0] ?? projectId);
+    // Land in the project on screen when the ticket belongs to it, else switch to its first project
+    // (from a global view: else the active one).
+    const target =
+      projectId && hit.project_ids.includes(projectId)
+        ? projectId
+        : (hit.project_ids[0] ?? projectId ?? projects.activeId);
+    if (!target) return;
     await activateProject(target);
     await openContent(target, { kind: 'ticket_detail', ticket: hit.ticket.ref }, { placement: 'new_tab' });
   } catch (err) {

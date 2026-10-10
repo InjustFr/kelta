@@ -54,6 +54,22 @@ export interface FetchResult {
   body_base64: boolean;
 }
 
+export interface ExecOptions {
+  cwd?: string;
+  /** Literal values (no templates); `PATH` defaults to the login shell's. */
+  env?: Record<string, string>;
+  stdin?: string;
+  /** Default 60000, max 600000; on timeout the call fails with `timeout`. */
+  timeout_ms?: number;
+}
+
+/** stdout / stderr are capped at 64 KiB each. */
+export interface ExecResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
 export interface Kelta {
   readonly init: ScreenInit;
   /** CSS variable map (also applied to `:root`). Updated on theme changes. */
@@ -73,6 +89,7 @@ export interface Kelta {
     assign(ticket: unknown, assignee: unknown): Promise<unknown>;
   };
   reviews: {
+    /** `kind: 'authored'` = your own PRs; default `review_requested`. */
     list(params?: { scope?: 'project' | 'all'; kind?: string }): Promise<unknown>;
     get(review: unknown): Promise<unknown>;
     approve(review: unknown, headSha: string): Promise<unknown>;
@@ -84,6 +101,13 @@ export interface Kelta {
     spawn(params: Record<string, unknown>): Promise<unknown>;
     sendText(sessionId: string, text: string, bracketed?: boolean): Promise<unknown>;
   };
+  /** Work items (needs `work.read`): branch, worktree, linked ticket, PR. `project: null` = every
+   * project (global screens only); default = the screen's project. */
+  work: {
+    list(params?: { project?: string | null }): Promise<unknown[]>;
+    /** `not_found` for another project's item on a project screen. */
+    get(id: string): Promise<unknown>;
+  };
   tools: { open(toolId: string, placement?: string): Promise<unknown> };
   /** Subscribes (needs `events:<glob>`); returns an unsubscribe function. */
   events: { on(name: string, cb: EventCallback): () => void };
@@ -93,6 +117,9 @@ export interface Kelta {
     set(key: string, value: unknown): Promise<unknown>;
   };
   fetch(url: string, init?: FetchInit): Promise<FetchResult>;
+  /** Runs a headless command (needs `exec:<basename>`): a bare name is looked up on the login PATH,
+   * a path (`./scripts/deploy.sh`) is a file of the plugin. `cwd` defaults to the plugin directory. */
+  exec(command: string, args?: string[], opts?: ExecOptions): Promise<ExecResult>;
   ui: {
     toast(text: string, level?: 'info' | 'warn' | 'error'): Promise<unknown>;
     openScreen(screenId: string, params?: unknown): Promise<unknown>;
@@ -230,6 +257,7 @@ function createClient(win: Window, init: ScreenInit, port: MessagePort): Kelta {
       spawn: (p) => call('sessions.spawn', p),
       sendText: (session_id, text, bracketed) => call('sessions.send_text', { session_id, text, bracketed }),
     },
+    work: { list: (p = {}) => call('work.list', p), get: (id) => call('work.get', { id }) },
     tools: { open: (tool_id, placement) => call('tools.open', { tool_id, placement }) },
     events: {
       on(name, cb) {
@@ -259,6 +287,7 @@ function createClient(win: Window, init: ScreenInit, port: MessagePort): Kelta {
       set: (key, value) => call('settings.set', { key, value }),
     },
     fetch: (url, i = {}) => call('net.fetch', { url, ...i }),
+    exec: (command, args = [], o = {}) => call('exec.run', { command, args, ...o }),
     ui: {
       toast: (text, level) => call('ui.toast', { text, level }),
       openScreen: (screen_id, p) => call('ui.open_screen', { screen_id, params: p ?? null }),

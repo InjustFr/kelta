@@ -21,7 +21,7 @@ import {
   focusedSessionId,
   gotoProjectIndex,
   liveSessionsOfTab,
-  openInbox,
+  openView,
   revealSession,
   splitFocused,
   toggleZoomFocused,
@@ -137,7 +137,7 @@ registerAction('project.switcher', () => ui.toggleOverlay('switcher'));
 // Toast action of a start refused for want of a project with a repository (SPEC §3.1).
 registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoProjectIndex(n));
-registerAction('inbox.open', () => openInbox());
+registerAction('inbox.open', () => openView('now'));
 registerAction('toast.run_last', async () => {
   const last = toasts.lastActionable;
   if (last) await toasts.run(last.id);

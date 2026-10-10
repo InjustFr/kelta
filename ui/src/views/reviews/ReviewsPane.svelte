@@ -5,7 +5,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { projects, reviews, settings, toasts, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, settings, toasts, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -24,7 +24,7 @@
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
-  import { openContent } from '../work/nav';
+  import { openFrom } from '../work/nav';
   import LinkedTicket from './LinkedTicket.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
@@ -34,6 +34,8 @@
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
 
   let { projectId, content, focused }: PaneProps<'reviews'> = $props();
+  /** The pane's project; `null` in the rail's Reviews view, where each PR uses its own project. */
+  const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const scope = $derived(content.scope);
   const kinds: { kind: ReviewKind; label: string }[] = [
@@ -136,7 +138,7 @@
 
   function openDetail(item: ReviewItem): void {
     reviews.markSeen(item.review.ref);
-    void openContent(projectId, { kind: 'review_detail', review: item.review.ref });
+    void openFrom(projectId, item.project_ids, { kind: 'review_detail', review: item.review.ref });
   }
 
   /** My PR's work item (by `pr_url`), for Merge when ready. */
@@ -361,7 +363,7 @@
                   {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
                   {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
                       ticketKey={t}
-                      {projectId}
+                      projectId={home}
                       repo={rv.ref.repo}
                       tabindex={-1}
                     />{/each}

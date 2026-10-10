@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerAction } from '$lib/actions';
 
 import type { UiEvent } from '$lib/gen';
 import { connectUiEvents, onAnyUiEvent, resetUiEventsForTests } from '$lib/ipc/events';
@@ -398,6 +399,23 @@ describe('ToastsStore', () => {
     expect(store.list).toHaveLength(5);
     store.clear();
     expect(store.list).toHaveLength(0);
+  });
+
+  it('keeps a two-choice toast until answered and runs its secondary action', async () => {
+    vi.useFakeTimers();
+    const store = new ToastsStore();
+    const never = vi.fn();
+    const off = registerAction('test.never', never);
+    const ask = { label: 'Install', command: 'test.install', args: null };
+    const no = { label: 'Never', command: 'test.never', args: null };
+    store.apply({ type: 'toast', toast: { level: 'info', text: 'ask', action: ask, secondary: no } });
+    vi.advanceTimersByTime(60_000);
+    expect(store.list).toHaveLength(1);
+    await store.run(store.list[0]!.id, true);
+    expect(never).toHaveBeenCalled();
+    expect(store.list).toHaveLength(0);
+    off();
+    vi.useRealTimers();
   });
 
   it('formats IPC errors', () => {

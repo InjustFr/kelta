@@ -1,7 +1,8 @@
 //! Lazy loopback HTTP server (ARCHITECTURE §2, §11.1): axum on `127.0.0.1:<random>`, started by
 //! the first consumer and stopped when the consumer count drops to 0 (no idle timer).
 //!
-//! Routes: `POST /hook/<sid>` (http hook transport, hook token), `POST /mcp/<sid>` (MCP, MCP token).
+//! Routes: `POST /hook/<sid>` (http hook transport, hook token), `POST /mcp/<sid>` (MCP, MCP token),
+//! `POST /mcp` (MCP for Claude sessions Kelta did not spawn, install token).
 //! Every request must carry `Host: 127.0.0.1:<port>`. (Web-tool proxies run on their own loopback
 //! listener per instance, in kelta-plugins.)
 
@@ -51,18 +52,22 @@ pub(crate) fn port(state: &Mutex<HttpState>) -> Option<u16> {
     state.lock().running.as_ref().map(|r| r.port)
 }
 
-/// Take a consumer reference, starting the server if it is not running.
+/// Take a consumer reference, starting the server if it is not running (on `preferred` when free).
 pub(crate) fn ensure(
     state: &Mutex<HttpState>,
     core: Weak<dyn CoreApi>,
     tokens: Arc<TokenTable>,
+    preferred: Option<u16>,
 ) -> Result<u16, KeltaError> {
     let mut st = state.lock();
     if let Some(port) = st.running.as_ref().map(|r| r.port) {
         st.refs += 1;
         return Ok(port);
     }
-    let std_listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+    let std_listener = match preferred.and_then(|p| std::net::TcpListener::bind(("127.0.0.1", p)).ok()) {
+        Some(l) => l,
+        None => std::net::TcpListener::bind(("127.0.0.1", 0))?,
+    };
     std_listener.set_nonblocking(true)?;
     let port = std_listener.local_addr()?.port();
     let listener = tokio::net::TcpListener::from_std(std_listener)?;
@@ -108,6 +113,7 @@ fn router(ctx: Arc<Ctx>) -> Router {
     Router::new()
         .route("/hook/{sid}", post(hook))
         .route("/mcp/{sid}", post(mcp_post).get(mcp_no_stream).delete(mcp_no_stream))
+        .route("/mcp", post(mcp_global_post).get(mcp_global_no_stream).delete(mcp_global_no_stream))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .with_state(ctx.clone())
         .layer(middleware::from_fn_with_state(ctx, host_guard))
@@ -126,9 +132,12 @@ async fn host_guard(State(ctx): State<Arc<Ctx>>, req: Request, next: Next) -> Re
     next.run(req).await
 }
 
+fn presented(headers: &HeaderMap) -> Option<&str> {
+    bearer(headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()))
+}
+
 fn authorized(ctx: &Ctx, sid: &SessionId, kind: TokenKind, headers: &HeaderMap) -> bool {
-    let presented = bearer(headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()));
-    presented.is_some_and(|t| ctx.tokens.check(sid, kind, t))
+    presented(headers).is_some_and(|t| ctx.tokens.check(sid, kind, t))
 }
 
 fn unauthorized() -> Response {
@@ -173,8 +182,20 @@ async fn mcp_post(
         tracing::warn!(session = %sid, "http: MCP request with an invalid token rejected");
         return unauthorized();
     }
+    mcp_reply(&ctx, Some(&sid), &body).await
+}
+
+async fn mcp_global_post(State(ctx): State<Arc<Ctx>>, headers: HeaderMap, body: Bytes) -> Response {
+    if !presented(&headers).is_some_and(|t| ctx.tokens.check_global(t)) {
+        tracing::warn!("http: global MCP request with an invalid token rejected");
+        return unauthorized();
+    }
+    mcp_reply(&ctx, None, &body).await
+}
+
+async fn mcp_reply(ctx: &Ctx, sid: Option<&SessionId>, body: &[u8]) -> Response {
     let Some(core) = ctx.core.upgrade() else { return core_gone() };
-    match mcp::handle_body(&core, &sid, &body).await {
+    match mcp::handle_body(&core, sid, body).await {
         mcp::Reply::Json(v) => json_response(StatusCode::OK, &v),
         mcp::Reply::Accepted => StatusCode::ACCEPTED.into_response(),
         mcp::Reply::BadRequest(v) => json_response(StatusCode::BAD_REQUEST, &v),
@@ -185,6 +206,13 @@ async fn mcp_post(
 async fn mcp_no_stream(State(ctx): State<Arc<Ctx>>, Path(sid): Path<String>, headers: HeaderMap) -> Response {
     let sid = SessionId::new(sid);
     if !authorized(&ctx, &sid, TokenKind::Mcp, &headers) {
+        return unauthorized();
+    }
+    (StatusCode::METHOD_NOT_ALLOWED, [(header::ALLOW, "POST")]).into_response()
+}
+
+async fn mcp_global_no_stream(State(ctx): State<Arc<Ctx>>, headers: HeaderMap) -> Response {
+    if !presented(&headers).is_some_and(|t| ctx.tokens.check_global(t)) {
         return unauthorized();
     }
     (StatusCode::METHOD_NOT_ALLOWED, [(header::ALLOW, "POST")]).into_response()

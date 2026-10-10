@@ -123,6 +123,10 @@ pub fn check_method(method: PluginMethod, params: &Value, granted: &Granted) -> 
                 }
                 Ok(())
             }
+            PluginMethod::ExecRun => granted.require_exec(
+                param_str(params, "command")
+                    .ok_or_else(|| KeltaError::invalid("exec.run: missing `command`"))?,
+            ),
             PluginMethod::EventsSubscribe => {
                 let names: Vec<&str> = params
                     .get("names")

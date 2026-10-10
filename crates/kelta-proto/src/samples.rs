@@ -584,6 +584,7 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
                         command: "open_external".into(),
                         args: Some(json!({"url": "https://acme.atlassian.net/browse/SHOP-142"})),
                     }),
+                    secondary: None,
                 },
             },
         ),

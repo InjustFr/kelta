@@ -30,6 +30,8 @@ pub(crate) enum TokenKind {
 #[derive(Default)]
 pub(crate) struct TokenTable {
     map: RwLock<HashMap<SessionId, Tokens>>,
+    /// Install token of the global `/mcp` (Claude sessions Kelta did not spawn); `None` = closed.
+    global: RwLock<Option<String>>,
 }
 
 impl TokenTable {
@@ -39,6 +41,15 @@ impl TokenTable {
 
     pub(crate) fn unregister(&self, sid: &SessionId) {
         self.map.write().remove(sid);
+    }
+
+    pub(crate) fn set_global(&self, token: Option<&str>) {
+        *self.global.write() = token.filter(|t| !t.is_empty()).map(str::to_owned);
+    }
+
+    /// True iff the global `/mcp` is open and `presented` is its install token.
+    pub(crate) fn check_global(&self, presented: &str) -> bool {
+        self.global.read().as_deref().is_some_and(|e| ct_eq(e.as_bytes(), presented.as_bytes()))
     }
 
     /// True iff `sid` is registered and `presented` equals its token of `kind` (non-empty).
@@ -86,6 +97,11 @@ mod tests {
         assert!(t.check(&sid, TokenKind::Mcp, "m"));
         t.unregister(&sid);
         assert!(!t.check(&sid, TokenKind::Mcp, "m"));
+        assert!(!t.check_global("g"));
+        t.set_global(Some("g"));
+        assert!(t.check_global("g") && !t.check_global("m") && !t.check_global(""));
+        t.set_global(None);
+        assert!(!t.check_global("g"));
     }
 
     #[test]

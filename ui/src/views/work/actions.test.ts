@@ -29,18 +29,34 @@ beforeEach(async () => {
 });
 
 describe('L9 actions', () => {
-  it('tickets.open opens (or focuses) the tickets pane of the active project', async () => {
-    expect(await dispatch('tickets.open')).toBe(true);
+  it('tickets.open {project_id} opens (or focuses) the tickets pane of that project', async () => {
+    expect(await dispatch('tickets.open', { project_id: 'shop' })).toBe(true);
     const l = layout.get('shop');
     const hit = l && findContent(l, (c) => c.kind === 'tickets');
     expect(hit).toBeTruthy();
     const tabs = l?.tabs.length;
-    await dispatch('tickets.open');
+    await dispatch('tickets.open', { project_id: 'shop' });
     expect(layout.get('shop')?.tabs.length).toBe(tabs); // no second pane
   });
 
-  it('reviews.open opens the reviews pane', async () => {
-    expect(await dispatch('reviews.open')).toBe(true);
+  it('tickets.open and reviews.open without a project show the cross-project views', async () => {
+    const tabs = layout.get('shop')?.tabs.length;
+    await dispatch('tickets.open');
+    expect(ui.view).toBe('tickets');
+    await dispatch('reviews.open');
+    expect(ui.view).toBe('reviews');
+    expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    ui.view = null;
+  });
+
+  it('tickets.board opens the active project board', async () => {
+    await dispatch('tickets.board');
+    const l = layout.get('shop');
+    expect(l && findContent(l, (c) => c.kind === 'tickets' && c.mode === 'board')).toBeTruthy();
+  });
+
+  it('reviews.open {project_id} opens the reviews pane', async () => {
+    expect(await dispatch('reviews.open', { project_id: 'shop' })).toBe(true);
     const l = layout.get('shop');
     expect(l && findContent(l, (c) => c.kind === 'reviews')).toBeTruthy();
   });

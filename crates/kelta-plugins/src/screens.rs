@@ -9,11 +9,12 @@ use kelta_proto::ext::{
     CallOrigin, Permission, PluginMethod, ProxiedRequest, ScreenOpenResult, ScreenScope, SecretHeader,
     Urgency,
 };
-use kelta_proto::ids::{PluginId, ProjectId, ScreenInstanceId, SessionId, ToolId};
+use kelta_proto::ids::{PluginId, ProjectId, ScreenInstanceId, SessionId, ToolId, WorkItemId};
 use kelta_proto::model::{
     OpenPaneRequest, PaneContent, Placement, RestorePolicy, Scope, SessionKind, SpawnRequest, TemplateCtx,
+    WorkItem,
 };
-use kelta_proto::tracker::{Assignee, Cursor, TicketItem, TicketPage, TicketRef};
+use kelta_proto::tracker::{Assignee, Cursor, TicketRef};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -65,6 +66,17 @@ fn method_name(m: PluginMethod) -> String {
 
 fn to_value<T: serde::Serialize>(v: T) -> Result<Value, KeltaError> {
     Ok(serde_json::to_value(v)?)
+}
+
+/// A work item without the fields private to the Claude / nvim integration.
+fn public_work(w: WorkItem) -> Result<Value, KeltaError> {
+    let mut v = to_value(w)?;
+    if let Some(o) = v.as_object_mut() {
+        for k in ["claude_uuid", "nvim_socket", "claude_message", "next_note", "sent_threads"] {
+            o.remove(k);
+        }
+    }
+    Ok(v)
 }
 
 #[derive(Deserialize)]
@@ -194,6 +206,19 @@ impl PluginHost {
         screen.project.clone().ok_or_else(|| KeltaError::invalid("this screen is not bound to a project"))
     }
 
+    /// The project a screen reads (`None` = all): a project screen only ever its own; a global one
+    /// what it `asked` for (`Some(None)` = all), else the project it was opened in.
+    fn read_scope(
+        &self,
+        screen: &Screen,
+        asked: Option<Option<ProjectId>>,
+    ) -> Result<Option<ProjectId>, KeltaError> {
+        match screen.scope {
+            ScreenScope::Project => self.screen_project(screen).map(Some),
+            ScreenScope::Global => Ok(asked.unwrap_or_else(|| screen.project.clone())),
+        }
+    }
+
     async fn call_method(
         &self,
         instance: &ScreenInstanceId,
@@ -226,50 +251,16 @@ impl PluginHost {
             }
             PluginMethod::TicketsList => {
                 let q: ListTickets = p(method, params)?;
-                let pid = self.screen_project(screen)?;
-                let project =
-                    core.project(&pid).ok_or_else(|| KeltaError::not_found(format!("project `{pid}`")))?;
-                let binding =
-                    project.tracker.ok_or_else(|| KeltaError::invalid("no tracker bound to this project"))?;
-                if q.scope.as_deref() == Some("all") {
-                    tracing::debug!("tickets.list scope=all served from the screen's project tracker");
-                }
-                let view = match &q.view_id {
-                    Some(id) => binding
-                        .views
-                        .iter()
-                        .find(|v| &v.id == id)
-                        .cloned()
-                        .ok_or_else(|| KeltaError::not_found(format!("tracker view `{id}`")))?,
-                    None => binding
-                        .views
-                        .first()
-                        .cloned()
-                        .ok_or_else(|| KeltaError::invalid("the tracker binding has no views"))?,
+                let all = q.scope.as_deref() == Some("all");
+                let scope = match self.read_scope(screen, all.then_some(None))? {
+                    Some(id) => Scope::Project { id },
+                    None => Scope::All,
                 };
-                let tracker = core.tracker_for(view.account.as_ref().unwrap_or(&binding.account)).await?;
-                let page = tracker.list(&view, q.cursor).await?;
-                to_value(TicketPage {
-                    items: page
-                        .items
-                        .into_iter()
-                        .map(|ticket| TicketItem {
-                            ticket,
-                            project_ids: vec![pid.clone()],
-                            work_item_id: None,
-                            view_ids: vec![view.id.clone()],
-                            caps: tracker.caps(),
-                            ..TicketItem::default()
-                        })
-                        .collect(),
-                    next: page.next,
-                    stale: false,
-                    errors: Vec::new(),
-                })
+                to_value(core.ticket_list(scope, q.view_id, q.cursor, false).await?)
             }
             PluginMethod::TicketsGet => {
                 let q: TicketParam = p(method, params)?;
-                to_value(core.tracker_for(&q.ticket.account).await?.get(&q.ticket).await?)
+                to_value(core.ticket_get(&q.ticket).await?)
             }
             PluginMethod::TicketsTransitions => {
                 let q: TicketParam = p(method, params)?;
@@ -292,12 +283,7 @@ impl PluginHost {
                     fields: Option<Value>,
                 }
                 let q: Q = p(method, params)?;
-                to_value(
-                    core.tracker_for(&q.ticket.account)
-                        .await?
-                        .transition(&q.ticket, &q.transition_id, q.fields)
-                        .await?,
-                )
+                to_value(core.ticket_transition(&q.ticket, &q.transition_id, q.fields, None).await?)
             }
             PluginMethod::TicketsComment => {
                 #[derive(Deserialize)]
@@ -306,7 +292,7 @@ impl PluginHost {
                     markdown: String,
                 }
                 let q: Q = p(method, params)?;
-                core.tracker_for(&q.ticket.account).await?.comment(&q.ticket, &q.markdown).await?;
+                core.ticket_comment(&q.ticket, &q.markdown, None).await?;
                 Ok(Value::Null)
             }
             PluginMethod::TicketsAssign => {
@@ -316,7 +302,7 @@ impl PluginHost {
                     assignee: Assignee,
                 }
                 let q: Q = p(method, params)?;
-                to_value(core.tracker_for(&q.ticket.account).await?.assign(&q.ticket, q.assignee).await?)
+                to_value(core.ticket_assign(&q.ticket, q.assignee).await?)
             }
             PluginMethod::ReviewsList => {
                 let q: ListReviews = p(method, params)?;
@@ -389,6 +375,74 @@ impl PluginHost {
                 let q: Q = p(method, params)?;
                 core.session_write(&q.session_id, &keys_bytes(&q.text, q.bracketed.unwrap_or(true))).await?;
                 Ok(Value::Null)
+            }
+            PluginMethod::WorkList => {
+                // absent = the screen's project, `null` = every project (global screens only)
+                let asked = match params.get("project") {
+                    None => None,
+                    Some(v) => Some(serde_json::from_value::<Option<ProjectId>>(v.clone())?),
+                };
+                let project = self.read_scope(screen, asked)?;
+                let items = core.work_list(project.as_ref()).await?;
+                Ok(Value::Array(items.into_iter().map(public_work).collect::<Result<_, _>>()?))
+            }
+            PluginMethod::WorkGet => {
+                #[derive(Deserialize)]
+                struct Q {
+                    id: WorkItemId,
+                }
+                let q: Q = p(method, params)?;
+                let own = (screen.scope == ScreenScope::Project)
+                    .then(|| self.screen_project(screen))
+                    .transpose()?;
+                match core.work_get(&q.id).await {
+                    Some(w) if own.as_ref().is_none_or(|p| p == &w.project_id) => public_work(w),
+                    _ => Err(KeltaError::not_found(format!("work item `{}`", q.id))),
+                }
+            }
+            PluginMethod::ExecRun => {
+                #[derive(Deserialize)]
+                struct Q {
+                    command: String,
+                    #[serde(default)]
+                    args: Vec<String>,
+                    #[serde(default)]
+                    cwd: Option<String>,
+                    #[serde(default)]
+                    env: std::collections::BTreeMap<String, String>,
+                    #[serde(default)]
+                    stdin: Option<String>,
+                    #[serde(default)]
+                    timeout_ms: Option<u64>,
+                }
+                let mut q: Q = p(method, params)?;
+                let dir = self.active_entry(screen.plugin.as_str())?.dir.clone();
+                // A path runs a file of the plugin itself (no `..`, absolute or escaping symlink); a bare name
+                // is looked up on the login PATH.
+                let command = if q.command.contains('/') {
+                    crate::uri::resolve_path(&dir, &q.command).ok_or_else(|| {
+                        KeltaError::invalid(format!(
+                            "exec.run: `{}` is not a file inside the plugin directory",
+                            q.command
+                        ))
+                    })?
+                } else {
+                    q.command.into()
+                };
+                if let Some(path) = core.login_path() {
+                    q.env.entry("PATH".to_owned()).or_insert(path);
+                }
+                let cwd = dir.join(q.cwd.unwrap_or_default());
+                let out = crate::actions::run_process(
+                    &command.to_string_lossy(),
+                    &q.args,
+                    cwd.to_str(),
+                    &q.env,
+                    q.stdin.map(String::into_bytes),
+                    std::time::Duration::from_millis(q.timeout_ms.unwrap_or(60_000).min(600_000)),
+                )
+                .await?;
+                Ok(json!({ "code": out.code, "stdout": out.stdout, "stderr": out.stderr }))
             }
             PluginMethod::ToolsOpen => {
                 #[derive(Deserialize)]
@@ -576,6 +630,7 @@ impl PluginHost {
                     level: q.level.unwrap_or_default(),
                     text: crate::util::truncate(&q.text, 500),
                     action: None,
+                    secondary: None,
                 });
                 Ok(Value::Null)
             }

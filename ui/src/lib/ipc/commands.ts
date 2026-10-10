@@ -31,6 +31,7 @@ import type {
   Layout,
   LayoutSaveResult,
   MergeMethod,
+  PaneContent,
   PerfSnapshot,
   Placement,
   PluginId,
@@ -114,6 +115,10 @@ export interface Commands {
   clipboard_read: { args: { kind: ClipboardKind }; result: string };
   clipboard_write: { args: { kind: ClipboardKind; text: string }; result: null };
   notify_test: { args: NoArgs; result: null };
+  /** Kelta's MCP registered in Claude Code at user scope; `null` = Claude Code not found. */
+  claude_mcp_status: { args: NoArgs; result: boolean | null };
+  claude_mcp_install: { args: NoArgs; result: null };
+  claude_mcp_remove: { args: NoArgs; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -152,6 +157,8 @@ export interface Commands {
   // ---- layout ------------------------------------------------------------------------------
   layout_get: { args: { project_id: ProjectId }; result: Layout };
   layout_save: { args: { layout: Layout }; result: LayoutSaveResult };
+  /** The global view shown on the rail (`null` = a project): polled like a visible pane. */
+  ui_set_global_view: { args: { content: PaneContent | null }; result: null };
   // ---- sessions ----------------------------------------------------------------------------
   session_spawn: { args: { req: SpawnRequest }; result: SessionInfo };
   session_spawn_template: {
@@ -336,6 +343,9 @@ export const COMMAND_NAMES = [
   'clipboard_read',
   'clipboard_write',
   'notify_test',
+  'claude_mcp_status',
+  'claude_mcp_install',
+  'claude_mcp_remove',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -364,6 +374,7 @@ export const COMMAND_NAMES = [
   'project_reorder',
   'layout_get',
   'layout_save',
+  'ui_set_global_view',
   'session_spawn',
   'session_spawn_template',
   'session_attach',
@@ -506,6 +517,9 @@ export const diagnosticsRun = wrap('diagnostics_run');
 export const clipboardRead = wrap('clipboard_read');
 export const clipboardWrite = wrap('clipboard_write');
 export const notifyTest = wrap('notify_test');
+export const claudeMcpStatus = wrap('claude_mcp_status');
+export const claudeMcpInstall = wrap('claude_mcp_install');
+export const claudeMcpRemove = wrap('claude_mcp_remove');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {
@@ -546,6 +560,7 @@ export const projectReorder = wrap('project_reorder');
 // ---- layout ---------------------------------------------------------------------------------
 export const layoutGet = wrap('layout_get');
 export const layoutSave = wrap('layout_save');
+export const uiSetGlobalView = wrap('ui_set_global_view');
 
 // ---- sessions -------------------------------------------------------------------------------
 export const sessionSpawn = wrap('session_spawn');

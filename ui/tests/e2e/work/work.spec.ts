@@ -26,8 +26,7 @@ async function dispatch(page: Page, id: string, args?: Record<string, unknown>):
 }
 
 async function openBoard(page: Page): Promise<void> {
-  await dispatch(page, 'tickets.open');
-  await page.getByRole('tab', { name: 'Board' }).click();
+  await dispatch(page, 'tickets.board');
   await expect(page.locator('[data-column]')).toHaveCount(4);
 }
 
@@ -92,7 +91,7 @@ test.describe('tickets board', () => {
 test.describe('reviews', () => {
   test('approves a review with the displayed head_sha', async ({ page }) => {
     const errors = await boot(page);
-    await dispatch(page, 'reviews.open');
+    await dispatch(page, 'reviews.open', { project_id: 'shop' });
     await expect(page.getByText('SHOP-150: cache product images')).toBeVisible();
     await page.keyboard.press('Enter'); // opens the detail of the first review
     const detail = page.getByTestId('review-detail');
@@ -111,7 +110,7 @@ test.describe('reviews', () => {
 test.describe('reviewing others', () => {
   test('request row, Enter, detail, s, Ctrl+Enter starts a local review', async ({ page }) => {
     const errors = await boot(page);
-    await dispatch(page, 'reviews.open');
+    await dispatch(page, 'reviews.open', { project_id: 'shop' });
     await expect(page.getByText('SHOP-150: cache product images')).toBeVisible();
     await page.keyboard.press('Enter'); // first request: SHOP-150
     const detail = page.getByTestId('review-detail');

@@ -20,13 +20,14 @@
     relativeTime,
   } from '$lib/ui';
 
+  import { openView } from '../../shell/nav';
   import { peekHover } from '../../shell/peek.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
-  import { openFromNow } from '../work/nav';
+  import { saveTicketsView } from '../work/nav';
   import { deltaParts, testsMissing, workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -348,9 +349,10 @@
   /** Next up as shown (unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
   const nextUpRows = (): NowRow[] => summary.sections.find((s) => s.id === 'next_up')?.rows ?? [];
 
+  /** Up next's "Show all": the rail's Tickets view, on Mine. */
   function showAll(): void {
-    const pid = projects.activeId ?? projects.list.find((p) => p.open && !p.builtin)?.id;
-    if (pid) void openFromNow(pid, { kind: 'tickets', scope: ALL, view_id: null, mode: 'list', who: 'mine' });
+    saveTicketsView({ who: 'mine', person: null });
+    openView('tickets');
   }
 
   function onkeydown(e: KeyboardEvent): void {

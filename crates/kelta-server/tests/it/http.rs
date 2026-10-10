@@ -213,7 +213,13 @@ async fn mcp_initialize_list_and_call() {
             "list_review_requests",
             "get_review_feedback",
             "add_review_comment",
-            "notify"
+            "notify",
+            "list_tickets",
+            "get_ticket_by_key",
+            "transition_ticket_by_key",
+            "comment_ticket_by_key",
+            "update_ticket_body",
+            "close_ticket"
         ]
     );
     for t in v["result"]["tools"].as_array().unwrap() {
@@ -368,5 +374,140 @@ async fn ticket_tools_without_link() {
     let args = json!({"path": "a.rs", "line": 1, "body": "x"});
     let (text, err) = call(port, "plain", "mt", "add_review_comment", args).await;
     assert!(err && text.contains("under review"), "{text}");
+    e.server.release_http();
+}
+
+async fn global(port: u16, token: &str, msg: Value) -> Value {
+    let r = client()
+        .post(format!("http://127.0.0.1:{port}/mcp"))
+        .bearer_auth(token)
+        .json(&msg)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    r.json().await.unwrap()
+}
+
+async fn global_call(port: u16, name: &str, args: Value) -> (String, bool) {
+    let v = global(
+        port,
+        "it",
+        json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":name,"arguments":args}}),
+    )
+    .await;
+    let res = &v["result"];
+    (
+        res["content"][0]["text"].as_str().unwrap_or_default().to_owned(),
+        res["isError"].as_bool().unwrap_or(true),
+    )
+}
+
+async fn global_tools(port: u16) -> Vec<String> {
+    let v = global(port, "it", json!({"jsonrpc":"2.0","id":2,"method":"tools/list"})).await;
+    v["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect()
+}
+
+#[tokio::test]
+async fn global_mcp_takes_the_install_token_only() {
+    let e = common::env();
+    e.server.register_session(&SessionId::new("s"), "ht", Some("mt"));
+    let port = e.server.ensure_http().await.unwrap();
+    let host = format!("127.0.0.1:{port}");
+    let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    // Closed until installed.
+    assert_eq!(raw_status(port, &host, "/mcp", Some("it"), ping).await, 401);
+    e.server.set_install_token(Some("it"));
+    for bad in [None, Some("wrong"), Some("mt"), Some("ht"), Some("")] {
+        assert_eq!(raw_status(port, &host, "/mcp", bad, ping).await, 401, "{bad:?}");
+    }
+    assert_eq!(raw_status(port, &host, "/mcp", Some("it"), ping).await, 200);
+    assert_eq!(raw_status(port, &host, "/mcp/s", Some("it"), ping).await, 401);
+    // Remove revokes it.
+    e.server.set_install_token(None);
+    assert_eq!(raw_status(port, &host, "/mcp", Some("it"), ping).await, 401);
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn global_mcp_serves_the_board_tools() {
+    let e = common::env();
+    let tracker = Arc::new(FakeTracker::new());
+    e.fake.add_tracker(samples::ticket_ref().account, tracker.clone());
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account.to_string();
+
+    // No session tools without a session.
+    assert_eq!(
+        global_tools(port).await,
+        [
+            "list_review_requests",
+            "list_tickets",
+            "get_ticket_by_key",
+            "transition_ticket_by_key",
+            "comment_ticket_by_key",
+            "update_ticket_body",
+            "close_ticket"
+        ]
+    );
+    let v = global(
+        port,
+        "it",
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_ticket"}}),
+    )
+    .await;
+    assert_eq!(v["error"]["code"], -32602);
+    let (text, err) = global_call(port, "list_review_requests", json!({})).await;
+    assert!(!err, "{text}");
+
+    // A stale revision writes nothing.
+    let (text, err) =
+        global_call(port, "get_ticket_by_key", json!({"key":"SHOP-141","account":account})).await;
+    assert!(!err, "{text}");
+    let rev = text.lines().find_map(|l| l.strip_prefix("Revision: ")).unwrap().to_owned();
+    let (text, err) = global_call(
+        port,
+        "update_ticket_body",
+        json!({"key":"SHOP-141","account":account,"body":"- [x] done","revision":"0000000000000000"}),
+    )
+    .await;
+    assert!(err && text.starts_with("conflict"), "{text}");
+    assert!(!tracker.calls().iter().any(|c| c.starts_with("set_body")));
+    assert_eq!(tracker.ticket("SHOP-141").unwrap().body_md, "Body of SHOP-141");
+    let (text, err) = global_call(
+        port,
+        "update_ticket_body",
+        json!({"key":"SHOP-141","account":account,"body":"- [x] done","revision":rev}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert_eq!(tracker.ticket("SHOP-141").unwrap().body_md, "- [x] done");
+
+    let (text, err) = global_call(
+        port,
+        "transition_ticket_by_key",
+        json!({"key":"SHOP-141","account":account,"to":"in_progress"}),
+    )
+    .await;
+    assert!(!err && text == "SHOP-141 is now In Progress.", "{text}");
+    let (text, err) =
+        global_call(port, "close_ticket", json!({"key":"SHOP-141","account":account,"comment":"Merged"}))
+            .await;
+    assert!(!err && text == "SHOP-141 is now Done.", "{text}");
+    assert!(tracker.calls().contains(&"comment:SHOP-141".to_owned()));
+
+    // Read-only board tools when board writes are off.
+    let mut s = kelta_proto::settings::Settings::defaults();
+    s.claude.mcp_board_writes = false;
+    e.fake.set_settings(s);
+    assert_eq!(global_tools(port).await, ["list_review_requests", "list_tickets", "get_ticket_by_key"]);
+    let v = global(
+        port,
+        "it",
+        json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"close_ticket","arguments":{"key":"SHOP-142"}}}),
+    )
+    .await;
+    assert_eq!(v["error"]["code"], -32602);
     e.server.release_http();
 }

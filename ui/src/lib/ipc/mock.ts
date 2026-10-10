@@ -351,6 +351,8 @@ export function createMockTransport(options: MockOptions = {}): {
   const attached = new Map<string, { generation: number; channel: IpcChannel<Uint8Array> }>();
   let generation = 0;
   const screens = new Map<ScreenInstanceId, string>();
+  // Claude Code found, Kelta's MCP not registered yet.
+  let claudeMcp: boolean | null = false;
 
   const emit = (event: UiEvent): void => {
     for (const ch of eventChannels) {
@@ -514,6 +516,15 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'toast', toast: { level: 'info', text: 'Test notification sent', action: null } });
       return null;
     },
+    claude_mcp_status: () => claudeMcp,
+    claude_mcp_install: () => {
+      claudeMcp = true;
+      return null;
+    },
+    claude_mcp_remove: () => {
+      claudeMcp = false;
+      return null;
+    },
     // ---- settings --------------------------------------------------------------------------
     settings_schema: async () => {
       const schema = await import('../../../../schema/settings.schema.json');
@@ -674,6 +685,7 @@ export function createMockTransport(options: MockOptions = {}): {
       state.layouts[layout.project_id] = { ...clone(layout), rev };
       return { rev };
     },
+    ui_set_global_view: () => null,
     // ---- sessions --------------------------------------------------------------------------
     session_spawn: ({ req }) => {
       const s = spawn(req.project_id, req.kind, req.name, req.cwd);

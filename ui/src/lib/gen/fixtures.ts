@@ -1850,6 +1850,8 @@ export const settingsDefault: Settings = {
     "ide_bridge": false,
     "max_live": 4,
     "mcp": true,
+    "mcp_board_writes": true,
+    "mcp_offer": true,
     "min_version": "2.1.200",
     "profiles": {
       "default": {
@@ -3628,6 +3630,7 @@ export const uiEventToast: UiEvent = {
       "label": "Open in browser"
     },
     "level": "error",
+    "secondary": null,
     "text": "Transition failed"
   },
   "type": "toast"

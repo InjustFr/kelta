@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { layout, reviews, toasts } from '$lib/stores';
+import { GLOBAL, layout, projects, reviews, toasts, ui } from '$lib/stores';
 
 import ReviewsPane from './ReviewsPane.svelte';
 
@@ -48,5 +48,30 @@ describe('ReviewsPane linked tickets', () => {
     await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toMatch(/SHOP-150 is not in any/));
     const l = layout.get('shop');
     expect(l && findContent(l, (c) => c.kind === 'ticket_detail')).toBeFalsy();
+  });
+});
+
+describe('ReviewsPane in the rail Reviews view', () => {
+  it("Enter opens the review in the PR's project and leaves the view", async () => {
+    await projects.load();
+    ui.view = 'reviews';
+    render(ReviewsPane, {
+      props: {
+        projectId: GLOBAL,
+        tabId: GLOBAL,
+        paneId: 'reviews',
+        content: { kind: 'reviews', scope: { kind: 'all' } },
+        visible: true,
+        focused: true,
+      },
+    });
+    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'Enter' });
+    await waitFor(() => expect(ui.view).toBeNull());
+    const pid = projects.activeId!;
+    expect(pid).not.toBe(GLOBAL);
+    await waitFor(() =>
+      expect(findContent(layout.get(pid)!, (c) => c.kind === 'review_detail')).toBeTruthy(),
+    );
   });
 });

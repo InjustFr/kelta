@@ -126,6 +126,7 @@ function createClient(win, init, port) {
             spawn: (p) => call('sessions.spawn', p),
             sendText: (session_id, text, bracketed) => call('sessions.send_text', { session_id, text, bracketed }),
         },
+        work: { list: (p = {}) => call('work.list', p), get: (id) => call('work.get', { id }) },
         tools: { open: (tool_id, placement) => call('tools.open', { tool_id, placement }) },
         events: {
             on(name, cb) {
@@ -156,6 +157,7 @@ function createClient(win, init, port) {
             set: (key, value) => call('settings.set', { key, value }),
         },
         fetch: (url, i = {}) => call('net.fetch', { url, ...i }),
+        exec: (command, args = [], o = {}) => call('exec.run', { command, args, ...o }),
         ui: {
             toast: (text, level) => call('ui.toast', { text, level }),
             openScreen: (screen_id, p) => call('ui.open_screen', { screen_id, params: p ?? null }),

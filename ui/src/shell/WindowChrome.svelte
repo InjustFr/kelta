@@ -7,6 +7,8 @@
   import { projects, ui } from '$lib/stores';
   import { IconButton } from '$lib/ui';
 
+  import { VIEW_NAMES } from './nav';
+
   type Dir = 'North' | 'South' | 'East' | 'West' | 'NorthEast' | 'NorthWest' | 'SouthEast' | 'SouthWest';
   const HANDLES: Dir[] = [
     'North',
@@ -20,7 +22,7 @@
   ];
 
   let custom = $state(false);
-  const title = $derived(ui.inboxActive ? 'Now' : (projects.active?.name ?? 'Kelta'));
+  const title = $derived(ui.view ? VIEW_NAMES[ui.view] : (projects.active?.name ?? 'Kelta'));
 
   onMount(() => {
     appInfo()

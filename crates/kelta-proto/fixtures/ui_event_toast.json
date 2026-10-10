@@ -8,6 +8,7 @@
       "label": "Open in browser"
     },
     "level": "error",
+    "secondary": null,
     "text": "Transition failed"
   },
   "type": "toast"

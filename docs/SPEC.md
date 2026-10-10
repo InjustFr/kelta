@@ -19,13 +19,13 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 └──┴ StatusBar: project · branch · session status · hooks ok · 142 MB ┘
 ```
 
-- **ProjectRail** (48 px, left): Inbox (badge = review requests + needs-input count across projects), open projects (icon/letter, colour, attention dot: red needs input, amber error, green done-unseen, blue activity), Home (built-in project rooted at `~`, for unrelated work; no tracker), `+` (open/create project). Drag to reorder; right-click: close, settings, remove.
+- **ProjectRail** (48 px, left): three **global views** above the projects, in the order of the loop (pick a ticket, work, review): **Tickets** (every open project's ticket sources; muted count of my tickets not Done, `12 mine`), **Now** (red badge = review requests + needs-input count across projects, the only red count), **Reviews** (every code-host account's review requests and my PRs; muted `2 to review`). A global view renders outside any project and does not change the active project; project rows lose their active style while one is shown. Anything it opens (ticket detail, PR detail, `p`, review locally, start work) leaves it for the item's first project, else the active one; a split or a pane opened from it first shows the active project. Kelta reopens on the last place, a global view or a project. Then the open projects (icon/letter, colour, attention dot: red needs input, amber error, green done-unseen, blue activity), Home (built-in project rooted at `~`, for unrelated work; no tracker), `+` (open/create project). Drag to reorder; right-click: close, settings, remove.
 - **Switching projects** never stops or pauses sessions; attention keeps updating on the rail. Target ≤ 50 ms warm.
 - **TabBar**: tabs per project (ticket tabs titled `KEY title`, plain tabs, view tabs). Tab dot = max attention of its sessions. Middle-click closes (confirm if a live process remains).
 - **Panes** contain: terminal, web tool, plugin screen, Tickets (list/board), Ticket detail, Reviews, Review detail, Inbox, WorkItem, Settings, Diagnostics, Welcome. Drag the gutter to resize; zoom a pane; close a pane (terminal sessions keep running as **background sessions** listed in the palette and the project's session list unless killed).
 - **Command palette** (fuzzy): actions, projects, sessions across all projects (with status), tickets (cached), PRs, tools, plugin commands, settings sections.
 - **Project switcher**: fuzzy list of configured projects (open or not); Enter opens/activates.
-- **StatusBar**: active project, branch of the focused session's cwd (read on focus, no polling), focused session status, hooks health, optional perf HUD (Kelta memory, separately from child processes).
+- **StatusBar**: active project (a global view: no branch or session), branch of the focused session's cwd (read on focus, no polling), focused session status, hooks health, optional perf HUD (Kelta memory, separately from child processes).
 
 ## 2. Projects (multi-project)
 
@@ -115,7 +115,7 @@ The project belongs to the work item (where the session runs), not to the ticket
 - Not in the detail yet: lifecycle lamp.
 
 ### 3.5 Open a tool
-Tools are opened from the palette ("Open tool: lazydocker"), the `+` menu of the TabBar, a tool's keybinding, or a trigger. `tool_open` → PTY tools become sessions (`kind = Tool`, cwd per tool template, exit banner with **Relaunch**, `close_on_exit` option); web tools start their server (if any), wait for readiness from stdout (no polling), then open a Web pane. Embed `auto`: iframe; if a HEAD probe sees `X-Frame-Options`/`frame-ancestors` → local proxy that strips them (WebSocket passthrough); failure → **Open in browser** button. Web tool processes stop when the pane/tab closes (`lifecycle`), or with the project. Missing binary → empty state with `install_hint` and "Check again".
+Tools are buttons for terminal programs (`kind = "pty"`, e.g. lazygit), apps launched beside Kelta (`kind = "external"`, e.g. `open -a Fork .`) and web tools. They are added from Settings → Tools (**Add tool**: Terminal or App, a name, a command line or an application, an optional key with conflict warnings) or `[[tools]]` in a config file (docs/user/tools.md). Tools are opened from the palette ("Open tool: lazydocker"), the tool strip at the right end of the TabBar (first 6 tools, pressed while the tool runs in the current work item; a click focuses that instance or opens one), the `+` menu of the TabBar, a tool's keybinding, or a trigger. `tool_open` → PTY tools become sessions (`kind = Tool`, cwd per tool template, exit banner with **Relaunch**, `close_on_exit` option); web tools start their server (if any), wait for readiness from stdout (no polling), then open a Web pane. Embed `auto`: iframe; if a HEAD probe sees `X-Frame-Options`/`frame-ancestors` → local proxy that strips them (WebSocket passthrough); failure → **Open in browser** button. Web tool processes stop when the pane/tab closes (`lifecycle`), or with the project. Missing binary → empty state with `install_hint` and "Check again".
 
 ### 3.6 Plugin screens
 Plugins contribute screens opened from palette/commands/keybindings/triggers into a tab or pane. A screen is a sandboxed iframe created when shown and destroyed when hidden (unless `keep_alive`, listed in Settings → Performance, which keeps it while its pane stays mounted; a tab or project switch still destroys it). Install from directory / git URL / tarball shows the manifest, requested permissions in plain words and the SHA-256; grants stored in app state; updates requesting new permissions re-prompt. Disabled plugins contribute nothing.
@@ -132,15 +132,16 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
 | `project.goto.1..9` | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
 | `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
-| `project.next` / `project.prev` | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
+| `project.next` / `project.prev` (from a global view: first / last project) | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
 | `tab.next` / `tab.prev` | Cmd+Shift+] / [ | Ctrl+Shift+] / [ | `n` / `N` |
 | `session.new` | Cmd+T | Ctrl+Shift+T | `c` |
 | `pane.split_right` / `pane.split_down` | Cmd+D / Cmd+Shift+D | Ctrl+Shift+E / Ctrl+Shift+O | `%` / `"` |
 | `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | (prefix only) | `h j k l` / arrows |
 | `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Z | `z` |
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
-| `tickets.open` | Cmd+Shift+B | Ctrl+Shift+B | `t` |
-| `reviews.open` | Cmd+Shift+R | Ctrl+Shift+R | `r` |
+| `tickets.open` (the Tickets view; with `project_id`, that project's Tickets tab) | Cmd+Shift+B | Ctrl+Shift+B | `t` |
+| `tickets.board` ("Open project board": the active project's Tickets tab as a board; palette only) | — | — | — |
+| `reviews.open` (the Reviews view; with `project_id`, that project's Reviews tab) | Cmd+Shift+R | Ctrl+Shift+R | `r` |
 | `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
 | `attention.peek` ("Peek waiting session": popover with the last 15 lines, a detected permission menu as `1`/`2`/`3` buttons and a reply field; `Tab` next needs-input session, `Mod+Enter` go to it, `Esc` back; also on hovering a rail row, a tab lamp or a Now row) | Cmd+Shift+Y | Ctrl+Shift+Y | `y` |
 | `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |
@@ -167,7 +168,8 @@ Terminal key handling: programs that enable the kitty keyboard protocol get kitt
 |---|---|
 | First run | Welcome/onboarding: detects `claude`, `nvim`, `git`, `gh`, `glab`, versions (Claude ≥ `claude.min_version`), secret backend and notification daemon; buttons "Create project from folder", "Add account". |
 | No projects | Home project only + "Create project from folder". |
-| Project without tracker | Tickets pane: "No tracker bound — Bind a tracker" (opens project settings). |
+| Project without tracker | Tickets pane: "No ticket source for this project." + Add source. |
+| No ticket source in any open project | Tickets view: "No ticket source yet." + Add source (source picker of the active project; hidden on Home). |
 | No accounts | Accounts wizard CTA. |
 | Account `NeedsAuth` (401) | Banner on affected panes + rail warning; "Re-authenticate" opens account settings; polling paused. |
 | Rate-limited | Stale data + "rate limited, retrying at hh:mm". |

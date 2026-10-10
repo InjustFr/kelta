@@ -9,11 +9,13 @@
     ondismiss: () => void;
     /** Called with the toast action (`command` is an ActionId or plugin command id). */
     onaction?: (action: NonNullable<Toast['action']>) => void;
+    /** Called for the toast's `secondary` action. */
+    onsecondary?: () => void;
     /** Chord that runs this toast's action (`toast.run_last`), printed on the button. */
     kbd?: string | null;
   }
 
-  let { toast, ondismiss, onaction, kbd = null }: Props = $props();
+  let { toast, ondismiss, onaction, onsecondary, kbd = null }: Props = $props();
 </script>
 
 <div class="k-toast {toast.level}" role={toast.level === 'error' ? 'alert' : 'status'}>
@@ -24,6 +26,9 @@
       {toast.action.label}
       {#if kbd}<Kbd chord={kbd} />{/if}
     </button>
+  {/if}
+  {#if toast.secondary && onsecondary}
+    <button type="button" class="action" onclick={onsecondary}>{toast.secondary.label}</button>
   {/if}
   <IconButton icon="x" label="Dismiss" size="sm" onclick={ondismiss} />
 </div>

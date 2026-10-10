@@ -7,7 +7,8 @@
 
   interface Props {
     ticketKey: string;
-    projectId: ProjectId;
+    /** The pane's project; `null` from a global view. */
+    projectId: ProjectId | null;
     repo: string;
     /** -1 in the list (the pane owns the keyboard), 0 where the badge is the only way in. */
     tabindex?: 0 | -1;

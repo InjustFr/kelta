@@ -8,6 +8,7 @@
   import { chordFor } from './labels';
   import { layoutSessionsOfTab, requestCloseTab, selectTab, tabAttention } from './nav';
   import { peekHover, peekTarget } from './peek.svelte';
+  import ToolStrip from './ToolStrip.svelte';
 
   interface Props {
     projectId: ProjectId;
@@ -27,7 +28,7 @@
   let overId = $state<string | null>(null);
 
   $effect(() => {
-    // Tools feed the "+" menu; they are cached per project.
+    // Tools feed the "+" menu and the tool strip; they are cached per project.
     if (tools.byProject[projectId] === undefined) void tools.load(projectId);
   });
 
@@ -70,8 +71,9 @@
   async function onPlus(id: string): Promise<void> {
     try {
       if (id === 'session') ui.openSheet('session_new');
-      else if (id === 'tickets') await dispatch('tickets.open');
-      else if (id === 'reviews') await dispatch('reviews.open');
+      // The project's own tabs; the bare actions open the rail's cross-project views.
+      else if (id === 'tickets') await dispatch('tickets.open', { project_id: projectId });
+      else if (id === 'reviews') await dispatch('reviews.open', { project_id: projectId });
       else if (id.startsWith('tool:')) await dispatch('tools.open', { tool_id: id.slice(5) });
     } catch (err) {
       toasts.error(err, 'Could not open the view');
@@ -179,6 +181,7 @@
       plusMenu = { x: r.left, y: r.bottom + 2 };
     }}>New tab</Button
   >
+  <ToolStrip {projectId} workItemId={active?.work_item_id ?? null} />
 </div>
 
 {#if tabMenu}
