@@ -725,6 +725,7 @@ export const reviewPage: ReviewPage = {
         ],
         "mergeable": true,
         "my_state": "pending",
+        "nudged_at": null,
         "ref": {
           "account": "github-work",
           "number": 87,
@@ -736,7 +737,8 @@ export const reviewPage: ReviewPage = {
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
         "updated_at": "2026-10-09T12:00:00Z",
-        "url": "https://github.com/acme/shop-api/pull/87"
+        "url": "https://github.com/acme/shop-api/pull/87",
+        "waiting_on": []
       }
     }
   ],
@@ -782,6 +784,7 @@ export const reviewDetail: ReviewDetail = {
     ],
     "mergeable": true,
     "my_state": "pending",
+    "nudged_at": null,
     "ref": {
       "account": "github-work",
       "number": 87,
@@ -793,7 +796,8 @@ export const reviewDetail: ReviewDetail = {
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",
     "updated_at": "2026-10-09T12:00:00Z",
-    "url": "https://github.com/acme/shop-api/pull/87"
+    "url": "https://github.com/acme/shop-api/pull/87",
+    "waiting_on": []
   },
   "reviewers": [
     {
@@ -2009,8 +2013,10 @@ export const settingsDefault: Settings = {
     ],
     "include_drafts": false,
     "include_team_requests": true,
+    "nudge_template": "{reviewers} friendly ping: this is waiting on your review.",
     "repos_allow": [],
     "repos_deny": [],
+    "sla_hours": 24,
     "ticket_key_regex": "[A-Z][A-Z0-9]+-\\d+|#\\d+"
   },
   "session_templates": [

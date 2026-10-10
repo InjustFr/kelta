@@ -1076,6 +1076,10 @@ pub struct ReviewsSettings {
     /// Paths (globs) the Ready for review chip counts as generated, next to `linguist-generated`
     /// and `-diff` attributes.
     pub ignore_globs: Vec<String>,
+    /// Hours a PR of mine may wait on a reviewer before its chip turns amber.
+    pub sla_hours: u32,
+    /// Comment ping of the nudge action (`n` on my PR); `{reviewers}` = `@anna @bob`.
+    pub nudge_template: String,
 }
 
 impl Default for ReviewsSettings {
@@ -1089,6 +1093,8 @@ impl Default for ReviewsSettings {
             ignore_globs: ["*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum", "*.min.js", "*.snap"]
                 .map(String::from)
                 .to_vec(),
+            sla_hours: 24,
+            nudge_template: "{reviewers} friendly ping: this is waiting on your review.".into(),
         }
     }
 }

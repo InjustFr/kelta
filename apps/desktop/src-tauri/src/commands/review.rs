@@ -38,3 +38,9 @@ pub async fn review_comment(core: State<'_, Arc<Core>>, review: ReviewRef, body:
 pub async fn review_request_changes(core: State<'_, Arc<Core>>, review: ReviewRef, body: String) -> Res<()> {
     core.review_request_changes(&review, &body).await
 }
+
+/// Nudges the reviewers of my PR: re-request (`comment` null) or post `comment`; refused for 24 h after the last.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn review_nudge(core: State<'_, Arc<Core>>, review: ReviewRef, comment: Option<String>) -> Res<()> {
+    core.review_nudge(&review, comment.as_deref()).await
+}

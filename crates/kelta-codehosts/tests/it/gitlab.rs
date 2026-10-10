@@ -121,11 +121,21 @@ async fn authored_list_uses_created_by_me() {
         .expect(1)
         .mount(&server)
         .await;
+    Mock::given(path("/api/v4/projects/grp%2Fsub%2Fproj/merge_requests/21/reviewers"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            { "user": { "username": "zed" }, "state": "approved", "created_at": "2026-09-27T10:00:00Z" },
+            { "user": { "username": "anna" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+            { "user": { "username": "bob" }, "state": "unreviewed", "created_at": "2026-09-28T10:00:00Z" },
+        ])))
+        .mount(&server)
+        .await;
     let list = gl(&server).list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].kind, ReviewKind::Authored);
     assert_eq!(list[0].my_state, None);
     assert_eq!(list[0].ci, CiState::Pending);
+    assert_eq!(list[0].waiting_on, ["anna", "bob"], "zed approved");
+    assert_eq!(list[0].requested_at.as_deref(), Some("2026-09-28T10:00:00Z"), "the oldest pending request");
 }
 
 const MR: &str = "/api/v4/projects/grp%2Fother/merge_requests/8";

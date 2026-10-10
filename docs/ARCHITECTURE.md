@@ -497,6 +497,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_approve` | `{review, head_sha}` | `()` (`Conflict` if head moved) | |
 | `review_comment` | `{review, body}` | `()` | |
 | `review_request_changes` | `{review, body}` | `()` | publishes my pending line comments too (as do `review_approve` / `review_comment`) |
+| `review_nudge` | `{review, comment?}` | `()` | my PR: re-request its reviewers (`comment` null, `CodeHost::rerequest_review`) or post `comment`; `InvalidArgument` within 24 h of the last nudge (`nudges`) |
 | **work** | | | `commands/work.rs` (L6) |
 | `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/}` | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
@@ -743,7 +744,8 @@ pub struct Review { r#ref, title, url, author: User, draft: bool, head_sha, sour
   my_state: Option<MyReviewState /*Pending|Approved|ChangesRequested|Commented*/>, mergeable: Option<bool>,
   labels: Vec<String>, kind: ReviewKind /*ReviewRequested|Authored*/, updated_at: String, linked_tickets: Vec<String>,
   additions: Option<u32>, deletions: Option<u32>, decision_head: Option<String> /*head the latest decisive review was left on*/,
-  requested_at: Option<String> /*when my review was requested*/, blocking: bool /*I am the last required reviewer*/ }
+  requested_at: Option<String> /*when my review was requested; authored: waiting since*/, blocking: bool /*I am the last required reviewer*/,
+  waiting_on: Vec<String> /*authored: reviewers it waits on*/, nudged_at: Option<String> /*my last nudge, core-filled*/ }
 pub struct Feedback { threads: Vec<FeedbackThread{id, author, path?, line?, body_md, url}>,
   reviews: Vec<FeedbackReview{author, state?, body_md}>, failed_checks: Vec<FailedCheck{name, url?, log_tail?}>, reviewers: Vec<String> }
 ```
@@ -833,6 +835,7 @@ plugin_kv(plugin_id, key, value, PK(plugin_id, key))      -- screens' kv.* (PLUG
 repo_trust(path PK, sha256, trusted_at)
 trigger_log(id PK, ts, trigger_id, event, ok, detail, depth)   -- capped 1000 rows
 ui_state(key PK, value)                                   -- webgl probe result, onboarding done, window geometry
+nudges(repo, number, at, PK(repo, number))                -- my last nudge per PR (one per 24 h, `review_nudge`)
 ```
 All writes go through the single sqlite thread. Startup reads (open projects, layouts, provider_cache) happen before window creation.
 

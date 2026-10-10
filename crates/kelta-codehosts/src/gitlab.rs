@@ -207,6 +207,8 @@ impl GitlabHost {
             deletions: None,
             requested_at: None,
             blocking: false,
+            waiting_on: Vec::new(),
+            nudged_at: None,
             title,
         })
     }
@@ -265,6 +267,30 @@ impl GitlabHost {
             }
             (review.additions, review.deletions) = (Some(a), Some(d));
         }
+    }
+
+    /// My MR: reviewers who have not reviewed yet (`/reviewers` state) and since when they were
+    /// asked. Best effort, like `request_state`.
+    // shortcut: a `requested_changes` reviewer counts again only once re-requested (GitLab keeps the
+    // state across pushes and `/reviewers` has no review time); compare with the push time if it matters.
+    async fn waiting_state(&self, review: &mut Review) {
+        let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
+        let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
+        let pending: Vec<(String, Option<String>)> = r
+            .body
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|x| !matches!(s(x, "state"), Some("reviewed" | "requested_changes" | "approved")))
+            .filter_map(|x| {
+                Some((
+                    x.pointer("/user/username")?.as_str()?.to_owned(),
+                    s(x, "created_at").map(str::to_owned),
+                ))
+            })
+            .collect();
+        review.requested_at = pending.iter().filter_map(|(_, t)| t.clone()).min();
+        review.waiting_on = pending.into_iter().map(|(u, _)| u).collect();
     }
 
     fn project_url(&self, repo: &str, tail: &str) -> String {
@@ -408,6 +434,8 @@ impl CodeHost for GitlabHost {
             self.diff_sizes.lock().retain(|(repo, n, sha), _| {
                 list.iter().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
             });
+        } else {
+            futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
         }
         Ok(list)
     }

@@ -216,6 +216,8 @@ export interface Commands {
   review_approve: { args: { review: ReviewRef; head_sha: string }; result: null };
   review_comment: { args: { review: ReviewRef; body: string }; result: null };
   review_request_changes: { args: { review: ReviewRef; body: string }; result: null };
+  /** My PR: re-request its reviewers (`comment` null) or post `comment`; refused for 24 h after a nudge. */
+  review_nudge: { args: { review: ReviewRef; comment: string | null }; result: null };
   // ---- work --------------------------------------------------------------------------------
   work_plan: { args: { project_id: ProjectId; source: WorkSource }; result: StartWorkPlan };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };
@@ -368,6 +370,7 @@ export const COMMAND_NAMES = [
   'review_approve',
   'review_comment',
   'review_request_changes',
+  'review_nudge',
   'work_plan',
   'work_start',
   'work_list',
@@ -574,6 +577,7 @@ export const reviewGet = wrap('review_get');
 export const reviewApprove = wrap('review_approve');
 export const reviewComment = wrap('review_comment');
 export const reviewRequestChanges = wrap('review_request_changes');
+export const reviewNudge = wrap('review_nudge');
 
 // ---- work -----------------------------------------------------------------------------------
 export const workPlan = wrap('work_plan');

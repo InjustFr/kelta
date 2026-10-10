@@ -34,7 +34,8 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
 author{ login avatarUrl ... on User{ name } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
-commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } \
+commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state } } } } \
+reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ slug } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
 latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
 timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
@@ -155,16 +156,23 @@ impl GithubHost {
             (_, _) => Some(MyReviewState::Pending),
         };
         let decision = decision_from(s(n, "reviewDecision"));
-        let (requested_at, blocking) = match kind {
-            ReviewKind::Authored => (None, false),
-            ReviewKind::ReviewRequested => request_state(n, me, decision),
+        let head_sha = s(n, "headRefOid").unwrap_or("").to_owned();
+        let (requested_at, blocking, waiting_on) = match kind {
+            ReviewKind::Authored => {
+                let (who, since) = waiting_state(n, &head_sha);
+                (since, false, who)
+            }
+            ReviewKind::ReviewRequested => {
+                let (at, blocking) = request_state(n, me, decision);
+                (at, blocking, Vec::new())
+            }
         };
         Some(Review {
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(n, "url").unwrap_or("").to_owned(),
             author: n.get("author").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
             draft: n.get("isDraft").and_then(Value::as_bool).unwrap_or(false),
-            head_sha: s(n, "headRefOid").unwrap_or("").to_owned(),
+            head_sha,
             source_branch: branch.clone(),
             target_branch: s(n, "baseRefName").unwrap_or("").to_owned(),
             ci: ci_from_rollup(
@@ -196,6 +204,8 @@ impl GithubHost {
                 .map(str::to_owned),
             requested_at,
             blocking,
+            waiting_on,
+            nudged_at: None,
             title,
         })
     }
@@ -232,6 +242,8 @@ impl GithubHost {
             decision_head: None,
             requested_at: None,
             blocking: false,
+            waiting_on: Vec::new(),
+            nudged_at: None,
             title,
         })
     }
@@ -328,6 +340,42 @@ fn request_state(n: &Value, me: &str, decision: Option<ReviewDecision>) -> (Opti
     let requested_at = asked.iter().find(|(l, _)| l == me).map(|(_, t)| t.clone());
     let others_pending = asked.iter().any(|(l, t)| l != me && !reviewed_since(l, t));
     (requested_at, decision == Some(ReviewDecision::ReviewRequired) && !others_pending)
+}
+
+/// Who my PR waits on and since when: users still asked (since their latest request) and those
+/// who requested changes on an older head (since the head commit, i.e. my last push).
+// shortcut: the push time is the head's `committedDate` (a rebase keeps the old date) and team
+// requests have no request time; read `HeadRefForcePushedEvent` if that misleads.
+fn waiting_state(n: &Value, head: &str) -> (Vec<String>, Option<String>) {
+    let nodes = |p: &str| n.pointer(p).and_then(Value::as_array).cloned().unwrap_or_default();
+    let str_at = |v: &Value, p: &str| v.pointer(p).and_then(Value::as_str).map(str::to_owned);
+    let events = nodes("/timelineItems/nodes");
+    let mut waiting: Vec<(String, Option<String>)> = nodes("/reviewRequests/nodes")
+        .iter()
+        .filter_map(|rq| {
+            str_at(rq, "/requestedReviewer/login").or_else(|| str_at(rq, "/requestedReviewer/slug"))
+        })
+        .map(|who| {
+            let asked = events
+                .iter()
+                .filter(|e| str_at(e, "/requestedReviewer/login").as_deref() == Some(who.as_str()))
+                .filter_map(|e| str_at(e, "/createdAt"))
+                .max();
+            (who, asked)
+        })
+        .collect();
+    let pushed = str_at(n, "/commits/nodes/0/commit/committedDate");
+    for r in nodes("/latestOpinionatedReviews/nodes") {
+        let Some(who) = str_at(&r, "/author/login") else { continue };
+        if s(&r, "state") == Some("CHANGES_REQUESTED")
+            && str_at(&r, "/commit/oid").as_deref() != Some(head)
+            && !waiting.iter().any(|(w, _)| *w == who)
+        {
+            waiting.push((who, pushed.clone()));
+        }
+    }
+    let since = waiting.iter().filter_map(|(_, t)| t.clone()).min();
+    (waiting.into_iter().map(|(w, _)| w).collect(), since)
 }
 
 fn mergeable_from(state: Option<&str>) -> Option<bool> {
@@ -968,5 +1016,33 @@ mod tests {
         assert_eq!(request_state(&n, "louis", required), (Some("2026-09-28T08:00:00Z".into()), false));
         assert!(!request_state(&n, "bob", required).1, "louis never reviewed: still pending");
         assert!(!request_state(&n, "louis", Some(ReviewDecision::Approved)).1);
+    }
+
+    #[test]
+    fn my_pr_waits_on_asked_reviewers_and_on_changes_requested_before_my_push() {
+        let n = json!({
+            "reviewRequests": { "nodes": [
+                { "requestedReviewer": { "login": "anna" } },
+                { "requestedReviewer": { "slug": "backend" } },
+            ] },
+            "timelineItems": { "nodes": [
+                { "createdAt": "2026-09-28T08:00:00Z", "requestedReviewer": { "login": "anna" } },
+                { "createdAt": "2026-09-29T08:00:00Z", "requestedReviewer": { "login": "anna" } },
+            ] },
+            "commits": { "nodes": [ { "commit": { "committedDate": "2026-09-30T08:00:00Z" } } ] },
+            "latestOpinionatedReviews": { "nodes": [
+                { "state": "CHANGES_REQUESTED", "commit": { "oid": "old" }, "author": { "login": "bob" } },
+                { "state": "CHANGES_REQUESTED", "commit": { "oid": "head" }, "author": { "login": "carl" } },
+                { "state": "APPROVED", "commit": { "oid": "old" }, "author": { "login": "dana" } },
+            ] },
+        });
+        let (who, since) = waiting_state(&n, "head");
+        assert_eq!(who, ["anna", "backend", "bob"]);
+        assert_eq!(
+            since.as_deref(),
+            Some("2026-09-29T08:00:00Z"),
+            "anna's latest request is the oldest wait"
+        );
+        assert_eq!(waiting_state(&json!({}), "head"), (vec![], None));
     }
 }

@@ -928,6 +928,14 @@ export function createMockTransport(options: MockOptions = {}): {
       delete state.pending[prKey(review)];
       return null;
     },
+    review_nudge: ({ review }) => {
+      const item = reviewItem(review);
+      const last = item.review.nudged_at ? Date.parse(item.review.nudged_at) : 0;
+      if (Date.now() - last < 24 * 3600_000) throw err('invalid_argument', 'already nudged in the last 24 h');
+      item.review.nudged_at = new Date().toISOString();
+      emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
+      return null;
+    },
     // ---- work ------------------------------------------------------------------------------
     work_plan: ({ project_id, source }) => {
       const p = project(project_id);

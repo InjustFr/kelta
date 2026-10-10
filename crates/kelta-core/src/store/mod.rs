@@ -356,6 +356,26 @@ pub mod q {
         rows.collect::<rusqlite::Result<std::collections::HashMap<_, _>>>().map_err(db_err)
     }
 
+    // ---- nudges --------------------------------------------------------------------------------
+
+    /// `(repo, number) → at` of my last nudge per PR.
+    pub fn nudges(c: &Connection) -> R<std::collections::HashMap<(String, u64), String>> {
+        let mut st = c.prepare("SELECT repo, number, at FROM nudges").map_err(db_err)?;
+        let rows =
+            st.query_map([], |r| Ok(((r.get(0)?, r.get::<_, i64>(1)? as u64), r.get(2)?))).map_err(db_err)?;
+        rows.collect::<rusqlite::Result<std::collections::HashMap<_, _>>>().map_err(db_err)
+    }
+
+    pub fn nudge_put(c: &Connection, r: &ReviewRef, at: &str) -> R<()> {
+        c.execute(
+            "INSERT INTO nudges (repo, number, at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(repo, number) DO UPDATE SET at = excluded.at",
+            params![r.repo, r.number as i64, at],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
     pub fn seen_review_key(r: &ReviewRef) -> (String, String, u64) {
         (r.account.as_str().to_owned(), r.repo.clone(), r.number)
     }
