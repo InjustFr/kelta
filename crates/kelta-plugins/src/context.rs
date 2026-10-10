@@ -181,8 +181,18 @@ impl PluginHost {
         }
         if let Some(p) = spec.plugin {
             v.set("plugin", json!({ "id": p.id, "dir": p.dir.display().to_string() }));
-            let ns = self.settings(project_id.as_ref()).plugins.settings.get(p.id.as_str()).cloned();
-            v.set("settings", ns.unwrap_or_else(|| json!({})));
+            let mut ns = self
+                .settings(project_id.as_ref())
+                .plugins
+                .settings
+                .get(p.id.as_str())
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            // A secret setting's SecretRef must not reach templates (http bodies, headers).
+            if let Some(schema) = self.registry().get(p.id.as_str()).and_then(|e| e.settings_schema.clone()) {
+                crate::screens::mask_secrets(&mut ns, &schema);
+            }
+            v.set("settings", ns);
         }
         if let Some(t) = tctx {
             if let Some(cwd) = &t.cwd {

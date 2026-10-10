@@ -6,6 +6,7 @@ mod kpp;
 mod manifests;
 mod permissions;
 mod proxy;
+mod secrets;
 mod tools;
 mod triggers;
 mod uri;

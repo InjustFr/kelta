@@ -86,7 +86,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         // ext
         ToolKind, EmbedMode, WebLifecycle, Ready, StopSpec, WebStart, ToolDef, ToolSource,
         ToolInfo, ToolCheck, ToolHandle, Matcher, TriggerDef, Urgency, RunStdin, RunShow,
-        ActionDef, CommandWhen, CommandDef, TriggerOrigin, TriggerInfo, TriggerRun,
+        ActionDef, SecretHeader, CommandWhen, CommandDef, TriggerOrigin, TriggerInfo, TriggerRun,
         BlockingOutcome, PlatformName, ScreenScope, ScreenPlacement, ScreenDef, KeybindingDef,
         ActionButtonDef, SettingsContribution, Contributes, PluginManifest, Permission,
         PluginMethod, PluginInfo, PermissionInfo, PluginInstallPreview, ScreenOpenResult,

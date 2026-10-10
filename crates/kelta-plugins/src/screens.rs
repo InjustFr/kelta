@@ -6,7 +6,8 @@ use kelta_proto::codehost::{ReviewKind, ReviewRef};
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, Notification, Toast, ToastLevel, UiEvent};
 use kelta_proto::ext::{
-    CallOrigin, Permission, PluginMethod, ProxiedRequest, ScreenOpenResult, ScreenScope, Urgency,
+    CallOrigin, Permission, PluginMethod, ProxiedRequest, ScreenOpenResult, ScreenScope, SecretHeader,
+    Urgency,
 };
 use kelta_proto::ids::{PluginId, ProjectId, ScreenInstanceId, SessionId, ToolId};
 use kelta_proto::model::{
@@ -448,11 +449,12 @@ impl PluginHost {
                     self.registry().get(screen.plugin.as_str()).and_then(|e| e.settings_schema.clone())
                 {
                     apply_schema_defaults(&mut values, &schema);
+                    mask_secrets(&mut values, &schema);
                 }
                 if granted.has(&Permission::SettingsRead)
                     && let Value::Object(m) = &mut values
                 {
-                    m.insert("$effective".into(), non_secret_settings(&settings));
+                    m.insert("$effective".into(), non_secret_settings(&settings, &self.registry()));
                 }
                 Ok(values)
             }
@@ -477,6 +479,12 @@ impl PluginHost {
                             q.key
                         ))
                     })?;
+                    if is_secret_prop(prop) {
+                        return Err(KeltaError::invalid(format!(
+                            "settings.set: `{}` is a secret; only the user sets it in Settings → Plugins",
+                            q.key
+                        )));
+                    }
                     if let Ok(v) = jsonschema::validator_for(prop)
                         && let Err(e) = v.validate(&q.value)
                     {
@@ -500,17 +508,25 @@ impl PluginHost {
                     headers: std::collections::BTreeMap<String, String>,
                     #[serde(default)]
                     body: Option<String>,
+                    #[serde(default)]
+                    secret_headers: std::collections::BTreeMap<String, SecretHeader>,
                 }
                 let q: Q = p(method, params)?;
-                let resp = core
-                    .http_fetch(ProxiedRequest {
-                        url: q.url,
-                        method: q.method.unwrap_or_else(|| "GET".into()).to_ascii_uppercase(),
-                        headers: q.headers,
-                        body: q.body,
-                        body_base64: false,
-                        timeout_ms: Some(30_000),
-                    })
+                // Without its entry a setting name would be read as a raw SecretRef: refuse.
+                let entry = self.registry().get(screen.plugin.as_str()).cloned();
+                if entry.is_none() && !q.secret_headers.is_empty() {
+                    return Err(KeltaError::not_found(format!("plugin {}", screen.plugin)));
+                }
+                let req = ProxiedRequest {
+                    url: q.url,
+                    method: q.method.unwrap_or_else(|| "GET".into()).to_ascii_uppercase(),
+                    headers: q.headers,
+                    body: q.body,
+                    body_base64: false,
+                    timeout_ms: Some(30_000),
+                };
+                let resp = self
+                    .fetch_with_secrets(entry.as_deref(), screen.project.as_ref(), req, &q.secret_headers)
                     .await?;
                 if resp.body.len() > NET_FETCH_CAP * 4 / 3 + 4 {
                     return Err(KeltaError::invalid("net.fetch: response larger than 5 MB"));
@@ -773,6 +789,7 @@ pub(crate) fn apply_schema_defaults(values: &mut Value, schema: &Value) {
     };
     for (k, prop) in props {
         if !m.contains_key(k)
+            && !is_secret_prop(prop)
             && let Some(d) = prop.get("default")
         {
             m.insert(k.clone(), d.clone());
@@ -780,13 +797,37 @@ pub(crate) fn apply_schema_defaults(values: &mut Value, schema: &Value) {
     }
 }
 
-/// Effective settings without secrets (`settings.read`): accounts' secret refs, every `env` and
-/// `headers` map (tools, triggers, terminal, project), and tool URLs marked `url_is_secret`.
-fn non_secret_settings(s: &kelta_proto::settings::Settings) -> Value {
+/// `x-kelta-secret` property of a plugin settings schema (its value is a SecretRef).
+pub(crate) fn is_secret_prop(prop: &Value) -> bool {
+    prop.get("x-kelta-secret").and_then(Value::as_bool) == Some(true)
+}
+
+/// `settings.get`: a set secret key reads `"***"`, an unset one is omitted.
+pub(crate) fn mask_secrets(values: &mut Value, schema: &Value) {
+    let (Some(props), Value::Object(m)) = (schema.get("properties").and_then(Value::as_object), values)
+    else {
+        return;
+    };
+    for (k, _) in props.iter().filter(|(_, p)| is_secret_prop(p)) {
+        match m.get(k) {
+            Some(Value::String(v)) if !v.is_empty() => {
+                m.insert(k.clone(), json!("***"));
+            }
+            _ => {
+                m.remove(k);
+            }
+        }
+    }
+}
+
+/// Effective settings without secrets (`settings.read`): accounts' secret refs, plugin `x-kelta-secret` settings, every `env`,
+/// `headers` and `secret_headers` map (tools, triggers, terminal, project), and tool URLs marked
+/// `url_is_secret`.
+fn non_secret_settings(s: &kelta_proto::settings::Settings, reg: &crate::registry::Registry) -> Value {
     fn scrub(v: &mut Value) {
         match v {
             Value::Object(o) => {
-                for k in ["secret", "env", "headers"] {
+                for k in ["secret", "secret_headers", "env", "headers"] {
                     o.remove(k);
                 }
                 o.values_mut().for_each(scrub);
@@ -806,5 +847,14 @@ fn non_secret_settings(s: &kelta_proto::settings::Settings) -> Value {
         }
     }
     scrub(&mut v);
+    // Plugin-declared secrets (`x-kelta-secret`): drop the SecretRef of every plugin.
+    for e in &reg.entries {
+        let props = e.settings_schema.as_ref().and_then(|s| s.get("properties")).and_then(Value::as_object);
+        if let (Some(props), Some(Value::Object(ns))) =
+            (props, v.pointer_mut(&format!("/plugins/{}", e.id.as_str())))
+        {
+            ns.retain(|k, _| !props.get(k).is_some_and(is_secret_prop));
+        }
+    }
     v
 }

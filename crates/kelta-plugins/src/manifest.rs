@@ -142,7 +142,10 @@ fn check_strings(v: &Value, ctx: &str, errors: &mut Vec<String>) {
             }
         }
         Value::Array(a) => a.iter().for_each(|x| check_strings(x, ctx, errors)),
-        Value::Object(m) => m.values().for_each(|x| check_strings(x, ctx, errors)),
+        // `secret_headers` formats use `{secret}`, filled host-side, not the template vars.
+        Value::Object(m) => {
+            m.iter().filter(|(k, _)| *k != "secret_headers").for_each(|(_, x)| check_strings(x, ctx, errors))
+        }
         _ => {}
     }
 }
