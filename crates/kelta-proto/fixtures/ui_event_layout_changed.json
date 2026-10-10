@@ -51,6 +51,7 @@
               "kind": "project"
             },
             "sort": "age",
+            "source_id": null,
             "view_id": "mine",
             "who": "mine"
           },

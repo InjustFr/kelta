@@ -4,45 +4,53 @@ The Tickets pane is a list, not a board: one row per ticket, grouped by flow (wh
 someone, what is ready), with the keyboard doing most of the work. A detail column on the right follows the
 selection. Board mode stays available with the list/board toggle.
 
-**Tickets** on the rail (`Cmd+Shift+B`) shows this list across every open project, outside any project: each row
-carries its project's name, Mine is the default, and its tab, grouping, sort and person come back after a restart.
+**Tickets** on the rail (`Cmd+Shift+B`) shows this list across every source, outside any project: Mine is the
+default, and its tab, source, grouping, sort and person come back after a restart.
 Opening a ticket, its PR or its work from there switches to the ticket's project. The board needs one project's
 columns: palette **Open project board** opens the active project's Tickets tab as a board (the `+` menu of the tab
 bar opens the project's own Tickets tab).
 
 ## Sources
 
-A source is a place tickets come from: a Jira board or filter, a Redmine project or query, a GitHub repo or
-Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A project can have several, from different
-accounts, so one project can show Jira and GitHub tickets together.
+A source is a board tickets come from: a Jira board or filter, a Redmine project or query, a GitHub repo or
+Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A source can hold several views, from different
+accounts, so one board can show Jira and GitHub tickets together.
 
-- Boards live in your global settings, not in each project: one `[[sources]]` entry holds the account, the
-  sources (views), the columns and the status mapping, and lists the projects it feeds (none is fine). A board
-  shared by several projects is set up once. The project's Tracker settings edit the board that feeds it. Boards
-  from older versions moved out of the project files on first launch (a copy of each project file is kept in
-  `projects/.trash/`). The All tickets view shows every board, also those feeding no open project.
-- The pane shows every source of the project by default (first page of each, duplicates removed); **Load more**
-  pages every source that has more.
+- Sources live in your global settings (Settings > Sources), not in each project: one `[[sources]]` entry holds
+  the account, the views, the columns and the status mapping, and lists the projects it feeds (none is fine). A
+  board shared by several projects is set up once. Settings > Projects shows which sources feed each project.
+  Boards from older versions moved out of the project files on first launch (a copy of each project file is kept
+  in `projects/.trash/`).
+- The Tickets view lists every source by default: the rail's Tickets shows all of them, also those feeding no
+  project; a project's Tickets shows the sources that feed it (first page of each, duplicates removed). **Load
+  more** pages every source that has more. Each row shows its source when several are listed, and Group by Source
+  works everywhere.
+- `v` (or the source button) narrows the list to one source; a source with several views lists them indented
+  under it, to narrow to one view. The pane remembers the choice. With a single source that has a single view
+  there is nothing to choose: no button, and `v` does nothing.
+- Board mode needs one source (the list narrowed to one, or a scope with only one): it uses that source's
+  columns. Otherwise the List/Board switch is hidden.
 - The palette and the ticket pickers search the trackers themselves (Jira `text ~`, Linear title and description,
   GitHub / GitLab / Gitea search, Redmine subject), so they find tickets past the first page. A tracker that cannot
   search matches the loaded first page instead; a typed key is also looked up directly.
-- `v` opens the source menu: "All sources", one entry per source, and "Add source...".
-- **Add source** (also Settings > Projects > Tracker) opens a sheet: choose the account, type to search, press
-  `Enter` on a result. Providers that cannot list sources tell you so; edit the TOML instead
-  ([views schema](../SETTINGS.md)).
+- With no source yet, Tickets and Now say "Add a ticket source: pick a board". **Pick a board** (also "Add
+  source..." in the `v` menu and Settings > Sources) opens a sheet: choose the account, type to search, press
+  `Enter` on a result. It creates a source labelled after the board, feeding the project you opened it from; the
+  toast's action opens Settings > Sources to choose its projects. **Add view...** on a source adds a view to it.
+  Providers that cannot list sources tell you so; edit the TOML instead ([views schema](../SETTINGS.md)).
 
-## Mine, Unassigned, Anyone
+## Mine, Unassigned, Team
 
-Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. For a team view use
-Anyone and group by Assignee (`Shift+g`).
+Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. Team is every open
+ticket of your sources; group it by Assignee (`Shift+g`) for a per-person view.
 
 The person menu next to the tabs narrows the list to one assignee (it lists the assignees of the loaded tickets,
-so it only knows people on the first page of each source). Choosing a person switches to Anyone and is remembered
+so it only knows people on the first page of each source). Choosing a person switches to Team and is remembered
 with the pane; "Any person" clears it. Picking a tab clears it too.
 
 ## Current iteration
 
-Each source can be limited to the current iteration (Settings > Projects > Tracker, or `current_iteration = true`):
+Each view can be limited to the current iteration (Settings > Sources, or `current_iteration = true`):
 
 | Provider | Meaning |
 |---|---|
@@ -64,7 +72,7 @@ Each source can be limited to the current iteration (Settings > Projects > Track
 | `Space` | show or hide the detail column |
 | `Esc` | from the detail column back to the list; in the list, clear the multi-selection |
 | `/` | filter |
-| `1` `2` `3` | Mine, Unassigned, Anyone |
+| `1` `2` `3` | Mine, Unassigned, Team |
 | `v` | choose sources |
 | `Shift+g` | cycle the grouping |
 | `f` `s` | only the current sprint (press again to clear) |
@@ -182,7 +190,7 @@ Statuses are shown as the tracker names them; Kelta only uses the category (to d
 to order and colour them.
 
 - **Kanban**: Mine, group by Status or Flow. Pull the next ticket with `m`, start it with `s`.
-- **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Anyone grouped by Assignee for stand-up, or by Sprint to see the carry-over.
+- **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
 

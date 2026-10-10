@@ -282,6 +282,7 @@ export const layout: Layout = {
             "kind": "project"
           },
           "sort": "age",
+          "source_id": null,
           "view_id": "mine",
           "who": "mine"
         },
@@ -487,6 +488,9 @@ export const ticketPage: TicketPage = {
           "url": "https://github.com/acme/shop-api/pull/90"
         }
       ],
+      "source_ids": [
+        "product"
+      ],
       "ticket": {
         "assignee": {
           "avatar_url": null,
@@ -626,6 +630,7 @@ export const ticketDetail: TicketDetail = {
         "shop"
       ],
       "prs": [],
+      "source_ids": [],
       "ticket": {
         "assignee": {
           "avatar_url": null,
@@ -3458,6 +3463,7 @@ export const uiEventLayoutChanged: UiEvent = {
               "kind": "project"
             },
             "sort": "age",
+            "source_id": null,
             "view_id": "mine",
             "who": "mine"
           },

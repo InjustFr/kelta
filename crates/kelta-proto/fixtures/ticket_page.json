@@ -37,6 +37,9 @@
           "url": "https://github.com/acme/shop-api/pull/90"
         }
       ],
+      "source_ids": [
+        "product"
+      ],
       "ticket": {
         "assignee": {
           "avatar_url": null,

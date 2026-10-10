@@ -6,7 +6,8 @@ import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 
 import { globalContent } from '../work/nav';
-import { layout, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import type { Settings } from '$lib/gen';
+import { layout, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
@@ -191,6 +192,25 @@ describe('Now', () => {
     await fireEvent.click(more);
     expect(ui.view).toBe('tickets');
     expect(globalContent('tickets')).toMatchObject({ scope: { kind: 'all' }, who: 'mine', person: null });
+  });
+
+  it('with no ticket source: a notice above the list, the empty state when Now is empty', async () => {
+    (mock.state.settings.value as unknown as Settings).sources = [];
+    settings.effective = {};
+    const { unmount } = mountNow();
+    await fireEvent.click(await within(await screen.findByTestId('now-no-source')).findByRole('button'));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: {} });
+    unmount();
+    ui.sheets = [];
+    mock.state.tickets = [];
+    mock.state.reviews = [];
+    sessions.byId = {};
+    work.byId = {};
+    mountNow();
+    expect(await screen.findByText('Add a ticket source: pick a board')).toBeTruthy();
+    expect(screen.queryByTestId('now-no-source')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pick a board' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: {} });
   });
 
   it('shows an error state when nothing loads', async () => {
