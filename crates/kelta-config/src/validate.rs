@@ -748,6 +748,22 @@ mod tests {
     }
 
     #[test]
+    fn project_color_is_a_theme_slot_or_a_hex() {
+        let issues = |c: &str| {
+            let v = json!({"project": {"id": "x", "name": "X", "color": c}});
+            layer_issues(Layer::Project, &v, Some("x"))
+        };
+        for ok in ["theme:green", "theme:bright-cyan", "#ff8800", "#5E8C4A"] {
+            assert!(issues(ok).is_empty(), "{ok}: {:?}", issues(ok));
+        }
+        for bad in ["green", "theme:black", "theme:bright-white", "theme:", "#f80", "#ff880", "rgb(1,2,3)"] {
+            let i = issues(bad);
+            assert_eq!(i.len(), 1, "{bad}: {i:?}");
+            assert_eq!(join_path(&i[0].path), "project.color");
+        }
+    }
+
+    #[test]
     fn cross_refs() {
         let mut d = serde_json::to_value(kelta_proto::settings::Settings::defaults()).unwrap();
         assert!(cross_issues(&d, Some("claude")).is_empty());

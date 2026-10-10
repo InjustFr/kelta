@@ -231,7 +231,7 @@ A theme is a named, **partial** set of colour overrides on top of a Bezel base: 
 |---|---|---|
 | `name` | str | required, display name |
 | `base` | enum(dark\|light) | required; the slot of the other mode ignores the theme |
-| `ui.<token>` | `#rrggbb` | `bezel`, `bezel_raised`, `well`, `bg_float`, `fg`, `fg_muted`, `fg_subtle`, `fg_chrome`, `border`, `border_strong`, `danger`, `warn`, `ok`, `info` → `--k-<token>` (`_` → `-`). Not themable: lamps, swatches, hover/active/overlay/shadow, `*_fg` |
+| `ui.<token>` | `#rrggbb` | `bezel`, `bezel_raised`, `well`, `bg_float`, `fg`, `fg_muted`, `fg_subtle`, `fg_chrome`, `border`, `border_strong`, `danger`, `warn`, `ok`, `info` → `--k-<token>` (`_` → `-`). Not themable: lamps, hover/active/overlay/shadow, `*_fg` |
 | `ui.accent` | `#rrggbb` | never writes `--k-accent`: the `--k-project` hue when the active project has no colour (red and grey are still dropped, DESIGN §9) |
 | `terminal.background` / `terminal.foreground` | `#rrggbb` | fallback `ui.well` / `ui.fg`, then the Bezel palette; also sets `--k-term-bg` / `--k-term-fg` |
 | `terminal.cursor` / `terminal.selection` | `#rrggbb` | fallback the Bezel palette; also sets `--k-term-cursor` / `--k-term-selection` |
@@ -334,7 +334,7 @@ check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the ap
 [project]
 id = "shop"                  # must equal the file stem
 name = "Shop"
-color = "#e07a5f"
+color = "theme:green"         # a theme slot (follows the theme) or a custom "#rrggbb" (kept as typed)
 icon = "S"                   # 1-2 chars or sprite icon name
 default_template = "claude+editor"
 

@@ -1,6 +1,7 @@
 // Overlays and sheets (palette, switcher, sheet stack) and ctl.command routing.
 
 import type { CtlCommand, UiEvent } from '$lib/gen';
+import { resolveTheme, type ResolvedTheme } from '$lib/theme';
 
 export type SheetKey =
   | 'start_work'
@@ -46,6 +47,8 @@ export class UiStore {
   view = $state<GlobalView | null>(null);
   /** A cross link's target in a global view (row key), read once by that view's pane on mount, then cleared. */
   select = $state<{ view: GlobalView; key: string } | null>(null);
+  /** The active theme (Shell keeps it current), for resolving `theme:<slot>` project colours. */
+  theme = $state.raw<ResolvedTheme>(resolveTheme(null, 'dark'));
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive listener list
   #ctlListeners = new Set<(cmd: CtlCommand) => void>();

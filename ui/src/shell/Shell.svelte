@@ -11,7 +11,7 @@
   import { layout, projects, reviews, sessions, settings, toasts, tools, ui } from '$lib/stores';
   import { configFromSettings, terminalPool } from '$lib/terminal';
   import { terminalPalette } from '$lib/terminal/theme';
-  import { resolveTheme } from '$lib/theme';
+  import { resolveProjectColor, resolveTheme } from '$lib/theme';
   import { Button, currentPlatform, EmptyState } from '$lib/ui';
   import { startWorkOnTicket } from '../views/work/startWork';
 
@@ -58,6 +58,10 @@
   const resolved = $derived(resolveTheme(settings.value(), resolvedTheme));
   const terminalConfig = $derived(configFromSettings(settings.value()?.terminal, resolved.terminal));
 
+  $effect.pre(() => {
+    ui.theme = resolved;
+  });
+
   $effect(() => {
     const root = document.documentElement;
     if (themeSetting === 'system') delete root.dataset.theme;
@@ -75,7 +79,8 @@
 
   $effect(() => {
     // The window takes the hue of the active project (else the theme's); the palette is not re-pushed.
-    const accent = projectAccent(projects.active?.color) ?? projectAccent(resolved.accent);
+    const accent =
+      projectAccent(resolveProjectColor(projects.active?.color, resolved)) ?? projectAccent(resolved.accent);
     const style = document.documentElement.style;
     if (accent) style.setProperty('--k-project', accent);
     else style.removeProperty('--k-project');
