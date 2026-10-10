@@ -297,7 +297,7 @@ pub struct SessionInfo {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct ClaudeMeta {
     pub session_uuid: String,
     pub model: Option<String>,
@@ -305,6 +305,34 @@ pub struct ClaudeMeta {
     pub preview: Option<String>,
     pub files_touched: Vec<PathBuf>,
     pub hooks_active: bool,
+    /// Last statusline snapshot (in memory only); `None` until Claude first refreshes it.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub usage: Option<ClaudeUsage>,
+}
+
+/// What Claude Code's statusline reports (`HookPayload::usage`), plus Kelta's cost bookkeeping.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClaudeUsage {
+    /// `context_window.used_percentage`; `None` before the first answer.
+    pub context_pct: Option<f64>,
+    /// `cost.total_cost_usd` of this Claude process (a resumed one starts from the restored cost).
+    pub cost_usd: f64,
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    /// `rate_limits.*`; absent for API-key accounts.
+    pub five_hour: Option<RateWindow>,
+    pub seven_day: Option<RateWindow>,
+    /// Spend not yet added to `WorkItem.cost_usd` (core moves it there on SessionEnd and quit).
+    #[serde(default)]
+    pub unsaved_usd: f64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+pub struct RateWindow {
+    pub used_percentage: f64,
+    /// Unix seconds.
+    pub resets_at: i64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -549,7 +577,7 @@ pub struct WorkStepStatus {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct WorkItem {
     pub id: WorkItemId,
     pub project_id: ProjectId,
@@ -594,6 +622,9 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub rebase: Option<Box<RebaseState>>,
+    /// Claude spend of the item's ended sessions (USD), summed across sessions and resumes.
+    #[serde(default)]
+    pub cost_usd: f64,
     /// Claude's full final message of its last `Stop` (the session preview keeps 200 chars).
     #[serde(default)]
     #[ts(optional = nullable)]
@@ -805,7 +836,7 @@ pub enum ShipOrigin {
 }
 
 /// `work_finish_merged` result.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct FinishMergedReport {
     pub finished: Vec<WorkItem>,
     /// Merged items left for a single Finish (dirty worktree, Done status to choose, busy).

@@ -7,9 +7,10 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { projects, reviews, tickets, toasts, work } from '$lib/stores';
+  import { projects, reviews, sessions, settings, tickets, toasts, work } from '$lib/stores';
   import { Button, EmptyState, ErrorState, Kbd, Lamp, ROW_HEIGHT, VirtualList, relativeTime } from '$lib/ui';
 
+  import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, WORK_ACTIONS } from '../work/actions';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
@@ -61,6 +62,9 @@
     color: string | null;
     reason: string;
     meta: string[];
+    /** Work rows: Claude context use and spend. */
+    ctx?: { text: string; hot: boolean } | null;
+    cost?: { text: string; over: boolean } | null;
     /** The meta part shown as a warning (`tests: none` when source changed). */
     warn?: string;
     age: string;
@@ -118,7 +122,10 @@
             : []),
           { key: 'g', label: 'Go to work tab' },
         ];
-        const preview = claudeOf(item)?.claude?.preview ?? '';
+        const claude = claudeOf(item)?.claude;
+        const u = claude?.usage;
+        const spent = itemCost(item, sessions.all);
+        const preview = claude?.preview ?? '';
         const said = item.claude_message?.trim().split('\n')[0] || preview;
         const more =
           phase.section === 'to_review'
@@ -135,6 +142,17 @@
           color: p.color,
           reason: phase.section === 'needs_you' && phase.detail ? phase.detail : phase.label,
           meta,
+          ctx:
+            u && u.context_pct !== null
+              ? { text: `ctx ${Math.round(u.context_pct)}%`, hot: ctxHot(u) }
+              : null,
+          cost:
+            spent > 0
+              ? {
+                  text: usd(spent),
+                  over: overBudget(spent, settings.value(item.project_id)?.claude.budget_usd),
+                }
+              : null,
           warn: delta && testsMissing(delta) ? 'tests: none' : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
@@ -454,6 +472,16 @@
                   {#if v.project}<span class="proj">{v.project}</span>{/if}
                   <span class="reason">{v.reason}</span>
                   {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}
+                  {#if v.ctx}<span
+                      class="meta"
+                      class:hot={v.ctx.hot}
+                      title={v.ctx.hot ? 'Compacts soon' : 'Context window used'}>{v.ctx.text}</span
+                    >{/if}
+                  {#if v.cost}<span
+                      class="meta"
+                      class:over={v.cost.over}
+                      title={v.cost.over ? 'Over budget' : 'Claude spend on this item'}>{v.cost.text}</span
+                    >{/if}
                   <span class="meta age">{v.age}</span>
                 </button>
               {:else}
@@ -639,6 +667,14 @@
     font-size: var(--k-font-size-xs);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-subtle);
+  }
+
+  .meta.hot {
+    color: var(--k-warn);
+  }
+
+  .meta.over {
+    color: var(--k-danger);
   }
 
   .meta.warn {

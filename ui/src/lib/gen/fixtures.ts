@@ -326,7 +326,22 @@ export const sessionInfo: SessionInfo = {
     "hooks_active": true,
     "model": "opus",
     "preview": "I need permission to run `cargo test`.",
-    "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b"
+    "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+    "usage": {
+      "context_pct": 72.0,
+      "cost_usd": 1.8412,
+      "five_hour": {
+        "resets_at": 1791637800,
+        "used_percentage": 64.2
+      },
+      "lines_added": 210,
+      "lines_removed": 40,
+      "seven_day": {
+        "resets_at": 1792051200,
+        "used_percentage": 31.0
+      },
+      "unsaved_usd": 1.8412
+    }
   },
   "cols": 120,
   "created_at": "2026-10-09T12:00:00Z",
@@ -739,6 +754,7 @@ export const workItem: WorkItem = {
   "claude_message": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -853,6 +869,7 @@ export const workItemFailed: WorkItem = {
   "claude_message": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -969,6 +986,7 @@ export const workItemMerged: WorkItem = {
   "claude_message": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -1116,6 +1134,7 @@ export const workItemRebaseStopped: WorkItem = {
   "claude_message": null,
   "claude_replied": false,
   "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -1644,6 +1663,7 @@ export const settingsDefault: Settings = {
     ],
     "append_system_prompt": "",
     "binary": "claude",
+    "budget_usd": null,
     "extra_args": [],
     "extra_hooks": {},
     "hook_transport": "command",
@@ -2527,6 +2547,124 @@ export const hookSessionEnd: HookPayload = {
   "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl"
 };
 
+export const hookStatusline: HookPayload = {
+  "context_window": {
+    "context_window_size": 200000,
+    "current_usage": {
+      "cache_creation_input_tokens": 2100,
+      "cache_read_input_tokens": 141888,
+      "input_tokens": 12,
+      "output_tokens": 410
+    },
+    "remaining_percentage": 28,
+    "total_input_tokens": 144000,
+    "total_output_tokens": 9100,
+    "used_percentage": 72
+  },
+  "cost": {
+    "total_api_duration_ms": 98000,
+    "total_cost_usd": 1.8412,
+    "total_duration_ms": 512000,
+    "total_lines_added": 210,
+    "total_lines_removed": 40
+  },
+  "cwd": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+  "exceeds_200k_tokens": false,
+  "fast_mode": false,
+  "hook_event_name": "Status",
+  "last_assistant_message": null,
+  "message": null,
+  "model": {
+    "display_name": "Opus",
+    "id": "claude-opus-4-1"
+  },
+  "notification_type": null,
+  "output_style": {
+    "name": "default"
+  },
+  "permission_mode": "acceptEdits",
+  "prompt": null,
+  "rate_limits": {
+    "five_hour": {
+      "resets_at": 1791637800,
+      "used_percentage": 64.2
+    },
+    "seven_day": {
+      "resets_at": 1792051200,
+      "used_percentage": 31
+    }
+  },
+  "reason": null,
+  "session_id": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "source": null,
+  "thinking": {
+    "enabled": true
+  },
+  "tool_input": null,
+  "tool_name": null,
+  "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl",
+  "version": "2.1.296",
+  "workspace": {
+    "added_dirs": [],
+    "current_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+    "project_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+  }
+};
+
+export const hookStatuslineApiKey: HookPayload = {
+  "context_window": {
+    "context_window_size": 200000,
+    "current_usage": {
+      "cache_creation_input_tokens": 2100,
+      "cache_read_input_tokens": 141888,
+      "input_tokens": 12,
+      "output_tokens": 410
+    },
+    "remaining_percentage": 28,
+    "total_input_tokens": 144000,
+    "total_output_tokens": 9100,
+    "used_percentage": 72
+  },
+  "cost": {
+    "total_api_duration_ms": 98000,
+    "total_cost_usd": 1.8412,
+    "total_duration_ms": 512000,
+    "total_lines_added": 210,
+    "total_lines_removed": 40
+  },
+  "cwd": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+  "exceeds_200k_tokens": false,
+  "fast_mode": false,
+  "hook_event_name": "Status",
+  "last_assistant_message": null,
+  "message": null,
+  "model": {
+    "display_name": "Opus",
+    "id": "claude-opus-4-1"
+  },
+  "notification_type": null,
+  "output_style": {
+    "name": "default"
+  },
+  "permission_mode": "acceptEdits",
+  "prompt": null,
+  "reason": null,
+  "session_id": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+  "source": null,
+  "thinking": {
+    "enabled": true
+  },
+  "tool_input": null,
+  "tool_name": null,
+  "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl",
+  "version": "2.1.296",
+  "workspace": {
+    "added_dirs": [],
+    "current_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+    "project_dir": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"
+  }
+};
+
 export const notification: Notification = {
   "body": "I need permission to run `cargo test`.",
   "project_id": "shop",
@@ -2899,7 +3037,22 @@ export const uiEventSessionUpdated: UiEvent = {
       "hooks_active": true,
       "model": "opus",
       "preview": "I need permission to run `cargo test`.",
-      "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b"
+      "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+      "usage": {
+        "context_pct": 72.0,
+        "cost_usd": 1.8412,
+        "five_hour": {
+          "resets_at": 1791637800,
+          "used_percentage": 64.2
+        },
+        "lines_added": 210,
+        "lines_removed": 40,
+        "seven_day": {
+          "resets_at": 1792051200,
+          "used_percentage": 31.0
+        },
+        "unsaved_usd": 1.8412
+      }
     },
     "cols": 120,
     "created_at": "2026-10-09T12:00:00Z",
@@ -3131,6 +3284,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "claude_message": null,
     "claude_replied": false,
     "claude_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+    "cost_usd": 3.5,
     "created_at": "2026-10-09T12:00:00Z",
     "delta": null,
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
@@ -3387,6 +3541,8 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "hook_stop": hookStop,
   "hook_stop_failure": hookStopFailure,
   "hook_session_end": hookSessionEnd,
+  "hook_statusline": hookStatusline,
+  "hook_statusline_api_key": hookStatuslineApiKey,
   "notification": notification,
   "terminal_stats": terminalStats,
   "terminal_limits": terminalLimits,

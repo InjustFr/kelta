@@ -51,8 +51,8 @@ use kelta_proto::ext::{BlockingOutcome, ProxiedRequest, ProxiedResponse, ToolHan
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
-    EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
-    SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
+    ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch,
+    Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
@@ -588,7 +588,12 @@ impl CoreApi for Core {
     }
     async fn session_apply_hook(&self, id: &SessionId, change: StatusChange) -> Result<(), KeltaError> {
         self.rt.capture();
-        self.apply_hook(id, change)
+        let end = change.raw_event == kelta_proto::hooks::names::SESSION_END;
+        self.apply_hook(id, change)?;
+        if end { self.flush_cost(id).await } else { Ok(()) }
+    }
+    async fn session_set_usage(&self, id: &SessionId, usage: ClaudeUsage) -> Result<(), KeltaError> {
+        self.set_usage(id, usage)
     }
     async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError> {
         self.rt.capture();

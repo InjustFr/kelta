@@ -663,6 +663,8 @@ pub struct ClaudeSettings {
     pub prompt_templates: BTreeMap<String, String>,
     /// Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
     pub ide_bridge: bool,
+    /// Spend per work item (USD) past which its cost chip turns red; set it per project.
+    pub budget_usd: Option<f64>,
 }
 
 impl Default for ClaudeSettings {
@@ -706,6 +708,7 @@ impl Default for ClaudeSettings {
                 ),
             ]),
             ide_bridge: false,
+            budget_usd: None,
         }
     }
 }

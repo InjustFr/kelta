@@ -12,6 +12,7 @@
     ],
     "append_system_prompt": "",
     "binary": "claude",
+    "budget_usd": null,
     "extra_args": [],
     "extra_hooks": {},
     "hook_transport": "command",

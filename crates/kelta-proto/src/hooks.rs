@@ -45,6 +45,8 @@ pub mod names {
     pub const STOP: &str = "Stop";
     pub const STOP_FAILURE: &str = "StopFailure";
     pub const SESSION_END: &str = "SessionEnd";
+    /// Not a hook: `kelta-ctl statusline` relays Claude's statusline JSON under this name.
+    pub const STATUS: &str = "Status";
 
     pub const ALL: &[&str] = &[
         SESSION_START,
@@ -117,12 +119,34 @@ pub fn claude_settings(
             }
         }
     }
-    json!({ "hooks": Value::Object(hooks) })
+    // `hook_command` is `'<kelta-ctl>' hook`; the statusline relay is the same binary.
+    let statusline = format!("{} statusline", hook_command.strip_suffix(" hook").unwrap_or(hook_command));
+    json!({ "hooks": Value::Object(hooks), "statusLine": { "type": "command", "command": statusline } })
 }
 
 impl HookPayload {
     /// `tool_input.file_path` for Edit/Write/MultiEdit.
     pub fn edited_file(&self) -> Option<PathBuf> {
         self.tool_input.as_ref().and_then(|v| v.get("file_path")).and_then(|v| v.as_str()).map(PathBuf::from)
+    }
+
+    /// The usage of a statusline payload (field names of Claude Code 2.1); `None` without `cost`.
+    pub fn usage(&self) -> Option<crate::model::ClaudeUsage> {
+        use serde_json::Value;
+        let cost = self.extra.get("cost")?;
+        let num = |v: &Value, k: &str| v.get(k).and_then(Value::as_f64);
+        let rate = |k: &str| {
+            let w = self.extra.get("rate_limits")?.get(k)?;
+            serde_json::from_value(w.clone()).ok()
+        };
+        Some(crate::model::ClaudeUsage {
+            context_pct: self.extra.get("context_window").and_then(|c| num(c, "used_percentage")),
+            cost_usd: num(cost, "total_cost_usd").unwrap_or(0.0),
+            lines_added: cost.get("total_lines_added").and_then(Value::as_u64).unwrap_or(0),
+            lines_removed: cost.get("total_lines_removed").and_then(Value::as_u64).unwrap_or(0),
+            five_hour: rate("five_hour"),
+            seven_day: rate("seven_day"),
+            unsaved_usd: 0.0,
+        })
     }
 }
