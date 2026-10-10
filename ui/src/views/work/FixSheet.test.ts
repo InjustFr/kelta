@@ -32,7 +32,13 @@ const claudeOf = (w: WorkItem): SessionInfo =>
   mock.state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude')!;
 const sent = () =>
   mock.calls.filter((c) => c.cmd === 'work_send').at(-1)?.args as
-    { prompt: string; files: { name: string; content: string }[]; threads: string[] } | undefined;
+    | {
+        prompt: string;
+        files: { name: string; content: string }[];
+        threads: string[];
+        feedback_at?: string | null;
+      }
+    | undefined;
 
 function mountSheet(): ReturnType<typeof vi.fn> {
   const onclose = vi.fn();
@@ -67,16 +73,41 @@ describe('FixSheet', () => {
     expect(args.files[0]!.content).toContain('## Unresolved threads');
     expect(args.files[0]!.content).not.toContain('## Reviews');
     expect(args.files[0]!.content).toContain('ci / test');
+    expect(args.feedback_at).toBe(samples.feedback.threads[0]!.last_comment_at);
+  });
+
+  it('ticks only what is new since the last send; the rest is under "Seen before"', async () => {
+    const saved = samples.feedback.threads[0]!.last_comment_at;
+    samples.feedback.threads[0]!.last_comment_at = '2026-10-09T13:00:00Z';
+    work.upsert({ ...pr(), feedback_at: '2026-10-09T14:00:00+02:00' }); // = 12:00Z, the review's time
+    try {
+      const onclose = mountSheet();
+      await waitFor(() => expect(screen.getAllByTestId('fix-item')).toHaveLength(3));
+      const boxes = screen.getAllByTestId('fix-item') as HTMLInputElement[];
+      // Thread (new), review (seen, after its heading), failed check (always).
+      expect(boxes.map((b) => b.checked)).toEqual([true, false, true]);
+      expect(screen.getAllByText('Seen before')).toHaveLength(1);
+      await fireEvent.click(boxes[0]!); // untick the new thread: still counts toward the watermark
+      await fireEvent.keyDown(boxes[0]!, { key: 'Enter', metaKey: true });
+      await waitFor(() => expect(onclose).toHaveBeenCalled());
+      expect(sent()!.threads).toEqual([]);
+      expect(sent()!.feedback_at).toBe('2026-10-09T13:00:00Z');
+    } finally {
+      samples.feedback.threads[0]!.last_comment_at = saved;
+    }
   });
 
   it('sends to a busy Claude when it stops, enabled', async () => {
     const c = claudeOf(pr());
-    sessions.byId = { ...sessions.byId, [c.id]: { ...c, status: 'needs_input' } };
+    sessions.byId = { ...sessions.byId, [c.id]: { ...c, status: 'working' } };
     const onclose = mountSheet();
     await waitFor(() => expect(screen.getAllByTestId('fix-item')).toHaveLength(3));
-    const button = screen.getByRole('button', { name: /Send when Claude stops/ }) as HTMLButtonElement;
+    expect(screen.getByTestId('fix-resumes').textContent).toContain(
+      'Claude is working: it gets this when it stops.',
+    );
+    const button = screen.getByRole('button', { name: /Send to Claude/ }) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
-    await fireEvent.click(button);
+    await fireEvent.keyDown(screen.getByLabelText('Prompt'), { key: 'Enter', metaKey: true });
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(sent()).toBeTruthy();
     expect(toasts.list.some((t) => t.toast.text.startsWith('Sent '))).toBe(false); // core toasts the hold
@@ -89,7 +120,7 @@ describe('FixSheet', () => {
     expect(await screen.findByText(/status hooks inactive/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeTruthy();
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: /Send to Claude/ }) as HTMLButtonElement).disabled).toBe(
+      expect((screen.getByRole('button', { name: /Copy for Claude/ }) as HTMLButtonElement).disabled).toBe(
         false,
       ),
     );

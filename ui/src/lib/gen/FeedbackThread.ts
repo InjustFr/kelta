@@ -8,4 +8,8 @@ id: string, author: string, path: string | null, line: number | null,
 /**
  * The thread's comments, oldest first, as `author: body` Markdown.
  */
-body_md: string, url: string, };
+body_md: string, url: string, 
+/**
+ * When the last comment was left; `None` when it is mine (answered).
+ */
+last_comment_at?: string | null, };

@@ -66,10 +66,16 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
   expect(sent.threads).toEqual(['PRRT_kwDOA1']);
   expect(sent.prompt).toContain('{file}');
 
-  // Claude is now working: a second send is held until it stops, never refused.
+  // Claude is now working: a second send is held until it stops, never refused. What the first send
+  // showed is listed under "Seen before", unticked; the failed check stays ticked.
   await fromMenu(page, /Fix with Claude/);
   await expect(items).toHaveCount(3);
-  await sheet.getByRole('button', { name: /Send when Claude stops/ }).click();
+  await expect(sheet.getByText('Seen before')).toHaveCount(2);
+  await expect(items.and(page.locator(':checked'))).toHaveCount(1);
+  await expect(sheet.getByTestId('fix-resumes')).toContainText(
+    'Claude is working: it gets this when it stops.',
+  );
+  await sheet.getByRole('button', { name: /Send to Claude/ }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId('toasts')).toContainText('it gets your message when it stops.');
   expect(errors).toEqual([]);

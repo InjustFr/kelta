@@ -40,6 +40,11 @@ claude_at?: string | null,
  */
 sent_threads?: Array<string>, 
 /**
+ * Newest review comment time (host's RFC 3339) shown in the last Fix with Claude send: a comment
+ * newer than it is new (#208). `None`: never sent, every unresolved thread awaiting me is new.
+ */
+feedback_at?: string | null, 
+/**
  * Kelta-driven rebase in progress, or done and awaiting its force push.
  */
 rebase?: RebaseState | null, 

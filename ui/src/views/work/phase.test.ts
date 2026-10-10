@@ -343,3 +343,36 @@ describe('background run claims (#235)', () => {
     expect(phaseOf(run('done'), null, null, null).id).not.toBe('run');
   });
 });
+
+describe('New comments (#208): the Fix with Claude watermark', () => {
+  const commented = pr({ last_comment_at: '2026-10-10T09:00:00.000Z', unresolved_threads: 3 });
+
+  it('fires when a comment is newer than the last send, or nothing was ever sent', () => {
+    const got = phaseOf(item(withPr), claude('done'), commented, git());
+    expect([got.id, got.section, got.primary, got.detail]).toEqual([
+      'new_comments',
+      'fix',
+      'fix',
+      '3 unresolved threads',
+    ]);
+    // 10:30+02:00 is 08:30Z: older as an instant, though later as a string.
+    const before = item({ ...withPr, feedback_at: '2026-10-10T10:30:00+02:00' });
+    expect(phaseOf(before, claude('done'), commented, git()).id).toBe('new_comments');
+  });
+
+  it('stays quiet once the comments are sent, or without any', () => {
+    const sent = item({ ...withPr, feedback_at: '2026-10-10T09:00:00Z' });
+    expect(phaseOf(sent, claude('done'), commented, git()).id).toBe('in_review');
+    expect(phaseOf(item(withPr), claude('done'), pr(), git()).id).toBe('in_review');
+  });
+
+  it('To review and Changes requested on the head beat it; unpushed work does not hide it', () => {
+    const due = item({ ...withPr, review_due: true });
+    expect(phaseOf(due, claude('done'), commented, git()).id).toBe('to_review');
+    const requested = { ...commented, decision: 'changes_requested' as const, decision_head: null };
+    expect(phaseOf(item(withPr), claude('done'), requested, git()).id).toBe('changes_requested');
+    expect(phaseOf(item(withPr), claude('done'), commented, git({ unpushed: true, ahead: 1 })).id).toBe(
+      'new_comments',
+    );
+  });
+});

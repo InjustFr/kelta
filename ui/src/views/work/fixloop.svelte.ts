@@ -102,6 +102,23 @@ export interface FeedbackEntry {
   text: string;
   /** What feedback.md gets under the title. */
   md: string;
+  /** Last comment (threads; `null` when mine) or submission (reviews) time; `null` for checks. */
+  at: string | null;
+}
+
+/** Ticked by default in the Fix sheet: failed checks always, threads and reviews newer than the
+ *  watermark (`null`: never sent, all of them). Compared as instants: hosts format times differently. */
+export function isNew(e: FeedbackEntry, feedbackAt: string | null | undefined): boolean {
+  if (e.kind === 'check') return true;
+  if (!e.at) return false;
+  return !feedbackAt || Date.parse(e.at) > Date.parse(feedbackAt);
+}
+
+/** The watermark a send stores: the newest time over every entry shown, ticked or not. */
+export function newestAt(entries: FeedbackEntry[]): string | null {
+  let best: string | null = null;
+  for (const e of entries) if (e.at && (!best || Date.parse(e.at) > Date.parse(best))) best = e.at;
+  return best;
 }
 
 export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
@@ -113,6 +130,7 @@ export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
       title: `${t.author}${t.path ? ` on ${t.path}${t.line ? `:${t.line}` : ''}` : ''}`,
       text: t.body_md.trim(),
       md: `${t.body_md.trim()}\n\n<${t.url}>`,
+      at: t.last_comment_at ?? null,
     })),
     ...fb.reviews.map((r, i) => ({
       key: `r:${i}`,
@@ -121,6 +139,7 @@ export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
       title: `${r.author}${r.state === 'changes_requested' ? ' (changes requested)' : r.state === 'approved' ? ' (approved)' : ''}`,
       text: r.body_md.trim(),
       md: r.body_md.trim(),
+      at: r.submitted_at ?? null,
     })),
     ...fb.failed_checks.map((c) => ({
       key: `c:${c.name}`,
@@ -131,6 +150,7 @@ export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
       md: [c.url ? `<${c.url}>` : '', c.log_tail ? `\`\`\`text\n${c.log_tail.trimEnd()}\n\`\`\`` : '']
         .filter(Boolean)
         .join('\n\n'),
+      at: null,
     })),
   ];
 }

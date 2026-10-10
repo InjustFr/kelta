@@ -142,6 +142,8 @@ pub fn review() -> Review {
         waiting_since: None,
         author_since: None,
         nudged_at: None,
+        unresolved_threads: None,
+        last_comment_at: None,
     }
 }
 
@@ -321,6 +323,7 @@ pub fn work_item() -> WorkItem {
         claude_replied: false,
         claude_at: None,
         sent_threads: Vec::new(),
+        feedback_at: None,
         rebase: None,
         claude_message: None,
         delta: None,
@@ -346,11 +349,13 @@ pub fn feedback() -> Feedback {
             line: Some(42),
             body_md: "bob: Reset the counter after a successful login.".into(),
             url: "https://github.com/acme/shop-api/pull/74#discussion_r1".into(),
+            last_comment_at: Some(TS.into()),
         }],
         reviews: vec![FeedbackReview {
             author: "bob".into(),
             state: Some(MyReviewState::ChangesRequested),
             body_md: "Close, two things to fix.".into(),
+            submitted_at: Some(TS.into()),
         }],
         failed_checks: vec![FailedCheck {
             name: "ci / test".into(),
@@ -1043,6 +1048,7 @@ pub fn all() -> Vec<Fixture> {
                 pr_url: Some("https://github.com/acme/shop-api/pull/74".into()),
                 state: WorkState::PrOpen,
                 sent_threads: vec!["PRRT_kwDOA1".into()],
+                feedback_at: Some(TS.into()),
                 rebase: Some(Box::new(RebaseState {
                     onto: "origin/main".into(),
                     pre_head: "9c1d8e7b6a5f4e3d2c1b0a998877665544aa3f2a".into(),

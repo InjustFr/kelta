@@ -45,6 +45,16 @@ pub fn now_rfc3339() -> String {
         .unwrap_or_else(|_| String::from("1970-01-01T00:00:00Z"))
 }
 
+/// The later of two RFC 3339 times, compared as instants (GitHub and GitLab format them
+/// differently); an unparsable one loses.
+pub fn later_rfc3339(a: Option<String>, b: Option<String>) -> Option<String> {
+    let at = |s: &Option<String>| {
+        s.as_deref()
+            .and_then(|s| time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339).ok())
+    };
+    if at(&b) > at(&a) { b } else { a.or(b) }
+}
+
 /// Everything most crates need.
 pub mod prelude {
     pub use crate::api::*;
@@ -62,4 +72,19 @@ pub mod prelude {
     pub use crate::settings::*;
     pub use crate::term::*;
     pub use crate::tracker::*;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn later_rfc3339_compares_instants() {
+        let s = |v: &str| Some(v.to_owned());
+        // GitLab's millisecond UTC vs GitHub's offset form: string order would pick the wrong one.
+        let (gl, gh) = (s("2026-10-10T09:00:00.500Z"), s("2026-10-10T10:30:00+02:00"));
+        assert_eq!(super::later_rfc3339(gh.clone(), gl.clone()), gl);
+        assert_eq!(super::later_rfc3339(gl.clone(), gh.clone()), gl);
+        assert_eq!(super::later_rfc3339(None, gh.clone()), gh);
+        assert_eq!(super::later_rfc3339(gh.clone(), None), gh);
+        assert_eq!(super::later_rfc3339(gh.clone(), s("garbage")), gh);
+    }
 }
