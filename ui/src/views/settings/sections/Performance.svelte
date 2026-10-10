@@ -6,6 +6,8 @@
   import { toIpcError } from '$lib/ipc/transport';
   import Button from '$lib/ui/Button.svelte';
 
+  import PerfHud from '../../../shell/PerfHud.svelte';
+
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -13,6 +15,7 @@
   let snap = $state<PerfSnapshot | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let hud = $state(false);
 
   async function refresh(): Promise<void> {
     loading = true;
@@ -37,6 +40,10 @@
 <SectionForm sectionId="performance" {...props}>
   {#snippet before()}
     <section class="perf" data-testid="perf">
+      <div class="overlay">
+        <Button icon="cpu" onclick={() => (hud = !hud)}>Show performance overlay</Button>
+      </div>
+      {#if hud}<PerfHud onclose={() => (hud = false)} />{/if}
       <header>
         <h3>Live memory</h3>
         <Button size="sm" icon="refresh-cw" {loading} onclick={refresh}>Refresh</Button>

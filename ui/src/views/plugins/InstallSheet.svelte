@@ -62,7 +62,7 @@
         bind:value={source}
         label="Source"
         hint="A plugin directory, a git URL (optionally #tag) or a .tar.gz"
-        placeholder="~/code/my-plugin"
+        placeholder="~/code/my-plugin, a git URL or a .tgz file"
       />
       <Button type="submit" loading={busy && !preview} disabled={!source.trim()}>Inspect</Button>
     </form>
