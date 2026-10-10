@@ -13,8 +13,6 @@
   import { MoveController } from '../tickets/move.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
   import { statusTone } from './common';
-  import CreatePrDialog from './CreatePrDialog.svelte';
-  import FinishDialog from './FinishDialog.svelte';
   import { phaseNow, workTitle } from './live';
   import { openContent } from './nav';
   import { workKey } from './phase';
@@ -210,12 +208,6 @@
 {/if}
 {#if menuPos}
   <Menu items={menuItems} x={menuPos.x} y={menuPos.y} label="Work" onselect={onMenu} onclose={closeMenu} />
-{/if}
-{#if workUi.ship === workItemId && item}
-  <CreatePrDialog {item} onclose={() => (workUi.ship = null)} />
-{/if}
-{#if workUi.finish === workItemId && item}
-  <FinishDialog {item} onclose={() => (workUi.finish = null)} />
 {/if}
 <MoveDialogs {move} />
 

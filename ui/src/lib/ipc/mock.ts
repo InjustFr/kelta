@@ -9,6 +9,8 @@ import * as samples from '$lib/gen/fixtures';
 import type {
   Column,
   EffectiveSettings,
+  FinishMergedReport,
+  FinishOpts,
   GitStatus,
   JsonValue,
   KeltaError,
@@ -146,6 +148,14 @@ function freshState(): MockState {
 const prKey = (r: { repo: string; number: number }): string => `${r.repo}#${r.number}`;
 const refKey = (r: TicketRef): string => `${r.account}:${r.key}`;
 const sameRef = (a: TicketRef, b: TicketRef): boolean => a.account === b.account && a.key === b.key;
+/** Fixture items whose worktree has uncommitted changes (the failed billing item, the merged wip). */
+const dirtyWork = (w: WorkItem): boolean => w.id === FIXTURES.work[1]?.id || w.id === FIXTURES.work[7]?.id;
+const FINISH_MERGED: FinishOpts = {
+  remove_worktree: true,
+  delete_branch: true,
+  force: false,
+  transition_to: null,
+};
 
 function ticketDetailFor(t: Ticket, comments: string[]): TicketDetail {
   const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
@@ -1006,9 +1016,32 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_pr_draft: ({ id }) => {
+      const w = work(id);
+      const t = w.ticket && state.tickets.find((x) => sameRef(x.ticket.ref, w.ticket!))?.ticket;
+      const pr = (state.settings.value as { work?: { pr?: { draft?: boolean } } }).work?.pr;
+      return {
+        title: t ? `${t.ref.key}: ${t.title}` : w.branch,
+        body: t ? `${t.url}` : '',
+        draft: pr?.draft ?? false,
+      };
+    },
+    work_finish_merged: ({ ids }) => {
+      const report: FinishMergedReport = { finished: [], skipped: [] };
+      for (const w of state.work.filter((x) => x.state.kind === 'merged' && ids.includes(x.id))) {
+        const why = w.state.kind === 'merged' ? w.state.detail : null;
+        if (why || dirtyWork(w)) {
+          report.skipped.push({ id: w.id, reason: why ?? `${w.worktree} has uncommitted changes` });
+        } else {
+          report.finished.push(handlers.work_finish({ id: w.id, opts: FINISH_MERGED }) as WorkItem);
+        }
+      }
+      return report;
+    },
+    work_check_prs: () => null,
     work_finish: ({ id, opts }) => {
       const w = work(id);
-      if (w.id === FIXTURES.work[1]?.id && !opts.force) {
+      if (dirtyWork(w) && !opts.force) {
         throw err('dirty', 'worktree has uncommitted changes', {
           files: ['src/invoice.rs', 'tests/rounding.rs'],
         });

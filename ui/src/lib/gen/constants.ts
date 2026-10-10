@@ -43,6 +43,7 @@ export const BUS_EVENTS = [
   "pr.approved",
   "pr.changes_requested",
   "pr.merged",
+  "pr.closed",
   "tool.opened",
   "tool.exited",
   "settings.changed"

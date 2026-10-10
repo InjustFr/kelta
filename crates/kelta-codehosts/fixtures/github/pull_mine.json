@@ -2,7 +2,8 @@
   "number": 101,
   "title": "SHOP-142 add rate limiter",
   "html_url": "https://github.com/acme/shop/pull/101",
-  "state": "open",
+  "state": "closed",
+  "merged_at": "2026-10-01T09:00:00Z",
   "draft": false,
   "user": {
     "login": "louis"

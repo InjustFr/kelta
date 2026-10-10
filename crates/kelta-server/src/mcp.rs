@@ -13,7 +13,7 @@ use kelta_proto::codehost::{PrDraft, ReviewKind};
 use kelta_proto::events::Notification;
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::SessionId;
-use kelta_proto::model::{EditorTarget, Lifecycle, Scope, SessionKind, WorkItem};
+use kelta_proto::model::{EditorTarget, Lifecycle, Scope, SessionKind, ShipOrigin, WorkItem};
 use kelta_proto::tracker::{TicketRef, Transition};
 use serde_json::{Value, json};
 
@@ -394,7 +394,7 @@ async fn create_pr(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> To
         body: args.get("body").and_then(Value::as_str).map(str::to_owned),
         draft: args.get("draft").and_then(Value::as_bool),
     };
-    let w = core.work_create_pr(&w.id, draft).await.map_err(|e| e.message)?;
+    let w = core.work_create_pr(&w.id, draft, ShipOrigin::Mcp).await.map_err(|e| e.message)?;
     Ok(match w.pr_url {
         Some(url) => format!("Pull request: {url}"),
         None => "Pull request created.".to_owned(),

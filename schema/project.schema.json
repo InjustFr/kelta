@@ -2073,6 +2073,7 @@
           "terminal.paste": "]",
           "terminal.search": "/",
           "tickets.open": "t",
+          "toast.run_last": "o",
           "work.menu": ".",
           "work.new": "w",
           "work.start": "s"
@@ -2139,6 +2140,7 @@
             "terminal.paste": "]",
             "terminal.search": "/",
             "tickets.open": "t",
+            "toast.run_last": "o",
             "work.menu": ".",
             "work.new": "w",
             "work.start": "s"

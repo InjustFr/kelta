@@ -13,7 +13,7 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MyReviewState,
-    PrCreate, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -448,9 +448,15 @@ impl CodeHost for GitlabHost {
                 url: s(j, "web_url").map(str::to_owned),
             })
             .collect();
+        let state = match s(&mr, "state") {
+            Some("merged") => PrState::Merged,
+            Some("closed") => PrState::Closed,
+            _ => PrState::Open,
+        };
         Ok(ReviewDetail {
             body_html: markdown::to_html(s(&mr, "description").unwrap_or("")),
             review,
+            state,
             reviewers,
             checks,
             files,

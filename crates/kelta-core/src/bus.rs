@@ -12,7 +12,10 @@ pub fn publish(core: &Core, ev: BusEvent) {
     match ev.name.as_str() {
         bus::APP_FOCUS_CHANGED => core.on_window_changed(),
         bus::WORK_UPDATED => match ev.payload.get("work").cloned().map(serde_json::from_value::<WorkItem>) {
-            Some(Ok(work)) => core.emit(UiEvent::WorkUpdated { work }),
+            Some(Ok(work)) => {
+                core.note_work_pr(&work);
+                core.emit(UiEvent::WorkUpdated { work });
+            }
             _ => tracing::warn!("work.updated without a work item"),
         },
         _ => {}

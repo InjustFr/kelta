@@ -19,7 +19,7 @@ use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use crate::ids::{AccountId, PaneId, ProjectId, SessionId, TabId, ToolId, WorkItemId};
 use crate::model::{
     Attention, EditorTarget, Lifecycle, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
-    SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
+    SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
 };
 use crate::settings::Settings;
 use crate::tracker::{Ticket, TicketRef};
@@ -440,8 +440,16 @@ impl CoreApi for FakeCore {
         self.work_items.lock().iter().find(|w| w.session_ids.contains(id)).cloned()
     }
 
-    async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft) -> Result<WorkItem, KeltaError> {
-        self.record("work_create_pr", serde_json::json!({ "id": id, "draft": Self::arg(&draft) }));
+    async fn work_create_pr(
+        &self,
+        id: &WorkItemId,
+        draft: PrDraft,
+        origin: ShipOrigin,
+    ) -> Result<WorkItem, KeltaError> {
+        self.record(
+            "work_create_pr",
+            serde_json::json!({ "id": id, "draft": Self::arg(&draft), "origin": origin }),
+        );
         if let Some(r) = self.overridden("work_create_pr") {
             return r;
         }

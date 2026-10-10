@@ -2,7 +2,9 @@
 
 mod support;
 
-use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, ReviewDecision, ReviewKind, ReviewQuery};
+use kelta_proto::codehost::{
+    CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind, ReviewQuery,
+};
 use kelta_proto::error::ErrorCode;
 use serde_json::json;
 use support::*;
@@ -141,6 +143,7 @@ async fn detail_when_i_approved_or_authored() {
     let d = gl(&server).get(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
     assert_eq!(d.review.kind, ReviewKind::Authored);
     assert_eq!(d.review.my_state, None);
+    assert_eq!(d.state, PrState::Merged);
 }
 
 #[tokio::test]

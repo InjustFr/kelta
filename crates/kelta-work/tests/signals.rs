@@ -113,9 +113,13 @@ async fn stop_hook_during_push_survives_the_push_save() {
     let fx = Fx::new();
     let (w, item, claude) = started(&fx).await;
     std::fs::write(item.worktree.join("login.rs"), "fn login() {}\n").unwrap();
+    git(&item.worktree, &["add", "login.rs"]);
+    git(&item.worktree, &["commit", "-q", "-m", "login"]);
 
     let (w2, id) = (w.clone(), item.id.clone());
-    let pr = tokio::spawn(async move { w2.create_pr(&id, PrDraft::default()).await });
+    let pr = tokio::spawn(async move {
+        w2.create_pr(&id, PrDraft::default(), kelta_proto::model::ShipOrigin::Mcp).await
+    });
     let push = fx.wait_session(|s| s.name == "git push").await;
     fx.core.publish(hook(&claude, "Stop", json!({})));
     wait_item(&fx, &item, |w| w.review_due).await;
