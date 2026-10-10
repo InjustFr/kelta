@@ -61,4 +61,8 @@ left_at?: string | null,
 /**
  * First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
  */
-port_base?: number | null, };
+port_base?: number | null, 
+/**
+ * Merge when ready armed (`work_arm_merge`): the host merges the PR, then Kelta runs Finish once.
+ */
+auto_finish: boolean, };

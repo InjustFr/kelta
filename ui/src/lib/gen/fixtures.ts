@@ -733,6 +733,7 @@ export const startWorkPlan: StartWorkPlan = {
 };
 
 export const workItem: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -847,6 +848,7 @@ export const workItem: WorkItem = {
 };
 
 export const workItemFailed: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -963,6 +965,7 @@ export const workItemFailed: WorkItem = {
 };
 
 export const workItemMerged: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -1110,6 +1113,7 @@ export const gitStatus: GitStatus = {
 };
 
 export const workItemRebaseStopped: WorkItem = {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,
@@ -2064,6 +2068,7 @@ export const settingsDefault: Settings = {
     "pr": {
       "body_template": "{ticket.url}\n\n{closes}",
       "draft": false,
+      "merge_method": "squash",
       "title_template": "{ticket.key}: {ticket.title}"
     },
     "return_brief_after_mins": 20,
@@ -3125,6 +3130,7 @@ export const uiEventReviewsChanged: UiEvent = {
 export const uiEventWorkUpdated: UiEvent = {
   "type": "work.updated",
   "work": {
+    "auto_finish": false,
     "base": "main",
     "branch": "feat/SHOP-142-rate-limit-login",
     "claude_at": null,

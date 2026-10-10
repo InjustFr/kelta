@@ -1189,6 +1189,18 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_arm_merge: ({ id }) => {
+      const w = work(id);
+      w.auto_finish = true;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_disarm_merge: ({ id }) => {
+      const w = work(id);
+      w.auto_finish = false;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
     editor_open: () => null,
     editor_send_selection: ({ editor_session, claude_session }) => {
       session(editor_session);

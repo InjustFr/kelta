@@ -322,7 +322,7 @@ export function reviewPhase(r: {
 
 /** Why a work action is unavailable on a review-kind item (a `kelta/pr-<n>` checkout is never pushed). */
 export const REVIEW_READONLY = 'Review checkout: read-only';
-const READONLY_KEYS = ['p', 'r', 'f', 'l'];
+const READONLY_KEYS = ['p', 'r', 'f', 'l', 'M'];
 export function workActionDisabled(item: { kind: string }, key: string): string | null {
   return item.kind === 'review' && READONLY_KEYS.includes(key) ? REVIEW_READONLY : null;
 }

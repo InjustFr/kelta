@@ -92,6 +92,7 @@ export type * from './LogLevel';
 export type * from './LoginEnv';
 export type * from './LoginEnvSource';
 export type * from './Matcher';
+export type * from './MergeMethod';
 export type * from './MyReviewState';
 export type * from './Notification';
 export type * from './NotificationSettings';

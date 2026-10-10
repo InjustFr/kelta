@@ -29,6 +29,7 @@ export type WorkActionId =
   | 'open_ticket'
   | 'open_pr'
   | 'open_review'
+  | 'merge'
   | 'finish';
 
 export type PhaseId =

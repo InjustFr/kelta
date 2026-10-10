@@ -295,6 +295,7 @@ pub fn work_item() -> WorkItem {
         next_note: None,
         left_at: None,
         port_base: Some(20140),
+        auto_finish: false,
     }
 }
 

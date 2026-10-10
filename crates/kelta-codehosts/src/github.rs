@@ -15,8 +15,8 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
     CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackReview, FeedbackThread, FileChange,
-    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
-    ReviewRef, Reviewer,
+    MergeMethod, MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind,
+    ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -46,6 +46,14 @@ comments(first:30){ nodes{ author{ login } body url } } } } latestReviews(first:
 
 const RESOLVE_THREAD: &str =
     "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
+
+const PR_ID: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ id } } }";
+
+const ARM_AUTO_MERGE: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
+enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }";
+
+const DISARM_AUTO_MERGE: &str =
+    "mutation($id:ID!){ disablePullRequestAutoMerge(input:{pullRequestId:$id}){ clientMutationId } }";
 
 #[derive(Default)]
 struct Gate {
@@ -834,6 +842,21 @@ impl CodeHost for GithubHost {
         Ok(())
     }
 
+    async fn arm_auto_merge(&self, r: &ReviewRef, method: MergeMethod) -> Result<(), KeltaError> {
+        let m = match method {
+            MergeMethod::Squash => "SQUASH",
+            MergeMethod::Merge => "MERGE",
+            MergeMethod::Rebase => "REBASE",
+        };
+        let id = self.pr_node_id(r).await?;
+        graphql(&self.auth, &self.graphql, ARM_AUTO_MERGE, json!({ "id": id, "m": m })).await.map(|_| ())
+    }
+
+    async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
+        let id = self.pr_node_id(r).await?;
+        graphql(&self.auth, &self.graphql, DISARM_AUTO_MERGE, json!({ "id": id })).await.map(|_| ())
+    }
+
     fn repo_from_remote(&self, url: &str) -> Option<String> {
         let (host, path) = parse_remote(url)?;
         if !host_matches(&host, &self.web_host) {
@@ -846,6 +869,16 @@ impl CodeHost for GithubHost {
 }
 
 impl GithubHost {
+    async fn pr_node_id(&self, r: &ReviewRef) -> Result<String, KeltaError> {
+        let (owner, name) = r.repo.split_once('/').unwrap_or((r.repo.as_str(), ""));
+        let vars = json!({ "o": owner, "n": name, "num": r.number });
+        let data = graphql(&self.auth, &self.graphql, PR_ID, vars).await?;
+        data.pointer("/repository/pullRequest/id")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or_else(|| KeltaError::not_found(format!("pull request {}#{}", r.repo, r.number)))
+    }
+
     async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
         let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;

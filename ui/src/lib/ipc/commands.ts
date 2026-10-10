@@ -30,6 +30,7 @@ import type {
   LayerDoc,
   Layout,
   LayoutSaveResult,
+  MergeMethod,
   PerfSnapshot,
   Placement,
   PluginId,
@@ -237,6 +238,9 @@ export interface Commands {
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
   work_left: { args: { id: WorkItemId }; result: WorkItem };
+  /** Merge when ready: the host's auto-merge, then Finish once merged (`auto_finish`). */
+  work_arm_merge: { args: { id: WorkItemId; method: MergeMethod }; result: WorkItem };
+  work_disarm_merge: { args: { id: WorkItemId }; result: WorkItem };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   editor_quickfix: { args: { target: EditorTarget; files: string[] }; result: null };
@@ -368,6 +372,8 @@ export const COMMAND_NAMES = [
   'work_mark_reviewed',
   'work_set_note',
   'work_left',
+  'work_arm_merge',
+  'work_disarm_merge',
   'editor_open',
   'editor_send_selection',
   'editor_quickfix',
@@ -570,6 +576,8 @@ export const workDiff = wrap('work_diff');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
+export const workArmMerge = wrap('work_arm_merge');
+export const workDisarmMerge = wrap('work_disarm_merge');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 export const editorQuickfix = wrap('editor_quickfix');

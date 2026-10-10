@@ -1,4 +1,5 @@
 {
+  "auto_finish": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "claude_at": null,

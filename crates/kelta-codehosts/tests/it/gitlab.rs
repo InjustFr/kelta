@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::codehost::{
-    CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind, ReviewQuery,
+    CiState, MergeMethod, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind, ReviewQuery,
 };
 use kelta_proto::error::ErrorCode;
 use serde_json::json;
@@ -447,4 +447,43 @@ async fn decisions_publish_the_drafts_first_and_an_empty_comment_sends_no_note()
     h.comment(&r, "").await.unwrap();
     assert_eq!(count(&server, "POST", &format!("{MR}/draft_notes/bulk_publish")).await, 2);
     assert_eq!(count(&server, "POST", &format!("{MR}/notes")).await, 0);
+}
+
+#[tokio::test]
+async fn arm_sets_merge_when_pipeline_succeeds_and_disarm_cancels_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("{MR}/merge")))
+        .and(query_param("merge_when_pipeline_succeeds", "true"))
+        .and(query_param("squash", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("{MR}/cancel_merge_when_pipeline_succeeds")))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (h, r) = (gl(&server), rref("gitlab-acme", "grp/other", 8));
+    h.arm_auto_merge(&r, MergeMethod::Squash).await.unwrap();
+    h.disarm_auto_merge(&r).await.unwrap();
+    let e = h.arm_auto_merge(&r, MergeMethod::Rebase).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn a_refused_arm_carries_gitlabs_message() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("{MR}/merge")))
+        .respond_with(ResponseTemplate::new(405).set_body_string(r#"{"message":"405 Method Not Allowed"}"#))
+        .mount(&server)
+        .await;
+    let e = gl(&server)
+        .arm_auto_merge(&rref("gitlab-acme", "grp/other", 8), MergeMethod::Merge)
+        .await
+        .unwrap_err();
+    assert!(e.message.contains("405 Method Not Allowed"), "{}", e.message);
 }

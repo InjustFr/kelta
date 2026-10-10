@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::codehost::MergeMethod;
 use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
@@ -1004,6 +1005,8 @@ pub struct PrSettings {
     /// `{closes}` = `Closes #n` for GitHub issues.
     pub body_template: String,
     pub draft: bool,
+    /// Default of the Merge when ready picker.
+    pub merge_method: MergeMethod,
 }
 
 impl Default for PrSettings {
@@ -1012,6 +1015,7 @@ impl Default for PrSettings {
             title_template: "{ticket.key}: {ticket.title}".into(),
             body_template: "{ticket.url}\n\n{closes}".into(),
             draft: false,
+            merge_method: MergeMethod::Squash,
         }
     }
 }

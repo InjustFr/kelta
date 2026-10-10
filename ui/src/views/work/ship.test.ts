@@ -9,9 +9,10 @@ import { sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import '../../shell/actions';
 import '../tickets/actions';
-import { runWorkAction } from './actions';
+import { blockedReason, runWorkAction } from './actions';
 import FinishDialog from './FinishDialog.svelte';
 import FinishMergedDialog from './FinishMergedDialog.svelte';
+import MergeDialog from './MergeDialog.svelte';
 import ShipDialog from './ShipDialog.svelte';
 
 let mock: MockControls;
@@ -119,5 +120,43 @@ describe('Finish', () => {
     expect(mock.calls.find((c) => c.cmd === 'work_finish_merged')?.args).toEqual({
       ids: [mock.state.work[6]!.id],
     });
+  });
+});
+
+describe('Merge when ready', () => {
+  it('needs an open PR, arms with the picked method, shows a refusal inline and disarms on M', async () => {
+    const w = item(0);
+    expect(blockedReason('merge', { ...w, state: { kind: 'active' } })).toBe('Needs an open PR');
+    const pr = { state: { kind: 'pr_open' as const }, pr_url: 'https://github.com/acme/shop/pull/7' };
+    Object.assign(mock.state.work[0]!, pr);
+    const open = work.upsert({ ...w, ...pr });
+    await runWorkAction('merge', open);
+    expect(ui.sheet?.key).toBe('merge');
+
+    mock.failNext('work_arm_merge', {
+      code: 'upstream',
+      message: 'Auto merge is not allowed for this repository',
+    });
+    render(MergeDialog, { props: { item: open, onclose: () => ui.closeSheet('merge') } });
+    const dialog = screen.getByRole('dialog');
+    expect((screen.getByLabelText('Merge method') as HTMLSelectElement).value).toBe('squash');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Merge when ready' }));
+    expect((await screen.findByTestId('merge-refused')).textContent).toContain('Auto merge is not allowed');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Open in browser' }));
+    await waitFor(() =>
+      expect(mock.calls.find((c) => c.cmd === 'open_external')?.args).toEqual({ url: open.pr_url }),
+    );
+
+    await fireEvent.change(screen.getByLabelText('Merge method'), { target: { value: 'rebase' } });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Merge when ready' }));
+    await waitFor(() => expect(work.get(w.id)?.auto_finish).toBe(true));
+    expect(mock.calls.filter((c) => c.cmd === 'work_arm_merge').at(-1)?.args).toEqual({
+      id: w.id,
+      method: 'rebase',
+    });
+
+    await runWorkAction('merge', work.get(w.id)!);
+    await waitFor(() => expect(work.get(w.id)?.auto_finish).toBe(false));
+    expect(mock.calls.some((c) => c.cmd === 'work_disarm_merge')).toBe(true);
   });
 });

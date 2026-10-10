@@ -5,7 +5,14 @@
 
 import { registerAction } from '$lib/actions';
 import type { TicketRef, WorkItem } from '$lib/gen';
-import { openExternal, workDiff, workMarkReviewed, workRetryStep, workSetNote } from '$lib/ipc/commands';
+import {
+  openExternal,
+  workDiff,
+  workDisarmMerge,
+  workMarkReviewed,
+  workRetryStep,
+  workSetNote,
+} from '$lib/ipc/commands';
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import { prompts } from '../../shell/confirm.svelte';
@@ -201,6 +208,16 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     run: async ({ item }) => {
       const url = item.pr_url ?? prOf(item)?.url;
       if (url) await openExternal({ url });
+    },
+  },
+  {
+    id: 'merge',
+    key: 'M',
+    label: (c) => (c.item.auto_finish ? 'Disarm merge when ready' : 'Merge when ready…'),
+    blocked: (c) => (c.item.state.kind === 'pr_open' ? null : 'Needs an open PR'),
+    run: async ({ item }) => {
+      if (item.auto_finish) work.upsert(await workDisarmMerge({ id: item.id }));
+      else ui.openSheet('merge', { item });
     },
   },
   {

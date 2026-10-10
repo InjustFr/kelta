@@ -614,6 +614,9 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub port_base: Option<u16>,
+    /// Merge when ready armed (`work_arm_merge`): the host merges the PR, then Kelta runs Finish once.
+    #[serde(default)]
+    pub auto_finish: bool,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files

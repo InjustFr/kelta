@@ -15,7 +15,7 @@ use kelta_proto::model::{
     PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
     StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
 };
-use kelta_proto::settings::{EditorOpenMode, EditorRestore};
+use kelta_proto::settings::{EditorOpenMode, EditorRestore, TransitionTarget};
 use kelta_proto::tracker::TicketRef;
 
 use crate::claude::LaunchMode;
@@ -414,13 +414,14 @@ impl WorkService {
         Ok(())
     }
 
-    /// `pr.merged` / `pr.closed` (idempotent): Merged + guarded Done move, or PrClosed.
+    /// `pr.merged` / `pr.closed` (idempotent): Merged + guarded Done move, or PrClosed; then the
+    /// armed Finish (`auto_finish`) of a merged item.
     pub(crate) async fn pr_ended(&self, review: &Review, merged: bool) -> Result<(), KeltaError> {
         let items = self.store.list_items(None).await?;
         let ours = items.into_iter().filter(|w| w.pr_url.as_deref() == Some(review.url.as_str()));
         for it in ours {
             let lock = self.item_lock(&it.id);
-            let _guard = lock.lock().await;
+            let guard = lock.lock().await;
             let mut item = self.load(&it.id).await?;
             if item.state.pr_done() || matches!(item.state, WorkState::Finished | WorkState::Failed { .. }) {
                 continue;
@@ -431,8 +432,59 @@ impl WorkService {
                 WorkState::PrClosed
             };
             self.save(&mut item).await?;
+            // Finish takes the item lock itself.
+            drop(guard);
+            self.auto_finish(&item).await;
         }
         Ok(())
+    }
+
+    /// Finish of an armed merged item (`pr_ended`, and `startup` after a crash in between). The
+    /// dirty/unpushed guard stays: a refusal disarms and flags the item (phase detail) instead.
+    pub(crate) async fn auto_finish(&self, item: &WorkItem) {
+        // A Done status to choose (or an earlier refusal) waits for the Finish dialog.
+        if !item.auto_finish || item.state != (WorkState::Merged { detail: None }) {
+            return;
+        }
+        let Ok(env) = self.env(&item.project_id, &item.repo_id) else { return };
+        let key = item.ticket.as_ref().map_or(item.branch.as_str(), |t| t.key.as_str());
+        let opts =
+            FinishOpts { remove_worktree: true, delete_branch: true, force: false, transition_to: None };
+        let had_worktree = item.worktree.is_dir() && !git::same_path(&item.worktree, &env.repo.path);
+        match self.finish_impl(&item.id, opts).await {
+            Ok(_) => {
+                let mut parts = vec![format!("{key} merged")];
+                if had_worktree && !item.worktree.exists() {
+                    parts.push("worktree removed".into());
+                }
+                let done = env.project.tracker.as_ref().and_then(|b| b.status_map.done.clone());
+                if item.ticket.is_some()
+                    && let Some(t) = done.or_else(|| env.settings.work.on_merge.transition_to.clone())
+                {
+                    parts.push(match t {
+                        TransitionTarget::Name { name } => format!("ticket → {name}"),
+                        TransitionTarget::Category { category } => format!("ticket → {category:?}"),
+                    });
+                }
+                env.core.toast(Toast::info(parts.join(" · ")));
+            }
+            Err(e) => {
+                let why = format!("auto-finish skipped: {}", e.message);
+                env.core.toast(Toast::warn(format!("{key} merged · {why}")));
+                let flagged = self
+                    .update(&item.id, |w| {
+                        w.auto_finish = false;
+                        if matches!(w.state, WorkState::Merged { .. }) {
+                            w.state = WorkState::Merged { detail: Some(why.clone()) };
+                        }
+                        true
+                    })
+                    .await;
+                if let Err(e) = flagged {
+                    tracing::warn!(error = %e.message, "auto-finish flag not saved");
+                }
+            }
+        }
     }
 
     /// On merge, move the ticket to Done only when exactly one transition fits and needs no
@@ -1171,6 +1223,10 @@ impl WorkService {
             if let Err(e) = crate::review::prune_refs(&r, &keep).await {
                 tracing::warn!(repo = %r.display(), error = %e.message, "review refs prune failed");
             }
+        }
+        // Armed items merged right before a quit/crash: their Finish never ran.
+        for w in items.iter().filter(|w| w.auto_finish) {
+            self.auto_finish(w).await;
         }
         // Sagas interrupted by a quit/crash become Failed so the UI offers Retry / Skip.
         for w in items.into_iter().filter(|w| matches!(w.state, WorkState::Starting | WorkState::Planned)) {

@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use crate::support::*;
-use kelta_proto::codehost::{CiState, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind};
+use kelta_proto::codehost::{
+    CiState, MergeMethod, MyReviewState, PrCreate, PrState, ReviewDecision, ReviewKind,
+};
 use kelta_proto::error::ErrorCode;
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
@@ -590,4 +592,33 @@ async fn decisions_publish_the_pending_review_with_its_comments() {
     // the pending review began on abc123: approving another head would approve unseen code
     let e = h.approve(&r, "newer").await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument);
+}
+
+#[tokio::test]
+async fn arm_auto_merge_enables_it_on_the_pr_node_and_surfaces_a_refusal() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "num": 101 } })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"data":{"repository":{"pullRequest":{"id":"PR_101"}}}}"#),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "id": "PR_101" } })))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"data":{"enablePullRequestAutoMerge":null},"errors":[{"type":"UNPROCESSABLE","message":"Auto merge is not allowed for this repository"}]}"#,
+        ))
+        .mount(&server)
+        .await;
+    let r = rref("github-work", "acme/shop", 101);
+    let e = gh(&server).arm_auto_merge(&r, MergeMethod::Squash).await.unwrap_err();
+    assert!(e.message.contains("Auto merge is not allowed"), "{}", e.message);
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(reqs[0]["variables"], json!({ "o": "acme", "n": "shop", "num": 101 }));
+    assert_eq!(reqs[1]["variables"], json!({ "id": "PR_101", "m": "SQUASH" }));
+    assert!(reqs[1]["query"].as_str().unwrap().contains("enablePullRequestAutoMerge"));
 }

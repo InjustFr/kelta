@@ -4095,6 +4095,7 @@
         "pr": {
           "body_template": "{ticket.url}\n\n{closes}",
           "draft": false,
+          "merge_method": "squash",
           "title_template": "{ticket.key}: {ticket.title}"
         },
         "return_brief_after_mins": 20,
@@ -4310,6 +4311,7 @@
           "default": {
             "body_template": "{ticket.url}\n\n{closes}",
             "draft": false,
+            "merge_method": "squash",
             "title_template": "{ticket.key}: {ticket.title}"
           },
           "properties": {
@@ -4321,6 +4323,16 @@
             "draft": {
               "default": false,
               "type": "boolean"
+            },
+            "merge_method": {
+              "default": "squash",
+              "description": "Default of the Merge when ready picker.",
+              "enum": [
+                "squash",
+                "merge",
+                "rebase"
+              ],
+              "type": "string"
             },
             "title_template": {
               "default": "{ticket.key}: {ticket.title}",

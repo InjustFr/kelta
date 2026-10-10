@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use crate::common::{Fx, git, has_git, project};
 use kelta_proto::api::{CoreApi, WorkStore};
-use kelta_proto::codehost::{PrDraft, Review};
-use kelta_proto::error::ErrorCode;
+use kelta_proto::codehost::{MergeMethod, PrDraft, Review};
+use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::model::{SessionKind, SessionStatus, ShipOrigin, WorkItem, WorkSource, WorkState};
 use kelta_proto::samples;
@@ -274,4 +274,77 @@ async fn finish_merged_finishes_listed_clean_items_and_skips_dirty_ones() {
             WorkState::Merged { detail: None }
         );
     }
+}
+
+#[tokio::test]
+async fn armed_merge_finishes_once_and_keeps_a_dirty_worktree_flagged() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let clean = started(&fx, &w, "SHOP-141").await;
+    let dirty = started(&fx, &w, "SHOP-143").await;
+    let mut reviews = Vec::new();
+    for (it, n) in [(&clean, 97), (&dirty, 98)] {
+        commit(it, "a.txt");
+        git(&it.worktree, &["push", "-q", "-u", "origin", &it.branch]);
+        reviews.push(with_pr(&fx, it, n).await);
+    }
+    // A refusal surfaces the host's message and arms nothing.
+    fx.host.fail_next(KeltaError::upstream("auto-merge is not allowed for this repository"));
+    let e = w.arm_merge(&clean.id, MergeMethod::Squash).await.unwrap_err();
+    assert!(e.message.contains("auto-merge is not allowed"));
+    assert!(!fx.store.get_item(&clean.id).await.unwrap().unwrap().auto_finish);
+    for it in [&clean, &dirty] {
+        assert!(w.arm_merge(&it.id, MergeMethod::Squash).await.unwrap().auto_finish);
+    }
+    assert!(!w.disarm_merge(&dirty.id).await.unwrap().auto_finish);
+    assert!(w.arm_merge(&dirty.id, MergeMethod::Merge).await.unwrap().auto_finish);
+    let calls = fx.host.calls();
+    assert!(calls.iter().any(|c| c == "arm_auto_merge:97:Squash"), "{calls:?}");
+    assert!(calls.iter().any(|c| c == "disarm_auto_merge:98"), "{calls:?}");
+
+    std::fs::write(dirty.worktree.join("wip.txt"), "wip\n").unwrap();
+    for r in &reviews {
+        publish_end(&fx, bus::PR_MERGED, r);
+    }
+    wait_state(&fx, &clean, |s| *s == WorkState::Finished).await;
+    assert!(!clean.worktree.exists());
+    assert!(git(&fx.repo, &["branch", "--list", &clean.branch]).is_empty(), "merged branch deleted");
+    assert_eq!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "Done");
+    let flagged = wait_state(&fx, &dirty, |s| matches!(s, WorkState::Merged { detail: Some(_) })).await;
+    assert!(dirty.worktree.join("wip.txt").exists(), "a dirty worktree is never removed");
+    assert!(!flagged.auto_finish);
+    let WorkState::Merged { detail: Some(why) } = &flagged.state else { unreachable!() };
+    assert!(why.starts_with("auto-finish skipped:") && why.contains("uncommitted"), "{why}");
+    let texts: Vec<String> = fx.core.toasts().into_iter().map(|t| t.text).collect();
+    assert!(texts.iter().any(|t| t == "SHOP-141 merged · worktree removed · ticket → Done"), "{texts:?}");
+
+    // Idempotent across polls and a restart: nothing runs again.
+    for r in &reviews {
+        publish_end(&fx, bus::PR_MERGED, r);
+    }
+    w.startup().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let moves = fx.tracker.calls().iter().filter(|c| c.starts_with("transition:SHOP-141:t5")).count();
+    assert_eq!(moves, 1);
+    assert!(dirty.worktree.join("wip.txt").exists());
+    assert_eq!(fx.store.get_item(&dirty.id).await.unwrap().unwrap().state, flagged.state);
+}
+
+#[tokio::test]
+async fn startup_finishes_an_armed_item_merged_before_a_crash() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    commit(&item, "a.txt");
+    git(&item.worktree, &["push", "-q", "-u", "origin", &item.branch]);
+    with_pr(&fx, &item, 99).await;
+    let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
+    it.state = WorkState::Merged { detail: None };
+    it.auto_finish = true;
+    fx.store.put_item(&it).await.unwrap();
+    w.startup().await.unwrap();
+    assert_eq!(fx.store.get_item(&item.id).await.unwrap().unwrap().state, WorkState::Finished);
+    assert!(!item.worktree.exists());
 }

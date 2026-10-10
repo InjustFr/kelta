@@ -81,7 +81,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         Comment, TicketDetail, Transition, Column, Cursor, Page<Ticket>, Assignee, AccountError,
         TicketItem, TicketPage, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
         ReviewKind, Review, ReviewQuery, Reviewer, CiCheck, FileChange, ReviewDetail, PrState, PrCreate,
-        PrDraft, ReviewItem, ReviewPage, Feedback, FeedbackThread, FeedbackReview, FailedCheck,
+        PrDraft, MergeMethod, ReviewItem, ReviewPage, Feedback, FeedbackThread, FeedbackReview, FailedCheck,
         // ext
         ToolKind, EmbedMode, WebLifecycle, Ready, StopSpec, WebStart, ToolDef, ToolSource,
         ToolInfo, ToolCheck, ToolHandle, Matcher, TriggerDef, Urgency, RunStdin, RunShow,
