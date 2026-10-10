@@ -39,12 +39,35 @@ On macOS every rebuild changes the code signature, so Keychain asks for permissi
 Before every pull request (see CI below):
 
 ```sh
-bash scripts/qa.sh      # or: bash scripts/ci-local.sh, which also runs e2e and cargo-deny
+bash scripts/ci-local.sh          # what the diff against origin/main affects; --full runs everything
+bash scripts/qa.sh [all|ui|rust] [package...]   # the QA steps alone (default: everything)
 ```
 
-It runs the UI build, `svelte-check`, ESLint, vitest, the timer check, `cargo fmt --check`, clippy with
-`-D warnings`, `cargo test --workspace` and the codegen drift check. The Playwright suite on mock IPC runs with
-`pnpm e2e`.
+`qa.sh` runs the UI build, `svelte-check`, ESLint, vitest, the timer check, the gate self-test
+(`scripts/affected_test.py`), `cargo fmt --check`, clippy with `-D warnings`, the Rust tests and the codegen
+drift check. Packages limit the Rust steps to those workspace packages. Rust tests run with
+[cargo-nextest](https://nexte.st) (`brew install cargo-nextest`) when it is installed, with one retry: a test
+that passes only on its retry is printed as `FLAKY` (fix it, do not ignore it); doctests still run with
+`cargo test --doc`. Without nextest the gate falls back to `cargo test`. The Playwright suite on mock IPC runs
+with `pnpm e2e`.
+
+`ci-local.sh` picks the steps from the diff against `--base` (default `origin/main`, plus uncommitted and
+untracked files), see `scripts/affected.py`:
+
+- Rust steps on the workspace packages owning the changed files plus every package that depends on them.
+  `Cargo.lock`, the root `Cargo.toml`, `.cargo/`, `rust-toolchain*`, `rustfmt.toml`, `clippy.toml`,
+  `deny.toml`, `ui/src/lib/gen/` and any path outside a package that is not known to be Rust-free (`schema/`,
+  `examples/`, `fixtures/` data, ...) run every crate. Docs, `*.md`, `ui/`, `packages/`, `packaging/` and
+  `docker/` run none.
+- The UI half when `ui/`, `packages/`, `package.json`, `pnpm-*.yaml` or `eslint.config.js` changed; e2e when
+  the UI, `apps/desktop/` or `kelta-proto` changed; cargo-deny when `Cargo.lock` or `deny.toml` changed.
+- Everything when `scripts/` changed, with `--full`, or when the detection fails. Release tags and the
+  nightly use `--full`.
+
+Heavy steps (clippy, tests, codegen, linux-check) wait for one of `KELTA_GATE_SLOTS` (default 2) machine-wide
+slots under `${TMPDIR}/kelta-gate/` and print how long they waited, so parallel worktrees queue instead of
+overloading the CPU. Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary shows the
+time of each step and the log path.
 
 ### Linux check in Docker
 
@@ -59,8 +82,8 @@ follow the host load, so measure on an idle machine.
 GitHub Actions is the confirmation, not the test bench. Do not push to see whether it works.
 
 1. Verify locally with `bash scripts/ci-local.sh`: the local mirror of `ci.yml` (`scripts/qa.sh`, Playwright
-   e2e, cargo-deny). It also runs `scripts/linux-check.sh` when the diff against `origin/main` touches Linux
-   code (`--linux` forces it, `--base <ref>` changes the base).
+   e2e, cargo-deny) for what the change affects (see QA). It also runs `scripts/linux-check.sh` when the diff
+   against `origin/main` touches Linux code (`--linux` or `--full` forces it, `--base <ref>` changes the base).
 2. Open the PR when it is ready. Draft PRs do not run CI; marking one ready does. A PR runs only the jobs for
    what it changes (Rust, UI, packaging), and docs-only PRs run nothing. There is no CI on pushes to `main`
    or to branches.
@@ -68,7 +91,8 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
    macOS dmg here and the Linux deb + AppImage (arm64, and amd64 under QEMU) in Docker, moves the `nightly`
-   tag to HEAD and uploads to the prerelease. Tags `v*` build the release.
+   tag to HEAD and uploads to the prerelease. It runs `bash scripts/ci-local.sh --full` first. Tags `v*` build
+   the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it.
 
 ## Packaging and benchmarks
 

@@ -72,7 +72,8 @@ cargo run -p kelta-desktop          # dev build (uses the Vite dev server: pnpm 
 bash packaging/build.sh             # installers: deb + AppImage on Linux, dmg on macOS
 ```
 
-Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security: see [SECURITY.md](SECURITY.md).
+Before a pull request run `bash scripts/ci-local.sh`: it checks only what your change affects (`--full` runs
+everything). Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security: see [SECURITY.md](SECURITY.md).
 
 ## License
 

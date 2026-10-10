@@ -10,3 +10,4 @@ playwright-report/
 .svelte-kit/
 .env
 apps/desktop/src-tauri/binaries/
+__pycache__/

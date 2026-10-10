@@ -8,6 +8,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 [[ -z "$(git status --porcelain)" ]] || { echo "dirty tree: commit or stash first" >&2; exit 1; }
 # The public nightly is main only: refuse unreviewed branches.
 git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main || { echo "HEAD is not on origin/main" >&2; exit 1; }
+# The nightly is built from a commit that passes every gate step, not only the affected ones.
+bash scripts/ci-local.sh --full
 sha="$(git rev-parse HEAD)"
 dist="$PWD/target/nightly-dist"
 rm -rf "$dist" && mkdir -p "$dist"
