@@ -90,7 +90,10 @@ async fn queue_survives_a_restart_in_order() {
     let a = start(&w, "r/a").await;
     let b = start(&w, "r/b").await;
     let c = start(&w, "r/c").await;
-    assert_eq!((b.state.clone(), c.state.clone()), (WorkState::Queued { pos: 0 }, WorkState::Queued { pos: 1 }));
+    assert_eq!(
+        (b.state.clone(), c.state.clone()),
+        (WorkState::Queued { pos: 0 }, WorkState::Queued { pos: 1 })
+    );
     drop(w);
 
     // Restart: Claude is gone (the fake keeps it live; exit it without a listener), one slot frees.

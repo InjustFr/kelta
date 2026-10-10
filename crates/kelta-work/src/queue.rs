@@ -13,7 +13,12 @@ use crate::WorkService;
 
 /// Dequeue policy: one more Claude may start while a slot is free (`max_live` 0 = no cap) and the
 /// 5h usage is under the hold threshold (if any).
-pub(crate) fn may_start(live: usize, max_live: u32, five_hour_pct: Option<f64>, hold_pct: Option<f64>) -> bool {
+pub(crate) fn may_start(
+    live: usize,
+    max_live: u32,
+    five_hour_pct: Option<f64>,
+    hold_pct: Option<f64>,
+) -> bool {
     let slot = max_live == 0 || live < max_live as usize;
     let held = matches!((five_hour_pct, hold_pct), (Some(u), Some(h)) if u >= h);
     slot && !held
