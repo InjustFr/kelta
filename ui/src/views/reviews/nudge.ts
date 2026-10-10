@@ -9,9 +9,10 @@ export const NUDGE_COOLDOWN_MS = 24 * HOUR;
 
 const mentions = (r: Review): string[] => r.waiting_on.map((w) => `@${w}`);
 
-/** The row's wait chip; amber past `slaHours` on my PRs only (a request row's wait is not mine to chase). */
+/** The row's wait chip; amber past `slaHours` on my PRs and Team rows (a request row's wait is not mine
+ * to chase). */
 export function waitingChip(item: ReviewItem, slaHours: number, now = Date.now()): WaitChip | null {
-  const mine = item.review.kind === 'authored';
+  const mine = item.review.kind !== 'review_requested';
   return waitChip(item.waiting, {
     slaHours: mine ? slaHours : undefined,
     fallbackSince: mine ? item.review.updated_at : undefined,

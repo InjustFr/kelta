@@ -349,6 +349,8 @@ impl GitlabHost {
                 q.push(("reviewer_username".into(), me.login.unwrap_or(me.id)));
             }
             ReviewKind::Authored => q.push(("scope".into(), "created_by_me".into())),
+            // per-project list (`list_open`): every MR of the repo
+            ReviewKind::Team => {}
         }
         if !include_drafts {
             let key = if self.major_version().await >= 16 { "draft" } else { "wip" };
@@ -504,6 +506,32 @@ impl CodeHost for GitlabHost {
         Ok(list.into_iter().map(|(r, _)| r).collect())
     }
 
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        let q = self.list_query(ReviewKind::Team, include_drafts).await?;
+        let lists = futures::future::try_join_all(repos.iter().map(|repo| {
+            let req =
+                q.iter().fold(HttpRequest::get(self.project_url(repo, "/merge_requests")), |r, (k, v)| {
+                    r.query(k.clone(), v.clone())
+                });
+            async move {
+                let resp = self.json(req.with_etag()).await?;
+                Ok::<_, KeltaError>(
+                    resp.body
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|m| self.review_from(m, Some(repo), ReviewKind::Team))
+                        .collect::<Vec<_>>(),
+                )
+            }
+        }))
+        .await?;
+        let mut list: Vec<Review> =
+            lists.into_iter().flatten().filter(|r| include_drafts || !r.draft).collect();
+        futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
+        Ok(list)
+    }
+
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         let me = self.me().await?;
@@ -574,7 +602,7 @@ impl CodeHost for GitlabHost {
             })
             .unwrap_or_default();
         review.my_state = match kind {
-            ReviewKind::Authored => None,
+            ReviewKind::Authored | ReviewKind::Team => None,
             ReviewKind::ReviewRequested => Some(if approved_by.contains(&me.id) {
                 MyReviewState::Approved
             } else {

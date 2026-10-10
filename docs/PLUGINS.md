@@ -154,6 +154,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `set_attention` | `session`, `level` | | `sessions.write` |
 | `prompt` | `text`, `yes = [ActionDef]`, `no? = [ActionDef]` | in-app confirm toast with buttons | — |
 | `command` | `id` | run a contributed command | (that command's) |
+| `fix_checks` | — | on a `pr.*` event: sends the PR's failed checks to its work item's Claude, as Enter on Checks failed does (held until a busy Claude stops). Once per head SHA and failed-check set; skipped (debug log) without an open work item, a Claude, or its status hooks; over the item's `claude.budget_usd`, a toast instead. Opt-in: nothing is sent without a key press unless a trigger says so | `terminal.write` |
 
 A command's `when` decides where the palette offers it: `terminal` with a focused terminal pane; `ticket` /
 `review` with a ticket / review detail pane focused, run with that ticket / PR; `work` with a focused work
@@ -201,6 +202,13 @@ id = "red-ci"
 on = "pr.ci_changed"
 match = { "payload.state" = ["failure", "error"] }
 do = [ { action = "notify", title = "Checks failed: {payload.review.title}", body = "{payload.review.url}", urgency = "critical" } ]
+
+# No key at all: every red CI run on my PR goes to the owning Claude by itself
+[[triggers]]
+id = "fix-red-ci"
+on = "pr.ci_changed"
+match = { "payload.state" = "failure" }
+do = [{ action = "fix_checks" }]
 
 # Merge → done + offer cleanup
 [[triggers]]
@@ -527,6 +535,7 @@ Methods mirror the trait methods; shapes are the generated types (`ui/src/lib/ge
 | `codehost.me` | `{}` | `User` |
 | `codehost.changed_since_last` | `{}` | `bool` (optional: method not found = `true`) |
 | `codehost.list_reviews` | `{query: ReviewQuery}` | `[Review]` |
+| `codehost.list_open` | `{repos: [string], include_drafts: bool}` | `[Review]` with `kind: "team"`: every open PR of those repos (optional: method not found = an account error "can't list team PRs" on the Reviews Team tab, never the `list_reviews` result) |
 | `codehost.get` | `{review: ReviewRef}` | `ReviewDetail` |
 | `codehost.approve` | `{review, head_sha}` | `null` |
 | `codehost.comment` / `codehost.request_changes` | `{review, body}` | `null` |

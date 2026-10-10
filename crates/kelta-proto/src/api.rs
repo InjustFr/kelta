@@ -181,6 +181,11 @@ pub trait CodeHost: Send + Sync {
         Ok(true)
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;
+    /// Every open PR of `repos` (`ReviewKind::Team`: no `my_state` / `reviewed_head`, `waiting_on`
+    /// filled like authored). A separate call so a host that lacks it never answers with my PRs.
+    async fn list_open(&self, _repos: &[String], _include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        Err(KeltaError::unsupported("can't list team PRs"))
+    }
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
     /// `approve`, `comment` and `request_changes` also publish my pending review (see
     /// `add_pending_comment`), so its line comments go out with the decision.
@@ -342,6 +347,11 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<WorkItem, KeltaError>;
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
+    /// The `fix_checks` trigger action (#252): `review`'s failed checks to the Claude of the work item
+    /// owning it, once per head SHA and failed-check set; `Ok` says what was sent or why nothing was.
+    async fn work_fix_checks(&self, _review: &Review) -> Result<String, KeltaError> {
+        Err(KeltaError::unsupported("work_fix_checks"))
+    }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
     async fn work_claim(

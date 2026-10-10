@@ -187,3 +187,19 @@ async fn bad_repos_are_rejected_before_any_request() {
     }
     assert!(server.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn team_list_reads_each_repos_open_pull_requests() {
+    let server = MockServer::start().await;
+    common(&server).await;
+    Mock::given(method("GET"))
+        .and(path("/repositories/acme/shop/pullrequests"))
+        .and(query_param("state", "OPEN"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("bitbucket/prs.json")))
+        .mount(&server)
+        .await;
+    let list = bb(&server).list_open(&["acme/shop".to_owned()], false).await.unwrap();
+    assert_eq!(list.iter().map(|r| r.r#ref.number).collect::<Vec<_>>(), [7], "draft dropped");
+    assert!(list.iter().all(|r| r.kind == ReviewKind::Team && r.my_state.is_none()));
+    assert_eq!(list[0].r#ref.repo, "acme/shop");
+}

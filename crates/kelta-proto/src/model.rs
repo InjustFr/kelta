@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::codehost::ReviewRef;
+use crate::codehost::{ReviewKind, ReviewRef};
 use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
@@ -482,6 +482,10 @@ pub enum PaneContent {
     },
     Reviews {
         scope: Scope,
+        /// The shown tab (For me / Team / Mine); `None` = For me.
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        tab: Option<ReviewKind>,
     },
     ReviewDetail {
         review: ReviewRef,

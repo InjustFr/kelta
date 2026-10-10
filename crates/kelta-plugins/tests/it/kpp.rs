@@ -145,6 +145,9 @@ async fn the_code_host_adapter_passes_the_contract() {
     };
     code_host_contract(&h, &case).await.unwrap();
     assert!(h.changed_since_last().await.unwrap(), "unsupported = assume a change");
+    // a plugin without `codehost.list_open`: an account error, never its `list_reviews` (my PRs)
+    let e = h.list_open(&["acme/shop".into()], true).await.unwrap_err();
+    assert_eq!((e.code, e.message.as_str()), (ErrorCode::Unsupported, "can't list team PRs"));
 }
 
 #[tokio::test]

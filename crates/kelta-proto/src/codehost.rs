@@ -60,6 +60,8 @@ pub enum MyReviewState {
 pub enum ReviewKind {
     ReviewRequested,
     Authored,
+    /// Every open PR on the repos of my ticket sources' projects (`CodeHost::list_open`).
+    Team,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -101,8 +103,8 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub decision_head: Option<String>,
-    /// When my review was requested (review requests only), or since when my PR waits on
-    /// `waiting_on` (authored); `None`: the UI ages the row by `updated_at`.
+    /// When my review was requested (review requests only), or since when the PR waits on
+    /// `waiting_on` (authored, team); `None`: the UI ages the row by `updated_at`.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub requested_at: Option<String>,

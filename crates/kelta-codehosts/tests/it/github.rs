@@ -722,3 +722,52 @@ async fn arm_auto_merge_merges_a_clean_pr_directly() {
     assert_eq!(reqs[1]["variables"], json!({ "id": "PR_101", "m": "REBASE" }));
     assert!(reqs[1]["query"].as_str().unwrap().contains("mergePullRequest"));
 }
+
+#[tokio::test]
+async fn team_list_chunks_repos_into_aliased_searches_in_one_request() {
+    let server = MockServer::start().await;
+    let gql = fixture("github/gql_list.json");
+    let data = &gql["data"];
+    let reply = json!({ "data": {
+        "viewer": data["viewer"], "c0": data["reviewRequested"], "c1": data["authored"],
+    } });
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(reply))
+        .mount(&server)
+        .await;
+    let repos: Vec<String> = (10..20).map(|i| format!("acme/repository-number-{i}")).collect();
+    let list = gh(&server).list_open(&repos, false).await.unwrap();
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(reqs.len(), 1, "every chunk in one request");
+    let q = reqs[0]["query"].as_str().unwrap();
+    assert!(q.contains("c0: search(query:$c0") && q.contains("c1: search(query:$c1") && !q.contains("$c2"));
+    assert!(!q.contains("reviewThreads") && !q.contains("@me"));
+    let vars = reqs[0]["variables"].as_object().unwrap();
+    let searches: Vec<&str> = vars.values().map(|v| v.as_str().unwrap()).collect();
+    assert!(
+        searches.iter().all(|s| s.len() <= 256 && s.starts_with("is:pr is:open archived:false draft:false"))
+    );
+    for r in &repos {
+        assert_eq!(
+            searches
+                .iter()
+                .filter(|s| s.contains(&format!("repo:{r} ")) || s.ends_with(&format!("repo:{r}")))
+                .count(),
+            1,
+            "{r}"
+        );
+    }
+    assert_eq!(list.iter().map(|r| r.r#ref.number).collect::<Vec<_>>(), vec![101, 103, 55], "drafts dropped");
+    assert!(
+        list.iter().all(|r| r.kind == ReviewKind::Team && r.my_state.is_none() && r.reviewed_head.is_none())
+    );
+    let a = &list[0];
+    assert_eq!(a.author.login.as_deref(), Some("carol"));
+    assert_eq!((a.decision, a.ci), (Some(ReviewDecision::ReviewRequired), CiState::Success));
+    assert_eq!(a.linked_tickets, vec!["SHOP-142"]);
+    assert_eq!(a.waiting_on, ["bob"], "waiting on, as on my PRs");
+    assert_eq!(a.requested_at.as_deref(), Some("2026-09-28T08:00:00Z"), "since bob was asked");
+    assert!(!a.blocking);
+    assert!(gh(&server).list_open(&[], true).await.unwrap().is_empty());
+}

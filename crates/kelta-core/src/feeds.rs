@@ -105,6 +105,7 @@ fn review_kind_str(k: ReviewKind) -> &'static str {
     match k {
         ReviewKind::ReviewRequested => "review_requested",
         ReviewKind::Authored => "authored",
+        ReviewKind::Team => "team",
     }
 }
 
@@ -1226,13 +1227,43 @@ impl Core {
             .collect()
     }
 
+    /// Team's reach: the repo bindings of the projects `scope` narrows to that some ticket source
+    /// feeds ("Other projects" never count).
+    pub fn team_repos(&self, scope: &Scope) -> Vec<(AccountId, String, ProjectId)> {
+        let fed: HashSet<ProjectId> = self.sources().into_iter().flat_map(|s| s.projects).collect();
+        let ids = self.scope_projects(scope);
+        self.review_bindings()
+            .into_iter()
+            .filter(|(_, _, p)| fed.contains(p) && ids.as_ref().is_none_or(|ids| ids.contains(p)))
+            .collect()
+    }
+
+    fn team_accounts(&self, scope: &Scope) -> Vec<AccountId> {
+        let mut out: Vec<AccountId> = self.team_repos(scope).into_iter().map(|(a, _, _)| a).collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     async fn fetch_reviews(&self, account: &AccountId, kind: ReviewKind) -> Result<Vec<Review>, KeltaError> {
         let host = self.code_host_of(account)?;
         let rs = &self.accounts_settings().reviews;
         // Authored always includes drafts: reviewing on GitHub means a draft PR (B6).
         let include_drafts = kind == ReviewKind::Authored || rs.include_drafts;
         let query = ReviewQuery { kind, include_team: rs.include_team_requests, include_drafts };
-        let r = host.list_reviews(&query).await;
+        let r = if kind == ReviewKind::Team {
+            let mut repos: Vec<String> = self
+                .team_repos(&Scope::All)
+                .into_iter()
+                .filter(|(a, _, _)| a == account)
+                .map(|(_, r, _)| r)
+                .collect();
+            repos.sort();
+            repos.dedup();
+            host.list_open(&repos, include_drafts).await
+        } else {
+            host.list_reviews(&query).await
+        };
         self.note_account(account, &r);
         let mut list = r?;
         if let Ok(re) = regex::Regex::new(&rs.ticket_key_regex) {
@@ -1252,6 +1283,8 @@ impl Core {
                 }
                 self.join_work_prs(account, &list).await;
             }
+            // Team raises no events: For me and Mine already do for what concerns me.
+            ReviewKind::Team => {}
         }
         Ok(list)
     }
@@ -1605,7 +1638,8 @@ impl Core {
     ) -> Result<ReviewPage, KeltaError> {
         self.rt.capture();
         self.check_scope(&scope)?;
-        let accounts = self.review_accounts(&scope);
+        let accounts =
+            if kind == ReviewKind::Team { self.team_accounts(&scope) } else { self.review_accounts(&scope) };
         let results =
             futures::future::join_all(accounts.iter().map(|a| self.load_reviews(a, kind, refresh))).await;
         let rs = self.accounts_settings().reviews.clone();
@@ -1625,7 +1659,13 @@ impl Core {
             allow.as_ref().is_none_or(|g| g.is_match(&r.r#ref.repo))
                 && !deny.as_ref().is_some_and(|g| g.is_match(&r.r#ref.repo))
         });
-        if let Some(ids) = self.scope_projects(&scope) {
+        if kind == ReviewKind::Team {
+            let team = self.team_repos(&scope);
+            all.retain(|r| {
+                team.iter()
+                    .any(|(a, repo, _)| a == &r.r#ref.account && repo.eq_ignore_ascii_case(&r.r#ref.repo))
+            });
+        } else if let Some(ids) = self.scope_projects(&scope) {
             all.retain(|r| {
                 bindings.iter().any(|(a, repo, p)| {
                     ids.contains(p) && a == &r.r#ref.account && repo.eq_ignore_ascii_case(&r.r#ref.repo)
@@ -1633,8 +1673,10 @@ impl Core {
             });
         }
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        let stamps = self.reviewed_stamps().await;
-        all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
+        if kind != ReviewKind::Team {
+            let stamps = self.reviewed_stamps().await;
+            all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
+        }
         if kind == ReviewKind::Authored {
             let nudges = self.store.call(|c| q::nudges(c)).await.unwrap_or_default();
             all.iter_mut()
@@ -1808,7 +1850,13 @@ impl Core {
                     let scope = narrowed.map_or_else(|| scope.clone(), |id| Scope::Source { id: id.clone() });
                     tickets(&scope, view_id.as_deref(), *who, &mut want)
                 }
-                PaneContent::Reviews { scope } => reviews(self.review_accounts(scope), &both, &mut want),
+                PaneContent::Reviews { scope, tab } => {
+                    reviews(self.review_accounts(scope), &both, &mut want);
+                    // Team only while shown: For me and Mine feed Now, badges and notifications.
+                    if *tab == Some(ReviewKind::Team) {
+                        reviews(self.team_accounts(scope), &[ReviewKind::Team], &mut want);
+                    }
+                }
                 PaneContent::Inbox => {
                     // Now reads `tracker_list(All, None, Mine)`: poll that cache key
                     tickets(&Scope::All, None, Some(Who::Mine), &mut want);
@@ -1860,8 +1908,13 @@ impl Core {
             self.emit_tickets_changed(&q.projects, &q.sources);
             return Ok(());
         }
-        let kind =
-            if key.query.ends_with(":authored") { ReviewKind::Authored } else { ReviewKind::ReviewRequested };
+        let kind = if key.query.ends_with(":authored") {
+            ReviewKind::Authored
+        } else if key.query.ends_with(":team") {
+            ReviewKind::Team
+        } else {
+            ReviewKind::ReviewRequested
+        };
         let host = self.code_host_of(&key.account)?;
         let has_cache = self.cache_get::<Vec<Review>>(&reviews_key(&key.account, kind)).await.is_some();
         // The gate is stateful per account ("changed since the last call"): only the requested

@@ -542,6 +542,19 @@ impl PluginHost {
                 let (ok, details) = Box::pin(self.run_actions(&entry.def.r#do, &mut sub, false, None)).await;
                 if ok { Ok(details.join("; ")) } else { Err(KeltaError::upstream(details.join("; "))) }
             }
+            ActionDef::FixChecks => {
+                // It types into Claude, as `send_keys` does.
+                cx.require(Permission::TerminalWrite)?;
+                let review = cx
+                    .event
+                    .as_ref()
+                    .and_then(|e| e.payload.get("review"))
+                    .and_then(|r| serde_json::from_value(r.clone()).ok())
+                    .ok_or_else(|| {
+                        KeltaError::invalid("fix_checks needs a `pr.*` event with its `review`")
+                    })?;
+                core.work_fix_checks(&review).await
+            }
         }
     }
 
@@ -827,6 +840,7 @@ fn action_name(a: &ActionDef) -> &'static str {
         ActionDef::SetAttention { .. } => "set_attention",
         ActionDef::Prompt { .. } => "prompt",
         ActionDef::Command { .. } => "command",
+        ActionDef::FixChecks => "fix_checks",
     }
 }
 

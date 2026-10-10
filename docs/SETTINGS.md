@@ -302,6 +302,18 @@ Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; d
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.
 
+The `fix_checks` trigger action (PLUGINS §3.1) sends a red CI run on my PR to its work item's Claude with no key
+press, once per head SHA and failed-check set, never over the item's `claude.budget_usd`. It is off unless a
+trigger asks for it:
+
+```toml
+[[triggers]]
+id = "fix-red-ci"
+on = "pr.ci_changed"
+match = { "payload.state" = "failure" }
+do = [{ action = "fix_checks" }]
+```
+
 Enabled tools are rows in the rail's Tools section (config order, icon and `label`, a lamp while a terminal tool runs, `⌥⌘N` for the first nine; the New tab menu lists 12, the palette all) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global layer; the Project layer shows the merged list and **Go to Global**). A tool opens where you are: the shown project and its focused work item, else Home (from Tickets, Now or Reviews). `scope` sets how many instances a tool has and where they open (Settings → Tools: **One instance**): `work` (default) one per work item, else per project, at the tool's `placement` (default `split_right`); `project` one per project, as its own tab in that project (a project picker asks from Home or a global view); `user` one for the whole app, as its own tab in Home, wherever it is opened from (lazydocker). Opening a tool whose instance exists focuses it. Pressing its key again while it is in front goes back (`nav.back`, to Now, Tickets or Reviews included) for a tool with no project argument (`user`, or no `{project.*}`/`{repo.*}` placeholder); a tool that takes a project asks for another project instead. Running instances show as sub-lines under the tool in the rail's Tools section (not for `user`); a tab made only of tools is listed there, not in its project's band. A tool whose template fields (`command`, `args`, `cwd`, `env`, `url`, `start.*`) use a `{project.*}` or `{repo.*}` placeholder, even in a fallback like `{worktree|project.root}`, needs a project: with no project in context a project picker asks which one, and the palette adds "Open <label> for project…", which always asks.
 
 Migration (once, on load): each `projects/<id>.toml` that has `[[tools]]` is copied to `projects/.trash/`, then its entries move to `config.toml`. A new id is appended unchanged (placeholders kept), an identical entry or an `id`/`enabled`-only override is dropped, and a different definition under a taken id becomes `<id>-<project id>` labelled "<label> (<project name>)". A toast "Tools moved to your global settings" offers **Review** (Settings → Tools). Repo files are never rewritten. No tool is built in or auto-detected.
