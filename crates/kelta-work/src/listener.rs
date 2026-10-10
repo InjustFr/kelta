@@ -73,6 +73,9 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     if let Err(e) = svc.on_claude_hook(&sid, hook).await {
                         tracing::debug!(error = %e.message, "work item hook signal failed");
                     }
+                    if stop && let Err(e) = svc.notes_on_stop(&sid).await {
+                        tracing::warn!(error = %e.message, "held prompt / review notes on Stop failed");
+                    }
                     // Claude may have finished (or aborted) a rebase it was asked to resolve.
                     if stop
                         && let Some(item) = svc.for_session(&sid).await

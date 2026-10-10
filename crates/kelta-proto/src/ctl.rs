@@ -75,6 +75,22 @@ pub enum CtlCommand {
     PluginInstall {
         source: String,
     },
+    /// Review note from a Kelta-spawned nvim (`kelta.lua`); `session` is that editor session.
+    NoteAdd {
+        session: SessionId,
+        path: PathBuf,
+        line_start: u32,
+        line_end: u32,
+        body: String,
+    },
+    /// Notes of the editor session's work item → `{worktree, notes}` (resolved ones left out).
+    NoteList {
+        session: SessionId,
+    },
+    /// Send the open notes of the editor session's work item to its Claude.
+    NoteSend {
+        session: SessionId,
+    },
     Version,
 }
 

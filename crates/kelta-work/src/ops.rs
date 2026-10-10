@@ -167,12 +167,16 @@ impl WorkService {
                     kind: SessionKind::Editor { adapter: preset.id.clone() },
                     name: Some(name.unwrap_or(&preset.id).to_owned()),
                     program: Some(preset.command.clone()),
-                    args: vec![
-                        "-S".into(),
-                        file.to_string_lossy().into_owned(),
-                        "--listen".into(),
-                        sock.to_string_lossy().into_owned(),
-                    ],
+                    args: [
+                        self.nvim_plugin_args(),
+                        vec![
+                            "-S".into(),
+                            file.to_string_lossy().into_owned(),
+                            "--listen".into(),
+                            sock.to_string_lossy().into_owned(),
+                        ],
+                    ]
+                    .concat(),
                     cwd: Some(item.worktree.clone()),
                     env: BTreeMap::new(),
                     cols: COLS,
@@ -1209,14 +1213,16 @@ pub(crate) struct DirtyReport {
 }
 
 /// `@path#Lx-y ` (path relative to the Claude session's cwd when inside it).
+/// `file` relative to `cwd` (also through symlinks); `None` when it is outside.
+pub(crate) fn rel_to(file: &Path, cwd: &Path) -> Option<PathBuf> {
+    match file.strip_prefix(cwd) {
+        Ok(p) => Some(p.to_path_buf()),
+        Err(_) => git::canon(file).strip_prefix(git::canon(cwd)).ok().map(Path::to_path_buf),
+    }
+}
+
 pub fn selection_ref(file: &Path, cwd: &Path, l1: u32, l2: u32) -> String {
-    let rel = match file.strip_prefix(cwd) {
-        Ok(p) => p.to_path_buf(),
-        Err(_) => {
-            let (cf, cc) = (git::canon(file), git::canon(cwd));
-            cf.strip_prefix(&cc).map(Path::to_path_buf).unwrap_or_else(|_| file.to_path_buf())
-        }
-    };
+    let rel = rel_to(file, cwd).unwrap_or_else(|| file.to_path_buf());
     let lines = if l1 >= l2 { format!("L{l1}") } else { format!("L{l1}-{l2}") };
     format!("@{}#{lines} ", rel.to_string_lossy())
 }

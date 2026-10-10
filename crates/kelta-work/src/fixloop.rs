@@ -31,7 +31,7 @@ pub(crate) fn claude_of(core: &Arc<dyn CoreApi>, item: &WorkItem, j: &Journal) -
         .filter(|s| s.lifecycle != Lifecycle::Exited)
 }
 
-fn busy(s: &SessionInfo) -> bool {
+pub(crate) fn busy(s: &SessionInfo) -> bool {
     s.lifecycle == Lifecycle::Live && matches!(s.status, SessionStatus::Working | SessionStatus::NeedsInput)
 }
 

@@ -16,7 +16,7 @@ use kelta_proto::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
 use kelta_proto::codehost::ReviewRef;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId, SessionId, TabId, WorkItemId};
-use kelta_proto::model::{StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus};
+use kelta_proto::model::{ReviewNote, StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus};
 use kelta_proto::store::{
     LayoutRow, ProjectOpenRow, ProviderCacheRow, SeenReviewRow, SessionRow, TRIGGER_LOG_CAP, TriggerLogRow,
 };
@@ -652,6 +652,7 @@ pub mod q {
 
     pub fn work_delete(c: &Connection, id: &WorkItemId) -> R<()> {
         c.execute("DELETE FROM work_steps WHERE work_item_id = ?1", [id.as_str()]).map_err(db_err)?;
+        c.execute("DELETE FROM notes WHERE work_item = ?1", [id.as_str()]).map_err(db_err)?;
         c.execute("DELETE FROM work_items WHERE id = ?1", [id.as_str()]).map_err(db_err)?;
         Ok(())
     }
@@ -671,6 +672,58 @@ pub mod q {
         )
         .map(|_| ())
         .map_err(db_err)
+    }
+
+    pub fn notes(c: &Connection, id: &WorkItemId) -> R<Vec<ReviewNote>> {
+        let mut st = c
+            .prepare(
+                "SELECT id, path, line_start, line_end, body, source, ext_ref, state, sent_at FROM notes
+                 WHERE work_item = ?1 ORDER BY path, line_start, id",
+            )
+            .map_err(db_err)?;
+        st.query_map([id.as_str()], |r| {
+            Ok(ReviewNote {
+                id: r.get(0)?,
+                work_item_id: id.clone(),
+                path: r.get(1)?,
+                line_start: r.get(2)?,
+                line_end: r.get(3)?,
+                body: r.get(4)?,
+                source: r.get(5)?,
+                ext_ref: r.get(6)?,
+                state: serde_json::from_value(serde_json::Value::String(r.get(7)?)).unwrap_or_default(),
+                sent_at: r.get(8)?,
+            })
+        })
+        .map_err(db_err)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db_err)
+    }
+
+    /// Insert (`id` 0) or update; returns the id.
+    pub fn note_put(c: &Connection, n: &ReviewNote) -> R<i64> {
+        let state = serde_json::to_value(n.state)?.as_str().unwrap_or("open").to_owned();
+        c.execute(
+            "INSERT INTO notes (id, work_item, path, line_start, line_end, body, source, ext_ref, state, sent_at)
+             VALUES (NULLIF(?1, 0), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET path = excluded.path, line_start = excluded.line_start,
+             line_end = excluded.line_end, body = excluded.body, ext_ref = excluded.ext_ref,
+             state = excluded.state, sent_at = excluded.sent_at",
+            params![
+                n.id,
+                n.work_item_id.as_str(),
+                n.path,
+                n.line_start,
+                n.line_end,
+                n.body,
+                n.source,
+                n.ext_ref,
+                state,
+                n.sent_at
+            ],
+        )
+        .map_err(db_err)?;
+        Ok(if n.id == 0 { c.last_insert_rowid() } else { n.id })
     }
 
     /// Steps in saga order, then unknown steps by name.
@@ -846,6 +899,16 @@ impl WorkStore for Store {
     async fn steps(&self, id: &WorkItemId) -> Result<Vec<WorkStepStatus>, KeltaError> {
         let id = id.clone();
         self.call(move |c| q::steps(c, &id)).await
+    }
+
+    async fn notes(&self, id: &WorkItemId) -> Result<Vec<ReviewNote>, KeltaError> {
+        let id = id.clone();
+        self.call(move |c| q::notes(c, &id)).await
+    }
+
+    async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError> {
+        let note = note.clone();
+        self.call(move |c| q::note_put(c, &note)).await
     }
 }
 

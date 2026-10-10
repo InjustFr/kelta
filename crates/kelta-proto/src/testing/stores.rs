@@ -9,12 +9,13 @@ use parking_lot::Mutex;
 use crate::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
 use crate::error::KeltaError;
 use crate::ids::{PluginId, ProjectId, WorkItemId};
-use crate::model::{StepStatus, WorkItem, WorkStepStatus};
+use crate::model::{ReviewNote, StepStatus, WorkItem, WorkStepStatus};
 
 #[derive(Default)]
 pub struct MemWorkStore {
     items: Mutex<BTreeMap<WorkItemId, WorkItem>>,
     steps: Mutex<BTreeMap<WorkItemId, BTreeMap<String, WorkStepStatus>>>,
+    notes: Mutex<Vec<ReviewNote>>,
 }
 
 impl MemWorkStore {
@@ -47,6 +48,7 @@ impl WorkStore for MemWorkStore {
     async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError> {
         self.items.lock().remove(id);
         self.steps.lock().remove(id);
+        self.notes.lock().retain(|n| &n.work_item_id != id);
         Ok(())
     }
 
@@ -72,6 +74,25 @@ impl WorkStore for MemWorkStore {
             crate::model::WORK_STEPS.iter().filter_map(|s| map.get(*s).cloned()).collect();
         out.extend(map.values().filter(|s| !crate::model::WORK_STEPS.contains(&s.step.as_str())).cloned());
         Ok(out)
+    }
+
+    async fn notes(&self, id: &WorkItemId) -> Result<Vec<ReviewNote>, KeltaError> {
+        let mut out: Vec<ReviewNote> =
+            self.notes.lock().iter().filter(|n| &n.work_item_id == id).cloned().collect();
+        out.sort_by(|a, b| (&a.path, a.line_start, a.id).cmp(&(&b.path, b.line_start, b.id)));
+        Ok(out)
+    }
+
+    async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError> {
+        let mut notes = self.notes.lock();
+        let mut note = note.clone();
+        if note.id == 0 {
+            note.id = notes.iter().map(|n| n.id).max().unwrap_or(0) + 1;
+        }
+        let id = note.id;
+        notes.retain(|n| n.id != id);
+        notes.push(note);
+        Ok(id)
     }
 }
 
