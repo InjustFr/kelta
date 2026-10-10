@@ -219,7 +219,10 @@ async fn mcp_initialize_list_and_call() {
             "transition_ticket_by_key",
             "comment_ticket_by_key",
             "update_ticket_body",
-            "close_ticket"
+            "close_ticket",
+            "claim_ticket",
+            "report_progress",
+            "release_ticket"
         ]
     );
     for t in v["result"]["tools"].as_array().unwrap() {
@@ -448,7 +451,10 @@ async fn global_mcp_serves_the_board_tools() {
             "transition_ticket_by_key",
             "comment_ticket_by_key",
             "update_ticket_body",
-            "close_ticket"
+            "close_ticket",
+            "claim_ticket",
+            "report_progress",
+            "release_ticket"
         ]
     );
     let v = global(
@@ -501,7 +507,17 @@ async fn global_mcp_serves_the_board_tools() {
     let mut s = kelta_proto::settings::Settings::defaults();
     s.claude.mcp_board_writes = false;
     e.fake.set_settings(s);
-    assert_eq!(global_tools(port).await, ["list_review_requests", "list_tickets", "get_ticket_by_key"]);
+    assert_eq!(
+        global_tools(port).await,
+        [
+            "list_review_requests",
+            "list_tickets",
+            "get_ticket_by_key",
+            "claim_ticket",
+            "report_progress",
+            "release_ticket"
+        ]
+    );
     let v = global(
         port,
         "it",

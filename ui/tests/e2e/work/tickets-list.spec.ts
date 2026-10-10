@@ -63,3 +63,52 @@ test('x, Shift+J and m move both tickets through the moves they share', async ({
   await expect(chip(page, 'SHOP-155')).toContainText('In review');
   await expect(page.locator('.k-row.picked')).toHaveCount(0);
 });
+
+test('a background run claim shows on the ticket row and follows report_progress', async ({ page }) => {
+  await openTickets(page, 'SHOP-160');
+  const report = (state: string, phase: string, note: string | null) =>
+    page.evaluate(
+      ([state, phase, note]) => {
+        const mock = window.__keltaMock!;
+        const ref = mock.state.work[0]!.ticket!;
+        const w = {
+          ...structuredClone(mock.state.work[0]!),
+          id: 'wi-run-160',
+          ticket: { ...ref, key: 'SHOP-160' },
+          session_ids: [],
+          tab_id: null,
+          run: {
+            name: 'kelta-ticket-pass',
+            run_id: 'r1',
+            session_id: 'orch',
+            phase,
+            state: state as 'running',
+            note,
+            sha: null,
+          },
+        };
+        mock.emit({ type: 'work.updated', work: w });
+      },
+      [state, phase, note] as const,
+    );
+  const meta = row(page, 'SHOP-160').locator('[data-phase="run"]');
+  const lamp = row(page, 'SHOP-160').locator('.k-row-lamp [data-attention]');
+
+  await report('running', 'Implement', null);
+  await expect(meta).toHaveText('kelta-ticket-pass · Implement');
+  await expect(lamp).toHaveAttribute('data-attention', 'working');
+
+  await report('blocked', 'Review', '2 unresolved review findings');
+  await expect(meta).toHaveText('kelta-ticket-pass · Review');
+  await expect(meta).toHaveAttribute('title', '2 unresolved review findings');
+  await expect(lamp).toHaveAttribute('data-attention', 'error');
+  await expect(page.getByTestId('ticket-detail').locator('[data-run]')).toContainText(
+    'kelta-ticket-pass · Review',
+  );
+
+  // Now lists the blocked run under Needs you, with its note.
+  await page.keyboard.press('Control+Shift+0');
+  const nowRow = page.getByTestId('inbox-pane').locator('[data-row="w:wi-run-160"]');
+  await expect(nowRow).toContainText('2 unresolved review findings');
+  await expect(nowRow.locator('[data-attention]').first()).toHaveAttribute('data-attention', 'error');
+});

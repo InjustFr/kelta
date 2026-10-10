@@ -293,3 +293,44 @@ describe('phaseOf: parked (#142)', () => {
     expect(phaseOf(parked, claude('done'), null, null).lamp).toBe('done');
   });
 });
+
+describe('background run claims (#235)', () => {
+  const run = (state: 'running' | 'blocked' | 'failed' | 'done' | 'orphaned', note: string | null = null) =>
+    item({
+      session_ids: [],
+      run: {
+        name: 'kelta-ticket-pass',
+        run_id: 'r1',
+        session_id: 'orch',
+        phase: 'Review',
+        state,
+        note,
+        sha: null,
+      },
+    });
+
+  it('shows the run and its phase; state drives the lamp and the Now section', () => {
+    const ph = phaseOf(run('running'), claude('needs_input'), null, git({ missing: true }));
+    expect([ph.id, ph.label, ph.lamp, ph.section]).toEqual([
+      'run',
+      'kelta-ticket-pass · Review',
+      'working',
+      'in_flight',
+    ]);
+    const blocked = phaseOf(run('blocked', '2 unresolved review findings'), null, null, null);
+    expect([blocked.lamp, blocked.section, blocked.detail]).toEqual([
+      'error',
+      'needs_you',
+      '2 unresolved review findings',
+    ]);
+    expect(phaseOf(run('failed'), null, null, null)).toMatchObject({
+      lamp: 'needs_input',
+      section: 'needs_you',
+    });
+    expect(phaseOf(run('orphaned'), null, null, null)).toMatchObject({
+      label: 'kelta-ticket-pass · Review (orphaned)',
+      lamp: 'none',
+    });
+    expect(phaseOf(run('done'), null, null, null).id).not.toBe('run');
+  });
+});

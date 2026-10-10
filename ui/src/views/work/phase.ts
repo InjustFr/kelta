@@ -1,7 +1,7 @@
 // The one derived state of a work item (FLOW §2.2): label, lamp, next action and Now section.
 // Pure; used by Now, the work bar, the tab lamp, the rail tile and the palette.
 
-import type { GitStatus, Review, ReviewDelta, SessionInfo, WorkItem } from '$lib/gen';
+import type { GitStatus, Review, ReviewDelta, RunState, SessionInfo, WorkItem } from '$lib/gen';
 
 /** Lamp shapes (DESIGN §6.1). `working` and `parked` are derived, not Attention levels. */
 export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'parked' | 'none';
@@ -38,6 +38,7 @@ export type WorkActionId =
   | 'finish';
 
 export type PhaseId =
+  | 'run'
   | 'failed'
   | 'starting'
   | 'queued'
@@ -153,6 +154,21 @@ function phaseRow(
   pr: PhasePr | null,
   git: PhaseGit | null,
 ): Phase {
+  const run = item.run;
+  // A background run's claim (#235): its own phase and state, `note` as the detail.
+  if (run && run.state !== 'done') {
+    const name = [run.name, run.phase].filter(Boolean).join(' · ') || 'Background run';
+    const stuck = run.state === 'blocked' || run.state === 'failed';
+    return p(
+      'run',
+      run.state === 'orphaned' ? `${name} (orphaned)` : name,
+      run.note ?? run.state,
+      RUN_LAMP[run.state],
+      null,
+      '',
+      stuck ? 'needs_you' : 'in_flight',
+    );
+  }
   const st = item.state;
   const urlNo = item.pr_url?.match(/(\d+)\/?$/)?.[1];
   const prLabel = pr ? `#${pr.ref.number}` : urlNo ? `#${urlNo}` : '';
@@ -302,6 +318,15 @@ function phaseRow(
   }
   return p('no_changes', 'No changes yet', '', 'none', 'go_claude', 'Go to Claude', 'in_flight');
 }
+
+// Blocked is amber (the `error` lamp), failed red.
+const RUN_LAMP: Record<RunState, Lamp> = {
+  running: 'working',
+  blocked: 'error',
+  failed: 'needs_input',
+  done: 'none',
+  orphaned: 'none',
+};
 
 const LAMP_RANK: Record<Lamp, number> = {
   none: 0,

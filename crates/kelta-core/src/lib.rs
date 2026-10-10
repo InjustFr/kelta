@@ -33,7 +33,7 @@ pub mod status;
 pub mod store;
 pub mod templates;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -737,6 +737,29 @@ impl CoreApi for Core {
     }
     async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.work.feedback(id).await
+    }
+    async fn work_claim(
+        &self,
+        project: &ProjectId,
+        ticket: TicketRef,
+        worktree: Option<PathBuf>,
+        branch: Option<String>,
+        run: kelta_proto::model::RunClaim,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.claim(project, ticket, worktree, branch, run).await
+    }
+    async fn work_report(
+        &self,
+        key: &str,
+        phase: Option<String>,
+        state: kelta_proto::model::RunState,
+        note: Option<String>,
+        sha: Option<String>,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.report(key, phase, state, note, sha).await
+    }
+    async fn work_release(&self, key: &str, sha: Option<String>) -> Result<WorkItem, KeltaError> {
+        self.work.release(key, sha).await
     }
     async fn editor_open(
         &self,

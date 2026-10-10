@@ -318,6 +318,7 @@ pub fn work_item() -> WorkItem {
         auto_finish: false,
         parked_at: None,
         nvim_kept: 0,
+        run: None,
     }
 }
 
