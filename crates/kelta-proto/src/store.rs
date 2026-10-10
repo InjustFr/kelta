@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{PluginId, ProjectId, SessionId, WorkItemId};
 
 /// Current schema version (`schema_version(v)`); bumped by L3 migrations.
-pub const SCHEMA_VERSION: u32 = 11;
+pub const SCHEMA_VERSION: u32 = 12;
 
 /// Table names.
 pub mod tables {
@@ -28,6 +28,8 @@ pub mod tables {
     pub const UI_STATE: &str = "ui_state";
     pub const NOTES: &str = "notes";
     pub const NUDGES: &str = "nudges";
+    pub const NEXT_UP: &str = "next_up";
+    pub const SEEN_TICKETS: &str = "seen_tickets";
 
     pub const ALL: &[&str] = &[
         SCHEMA_VERSION,
@@ -45,6 +47,8 @@ pub mod tables {
         UI_STATE,
         NOTES,
         NUDGES,
+        NEXT_UP,
+        SEEN_TICKETS,
     ];
 }
 

@@ -726,6 +726,24 @@ pub struct ReviewNotes {
     pub since: Option<ReviewDelta>,
 }
 
+/// A ticket in my Next up list, or snoozed (#145). Local to Kelta, never written to a tracker.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct NextUpItem {
+    pub project_id: ProjectId,
+    pub ticket: TicketRef,
+    /// Fractional order, lowest first; `None` = not in the list, only snoozed.
+    pub rank: Option<f64>,
+    /// RFC 3339; hidden from Next up and grooming until then.
+    pub snoozed_until: Option<String>,
+}
+
+/// `next_up_list`: the list and snoozes, plus the tickets I have seen (`account:key`, the `New` badge).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct NextUp {
+    pub items: Vec<NextUpItem>,
+    pub seen: Vec<String>,
+}
+
 /// Ports per work item: `KELTA_PORT` plus `KELTA_PORT_1..9`.
 pub const PORT_BLOCK: u16 = 10;
 

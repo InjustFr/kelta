@@ -183,8 +183,24 @@ CREATE TABLE IF NOT EXISTS nudges (
 );
 "#;
 
+/// v12: my Next up list and snoozes (#145; `rank` NULL = snoozed only), and the tickets I have seen
+/// (the `New` badge). Keys are `account:key`; local to Kelta, never written to a tracker.
+const V12: &str = r#"
+CREATE TABLE IF NOT EXISTS next_up (
+  ticket_key    TEXT PRIMARY KEY,
+  project       TEXT NOT NULL,
+  ticket_json   TEXT NOT NULL,
+  rank          REAL,
+  snoozed_until TEXT
+);
+CREATE TABLE IF NOT EXISTS seen_tickets (
+  ticket_key TEXT PRIMARY KEY,
+  at         TEXT NOT NULL
+);
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

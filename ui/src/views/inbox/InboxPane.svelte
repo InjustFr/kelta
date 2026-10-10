@@ -30,8 +30,9 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
-  import type { NowRow, Section } from './groups';
-  import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally } from './now';
+  import { isNextUp, type NowRow, type Section } from './groups';
+  import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
+  import { nextUp } from './nextUp.svelte';
 
   let { focused }: PaneProps<'inbox'> = $props();
 
@@ -221,11 +222,22 @@
           project: p.name,
           color: p.color,
           reason: t.status.name,
-          meta: [...(batch.has(t.ref) ? ['marked'] : []), ...(t.priority ? [t.priority] : [])],
+          meta: [
+            ...(nextUp.isNew(t.ref) ? ['New'] : []),
+            ...(batch.has(t.ref) ? ['marked'] : []),
+            ...(t.priority ? [t.priority] : []),
+          ],
           age: age(t.updated_at),
           more: t.assignee?.name ?? '',
           actions: [
             { key: 'enter', label: 'Start work' },
+            ...(isNextUp(row)
+              ? [
+                  { key: 'shift+s', label: 'Start the top ones' },
+                  { key: 'shift+j', label: 'Down' },
+                  { key: 'shift+k', label: 'Up' },
+                ]
+              : []),
             { key: 'o', label: 'Open in tracker' },
           ],
         };
@@ -311,6 +323,7 @@
           : row.type === 'work'
             ? (row.item.pr_url ?? prOf(row.item)?.url ?? null)
             : null;
+    if (row.type === 'ticket') nextUp.markSeen(row.ticket.ticket.ref);
     if (url) openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
     else if (row.type === 'work') void runWorkAction('open_ticket', row.item);
   }
@@ -325,6 +338,9 @@
     if (key === 's' && row.type === 'ticket') void enterRow(row);
     else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
   }
+
+  /** Next up as shown (unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
+  const nextUpRows = (): NowRow[] => summary.sections.find((s) => s.id === 'next_up')?.rows ?? [];
 
   function showAll(): void {
     const pid = projects.activeId ?? projects.list.find((p) => p.open && !p.builtin)?.id;
@@ -375,6 +391,18 @@
         break;
       case 'N':
         toasts.info('New work item: not available yet');
+        break;
+      case 'S':
+        if (cur && isNextUp(cur)) startNextUp(nextUpRows());
+        break;
+      case 'J':
+      case 'K':
+        if (cur && isNextUp(cur))
+          void nextUp.move(
+            cur.ticket.ticket.ref,
+            e.key === 'J' ? 1 : -1,
+            nextUpRows().flatMap((r) => (r.type === 'ticket' ? [r.ticket.ticket.ref] : [])),
+          );
         break;
       default:
         if (!cur || !'vVbpfrcanso'.includes(e.key) || e.key.length !== 1) return;

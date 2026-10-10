@@ -19,7 +19,8 @@ export type SheetKey =
   | 'fix'
   | 'work_dialog'
   | 'tracker.source_picker'
-  | 'tickets.move';
+  | 'tickets.move'
+  | 'groom';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {

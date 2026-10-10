@@ -72,7 +72,8 @@ export type RegisteredSheetKey =
   | 'fix'
   | 'work_dialog'
   | 'tracker.source_picker'
-  | 'tickets.move';
+  | 'tickets.move'
+  | 'groom';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
   start_batch: () => import('../views/work/BatchStartSheet.svelte'),
@@ -92,6 +93,8 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   'tracker.source_picker': () => import('../views/tickets/SourcePickerSheet.svelte'),
   /** props: { ticket } */
   'tickets.move': () => import('../views/tickets/MoveSheet.svelte'),
+  /** Palette `Groom` (#145). */
+  groom: () => import('../views/inbox/GroomSheet.svelte'),
 };
 
 export type SettingsSectionId =

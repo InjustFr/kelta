@@ -5,8 +5,9 @@ use std::path::Path;
 use kelta_core::store::{Store, migrations, q};
 use kelta_proto::api::{GrantStore, TrustStore, WorkStore};
 use kelta_proto::ids::{PluginId, SessionId, WorkItemId};
-use kelta_proto::model::{NoteState, ReviewNote, StepStatus, WorkState};
+use kelta_proto::model::{NextUpItem, NoteState, ReviewNote, StepStatus, WorkState};
 use kelta_proto::store::{SCHEMA_VERSION, TriggerLogRow, tables};
+use kelta_proto::tracker::TicketRef;
 
 #[tokio::test]
 async fn migrations_from_empty_and_idempotent() {
@@ -37,6 +38,42 @@ async fn migrations_from_empty_and_idempotent() {
     // migrate again explicitly: still one version row
     let v = s.call(|c| migrations::migrate(c).map_err(kelta_core::store::db_err)).await.unwrap();
     assert_eq!(v, SCHEMA_VERSION);
+}
+
+#[tokio::test]
+async fn next_up_keeps_its_order_snoozes_and_seen_marks_across_a_restart() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let t = |key: &str| TicketRef { account: "jira".into(), key: key.into(), id: key.into() };
+    let it = |key: &str, rank: Option<f64>, snoozed: Option<&str>| NextUpItem {
+        project_id: "shop".into(),
+        ticket: t(key),
+        rank,
+        snoozed_until: snoozed.map(Into::into),
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        for i in [
+            it("A-1", Some(1.0), None),
+            it("A-2", Some(0.5), None),
+            it("A-3", None, Some("2026-10-17T00:00:00Z")),
+        ] {
+            s.call(move |c| q::next_up_put(c, &i)).await.unwrap();
+        }
+        // Re-rank (J/K) is an upsert.
+        let moved = it("A-1", Some(0.25), None);
+        s.call(move |c| q::next_up_put(c, &moved)).await.unwrap();
+        s.call(move |c| q::ticket_seen(c, &t("A-2"))).await.unwrap();
+        s.call(move |c| q::ticket_seen(c, &t("A-2"))).await.unwrap();
+    }
+    let s = Store::open(&db).unwrap();
+    let got = s.call(|c| q::next_up(c)).await.unwrap();
+    let keys: Vec<_> = got.items.iter().map(|i| i.ticket.key.as_str()).collect();
+    assert_eq!(keys, ["A-1", "A-2", "A-3"], "rank order, snoozed-only last");
+    assert_eq!(got.items[2].snoozed_until.as_deref(), Some("2026-10-17T00:00:00Z"));
+    assert_eq!(got.seen, ["jira:A-2"]);
+    s.call(move |c| q::next_up_remove(c, &t("A-1"))).await.unwrap();
+    assert_eq!(s.call(|c| q::next_up(c)).await.unwrap().items.len(), 2);
 }
 
 #[tokio::test]

@@ -17,7 +17,7 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{AccountStatus, BusEvent, Notification, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
-use kelta_proto::model::{PaneContent, Scope, WorkItem, WorkState};
+use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{AccountKind, ColumnSpec, ProjectConfig, Settings, TrackerBinding, TrackerView};
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
@@ -1439,6 +1439,24 @@ impl Core {
         self.store.call(move |c| q::nudge_put(c, &rr, &kelta_proto::now_rfc3339())).await?;
         self.after_review_write(r).await;
         Ok(())
+    }
+
+    // ---- Next up (#145): local, no tracker call -------------------------------------------------
+
+    pub async fn next_up_list(&self) -> Result<NextUp, KeltaError> {
+        self.store.call(|c| q::next_up(c)).await
+    }
+
+    pub async fn next_up_put(&self, item: NextUpItem) -> Result<(), KeltaError> {
+        self.store.call(move |c| q::next_up_put(c, &item)).await
+    }
+
+    pub async fn next_up_remove(&self, ticket: TicketRef) -> Result<(), KeltaError> {
+        self.store.call(move |c| q::next_up_remove(c, &ticket)).await
+    }
+
+    pub async fn ticket_seen(&self, ticket: TicketRef) -> Result<(), KeltaError> {
+        self.store.call(move |c| q::ticket_seen(c, &ticket)).await
     }
 
     // =========================================================================================

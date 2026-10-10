@@ -6,7 +6,8 @@ import type { GitStatus, Review, ReviewDelta, SessionInfo, WorkItem } from '$lib
 /** Lamp shapes (DESIGN §6.1). `working` is derived, not an Attention level. */
 export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'none';
 
-export type NowSection = 'needs_you' | 'to_review' | 'fix' | 'requests' | 'ship' | 'in_flight' | 'up_next';
+export type NowSection =
+  'needs_you' | 'to_review' | 'next_up' | 'new' | 'fix' | 'requests' | 'ship' | 'in_flight' | 'up_next';
 
 /** Ids of the work action registry (`actions.ts`). */
 export type WorkActionId =
