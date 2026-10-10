@@ -739,6 +739,9 @@ impl CoreApi for Core {
     async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.work.feedback(id).await
     }
+    async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
+        self.work.fix_checks(review).await
+    }
     async fn work_claim(
         &self,
         project: &ProjectId,

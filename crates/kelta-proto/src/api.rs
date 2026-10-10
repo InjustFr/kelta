@@ -342,6 +342,11 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<WorkItem, KeltaError>;
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
+    /// The `fix_checks` trigger action (#252): `review`'s failed checks to the Claude of the work item
+    /// owning it, once per head SHA and failed-check set; `Ok` says what was sent or why nothing was.
+    async fn work_fix_checks(&self, _review: &Review) -> Result<String, KeltaError> {
+        Err(KeltaError::unsupported("work_fix_checks"))
+    }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
     async fn work_claim(

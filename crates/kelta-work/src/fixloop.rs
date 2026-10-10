@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use kelta_proto::api::{CodeHost, CoreApi};
-use kelta_proto::codehost::{Feedback, MergeMethod, ReviewRef};
+use kelta_proto::codehost::{Feedback, MergeMethod, Review, ReviewRef};
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::Toast;
 use kelta_proto::ids::WorkItemId;
@@ -85,6 +85,11 @@ pub(crate) async fn paste_prompt(
     core.session_write(&s.id, b"\r").await
 }
 
+/// A send to this live Claude goes to the clipboard: Kelta cannot tell when it is idle.
+fn copies(s: &SessionInfo) -> bool {
+    route(Some(s)) == Route::Paste && check_idle(s).is_err()
+}
+
 fn valid_name(name: &str) -> bool {
     name.strip_suffix(".md").is_some_and(|stem| {
         !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
@@ -120,8 +125,7 @@ impl WorkService {
         let mut j = self.load_journal(id);
         // Never refused: a live Claude Kelta cannot paste into (hooks inactive, so no `Stop` to hold
         // the message for) gets the prompt on the clipboard instead.
-        let copy = claude_of(&env.core, &item, &j)
-            .is_some_and(|s| route(Some(&s)) == Route::Paste && check_idle(&s).is_err());
+        let copy = claude_of(&env.core, &item, &j).is_some_and(|s| copies(&s));
         let run = self.ensure_claude_run(&item, &mut j)?;
         self.save_journal(id, &j)?;
         for f in &sent {
@@ -190,6 +194,69 @@ impl WorkService {
         let item = self.load(id).await?;
         let (host, r) = self.pr_of(&item).await?;
         host.feedback(&r).await
+    }
+
+    /// The `fix_checks` trigger action (#252): the failed checks of `review` to its work item's Claude,
+    /// as Enter on Checks failed sends them, once per head SHA and failed-check set. `Ok(reason)`
+    /// when nothing is sent.
+    pub(crate) async fn fix_checks_impl(&self, review: &Review) -> Result<String, KeltaError> {
+        let skip = |why: &str| {
+            tracing::debug!(pr = %review.url, "fix_checks skipped: {why}");
+            Ok(format!("skipped: {why}"))
+        };
+        let items = self.store.list_items(None).await?;
+        let Some(item) = items
+            .into_iter()
+            .find(|w| w.state == WorkState::PrOpen && w.pr_url.as_deref() == Some(review.url.as_str()))
+        else {
+            return skip("no work item owns this PR");
+        };
+        if item.claude_uuid.is_none() {
+            return skip("the work item has no Claude");
+        }
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let j = self.load_journal(&item.id);
+        if claude_of(&env.core, &item, &j).is_some_and(|s| copies(&s)) {
+            return skip("Claude's status hooks are inactive");
+        }
+        let label = item.ticket.as_ref().map_or(item.branch.as_str(), |t| t.key.as_str());
+        if let Some(budget) = env.settings.claude.budget_usd {
+            let unsaved: f64 = env
+                .core
+                .session_list(Some(&item.project_id))
+                .iter()
+                .filter(|s| s.work_item_id.as_ref() == Some(&item.id))
+                .filter_map(|s| s.claude.as_ref()?.usage.as_ref().map(|u| u.unsaved_usd))
+                .sum();
+            if item.cost_usd + unsaved > budget {
+                env.core.toast(Toast::warn(format!(
+                    "{label}: CI failed. Not sent to Claude: the item is over its ${budget:.2} budget."
+                )));
+                return Ok("skipped: over budget".into());
+            }
+        }
+        let failed = self.feedback_impl(&item.id).await?.failed_checks;
+        if failed.is_empty() {
+            return skip("no failed check");
+        }
+        let mut names: Vec<&str> = failed.iter().map(|c| c.name.as_str()).collect();
+        names.sort_unstable();
+        let sent = format!("{}:{}", review.head_sha, names.join(","));
+        if j.checks_sent.as_deref() == Some(sent.as_str()) {
+            return skip("already sent for this head");
+        }
+        let n = failed.len();
+        let brief = Feedback { failed_checks: failed, ..Feedback::default() }.to_markdown();
+        let prompt = env.settings.claude.prompt_templates.get("checks").cloned().unwrap_or_default();
+        let file = SendFile { name: "feedback.md".into(), content: brief };
+        self.send_impl(&item.id, &prompt, vec![file], None, None).await?;
+        // send_impl saved the journal: reload, so its run dir / held prompt are kept.
+        let mut j = self.load_journal(&item.id);
+        j.checks_sent = Some(sent);
+        self.save_journal(&item.id, &j)?;
+        let what = format!("{n} failed check{}", if n == 1 { "" } else { "s" });
+        env.core.toast(Toast::info(format!("{label}: sent {what} to Claude.")));
+        Ok(format!("sent {what}"))
     }
 
     pub(crate) async fn rerequest_impl(&self, id: &WorkItemId) -> Result<Vec<String>, KeltaError> {

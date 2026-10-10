@@ -597,6 +597,19 @@
             "id"
           ],
           "type": "object"
+        },
+        {
+          "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+          "properties": {
+            "action": {
+              "const": "fix_checks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1762,6 +1775,19 @@
                   "required": [
                     "action",
                     "id"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+                  "properties": {
+                    "action": {
+                      "const": "fix_checks",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action"
                   ],
                   "type": "object"
                 }
@@ -5405,6 +5431,19 @@
                   "required": [
                     "action",
                     "id"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).",
+                  "properties": {
+                    "action": {
+                      "const": "fix_checks",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action"
                   ],
                   "type": "object"
                 }
