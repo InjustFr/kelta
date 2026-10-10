@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { TicketItem } from '$lib/gen';
+import type { StartWorkPlan, TicketItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
+import { ticketKey } from '$lib/stores/tickets.svelte';
 
-import { acceptanceCriteria, refines } from './refine.svelte';
+import { acceptanceCriteria, refines, withCriteria } from './refine.svelte';
 import TicketDetail from './TicketDetail.svelte';
 
 let mock: MockControls;
@@ -231,5 +232,20 @@ describe('acceptanceCriteria', () => {
     expect(acceptanceCriteria('### acceptance criteria\n- x')).toBe('- x');
     expect(acceptanceCriteria('## Acceptance criteria\n\n## Open questions')).toBeNull();
     expect(acceptanceCriteria('no section')).toBeNull();
+  });
+});
+
+describe('withCriteria', () => {
+  it('escapes braces so the spawn-time template render keeps them literal', () => {
+    const ref = { account: 'a', key: 'X-1' } as TicketItem['ticket']['ref'];
+    refines[ticketKey(ref)] = {
+      running: false,
+      text: '## Acceptance criteria\n- uses {{x}} and {id}',
+      posted: false,
+    };
+    const plan = { claude: { prompt: 'Go' } } as StartWorkPlan;
+    expect(withCriteria(plan, ref).claude.prompt).toBe(
+      'Go\n\nAcceptance criteria (from the refine):\n- uses {{{{x}}}} and {{id}}',
+    );
   });
 });

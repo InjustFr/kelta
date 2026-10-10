@@ -2,7 +2,7 @@
 // on a ticket with a kept proposal adds its acceptance criteria to Claude's first prompt.
 // shortcut: proposals live in memory only (lost on reload); persist them if refines must outlive the window.
 
-import type { ProjectId, TicketRef } from '$lib/gen';
+import type { ProjectId, StartWorkPlan, TicketRef } from '$lib/gen';
 import { trackerRefine } from '$lib/ipc/commands';
 import { toasts } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
@@ -52,4 +52,13 @@ export function acceptanceCriteria(md: string): string | null {
 export function criteriaFor(ref: TicketRef): string | null {
   const text = refines[ticketKey(ref)]?.text;
   return text ? acceptanceCriteria(text) : null;
+}
+
+/** Appends `ref`'s accepted criteria to the plan's first prompt (a template rendered again at spawn). */
+export function withCriteria(plan: StartWorkPlan, ref: TicketRef): StartWorkPlan {
+  const criteria = criteriaFor(ref);
+  // Braces escaped: `{x}` in the prompt is a placeholder, `{{`/`}}` collapse back to literals.
+  if (criteria)
+    plan.claude.prompt += `\n\nAcceptance criteria (from the refine):\n${criteria.replaceAll('{', '{{').replaceAll('}', '}}')}`;
+  return plan;
 }
