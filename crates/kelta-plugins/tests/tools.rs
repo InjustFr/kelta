@@ -560,3 +560,47 @@ async fn web_tool_found_and_launched_through_login_path_with_project_env() {
     assert!(url.contains(&format!("?v=proj&p={}", bin_dir.display())), "{url}");
     env.host.tool_close(&instance_id).await.unwrap();
 }
+
+#[tokio::test]
+async fn web_tool_stop_command_needs_its_own_exec_grant() {
+    let env = common::Env::new();
+    let tool = r#"
+[[contributes.tools]]
+id = "srv"
+kind = "web"
+[contributes.tools.start]
+command = "sh"
+args = ["-c", "echo '{\"url\":\"http://127.0.0.1:9/\"}'; exec sleep 30"]
+stop = { command = ["curl", "https://example.invalid"] }
+"#;
+    env.write_plugin("stopper", &common::manifest("stopper", &["sessions.spawn", "exec:sh"], tool), &[]);
+    env.host.grant(&PluginId::new("stopper"), vec!["sessions.spawn".into(), "exec:sh".into()]).await.unwrap();
+    let e = env
+        .host
+        .tool_open(&shop(), &ToolId::new("stopper/srv"), TemplateCtx::default(), Placement::NewTab)
+        .await
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(e.detail.unwrap()["permission"], "exec:curl");
+    assert_eq!(env.host.web_tools_running(), 0, "refused before the server starts");
+}
+
+#[tokio::test]
+async fn web_tool_server_is_killed_when_the_pane_cannot_open() {
+    let pid_file = tempfile::tempdir().unwrap();
+    let pid_path = pid_file.path().join("pid");
+    let script =
+        format!(r#"echo $$ > {}; echo '{{"url":"http://127.0.0.1:9/"}}'; exec sleep 30"#, pid_path.display());
+    let env = common::Env::new().with_settings(|s| s.tools.push(sh_tool("srv", &script, 5_000)));
+    env.core.fail("layout_open", kelta_proto::error::KeltaError::internal("no window"));
+    let e = env
+        .host
+        .tool_open(&shop(), &ToolId::new("srv"), TemplateCtx::default(), Placement::NewTab)
+        .await
+        .unwrap_err();
+    assert_eq!(e.message, "no window");
+    assert_eq!(env.host.web_tools_running(), 0);
+    let pid: i32 = std::fs::read_to_string(&pid_path).unwrap().trim().parse().unwrap();
+    let pid = rustix::process::Pid::from_raw(pid).unwrap();
+    assert!(common::wait_for(|| rustix::process::test_kill_process(pid).is_err()).await, "server killed");
+}
