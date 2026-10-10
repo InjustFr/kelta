@@ -349,6 +349,7 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 - Inactive: `--k-fg-chrome`. Active: `--k-fg` 600 and a 2px accent underline.
 - A tab whose session needs input gets a 2px `--k-lamp-needs-input` top edge, visible even when the tab is scrolled half out of view *(from Faceplate)*.
 - Close button shows on hover, on `:focus-visible`, and on the active tab, so it is keyboard reachable.
+- Tool strip (`shell/ToolStrip.svelte`): the project's first 6 tools after New tab, `[icon] Label` ghost `sm` buttons (label only when the icon is unknown), sticky at the right end with the `--k-bezel` background so overflowing tabs never push it out. A tool running in the current work item is pressed (active tab's `--k-well` face, `aria-pressed`, tooltip ` - running`); a missing tool is at 55% with a "Not installed" tooltip. No strip in Now or the top-level views.
 - Window chrome: macOS custom chrome reserves a 72px leading inset for the traffic lights and the empty bar area is `data-tauri-drag-region`. GNOME custom chrome adds a 30px controls cluster on the right. Hyprland/Sway: no title bar, the tab bar is the top edge.
 
 ### 6.4 Panes (`shell/PaneHost.svelte`)

@@ -8,6 +8,7 @@
   import { chordFor } from './labels';
   import { layoutSessionsOfTab, requestCloseTab, selectTab, tabAttention } from './nav';
   import { peekHover, peekTarget } from './peek.svelte';
+  import ToolStrip from './ToolStrip.svelte';
 
   interface Props {
     projectId: ProjectId;
@@ -27,7 +28,7 @@
   let overId = $state<string | null>(null);
 
   $effect(() => {
-    // Tools feed the "+" menu; they are cached per project.
+    // Tools feed the "+" menu and the tool strip; they are cached per project.
     if (tools.byProject[projectId] === undefined) void tools.load(projectId);
   });
 
@@ -180,6 +181,7 @@
       plusMenu = { x: r.left, y: r.bottom + 2 };
     }}>New tab</Button
   >
+  <ToolStrip {projectId} workItemId={active?.work_item_id ?? null} />
 </div>
 
 {#if tabMenu}
