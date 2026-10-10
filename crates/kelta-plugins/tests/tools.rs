@@ -586,12 +586,21 @@ stop = { command = ["curl", "https://example.invalid"] }
 }
 
 #[tokio::test]
-async fn web_tool_server_is_killed_when_the_pane_cannot_open() {
+async fn web_tool_server_is_stopped_per_spec_when_the_pane_cannot_open() {
     let pid_file = tempfile::tempdir().unwrap();
     let pid_path = pid_file.path().join("pid");
+    let stopped = pid_file.path().join("stopped");
     let script =
         format!(r#"echo $$ > {}; echo '{{"url":"http://127.0.0.1:9/"}}'; exec sleep 30"#, pid_path.display());
-    let env = common::Env::new().with_settings(|s| s.tools.push(sh_tool("srv", &script, 5_000)));
+    let mut tool = sh_tool("srv", &script, 5_000);
+    tool.start.as_mut().unwrap().stop = StopSpec::Command {
+        command: vec![
+            "sh".into(),
+            "-c".into(),
+            format!("touch {}; kill $(cat {})", stopped.display(), pid_path.display()),
+        ],
+    };
+    let env = common::Env::new().with_settings(|s| s.tools.push(tool));
     env.core.fail("layout_open", kelta_proto::error::KeltaError::internal("no window"));
     let e = env
         .host
@@ -603,4 +612,5 @@ async fn web_tool_server_is_killed_when_the_pane_cannot_open() {
     let pid: i32 = std::fs::read_to_string(&pid_path).unwrap().trim().parse().unwrap();
     let pid = rustix::process::Pid::from_raw(pid).unwrap();
     assert!(common::wait_for(|| rustix::process::test_kill_process(pid).is_err()).await, "server killed");
+    assert!(stopped.exists(), "the stop command ran (e.g. `docker compose down`)");
 }

@@ -471,7 +471,21 @@ impl PluginHost {
                 (None, url, None)
             }
         };
-        let pid = proc_.as_ref().map(|p| p.pid);
+        // Registered before any fallible step so a failed open stops it via `close_tool` (stop spec included).
+        let inst = Arc::new(WebInstance {
+            tool_id: r.id.clone(),
+            project_id: project.clone(),
+            lifecycle: def.lifecycle,
+            plugin: r.plugin.as_ref().map(|e| e.id.clone()),
+            proc_: proc_.clone(),
+            stop: def.start.as_ref().map(|s| s.stop.clone()).unwrap_or_default(),
+            stop_argv,
+            closing: AtomicBool::new(false),
+        });
+        self.tools.web.lock().insert(instance_id.to_string(), inst.clone());
+        if let Some(p) = proc_ {
+            self.watch_exit(instance_id.clone(), inst, p);
+        }
         let res: Result<ToolHandle, KeltaError> = async {
             let log_url = if secret { kelta_proto::redact::redact_url(&url) } else { url.clone() };
             tracing::info!(tool = %r.id, url = %log_url, "web tool ready");
@@ -494,21 +508,6 @@ impl PluginHost {
                     }
                 }
             }
-            let inst = Arc::new(WebInstance {
-                tool_id: r.id.clone(),
-                project_id: project.clone(),
-                lifecycle: def.lifecycle,
-                plugin: r.plugin.as_ref().map(|e| e.id.clone()),
-                proc_: proc_.clone(),
-                stop: def.start.as_ref().map(|s| s.stop.clone()).unwrap_or_default(),
-                stop_argv,
-                closing: AtomicBool::new(false),
-            });
-            self.tools.web.lock().insert(instance_id.to_string(), inst.clone());
-            if let Some(p) = proc_ {
-                self.watch_exit(instance_id.clone(), inst, p);
-            }
-
             let handle = ToolHandle::Web { instance_id: instance_id.clone(), url: public_url, embed };
             let label = if def.label.is_empty() { r.id.to_string() } else { def.label.clone() };
             self.emit_ui(UiEvent::PluginEvent {
@@ -546,14 +545,7 @@ impl PluginHost {
         }
         .await;
         if res.is_err() {
-            // Nothing else knows this server yet: stop it so it does not outlive the failed open.
-            crate::proxy::unregister(instance_id.as_str());
-            if let Some(inst) = self.tools.web.lock().remove(instance_id.as_str()) {
-                inst.closing.store(true, Ordering::SeqCst);
-            }
-            if let Some(pid) = pid {
-                signal_group(pid, rustix::process::Signal::KILL);
-            }
+            let _ = self.close_tool(&instance_id).await;
         }
         res
     }
