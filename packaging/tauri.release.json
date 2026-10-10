@@ -18,5 +18,10 @@
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE-WITH-the-content-of-kelta-updater.key.pub (CONTRIBUTING, Nightly builds)"
+    }
   }
 }
