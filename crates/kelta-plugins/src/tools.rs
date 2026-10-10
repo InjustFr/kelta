@@ -147,6 +147,7 @@ impl PluginHost {
                 installed: checks.get(r.id.as_str()).map(|c| c.installed),
                 keybinding: r.def.keybinding.clone(),
                 description: r.def.description.clone(),
+                placement: r.def.placement,
                 source: r.source,
                 id: r.id,
             })
@@ -218,9 +219,10 @@ impl PluginHost {
         project: &ProjectId,
         tool: &ToolId,
         ctx: TemplateCtx,
-        placement: Placement,
+        placement: Option<Placement>,
     ) -> Result<ToolHandle, KeltaError> {
         let r = self.find_tool(Some(project), tool)?;
+        let placement = placement.unwrap_or(r.def.placement);
         if let Some(e) = &r.plugin {
             self.mark_activated(&e.id);
         }
@@ -239,9 +241,11 @@ impl PluginHost {
         }
     }
 
-    fn default_cwd(&self, project: &ProjectId, ctx: &TemplateCtx) -> PathBuf {
+    /// ctx.cwd, else the work item's worktree, else the project root.
+    fn default_cwd(&self, project: &ProjectId, ctx: &TemplateCtx, vars: &Vars) -> PathBuf {
         ctx.cwd
             .clone()
+            .or_else(|| vars.get("worktree").and_then(Value::as_str).map(PathBuf::from))
             .or_else(|| self.core().and_then(|c| c.project(project)).as_ref().and_then(project_root))
             .unwrap_or_else(|| PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/".into())))
     }
@@ -255,7 +259,7 @@ impl PluginHost {
     ) -> Result<PathBuf, KeltaError> {
         match tmpl.map(|t| vars.expand(t)).transpose()?.filter(|s| !s.is_empty()) {
             Some(s) => Ok(PathBuf::from(s)),
-            None => Ok(self.default_cwd(project, ctx)),
+            None => Ok(self.default_cwd(project, ctx, vars)),
         }
     }
 

@@ -258,13 +258,14 @@ Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id;
 Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
 
 ```toml
-[[tools]]                    # embedded: TUI in a pane next to the current one, focused if already open
+[[tools]]                    # embedded: TUI in a pane next to the current one (placement defaults to "split_right"),
+                             # cwd = worktree of the active work item, else project root; focused if already open in that work item
 id = "lazydocker"
 label = "Docker"
 command = "lazydocker"       # kind defaults to "pty"
 keybinding = "mod+shift+d"
 
-[[tools]]                    # external: launched detached, cwd = project root, never killed by Kelta
+[[tools]]                    # external: launched detached, cwd = worktree of the active work item, else project root, never killed by Kelta
 id = "fork"
 label = "Fork"
 kind = "external"

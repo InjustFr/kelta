@@ -1035,6 +1035,7 @@ pub fn all() -> Vec<Fixture> {
                     source: ToolSource::Layer { layer: Layer::Global },
                     keybinding: None,
                     description: None,
+                    placement: Placement::SplitRight,
                 },
                 ToolInfo {
                     id: ToolId::new("tools-pack/k9s"),
@@ -1045,6 +1046,7 @@ pub fn all() -> Vec<Fixture> {
                     source: ToolSource::Plugin { plugin_id: PluginId::new("tools-pack") },
                     keybinding: None,
                     description: None,
+                    placement: Placement::SplitRight,
                 },
             ]
         ),
