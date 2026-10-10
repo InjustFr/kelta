@@ -102,6 +102,17 @@ describe('Add tool form', () => {
     });
   });
 
+  it('writes the instance scope, and leaves the default out', async () => {
+    const m = await mount('global');
+    await openForm();
+    await fill('Name', 'lazydocker');
+    await fill('Command line', 'lazydocker');
+    await fireEvent.change(screen.getByLabelText('One instance'), { target: { value: 'user' } });
+    expect(((await add(m)) as { value: unknown }).value).toEqual([
+      { id: 'lazydocker', label: 'lazydocker', command: 'lazydocker', scope: 'user' },
+    ]);
+  });
+
   it('keeps Add disabled when the command line has an empty first token', async () => {
     await mount('global');
     await openForm();

@@ -34,7 +34,8 @@
 
   --k-rail-width: 240px; /* labelled sidebar */
   --k-rail-width-compact: 64px; /* sidebar below 1100px window width */
-  --k-sidebar-row-height: 44px; /* two lines: name + status word */
+  --k-sidebar-row-height: 44px; /* two lines: name + status word (global views) */
+  --k-rail-item: 32px; /* rail session and tool rows: one line */
   --k-tabbar-height: 40px; /* also .k-toolbar */
   --k-work-header-height: 44px;
   --k-statusbar-height: 28px; /* also WindowChrome */

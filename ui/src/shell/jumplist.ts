@@ -3,14 +3,16 @@
 
 import type { PaneId, ProjectId, TabId } from '$lib/gen';
 import { findPane } from '$lib/layout';
-import { layout, projects } from '$lib/stores';
+import { layout, projects, type GlobalView } from '$lib/stores';
 
-import { activateProject, focusPaneById } from './nav';
+import { activateProject, focusPaneById, openView } from './nav';
 
 export interface JumpLoc {
   project: ProjectId;
   tab: TabId;
   pane: PaneId;
+  /** A global view (Tickets, Now, Reviews) was shown: the other fields are not a place then. */
+  view?: GlobalView;
 }
 
 export const JUMP_CAP = 100;
@@ -19,7 +21,7 @@ export const JUMP_CAP = 100;
 const KEY = 'kelta.jumplist.v1';
 
 const same = (a: JumpLoc | undefined, b: JumpLoc): boolean =>
-  !!a && a.project === b.project && a.tab === b.tab && a.pane === b.pane;
+  !!a && a.view === b.view && (!!b.view || (a.project === b.project && a.tab === b.tab && a.pane === b.pane));
 
 export class Jumplist {
   list: JumpLoc[] = [];
@@ -97,6 +99,11 @@ export function navStep(delta: 1 | -1): void {
   flushJump();
   const from = jumplist.at;
   for (let loc = jumplist.step(delta); loc; loc = jumplist.step(delta)) {
+    if (loc.view) {
+      save();
+      openView(loc.view);
+      return;
+    }
     const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
     if (!projects.byId(loc.project)?.open || !tab || !findPane(tab.root, loc.pane)) continue;
     save();

@@ -231,14 +231,6 @@ export function headerParts(sections: readonly Section[], working: number): stri
   ].filter(Boolean);
 }
 
-/** Ready for review rows per project (the project rail's count badge). */
-export function readyByProject(sections: readonly Section[]): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const r of sections.find((s) => s.id === 'to_review')?.rows ?? [])
-    if (r.type === 'work') out.set(r.item.project_id, (out.get(r.item.project_id) ?? 0) + 1);
-  return out;
-}
-
 // ---- Mod+J (ticket #136) ----------------------------------------------------------------------
 
 /** Mod+J's bands, most urgent first. */
