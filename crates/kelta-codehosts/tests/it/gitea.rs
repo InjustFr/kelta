@@ -218,3 +218,20 @@ async fn approve_with_a_stale_head_is_a_conflict_and_posts_nothing() {
     assert_eq!(err.code, ErrorCode::Conflict);
     assert_eq!(count(&server, "POST", "/api/v1/repos/acme/shop/pulls/7/reviews").await, 0);
 }
+
+#[tokio::test]
+async fn team_list_reads_each_repos_open_pulls() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/repos/acme/shop/pulls"))
+        .and(query_param("state", "open"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitea/pulls_open.json")))
+        .mount(&server)
+        .await;
+    let list = gt(&server).list_open(&["acme/shop".to_owned()], false).await.unwrap();
+    assert_eq!(list.iter().map(|r| r.r#ref.number).collect::<Vec<_>>(), [7, 8]);
+    assert!(
+        list.iter().all(|r| r.kind == ReviewKind::Team && r.my_state.is_none() && r.waiting_on.is_empty())
+    );
+    assert_eq!(list[0].linked_tickets, vec!["SHOP-142"]);
+}

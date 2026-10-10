@@ -305,6 +305,22 @@ impl CodeHost for BitbucketHost {
             .collect())
     }
 
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        let me = self.me().await?;
+        let mut out = Vec::new();
+        for repo in repos {
+            let req =
+                HttpRequest::get(self.pr_url(repo, "")?).query("state", "OPEN").query("pagelen", PAGELEN);
+            let rows = self.paged(req).await?;
+            out.extend(
+                rows.iter()
+                    .filter_map(|p| self.review_from(p, ReviewKind::Team, Some(&me.id)))
+                    .filter(|r| include_drafts || !r.draft),
+            );
+        }
+        Ok(out)
+    }
+
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let me = self.me().await?;
         let pr = |tail: &str| self.pr_url(&r.repo, &format!("/{}{tail}", r.number));

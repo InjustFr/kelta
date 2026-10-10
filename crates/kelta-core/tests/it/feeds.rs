@@ -60,12 +60,20 @@ fn env_with(root: &std::path::Path, host: Arc<ListHost>) -> Env {
 }
 
 fn env_full(root: &std::path::Path, host: Arc<ListHost>, tracker: FakeTracker) -> Env {
+    env_in(root, host, tracker, projects(root))
+}
+
+fn env_in(
+    root: &std::path::Path,
+    host: Arc<ListHost>,
+    tracker: FakeTracker,
+    projects: Vec<ProjectConfig>,
+) -> Env {
     let tracker = Arc::new(tracker);
     let factory = Arc::new(Factory::default());
     factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker.clone() as Arc<dyn Tracker>);
     factory.hosts.lock().insert(AccountId::new("github-work"), host.clone() as Arc<dyn CodeHost>);
-    let h =
-        start_in(root, MemConfig::new(settings(), projects(root)), FakeTerminalHost::new(), factory.clone());
+    let h = start_in(root, MemConfig::new(settings(), projects), FakeTerminalHost::new(), factory.clone());
     h.core.project_open(&ProjectId::new("shop")).unwrap();
     h.core.project_open(&ProjectId::new("blog")).unwrap();
     Env { h, tracker, host, factory }
@@ -410,6 +418,10 @@ async fn unchanged_gate_skips_requested_but_authored_still_polls() {
     assert_eq!(*e.host.calls.lock(), 0, "gate says unchanged");
     e.h.core.refresh(&sub(ReviewKind::Authored)).await.unwrap();
     assert_eq!(*e.host.calls.lock(), 1, "authored never consumes the gate");
+    e.h.core.refresh(&sub(ReviewKind::Team)).await.unwrap();
+    assert_eq!(*e.host.calls.lock(), 2, "team never reads the gate either");
+    e.h.core.refresh(&sub(ReviewKind::ReviewRequested)).await.unwrap();
+    assert_eq!(*e.host.calls.lock(), 2, "and leaves it to the requested feed");
 }
 
 /// A ticket-less work item on shop's bound repo.
@@ -997,4 +1009,60 @@ async fn team_people_reads_caches_only_and_waits_name_merged_people() {
     assert!(people.iter().any(|p| p.me));
     e.h.core.team_people(shop).await.unwrap();
     assert_eq!((*e.host.calls.lock(), e.tracker.calls().len()), (host_calls, tracker_calls));
+}
+
+/// shop (a source feeds it, bound to acme/shop-api) + lab (no source, bound to acme/lab).
+fn team_env(root: &std::path::Path, reviews: Vec<Review>) -> Env {
+    let mut ps = projects(root);
+    let mut lab = project("lab", root);
+    lab.repos[0].code_host = Some(CodeHostBinding { account: "github-work".into(), repo: "acme/lab".into() });
+    ps.push(lab);
+    env_in(root, ListHost::new(reviews), FakeTracker::new(), ps)
+}
+
+#[tokio::test]
+async fn team_lists_open_prs_on_source_fed_repos_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = team_env(
+        tmp.path(),
+        vec![
+            review("acme/shop-api", 1, ReviewKind::Team),
+            review("acme/lab", 2, ReviewKind::Team),
+            review("acme/shop-api", 3, ReviewKind::Authored),
+        ],
+    );
+    let acc = AccountId::new("github-work");
+    assert_eq!(e.h.core.team_repos(&Scope::All), vec![(acc, "acme/shop-api".into(), ProjectId::new("shop"))]);
+    let all = e.h.core.review_page(Scope::All, ReviewKind::Team, true).await.unwrap();
+    let numbers: Vec<u64> = all.items.iter().map(|i| i.review.r#ref.number).collect();
+    assert_eq!(numbers, vec![1], "lab is fed by no source: never in Team");
+    assert_eq!(all.items[0].project_ids, vec![ProjectId::new("shop")]);
+    let shop =
+        e.h.core.review_page(Scope::Project { id: "shop".into() }, ReviewKind::Team, false).await.unwrap();
+    assert_eq!(shop.items.len(), 1);
+    let lab =
+        e.h.core.review_page(Scope::Project { id: "lab".into() }, ReviewKind::Team, true).await.unwrap();
+    assert!(lab.items.is_empty() && lab.errors.is_empty());
+    let mine =
+        e.h.core.review_page(Scope::Project { id: "lab".into() }, ReviewKind::Authored, true).await.unwrap();
+    assert!(mine.items.is_empty(), "the project scope keeps its own repos");
+}
+
+#[tokio::test]
+async fn team_is_polled_only_while_its_tab_is_shown() {
+    use kelta_proto::model::PaneContent;
+    let tmp = tempfile::tempdir().unwrap();
+    let e = team_env(tmp.path(), vec![]);
+    e.h.cfg.update(|s| s.notifications.enabled = false);
+    settle().await;
+    let view = |tab| PaneContent::Reviews { scope: Scope::All, tab };
+    e.h.core.ui_set_global_view(Some(view(None)));
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2, "For me + Mine");
+    e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Team))));
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 3, "+ Team");
+    e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Authored))));
+    settle().await;
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2);
 }

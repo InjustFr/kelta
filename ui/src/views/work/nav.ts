@@ -2,7 +2,15 @@
 // one per the requested placement. Every action that leaves a global view (Tickets, Now, Reviews)
 // closes it and focuses the target in its project (FLOW §3.3, bug B1).
 
-import type { PaneContent, Placement, ProjectId, SessionInfo, WorkItem, WorkItemId } from '$lib/gen';
+import type {
+  PaneContent,
+  Placement,
+  ProjectId,
+  ReviewKind,
+  SessionInfo,
+  WorkItem,
+  WorkItemId,
+} from '$lib/gen';
 import { uiSetGlobalView, workResume } from '$lib/ipc/commands';
 import {
   activateTab,
@@ -106,11 +114,31 @@ const ticketsContent = (s: TicketsState): PaneContent => ({
   mode: 'list',
 });
 
-/** The pane a global view shows; the Tickets view (list only) seeds its saved state. */
+const REVIEWS_VIEW = 'kelta.view.reviews';
+
+function savedReviewsTab(): ReviewKind | null {
+  try {
+    return (JSON.parse(localStorage.getItem(REVIEWS_VIEW) ?? '{}') as { tab?: ReviewKind }).tab ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The pane a global view shows; the Tickets view (list only) and Reviews seed their saved state. */
 export function globalContent(view: GlobalView): PaneContent {
   if (view === 'now') return { kind: 'inbox' };
-  if (view === 'reviews') return { kind: 'reviews', scope: ALL };
+  if (view === 'reviews') return { kind: 'reviews', scope: ALL, tab: savedReviewsTab() };
   return ticketsContent(savedTickets());
+}
+
+/** Saves the Reviews view's tab and polls what it now shows (Team only while shown). */
+export function saveReviewsView(tab: ReviewKind): void {
+  try {
+    localStorage.setItem(REVIEWS_VIEW, JSON.stringify({ tab }));
+  } catch {
+    // storage blocked: the tab lasts until the view closes
+  }
+  uiSetGlobalView({ content: globalContent('reviews') }).catch(() => {});
 }
 
 /**

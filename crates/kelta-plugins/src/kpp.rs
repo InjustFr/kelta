@@ -530,6 +530,17 @@ impl CodeHost for KppCodeHost {
         let list: Vec<Review> = self.rpc.call("codehost.list_reviews", json!({ "query": q })).await?;
         Ok(list.into_iter().map(|r| self.rpc.own_review(r)).collect())
     }
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        let params = json!({ "repos": repos, "include_drafts": include_drafts });
+        let list: Vec<Review> = match self.rpc.call("codehost.list_open", params).await {
+            // a plugin without the call: an account error, never its `list_reviews` (my PRs)
+            Err(e) if e.code == ErrorCode::Unsupported => {
+                return Err(KeltaError::unsupported("can't list team PRs"));
+            }
+            r => r?,
+        };
+        Ok(list.into_iter().map(|r| self.rpc.own_review(r)).collect())
+    }
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let mut d: ReviewDetail = self.rpc.call("codehost.get", json!({ "review": r })).await?;
         d.review = self.rpc.own_review(d.review);

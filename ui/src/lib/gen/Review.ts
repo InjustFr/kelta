@@ -24,8 +24,8 @@ linked_tickets: Array<string>, additions: number | null, deletions: number | nul
  */
 decision_head?: string | null, 
 /**
- * When my review was requested (review requests only), or since when my PR waits on
- * `waiting_on` (authored); `None`: the UI ages the row by `updated_at`.
+ * When my review was requested (review requests only), or since when the PR waits on
+ * `waiting_on` (authored, team); `None`: the UI ages the row by `updated_at`.
  */
 requested_at?: string | null, 
 /**

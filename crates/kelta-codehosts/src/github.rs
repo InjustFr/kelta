@@ -154,11 +154,11 @@ impl GithubHost {
             .pointer("/latestReviews/nodes")
             .and_then(Value::as_array)
             .and_then(|a| a.iter().find(|r| r.pointer("/author/login").and_then(Value::as_str) == Some(me)))
-            .filter(|_| kind != ReviewKind::Authored)
+            .filter(|_| kind == ReviewKind::ReviewRequested)
             .and_then(|r| r.pointer("/commit/oid").and_then(Value::as_str))
             .map(str::to_owned);
         let my_state = match (kind, mine) {
-            (ReviewKind::Authored, _) => None,
+            (ReviewKind::Authored | ReviewKind::Team, _) => None,
             (_, Some("APPROVED")) => Some(MyReviewState::Approved),
             (_, Some("CHANGES_REQUESTED")) => Some(MyReviewState::ChangesRequested),
             (_, Some("COMMENTED")) => Some(MyReviewState::Commented),
@@ -169,7 +169,7 @@ impl GithubHost {
         let (unresolved_threads, last_comment_at) = thread_state(n, me);
         let (waiting_on, since) = waiting_state(n, &head_sha);
         let (requested_at, blocking) = match kind {
-            ReviewKind::Authored => (since.clone(), false),
+            ReviewKind::Authored | ReviewKind::Team => (since.clone(), false),
             ReviewKind::ReviewRequested => request_state(n, me, decision),
         };
         let changes_on_head: Vec<&Value> = n
@@ -390,6 +390,20 @@ fn request_state(n: &Value, me: &str, decision: Option<ReviewDecision>) -> (Opti
 // requests have no request time; read `HeadRefForcePushedEvent` if that misleads.
 /// Unresolved review threads and the newest last comment among them that is not `me`'s (answered
 /// threads wait on the reviewer); `(None, None)` without the `Threads` fragment.
+/// `is:pr is:open … repo:a/b repo:c/d` searches, each within GitHub's 256-character query limit.
+fn repo_searches(repos: &[String], include_drafts: bool) -> Vec<String> {
+    let base = format!("is:pr is:open archived:false{}", if include_drafts { "" } else { " draft:false" });
+    let mut out: Vec<String> = Vec::new();
+    for r in repos {
+        let term = format!(" repo:{r}");
+        match out.last_mut() {
+            Some(q) if q.len() + term.len() <= 256 => q.push_str(&term),
+            _ => out.push(format!("{base}{term}")),
+        }
+    }
+    out
+}
+
 fn thread_state(n: &Value, me: &str) -> (Option<u32>, Option<String>) {
     let Some(threads) = n.pointer("/reviewThreads/nodes").and_then(Value::as_array) else {
         return (None, None);
@@ -615,7 +629,7 @@ impl CodeHost for GithubHost {
                 ReviewKind::ReviewRequested,
                 format!("is:pr is:open {requested} archived:false{draft}"),
             ),
-            ReviewKind::Authored => {
+            ReviewKind::Authored | ReviewKind::Team => {
                 ("authored", ReviewKind::Authored, format!("is:pr is:open author:@me archived:false{draft}"))
             }
         };
@@ -629,7 +643,7 @@ impl CodeHost for GithubHost {
                 " reviewedByMe: search(query:$r, type:ISSUE, first:50){ nodes{ ...Pr } }",
                 json!({ "s": search, "r": reviewed }),
             ),
-            ReviewKind::Authored => ("", "", json!({ "s": search })),
+            ReviewKind::Authored | ReviewKind::Team => ("", "", json!({ "s": search })),
         };
         let (spread, threads) =
             if kind == ReviewKind::Authored { (" ...Threads", THREADS_FRAGMENT) } else { ("", "") };
@@ -651,6 +665,29 @@ impl CodeHost for GithubHost {
         // A re-requested PR matches both searches.
         let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();
         Ok(requested.into_iter().chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
+    }
+
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        let chunks = repo_searches(repos, include_drafts);
+        if chunks.is_empty() {
+            return Ok(Vec::new());
+        }
+        // shortcut: 50 PRs per chunk, page when a source's repos hold more open PRs
+        let decl: Vec<String> = (0..chunks.len()).map(|i| format!("$c{i}:String!")).collect();
+        let fields: String = (0..chunks.len())
+            .map(|i| format!(" c{i}: search(query:$c{i}, type:ISSUE, first:50){{ nodes{{ ...Pr }} }}"))
+            .collect();
+        let vars: serde_json::Map<String, Value> =
+            chunks.iter().enumerate().map(|(i, c)| (format!("c{i}"), json!(c))).collect();
+        let query = format!("query({}){{ viewer{{ login }}{fields} }} {PR_FRAGMENT}", decl.join(","));
+        let data = graphql(&self.auth, &self.graphql, &query, Value::Object(vars)).await?;
+        let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("");
+        Ok((0..chunks.len())
+            .filter_map(|i| data.pointer(&format!("/c{i}/nodes")).and_then(Value::as_array))
+            .flatten()
+            .filter_map(|n| self.graphql_pr(n, ReviewKind::Team, me))
+            .filter(|r| include_drafts || !r.draft)
+            .collect())
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
@@ -740,7 +777,7 @@ impl CodeHost for GithubHost {
             None => 0,
         };
         review.my_state = match kind {
-            ReviewKind::Authored => None,
+            ReviewKind::Authored | ReviewKind::Team => None,
             ReviewKind::ReviewRequested => Some(
                 by_reviewer
                     .iter()

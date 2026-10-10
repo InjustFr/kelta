@@ -235,6 +235,20 @@ impl CodeHost for GiteaHost {
         Ok(out)
     }
 
+    async fn list_open(&self, repos: &[String], include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        let lists = futures::future::try_join_all(repos.iter().map(|repo| async move {
+            let req = HttpRequest::get(self.pulls(repo, "")?).query("state", "open").query("limit", LIMIT);
+            self.paged(req.query("page", "1")).await
+        }))
+        .await?;
+        Ok(lists
+            .iter()
+            .flatten()
+            .filter_map(|v| self.review_from(v, ReviewKind::Team))
+            .filter(|r| include_drafts || !r.draft)
+            .collect())
+    }
+
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let me = self.me().await?;
         let (pull, reviews, files) = tokio::join!(

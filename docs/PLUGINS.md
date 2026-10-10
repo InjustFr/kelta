@@ -535,6 +535,7 @@ Methods mirror the trait methods; shapes are the generated types (`ui/src/lib/ge
 | `codehost.me` | `{}` | `User` |
 | `codehost.changed_since_last` | `{}` | `bool` (optional: method not found = `true`) |
 | `codehost.list_reviews` | `{query: ReviewQuery}` | `[Review]` |
+| `codehost.list_open` | `{repos: [string], include_drafts: bool}` | `[Review]` with `kind: "team"`: every open PR of those repos (optional: method not found = an account error "can't list team PRs" on the Reviews Team tab, never the `list_reviews` result) |
 | `codehost.get` | `{review: ReviewRef}` | `ReviewDetail` |
 | `codehost.approve` | `{review, head_sha}` | `null` |
 | `codehost.comment` / `codehost.request_changes` | `{review, body}` | `null` |

@@ -181,6 +181,11 @@ pub trait CodeHost: Send + Sync {
         Ok(true)
     }
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError>;
+    /// Every open PR of `repos` (`ReviewKind::Team`: no `my_state` / `reviewed_head`, `waiting_on`
+    /// filled like authored). A separate call so a host that lacks it never answers with my PRs.
+    async fn list_open(&self, _repos: &[String], _include_drafts: bool) -> Result<Vec<Review>, KeltaError> {
+        Err(KeltaError::unsupported("can't list team PRs"))
+    }
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError>;
     /// `approve`, `comment` and `request_changes` also publish my pending review (see
     /// `add_pending_comment`), so its line comments go out with the decision.

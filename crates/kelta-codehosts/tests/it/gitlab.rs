@@ -573,3 +573,45 @@ async fn a_refused_arm_carries_gitlabs_message() {
         .unwrap_err();
     assert!(e.message.contains("405 Method Not Allowed"), "{}", e.message);
 }
+
+#[tokio::test]
+async fn team_list_reads_each_projects_open_mrs_and_who_they_wait_on() {
+    let server = MockServer::start().await;
+    common(&server, "gitlab/version_16.json").await;
+    let mrs = fixture("gitlab/mrs_review.json");
+    let of = |iids: &[u64]| -> Vec<serde_json::Value> {
+        mrs.as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| iids.contains(&m["iid"].as_u64().unwrap()))
+            .cloned()
+            .collect()
+    };
+    for (repo, iids) in [("grp%2Fother", vec![8]), ("grp%2Fsub%2Fproj", vec![7, 9])] {
+        Mock::given(method("GET"))
+            .and(path(format!("/api/v4/projects/{repo}/merge_requests")))
+            .and(query_param("state", "opened"))
+            .and(query_param("draft", "no"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(of(&iids)))
+            .mount(&server)
+            .await;
+    }
+    Mock::given(path("/api/v4/projects/grp%2Fother/merge_requests/8/reviewers"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            { "user": { "id": 44, "username": "anna" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+        ])))
+        .mount(&server)
+        .await;
+    let repos = ["grp/other".to_owned(), "grp/sub/proj".to_owned()];
+    let list = gl(&server).list_open(&repos, false).await.unwrap();
+    let mut numbers: Vec<u64> = list.iter().map(|r| r.r#ref.number).collect();
+    numbers.sort();
+    assert_eq!(numbers, vec![8, 9], "draft MR dropped");
+    assert!(list.iter().all(|r| r.kind == ReviewKind::Team && r.my_state.is_none()));
+    let q = queries(&server, "GET", "/api/v4/projects/grp%2Fother/merge_requests").await;
+    assert!(q[0].contains("updated_after=20") && !q[0].contains("scope="), "{}", q[0]);
+    let a = list.iter().find(|r| r.r#ref.number == 8).unwrap();
+    assert_eq!(a.r#ref.repo, "grp/other");
+    assert_eq!(a.waiting_on, ["anna"]);
+    assert_eq!(a.waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"));
+}
