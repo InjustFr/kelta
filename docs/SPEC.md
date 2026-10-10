@@ -39,7 +39,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 ## 3. Core flows
 
 ### 3.1 Start work on a ticket
-Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
+Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** button or `Mod+Enter`; in the Tickets list `s` opens the plan sheet and `S` starts without it), palette "Start work on…", `kelta-ctl start SHOP-142 [--project shop]`, trigger action `start_work`.
 
 1. `work_plan` returns a **StartWorkPlan**, shown in a sheet (skipped when `work.plan_preview = false`, except when a choice is required):
    ```
@@ -78,10 +78,20 @@ Entry points: Tickets/Board/Inbox (select + `Enter`→detail, **Start work** but
 - New review requests detected via `seen_reviews` (never on the first poll after start) → desktop notification (toggle) + rail/Inbox badge.
 
 ### 3.4 Move ticket status
+- **List:** `m` on a row (or the status in the detail) opens the ticket's own workflow as a line of native status names, then its legal transitions numbered `1`-`9`: `m` `2` moves. Same conflict, needs-fields and unsupported handling as the board.
 - **Board:** columns from `tracker_columns` (project `tracker.columns` override; default by status category: To do / In progress / In review / Done). Drag a card (or select + `m`) → `tracker_move`: resolves column → transition by category or names; several candidates → small picker; none → toast "No transition to <column> — Open in browser"; `NeedsFields` → field form or browser. Optimistic move with rollback on error.
 - **Detail:** "Move to…" menu filled from `tracker_transitions`; assign (Me / none), comment box (Markdown).
 - **Palette:** "Move SHOP-142 to…".
 - Provider semantics: Jira transitions; Redmine `allowed_statuses`; GitHub Projects v2 Status (or open/closed); GitLab scoped labels + close/reopen; Linear workflow states of the ticket's team; Gitea open/closed.
+
+### 3.4a Choose ticket sources and who
+- A **source** is a tracker view: a Jira board or filter, a Redmine project or query, a GitHub repo or Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A project binds any number of them, each optionally from another account (`views[].account`; none = the binding account), so one project can mix Jira and GitHub tickets. Board mode and `tracker_columns` stay tied to the binding account.
+- **Add a source** from the Tickets toolbar (source menu, `v`, then "Add source…") or Settings > Projects > Tracker: pick an account, search, press `Enter` on a hit (`tracker_sources` lists boards, projects, filters, teams, repos). A provider without discovery says so and offers the TOML.
+- The Tickets pane, Now and the palette with no source chosen show **every source of the project**, one first page each, deduped by account and ticket key. The source menu narrows the pane to one.
+- **Who** tabs: *Mine*, *Unassigned*, *Anyone* (keys `1` `2` `3`). The choice is saved with the pane. "Team" is Anyone grouped by assignee.
+- **Current iteration** (per source toggle) keeps the open sprint (Jira), active cycle (Linear), current iteration (GitHub Projects v2), started milestone (GitLab) or the project's next open version (Redmine). Gitea has none.
+- Statuses show the tracker's own names. The category (To do, In progress, In review, Done) only orders and colours them, so Backlog, Triage, QA or Blocked appear as they are. Group by Status, Assignee, Source or None (`g`); Done starts collapsed.
+- A row shows the linked pull request and its CI state when a work item or a review's linked ticket key points at the ticket.
 
 ### 3.5 Open a tool
 Tools are opened from the palette ("Open tool: lazydocker"), the `+` menu of the TabBar, a tool's keybinding, or a trigger. `tool_open` → PTY tools become sessions (`kind = Tool`, cwd per tool template, exit banner with **Relaunch**, `close_on_exit` option); web tools start their server (if any), wait for readiness from stdout (no polling), then open a Web pane. Embed `auto`: iframe; if a HEAD probe sees `X-Frame-Options`/`frame-ancestors` → local proxy that strips them (WebSocket passthrough); failure → **Open in browser** button. Web tool processes stop when the pane/tab closes (`lifecycle`), or with the project. Missing binary → empty state with `install_hint` and "Check again".

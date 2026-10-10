@@ -401,7 +401,7 @@ pub enum LayoutNode { Split{ dir: SplitDir /*Row|Column*/, ratios: Vec<f32> /*su
 pub enum PaneContent {                       // serde tag = "kind"
   Terminal{ session_id: SessionId }, Web{ tool_instance_id: ToolInstanceId },
   PluginScreen{ plugin_id: PluginId, screen_id: String, instance_id: ScreenInstanceId, params: serde_json::Value },
-  Tickets{ scope: Scope, view_id: Option<String>, mode: TicketsMode /*List|Board*/ }, TicketDetail{ ticket: TicketRef },
+  Tickets{ scope: Scope, view_id: Option<String>, mode: TicketsMode /*List|Board*/, who: Option<Who> }, TicketDetail{ ticket: TicketRef },
   Reviews{ scope: Scope }, ReviewDetail{ review: ReviewRef }, Inbox, WorkItem{ id: WorkItemId },
   Settings{ section: Option<String> }, Diagnostics, Welcome, Empty }
 pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: bool, tab_title: Option<String>, work_item_id: Option<WorkItemId> }
@@ -481,14 +481,15 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `session_history_search` | `{project_id, session_id?, query, limit}` | `Vec<HistoryHit{session_id, line}>` | on-disk history log (§9.6) of one session or every session of the project; case-insensitive substring |
 | `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
 | **tickets** | | | `commands/tracker.rs` (L3) |
-| `tracker_list` | `{scope, view_id?, cursor?: Cursor, refresh: bool}` | `TicketPage{items: Vec<TicketItem{ticket, project_ids, work_item_id?}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
+| `tracker_list` | `{scope, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>}` | |
 | `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` | |
 | `tracker_columns` | `{project_id}` | `Vec<Column>` | |
 | `tracker_transitions` | `{ticket}` | `Vec<Transition>` | |
 | `tracker_transition` | `{ticket, transition_id, fields?: Value}` | `Ticket` (`NeedsFields` error carries `detail.fields`) | |
-| `tracker_move` | `{ticket, column_id}` | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
+| `tracker_move` | `{ticket, column_id, project_id?}` (no `project_id`: the project whose binding or view account is the ticket's) | `Ticket` (resolves column → transition; `Conflict` + candidates if ambiguous) | |
 | `tracker_comment` | `{ticket, markdown}` | `()` | |
 | `tracker_assign` | `{ticket, assignee: Assignee /*Me|User{id}|None*/}` | `Ticket` | |
+| `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
 | `tracker_search` | `{scope, text}` | `Vec<TicketItem>` (palette) | |
 | **reviews** | | | `commands/review.rs` (L3) |
 | `review_list` | `{scope, kind: ReviewKind, refresh: bool}` | `ReviewPage{items: Vec<ReviewItem{review, project_ids}>, stale, errors}` | |
@@ -662,7 +663,8 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
   fn kind(&self) -> TrackerKind;                       // Jira | Redmine | GithubIssues | GitlabIssues | GiteaIssues | Linear
   fn caps(&self) -> TrackerCaps;                       // board_columns, assign, comment, transitions_need_fetch, projects_v2
   async fn me(&self) -> Result<User, KeltaError>;
-  async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;
+  async fn list(&self, view: &TrackerView, cursor: Option<Cursor>) -> Result<Page<Ticket>, KeltaError>;  // honours view.who and view.current_iteration
+  async fn sources(&self, query: &str) -> Result<Vec<SourceHit>, KeltaError>;  // boards/projects/filters/teams/repos as ready TrackerViews; default Unsupported (no account status change)
   async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError>;  // body_md + body_html (sanitized), last 20 comments
   async fn columns(&self, b: &TrackerBinding) -> Result<Vec<Column>, KeltaError>;
   async fn transitions(&self, t: &TicketRef) -> Result<Vec<Transition>, KeltaError>;
@@ -680,6 +682,9 @@ pub struct TicketDetail { ticket: Ticket, body_md: String, body_html: String, bo
 pub struct Status { id, name, category: StatusCategory /*Todo|InProgress|InReview|Done|Unknown*/ }
 pub struct Transition { id, name, to: Status, needs_fields: bool }
 pub struct Column { id, name, category: StatusCategory, order: u32, match_names: Vec<String> }
+pub struct SourceHit { kind: String, label, detail: Option<String>, view: TrackerView /* core sets view.account */ }
+pub enum Who { Mine, Unassigned, Anyone }          // snake_case; TrackerView.who None = legacy provider fields
+// TrackerView gains who: Option<Who>, current_iteration: bool (default false), account: Option<AccountId> (None = binding.account)
 pub enum Cursor { Offset(u32), Token(String), Page(u32), After(String) }
 pub struct Page<T> { items: Vec<T>, next: Option<Cursor> }
 ```

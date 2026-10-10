@@ -204,6 +204,8 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |
 | `s` | Start work (Up next rows) / Review locally (Review requests rows) / Skip step (Failed rows) |
 | `o` | open on the host (PR) or tracker (ticket) |
+
+In the Tickets list (not Now): `1` `2` `3` Mine / Unassigned / Anyone, `v` choose sources (all by default, "Add source…" at the end), `g` group, `m` then `1`-`9` move the ticket to one of its tracker transitions, `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker.
 | `N` | New work item |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |

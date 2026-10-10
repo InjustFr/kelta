@@ -388,7 +388,10 @@ One row grammar for all three, so they read as one instrument:
 - Tickets meta: assignee initials (20px circle on `--k-bezel`), priority (11), age (11, tabular).
 - Reviews meta: `+214 −38` in mono tabular (`--k-ok` / `--k-danger`), checks lamp.
 - Inbox: grouped by lamp (needs input first) under 12/600 `--k-fg-muted` sentence-case headers that carry the lamp shape.
-- Toolbar 30px `--k-bezel-raised`: filter input left (most-used control), list/board toggle right.
+- Toolbar 30px `--k-bezel-raised`: filter input left (most-used control), then Who tabs (Mine, Unassigned, Anyone, with tabular counts, omitted when unknown), then the source menu, the Group select and the list/board toggle on the right.
+- Tickets are grouped (Status by default, ordered in progress, in review, to do, unknown, done; Done collapsed) under 12/600 `--k-fg-muted` sentence-case headers with a tabular count, 26px. The status chip is flat text with a 2px left bar in the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`) and always shows the tracker's own status name. The PR chip is mono `#N` / `!N` with a CI lamp shape. The source chip appears only with more than one source and a grouping other than Source.
+- Move menu (`m`): the header is the ticket's workflow on one line of native status names in category order, the current one `--k-fg` 600 with its category bar, the rest `--k-fg-subtle`. Below, the legal transitions numbered `1`-`9` with the digit as a mono kbd hint on the right; the digit moves at once.
+- Source picker sheet (§6.7, `min(480px, 100vw)`, from the right): account Select, search input, rows of kind (12 muted), label (13), detail (11 muted); added hits read "Added".
 - No key shadows or per-row effects: rows live inside VirtualList and must stay cheap to paint.
 
 ### 6.9 Detail panes (ticket, review) *(meta grid and measure from Spine)*
@@ -397,6 +400,7 @@ One row grammar for all three, so they read as one instrument:
 - Section heads (Description, Discussion, Checks) 13/600.
 - `HtmlContent`: 13/1.5, `max-width: var(--k-measure)`, links `--k-accent` underlined, code/pre mono on `--k-bezel-raised` radius 2, blockquote 2px `--k-border-strong` left rule.
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
+- Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the move menu of §6.8. Actions: Start work (primary), Move, Assign to me / Unassign, Comment, Open in browser.
 
 ### 6.10 Board
 
