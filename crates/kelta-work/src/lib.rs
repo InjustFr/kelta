@@ -71,6 +71,8 @@ pub struct WorkService {
     write_lock: tokio::sync::Mutex<()>,
     /// Last `git fetch` per repo (`work_status_all` floor).
     fetched: Mutex<HashMap<PathBuf, std::time::Instant>>,
+    /// Worktree fingerprint at the last `UserPromptSubmit` per item: a `Stop` changed code iff it moved.
+    prompt_marks: Mutex<HashMap<WorkItemId, u64>>,
     /// Bus listener (follow_claude_edits, HTTP consumer release); started on first need.
     listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Claude sessions holding an HTTP server consumer.
@@ -92,6 +94,7 @@ impl WorkService {
             start_lock: tokio::sync::Mutex::new(()),
             write_lock: tokio::sync::Mutex::new(()),
             fetched: Mutex::new(HashMap::new()),
+            prompt_marks: Mutex::new(HashMap::new()),
             listener: Mutex::new(None),
             http_sessions: Mutex::new(HashSet::new()),
             crash_after: Mutex::new(None),

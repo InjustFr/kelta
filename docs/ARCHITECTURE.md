@@ -358,8 +358,9 @@ pub struct WorkItem { id, project_id, kind: WorkKind /*Ticket|Review|Branch*/, t
   session_ids: Vec<SessionId>, tab_id: Option<TabId>, pr_url: Option<String>, state: WorkState, steps: Vec<WorkStepStatus>,
   created_at: String, review_due: bool, claude_replied: bool }
 // review_due / claude_replied (FLOW §2.3): set only by kelta-work from a real `Stop` hook of the item's
-// Claude (changes = ahead of <remote>/<base> or dirty → review_due, else claude_replied; never for review
-// checkouts), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr`, Finish and
+// Claude (changes = the worktree fingerprint — HEAD, tracked diff, untracked paths — moved since the last
+// `UserPromptSubmit` (kept in memory; after a restart: ahead of <remote>/<base> or dirty) → review_due, else
+// claude_replied; never for review checkouts; hooks of one session apply in order), cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr`, Finish and
 // `work_mark_reviewed`; claude_replied by Finish. Store writes: `save` never writes these two (it keeps the
 // stored values); `update(id, |w| ..)` re-loads under a write lock held only around load-modify-save and is
 // their only writer. Long operations (`create_pr`, `finish`) end with `update` of their own fields.

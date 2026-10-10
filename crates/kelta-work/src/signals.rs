@@ -1,5 +1,5 @@
 //! Durable Claude signals on work items (FLOW §2.3): `review_due` / `claude_replied` from real
-//! `Stop` hooks, cleared by `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
+//! `Stop` hooks (changes = worktree moved since the last prompt), cleared by `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
 //! session id (B3). Everything travels in `work.updated`.
 
 use kelta_proto::error::KeltaError;
@@ -9,7 +9,7 @@ use kelta_proto::hooks::{HookPayload, names};
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{SessionKind, WorkItem, WorkKind, WorkState};
 
-use crate::WorkService;
+use crate::{WorkService, git};
 
 /// Short name of an item in notifications: ticket key, `#n` for a review, else the branch.
 pub(crate) fn item_key(item: &WorkItem) -> String {
@@ -39,12 +39,28 @@ impl WorkService {
         }
         // Review checkouts are someone else's code: no "to review" signal for them.
         let own = item.kind != WorkKind::Review;
-        let changes = if own && event == names::STOP {
-            let env = self.env(&item.project_id, &item.repo_id)?;
-            let st = self.git_status(&env, &item).await?;
-            Some(st.ahead > 0 || st.dirty)
-        } else {
-            None
+        let changes = match event {
+            names::USER_PROMPT_SUBMIT if own => {
+                // A missing worktree just leaves no mark (Stop then falls back).
+                match git::fingerprint(&item.worktree).await {
+                    Ok(fp) => self.prompt_marks.lock().insert(item.id.clone(), fp),
+                    Err(_) => self.prompt_marks.lock().remove(&item.id),
+                };
+                None
+            }
+            // Changes since the prompt; without a mark (Kelta restarted) anything ahead of base or dirty.
+            names::STOP if own => {
+                let mark = self.prompt_marks.lock().get(&item.id).copied();
+                match mark {
+                    Some(m) => Some(git::fingerprint(&item.worktree).await? != m),
+                    None => {
+                        let env = self.env(&item.project_id, &item.repo_id)?;
+                        let st = self.git_status(&env, &item).await?;
+                        Some(st.ahead > 0 || st.dirty)
+                    }
+                }
+            }
+            _ => None,
         };
         let uuid = hook.session_id.filter(|u| !u.is_empty());
         let item = self

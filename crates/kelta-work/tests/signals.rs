@@ -167,3 +167,42 @@ async fn status_all_compares_with_remote_base_after_first_push() {
     std::fs::remove_dir_all(wt).unwrap();
     assert!(w.status_all().await.unwrap()[&item.id].missing);
 }
+
+#[tokio::test]
+async fn prose_answer_after_a_commit_is_a_reply() {
+    need_git!();
+    let fx = Fx::new();
+    let (_w, item, claude) = started(&fx).await;
+    std::fs::write(item.worktree.join("a.txt"), "a\n").unwrap();
+    git(&item.worktree, &["add", "a.txt"]);
+    git(&item.worktree, &["commit", "-q", "-m", "a"]);
+
+    // "Why did you do X?": Claude answers without touching code, the branch stays ahead of base.
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    let cur = wait_item(&fx, &item, |w| w.claude_replied).await;
+    assert!(!cur.review_due);
+
+    // A new commit after the next prompt is to review again.
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    wait_item(&fx, &item, |w| !w.claude_replied).await;
+    std::fs::write(item.worktree.join("a.txt"), "b\n").unwrap();
+    git(&item.worktree, &["commit", "-q", "-am", "b"]);
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    wait_item(&fx, &item, |w| w.review_due).await;
+}
+
+#[tokio::test]
+async fn prompt_right_after_stop_wins() {
+    need_git!();
+    let fx = Fx::new();
+    let (_w, item, claude) = started(&fx).await;
+    std::fs::write(item.worktree.join("login.rs"), "fn login() {}\n").unwrap();
+
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
+    // Hooks of one session apply in order: once this marker lands, both earlier hooks have.
+    fx.core.publish(hook(&claude, "SessionStart", json!({ "session_id": "marker" })));
+    let cur = wait_item(&fx, &item, |w| w.claude_uuid.as_deref() == Some("marker")).await;
+    assert!(!cur.review_due && !cur.claude_replied);
+}

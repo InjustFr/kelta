@@ -310,6 +310,20 @@ pub async fn dirty_files(worktree: &Path) -> Result<Vec<String>, KeltaError> {
     Ok(files)
 }
 
+/// Hash of HEAD, the tracked diff to the working tree and the untracked paths: equal hashes mean
+/// nothing changed in between (in-process comparison only).
+/// shortcut: an untracked file edited in place keeps the hash, hash its content if that matters.
+pub async fn fingerprint(worktree: &Path) -> Result<u64, KeltaError> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for args in
+        [&["rev-parse", "HEAD"][..], &["diff", "HEAD"], &["ls-files", "-z", "--others", "--exclude-standard"]]
+    {
+        run_ok(worktree, args, LOCAL_TIMEOUT).await?.stdout.hash(&mut h);
+    }
+    Ok(h.finish())
+}
+
 /// Is `path` tracked in the index of `worktree`?
 pub async fn is_tracked(worktree: &Path, path: &str) -> Result<bool, KeltaError> {
     Ok(run(worktree, &["ls-files", "--error-unmatch", "--", path], LOCAL_TIMEOUT).await?.ok())
