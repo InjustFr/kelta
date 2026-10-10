@@ -94,6 +94,9 @@ fn raw_write_validates_first() {
     assert_eq!((issues[0].line, issues[0].path.as_str()), (Some(2), "terminal.font_size"));
     assert!(svc.layer_validate(Layer::Global, "[terminal]\nfont_size = 12\n").unwrap().is_empty());
     assert!(svc.layer_validate(Layer::Default, "").is_err());
+    // a bad project colour does not block the editor: the file loads without it
+    let r = svc.layer_validate(Layer::Project, "[project]\nid = \"shop\"\ncolor = \"red\"\n").unwrap();
+    assert!(r.is_empty(), "{r:?}");
 }
 
 #[test]
