@@ -132,6 +132,19 @@ describe('TicketDetail', () => {
     );
   });
 
+  it('lists sub-tasks with their status; s on one starts work on it, not on the parent', async () => {
+    mount('SHOP-142');
+    const sub = await screen.findByRole('region', { name: 'Sub-tasks' });
+    const row = within(sub).getByRole('button', { name: /SHOP-160/ });
+    expect(row.textContent).toContain(itemOf('SHOP-160').ticket.status.name);
+    await fireEvent.keyDown(row, { key: 's' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'work_plan').map((c) => c.args)).toEqual([
+        { project_id: 'shop', source: { kind: 'ticket', ticket: itemOf('SHOP-160').ticket.ref } },
+      ]),
+    );
+  });
+
   it('c focuses the comment box', async () => {
     const root = mount('SHOP-151');
     await fireEvent.keyDown(root, { key: 'c' });

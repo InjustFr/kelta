@@ -110,6 +110,17 @@
       "id": "10100",
       "key": "SHOP-100"
     },
+    "subtasks": [
+      {
+        "id": "10143",
+        "key": "SHOP-143",
+        "fields": {
+          "summary": "Audit log",
+          "status": { "id": "1", "name": "To Do", "statusCategory": { "key": "new" } },
+          "issuetype": { "name": "Sub-task" }
+        }
+      }
+    ],
     "comment": {
       "comments": [
         {

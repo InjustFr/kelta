@@ -463,6 +463,23 @@ impl Tracker for RedmineTracker {
                     .collect()
             })
             .unwrap_or_default();
+        // Children are extra: a failed call still shows the ticket.
+        let req = HttpRequest::get(format!("{}/issues.json", self.base))
+            .query("parent_id", t.id.clone())
+            .query("status_id", "*")
+            .query("limit", "100");
+        let mut kids: Vec<Ticket> = self
+            .json(req)
+            .await
+            .ok()
+            .and_then(|v| {
+                v.get("issues")?
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|i| self.ticket_from(i).ok()).collect())
+            })
+            .unwrap_or_default();
+        self.resolve_sprints(&mut kids).await;
+        let children = kids.into_iter().map(common::child).collect();
         let parent = issue.pointer("/parent/id").and_then(idstr).map(|id| TicketRef {
             account: t.account.clone(),
             key: id.clone(),
@@ -478,6 +495,7 @@ impl Tracker for RedmineTracker {
             },
             comments: common::last_n(comments, COMMENT_LIMIT),
             parent,
+            children,
             prs: Vec::new(),
             caps: Default::default(),
         })

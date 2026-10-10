@@ -20,6 +20,7 @@
     relativeTime,
   } from '$lib/ui';
 
+  import { peekHover } from '../../shell/peek.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
@@ -420,6 +421,12 @@
   const QUEUE_MENU: WorkActionId[] = ['start_now', 'queue_front'];
   let queueMenu = $state<{ x: number; y: number; row: NowRow & { type: 'work' } } | null>(null);
 
+  /** The session a Now row peeks at: its own, or the work item's Claude. */
+  function rowSession(row: NowRow): string | null {
+    if (row.type === 'session') return row.session.id;
+    return row.type === 'work' ? (claudeOf(row.item)?.id ?? null) : null;
+  }
+
   function rowMenu(e: MouseEvent, row: NowRow): void {
     if (row.type !== 'work' || row.item.state.kind !== 'queued') return;
     e.preventDefault();
@@ -530,6 +537,7 @@
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
                   oncontextmenu={(e) => rowMenu(e, l.row)}
+                  use:peekHover={() => rowSession(l.row)}
                 >
                   <span class="slot"><Lamp level={v.lamp} /></span>
                   <span class="id">{v.id}</span>

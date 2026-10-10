@@ -426,6 +426,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 |---|---|---|---|---|
 | `inbox.open` (label "Open Now") | `⌘0` | `Ctrl+Shift+0` | `0` | global, unchanged chord |
 | `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+Shift+J` | `u` | global, walks the Now queue (§3.4) |
+| `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
 | `work.menu` | `⌘.` | `Ctrl+Shift+.` | `.` | global, needs a focused work tab |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |

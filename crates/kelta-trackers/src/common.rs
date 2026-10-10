@@ -2,7 +2,7 @@
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::settings::{AccountConfig, TrackerBinding, TrackerView};
-use kelta_proto::tracker::{Column, Comment, Status, StatusCategory, User};
+use kelta_proto::tracker::{Column, Comment, Status, StatusCategory, Ticket, TicketItem, User};
 use serde_json::Value;
 
 /// Comments shown in `TicketDetail` (oldest first).
@@ -127,6 +127,11 @@ pub fn columns_from_statuses(statuses: &[Status]) -> Vec<Column> {
 
 pub fn comment(author: User, created_at: String, body_html: String) -> Comment {
     Comment { author, created_at, body_html }
+}
+
+/// A sub-task in `TicketDetail.children`: the provider gives the ticket, kelta-core the rest.
+pub fn child(ticket: Ticket) -> TicketItem {
+    TicketItem { ticket, ..TicketItem::default() }
 }
 
 /// Split `"acme/shop#12"` into (`"acme/shop"`, 12).

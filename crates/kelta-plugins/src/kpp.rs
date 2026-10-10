@@ -442,6 +442,9 @@ impl Tracker for KppTracker {
         if let Some(p) = &mut d.parent {
             p.account = self.rpc.account_id.clone();
         }
+        for c in &mut d.children {
+            c.ticket = self.rpc.own_ticket(std::mem::take(&mut c.ticket));
+        }
         d.body_html = if d.body_html.is_empty() {
             kelta_http::markdown::to_html(&d.body_md)
         } else {

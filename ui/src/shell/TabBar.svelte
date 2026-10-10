@@ -2,11 +2,12 @@
   import { dispatch } from '$lib/actions';
   import type { ProjectId, Tab, ToolInfo } from '$lib/gen';
   import { activeTab, moveTab } from '$lib/layout';
-  import { layout, projects, toasts, tools, ui } from '$lib/stores';
+  import { layout, projects, sessions, toasts, tools, ui } from '$lib/stores';
   import { Button, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { chordFor } from './labels';
-  import { requestCloseTab, selectTab, tabAttention } from './nav';
+  import { layoutSessionsOfTab, requestCloseTab, selectTab, tabAttention } from './nav';
+  import { peekHover, peekTarget } from './peek.svelte';
 
   interface Props {
     projectId: ProjectId;
@@ -146,7 +147,11 @@
         overId = null;
       }}
     >
-      {#if level !== 'none'}<span class="lamp-slot"><Lamp {level} /></span>{/if}
+      {#if level !== 'none'}<span
+          class="lamp-slot"
+          use:peekHover={() => peekTarget(layoutSessionsOfTab(tab).map((id) => sessions.get(id)))}
+          ><Lamp {level} /></span
+        >{/if}
       {#if tab.work_item_id}<Icon name="git-branch" size={14} />{/if}
       <span class="title">{tab.title}</span>
       <button
@@ -327,22 +332,14 @@
     inset: -2px;
   }
 
-  /* Plain tabs show the close button only on hover or focus, so their label is not padded by an
-     empty slot; the active tab always shows it. */
+  /* Plain tabs show the close button only on hover or focus, but its slot is always reserved so the
+     tab never changes width under the pointer; the active tab always shows it. */
   .tab:not(.active) .close {
-    display: none;
+    visibility: hidden;
   }
 
   .tab:not(.active):is(:hover, :focus-within) .close {
-    display: inline-flex;
-  }
-
-  .tab:not(.active) {
-    padding-right: var(--k-space-4);
-  }
-
-  .tab:not(.active):is(:hover, :focus-within) {
-    padding-right: 6px;
+    visibility: visible;
   }
 
   .close:hover {

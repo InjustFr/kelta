@@ -27,6 +27,7 @@ import {
   toggleZoomFocused,
 } from './nav';
 import { navStep } from './jumplist';
+import { peekWaiting } from './peek.svelte';
 
 function focusedView(): TerminalView | null {
   const id = focusedSessionId();
@@ -158,6 +159,7 @@ registerAction('pane.close', () => closeFocusedPane());
 // Mod+J / Mod+Shift+J walk the jump queue (ticket #136); loaded on first use.
 registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting(1));
 registerAction('attention.prev', async () => (await import('../views/inbox/now')).nextWaiting(-1));
+registerAction('attention.peek', () => peekWaiting());
 registerAction('nav.back', () => navStep(-1));
 registerAction('nav.forward', () => navStep(1));
 registerAction('terminal.search', () => {

@@ -339,7 +339,7 @@ export async function requestCloseTab(projectId: ProjectId, tabId: TabId): Promi
   }
 }
 
-function layoutSessionsOfTab(tab: Tab): SessionId[] {
+export function layoutSessionsOfTab(tab: Tab): SessionId[] {
   return layoutSessions({ project_id: '', tabs: [tab], active_tab: tab.id, rev: 0 });
 }
 

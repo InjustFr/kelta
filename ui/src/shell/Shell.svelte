@@ -18,6 +18,7 @@
   import JumpHud from './JumpHud.svelte';
   import InboxHost from './InboxHost.svelte';
   import { noteFocus } from './jumplist';
+  import PeekPopover from './PeekPopover.svelte';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
@@ -262,6 +263,7 @@
   <DialogHost />
   <ToastHost />
   <JumpHud />
+  <PeekPopover />
 </main>
 
 <style>

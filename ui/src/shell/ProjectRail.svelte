@@ -11,6 +11,7 @@
   import { confirms } from './confirm.svelte';
   import { attentionLabel, chordFor } from './labels';
   import { activateProject, openInbox, projectAttention, railProjects } from './nav';
+  import { peekHover, peekTarget } from './peek.svelte';
 
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
@@ -255,6 +256,7 @@
             data-testid="rail-project"
             data-project-id={p.id}
             data-attention={lvl}
+            use:peekHover={() => peekTarget(sessions.forProject(p.id))}
             draggable="true"
             onclick={() => activateProject(p.id)}
             oncontextmenu={(e) => openMenu(e, p)}
@@ -303,6 +305,7 @@
           data-testid="rail-project"
           data-project-id={home.id}
           data-attention={lvl}
+          use:peekHover={() => peekTarget(sessions.forProject(home.id))}
           onclick={() => activateProject(home.id)}
           oncontextmenu={(e) => openMenu(e, home)}
         >

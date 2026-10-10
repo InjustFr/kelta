@@ -85,6 +85,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("attention.next", "Next waiting", ["cmd+j"], ["ctrl+shift+j"], Some("u"), Global),
     // Linux: Mod is ctrl+shift, so Mod+Shift+J does not exist there.
     a!("attention.prev", "Previous waiting", ["cmd+shift+j"], [], Some("U"), Global),
+    a!("attention.peek", "Peek waiting session", ["cmd+shift+y"], ["ctrl+shift+y"], Some("y"), Global),
     a!("nav.back", "Go back", ["cmd+ctrl+left"], [], Some("-"), Global),
     a!("nav.forward", "Go forward", ["cmd+ctrl+right"], [], Some("="), Global),
     a!("work.start", "Start work", ["cmd+enter"], ["ctrl+enter"], Some("s"), TicketViews),
