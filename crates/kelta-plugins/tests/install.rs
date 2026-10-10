@@ -198,6 +198,10 @@ async fn invalid_plugins_are_listed_with_their_problems() {
 #[tokio::test]
 async fn failed_install_leaves_no_tmp_copy() {
     use std::os::unix::fs::PermissionsExt;
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: root can read a 0o000 file, so the copy cannot be made to fail");
+        return;
+    }
     let env = common::Env::new();
     let src = tempfile::tempdir().unwrap();
     std::fs::write(src.path().join("kelta-plugin.toml"), common::manifest("unreadable", &[], "")).unwrap();
