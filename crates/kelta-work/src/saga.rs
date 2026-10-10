@@ -306,6 +306,19 @@ impl WorkService {
                 let r = host.get(review).await?.review;
                 // B2: my own PR is the work item on its head branch, never a `kelta/pr-N` checkout.
                 let existing = existing.or_else(|| plan::owner_of_pr(&items, &project, &r).cloned());
+                if existing.is_none() {
+                    // My PR adopted (or opened by Claude) in another project: plan there, no second worktree.
+                    let all = self.store.list_items(None).await?;
+                    let elsewhere = all.iter().filter(|w| &w.project_id != project_id).find(|w| {
+                        core.project(&w.project_id).is_some_and(|p| {
+                            !p.repos.is_empty()
+                                && plan::owner_of_pr(std::slice::from_ref(w), &p, &r).is_some()
+                        })
+                    });
+                    if let Some(w) = elsewhere {
+                        return Box::pin(self.build_plan(&w.project_id, source)).await;
+                    }
+                }
                 if existing.is_none() && r.kind == ReviewKind::Authored {
                     // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
                     let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
