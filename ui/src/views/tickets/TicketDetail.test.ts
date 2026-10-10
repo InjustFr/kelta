@@ -47,8 +47,22 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'Shift+A', 'c', 'r', 'y', 'o']);
+    ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+Shift+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
+    // the rest under More (Mod+.), each with its key
+    await fireEvent.keyDown(screen.getByTestId('ticket-detail'), {
+      key: '>',
+      code: 'Period',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    const more = screen.getByRole('menu', { name: 'More actions' });
+    expect(
+      within(more)
+        .getAllByRole('menuitem')
+        .map((b) => b.querySelector('.label')?.textContent),
+    ).toEqual(['Unassign', 'Refine with Claude', 'Copy branch', 'Open in browser']);
+    await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
     expect(meta.textContent?.replace(/\s+/g, ' ')).toContain('Estimate 5');
@@ -82,11 +96,15 @@ describe('TicketDetail', () => {
       ['Assign to me', 'This tracker does not let Kelta change the assignee.'],
       ['Comment', 'This tracker does not let Kelta add comments.'],
       ['Open PR', 'No pull request is linked to this ticket yet.'],
-      ['Copy branch', 'No branch yet. Start work first.'],
     ]) {
       expect(action(name!).getAttribute('aria-disabled')).toBe('true');
       expect(action(name!).title).toBe(reason);
     }
+    await fireEvent.click(action('More'));
+    const branch = screen.getByRole('menuitem', { name: /^Copy branch/ });
+    expect(branch.getAttribute('aria-disabled')).toBe('true');
+    expect(branch.title).toBe('No branch yet. Start work first.');
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(action('Move').getAttribute('aria-disabled')).toBeNull();
     expect(screen.queryByLabelText(/Add a comment/)).toBeNull();
     await fireEvent.click(action('Assign to me'));

@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+
   import type { TicketSort, TicketsMode, Who } from '$lib/gen';
-  import { Button, Icon, Select, Tabs } from '$lib/ui';
+  import { Button, Icon, IconButton, Select, Tabs } from '$lib/ui';
 
   import { GROUP_BYS, SORTS, type GroupBy } from './group';
 
-  // The Tickets toolbar (DESIGN §6.8). The pane owns the state and the keys; this only shows them.
+  // The Tickets toolbar (DESIGN §6.8), in two groups. Left, what you look at: source, then whose
+  // tickets. Right, how it is arranged: one View menu (person, sprint, grouping, sort), the list/board
+  // toggle, the filter and Refresh. The pane owns the state and the keys; this only shows them.
   interface Props {
     /** "All projects" title (the rail's Tickets view). */
     allProjects: boolean;
@@ -85,42 +89,35 @@
     age: 'Sort by age in status',
     key: 'Sort by key',
   };
+
+  const hasPeople = $derived(people.length > 1);
+  const hasView = $derived(hasSource && (hasPeople || showSprint || list));
+  /** What narrows the list from inside the menu: the button says so while the menu is closed. */
+  const narrowed = $derived(
+    [
+      person ? people.find((p) => p.value === person)?.label : '',
+      currentSprint ? 'current sprint' : '',
+    ].filter(Boolean),
+  );
+
+  let viewOpen = $state(false);
+  let viewBox = $state<HTMLElement>();
+  let viewBtn = $state<HTMLButtonElement>();
+
+  async function toggleView(): Promise<void> {
+    viewOpen = !viewOpen;
+    await tick();
+    if (viewOpen) viewBox?.querySelector<HTMLElement>('select, button')?.focus();
+  }
+
+  function closeView(focusButton: boolean): void {
+    viewOpen = false;
+    if (focusButton) viewBtn?.focus();
+  }
 </script>
 
 <header class="k-toolbar bar">
   {#if allProjects}<span class="title">All projects</span>{/if}
-  <input
-    class="k-filter"
-    bind:this={filterInput}
-    bind:value={filter}
-    placeholder="Filter (/)"
-    aria-label="Filter tickets"
-    onkeydown={onfilterkey}
-  />
-  {#if hasSource}
-    <div class="who">
-      <Tabs label="Whose tickets" items={who} value={whoTab ?? undefined} onchange={onwho} />
-      {#if people.length > 1}
-        <Select
-          label="Person"
-          value={person}
-          options={people}
-          onchange={(id) => onperson(id === '' ? null : id)}
-        />
-      {/if}
-    </div>
-  {/if}
-  {#if showSprint}
-    <Button
-      variant="ghost"
-      size="sm"
-      icon={currentSprint ? 'check' : undefined}
-      aria-pressed={currentSprint}
-      title="Only tickets in an active sprint (f, then s)"
-      onclick={onsprint}>Current sprint</Button
-    >
-  {/if}
-  <span class="spacer"></span>
   {#if sourceText !== null}
     <button
       type="button"
@@ -135,19 +132,75 @@
       <Icon name="chevron-down" size={12} />
     </button>
   {/if}
-  {#if list && hasSource}
-    <Select
-      label="Group (g)"
-      value={groupBy}
-      options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
-      onchange={ongroup}
-    />
-    <Select
-      label="Sort"
-      value={sort}
-      options={SORTS.map((x) => ({ value: x, label: SORT_LABELS[x] }))}
-      onchange={onsort}
-    />
+  {#if hasSource}
+    <Tabs label="Whose tickets" items={who} value={whoTab ?? undefined} onchange={onwho} />
+  {/if}
+  <span class="spacer"></span>
+  {#if hasView}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="view"
+      onfocusout={(e) => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) closeView(false);
+      }}
+      onkeydown={(e) => {
+        if (e.key === 'Escape' && viewOpen) {
+          e.stopPropagation();
+          closeView(true);
+        }
+      }}
+    >
+      <button
+        type="button"
+        class="source"
+        class:on={narrowed.length > 0}
+        bind:this={viewBtn}
+        aria-haspopup="dialog"
+        aria-expanded={viewOpen}
+        aria-label={narrowed.length > 0 ? `View, narrowed to ${narrowed.join(' and ')}` : 'View'}
+        title="Person, sprint, grouping (Shift+G) and sort"
+        onclick={() => void toggleView()}
+      >
+        View{#if narrowed.length > 0}<span class="dot" aria-hidden="true"></span>{/if}
+        <Icon name="chevron-down" size={12} />
+      </button>
+      {#if viewOpen}
+        <div class="pop" role="dialog" aria-label="View" bind:this={viewBox}>
+          {#if hasPeople}
+            <Select
+              label="Person"
+              value={person}
+              options={people}
+              onchange={(id) => onperson(id === '' ? null : id)}
+            />
+          {/if}
+          {#if list}
+            <Select
+              label="Group (g)"
+              value={groupBy}
+              options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
+              onchange={ongroup}
+            />
+            <Select
+              label="Sort"
+              value={sort}
+              options={SORTS.map((x) => ({ value: x, label: SORT_LABELS[x] }))}
+              onchange={onsort}
+            />
+          {/if}
+          {#if showSprint}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={currentSprint ? 'check' : 'square'}
+              aria-pressed={currentSprint}
+              title="Only tickets in an active sprint (f, then s)"
+              onclick={onsprint}>Current sprint</Button
+            >
+          {/if}
+        </div>
+      {/if}
+    </div>
   {/if}
   {#if canBoard}
     <Tabs
@@ -160,37 +213,40 @@
       onchange={onmode}
     />
   {/if}
-  <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={onrefresh}>Refresh</Button>
+  <input
+    class="k-filter"
+    bind:this={filterInput}
+    bind:value={filter}
+    placeholder="Filter (/)"
+    aria-label="Filter tickets"
+    onkeydown={onfilterkey}
+  />
+  <IconButton icon="refresh-cw" label="Refresh" chord="shift+r" size="sm" onclick={onrefresh} />
 </header>
 
 <style>
   /* A narrow pane wraps the toolbar to a second line rather than hiding controls; labels never wrap. */
   .bar {
+    position: relative;
     flex-wrap: wrap;
     row-gap: var(--k-space-2);
     height: auto;
     min-height: var(--k-tabbar-height);
     padding-block: var(--k-space-2);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .bar .k-filter {
-    flex: 0 1 180px;
-    min-width: 72px;
-  }
-
-  .who {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    font-variant-numeric: tabular-nums;
+    flex: 0 1 200px;
+    min-width: 96px;
   }
 
   .source {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-2);
-    height: 22px;
+    height: var(--k-control-height-sm);
     padding: 0 var(--k-space-3);
     border: 0;
     border-radius: var(--k-radius);
@@ -199,8 +255,52 @@
     cursor: pointer;
   }
 
-  .source:hover {
+  .source:hover,
+  .source[aria-expanded='true'] {
     background: var(--k-bg-hover);
     color: var(--k-fg);
+  }
+
+  .source.on {
+    color: var(--k-fg);
+  }
+
+  /* The View menu narrows the list: one accent dot says so without opening it. */
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--k-accent);
+  }
+
+  .view {
+    position: relative;
+  }
+
+  .pop {
+    position: absolute;
+    top: calc(100% + var(--k-space-2));
+    right: 0;
+    z-index: var(--k-z-menu);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--k-space-2);
+    min-width: 220px;
+    padding: var(--k-space-3);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-bg-float);
+    box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
+  }
+
+  /* In the menu the selects are full width; their labels stay for screen readers only (.k-toolbar). */
+  .pop :global(.k-select),
+  .pop :global(.k-select select) {
+    width: 100%;
+  }
+
+  .pop :global(.k-button) {
+    justify-content: flex-start;
   }
 </style>

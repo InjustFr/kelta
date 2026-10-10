@@ -12,9 +12,11 @@
   import {
     Badge,
     Button,
+    Dialog,
     EmptyState,
     ErrorState,
     Icon,
+    Kbd,
     Lamp,
     Menu,
     ROW_HEIGHT,
@@ -301,6 +303,8 @@
     toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
   }
 
+  /** The key column fits the longest key in view, capped so a long key cannot take the title's room. */
+  const keyChars = $derived(Math.min(12, Math.max(4, ...shown.map((i) => i.ticket.ref.key.length))));
   const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
   const sourceOf = (item: TicketItem): string =>
     sources.find((s) => s.id === item.source_ids[0])?.label ?? 'Other';
@@ -421,6 +425,29 @@
   let chord: string | null = null;
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
+  /** The full key list (`?`); the footer shows the first five. */
+  let keysOpen = $state(false);
+  const hints = $derived<[string, string][]>([
+    ['j k', 'Move'],
+    ['enter', enterLabel],
+    ['s shift+s', 'Start work, start now'],
+    ['m', 'Move to'],
+    ['/', 'Filter'],
+    ['space', 'Split'],
+    ['g', 'Open detail'],
+    ['shift+enter', 'Own pane'],
+    ['1 2 3', 'Who'],
+    ['mod+enter', 'Start marked'],
+    ['x', 'Select'],
+    ['p shift+p', 'Pull request, in browser'],
+    ['f then s', 'Current sprint'],
+    ['a shift+a', 'Assign me, unassign'],
+    ['v', 'Source'],
+    ['shift+g', 'Group'],
+    ['c', 'Comment'],
+    ['o', 'Open in browser'],
+    ['shift+r', 'Refresh'],
+  ]);
 
   // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
   // shortcut: on/off is per mount, not persisted; add `PaneContent::Tickets.split` if it should stick.
@@ -661,6 +688,9 @@
         if (wide) split = !split;
         else if (item) openDetail(item);
         break;
+      case '?':
+        keysOpen = true;
+        break;
       case '/':
         filterInput?.focus();
         filterInput?.select();
@@ -853,7 +883,7 @@
       </EmptyState>
     {:else if mode === 'list'}
       <div class="split">
-        <div class="list">
+        <div class="list" style:--key-chars={keyChars}>
           <VirtualList
             bind:this={vlist}
             items={rows}
@@ -1010,29 +1040,7 @@
     {/if}
   {/if}
 
-  <KeyHints
-    hints={[
-      ['j k', 'Move'],
-      ['space', 'Split'],
-      ['enter', enterLabel],
-      ['g', 'Open detail'],
-      ['shift+enter', 'Own pane'],
-      ['1 2 3', 'Who'],
-      ['/', 'Filter'],
-      ['mod+enter', 'Start marked'],
-      ['m', 'Move to'],
-      ['x', 'Select'],
-      ['p shift+p', 'Pull request, in browser'],
-      ['f then s', 'Current sprint'],
-      ['a shift+a', 'Assign me, unassign'],
-      ['s shift+s', 'Start work, start now'],
-      ['v', 'Source'],
-      ['shift+g', 'Group'],
-      ['c', 'Comment'],
-      ['o', 'Open in browser'],
-      ['shift+r', 'Refresh'],
-    ]}
-  />
+  <KeyHints hints={[...hints.slice(0, 5), ['?', 'All keys']]} />
 </div>
 
 {#if picker}
@@ -1078,8 +1086,54 @@
   />
 {/if}
 <MoveDialogs {move} />
+{#if keysOpen}
+  <Dialog
+    title="Ticket keys"
+    width={420}
+    onclose={() => {
+      keysOpen = false;
+      root?.focus();
+    }}
+  >
+    <dl class="keys">
+      {#each hints as [keys, label] (keys)}
+        <dt>
+          {#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">then</span>{:else}<Kbd
+                chord={k}
+              />{/if}{/each}
+        </dt>
+        <dd>{label}</dd>
+      {/each}
+    </dl>
+  </Dialog>
+{/if}
 
 <style>
+  .keys {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--k-space-3) var(--k-space-5);
+    margin: 0;
+    align-items: center;
+  }
+
+  .keys dt {
+    display: inline-flex;
+    gap: var(--k-space-1);
+    justify-self: end;
+  }
+
+  .keys dd {
+    margin: 0;
+    color: var(--k-fg-muted);
+  }
+
+  .then {
+    padding: 0 2px;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
+  }
+
   /* Split view: list left, the selected ticket's detail right, the 1px splitter gap between. */
   .split {
     flex: 1;

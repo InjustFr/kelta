@@ -1,0 +1,200 @@
+// Tickets list grid (#251) on the IPC mock: shared column tracks, room for the title, one baseline,
+// a toolbar of at most six controls, and the order columns drop in as the list narrows.
+import { expect, test, type Page } from '@playwright/test';
+
+import { boot } from '../shell/helpers';
+
+const LONG = 'Invoice rounding differs from the ledger on multiline orders'; // 60 characters
+
+/** 20 extra Mine tickets with mixed optional data: key length, PR, waiting, sprint, age, title. */
+async function seed(page: Page): Promise<void> {
+  await page.evaluate((long) => {
+    const mock = window.__keltaMock!;
+    const base = mock.state.tickets.find((i) => i.ticket.ref.key === 'SHOP-142')!;
+    const day = 86_400_000;
+    for (let n = 0; n < 20; n++) {
+      const item = structuredClone(base);
+      const key = `SHOP-${n % 3 === 0 ? 7 + n : 9000 + n * 111}`;
+      item.ticket.ref = { ...item.ticket.ref, key, id: `x${n}` };
+      item.ticket.title =
+        n === 1 ? long : `Seeded ticket ${n}${n % 4 === 0 ? ' with a longer title to clip' : ''}`;
+      item.ticket.status_since = new Date(Date.now() - (n % 5) * 6 * day).toISOString();
+      item.ticket.sprint = n % 2 ? item.ticket.sprint : null;
+      item.work_item_id = null;
+      item.prs = n % 3 === 1 ? item.prs.slice(0, 1) : [];
+      item.waiting =
+        n % 4 === 2
+          ? [
+              {
+                person: 'gh:anna',
+                name: 'Anna',
+                since: new Date().toISOString(),
+                matched: true,
+                why: 'review',
+              },
+            ]
+          : [];
+      mock.state.tickets.push(item);
+    }
+  }, LONG);
+}
+
+async function openRailTickets(page: Page): Promise<void> {
+  await boot(page);
+  await seed(page);
+  await page.getByTestId('rail-tickets').click();
+  await page.getByTestId('tickets-pane').press('Shift+R'); // past the lists loaded at boot
+  await expect(page.locator('[data-key="jira-acme:SHOP-7"]')).toBeVisible();
+}
+
+/** Ticket rows on screen (VirtualList renders the visible ones). */
+const rows = (page: Page) => page.getByTestId('tickets-pane').locator('.k-row[data-key]');
+
+test.use({ viewport: { width: 1440, height: 900 } });
+
+test('rows share one grid: key, title, status, age and source start at one x on every row', async ({
+  page,
+}) => {
+  await openRailTickets(page);
+  await page.getByTestId('tickets-pane').press('Space'); // detail closed: the list is wide
+  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByLabel('Group (g)').selectOption('none');
+  await page.keyboard.press('Escape');
+  const lefts = await rows(page).evaluateAll((els) =>
+    els.map((row) =>
+      ['.c-key', '.c-title', '[data-status]', '.c-age', '.c-source'].map(
+        (sel) => row.querySelector(sel)!.getBoundingClientRect().left,
+      ),
+    ),
+  );
+  expect(lefts.length).toBeGreaterThanOrEqual(20);
+  for (let col = 0; col < 5; col++) expect(new Set(lefts.map((l) => l[col])).size).toBe(1);
+  // every column on screen: the list is past 900px
+  const ages = await rows(page).locator('.c-age').first().isVisible();
+  expect(ages).toBe(true);
+});
+
+test('the title takes the free width: a 60-character title shows 45 or more with the detail open', async ({
+  page,
+}) => {
+  await openRailTickets(page);
+  await expect(page.getByTestId('ticket-detail')).toBeVisible();
+  const row = page.locator('[data-key="jira-acme:SHOP-9111"]');
+  await expect(row).not.toHaveAttribute('aria-current', 'true');
+  // How many leading characters fit the cell: the laid-out text, measured with a range.
+  const fit = await row.locator('.c-title .text').evaluate((el) => {
+    const text = el.firstChild!;
+    const range = document.createRange();
+    let n = 0;
+    while (n < text.textContent!.length) {
+      range.setStart(text, 0);
+      range.setEnd(text, n + 1);
+      if (range.getBoundingClientRect().width > el.clientWidth) break;
+      n++;
+    }
+    return { n, len: text.textContent!.length };
+  });
+  expect(fit.len).toBe(60);
+  expect(fit.n).toBeGreaterThanOrEqual(45);
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`${scheme} theme`, () => {
+    test.use({ colorScheme: scheme });
+
+    test('text cells share one baseline; lamps and status dots are centred on the row', async ({
+      page,
+    }, info) => {
+      await openRailTickets(page);
+      const row = page.locator('[data-key="jira-acme:SHOP-142"]'); // work lamp, PR lamp, aged, source
+      await expect(row.locator('.c-lamp [data-attention]')).toBeVisible();
+      const m = await row.evaluate((r) => {
+        const base = (el: Element): number => {
+          const probe = document.createElement('span');
+          probe.style.cssText = 'display:inline-block;width:0;height:0';
+          el.prepend(probe);
+          const y = probe.getBoundingClientRect().bottom;
+          probe.remove();
+          return y;
+        };
+        const mid = (el: Element): number => {
+          const b = el.getBoundingClientRect();
+          return b.top + b.height / 2;
+        };
+        const rb = r.getBoundingClientRect();
+        return {
+          row: rb.top + rb.height / 2,
+          baselines: ['.c-key', '.c-title .text', '[data-status] .chip'].map((s) =>
+            base(r.querySelector(s)!),
+          ),
+          marks: ['.c-lamp [data-attention]', '[data-pr] [data-attention]', '[data-status] .dot'].map((s) =>
+            mid(r.querySelector(s)!),
+          ),
+        };
+      });
+      for (const b of m.baselines) expect(Math.abs(b - m.baselines[0]!)).toBeLessThanOrEqual(0.5);
+      for (const y of m.marks) expect(Math.abs(y - m.row)).toBeLessThanOrEqual(1.5);
+      await info.attach(`tickets-${scheme}`, {
+        body: await page.getByTestId('tickets-pane').screenshot(),
+        contentType: 'image/png',
+      });
+    });
+  });
+}
+
+test('the toolbar shows at most six controls; person, sprint, group and sort sit in View', async ({
+  page,
+}) => {
+  await openRailTickets(page);
+  const bar = page.getByTestId('tickets-pane').locator('header.k-toolbar');
+  const controls = await bar.evaluate(
+    (h) =>
+      [...h.children].filter(
+        (el) =>
+          el.matches('button, input, select, [role="tablist"]') || el.querySelector('button, input, select'),
+      ).length,
+  );
+  expect(controls).toBeLessThanOrEqual(6);
+  await expect(bar.getByLabel('Sort')).toHaveCount(0);
+  await bar.getByRole('button', { name: /^View/ }).click();
+  const view = bar.getByRole('dialog', { name: 'View' });
+  for (const label of ['Person', 'Group (g)', 'Sort']) await expect(view.getByLabel(label)).toBeVisible();
+  await expect(view.getByRole('button', { name: /Current sprint/ })).toBeVisible();
+});
+
+test('narrow lists drop age and source first, then the signals; key and title stay', async ({ page }) => {
+  await openRailTickets(page);
+  await page.getByTestId('tickets-pane').press('Space');
+  const row = page.locator('[data-key="jira-acme:SHOP-151"]'); // aged, from one of several sources
+  const shown = async () =>
+    Object.fromEntries(
+      await Promise.all(
+        ['.c-key', '.c-title', '.c-signals', '[data-status]', '.c-age', '.c-source'].map(
+          async (s) => [s, await row.locator(s).isVisible()] as const,
+        ),
+      ),
+    );
+  const listWidth = () =>
+    page
+      .getByTestId('tickets-pane')
+      .locator('.list')
+      .evaluate((l) => l.clientWidth);
+
+  expect(await listWidth()).toBeGreaterThanOrEqual(900);
+  expect(Object.values(await shown()).every(Boolean)).toBe(true);
+
+  await page.setViewportSize({ width: 900, height: 900 });
+  expect(await listWidth()).toBeLessThan(900);
+  expect(await shown()).toMatchObject({
+    '.c-key': true,
+    '.c-title': true,
+    '.c-signals': true,
+    '[data-status]': true,
+    '.c-age': false,
+    '.c-source': false,
+  });
+
+  await page.setViewportSize({ width: 600, height: 900 });
+  expect(await listWidth()).toBeLessThan(560);
+  expect(await shown()).toMatchObject({ '.c-key': true, '.c-title': true, '.c-signals': false });
+});
