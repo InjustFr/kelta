@@ -272,16 +272,18 @@ impl WorkService {
     }
 
     /// `work_send`: brief files into the private run dir, then `prompt` into the item's previous
-    /// Claude conversation; `threads` (review thread ids handed over) are remembered on success.
+    /// Claude conversation; `threads` (review thread ids handed over) are remembered on success, and
+    /// `feedback_at` (newest comment time the sheet showed) moves the watermark forward.
     pub async fn send(
         &self,
         id: &WorkItemId,
         prompt: &str,
         files: Vec<SendFile>,
         threads: Option<Vec<String>>,
+        feedback_at: Option<String>,
     ) -> Result<WorkItem, KeltaError> {
         self.ensure_listener();
-        self.send_impl(id, prompt, files, threads).await
+        self.send_impl(id, prompt, files, threads, feedback_at).await
     }
 
     /// `work_feedback`: unresolved threads, review summaries and failed checks of the item's PR.

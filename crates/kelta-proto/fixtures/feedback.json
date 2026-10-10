@@ -13,7 +13,8 @@
     {
       "author": "bob",
       "body_md": "Close, two things to fix.",
-      "state": "changes_requested"
+      "state": "changes_requested",
+      "submitted_at": "2026-10-09T12:00:00Z"
     }
   ],
   "threads": [
@@ -21,6 +22,7 @@
       "author": "bob",
       "body_md": "bob: Reset the counter after a successful login.",
       "id": "PRRT_kwDOA1",
+      "last_comment_at": "2026-10-09T12:00:00Z",
       "line": 42,
       "path": "src/login.rs",
       "url": "https://github.com/acme/shop-api/pull/74#discussion_r1"

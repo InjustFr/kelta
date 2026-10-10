@@ -13,6 +13,9 @@ use crate::Core;
 use crate::feeds::uses_account;
 use crate::store::q;
 
+/// A start's project, the route's repo, and `true` = only a guess.
+type Target = (ProjectId, Option<String>, bool);
+
 /// A ticket's source for rules 3-5: its id, the projects it feeds and the route the ticket matches
 /// (project, repo).
 #[derive(Debug, Default)]
@@ -33,6 +36,29 @@ impl Core {
             let project = project.unwrap_or_else(|| self.active_project());
             return self.work.plan(&project, source).await;
         }
+        let (target, choices, hint) = self.plan_target(project.as_ref(), &source).await?;
+        let (project, repo, guessed) = target;
+        let mut plan = self.work.plan_with_repo(&project, source, repo).await?;
+        plan.project_choices = choices;
+        plan.ticket_source = hint.map(|h| h.id);
+        // One choice: nothing to confirm (the sheet shows no Project field).
+        plan.project_guessed = guessed && plan.existing.is_none() && plan.project_choices.len() > 1;
+        Ok(plan)
+    }
+
+    /// The project a ticket's background run goes to (#233): the start-work rules, no plan built.
+    pub(crate) async fn ticket_project(&self, ticket: &TicketRef) -> Result<ProjectId, KeltaError> {
+        let source = WorkSource::Ticket { ticket: ticket.clone() };
+        Ok(self.plan_target(None, &source).await?.0.0)
+    }
+
+    /// SPEC §3.1 for a ticket or a PR: the default (project, route repo, guessed), the choices and
+    /// the ticket's source.
+    async fn plan_target(
+        &self,
+        project: Option<&ProjectId>,
+        source: &WorkSource,
+    ) -> Result<(Target, Vec<ProjectId>, Option<SourceHint>), KeltaError> {
         let open = self.open_projects();
         let configs = self.project_configs();
         let mut choices: Vec<ProjectId> = configs
@@ -41,7 +67,7 @@ impl Core {
             .map(|p| p.id.clone())
             .collect();
         let sources = self.sources();
-        let hint = match &source {
+        let hint = match source {
             WorkSource::Ticket { ticket } => self.source_hint(ticket, &sources).await,
             WorkSource::Review { review } => {
                 let binds: Vec<ProjectId> = self
@@ -64,14 +90,8 @@ impl Core {
         items.retain(|w| configs.iter().any(|p| p.id == w.project_id && !p.repos.is_empty()));
         fill_sources(&mut items, &sources);
         let active = self.active_project();
-        let (project, repo, guessed) =
-            default_project(&source, project.as_ref(), &items, &choices, hint.as_ref(), &active)?;
-        let mut plan = self.work.plan_with_repo(&project, source, repo).await?;
-        plan.project_choices = choices;
-        plan.ticket_source = hint.map(|h| h.id);
-        // One choice: nothing to confirm (the sheet shows no Project field).
-        plan.project_guessed = guessed && plan.existing.is_none() && plan.project_choices.len() > 1;
-        Ok(plan)
+        let target = default_project(source, project, &items, &choices, hint.as_ref(), &active)?;
+        Ok((target, choices, hint))
     }
 
     /// The ticket's source, and the route it matches from the cached ticket, else the tracker's (a
@@ -131,7 +151,7 @@ fn default_project(
     choices: &[ProjectId],
     hint: Option<&SourceHint>,
     active: &ProjectId,
-) -> Result<(ProjectId, Option<String>, bool), KeltaError> {
+) -> Result<Target, KeltaError> {
     // 1. Where its unfinished work item lives, closed project included (Resume opens it).
     if let Some(w) = existing_for(items, source) {
         return Ok((w.project_id.clone(), None, false));

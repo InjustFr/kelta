@@ -648,6 +648,11 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub sent_threads: Vec<String>,
+    /// Newest review comment time (host's RFC 3339) shown in the last Fix with Claude send: a comment
+    /// newer than it is new (#208). `None`: never sent, every unresolved thread awaiting me is new.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub feedback_at: Option<String>,
     /// Kelta-driven rebase in progress, or done and awaiting its force push.
     #[serde(default)]
     #[ts(optional = nullable)]
@@ -789,6 +794,23 @@ pub struct NextUpItem {
     pub rank: Option<f64>,
     /// RFC 3339; hidden from Next up and grooming until then.
     pub snoozed_until: Option<String>,
+}
+
+/// A saved Claude Code workflow (#233): a `*.js` file whose `export const meta` names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct WorkflowInfo {
+    pub name: String,
+    pub description: String,
+    pub path: PathBuf,
+    pub source: WorkflowSource,
+}
+
+/// Where a workflow lives: the project's primary repo (`.claude/workflows/`) or `~/.claude/workflows/`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowSource {
+    Repo,
+    Home,
 }
 
 /// `next_up_list`: the list and snoozes, plus the tickets I have seen (`account:key`, the `New` badge).

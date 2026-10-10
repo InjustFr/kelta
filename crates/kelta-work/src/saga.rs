@@ -485,6 +485,7 @@ impl WorkService {
             steps: Vec::new(),
             created_at: kelta_proto::now_rfc3339(),
             sent_threads: Vec::new(),
+            feedback_at: None,
             rebase: None,
             title: title.filter(|t| !t.is_empty()),
             pr_title_needs_key: false,

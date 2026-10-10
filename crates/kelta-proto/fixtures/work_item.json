@@ -9,6 +9,7 @@
   "cost_usd": 3.5,
   "created_at": "2026-10-09T12:00:00Z",
   "delta": null,
+  "feedback_at": null,
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "left_at": null,

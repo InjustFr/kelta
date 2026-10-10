@@ -92,7 +92,7 @@ docs/** (these five docs)     owned by the merge owner, read-only for lanes (exc
 | pane `reviews`, `review_detail` | `views/reviews/ReviewsPane.svelte`, `views/reviews/ReviewDetailPane.svelte` | L9 |
 | pane `inbox` | `views/inbox/InboxPane.svelte` | L9 |
 | pane `work_item` | `views/work/WorkItemPane.svelte` | L9 |
-| tab header `work` | `views/work/WorkItemHeader.svelte` | L9 |
+| tab header `work` (context bar segment), `brief` | `views/work/WorkContext.svelte`, `views/work/ReturnBrief.svelte` | L9 |
 | sheet `start_work` | `views/work/StartWorkSheet.svelte` | L9 |
 | pane `settings`, `diagnostics` | `views/settings/SettingsPane.svelte`, `views/diagnostics/DiagnosticsPane.svelte` | L4 |
 | sheet `onboarding`, `project_new` | `views/onboarding/OnboardingSheet.svelte`, `views/onboarding/ProjectNewSheet.svelte` | L4 |

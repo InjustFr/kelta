@@ -49,6 +49,7 @@ describe('registries', { timeout: 30_000 }, () => {
         'tracker.source_picker',
         'work_dialog',
         'work_new',
+        'workflow_run',
       ].sort(),
     );
     for (const load of [...Object.values(sheetRegistry), ...Object.values(tabHeaderRegistry)]) {

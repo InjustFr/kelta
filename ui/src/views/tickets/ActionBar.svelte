@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { ProjectId, TicketItem } from '$lib/gen';
+  import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button, Menu, currentPlatform, formatChord } from '$lib/ui';
 
   import { ticketCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
   import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
+  import { workflows } from './workflow.svelte';
 
   // Ticket detail action bar (TICKETS.md T3): the primary action, one row of quiet secondary actions,
   // and More for the rest. Keys show in tooltips and in the menu; every key works without the bar.
@@ -32,6 +34,7 @@
     unassign: 'Unassign',
     comment: 'Comment',
     refine: 'Refine with Claude',
+    workflow: 'Run workflow…',
     branch: 'Copy branch',
     browser: 'Open in browser',
   };
@@ -49,7 +52,7 @@
           : a.id === 'pr' && item.prs.length > 1
             ? 'Open PRs'
             : LABELS[a.id],
-      reason: blockedReason(a.id, item, branch),
+      reason: blockedReason(a.id, item, branch, workflows[ticketKey(item.ticket.ref)]),
       chord: a.key === 'A' ? 'shift+a' : a.key,
     })),
   );

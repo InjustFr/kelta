@@ -44,6 +44,7 @@
   import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
   import TicketRow from './TicketRow.svelte';
   import TicketsToolbar from './TicketsToolbar.svelte';
+  import { pickWorkflow } from './workflow.svelte';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -431,6 +432,7 @@
     ['j k', 'Move'],
     ['enter', enterLabel],
     ['s shift+s', 'Start work, start now'],
+    ['w', 'Run workflow'],
     ['m', 'Move to'],
     ['/', 'Filter'],
     ['space', 'Split'],
@@ -733,6 +735,9 @@
         break;
       case 'S':
         if (item) start(item, false);
+        break;
+      case 'w':
+        if (item) void pickWorkflow(item.ticket.ref);
         break;
       default:
         return;

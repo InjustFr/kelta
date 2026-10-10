@@ -83,8 +83,9 @@ pub async fn work_send(
     prompt: String,
     files: Vec<SendFile>,
     threads: Option<Vec<String>>,
+    feedback_at: Option<String>,
 ) -> Res<WorkItem> {
-    core.work().send(&id, &prompt, files, threads).await
+    core.work().send(&id, &prompt, files, threads, feedback_at).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

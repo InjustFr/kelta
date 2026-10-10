@@ -44,15 +44,16 @@ export function paneComponent(kind: PaneKind): LazyComponent | null {
   return kind === 'empty' ? null : paneRegistry[kind];
 }
 
-/** Tab header components, keyed by tab flavour (`work` = tab linked to a work item). */
-export type TabHeaderKey = 'work';
+/** Work tab components (a tab linked to a work item): `work` = its segment of the context bar, `brief` = the return strip under the bar. */
+export type TabHeaderKey = 'work' | 'brief';
 export interface TabHeaderProps {
   projectId: string;
   tabId: string;
   workItemId: string;
 }
 export const tabHeaderRegistry: Record<TabHeaderKey, LazyComponent> = {
-  work: () => import('../views/work/WorkItemHeader.svelte'),
+  work: () => import('../views/work/WorkContext.svelte'),
+  brief: () => import('../views/work/ReturnBrief.svelte'),
 };
 
 /** Sheets (modal side panels) opened through `ui.openSheet(key, props)`. */
@@ -74,6 +75,7 @@ export type RegisteredSheetKey =
   | 'work_dialog'
   | 'tracker.source_picker'
   | 'tickets.move'
+  | 'workflow_run'
   | 'groom';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
@@ -95,6 +97,8 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   'tracker.source_picker': () => import('../views/tickets/SourcePickerSheet.svelte'),
   /** props: { ticket } */
   'tickets.move': () => import('../views/tickets/MoveSheet.svelte'),
+  /** props: { ticket, workflows } (#233) */
+  workflow_run: () => import('../views/tickets/WorkflowSheet.svelte'),
   /** Palette `Groom` (#145). */
   groom: () => import('../views/inbox/GroomSheet.svelte'),
 };

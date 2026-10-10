@@ -48,7 +48,8 @@ Every existing `--k-*` name is kept, so components that only read tokens need no
   --k-radius-lg: 8px;       /* floating: menus, palette, dialogs, sheets, toasts */
 
   --k-rail-width: 44px;
-  --k-tabbar-height: 30px;
+  --k-contextbar-height: 30px;
+  --k-toolbar-height: 40px; /* .k-toolbar: a global view's or a list pane's filters */
   --k-statusbar-height: 22px;
   --k-pane-header-height: 22px;
   --k-control-height: 26px;
@@ -314,11 +315,18 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 - Focus: 2px `--k-focus` outline inset 2px.
 - Drag-over: 2px accent insertion line.
 
-### 6.3 Tab bar (`shell/TabBar.svelte`)
+### 6.3 Context bar (`shell/ContextBar.svelte`)
 
-- `--k-tabbar-height`, `--k-bezel`. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
-- Left: `▌project › title`, a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row title in `--k-fg` 600 (ellipsis). Right: the `+` ghost button and its menu. The context bar (#248) replaces this bar.
-- Window chrome: macOS custom chrome reserves a 72px leading inset for the traffic lights and the empty bar area is `data-tauri-drag-region`. GNOME custom chrome adds a 30px controls cluster on the right. Hyprland/Sway: no title bar, the tab bar is the top edge.
+One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It describes the selected rail row; the status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
+
+- Always: `‹` (`nav.back`, its tooltip names the jumplist target), the breadcrumb, `+` on the right (New session, Tickets, Reviews; tools live in the rail). The breadcrumb is `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
+- Work tab: the mono key and the title, then the ticket status chip (status picker), the phase chip with its lamp (opens `WorkItemPane` as a split below), the PR chip `PR #482 ●` (CI lamp; opens the PR, as `⌘.` `o`), `↑a ↓b`, the cost (`--k-warn` over budget), `⎇` (branch, worktree, ports, armed, `+ins −del` and uncommitted changes in its tooltip), then on the right the primary button (its blocked reason in the tooltip) and `Work ⌘.`. The return strip sits directly under the bar.
+- Claude session: `✻ name`, then the cwd and the model on the right. Terminal: `❯ title` (OSC 2) and the cwd. Home: `Home › ❯ zsh` and the cwd (`Home` alone on the welcome screen).
+- Tool tab: `Tools › ⚒ tool`; in Home a muted "for you", else a context chip `▌project › KEY` (goes to that tab) and the cwd; on the right the return chip `↩ <back target> <tool key>` (`nav.back`, what pressing the tool's key again does).
+- Global view: its name, and on the right the "underneath" chip `‹ project › row` that leaves the view. The view's own 40px `.k-toolbar` (filters) stays under the bar.
+- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, the lamp meter, restart, prefix (status strip); row lamps and peek (rail).
+- Narrow bars (container queries) drop, in order: `⎇` and the cwd/model, the cost unless over budget, `↑↓`, the PR chip's `PR` word, the ticket chip, the title (the key stays), the phase label (its lamp stays), the `Work` label (its icon stays). `‹`, the key, the primary button and `+` never drop.
+- Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the context bar is the top edge.
 
 ### 6.4 Panes (`shell/PaneHost.svelte`)
 
@@ -449,6 +457,6 @@ One row grammar for all three, so they read as one instrument:
 ## 10. Rollout and checks
 
 1. Replace `tokens.css`; update `theme.ts` arrays; add the token/theme parity unit test.
-2. Edit AttentionDot, ProjectRail, TabBar, PaneHost, StatusBar, Button, Toggle, Kbd, HtmlContent, list rows, Board; set `--k-project` in Shell.
+2. Edit AttentionDot, ProjectRail, ContextBar, PaneHost, StatusBar, Button, Toggle, Kbd, HtmlContent, list rows, Board; set `--k-project` in Shell.
 3. Run `VITE_IPC=mock pnpm --filter @kelta/ui dev` and screenshot both themes with Playwright; `pnpm --filter @kelta/ui run e2e`; `bash scripts/ci-local.sh` (bundle budgets, no-timers).
 4. Check the 1px gap and lamp shapes at 100% zoom on a 1x Linux display.

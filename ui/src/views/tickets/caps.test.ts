@@ -32,6 +32,8 @@ describe('blockedReason', () => {
     const item = { ...base, prs: [pr] };
     for (const a of ['start', 'move', 'pr', 'assign', 'unassign', 'comment', 'branch', 'browser'] as const)
       expect(blockedReason(a, item, 'feat/x')).toBeNull();
+    // Workflows not loaded yet: the picker says why when there are none.
+    expect(blockedReason('workflow', item, null)).toBeNull();
   });
 
   it('names what is missing', () => {
@@ -42,6 +44,12 @@ describe('blockedReason', () => {
     expect(blockedReason('pr', item, null)).toMatch(/No pull request/);
     expect(blockedReason('branch', item, null)).toMatch(/Start work first/);
     expect(blockedReason('move', item, null)).toBeNull();
+    expect(blockedReason('workflow', item, null, [])).toBe(
+      'No workflows in .claude/workflows or ~/.claude/workflows',
+    );
+    // No project: the backend's reason.
+    const noProject = 'Add a repository to a project first';
+    expect(blockedReason('workflow', item, null, noProject)).toBe(noProject);
   });
 
   it('will not unassign a ticket nobody is assigned to', () => {

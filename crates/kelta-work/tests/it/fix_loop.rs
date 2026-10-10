@@ -129,7 +129,8 @@ async fn send_pastes_into_an_idle_claude_and_keeps_the_brief_out_of_the_worktree
     let (w, item) = started(&fx, "SHOP-141").await;
     let sid = claude(&fx);
     set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
-    let out = w.send(&item.id, "Read {file}\x1b[201~ now", brief(), Some(vec!["T1".into()])).await.unwrap();
+    let out =
+        w.send(&item.id, "Read {file}\x1b[201~ now", brief(), Some(vec!["T1".into()]), None).await.unwrap();
     assert_eq!(out.sent_threads, vec!["T1"]);
 
     let run = run_dir(&fx);
@@ -141,7 +142,7 @@ async fn send_pastes_into_an_idle_claude_and_keeps_the_brief_out_of_the_worktree
 
     // WaitingUser (idle_prompt) is idle too.
     set_status(&fx, &sid, SessionStatus::WaitingUser, StatusSource::Hook);
-    w.send(&item.id, "again", vec![], None).await.unwrap();
+    w.send(&item.id, "again", vec![], None, None).await.unwrap();
     assert!(fx.core.written_text(&sid).ends_with("\x1b[200~again\x1b[201~\r"));
     assert_eq!(w.list(None).await.unwrap()[0].sent_threads, vec!["T1"], "kept without new threads");
 }
@@ -157,7 +158,7 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
     {
         set_status(&fx, &sid, status, StatusSource::Hook);
         let sent = vec![SendFile { name: "feedback.md".into(), content: content.into() }];
-        let out = w.send(&item.id, "Fix {file}", sent, Some(vec!["T1".into()])).await.unwrap();
+        let out = w.send(&item.id, "Fix {file}", sent, Some(vec!["T1".into()]), None).await.unwrap();
         assert_eq!(out.sent_threads, vec!["T1"], "stored at send time while held");
     }
     assert!(fx.core.writes().is_empty(), "nothing typed mid-turn");
@@ -187,6 +188,26 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
 }
 
 #[tokio::test]
+async fn send_moves_the_feedback_watermark_forward_only() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    let sid = claude(&fx);
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    let at = |v: &str| Some(v.to_owned());
+    let out = w.send(&item.id, "fix", vec![], None, at("2026-10-10T09:00:00.500Z")).await.unwrap();
+    assert_eq!(out.feedback_at, at("2026-10-10T09:00:00.500Z"));
+    // Earlier as an instant (later as a string): an old sheet sent late keeps the newer watermark.
+    let out = w.send(&item.id, "fix", vec![], None, at("2026-10-10T10:30:00+02:00")).await.unwrap();
+    assert_eq!(out.feedback_at, at("2026-10-10T09:00:00.500Z"));
+    let out = w.send(&item.id, "fix", vec![], None, None).await.unwrap();
+    assert_eq!(out.feedback_at, at("2026-10-10T09:00:00.500Z"), "a send without feedback keeps it");
+    let out = w.send(&item.id, "fix", vec![], None, at("2026-10-10T09:05:00Z")).await.unwrap();
+    assert_eq!(w.list(None).await.unwrap()[0].feedback_at, at("2026-10-10T09:05:00Z"));
+    assert_eq!(out.feedback_at, at("2026-10-10T09:05:00Z"));
+}
+
+#[tokio::test]
 async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
     need_git!();
     let fx = Fx::new();
@@ -194,11 +215,11 @@ async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
     let sid = claude(&fx);
     set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
     let old = vec![SendFile { name: "feedback.md".into(), content: "# Old threads\n".into() }];
-    w.send(&item.id, "Fix {file}", old, None).await.unwrap();
+    w.send(&item.id, "Fix {file}", old, None, None).await.unwrap();
     set_status(&fx, &sid, SessionStatus::Working, StatusSource::Hook);
-    w.send(&item.id, "A review note, no file", vec![], None).await.unwrap();
+    w.send(&item.id, "A review note, no file", vec![], None, None).await.unwrap();
     let new = vec![SendFile { name: "feedback.md".into(), content: "# Checks failed\n".into() }];
-    w.send(&item.id, "Fix {file}", new, None).await.unwrap();
+    w.send(&item.id, "Fix {file}", new, None, None).await.unwrap();
     let file = run_dir(&fx).join("feedback.md");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Checks failed\n", "no stale feedback");
 }
@@ -216,7 +237,7 @@ async fn send_copies_the_prompt_when_kelta_cannot_tell_claude_is_idle() {
         (SessionStatus::Running, StatusSource::Hook),
     ] {
         set_status(&fx, &sid, status, source);
-        let out = w.send(&item.id, "fix it", brief(), Some(vec!["T1".into()])).await.unwrap();
+        let out = w.send(&item.id, "fix it", brief(), Some(vec!["T1".into()]), None).await.unwrap();
         assert_eq!(out.sent_threads, vec!["T1"], "{status:?}/{source:?}");
     }
     let copied: Vec<_> = fx.core.calls().into_iter().filter(|c| c.method == "clipboard_copy").collect();
@@ -225,10 +246,14 @@ async fn send_copies_the_prompt_when_kelta_cannot_tell_claude_is_idle() {
     assert!(fx.core.writes().is_empty(), "nothing typed");
     assert!(fx.core.toasts().iter().any(|t| t.text
         == "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready."));
-    let e =
-        w.send(&item.id, "x", vec![SendFile { name: "../x.md".into(), content: String::new() }], None).await;
+    let e = w
+        .send(&item.id, "x", vec![SendFile { name: "../x.md".into(), content: String::new() }], None, None)
+        .await;
     assert_eq!(e.unwrap_err().code, ErrorCode::InvalidArgument);
-    assert_eq!(w.send(&item.id, "  ", vec![], None).await.unwrap_err().code, ErrorCode::InvalidArgument);
+    assert_eq!(
+        w.send(&item.id, "  ", vec![], None, None).await.unwrap_err().code,
+        ErrorCode::InvalidArgument
+    );
 }
 
 #[tokio::test]
@@ -237,7 +262,7 @@ async fn send_resumes_a_dead_claude_with_the_prompt_and_the_fallback_keeps_it() 
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
     fx.core.exit_session(&claude(&fx), 0);
-    w.send(&item.id, "-Fix the review", brief(), None).await.unwrap();
+    w.send(&item.id, "-Fix the review", brief(), None, None).await.unwrap();
     let claude_args = |fx: &Fx| -> Vec<Vec<String>> {
         fx.core
             .calls()

@@ -37,6 +37,7 @@ import type {
   ToolInfo,
   Transition,
   UiEvent,
+  WorkflowInfo,
   UpdateStatus,
   WorkItem,
   WorkStepStatus,
@@ -117,6 +118,8 @@ export interface MockState {
   notes: Record<string, ReviewNote[]>;
   /** Next up list and seen tickets (#145). */
   nextUp: NextUp;
+  /** Saved Claude workflows (`workflows_list`, #233). */
+  workflows: WorkflowInfo[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
 }
@@ -143,6 +146,20 @@ const MOCK_USERS = [
   { id: 'u-linus', name: 'Linus Torvalds', login: 'linus', avatar_url: null },
 ];
 const MOCK_PRIORITIES = ['Highest', 'High', 'Medium', 'Low', 'Lowest'];
+const MOCK_WORKFLOWS: WorkflowInfo[] = [
+  {
+    name: 'kelta-ticket-pass',
+    description: 'Implement, review and merge one ticket',
+    path: '/Users/ada/.claude/workflows/kelta-ticket-pass.js',
+    source: 'home',
+  },
+  {
+    name: 'triage',
+    description: 'Reproduce and label a bug',
+    path: '/Users/ada/code/shop/.claude/workflows/triage.js',
+    source: 'repo',
+  },
+];
 
 const CATEGORY_NAMES: Record<StatusCategory, string> = {
   todo: 'To do',
@@ -223,6 +240,7 @@ function freshState(): MockState {
     notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
+    workflows: clone(MOCK_WORKFLOWS),
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
@@ -994,6 +1012,69 @@ export function createMockTransport(options: MockOptions = {}): {
         'None',
       ].join('\n');
     },
+    workflows_list: ({ ticket }) => {
+      ticketItem(ticket);
+      return clone(state.workflows);
+    },
+    // Like `Core::workflow_run`: claim (`Starting`), then a Claude session in a background tab.
+    workflow_run: ({ ticket, workflow }) => {
+      const t = ticketItem(ticket);
+      if (!state.workflows.some((w) => w.name === workflow)) throw err('not_found', `workflow ${workflow}`);
+      const held = state.work.find(
+        (w) => w.ticket && sameRef(w.ticket, ticket) && w.state.kind !== 'finished',
+      );
+      if (held) throw err('conflict', `${ticket.key} is held by work item ${held.id} (started in Kelta)`);
+      const projectId = t.project_ids[0] ?? state.projects.find((p) => p.active)?.id ?? 'shop';
+      const title = `${workflow} · ${ticket.key}`;
+      const s = spawn(projectId, { type: 'claude' }, title, null);
+      const item: WorkItem = {
+        id: uuid(),
+        project_id: projectId,
+        kind: 'ticket',
+        ticket: { ...ticket }, // a plain copy: the arg can be a UI state proxy
+        review: null,
+        repo_id: project(projectId).repos[0]?.id ?? 'main',
+        worktree: s.cwd,
+        branch: 'main',
+        base: 'main',
+        claude_uuid: null,
+        nvim_socket: null,
+        session_ids: [],
+        tab_id: null,
+        pr_url: null,
+        state: { kind: 'active' },
+        steps: [],
+        created_at: new Date().toISOString(),
+        title: null,
+        pr_title_needs_key: false,
+        cost_usd: 0,
+        review_due: false,
+        claude_replied: false,
+        auto_finish: false,
+        nvim_kept: 0,
+        run: {
+          name: workflow,
+          run_id: `${workflow}-${s.id.slice(0, 8)}`,
+          session_id: s.id,
+          phase: 'Starting',
+          state: 'running',
+          note: null,
+          sha: null,
+        },
+      };
+      state.work.push(item);
+      emit({ type: 'work.updated', work: clone(item) });
+      const content = { kind: 'terminal' as const, session_id: s.id };
+      const req = {
+        content,
+        placement: 'new_tab' as const,
+        focus: false,
+        tab_title: title,
+        work_item_id: null,
+      };
+      backendLayoutChange(projectId, openPane(layoutOf(projectId), req).layout);
+      return s;
+    },
     tracker_search: ({ scope, text }) => {
       const q = text.toLowerCase();
       return clone(
@@ -1425,7 +1506,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const s = spawn(w.project_id, { type: 'editor', adapter: 'nvim' }, 'diff', w.worktree);
       return updateSession(session(s.id), { work_item_id: w.id });
     },
-    work_send: ({ id, prompt, files, threads }) => {
+    work_send: ({ id, prompt, files, threads, feedback_at }) => {
       const w = work(id);
       if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
       const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
@@ -1443,6 +1524,8 @@ export function createMockTransport(options: MockOptions = {}): {
         updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
       }
       if (threads) w.sent_threads = [...threads];
+      if (feedback_at && !(Date.parse(w.feedback_at ?? '') >= Date.parse(feedback_at)))
+        w.feedback_at = feedback_at;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },

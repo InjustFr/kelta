@@ -93,6 +93,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
+| `w` | run a saved Claude workflow on the ticket, in the background |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |
@@ -131,7 +132,7 @@ which is also what `g` does in a narrow pane.
 ## Next step
 
 A ticket with work under way shows its lamp and a work icon in its row; hover either for the phase (Claude working, Claude needs
-you, To review, Changes requested, Checks failed, In review, Merged...): the state Now shows, from the same signals. With the
+you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. With the
 detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
 the detail instead.
 
@@ -202,6 +203,11 @@ to order and colour them.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
+- **Hand a ticket to a workflow**: `w` lists your saved Claude Code workflows (`.claude/workflows/*.js` in the
+  project's main repository, then `~/.claude/workflows/`). Pick one and Kelta claims the ticket for it, then starts
+  Claude in a new tab that stays in the background, told to run that workflow on the ticket. The row shows the
+  workflow and its phase (`kelta-ticket-pass · Starting`) as it reports progress; the toast's **Open** shows the
+  session and **Peek** its last lines. A ticket someone is already working on is refused.
 
 ## Tickets from any Claude session
 

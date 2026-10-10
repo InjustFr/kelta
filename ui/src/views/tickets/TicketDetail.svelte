@@ -34,6 +34,7 @@
   import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
+  import { loadWorkflows, pickWorkflow, workflows } from './workflow.svelte';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -84,6 +85,7 @@
       field = null;
       loadCurrent();
       ensureReviews();
+      if (!workflows[key]) void loadWorkflows(ref);
     });
   });
 
@@ -220,7 +222,7 @@
 
   /** Runs an action, or says why it cannot run (a key press on an off action). */
   function run(action: TicketAction, browser = false): void {
-    const reason = blockedReason(action, item, branch);
+    const reason = blockedReason(action, item, branch, workflows[key]);
     if (reason) return void toasts.info(reason);
     switch (action) {
       case 'start':
@@ -244,6 +246,9 @@
         break;
       case 'refine':
         void refine(ref, project);
+        break;
+      case 'workflow':
+        void pickWorkflow(ref);
         break;
       case 'branch':
         void copyBranch();
