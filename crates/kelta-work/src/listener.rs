@@ -63,6 +63,8 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     continue;
                 };
                 let stop = ev.payload.get("event").and_then(|e| e.as_str()) == Some("Stop");
+                // Esc ends a turn without a Stop; Claude still reports itself idle.
+                let idle = hook.notification_type.as_deref() == Some("idle_prompt");
                 // Hooks read git status: off the listener task, in order per session.
                 let prev = last_hook.remove(&sid);
                 let key = sid.clone();
@@ -75,6 +77,9 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     }
                     if stop && let Err(e) = svc.notes_on_stop(&sid).await {
                         tracing::warn!(error = %e.message, "held prompt / review notes on Stop failed");
+                    }
+                    if idle && let Err(e) = svc.flush_pending(&sid).await {
+                        tracing::warn!(error = %e.message, "held prompt on idle failed");
                     }
                     // Claude may have finished (or aborted) a rebase it was asked to resolve.
                     if stop

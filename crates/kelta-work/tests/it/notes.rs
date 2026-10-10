@@ -161,3 +161,48 @@ async fn a_held_message_that_fails_at_stop_reopens_its_notes() {
     w.notes_send(&item.id).await.unwrap();
     assert_eq!(fx.core.written_text(&claude).matches("Review notes:").count(), 1);
 }
+
+#[tokio::test]
+async fn a_held_message_goes_when_claude_idles_without_a_stop() {
+    if !has_git() {
+        eprintln!("skipping: git not found");
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w
+        .start(w.plan(&project(), WorkSource::Ticket { ticket: samples::ticket_ref() }).await.unwrap())
+        .await
+        .unwrap();
+    let live = |k: fn(&SessionKind) -> bool| {
+        fx.spawned_of(k).into_iter().find(|s| s.lifecycle == Lifecycle::Live).unwrap().id
+    };
+    let claude = live(|k| *k == SessionKind::Claude);
+    let editor = live(|k| matches!(k, SessionKind::Editor { .. }));
+    std::fs::write(item.worktree.join("a.rs"), "x\n").unwrap();
+    w.note_add(&editor, &item.worktree.join("a.rs"), (1, 1), "why?").await.unwrap();
+    let mut s = fx.core.session_get(&claude).unwrap();
+    (s.status, s.status_source) = (SessionStatus::Working, StatusSource::Hook);
+    fx.core.insert_session(s.clone());
+    w.notes_send(&item.id).await.unwrap();
+    assert_eq!(fx.core.written_text(&claude), "");
+
+    // Esc: no Stop, only Claude's idle notification.
+    s.status = SessionStatus::WaitingUser;
+    fx.core.insert_session(s);
+    let payload = json!({ "hook_event_name": "Notification", "notification_type": "idle_prompt" });
+    fx.core.publish(
+        BusEvent::new(bus::CLAUDE_HOOK, json!({ "event": "Notification", "payload": payload }))
+            .with_session(claude.clone()),
+    );
+    for _ in 0..500 {
+        if !fx.core.written_text(&claude).is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // Delivered once: the next Stop judges the notes and types nothing.
+    stop(&fx, &claude);
+    wait_notes(&fx, &item, |n| n.iter().all(|n| n.state != NoteState::Sent)).await;
+    assert_eq!(fx.core.written_text(&claude).matches("Review notes:").count(), 1);
+}

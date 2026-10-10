@@ -93,39 +93,59 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         let mut j = self.load_journal(id);
-        if route(claude_of(&env.core, &item, &j).as_ref()) != Route::AtStop {
-            self.resume_item(id, Some(text.to_owned())).await?;
-            return Ok(false);
-        }
-        j.pending_prompt = Some(match j.pending_prompt.take() {
+        let held = j.pending_prompt.take();
+        let text = match &held {
             Some(p) => format!("{p}\n\n{text}"),
             None => text.to_owned(),
-        });
+        };
+        if route(claude_of(&env.core, &item, &j).as_ref()) != Route::AtStop {
+            // A held message goes along now: left held, a later Stop would paste it again.
+            if held.is_some() {
+                self.save_journal(id, &j)?;
+            }
+            if let Err(e) = self.resume_item(id, Some(text)).await {
+                if held.is_some() {
+                    let mut j = self.load_journal(id);
+                    j.pending_prompt = held;
+                    self.save_journal(id, &j)?;
+                }
+                return Err(e);
+            }
+            return Ok(false);
+        }
+        j.pending_prompt = Some(text);
         self.save_journal(id, &j)?;
         env.core.toast(Toast::info("Claude is working: it gets your message when it stops."));
         Ok(true)
     }
 
+    /// Claude of `sid` went idle (`Stop`, or the `idle_prompt` Notification after an Esc): deliver
+    /// the held prompt. Returns true when there was one.
+    pub(crate) async fn flush_pending(&self, sid: &SessionId) -> Result<bool, KeltaError> {
+        let Some(item) = self.for_session(sid).await else { return Ok(false) };
+        let Some(p) = self.load_journal(&item.id).pending_prompt else { return Ok(false) };
+        let delivered = self.resume_item(&item.id, Some(p)).await;
+        // Dropped either way: held past this Stop it would land after some unrelated turn.
+        let mut j = self.load_journal(&item.id);
+        j.pending_prompt = None;
+        self.save_journal(&item.id, &j)?;
+        let Err(e) = delivered else { return Ok(true) };
+        // Reopen the notes it carried so `s` / `<leader>ks` can send them again.
+        for mut n in self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent) {
+            (n.state, n.sent_at) = (NoteState::Open, None);
+            self.store.put_note(&n).await?;
+        }
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        env.core.toast(Toast::error(format!("Your held message did not reach Claude: {}", e.message)));
+        self.notes_changed(&item.id).await.map(|_| true)
+    }
+
     /// A Claude `Stop` of `sid`: deliver the held prompt, else judge the notes sent before this turn.
     pub(crate) async fn notes_on_stop(&self, sid: &SessionId) -> Result<(), KeltaError> {
-        let Some(item) = self.for_session(sid).await else { return Ok(()) };
-        if let Some(p) = self.load_journal(&item.id).pending_prompt {
-            let delivered = self.resume_item(&item.id, Some(p)).await;
-            // Dropped either way: held past this Stop it would land after some unrelated turn.
-            let mut j = self.load_journal(&item.id);
-            j.pending_prompt = None;
-            self.save_journal(&item.id, &j)?;
-            let Err(e) = delivered else { return Ok(()) };
-            // Reopen the notes it carried so `s` / `<leader>ks` can send them again.
-            for mut n in self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent)
-            {
-                (n.state, n.sent_at) = (NoteState::Open, None);
-                self.store.put_note(&n).await?;
-            }
-            let env = self.env(&item.project_id, &item.repo_id)?;
-            env.core.toast(Toast::error(format!("Your held message did not reach Claude: {}", e.message)));
-            return self.notes_changed(&item.id).await.map(|_| ());
+        if self.flush_pending(sid).await? {
+            return Ok(());
         }
+        let Some(item) = self.for_session(sid).await else { return Ok(()) };
         let mut sent: Vec<ReviewNote> =
             self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent).collect();
         if sent.is_empty() {
