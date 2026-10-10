@@ -300,7 +300,11 @@
   {#if ui.overlay === 'palette' && Palette}
     <Palette initialQuery={ui.paletteQuery} onclose={() => ui.closeOverlay()} />
   {:else if ui.overlay === 'switcher' && Switcher}
-    <Switcher onclose={() => ui.closeOverlay()} />
+    <Switcher
+      onclose={() => ui.closeOverlay()}
+      placeholder={ui.pick?.placeholder}
+      onpick={ui.pick ? (id: string) => ui.resolvePick(id) : undefined}
+    />
   {/if}
   <SheetHost />
   <DialogHost />

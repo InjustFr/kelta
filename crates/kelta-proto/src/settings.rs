@@ -104,7 +104,7 @@ pub struct Settings {
     #[schemars(extend(
         "x-kelta-category" = "Tools",
         "x-kelta-order" = 13,
-        "x-kelta-scope" = ["global", "project", "repo"],
+        "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
     ))]
@@ -120,7 +120,7 @@ pub struct Settings {
     #[schemars(extend(
         "x-kelta-category" = "Tools",
         "x-kelta-order" = 13,
-        "x-kelta-scope" = ["global", "project", "repo"],
+        "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
     ))]
@@ -1695,7 +1695,6 @@ pub struct ProjectFile {
 
 /// Repo-local `.kelta/config.toml` allowed top-level keys (SETTINGS §4).
 pub const REPO_ALLOWED_KEYS: &[&str] = &[
-    "tools",
     "triggers",
     "session_templates",
     "commands",
@@ -1709,7 +1708,7 @@ pub const REPO_ALLOWED_KEYS: &[&str] = &[
 ];
 
 /// Repo-local keys that are inert until trusted (`x-kelta-exec`).
-pub const REPO_EXEC_KEYS: &[&str] = &["tools", "triggers", "commands", "worktree.setup", "env"];
+pub const REPO_EXEC_KEYS: &[&str] = &["triggers", "commands", "worktree.setup", "env"];
 
 /// Runtime overrides (env `KELTA__SECTION__KEY=value`, CLI `--set key=value`, `--safe-graphics`, `--config-dir`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

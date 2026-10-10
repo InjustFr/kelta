@@ -135,14 +135,24 @@ pub fn repo_key_issues(value: &Value) -> Vec<RawIssue> {
         if matches!(get(value, &p), Some(Value::Object(m)) if m.is_empty()) {
             continue;
         }
+        if p.first().map(String::as_str) == Some("tools") {
+            out.push(RawIssue::new(&p[..1], REPO_TOOLS_PERSONAL));
+            continue;
+        }
         let dotted = join_path(&p);
         let allowed = REPO_ALLOWED_KEYS.iter().any(|a| dotted == *a || dotted.starts_with(&format!("{a}.")));
         if !allowed {
             out.push(RawIssue::new(&p, format!("`{dotted}` is not allowed in repo config")));
         }
     }
+    out.dedup();
     out
 }
+
+/// Tools belong to the user, not to a committed repo file: reported, ignored, rest of the file applies.
+pub const REPO_TOOLS_PERSONAL: &str = "`tools` is personal: add it in Settings → Tools";
+
+pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (global only)";
 
 /// Duplicate or missing ids in keyed lists, per layer.
 pub fn id_issues(value: &Value) -> Vec<RawIssue> {
@@ -630,6 +640,16 @@ mod tests {
         let paths: Vec<String> = issues.iter().map(|i| join_path(&i.path)).collect();
         assert_eq!(paths, vec!["terminal.font_size", "worktree.root"]);
         assert!(issues[0].message.contains("not allowed in repo config"));
+        let t = json!({"tools": [{"id": "a", "command": "x"}, {"id": "b"}]});
+        assert_eq!(repo_key_issues(&t), vec![RawIssue::new(&["tools".to_owned()], REPO_TOOLS_PERSONAL)]);
+    }
+
+    #[test]
+    fn tools_are_global_only() {
+        let v = json!({"project": {"id": "x", "name": "X"}, "tools": [{"id": "a", "command": "x"}]});
+        let issues = layer_issues(Layer::Project, &v, Some("x"));
+        let t = vec!["tools".to_owned()];
+        assert_eq!(issues, vec![RawIssue::new(&t, "`tools` cannot be set per project (global only)")]);
     }
 
     #[test]
