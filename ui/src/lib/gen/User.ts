@@ -4,4 +4,8 @@ export type User = {
 /**
  * Provider user id (Jira accountId, Redmine id, GitHub/GitLab login or numeric id).
  */
-id: string, name: string, login: string | null, avatar_url: string | null, };
+id: string, name: string, login: string | null, avatar_url: string | null, 
+/**
+ * Email when the provider exposes one (Jira `emailAddress`); joins identities across providers.
+ */
+email?: string | null, };

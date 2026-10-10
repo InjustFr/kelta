@@ -80,7 +80,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         // tracker / codehost
         TrackerKind, TrackerCaps, User, TicketRef, StatusCategory, Status, Ticket, BodyFormat,
         Comment, TicketDetail, Transition, Column, Cursor, Page<Ticket>, Assignee, AccountError,
-        TicketItem, TicketPage, Who, TicketGroupBy, TicketSort, Sprint, SourceHit, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
+        TicketItem, TicketPage, Person, PersonId, WaitWhy, Waiting, Who, TicketGroupBy, TicketSort, Sprint, SourceHit, CodeHostKind, ReviewRef, CiState, ReviewDecision, MyReviewState,
         ReviewKind, Review, ReviewQuery, Reviewer, CiCheck, FileChange, ReviewDetail, PrState, PrSource, PrLink, PrCreate,
         PrDraft, MergeMethod, ReviewItem, ReviewPage, Feedback, FeedbackThread, FeedbackReview, FailedCheck,
         // ext
@@ -95,7 +95,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         Layer, Settings, ProjectConfig, RepoConfig, CodeHostBinding, TrackerBinding, TrackerView,
         ColumnSpec, StatusMap, RepoRule, RepoMatch, ProjectV2Ref, TransitionTarget, AccountConfig, OAuthSettings,
         SessionTemplate, TemplateNode, EditorPreset, ClaudeProfile, LinuxGraphics,
-        EffectiveSettings, LayerDoc, ValidationIssue, TrustInfo, SettingsDiff,
+        EffectiveSettings, LayerDoc, ValidationIssue, Severity, TrustInfo, SettingsDiff,
         // secrets
         SecretRef, SecretBackendStatus, OAuthDevicePrompt,
         // events
@@ -107,7 +107,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         KillSignal, ClipboardKind, TerminalPalette, TerminalLimits, HistoryHit, SessionTermStats,
         TerminalStats, LoginEnvSource, LoginEnv,
         // ipc
-        ToolVersion, AppInfo, ProcRole, ProcMem, SessionMem, PerfSnapshot, CheckStatus, Check,
+        ToolVersion, AppInfo, UpdateChannel, UpdateState, UpdateStatus, ProcRole, ProcMem, SessionMem, PerfSnapshot, CheckStatus, Check,
         Diagnostics, WindowState, SubscribeResult, LayoutSaveResult, AccountTestResult,
     );
     if let Some(e) = v.error {

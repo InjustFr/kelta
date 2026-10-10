@@ -26,6 +26,7 @@
       "labels": [],
       "kind": "review_requested",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["SHOP-150"],
       "additions": 220,
@@ -33,7 +34,8 @@
       "requested_at": "2026-10-06T09:00:00Z",
       "blocking": true
     },
-    "project_ids": ["shop"]
+    "project_ids": ["shop"],
+    "waiting": []
   },
   {
     "review": {
@@ -62,13 +64,15 @@
       "labels": [],
       "kind": "review_requested",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["SHOP-142"],
       "additions": 40,
       "deletions": 38,
       "requested_at": "2026-10-02T14:00:00Z"
     },
-    "project_ids": ["shop"]
+    "project_ids": ["shop"],
+    "waiting": []
   },
   {
     "review": {
@@ -97,13 +101,23 @@
       "labels": [],
       "kind": "authored",
       "waiting_on": ["anna"],
+      "author_to_act": false,
       "requested_at": "2026-10-08T09:00:00Z",
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["SHOP-120"],
       "additions": 512,
       "deletions": 300
     },
-    "project_ids": ["shop"]
+    "project_ids": ["shop"],
+    "waiting": [
+      {
+        "person": "github-acme:anna",
+        "name": "Anna",
+        "why": "review",
+        "since": "2026-10-09T10:00:00Z",
+        "matched": false
+      }
+    ]
   },
   {
     "review": {
@@ -132,13 +146,30 @@
       "labels": [],
       "kind": "authored",
       "waiting_on": ["bob", "carol"],
+      "author_to_act": false,
       "requested_at": "2026-10-09T16:00:00Z",
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["4567"],
       "additions": 18,
       "deletions": 6
     },
-    "project_ids": ["billing"]
+    "project_ids": ["billing"],
+    "waiting": [
+      {
+        "person": "github-acme:bob",
+        "name": "Bob",
+        "why": "review",
+        "since": "2026-10-08T10:00:00Z",
+        "matched": false
+      },
+      {
+        "person": "github-acme:carol",
+        "name": "Carol",
+        "why": "review",
+        "since": "2026-10-08T10:00:00Z",
+        "matched": false
+      }
+    ]
   },
   {
     "review": {
@@ -167,12 +198,14 @@
       "labels": [],
       "kind": "authored",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["#12"],
       "additions": 140,
       "deletions": 12
     },
-    "project_ids": ["kelta-tools"]
+    "project_ids": ["kelta-tools"],
+    "waiting": []
   },
   {
     "review": {
@@ -201,12 +234,14 @@
       "labels": [],
       "kind": "review_requested",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": [],
       "additions": 95,
       "deletions": 0
     },
-    "project_ids": []
+    "project_ids": [],
+    "waiting": []
   },
   {
     "review": {
@@ -235,13 +270,15 @@
       "labels": [],
       "kind": "review_requested",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": [],
       "additions": 220,
       "deletions": 31,
       "reviewed_head": "1111111111111111111111111111111111111111"
     },
-    "project_ids": ["shop"]
+    "project_ids": ["shop"],
+    "waiting": []
   },
   {
     "review": {
@@ -270,12 +307,14 @@
       "labels": [],
       "kind": "review_requested",
       "waiting_on": [],
+      "author_to_act": false,
       "updated_at": "2026-10-09T07:30:00Z",
       "linked_tickets": ["SHOP-142"],
       "additions": 220,
       "deletions": 31,
       "reviewed_head": "2222222222222222222222222222222222222222"
     },
-    "project_ids": ["shop"]
+    "project_ids": ["shop"],
+    "waiting": []
   }
 ]

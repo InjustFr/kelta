@@ -17,6 +17,7 @@ import type {
   Layer,
   NextUp,
   Layout,
+  Person,
   ProjectInfo,
   ReviewDetail,
   ReviewItem,
@@ -36,6 +37,7 @@ import type {
   ToolInfo,
   Transition,
   UiEvent,
+  UpdateStatus,
   WorkItem,
   WorkStepStatus,
 } from '$lib/gen';
@@ -115,6 +117,8 @@ export interface MockState {
   notes: Record<string, ReviewNote[]>;
   /** Next up list and seen tickets (#145). */
   nextUp: NextUp;
+  /** `app_update_status`; `app_update_check` stamps `checked_at`. */
+  update: UpdateStatus;
 }
 
 interface MockOptions {
@@ -219,6 +223,7 @@ function freshState(): MockState {
     notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
+    update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
 
@@ -561,6 +566,12 @@ export function createMockTransport(options: MockOptions = {}): {
       claudeMcp = false;
       return null;
     },
+    app_update_status: () => clone(state.update),
+    app_update_check: () => {
+      state.update.checked_at = new Date().toISOString();
+      return clone(state.update);
+    },
+    app_restart: () => null,
     // ---- settings --------------------------------------------------------------------------
     settings_schema: async () => {
       const schema = await import('../../../../schema/settings.schema.json');
@@ -584,7 +595,7 @@ export function createMockTransport(options: MockOptions = {}): {
     settings_validate: ({ text }) =>
       text.includes('=') || text.trim() === ''
         ? []
-        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1 }],
+        : [{ path: '', message: 'expected `key = value`', line: 1, col: 1, severity: 'error' as const }],
     settings_write_raw: () => clone(state.settings),
     settings_open_file: ({ project_id }) =>
       spawn(
@@ -998,6 +1009,25 @@ export function createMockTransport(options: MockOptions = {}): {
       if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
       const q = query.trim().toLowerCase();
       return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
+    },
+    team_people: ({ scope }) => {
+      const people = new Map<string, Person>();
+      for (const t of state.tickets.filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))) {
+        for (const u of [t.ticket.assignee, t.ticket.reporter]) {
+          if (!u) continue;
+          const me = u.id === ME.id;
+          const key = me ? 'me' : `${t.ticket.ref.account}:${u.id}`;
+          people.set(key, {
+            key,
+            name: me ? 'You' : u.name,
+            avatar_url: u.avatar_url,
+            ids: [{ account: t.ticket.ref.account, id: u.id, login: u.login, code_host: false }],
+            matched: me,
+            me,
+          });
+        }
+      }
+      return clone([...people.values()]);
     },
     next_up_list: () => clone(state.nextUp),
     next_up_put: ({ item }) => {

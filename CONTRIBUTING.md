@@ -99,10 +99,29 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
-   macOS dmg here and the Linux deb + AppImage (arm64, and amd64 under QEMU) in Docker, moves the `nightly`
-   tag to HEAD and uploads to the prerelease. It runs `bash scripts/ci-local.sh --full` first. Tags `v*` build
+   macOS dmg and signed updater bundle here (and, with `--linux`, the deb + AppImage for arm64, and amd64 under
+   QEMU, in Docker), moves the `nightly` tag to HEAD and uploads to the prerelease, `latest.json` after the
+   other assets. It runs `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key
+   (see Nightly builds). Tags `v*` build
    the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A manual run of
    `release` (or of `nightly` off `main`) builds without publishing.
+
+## Nightly builds
+
+Installed copies update from the nightly's `latest.json`, verified with a Tauri (minisign) key pair. This is not
+Apple signing. One-time setup on the Mac that publishes:
+
+```sh
+ui/node_modules/.bin/tauri signer generate -w ~/.tauri/kelta-updater.key       # choose a password
+security add-generic-password -a "$USER" -s kelta-updater -w            # prompts; login Keychain
+```
+
+Put the content of `~/.tauri/kelta-updater.key.pub` in `packaging/tauri.release.json` under
+`plugins.updater.pubkey` (replacing the placeholder) and commit it. Back up the private key and its password in a
+password manager: losing either strands every installed build until a manual reinstall. `nightly-local.sh` reads
+the key from `${KELTA_UPDATER_KEY:-~/.tauri/kelta-updater.key}` and the password from the Keychain, and stops
+before building when either is missing or the pubkey is still the placeholder. `packaging/build.sh` without
+`TAURI_SIGNING_PRIVATE_KEY` still builds unsigned installers (no update artifacts) from source.
 
 ## Packaging and benchmarks
 

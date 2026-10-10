@@ -43,6 +43,8 @@
   let Active = $state<Component<SettingsSectionProps> | null>(null);
   let sectionLoading = $state(false);
   let layerIssues = $state<ValidationIssue[]>([]);
+  const layerErrors = $derived(layerIssues.filter((i) => i.severity === 'error'));
+  const layerWarnings = $derived(layerIssues.filter((i) => i.severity === 'warning'));
 
   const configurable = $derived(projects.list.filter((p) => !p.builtin));
   const projectOptions = $derived(configurable.map((p) => ({ value: p.id, label: p.name })));
@@ -209,25 +211,39 @@
     </div>
   {/if}
 
-  {#if layerIssues.length > 0}
+  {#if layerErrors.length > 0}
     <div class="banner err" role="alert" data-testid="layer-issues">
       <Icon name="circle-alert" size={14} />
       <div>
         <strong
           >{editor.doc?.path.split('/').pop() ?? 'config'} has errors; the last good configuration is still active.</strong
         >
-        <ul>
-          {#each layerIssues as i, n (n)}
-            <li>
-              {#if i.line}<code>{i.line}:{i.col ?? 1}</code>{/if}
-              {#if i.path}<code>{i.path}</code>{/if}
-              {i.message}
-            </li>
-          {/each}
-        </ul>
+        {@render issueList(layerErrors)}
       </div>
     </div>
   {/if}
+  {#if layerWarnings.length > 0}
+    <div class="banner warn" role="status" data-testid="layer-warnings">
+      <Icon name="triangle-alert" size={14} />
+      <div>
+        <strong
+          >Warnings: these settings in {editor.doc?.path.split('/').pop() ?? 'config'} are ignored; the rest applies.</strong
+        >
+        {@render issueList(layerWarnings)}
+      </div>
+    </div>
+  {/if}
+  {#snippet issueList(list: ValidationIssue[])}
+    <ul>
+      {#each list as i, n (n)}
+        <li>
+          {#if i.line}<code>{i.line}:{i.col ?? 1}</code>{/if}
+          {#if i.path}<code>{i.path}</code>{/if}
+          {i.message}
+        </li>
+      {/each}
+    </ul>
+  {/snippet}
 
   {#if editor.layer === 'repo'}<RepoTrust {editor} />{/if}
 

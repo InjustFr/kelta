@@ -18,6 +18,9 @@ pub const COMMANDS: &[&str] = &[
     "claude_mcp_status",
     "claude_mcp_install",
     "claude_mcp_remove",
+    "app_update_status",
+    "app_update_check",
+    "app_restart",
     // settings
     "settings_schema",
     "settings_effective",
@@ -82,6 +85,7 @@ pub const COMMANDS: &[&str] = &[
     "tracker_refine",
     "tracker_search",
     "tracker_sources",
+    "team_people",
     "next_up_list",
     "next_up_put",
     "next_up_remove",

@@ -55,6 +55,7 @@ async fn assigned_list_drops_pull_requests_and_follows_link_headers() {
     assert_eq!(t.status.category, StatusCategory::Todo);
     assert_eq!(t.labels, vec!["bug"]);
     assert_eq!(t.assignee.as_ref().unwrap().id, "louis");
+    assert_eq!(t.reporter.as_ref().unwrap().id, "carol");
     assert_eq!(t.project_hint.as_deref(), Some("acme/shop"));
     assert_eq!(page.items[1].r#ref.key, "acme/web#7");
     assert_eq!((t.priority_rank, t.due.as_deref(), t.sprint.is_none()), (None, None, true));

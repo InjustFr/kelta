@@ -29,6 +29,22 @@
   let saving = $state(false);
   let removing = $state<ProjectInfo | null>(null);
   let killSessions = $state(false);
+  // the file's own `project.color` warning: a bad colour is dropped on load, so `p.color` cannot tell
+  let colorWarnings = $state<Record<string, string>>({});
+
+  async function colorWarning(id: string): Promise<string> {
+    try {
+      const doc = await ipc.settingsLayerGet({ layer: 'project', project_id: id, repo_id: null });
+      const issues = await ipc.settingsValidate({ layer: 'project', text: doc.text });
+      return issues.find((i) => i.severity === 'warning' && i.path === 'project.color')?.message ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  $effect(() => {
+    for (const p of editable) void colorWarning(p.id).then((m) => (colorWarnings[p.id] = m));
+  });
 
   function edit(p: ProjectInfo): void {
     editing = p.id;
@@ -106,6 +122,11 @@
                   <ColorPicker value={color} onchange={(c) => (color = c)} />
                   <input class="icon" aria-label="Icon" maxlength="2" placeholder="Icon" bind:value={icon} />
                 </div>
+                {#if colorWarnings[p.id]}
+                  <p class="warn" role="status" data-testid="color-warning">
+                    Colour ignored: {colorWarnings[p.id]}. Pick one to replace it.
+                  </p>
+                {/if}
                 <div class="row">
                   <Button type="submit" variant="primary" size="sm" loading={saving}>Save</Button>
                   <Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
@@ -120,6 +141,9 @@
                   ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
                 >
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
+                {#if colorWarnings[p.id]}
+                  <span class="warn" data-testid="color-warning">Colour ignored: {colorWarnings[p.id]}</span>
+                {/if}
                 {#if fedBy(p.id).length > 0}
                   <span class="muted" data-testid="fed-by"
                     >Fed by {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
@@ -231,6 +255,12 @@
 
   .icon {
     width: 56px;
+  }
+
+  .warn {
+    margin: 0;
+    color: var(--k-warn);
+    font-size: var(--k-font-size-sm);
   }
 
   .link {

@@ -386,7 +386,7 @@
                 {@const ci = ciGlyph(rv.ci)}
                 {@const dec = decisionInfo(rv.decision)}
                 {@const mine = myStateInfo(rv.my_state)}
-                {@const wait = waitingChip(rv, slaHours)}
+                {@const wait = waitingChip(r.item, slaHours)}
                 <button
                   type="button"
                   tabindex="-1"
@@ -414,7 +414,9 @@
                     {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge
                       >{/if}
                     {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-                    {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'}>{wait.label}</Badge>{/if}
+                    {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'} title={wait.title}
+                        >{wait.label}</Badge
+                      >{/if}
                     <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
                     <span class="k-row-meta k-narrow-hide">{rv.author.name}</span>
                     {#if rv.additions !== null || rv.deletions !== null}

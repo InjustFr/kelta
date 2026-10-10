@@ -57,6 +57,7 @@ fi
 section "bash scripts/check-no-timers.sh"
 bash scripts/check-no-timers.sh
 bash scripts/check-no-timers.test.sh
+bash scripts/update-manifest.test.sh
 python3 scripts/affected_test.py
 
 if want rust; then

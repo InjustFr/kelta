@@ -233,6 +233,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             if let Some(c) = core(app) {
                 c.publish(BusEvent::new(bus::APP_FOCUS_CHANGED, serde_json::json!({ "focused": focused })));
             }
+            if *focused {
+                crate::platform::update::auto_check(app);
+            }
         }
         // The webview is gone: its event channels are dead; commands queue until the next one.
         WindowEvent::Destroyed => {

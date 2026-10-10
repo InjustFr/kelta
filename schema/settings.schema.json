@@ -858,7 +858,8 @@
         "light_theme": "bezel-light",
         "log_level": "info",
         "restore_mode": "lazy",
-        "theme": "system"
+        "theme": "system",
+        "updates": true
       },
       "properties": {
         "confirm_quit_with_running": {
@@ -915,6 +916,14 @@
             "light"
           ],
           "type": "string"
+        },
+        "updates": {
+          "default": true,
+          "description": "Check for updates automatically (on start and on focus, at most every 6 h); \"Check now\" works either way.",
+          "type": "boolean",
+          "x-kelta-scope": [
+            "global"
+          ]
         }
       },
       "type": "object",

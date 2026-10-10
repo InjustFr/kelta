@@ -207,6 +207,7 @@ impl RedmineTracker {
             status: issue.get("status").map(|s| self.status_from(s)).unwrap_or_default(),
             kind: issue.pointer("/tracker/name").and_then(Value::as_str).map(str::to_owned),
             assignee: issue.get("assigned_to").and_then(Self::user_from),
+            reporter: issue.get("author").and_then(Self::user_from),
             labels: Vec::new(),
             priority: issue.pointer("/priority/name").and_then(Value::as_str).map(str::to_owned),
             updated_at: s(issue, "updated_on").unwrap_or("").to_owned(),

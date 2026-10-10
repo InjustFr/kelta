@@ -40,6 +40,7 @@
   import StatusBar from './StatusBar.svelte';
   import ToastHost from './ToastHost.svelte';
   import { startupUnlock } from './unlock';
+  import UpdateBanner from './UpdateBanner.svelte';
   import Workspace from './Workspace.svelte';
   import { globalContent } from '../views/work/nav';
 
@@ -279,6 +280,7 @@
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
   <ProjectRail />
   <div class="main">
+    <UpdateBanner />
     {#if ui.view}
       <GlobalHost view={ui.view} />
     {:else if active}

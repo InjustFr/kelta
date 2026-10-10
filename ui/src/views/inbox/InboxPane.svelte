@@ -36,6 +36,8 @@
   import { isNextUp, type NowRow, type Section } from './groups';
   import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
   import { nextUp } from './nextUp.svelte';
+  import { waitChip } from '../people/waiting';
+  import { waitingChip } from '../reviews/nudge';
 
   let { focused }: PaneProps<'inbox'> = $props();
 
@@ -210,6 +212,7 @@
         const r = row.review.review;
         const p = projectOf(row.review.project_ids);
         const stat = r.additions !== null && r.deletions !== null ? [`+${r.additions} −${r.deletions}`] : [];
+        const chip = waitingChip(row.review, settings.value()?.reviews.sla_hours ?? 24);
         return {
           lamp: 'none',
           id: `#${r.ref.number}`,
@@ -218,7 +221,7 @@
           color: p.color,
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
           reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
-          meta: stat,
+          meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
           age: age((!row.mine && r.requested_at) || r.updated_at),
           more: `${r.source_branch} into ${r.target_branch}${
             r.failed_check_names.length
@@ -250,7 +253,7 @@
             ...(t.priority ? [t.priority] : []),
           ],
           age: age(t.updated_at),
-          more: t.assignee?.name ?? '',
+          more: waitChip(row.ticket.waiting, { withWhy: true })?.label ?? '',
           actions: [
             { key: 'enter', label: 'Start work' },
             ...(isNextUp(row)

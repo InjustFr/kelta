@@ -194,6 +194,21 @@ describe('Now', () => {
     expect(globalContent('tickets')).toMatchObject({ scope: { kind: 'all' }, who: 'mine', person: null });
   });
 
+  it('a ticket row says who it waits on instead of the bare assignee', async () => {
+    const base = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
+    if (!base) throw new Error('fixture missing');
+    const ticket = { ...base.ticket, ref: { ...base.ticket.ref, key: 'WAIT-1', id: 'w1' }, priority_rank: 0 };
+    const waiting = [
+      { person: 'gh:anna', name: 'Anna', why: 'review', since: '2026-01-01T00:00:00Z', matched: true },
+    ] as const;
+    mock.state.tickets.push({ ...base, ticket, waiting: [...waiting] });
+    mock.state.nextUp.seen.push(`${ticket.ref.account}:WAIT-1`);
+    const { container } = mountNow();
+    await screen.findByText('WAIT-1');
+    await nextWaitingTo(container, `t:${ticket.ref.account}:WAIT-1`);
+    expect(await screen.findByText(/waiting on Anna \(review\) · \d+h/)).toBeTruthy();
+  });
+
   it('with no ticket source: a notice above the list, the empty state when Now is empty', async () => {
     (mock.state.settings.value as unknown as Settings).sources = [];
     settings.effective = {};

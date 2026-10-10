@@ -37,6 +37,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 | `dark_theme` | str | `bezel-dark` | scope global; theme id used in dark mode (built-in or `[themes.<id>]` with `base = "dark"`); an unknown id or a theme of the other base falls back to `bezel-dark` |
 | `light_theme` | str | `bezel-light` | scope global; same for light mode, fallback `bezel-light` |
+| `updates` | bool | `true` | scope global; check for updates after start and on focus (at most every 6 h); `false` stops automatic checks, Settings → General "Check now" still works |
 
 ### [window]
 | `decorations` | enum(auto\|native\|none\|custom) | `auto` | restart; auto = none on Hyprland/Sway, native elsewhere |

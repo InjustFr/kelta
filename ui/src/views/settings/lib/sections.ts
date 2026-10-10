@@ -26,7 +26,7 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
 export const FOREIGN_ROOTS: readonly string[] = ['triggers', 'commands', 'plugins', 'themes'];
 
 export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
-  general: 'Theme, session restore and quit behaviour.',
+  general: 'Theme, updates, session restore and quit behaviour.',
   window: 'Window decorations and what closing the window does.',
   terminal: 'Fonts, scrollback, clipboard and keyboard behaviour of terminal panes.',
   'linux-graphics':
