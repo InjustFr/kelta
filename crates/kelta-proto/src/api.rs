@@ -238,6 +238,9 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<(), KeltaError>;
     // work & editor (core delegates to kelta-work)
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem>;
+    async fn work_get(&self, _id: &WorkItemId) -> Option<WorkItem> {
+        None
+    }
     async fn work_create_pr(
         &self,
         id: &WorkItemId,

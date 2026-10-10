@@ -610,6 +610,10 @@ pub struct WorkItem {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub left_at: Option<String>,
+    /// First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub port_base: Option<u16>,
 }
 
 /// What changed since Louis's last look (the Ready for review chip). Lockfiles, generated files
@@ -626,6 +630,36 @@ pub struct ReviewDelta {
     /// Every file, for `+N/−M since you reviewed`.
     pub insertions: u32,
     pub deletions: u32,
+}
+
+/// Ports per work item: `KELTA_PORT` plus `KELTA_PORT_1..9`.
+pub const PORT_BLOCK: u16 = 10;
+
+impl WorkItem {
+    /// Env of every process of the item: `KELTA_PORT`, `KELTA_PORT_1..9` (when it has a block) and
+    /// `COMPOSE_PROJECT_NAME=kelta-<key-slug>` so parallel worktrees get their own containers.
+    pub fn env(&self) -> BTreeMap<String, String> {
+        let key = self.ticket.as_ref().map_or(self.branch.as_str(), |t| t.key.as_str());
+        let mut slug = String::new();
+        for c in key.chars().map(|c| c.to_ascii_lowercase()) {
+            if c.is_ascii_alphanumeric() {
+                slug.push(c);
+            } else if !slug.is_empty() && !slug.ends_with('-') {
+                slug.push('-');
+            }
+        }
+        let mut env = BTreeMap::from([(
+            "COMPOSE_PROJECT_NAME".to_owned(),
+            format!("kelta-{}", slug.trim_end_matches('-')),
+        )]);
+        if let Some(base) = self.port_base {
+            env.insert("KELTA_PORT".into(), base.to_string());
+            for i in 1..PORT_BLOCK {
+                env.insert(format!("KELTA_PORT_{i}"), (base + i).to_string());
+            }
+        }
+        env
+    }
 }
 
 /// `work_rebase` bookkeeping (FLOW §4.4). `pre_head` is the last HEAD that contained the remote

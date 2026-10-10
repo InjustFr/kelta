@@ -12,6 +12,7 @@
   "left_at": null,
   "next_note": null,
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/90",
   "project_id": "shop",

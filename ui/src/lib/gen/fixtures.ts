@@ -746,6 +746,7 @@ export const workItem: WorkItem = {
   "left_at": null,
   "next_note": null,
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
@@ -859,6 +860,7 @@ export const workItemFailed: WorkItem = {
   "left_at": null,
   "next_note": null,
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
@@ -974,6 +976,7 @@ export const workItemMerged: WorkItem = {
   "left_at": null,
   "next_note": null,
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/90",
   "project_id": "shop",
@@ -1120,6 +1123,7 @@ export const workItemRebaseStopped: WorkItem = {
   "left_at": null,
   "next_note": null,
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/74",
   "project_id": "shop",
@@ -1866,6 +1870,9 @@ export const settingsDefault: Settings = {
     "min_secs": 30,
     "when_closed": "off"
   },
+  "ports": {
+    "range": "20000-29999"
+  },
   "reviews": {
     "ignore_globs": [
       "*.lock",
@@ -2066,6 +2073,7 @@ export const settingsDefault: Settings = {
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
     "cleanup": "ask",
+    "env_template": "",
     "fetch_timeout_secs": 20,
     "include": [
       ".env",
@@ -2075,6 +2083,7 @@ export const settingsDefault: Settings = {
     "setup": [],
     "setup_blocking": true,
     "slug_max": 40,
+    "teardown": "",
     "type_map": {
       "bug": "fix",
       "default": "chore",
@@ -3129,6 +3138,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "left_at": null,
     "next_note": null,
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "port_base": 20140,
     "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",

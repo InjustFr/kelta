@@ -57,4 +57,8 @@ next_note?: string | null,
 /**
  * When Louis last left the item's tab (RFC 3339, `work_left`); drives the return strip.
  */
-left_at?: string | null, };
+left_at?: string | null, 
+/**
+ * First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
+ */
+port_base?: number | null, };

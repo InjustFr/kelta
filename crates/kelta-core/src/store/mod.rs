@@ -491,9 +491,9 @@ pub mod q {
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
              review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at,
-             claude_message, delta_json, next_note, left_at)
+             claude_message, delta_json, next_note, left_at, port_base)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
-             ?25, ?26, ?27, ?28)
+             ?25, ?26, ?27, ?28, ?29)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -504,7 +504,7 @@ pub mod q {
              pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
              rebase_json = excluded.rebase_json, claude_at = excluded.claude_at,
              claude_message = excluded.claude_message, delta_json = excluded.delta_json,
-             next_note = excluded.next_note, left_at = excluded.left_at",
+             next_note = excluded.next_note, left_at = excluded.left_at, port_base = excluded.port_base",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -534,6 +534,7 @@ pub mod q {
                 json_opt(&w.delta)?,
                 w.next_note,
                 w.left_at,
+                w.port_base,
             ],
         )
         .map_err(db_err)?;
@@ -552,7 +553,7 @@ pub mod q {
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
         claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, claude_message,
-        delta_json, next_note, left_at";
+        delta_json, next_note, left_at, port_base";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -592,6 +593,7 @@ pub mod q {
             delta: r.get::<_, Option<String>>(24)?.and_then(|d| serde_json::from_str(&d).ok()),
             next_note: r.get(25)?,
             left_at: r.get(26)?,
+            port_base: r.get(27)?,
         };
         Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }

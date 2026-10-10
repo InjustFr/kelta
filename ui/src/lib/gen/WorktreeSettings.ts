@@ -25,4 +25,13 @@ setup: Array<string>,
 /**
  * Claude waits for setup exit 0.
  */
-setup_blocking: boolean, fetch_timeout_secs: number, cleanup: Cleanup, };
+setup_blocking: boolean, fetch_timeout_secs: number, cleanup: Cleanup, 
+/**
+ * Worktree file ending in `.kelta` (e.g. `.env.kelta`), rendered at start work to the same path
+ * without `.kelta` (`{port}`, `{port.1}`…`{port.9}`); an existing different file is kept.
+ */
+env_template: string, 
+/**
+ * Run in a visible pane on Finish, in the worktree; failure stops the Finish.
+ */
+teardown: string, };
