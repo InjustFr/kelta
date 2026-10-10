@@ -925,6 +925,7 @@ export function createMockTransport(options: MockOptions = {}): {
         pr_title_needs_key: false,
         review_due: false,
         claude_replied: false,
+        auto_finish: false,
       };
       // Like the saga: sessions run in the worktree, bound to the item, in a new active tab that
       // carries the item (B5); the UI brings the project to the front once work_start returns.
