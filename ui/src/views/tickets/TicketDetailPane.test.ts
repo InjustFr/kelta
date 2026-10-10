@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { TicketRef } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, tickets, toasts, ui, work } from '$lib/stores';
+import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 
 import TicketDetailPane from './TicketDetailPane.svelte';
 
@@ -21,6 +21,7 @@ beforeEach(async () => {
   toasts.clear();
   ui.sheets = [];
   work.byId = {};
+  reviews.lists = {};
   await projects.load();
 });
 
@@ -94,6 +95,31 @@ describe('TicketDetailPane', () => {
     mountDetail({ account: 'jira-acme', key: 'SHOP-142', id: '10142' });
     expect(existing).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Resume work' })).toBeTruthy();
+  });
+
+  it('shows the linked pull request with its CI lamp and review state', async () => {
+    mountDetail({ account: 'jira-acme', key: 'SHOP-120', id: '10120' });
+    await screen.findByRole('heading', { level: 1 });
+    const row = screen.getByTestId('ticket-pr');
+    await waitFor(() => expect(row.textContent).toContain('#305'));
+    expect(row.textContent).toContain('Changes requested');
+    expect(row.querySelector('[data-attention="done"]')).not.toBeNull();
+  });
+
+  it('opens the move menu from the status value and moves with a digit', async () => {
+    mountDetail();
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.getByTestId('ticket-pr').textContent).toContain('None');
+    await fireEvent.click(screen.getByRole('button', { name: /^Status To Do/ }));
+    const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
+    expect(menu.querySelector('[aria-current="step"]')?.textContent).toBe('To Do');
+    await fireEvent.keyDown(menu, { key: '3' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
+        transition_id: 'to-done',
+      }),
+    );
+    expect(await screen.findByLabelText('Resolution')).toBeTruthy(); // jira Done needs fields
   });
 
   it('shows the not-found and error states', async () => {

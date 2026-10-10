@@ -54,6 +54,7 @@ export class MoveController {
       });
       tickets.patch(updated);
       this.dialog = null;
+      toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
       return true;
     } catch (err) {
       await this.#handle(err, ticket, transition.to.name, transition.to.category, transition);
@@ -83,6 +84,7 @@ export class MoveController {
       });
       tickets.patch(updated);
       this.dialog = null;
+      toasts.info(`Moved ${d.ticket.ref.key} to ${d.target}`);
     } catch (err) {
       const e = toIpcError('tracker_transition', err);
       if (e.code === 'needs_fields') {

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, tickets, toasts } from '$lib/stores';
+import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 
 import { selection } from '../work/selection.svelte';
 import TicketsPane from './TicketsPane.svelte';
@@ -20,16 +20,19 @@ beforeEach(async () => {
   tickets.details = {};
   tickets.transitions = {};
   toasts.clear();
+  reviews.lists = {};
+  ui.sheets = [];
+  work.byId = {};
   await projects.load();
 });
 
-function mountBoard(mode: 'board' | 'list' = 'board') {
+function mountBoard(mode: 'board' | 'list' = 'board', projectId = 'shop') {
   return render(TicketsPane, {
     props: {
-      projectId: 'shop',
+      projectId,
       tabId: 'tab-1',
       paneId: 'pane-1',
-      content: { kind: 'tickets', scope: { kind: 'project', id: 'shop' }, view_id: null, mode, who: null },
+      content: { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode, who: null },
       visible: true,
       focused: true,
     },
@@ -170,15 +173,15 @@ describe('TicketsPane board', () => {
     expect(laneOf(container, 'SHOP-151')).toBe('todo');
   });
 
-  it('moves with the keyboard only: m opens the column menu', async () => {
+  it('moves with the keyboard only: m opens the transition menu, Enter takes the first', async () => {
     const { container } = mountBoard();
     await ready(container);
     await waitFor(() => expect(container.querySelectorAll('[data-column]').length).toBe(4));
     await fireEvent.keyDown(screen.getByTestId('tickets-pane'), { key: 'm' });
-    const menu = await screen.findByRole('menu');
+    const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
     await fireEvent.keyDown(menu, { key: 'ArrowDown' });
     await fireEvent.keyDown(menu, { key: 'Enter' });
-    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_move')).toBe(true));
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'tracker_transition')).toBe(true));
     await waitFor(() => expect(laneOf(container, 'SHOP-151')).toBe('in_progress'));
   });
 });
@@ -214,7 +217,7 @@ describe('TicketsPane states', () => {
     expect(selection.ticket).toBeNull();
   });
 
-  it('shows "No tracker bound" for a project without a tracker', async () => {
+  it('shows "No ticket source" with Add source for a project without a tracker', async () => {
     render(TicketsPane, {
       props: {
         projectId: 'home',
@@ -231,7 +234,128 @@ describe('TicketsPane states', () => {
         focused: true,
       },
     });
-    expect(await screen.findByText(/^No tracker bound to/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Bind a tracker' })).toBeTruthy();
+    expect(await screen.findByText('No ticket source for this project.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: 'home' } });
+  });
+
+  it('says why an empty Unassigned list is empty and offers Anyone', async () => {
+    mountBoard('list', 'billing');
+    await screen.findByRole('tab', { name: /^Mine/ });
+    await fireEvent.keyDown(screen.getByTestId('tickets-pane'), { key: '2' });
+    expect(await screen.findByText('Every ticket in Billing has an owner.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show anyone' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^Anyone/ }).getAttribute('aria-selected')).toBe('true'),
+    );
+  });
+});
+
+const pane = () => screen.getByTestId('tickets-pane');
+const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(pane(), { key, ...init });
+const groupNames = (c: HTMLElement) =>
+  [...c.querySelectorAll<HTMLElement>('[data-group]')].map((g) => g.textContent?.replace(/\s+/g, ' ').trim());
+
+describe('TicketsPane workbench', () => {
+  it('switches who with 1/2/3, loads with that who and shows the counts', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Mine 2' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Unassigned 1' })).toBeTruthy());
+    await press('2');
+    await waitFor(() => expect(card(container, 'SHOP-151')).toBeNull());
+    expect(card(container, 'SHOP-155')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Unassigned 1' }).getAttribute('aria-selected')).toBe('true');
+    await press('3');
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_list').at(-1)?.args).toMatchObject({
+        who: 'anyone',
+      }),
+    );
+    await waitFor(() => expect(card(container, 'SHOP-120')).not.toBeNull());
+  });
+
+  it('groups by native status, cycles the grouping with g, and keeps Done collapsed', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
+    expect(groupNames(container)).toEqual(['In Progress 1', 'In Review 1', 'To Do 2']);
+    await press('g');
+    await waitFor(() =>
+      expect(groupNames(container)).toEqual(['Ada Lovelace 2', 'Bob Martin 1', 'Unassigned 1']),
+    );
+    await press('g'); // source
+    await press('g'); // none
+    await waitFor(() => expect(groupNames(container)).toEqual([]));
+    expect(card(container, 'SHOP-151')).not.toBeNull();
+  });
+
+  it('opens a collapsed Done group with Enter', async () => {
+    const { container } = mountBoard('list', 'billing');
+    const key = (k: string) => container.querySelector(`[data-key="redmine-corp:${k}"]`);
+    await waitFor(() => expect(key('4590')).not.toBeNull());
+    const done = container.querySelector<HTMLElement>('[data-group="Resolved"]');
+    expect(done?.getAttribute('aria-expanded')).toBe('false');
+    expect(key('4602')).toBeNull();
+    await press('End');
+    await press('Enter');
+    await waitFor(() => expect(key('4602')).not.toBeNull());
+  });
+
+  it('m shows the flow strip and a digit moves at once', async () => {
+    const { container } = mountBoard('list');
+    await ready(container);
+    await press('m');
+    const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
+    const current = menu.querySelector('[aria-current="step"]');
+    expect(current?.textContent).toBe('To Do');
+    expect([...menu.querySelectorAll('[role="menuitem"] .label')].map((l) => l.textContent)).toEqual([
+      'In progress',
+      'In review',
+      'Done',
+    ]);
+    await fireEvent.keyDown(menu, { key: '2' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
+        transition_id: 'to-in_review',
+      }),
+    );
+    expect(screen.queryByRole('menu')).toBeNull();
+    await waitFor(() =>
+      expect(toasts.list.some((t) => t.toast.text === 'Moved SHOP-151 to In review')).toBe(true),
+    );
+  });
+
+  it('A unassigns the selected ticket', async () => {
+    const { container } = mountBoard('list');
+    await ready(container);
+    await press('A');
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_assign').at(-1)?.args).toMatchObject({
+        ticket: { key: 'SHOP-151' },
+        assignee: { kind: 'none' },
+      }),
+    );
+  });
+
+  it('s opens the start sheet, S starts with no sheet', async () => {
+    const { container } = mountBoard('list', 'kelta-tools');
+    await waitFor(() => expect(container.querySelector('[data-key="github-oss:#15"]')).not.toBeNull());
+    await fireEvent.click(container.querySelector('[data-key="github-oss:#15"]') as HTMLElement);
+    await press('s');
+    await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
+    ui.sheets = [];
+    await press('S', { shiftKey: true });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_start')).toBe(true));
+    expect(ui.sheet).toBeNull();
+  });
+
+  it('shows the PR chip of a ticket linked by a review', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => {
+      const chip = card(container, 'SHOP-120')?.querySelector('[data-pr]');
+      expect(chip?.textContent?.trim()).toBe('#305');
+      expect(chip?.querySelector('[data-attention="done"]')).not.toBeNull(); // CI success = dot
+    });
+    expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
   });
 });

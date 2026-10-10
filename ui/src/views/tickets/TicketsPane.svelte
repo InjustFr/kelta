@@ -3,27 +3,29 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, ProjectId, TicketItem, TicketsMode } from '$lib/gen';
+  import type { Column, TicketItem, TicketsMode, Transition, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { findPane, replacePaneContent } from '$lib/layout';
-  import { layout, projects, tickets, toasts, work } from '$lib/stores';
+  import { layout, projects, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
+  import type { SheetKey } from '$lib/stores/ui.svelte';
   import {
     Badge,
     Button,
     EmptyState,
     ErrorState,
     Icon,
+    IconButton,
     Lamp,
     Menu,
+    Select,
     Tabs,
-    ROW_HEIGHT,
     VirtualList,
     relativeTime,
     type MenuItem,
   } from '$lib/ui';
 
-  import { columnFor, initials, isAuthError, statusTone } from '../work/common';
+  import { columnFor, initials, isAuthError } from '../work/common';
   import { sessionsLamp } from '../../shell/nav';
   import { openContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
@@ -33,27 +35,56 @@
   import { startWorkOnTicket } from '../work/startWork';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
+  import MoveMenu from './MoveMenu.svelte';
+  import StatusChip from './StatusChip.svelte';
+  import { GROUP_BYS, groupTickets, type GroupBy, type TicketGroup } from './group';
   import { MoveController } from './move.svelte';
+  import { ciLamp, ensureReviews, loadedReviews, prForTicket, prLabel } from './prLink';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
+  const ROW_HEIGHT = 26;
+  const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
+  const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
+  const GROUP_LABELS: Record<GroupBy, string> = {
+    status: 'Group by status',
+    assignee: 'Group by assignee',
+    source: 'Group by source',
+    none: 'No grouping',
+  };
   const move = new MoveController();
 
-  // ---- scope, view and mode -----------------------------------------------------------------
+  // ---- scope, source, who and mode ----------------------------------------------------------
   const scope = $derived(content.scope);
   const project = $derived(scope.kind === 'project' ? projects.byId(scope.id) : null);
   const views = $derived(project?.tracker?.views ?? []);
+  const accountOf = (v: (typeof views)[number]): string => v.account ?? project?.tracker?.account ?? '';
+  const multiAccount = $derived(new Set(views.map(accountOf)).size > 1);
   let viewOverride = $state<string | null | undefined>(undefined);
-  const viewId = $derived(
-    viewOverride !== undefined ? viewOverride : (content.view_id ?? views[0]?.id ?? null),
+  /** `null` = all sources (the union of the project's views). */
+  const viewId = $derived(viewOverride !== undefined ? viewOverride : content.view_id);
+  const sourceLabel = $derived(
+    viewId ? (views.find((v) => v.id === viewId)?.label ?? 'this source') : (project?.name ?? 'all projects'),
   );
-  const viewLabel = $derived(views.find((v) => v.id === viewId)?.label ?? 'this view');
+  const noSource = $derived(project !== null && views.length === 0);
+
+  let whoOverride = $state<Who | null | undefined>(undefined);
+  /** The persisted who the list loads with (`null` = each view decides). */
+  const who = $derived(whoOverride !== undefined ? whoOverride : content.who);
+  /** The tab shown: the pane's who, else the who every queried view agrees on. */
+  const whoTab = $derived.by<Who | null>(() => {
+    if (who) return who;
+    const ws = new Set((viewId ? views.filter((v) => v.id === viewId) : views).map((v) => v.who));
+    return ws.size === 1 ? ([...ws][0] ?? null) : null;
+  });
+
   let modeOverride = $state<TicketsMode | undefined>(undefined);
   const wantedMode = $derived(modeOverride ?? content.mode);
-  const noTracker = $derived(project !== null && project.tracker === null);
   const mode = $derived<TicketsMode>(wantedMode === 'board' && project?.tracker ? 'board' : 'list');
+  // shortcut: grouping is per pane instance (PaneContent has no field), upgrade = a `group` field in the proto.
+  let groupBy = $state<GroupBy>('status');
 
-  function persist(patch: { view_id?: string | null; mode?: TicketsMode }): void {
+  function persist(patch: { view_id?: string | null; mode?: TicketsMode; who?: Who | null }): void {
     const current = layout.get(projectId);
     if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
     layout.update(projectId, (l) => ({
@@ -62,9 +93,14 @@
     }));
   }
 
-  function setView(id: string): void {
+  function setView(id: string | null): void {
     viewOverride = id;
     persist({ view_id: id });
+  }
+
+  function setWho(w: Who): void {
+    whoOverride = w;
+    persist({ who: w });
   }
 
   function setMode(m: TicketsMode): void {
@@ -72,8 +108,13 @@
     persist({ mode: m });
   }
 
+  function addSource(): void {
+    // shortcut: the key is WP4's sheet, not yet in SheetKey; drop the cast once it is registered.
+    ui.openSheet('tracker.source_picker' as SheetKey, { projectId: project?.id ?? projectId });
+  }
+
   // ---- data ---------------------------------------------------------------------------------
-  const list = $derived(tickets.list(scope, viewId));
+  const list = $derived(tickets.list(scope, viewId, who));
   const items = $derived(list.data?.items ?? []);
   let filter = $state('');
   const shown = $derived.by(() => {
@@ -88,11 +129,21 @@
   });
 
   $effect(() => {
-    const s = scope;
-    const v = viewId;
-    if (noTracker) return;
-    untrack(() => void tickets.load(s, v));
+    const [s, v, w, tab] = [scope, viewId, who, whoTab];
+    if (noSource) return;
+    untrack(() => {
+      void tickets.load(s, v, false, w);
+      // Counts for the other tabs (served from the core's cache); Anyone can be large, so only on demand.
+      for (const o of ['mine', 'unassigned'] as const) {
+        const l = tickets.list(s, v, o);
+        if (o !== tab && !l.data && !l.loading) void tickets.load(s, v, false, o);
+      }
+      ensureReviews();
+    });
   });
+
+  const countOf = (w: Who): number | undefined =>
+    (w === whoTab ? list : tickets.list(scope, viewId, w)).data?.items.length;
 
   const projectIdForColumns = $derived(project?.tracker ? project.id : null);
   $effect(() => {
@@ -118,15 +169,62 @@
     return out;
   });
 
-  // ---- selection ----------------------------------------------------------------------------
+  // ---- grouped rows (list) ------------------------------------------------------------------
+  type Row =
+    | { kind: 'group'; key: string; group: TicketGroup; open: boolean }
+    | { kind: 'ticket'; key: string; item: TicketItem };
+
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
+  /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
+  let toggled = $state<Record<string, boolean>>({});
+  const groups = $derived(groupTickets(shown, groupBy, views));
+  const rows = $derived.by<Row[]>(() => {
+    if (groupBy === 'none') return shown.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
+    const out: Row[] = [];
+    for (const group of groups) {
+      const open = toggled[`${groupBy}:${group.id}`] ?? group.category !== 'done';
+      out.push({ kind: 'group', key: `group:${group.id}`, group, open });
+      if (open) for (const item of group.items) out.push({ kind: 'ticket', key: keyOf(item), item });
+    }
+    return out;
+  });
+
+  function toggleGroup(row: Row): void {
+    if (row.kind !== 'group') return;
+    toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
+  }
+
+  const showSource = $derived(
+    groupBy !== 'source' && (scope.kind === 'all' || (views.length > 1 && viewId === null)),
+  );
+  const sourceOf = (item: TicketItem): string =>
+    scope.kind === 'all'
+      ? (projects.byId(item.project_ids[0] ?? '')?.name ?? 'Other')
+      : (views.find((v) => v.id === item.view_ids[0])?.label ?? 'Other');
+
+  const reviewPool = $derived(loadedReviews());
+  const workOf = (item: TicketItem) =>
+    work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
+  const prOf = (item: TicketItem) => prForTicket(item.ticket, workOf(item)?.pr_url ?? null, reviewPool);
+
+  // ---- selection ----------------------------------------------------------------------------
   let selKey = $state<string | null>(null);
-  const cur = $derived(shown.find((i) => keyOf(i) === selKey) ?? null);
+  const selRow = $derived(mode === 'list' ? (rows.find((r) => r.key === selKey) ?? null) : null);
+  const cur = $derived(
+    mode === 'list'
+      ? selRow?.kind === 'ticket'
+        ? selRow.item
+        : null
+      : (shown.find((i) => keyOf(i) === selKey) ?? null),
+  );
 
   $effect(() => {
-    if (cur || shown.length === 0) return;
-    const first = mode === 'board' ? lanes.find((l) => l.cards.length > 0)?.cards[0] : shown[0];
-    if (first) selKey = keyOf(first);
+    if ((mode === 'list' ? selRow : cur) || shown.length === 0) return;
+    const first =
+      mode === 'board'
+        ? lanes.find((l) => l.cards.length > 0)?.cards[0]
+        : (rows.find((r) => r.kind === 'ticket') ?? rows[0]);
+    if (first) selKey = 'key' in first ? first.key : keyOf(first);
   });
 
   $effect(() => {
@@ -137,9 +235,9 @@
 
   let vlist = $state<{ scrollToIndex(i: number): void }>();
   $effect(() => {
-    if (!cur) return;
-    if (mode === 'list') vlist?.scrollToIndex(shown.indexOf(cur));
-    else rowEl(keyOf(cur))?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    if (mode === 'list') {
+      if (selRow) vlist?.scrollToIndex(rows.indexOf(selRow));
+    } else if (cur) rowEl(keyOf(cur))?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
 
   function rowEl(key: string): HTMLElement | undefined {
@@ -148,18 +246,22 @@
     );
   }
 
+  /** Keys of the rows j/k walk: the grouped rows, or the current lane's cards. */
+  function sequence(): string[] {
+    if (mode === 'list') return rows.map((r) => r.key);
+    return (lanes.find((l) => cur && l.cards.includes(cur))?.cards ?? []).map(keyOf);
+  }
+
   function step(delta: number): void {
-    const seq = mode === 'board' ? (lanes.find((l) => cur && l.cards.includes(cur))?.cards ?? []) : shown;
+    const seq = sequence();
     if (seq.length === 0) return;
-    const at = cur ? seq.indexOf(cur) : -1;
-    const next = seq[Math.min(seq.length - 1, Math.max(0, at + delta))];
-    if (next) selKey = keyOf(next);
+    const at = selKey ? seq.indexOf(selKey) : -1;
+    selKey = seq[Math.min(seq.length - 1, Math.max(0, at + delta))] ?? selKey;
   }
 
   function jump(end: boolean): void {
-    const seq = mode === 'board' ? (lanes.find((l) => cur && l.cards.includes(cur))?.cards ?? []) : shown;
-    const t = end ? seq[seq.length - 1] : seq[0];
-    if (t) selKey = keyOf(t);
+    const seq = sequence();
+    selKey = (end ? seq[seq.length - 1] : seq[0]) ?? selKey;
   }
 
   function laneStep(delta: number): void {
@@ -179,17 +281,13 @@
   // ---- actions ------------------------------------------------------------------------------
   let root = $state<HTMLDivElement>();
   let filterInput = $state<HTMLInputElement>();
-  let menu = $state<{
-    x: number;
-    y: number;
-    item: TicketItem;
-    columns: Column[];
-    projectId: ProjectId;
-  } | null>(null);
+  let sourceBtn = $state<HTMLElement>();
+  let moveMenu = $state<{ x: number; y: number; item: TicketItem; transitions: Transition[] } | null>(null);
+  let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
 
   function refresh(): void {
-    void tickets.load(scope, viewId, true);
+    void tickets.load(scope, viewId, true, who);
     if (projectIdForColumns && mode === 'board') void tickets.loadColumns(projectIdForColumns);
   }
 
@@ -197,12 +295,13 @@
     void openContent(projectId, { kind: 'ticket_detail', ticket: item.ticket.ref });
   }
 
-  async function assignMe(item: TicketItem): Promise<void> {
+  async function assign(item: TicketItem, to: 'me' | 'none'): Promise<void> {
+    const key = item.ticket.ref.key;
     try {
-      tickets.patch(await trackerAssign({ ticket: item.ticket.ref, assignee: { kind: 'me' } }));
-      toasts.info(`${item.ticket.ref.key} assigned to you`);
+      tickets.patch(await trackerAssign({ ticket: item.ticket.ref, assignee: { kind: to } }));
+      toasts.info(to === 'me' ? `${key} assigned to you` : `${key} unassigned`);
     } catch (err) {
-      toasts.error(err, `Assigning ${item.ticket.ref.key}`);
+      toasts.error(err, `Assigning ${key}`);
     }
   }
 
@@ -210,38 +309,34 @@
     openExternal({ url: item.ticket.url }).catch((err) => toasts.error(err, 'Open in browser'));
   }
 
+  function start(item: TicketItem, preview?: boolean): void {
+    void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId, { preview });
+  }
+
   async function openMoveMenu(item: TicketItem): Promise<void> {
-    const pid = item.project_ids[0] ?? project?.id ?? null;
-    if (!pid) {
-      toasts.warn(`${item.ticket.ref.key} is not bound to a project, it cannot be moved here`);
+    const slot = await tickets.loadTransitions(item.ticket.ref);
+    if (!slot.data) {
+      toasts.error(slot.error ?? 'No transitions', `Moving ${item.ticket.ref.key}`);
       return;
     }
-    const slot = await tickets.loadColumns(pid);
-    const cols = [...(slot.data ?? [])].sort((a, b) => a.order - b.order);
-    if (cols.length === 0) {
-      toasts.error(slot.error ?? 'No columns configured for this tracker', 'Move');
-      return;
-    }
-    const el = rowEl(keyOf(item));
-    const r = (el ?? root)?.getBoundingClientRect();
-    menu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, columns: cols, projectId: pid };
+    const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
+    moveMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, item, transitions: slot.data };
   }
 
-  const menuItems = $derived<MenuItem[]>(
-    menu
-      ? menu.columns.map((c) => ({
-          id: c.id,
-          label: c.name,
-          disabled: columnFor(menu!.columns, menu!.item.ticket.status)?.id === c.id,
-        }))
-      : [],
-  );
-
-  function menuSelect(id: string): void {
-    const m = menu;
-    const col = m?.columns.find((c) => c.id === id);
-    if (m && col) void move.moveToColumn(m.item.ticket, col, m.projectId);
+  function openSourceMenu(): void {
+    const r = sourceBtn?.getBoundingClientRect();
+    sourceMenu = { x: r?.left ?? 0, y: (r?.bottom ?? 0) + 2 };
   }
+
+  const sourceItems = $derived<MenuItem[]>([
+    { id: '', label: 'All sources', icon: viewId === null ? 'check' : undefined },
+    ...views.map((v) => ({
+      id: v.id,
+      label: multiAccount ? `${v.label} (${accountOf(v)})` : v.label,
+      icon: v.id === viewId ? 'check' : undefined,
+    })),
+    { id: '+', label: 'Add source…', icon: 'plus', separator: true },
+  ]);
 
   function shiftLane(delta: number): void {
     if (!cur || mode !== 'board') return;
@@ -286,11 +381,23 @@
         laneStep(1);
         break;
       case 'Enter':
-        if (item) openDetail(item);
+        if (selRow?.kind === 'group') toggleGroup(selRow);
+        else if (item) openDetail(item);
         break;
       case '/':
         filterInput?.focus();
         filterInput?.select();
+        break;
+      case '1':
+      case '2':
+      case '3':
+        setWho(WHOS[Number(e.key) - 1] ?? 'mine');
+        break;
+      case 'v':
+        if (project?.tracker) openSourceMenu();
+        break;
+      case 'g':
+        groupBy = GROUP_BYS[(GROUP_BYS.indexOf(groupBy) + 1) % GROUP_BYS.length] ?? 'status';
         break;
       case 'R':
         refresh();
@@ -299,7 +406,10 @@
         if (item) void openMoveMenu(item);
         break;
       case 'a':
-        if (item) void assignMe(item);
+        if (item) void assign(item, 'me');
+        break;
+      case 'A':
+        if (item) void assign(item, 'none');
         break;
       case 'c':
         if (item) commenting = item;
@@ -308,7 +418,10 @@
         if (item) browse(item);
         break;
       case 's':
-        if (item) void startWorkOnTicket(item.ticket.ref, item.project_ids[0] ?? projectId);
+        if (item) start(item);
+        break;
+      case 'S':
+        if (item) start(item, false);
         break;
       default:
         return;
@@ -353,8 +466,6 @@
     void move.moveToColumn(item.ticket, column, projectIdForColumns);
   }
 
-  const workOf = (item: TicketItem) =>
-    work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
   const hasWork = (item: TicketItem): boolean => item.work_item_id !== null || workOf(item) !== null;
 </script>
 
@@ -369,7 +480,7 @@
   aria-label="Tickets"
   {onkeydown}
 >
-  <header class="k-toolbar">
+  <header class="k-toolbar bar">
     <input
       class="k-filter"
       bind:this={filterInput}
@@ -378,17 +489,42 @@
       aria-label="Filter tickets"
       onkeydown={filterKeys}
     />
-    {#if views.length > 1}
-      <Tabs
-        label="Views"
-        items={views.map((v) => ({ id: v.id, label: v.label }))}
-        value={viewId ?? undefined}
-        onchange={setView}
-      />
-    {:else if views[0] || scope.kind === 'all'}
-      <span class="title">{views[0]?.label ?? 'All projects'}</span>
+    {#if !noSource}
+      <div class="who">
+        <Tabs
+          label="Whose tickets"
+          items={WHOS.map((w) => {
+            const n = countOf(w);
+            return { id: w, label: n === undefined ? WHO_LABELS[w] : `${WHO_LABELS[w]} ${n}` };
+          })}
+          value={whoTab ?? undefined}
+          onchange={setWho}
+        />
+      </div>
     {/if}
+    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
     <span class="spacer"></span>
+    {#if project?.tracker}
+      <button
+        type="button"
+        class="source"
+        bind:this={sourceBtn}
+        aria-haspopup="menu"
+        title="Source (v)"
+        onclick={openSourceMenu}
+      >
+        {viewId ? sourceLabel : 'All sources'}
+        <Icon name="chevron-down" size={12} />
+      </button>
+    {/if}
+    {#if mode === 'list' && !noSource}
+      <Select
+        label="Group (g)"
+        value={groupBy}
+        options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
+        onchange={(g) => (groupBy = g)}
+      />
+    {/if}
     {#if project?.tracker}
       <Tabs
         label="Display mode"
@@ -400,15 +536,13 @@
         onchange={setMode}
       />
     {/if}
-    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
+    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
   </header>
 
-  {#if noTracker}
-    <EmptyState icon="ticket" title={`No tracker bound to ${project?.name ?? 'this project'}.`}>
+  {#if noSource}
+    <EmptyState icon="ticket" title="No ticket source for this project.">
       {#snippet actions()}
-        <Button variant="primary" onclick={() => void dispatch('settings.open', { section: 'projects' })}>
-          Bind a tracker
-        </Button>
+        <Button variant="primary" onclick={addSource}>Add source</Button>
       {/snippet}
     </EmptyState>
   {:else if list.loading && !list.data}
@@ -416,15 +550,9 @@
   {:else if !list.data && list.error}
     <ErrorState error={list.error} title="Could not load tickets" onretry={refresh}>
       {#snippet actions()}
-        {#if isAuthError(list.error)}
-          <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
-            >Re-authenticate</Button
-          >
-        {:else}
-          <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
-            >Open account settings</Button
-          >
-        {/if}
+        <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
+          >{isAuthError(list.error) ? 'Re-authenticate' : 'Open settings'}</Button
+        >
       {/snippet}
     </ErrorState>
   {:else}
@@ -436,23 +564,19 @@
       onretry={refresh}
     />
     {#if items.length === 0}
-      <EmptyState
-        icon="ticket"
-        title={`Nothing assigned to you in ${viewLabel}.`}
-        body="Switch view to see other tickets, or refresh."
-      >
-        {#snippet actions()}
-          {#if views.length > 1}
-            <Button
-              onclick={() => {
-                const next = views[(views.findIndex((v) => v.id === viewId) + 1) % views.length];
-                if (next) setView(next.id);
-              }}>Switch view</Button
-            >
-          {/if}
-          <Button onclick={refresh}>Refresh</Button>
-        {/snippet}
-      </EmptyState>
+      {#if whoTab === 'mine'}
+        <EmptyState icon="ticket" title={`Nothing assigned to you in ${sourceLabel}.`}>
+          {#snippet actions()}<Button onclick={() => setWho('unassigned')}>Show unassigned</Button>{/snippet}
+        </EmptyState>
+      {:else if whoTab === 'unassigned'}
+        <EmptyState icon="ticket" title={`Every ticket in ${sourceLabel} has an owner.`}>
+          {#snippet actions()}<Button onclick={() => setWho('anyone')}>Show anyone</Button>{/snippet}
+        </EmptyState>
+      {:else}
+        <EmptyState icon="ticket" title={`No tickets in ${sourceLabel}.`}>
+          {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
+        </EmptyState>
+      {/if}
     {:else if shown.length === 0}
       <EmptyState icon="search" title={`No tickets match "${filter}".`}>
         {#snippet actions()}<Button onclick={() => (filter = '')}>Clear filter</Button>{/snippet}
@@ -461,43 +585,67 @@
       <div class="list">
         <VirtualList
           bind:this={vlist}
-          items={shown}
+          items={rows}
           itemHeight={ROW_HEIGHT}
-          key={(i) => keyOf(i)}
+          key={(r) => r.key}
           label="Tickets"
           onend={() =>
-            void tickets.loadMore(scope, viewId).catch((e) => toasts.error(e, 'Loading more tickets'))}
+            void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
         >
-          {#snippet row(item)}
-            <button
-              type="button"
-              tabindex="-1"
-              class="k-row"
-              class:selected={cur === item}
-              aria-current={cur === item ? 'true' : undefined}
-              data-key={keyOf(item)}
-              onclick={() => (selKey = keyOf(item))}
-              ondblclick={() => openDetail(item)}
-            >
-              <span class="k-row-key">{item.ticket.ref.key}</span>
-              <span class="k-row-title">{item.ticket.title}</span>
-              <span class="k-row-tail">
-                {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
-                {#if scope.kind === 'all'}
-                  <span class="k-narrow-hide"><Badge>{item.project_ids[0] ?? 'Other'}</Badge></span>
-                {/if}
-                {#each item.ticket.labels.slice(0, 2) as l (l)}<span class="k-narrow-hide"
-                    ><Badge>{l}</Badge></span
-                  >{/each}
-                <Badge tone={statusTone(item.ticket.status.category)}>{item.ticket.status.name}</Badge>
-                <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}>
-                  {item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}
+          {#snippet row(r)}
+            {#if r.kind === 'group'}
+              <button
+                type="button"
+                tabindex="-1"
+                class="k-group head"
+                class:selected={selKey === r.key}
+                aria-expanded={r.open}
+                data-group={r.group.id}
+                onclick={() => {
+                  selKey = r.key;
+                  toggleGroup(r);
+                }}
+              >
+                <Icon name={r.open ? 'chevron-down' : 'chevron-right'} size={12} />
+                {r.group.label}
+                <span class="count k-num">{r.group.items.length}</span>
+              </button>
+            {:else}
+              {@const item = r.item}
+              {@const pr = prOf(item)}
+              <button
+                type="button"
+                tabindex="-1"
+                class="k-row"
+                class:selected={cur === item}
+                aria-current={cur === item ? 'true' : undefined}
+                data-key={r.key}
+                onclick={() => (selKey = r.key)}
+                ondblclick={() => openDetail(item)}
+              >
+                <span class="k-row-lamp"><Lamp level={sessionsLamp(workOf(item)?.session_ids ?? [])} /></span>
+                <span class="k-row-key">{item.ticket.ref.key}</span>
+                <span class="k-row-title">{item.ticket.title}</span>
+                <span class="meta">
+                  {#if pr}
+                    <span class="pr" data-pr title={`${pr.title} (CI ${pr.ci})`}
+                      ><span class="k-mono">{prLabel(pr)}</span><Lamp
+                        level={ciLamp(pr.ci)}
+                        title={`CI ${pr.ci}`}
+                      /></span
+                    >
+                  {/if}
+                  <span class="status-slot"><StatusChip status={item.ticket.status} /></span>
+                  {#if showSource}<Badge>{sourceOf(item)}</Badge>{/if}
+                  {#if whoTab !== 'mine'}
+                    <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
+                      >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
+                    >
+                  {/if}
+                  <span class="k-row-meta age">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
                 </span>
-                {#if item.ticket.priority}<span class="k-row-meta k-narrow-hide">{item.ticket.priority}</span
-                  >{/if}
-                <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
-              </span>
-            </button>
+              </button>
+            {/if}
           {/snippet}
         </VirtualList>
       </div>
@@ -568,7 +716,7 @@
             size="sm"
             loading={list.loadingMore}
             onclick={() =>
-              void tickets.loadMore(scope, viewId).catch((e) => toasts.error(e, 'Loading more tickets'))}
+              void tickets.loadMore(scope, viewId, who).catch((e) => toasts.error(e, 'Loading more tickets'))}
           >
             <Icon name="plus" size={12} /> More
           </Button>
@@ -579,28 +727,42 @@
 
   <KeyHints
     hints={[
-      ['j k', 'Move'],
-      ['enter', 'Open'],
-      ['/', 'Filter'],
-      ['s', 'Start work'],
-      ['m', 'Move to'],
-      ['a', 'Assign me'],
-      ['c', 'Comment'],
-      ['o', 'Open in browser'],
-      ['shift+r', 'Refresh'],
+      ['j/k', 'move'],
+      ['Enter', 'open'],
+      ['1/2/3', 'who'],
+      ['m', 'move to'],
+      ['a/A', 'assign me, unassign'],
+      ['s/S', 'start, start now'],
+      ['v', 'source'],
+      ['g', 'group'],
+      ['c', 'comment'],
+      ['o', 'browser'],
     ]}
   />
 </div>
 
-{#if menu}
-  <Menu
-    items={menuItems}
-    x={menu.x}
-    y={menu.y}
-    label="Move to"
-    onselect={menuSelect}
+{#if moveMenu}
+  <MoveMenu
+    ticket={moveMenu.item.ticket}
+    transitions={moveMenu.transitions}
+    x={moveMenu.x}
+    y={moveMenu.y}
+    onselect={(t) => moveMenu && void move.moveViaTransition(moveMenu.item.ticket, t)}
     onclose={() => {
-      menu = null;
+      moveMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if sourceMenu}
+  <Menu
+    items={sourceItems}
+    x={sourceMenu.x}
+    y={sourceMenu.y}
+    label="Source"
+    onselect={(id) => (id === '+' ? addSource() : setView(id === '' ? null : id))}
+    onclose={() => {
+      sourceMenu = null;
       root?.focus();
     }}
   />
@@ -617,6 +779,83 @@
 <MoveDialogs {move} />
 
 <style>
+  /* One line at any pane width: the toolbar scrolls sideways instead of wrapping labels. */
+  .bar {
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+
+  .bar .k-filter {
+    flex: 0 1 180px;
+    min-width: 72px;
+  }
+
+  .who {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Fixed width so the category bars form one column down the list. */
+  .status-slot {
+    display: inline-flex;
+    width: 112px;
+  }
+
+  .status-slot :global(span) {
+    max-width: 100%;
+  }
+
+  .source {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    height: 22px;
+    padding: 0 var(--k-space-3);
+    border: 0;
+    border-radius: var(--k-radius);
+    background: transparent;
+    color: var(--k-fg-chrome);
+    cursor: pointer;
+  }
+
+  .source:hover {
+    background: var(--k-bg-hover);
+    color: var(--k-fg);
+  }
+
+  .head {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: default;
+  }
+
+  .head.selected {
+    background: var(--k-bg-selected);
+    box-shadow: inset 2px 0 0 var(--k-accent);
+  }
+
+  .meta {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-4);
+  }
+
+  .pr {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
+  }
+
+  .age {
+    min-width: 52px;
+    text-align: right;
+  }
+
   /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */
   .board {
     flex: 1;
@@ -688,7 +927,7 @@
 
   /* Fixed to chip height on every card so titles line up across lanes. */
   .card-row.first {
-    height: 20px;
+    height: 18px;
   }
 
   .key {

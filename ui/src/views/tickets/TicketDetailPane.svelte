@@ -13,21 +13,22 @@
     ErrorState,
     HtmlContent,
     Icon,
-    IconButton,
-    Menu,
+    Lamp,
     TextInput,
     relativeTime,
-    type MenuItem,
   } from '$lib/ui';
 
-  import { isAuthError, statusTone } from '../work/common';
+  import { isAuthError } from '../work/common';
   import { openContent } from '../work/nav';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { startWorkOnTicket } from '../work/startWork';
   import MoveDialogs from './MoveDialogs.svelte';
+  import MoveMenu from './MoveMenu.svelte';
+  import StatusChip from './StatusChip.svelte';
   import { MoveController } from './move.svelte';
+  import { ciLamp, ensureReviews, loadedReviews, prForTicket, prLabel, reviewWord } from './prLink';
 
   let { projectId, content, focused }: PaneProps<'ticket_detail'> = $props();
 
@@ -38,12 +39,14 @@
   const ticket = $derived(detail?.ticket ?? null);
   const transitions = $derived(tickets.transitions[ticketKey(ref)]?.data ?? []);
   const workItem = $derived(work.forTicket(ref));
+  const pr = $derived(ticket ? prForTicket(ticket, workItem?.pr_url ?? null, loadedReviews()) : null);
 
   $effect(() => {
     const r = ref;
     untrack(() => {
       void tickets.loadDetail(r);
       void tickets.loadTransitions(r);
+      ensureReviews();
     });
   });
 
@@ -73,19 +76,6 @@
     if (transitions.length === 0) await tickets.loadTransitions(ref);
     const r = statusBtn?.getBoundingClientRect();
     menu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
-  }
-
-  const menuItems = $derived<MenuItem[]>(
-    transitions.map((t) => ({
-      id: t.id,
-      label: t.name === t.to.name ? t.name : `${t.name} → ${t.to.name}`,
-      disabled: ticket !== null && t.to.name === ticket.status.name,
-    })),
-  );
-
-  function menuSelect(id: string): void {
-    const t = transitions.find((x) => x.id === id);
-    if (t && ticket) void move.moveViaTransition(ticket, t);
   }
 
   async function assign(who: 'me' | 'none'): Promise<void> {
@@ -126,6 +116,10 @@
     }
   }
 
+  function focusComment(): void {
+    commentBox?.querySelector('textarea')?.focus();
+  }
+
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -140,13 +134,16 @@
         void assign('none');
         break;
       case 'c':
-        commentBox?.querySelector('textarea')?.focus();
+        focusComment();
         break;
       case 'o':
         browse();
         break;
       case 's':
         void startWorkOnTicket(ref, projectId);
+        break;
+      case 'S':
+        void startWorkOnTicket(ref, projectId, { preview: false });
         break;
       case 'R':
         refresh();
@@ -181,7 +178,7 @@
       <ErrorState error={slot.error} title={`Could not load ${ref.key}`} onretry={refresh}>
         {#snippet actions()}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open account settings'}
+            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open settings'}
           </Button>
         {/snippet}
       </ErrorState>
@@ -210,22 +207,47 @@
       </div>
       <h1>{ticket.title}</h1>
       <div class="line actions">
-        <span class="status" bind:this={statusBtn}>
-          <Button aria-haspopup="menu" title="Move to… (m)" onclick={() => void openMoveMenu()}>
-            <Badge tone={statusTone(ticket.status.category)}>{ticket.status.name}</Badge>
-            <Icon name="chevron-down" size={14} />
-          </Button>
-        </span>
         <Button variant="primary" icon="play" onclick={() => void startWorkOnTicket(ref, projectId)}>
           {workItem ? 'Resume work' : 'Start work'}
         </Button>
-        <Button icon="user" onclick={() => void assign('me')}>Assign me</Button>
+        <Button title="Move (m)" onclick={() => void openMoveMenu()}>Move</Button>
+        <Button icon="user" onclick={() => void assign('me')}>Assign to me</Button>
         {#if ticket.assignee}<Button variant="ghost" onclick={() => void assign('none')}>Unassign</Button
           >{/if}
+        <Button variant="ghost" icon="message-square" onclick={focusComment}>Comment</Button>
         <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
-        <IconButton icon="refresh-cw" label="Refresh" onclick={refresh} />
       </div>
       <dl class="k-meta">
+        <dt>Status</dt>
+        <dd>
+          <button
+            type="button"
+            class="status"
+            bind:this={statusBtn}
+            aria-haspopup="menu"
+            aria-label={`Status ${ticket.status.name}, move (m)`}
+            onclick={() => void openMoveMenu()}
+          >
+            <StatusChip status={ticket.status} />
+            <Icon name="chevron-down" size={12} />
+          </button>
+        </dd>
+        <dt>Pull request</dt>
+        <dd data-testid="ticket-pr">
+          {#if pr}
+            <button
+              type="button"
+              class="link k-mono"
+              title={pr.title}
+              onclick={() => void openContent(projectId, { kind: 'review_detail', review: pr.ref })}
+              >{prLabel(pr)}</button
+            >
+            <Lamp level={ciLamp(pr.ci)} title={`CI ${pr.ci}`} />
+            <span>{reviewWord(pr)}</span>
+          {:else}
+            <span class="muted">None</span>
+          {/if}
+        </dd>
         <dt>Assignee</dt>
         <dd>{ticket.assignee?.name ?? 'Unassigned'}</dd>
         <dt>Priority</dt>
@@ -289,13 +311,13 @@
   {/if}
 </div>
 
-{#if menu}
-  <Menu
-    items={menuItems}
+{#if menu && ticket}
+  <MoveMenu
+    {ticket}
+    {transitions}
     x={menu.x}
     y={menu.y}
-    label="Move to"
-    onselect={menuSelect}
+    onselect={(t) => ticket && void move.moveViaTransition(ticket, t)}
     onclose={() => {
       menu = null;
       root?.focus();
@@ -356,12 +378,17 @@
   .link,
   .status {
     display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--k-accent);
+    cursor: pointer;
   }
 
-  .status :global(.label) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
+  .status {
+    color: var(--k-fg-muted);
   }
 
   .scroll {
