@@ -117,7 +117,7 @@ registerAction('tools.open', async (args) => {
   }
   flushJump(); // the place this open leaves is a stop on the way back
   const wantsProject = takesProject || scope === 'project';
-  if (args?.pick_project === true || (wantsProject && (!here || inFront))) {
+  if (args?.pick_project === true || (wantsProject && (!here || (inFront && args?.focus_only !== true)))) {
     const picked = await ui.pickProject(`Open ${tool.label} for project…`);
     if (!picked) return;
     try {

@@ -227,6 +227,14 @@ describe('tools.open', () => {
     expect(focusedPane()?.id).toBe(pane.id);
   });
 
+  it('a focus-only open (the rail click) on a project tool in front stays there, no picker', async () => {
+    const { open, id, opens } = await needsProject();
+    await open();
+    await dispatch('tools.open', { tool_id: id, focus_only: true });
+    expect(ui.pick).toBeNull();
+    expect(opens()).toHaveLength(1);
+  });
+
   it('pressed again in front, a tool that takes a project asks for another project', async () => {
     const { open, id, opens } = await needsProject();
     await open();
