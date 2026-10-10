@@ -127,12 +127,64 @@
 {/if}
 
 <style>
+  /* Label and help on the left, the control right-aligned in its own column (DESIGN §6.12). */
   .field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-2);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 340px);
+    gap: var(--k-space-1) var(--k-space-6);
+    align-items: start;
     padding: var(--k-space-3) 0;
     border-bottom: 1px solid var(--k-border);
+    container-type: inline-size;
+  }
+
+  .field > :global(*) {
+    grid-column: 2;
+    grid-row: 1 / span 8;
+    min-width: 0;
+  }
+
+  .field > .head,
+  .field > .desc,
+  .field > .error {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* A toggle carries its own label: it spans the row with its text left and the switch in the
+     control column, and the head (markers) sits over column 1 so badges keep one slot per row. */
+  .field[data-kind='bool'] > :global(*) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .field[data-kind='bool'] > :global(.control .k-toggle) {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    min-height: var(--k-control-height);
+  }
+
+  .field[data-kind='bool'] > .head {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    pointer-events: none;
+  }
+
+  .field[data-kind='bool'] > .head > .markers {
+    pointer-events: auto;
+  }
+
+  .field[data-kind='bool'] > .desc {
+    grid-row: auto;
+  }
+
+  @container (max-width: 560px) {
+    .field > :global(*) {
+      grid-column: 1;
+      grid-row: auto;
+    }
   }
 
   .head {
@@ -140,11 +192,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--k-space-3);
-    min-height: 22px;
-  }
-
-  label {
-    font-weight: 600;
+    min-height: var(--k-control-height);
   }
 
   .markers {
@@ -156,8 +204,8 @@
 
   .desc {
     margin: 0;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
   }
 
   .error {
@@ -184,11 +232,13 @@
   }
 
   h3 {
-    font-size: var(--k-font-size-lg);
+    font-size: var(--k-font-size);
+    font-weight: var(--k-weight-strong);
   }
 
   h4 {
-    font-size: var(--k-font-size);
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-strong);
     color: var(--k-fg-muted);
   }
 

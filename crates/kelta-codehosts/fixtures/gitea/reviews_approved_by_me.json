@@ -1,0 +1,15 @@
+[
+  {
+    "id": 5,
+    "user": {
+      "id": 1,
+      "login": "louis",
+      "full_name": "Louis D",
+      "avatar_url": "https://git.acme.example/avatars/1"
+    },
+    "state": "APPROVED",
+    "commit_id": "abc",
+    "dismissed": false,
+    "stale": false
+  }
+]

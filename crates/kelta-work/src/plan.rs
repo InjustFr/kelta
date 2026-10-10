@@ -84,6 +84,7 @@ pub fn base_ctx(project: &ProjectInfo, repo: Option<&RepoInfo>, dirs: &kelta_pro
         "ticket.title",
         "ticket.url",
         "ticket.file",
+        "task",
     ] {
         c.set(k, "");
     }
@@ -191,7 +192,7 @@ pub async fn suffixed(repo: &Path, branch: &str, path: &Path) -> Result<(String,
 /// Local branch for a review (`kelta/pr-<n>` / `kelta/mr-<iid>`).
 pub fn review_branch(kind: CodeHostKind, number: u64) -> String {
     match kind {
-        CodeHostKind::Github => format!("kelta/pr-{number}"),
+        CodeHostKind::Github | CodeHostKind::Bitbucket | CodeHostKind::Gitea => format!("kelta/pr-{number}"),
         CodeHostKind::Gitlab => format!("kelta/mr-{number}"),
     }
 }
@@ -203,8 +204,39 @@ pub fn existing_for<'a>(items: &'a [WorkItem], source: &WorkSource) -> Option<&'
             w.ticket.as_ref().is_some_and(|t| t.account == ticket.account && t.key == ticket.key)
         }
         WorkSource::Review { review } => w.review.as_ref() == Some(review),
-        WorkSource::Branch { name } => w.ticket.is_none() && w.review.is_none() && &w.branch == name,
+        WorkSource::Branch { name, .. } => w.ticket.is_none() && w.review.is_none() && &w.branch == name,
     })
+}
+
+/// Unfinished own work item behind `pr` (B2): linked by URL, or on its head branch in the repo
+/// bound to the PR's repository (a PR Claude opened with `gh`).
+pub fn owner_of_pr<'a>(items: &'a [WorkItem], project: &ProjectInfo, pr: &Review) -> Option<&'a WorkItem> {
+    let bound = |w: &WorkItem| {
+        project
+            .repos
+            .iter()
+            .any(|r| r.id == w.repo_id && r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
+    };
+    items
+        .iter()
+        .filter(|w| w.state != WorkState::Finished && w.review.is_none())
+        .find(|w| w.pr_url.as_deref() == Some(pr.url.as_str()) || (w.branch == pr.source_branch && bound(w)))
+}
+
+/// Scratch item title: the task's first non-empty line, at most 72 chars.
+pub fn task_title(task: &str) -> String {
+    let line = task.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default();
+    match line.char_indices().nth(72) {
+        Some((i, _)) => line[..i].trim_end().to_owned(),
+        None => line.to_owned(),
+    }
+}
+
+/// PR title after a ticket was linked (FLOW §4.3 step 4): `None` when `title` already carries a
+/// ticket key (`key` itself or a `reviews.ticket_key_regex` match), else `KEY: title`.
+pub fn pr_title_with_key(title: &str, key: &str, key_regex: &str) -> Option<String> {
+    let has_key = title.contains(key) || regex::Regex::new(key_regex).is_ok_and(|re| re.is_match(title));
+    (!has_key).then(|| format!("{key}: {}", title.trim()))
 }
 
 /// Default side effects (status_map overrides `work.on_start`).
@@ -267,6 +299,7 @@ pub fn assemble(
         claude,
         side_effects,
         existing: existing.map(|w| w.id.clone()),
+        adopt_pr: None,
     }
 }
 
@@ -293,5 +326,48 @@ mod tests {
         assert_eq!(type_for(&s, Some("Bug")), "fix");
         assert_eq!(type_for(&s, Some("Epic")), "chore");
         assert_eq!(review_branch(CodeHostKind::Gitlab, 7), "kelta/mr-7");
+    }
+
+    #[test]
+    fn own_pr_matches_by_url_or_head_branch() {
+        let project = samples::project_info();
+        let mut pr = samples::review();
+        pr.source_branch = "feat/x".into();
+        let mut item = samples::work_item();
+        item.repo_id = project.repos[0].id.clone();
+        item.review = None;
+        item.pr_url = None;
+        item.branch = "feat/y".into();
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+        item.branch = "feat/x".into();
+        let bound = project.repos[0].code_host.as_ref().map(|c| c.repo.clone());
+        assert_eq!(bound.as_deref(), Some(pr.r#ref.repo.as_str()), "sample repo is bound to the PR repo");
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
+        item.branch = "other".into();
+        item.pr_url = Some(pr.url.clone());
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
+        item.state = WorkState::Finished;
+        assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+    }
+
+    #[test]
+    fn task_titles() {
+        assert_eq!(task_title("\n  Fix the login flake  \nmore"), "Fix the login flake");
+        assert_eq!(task_title(""), "");
+        let long = "é".repeat(80);
+        assert_eq!(task_title(&long).chars().count(), 72);
+    }
+
+    #[test]
+    fn pr_title_key_rule() {
+        let re = &Settings::default().reviews.ticket_key_regex;
+        assert_eq!(
+            pr_title_with_key("Speed up search", "SHOP-7", re).as_deref(),
+            Some("SHOP-7: Speed up search")
+        );
+        assert_eq!(pr_title_with_key("SHOP-7: Speed up search", "SHOP-7", re), None);
+        assert_eq!(pr_title_with_key("OPS-2 speed up search", "SHOP-7", re), None, "any key counts");
+        assert_eq!(pr_title_with_key("Fix #12", "SHOP-7", re), None);
+        assert_eq!(pr_title_with_key("Speed up", "acme/web#3", "["), Some("acme/web#3: Speed up".into()));
     }
 }

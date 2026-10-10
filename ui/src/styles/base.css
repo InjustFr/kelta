@@ -14,7 +14,7 @@ body {
 }
 
 body {
-  background: var(--k-bg);
+  background: var(--k-bezel);
   color: var(--k-fg);
   font-family: var(--k-font-ui);
   font-size: var(--k-font-size);
@@ -58,6 +58,11 @@ pre,
   font-family: var(--k-font-mono);
 }
 
+/* Counts, ages, diffstats: digits line up. */
+.k-num {
+  font-variant-numeric: tabular-nums;
+}
+
 :focus {
   outline: none;
 }
@@ -72,13 +77,13 @@ pre,
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--k-border-strong);
-  border-radius: 5px;
+  border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -96,7 +101,201 @@ pre,
   white-space: nowrap;
 }
 
+/* List grammar shared by tickets, reviews and inbox (DESIGN §6.8): lamp | id | title | meta.
+   Rows live in VirtualList: no borders, no per-row effects, cheap to paint. */
+.k-listpane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  background: var(--k-well);
+  color: var(--k-fg);
+}
+.k-listpane:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--k-focus);
+}
+.k-listpane .title {
+  font-weight: var(--k-weight-strong);
+}
+.k-listpane .spacer {
+  flex: 1;
+}
+.k-listpane .list {
+  flex: 1;
+  min-height: 0;
+}
+.k-listpane .count {
+  font-size: var(--k-font-size-xs);
+  font-weight: 400;
+  color: var(--k-fg-subtle);
+}
+
+.k-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--k-space-3);
+  height: var(--k-tabbar-height);
+  flex: none;
+  padding: 0 var(--k-space-3);
+  background: var(--k-bezel-raised);
+  font-size: var(--k-font-size-sm);
+}
+
+.k-toolbar .k-select select {
+  height: 22px;
+}
+
+/* Toolbar selects keep their label for screen readers only. */
+.k-toolbar .k-select label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.k-filter {
+  width: 180px;
+  height: 22px;
+  padding: 0 var(--k-space-3);
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius);
+  background: var(--k-well);
+  color: var(--k-fg);
+}
+
+.k-row {
+  display: flex;
+  align-items: center;
+  gap: var(--k-space-3);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--k-space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.k-row:hover {
+  background: var(--k-bg-hover);
+}
+
+.k-row.selected {
+  background: var(--k-bg-selected);
+  box-shadow: inset 2px 0 0 var(--k-accent);
+}
+
+.k-row-lamp {
+  flex: none;
+  display: inline-flex;
+  justify-content: center;
+  width: 10px;
+}
+
+.k-row-key {
+  flex: none;
+  width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--k-font-mono);
+  font-size: var(--k-font-size-sm);
+  color: var(--k-fg-muted);
+}
+
+.k-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.k-row-meta {
+  flex: none;
+  font-size: var(--k-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--k-fg-subtle);
+}
+
+.k-group {
+  display: flex;
+  align-items: center;
+  gap: var(--k-space-3);
+  height: 100%;
+  padding: 0 var(--k-space-3);
+  font-size: var(--k-font-size-sm);
+  font-weight: var(--k-weight-strong);
+  color: var(--k-fg-muted);
+}
+
+.k-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--k-bezel);
+  font-size: 10px;
+  color: var(--k-fg-muted);
+}
+
+/* Detail panes (ticket, review): label/value meta grid that stacks in narrow panes. */
+.k-detail {
+  container-type: inline-size;
+}
+
+.k-meta {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: var(--k-space-2) var(--k-space-4);
+  margin: 0;
+  max-width: var(--k-measure);
+}
+
+.k-meta dt {
+  font-size: var(--k-font-size-sm);
+  color: var(--k-fg-muted);
+}
+
+.k-meta dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--k-space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+@container (max-width: 480px) {
+  .k-meta {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+/* Floating surfaces answer the action that opened them: one 90ms step, never looping. */
+@keyframes k-float-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+@keyframes k-sheet-in {
+  from {
+    translate: 24px 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --k-duration: 0ms;
+  }
+
   *,
   *::before,
   *::after {

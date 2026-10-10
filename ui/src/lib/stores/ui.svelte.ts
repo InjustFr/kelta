@@ -4,6 +4,8 @@ import type { CtlCommand, UiEvent } from '$lib/gen';
 
 export type SheetKey =
   | 'start_work'
+  | 'work_new'
+  | 'link_ticket'
   | 'onboarding'
   | 'project_new'
   | 'plugin_install'
@@ -11,7 +13,9 @@ export type SheetKey =
   | 'session_new'
   | 'ship'
   | 'finish'
-  | 'finish_merged';
+  | 'finish_merged'
+  | 'fix'
+  | 'work_dialog';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {

@@ -17,6 +17,7 @@ pub mod feeds;
 pub mod layout;
 pub mod layout_store;
 pub mod notifier;
+pub mod oauth;
 pub mod perf;
 pub mod projects;
 pub mod providers;
@@ -53,12 +54,13 @@ use kelta_proto::model::{
     EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch, Scope,
     SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
 };
-use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, Settings, SettingsDiff};
+use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
 use kelta_proto::tracker::{Ticket, TicketRef};
-use kelta_secrets::Secrets;
+use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
+use kelta_term::daemon::DaemonTerminalHost;
 use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -174,9 +176,42 @@ pub struct Core {
     pub(crate) http_refs: std::sync::atomic::AtomicU32,
     pub(crate) last_reload: Mutex<Option<std::time::Instant>>,
     pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
+    /// Device-flow sign-ins between start and finish, by user code.
+    pub(crate) oauth: Mutex<std::collections::HashMap<String, oauth::Pending>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
+}
+
+/// `terminal.session_host`: keltad (sessions survive quit) or PTYs in this process.
+fn terminal_host(dirs: &Dirs, settings: &Settings, login_env: &LoginEnv) -> Arc<dyn TerminalHost> {
+    let limits = TerminalLimits::from_settings(&settings.terminal);
+    if settings.terminal.session_host == SessionHost::Daemon {
+        // Launched from a stable copy: the AppImage mount (or an updated bundle) goes away on quit.
+        let daemon = ctl::bundled("keltad")
+            .and_then(|src| ctl::install_stable_bin(&src, &dirs.bin, kelta_proto::VERSION))
+            .and_then(|exe| {
+                DaemonTerminalHost::connect_or_launch(
+                    &dirs.keltad_socket(),
+                    &exe,
+                    &dirs.logs.join("keltad.log"),
+                    &dirs.data.join("history"),
+                )
+            });
+        match daemon {
+            Ok(d) => {
+                d.set_limits(limits);
+                return d;
+            }
+            Err(e) => tracing::warn!(error = %e, "keltad unavailable; sessions run in-process"),
+        }
+    }
+    Arc::new(PtyTerminalHost::with_history_dir(
+        login_env.clone(),
+        limits,
+        kelta_term::backend::default_backend(),
+        dirs.data.join("history"),
+    ))
 }
 
 impl Core {
@@ -209,15 +244,16 @@ impl Core {
             None => config.clone(),
         };
         let settings_source: Arc<dyn SettingsSource> = cfg.clone();
-        let secrets = Secrets::new(settings_source.clone());
+        let secrets = Secrets::with_options(
+            settings_source.clone(),
+            SecretsOptions { file: Some(dirs.data.join(SECRETS_FILE)), ..SecretsOptions::default() },
+        );
         let resolver: Arc<dyn SecretResolver> = resolver.unwrap_or_else(|| secrets.clone());
         let settings = settings_source.effective(None);
         let login_env = login_env.unwrap_or_else(|| kelta_term::resolve_login_env(Duration::from_secs(3)));
         let terminal: Arc<dyn TerminalHost> = match terminal {
             Some(t) => t,
-            None => {
-                PtyTerminalHost::new_arc(login_env.clone(), TerminalLimits::from_settings(&settings.terminal))
-            }
+            None => terminal_host(&dirs, &settings, &login_env),
         };
         let store = if in_memory_store {
             Store::open_in_memory()?
@@ -285,6 +321,7 @@ impl Core {
                 http_refs: std::sync::atomic::AtomicU32::new(0),
                 last_reload: Mutex::new(None),
                 claude_ver: Mutex::new(None),
+                oauth: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -300,6 +337,7 @@ impl Core {
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
+        self.adopt_live_sessions();
         let weak = self.me.clone();
         self.cfg.watch(Box::new(move |diff| {
             if let Some(core) = weak.upgrade() {
@@ -593,6 +631,9 @@ impl CoreApi for Core {
     ) -> Result<WorkItem, KeltaError> {
         self.work.create_pr(id, draft, origin).await
     }
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
+        self.work.feedback(id).await
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,
@@ -600,6 +641,15 @@ impl CoreApi for Core {
         line: Option<u32>,
     ) -> Result<(), KeltaError> {
         self.work.editor_open(target, path, line).await
+    }
+    async fn editor_diff(
+        &self,
+        target: EditorTarget,
+        old: &Path,
+        proposed: &Path,
+        close: bool,
+    ) -> Result<(), KeltaError> {
+        self.work.editor_diff(target, old, proposed, close).await
     }
     async fn tool_open(
         &self,

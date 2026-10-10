@@ -9,7 +9,7 @@
     "homepage": null,
     "kelta_api": "^0.1",
     "platforms": ["macos", "linux"],
-    "permissions": ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open"],
+    "permissions": ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open", "storage"],
     "activation": ["onScreen:hello", "onCommand:hello-screen.open"],
     "contributes": {
       "tools": [],
@@ -78,8 +78,12 @@
     {
       "permission": "ui.open",
       "description": "Open panes and screens, change focus"
+    },
+    {
+      "permission": "storage",
+      "description": "Store its own data in Kelta (up to 1 MiB)"
     }
   ],
-  "sha256": "495438c82a90160c6505744881b4f6f05c4c7045e67acafd57eebbee074dc783",
+  "sha256": "9fea6dfb96145e992c74d70b31edf6b9c2a3eded605141c823cd79a48810fa1f",
   "warnings": []
 }

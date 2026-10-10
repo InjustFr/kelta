@@ -63,10 +63,14 @@
     max-height: 70vh;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--k-border);
     border-radius: var(--k-radius-lg);
-    background: var(--k-bg-elev);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
+  }
+
+  .k-dialog:focus-visible {
+    outline: none;
   }
 
   header {
@@ -79,7 +83,7 @@
   h2 {
     margin: 0;
     font-size: var(--k-font-size-lg);
-    font-weight: 600;
+    font-weight: var(--k-weight-strong);
   }
 
   .danger h2 {
@@ -95,7 +99,6 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-5) var(--k-space-4);
-    border-top: 1px solid var(--k-border);
+    padding: var(--k-space-3) var(--k-space-5) var(--k-space-5);
   }
 </style>

@@ -96,21 +96,25 @@
     touch-action: none;
   }
 
+  /* 5px hit area around the 1px bezel gap left of the line. */
   .gutter.row {
-    width: 7px;
+    width: 5px;
     margin-left: -3px;
     cursor: col-resize;
   }
 
   .gutter:not(.row) {
-    height: 7px;
+    height: 5px;
     margin-top: -3px;
     cursor: row-resize;
   }
 
   .gutter:hover,
-  .gutter.dragging,
+  .gutter.dragging {
+    background: var(--k-border-strong);
+  }
+
   .gutter:focus-visible {
-    background: color-mix(in srgb, var(--k-accent) 55%, transparent);
+    outline-offset: -1px;
   }
 </style>

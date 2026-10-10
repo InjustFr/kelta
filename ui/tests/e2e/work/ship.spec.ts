@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { boot, callsOf, dispatch, SESSIONS } from '../shell/helpers';
 
 const SHOP_142 = '0199a6b2-0000-7000-8000-00000000a001';
-const SHOP_120_MERGED = '0199a6b2-0000-7000-8000-00000000a005';
+const SHOP_120_MERGED = '0199a6b2-0000-7000-8000-00000000a007';
 
 async function claudeStatus(page: Page, status: string): Promise<void> {
   await page.evaluate(

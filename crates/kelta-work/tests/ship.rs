@@ -96,7 +96,7 @@ async fn ship_refuses_without_commits_and_while_claude_works() {
 }
 
 #[tokio::test]
-async fn mcp_ship_sets_review_due_holds_the_lock_and_ui_ship_clears_it() {
+async fn mcp_ship_holds_the_lock_and_names_it() {
     need_git!();
     let fx = Fx::new();
     let w = fx.service();
@@ -115,10 +115,8 @@ async fn mcp_ship_sets_review_due_holds_the_lock_and_ui_ship_clears_it() {
     fx.core.exit_session(&push, 0);
     let out = task.await.unwrap().unwrap();
     assert_eq!(out.state, WorkState::PrOpen);
-    assert!(out.review_due, "Claude's own ship is not a review");
-    assert!(fx.store.get_item(&item.id).await.unwrap().unwrap().review_due);
 
-    // A UI ship of the same item (PR found for the branch) clears it.
+    // A UI ship of the same item (PR found for the branch).
     set_claude_status(&fx, &item, SessionStatus::Done);
     commit(&item, "b.txt");
     let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
@@ -130,7 +128,7 @@ async fn mcp_ship_sets_review_due_holds_the_lock_and_ui_ship_clears_it() {
     });
     let push = fx.wait_session(|s| s.name == "git push" && s.id != push).await;
     fx.core.exit_session(&push, 0);
-    assert!(!task.await.unwrap().unwrap().review_due);
+    task.await.unwrap().unwrap();
 }
 
 #[tokio::test]

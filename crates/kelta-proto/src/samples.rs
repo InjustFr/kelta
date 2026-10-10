@@ -22,7 +22,7 @@ use crate::model::*;
 use crate::secret::SecretBackendStatus;
 use crate::settings::*;
 use crate::term::{
-    LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
+    HistoryHit, LoginEnv, LoginEnvSource, SessionTermStats, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::*;
 
@@ -108,12 +108,14 @@ pub fn review() -> Review {
         decision: Some(ReviewDecision::ReviewRequired),
         my_state: Some(MyReviewState::Pending),
         mergeable: Some(true),
+        reviewed_head: None,
         labels: vec![],
         kind: ReviewKind::ReviewRequested,
         updated_at: TS.into(),
         linked_tickets: vec!["SHOP-140".into()],
         additions: Some(120),
         deletions: Some(14),
+        decision_head: None,
     }
 }
 
@@ -271,7 +273,6 @@ pub fn work_item() -> WorkItem {
         tab_id: Some(TabId::new("tab-1")),
         pr_url: None,
         state: WorkState::Active,
-        review_due: false,
         steps: crate::model::WORK_STEPS
             .iter()
             .map(|s| WorkStepStatus {
@@ -282,6 +283,37 @@ pub fn work_item() -> WorkItem {
             })
             .collect(),
         created_at: TS.into(),
+        title: None,
+        pr_title_needs_key: false,
+        review_due: false,
+        claude_replied: false,
+        sent_threads: Vec::new(),
+        rebase: None,
+    }
+}
+
+/// Feedback on PR #74 (Fix with Claude).
+pub fn feedback() -> Feedback {
+    Feedback {
+        threads: vec![FeedbackThread {
+            id: "PRRT_kwDOA1".into(),
+            author: "bob".into(),
+            path: Some("src/login.rs".into()),
+            line: Some(42),
+            body_md: "bob: Reset the counter after a successful login.".into(),
+            url: "https://github.com/acme/shop-api/pull/74#discussion_r1".into(),
+        }],
+        reviews: vec![FeedbackReview {
+            author: "bob".into(),
+            state: Some(MyReviewState::ChangesRequested),
+            body_md: "Close, two things to fix.".into(),
+        }],
+        failed_checks: vec![FailedCheck {
+            name: "ci / test".into(),
+            url: Some("https://github.com/acme/shop-api/actions/runs/2".into()),
+            log_tail: Some("test login::lockout ... FAILED".into()),
+        }],
+        reviewers: vec!["bob".into()],
     }
 }
 
@@ -310,6 +342,7 @@ pub fn start_work_plan() -> StartWorkPlan {
             run_setup: true,
         },
         existing: None,
+        adopt_pr: None,
     }
 }
 
@@ -801,6 +834,7 @@ pub fn all() -> Vec<Fixture> {
                     url: Some("https://github.com/acme/shop-api/actions/runs/1".into()),
                 }],
                 files: vec![FileChange { path: "src/prices.rs".into(), additions: 120, deletions: 14 }],
+                pending_comments: 0,
             }
         ),
         fx!("start_work_plan", StartWorkPlan, start_work_plan()),
@@ -840,7 +874,42 @@ pub fn all() -> Vec<Fixture> {
                 transition_to: Some(TransitionTarget::Name { name: "Done".into() }),
             }
         ),
-        fx!("git_status", GitStatus, GitStatus { ahead: 2, behind: 0, dirty: true, unpushed: true }),
+        fx!(
+            "git_status",
+            GitStatus,
+            GitStatus {
+                ahead: 2,
+                behind: 0,
+                dirty: true,
+                unpushed: true,
+                diverged: false,
+                remote_new: 0,
+                files: 3,
+                insertions: 41,
+                deletions: 7,
+                missing: false
+            }
+        ),
+        fx!(
+            "work_item_rebase_stopped",
+            WorkItem,
+            WorkItem {
+                pr_url: Some("https://github.com/acme/shop-api/pull/74".into()),
+                state: WorkState::PrOpen,
+                sent_threads: vec!["PRRT_kwDOA1".into()],
+                rebase: Some(Box::new(RebaseState {
+                    onto: "origin/main".into(),
+                    pre_head: "9c1d8e7b6a5f4e3d2c1b0a998877665544aa3f2a".into(),
+                    remote_sha: Some("a1b2c3d4e5f60718293a4b5c6d7e8f9012345678".into()),
+                    conflicts: vec![PathBuf::from("src/login.rs")],
+                    step: 2,
+                    total: 3,
+                })),
+                ..work_item()
+            }
+        ),
+        fx!("rebase_op", RebaseOp, RebaseOp::Start { onto: RebaseOnto::Base, no_fetch: false }),
+        fx!("feedback", Feedback, feedback()),
         fx!(
             "pr_draft",
             PrDraft,
@@ -1150,8 +1219,16 @@ pub fn all() -> Vec<Fixture> {
             TerminalLimits {
                 scrollback: ScrollbackSettings::default(),
                 memory_cap_mb: 160,
-                view_scrollback: 1000
+                view_scrollback: 1000,
+                history_log: true,
+                history_log_mb: 16,
+                history_log_total_mb: 512
             }
+        ),
+        fx!(
+            "history_hit",
+            HistoryHit,
+            HistoryHit { session_id: SessionId::new(SID), line: "error[E0308]: mismatched types".into() }
         ),
         fx!(
             "login_env",

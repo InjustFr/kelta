@@ -3,6 +3,7 @@ import type { ReviewRef } from "./ReviewRef";
 import type { TicketRef } from "./TicketRef";
 
 /**
- * `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` | `{"kind":"branch","name":".."}`.
+ * `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` |
+ * `{"kind":"branch","name":"..","task":"..","repo":".."}` (scratch work, FLOW §2.1).
  */
-export type WorkSource = { "kind": "ticket", ticket: TicketRef, } | { "kind": "review", review: ReviewRef, } | { "kind": "branch", name: string, };
+export type WorkSource = { "kind": "ticket", ticket: TicketRef, } | { "kind": "review", review: ReviewRef, } | { "kind": "branch", name: string, task: string | null, repo: string | null, };

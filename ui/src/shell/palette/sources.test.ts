@@ -13,6 +13,7 @@ import {
   itemText,
   projectItems,
   sessionItems,
+  workItems,
   settingsItems,
   ticketItems,
   toolItems,
@@ -29,10 +30,23 @@ beforeEach(async () => {
 describe('palette sources', () => {
   it('lists the sessions of every project with their status, needing-input first', () => {
     const items = sessionItems();
-    expect(items).toHaveLength(10);
+    expect(items).toHaveLength(11);
+    // Sessions of a work item are told apart by its key.
+    expect(items.map((i) => i.label)).toContain('SHOP-142 claude');
     expect(items[0]!.detail).toContain('Needs input');
     expect(items[0]!.detail).toContain('Billing');
     expect(items.every((i) => i.group === 'Sessions')).toBe(true);
+  });
+
+  it('lists unfinished work items with their lamp and phase', () => {
+    const items = workItems();
+    expect(items.map((i) => i.label)).toContain('SHOP-155 feat/SHOP-155-flaky-cart-test');
+    const toReview = items.find((i) => i.label.startsWith('SHOP-155'))!;
+    expect([toReview.group, toReview.lamp, toReview.detail]).toEqual([
+      'Work items',
+      'done',
+      'To review · feat/SHOP-155-flaky-cart-test',
+    ]);
   });
 
   it('lists every configured project, open or not', () => {
@@ -74,7 +88,7 @@ describe('palette sources', () => {
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });
-    expect(items[0]!.detail).toBe('In progress · Shop');
+    expect(items[0]!.detail).toBe('In progress\u2002\u2002Shop');
   });
 
   it('ranks across groups and keeps the display group order', () => {

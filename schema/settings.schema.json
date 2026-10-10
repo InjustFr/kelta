@@ -451,7 +451,7 @@
             },
             "secret_headers": {
               "additionalProperties": {
-                "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
                 "type": "string"
               },
               "default": {},
@@ -681,23 +681,35 @@
         "description": "One tracker / code-host account (global scope only).",
         "properties": {
           "auth": {
-            "default": null,
-            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).",
-            "enum": [
-              "basic",
-              "bearer",
-              "api_key",
-              "token",
-              null
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "basic",
+                      "bearer",
+                      "api_key",
+                      "token"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "oauth",
+                    "description": "Bearer token from \"Sign in with browser\" (device flow), refreshed before it expires.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "type": [
-              "string",
-              "null"
-            ]
+            "default": null,
+            "description": "Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth)."
           },
           "base_url": {
             "default": null,
-            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.",
+            "description": "github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0`; required for jira/redmine/gitea.",
             "type": [
               "string",
               "null"
@@ -720,14 +732,28 @@
             "type": "string"
           },
           "kind": {
-            "enum": [
-              "jira",
-              "redmine",
-              "github",
-              "gitlab",
-              "linear"
-            ],
-            "type": "string"
+            "oneOf": [
+              {
+                "enum": [
+                  "jira",
+                  "redmine",
+                  "github",
+                  "gitlab",
+                  "linear"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "bitbucket",
+                "description": "Bitbucket Cloud: code host only (its issue tracker was removed in August 2026).",
+                "type": "string"
+              },
+              {
+                "const": "gitea",
+                "description": "Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.",
+                "type": "string"
+              }
+            ]
           },
           "poll_secs": {
             "default": null,
@@ -795,7 +821,7 @@
       "properties": {
         "confirm_quit_with_running": {
           "default": true,
-          "description": "Confirm quit if a Claude session is Working/NeedsInput.",
+          "description": "Ask before quitting while Claude is working or waiting for you.",
           "type": "boolean"
         },
         "log_level": {
@@ -869,8 +895,10 @@
           }
         },
         "prompt_templates": {
+          "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
+          "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
           "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-          "standalone": "",
+          "standalone": "{task}",
           "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
         }
       },
@@ -928,7 +956,7 @@
         },
         "ide_bridge": {
           "default": false,
-          "description": "v0.2; ignored in v0.1.",
+          "description": "Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).",
           "type": "boolean"
         },
         "mcp": {
@@ -999,8 +1027,10 @@
             "type": "string"
           },
           "default": {
+            "conflicts": "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.",
+            "feedback": "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.",
             "review": "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.",
-            "standalone": "",
+            "standalone": "{task}",
             "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."
           },
           "type": "object"
@@ -1469,7 +1499,7 @@
                     },
                     "secret_headers": {
                       "additionalProperties": {
-                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
                         "type": "string"
                       },
                       "default": {},
@@ -1954,7 +1984,7 @@
         },
         "review_args": {
           "default": [],
-          "description": "Appended for review sessions, e.g. `[\"-c\",\"DiffviewOpen origin/{base}...HEAD\"]`.",
+          "description": "The diff editor's arguments: appended for review sessions and used by Review diff on own work\nitems, e.g. `[\"-c\",\"DiffviewOpen {range}\"]` (`{range}` = `<remote>/<base>` for own items, merge\nbase to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.",
           "items": {
             "type": "string"
           },
@@ -2027,6 +2057,8 @@
           "terminal.search": "/",
           "tickets.open": "t",
           "toast.run_last": "o",
+          "work.menu": ".",
+          "work.new": "w",
           "work.start": "s"
         },
         "prefix_timeout_ms": 1000
@@ -2092,6 +2124,8 @@
             "terminal.search": "/",
             "tickets.open": "t",
             "toast.run_last": "o",
+            "work.menu": ".",
+            "work.new": "w",
             "work.start": "s"
           },
           "description": "ActionId → single key after the prefix.",
@@ -2248,6 +2282,29 @@
       "type": "object",
       "x-kelta-category": "Notifications",
       "x-kelta-order": 12
+    },
+    "oauth": {
+      "additionalProperties": false,
+      "default": {
+        "client_ids": {}
+      },
+      "description": "OAuth apps used by \"Sign in with browser\" (device flow, GitHub and GitLab).",
+      "properties": {
+        "client_ids": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Client id of the GitHub OAuth App or application id of the GitLab application, per host (`github.com`, `gitlab.com`, `gitlab.acme.example`). Public values; a host without one only offers pasted tokens.",
+          "type": "object"
+        }
+      },
+      "type": "object",
+      "x-kelta-category": "Accounts",
+      "x-kelta-order": 6,
+      "x-kelta-scope": [
+        "global"
+      ]
     },
     "performance": {
       "additionalProperties": false,
@@ -2598,10 +2655,13 @@
         "env": {},
         "font_family": "JetBrains Mono, Menlo, DejaVu Sans Mono, monospace",
         "font_size": 13.0,
+        "history_log": true,
+        "history_log_mb": 16,
+        "history_log_total_mb": 512,
         "keyboard_protocol": "legacy",
         "letter_spacing": 0.0,
         "line_height": 1.15,
-        "max_live_views": 4,
+        "max_live_views": 2,
         "memory_cap_mb": 160,
         "minimum_contrast_ratio": 1.0,
         "option_as_meta": "both",
@@ -2616,6 +2676,7 @@
           "shell": 3000,
           "tool": 500
         },
+        "session_host": "daemon",
         "shell": "",
         "shift_enter": {
           "claude": "esc-cr",
@@ -2676,6 +2737,27 @@
           "minimum": 6.0,
           "type": "number"
         },
+        "history_log": {
+          "default": true,
+          "description": "Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.",
+          "type": "boolean"
+        },
+        "history_log_mb": {
+          "default": 16,
+          "description": "Per-session log cap (two rotated halves).",
+          "format": "uint32",
+          "maximum": 1024,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "history_log_total_mb": {
+          "default": 512,
+          "description": "Cap of all session logs; oldest files are deleted first.",
+          "format": "uint32",
+          "maximum": 65536,
+          "minimum": 16,
+          "type": "integer"
+        },
         "keyboard_protocol": {
           "default": "legacy",
           "enum": [
@@ -2696,7 +2778,7 @@
           "type": "number"
         },
         "max_live_views": {
-          "default": 4,
+          "default": 2,
           "format": "uint32",
           "maximum": 12,
           "minimum": 1,
@@ -2799,6 +2881,26 @@
             }
           },
           "type": "object"
+        },
+        "session_host": {
+          "default": "daemon",
+          "description": "`daemon` = sessions survive quit (keltad).",
+          "oneOf": [
+            {
+              "const": "inprocess",
+              "description": "PTYs in the app process: quitting ends them.",
+              "type": "string"
+            },
+            {
+              "const": "daemon",
+              "description": "PTYs in `keltad`: sessions survive quit and re-attach on the next start.",
+              "type": "string"
+            }
+          ],
+          "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "shell": {
           "default": "",
@@ -3651,7 +3753,7 @@
                     },
                     "secret_headers": {
                       "additionalProperties": {
-                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                        "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
                         "type": "string"
                       },
                       "default": {},
@@ -3937,7 +4039,8 @@
           "draft": false,
           "title_template": "{ticket.key}: {ticket.title}"
         },
-        "review_template": "review"
+        "review_template": "review",
+        "scratch_branch_template": "wip/{slug}"
       },
       "properties": {
         "default_template": {
@@ -4169,6 +4272,11 @@
         },
         "review_template": {
           "default": "review",
+          "type": "string"
+        },
+        "scratch_branch_template": {
+          "default": "wip/{slug}",
+          "description": "Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of\nthe task's first line.",
           "type": "string"
         }
       },

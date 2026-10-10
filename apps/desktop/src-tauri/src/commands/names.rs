@@ -7,6 +7,7 @@ pub const COMMANDS: &[&str] = &[
     // app
     "app_info",
     "app_ready",
+    "bench_mark",
     "events_subscribe",
     "open_external",
     "perf_snapshot",
@@ -27,6 +28,9 @@ pub const COMMANDS: &[&str] = &[
     "secret_set",
     "secret_delete",
     "secret_backends_status",
+    "secret_unlock",
+    "oauth_device_start",
+    "oauth_device_finish",
     "account_test",
     // projects
     "project_list",
@@ -56,6 +60,7 @@ pub const COMMANDS: &[&str] = &[
     "session_mark_seen",
     "session_link",
     "session_text_tail",
+    "session_history_search",
     "terminal_set_palette",
     // tickets
     "tracker_list",
@@ -85,6 +90,16 @@ pub const COMMANDS: &[&str] = &[
     "work_pr_draft",
     "work_finish_merged",
     "work_check_prs",
+    "work_send",
+    "work_feedback",
+    "work_rerequest_review",
+    "work_resolve_sent_threads",
+    "work_rebase",
+    "work_push",
+    "work_link",
+    "work_status_all",
+    "work_diff",
+    "work_mark_reviewed",
     "editor_open",
     "editor_send_selection",
     // tools / plugins / triggers

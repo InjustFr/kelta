@@ -108,13 +108,26 @@ CREATE TABLE IF NOT EXISTS ui_state (
 );
 "#;
 
-/// v2: Claude's changes wait for review on work items (FLOW §2.3).
+/// v2: durable Claude signals on work items (FLOW §2.3).
 const V2: &str = r#"
 ALTER TABLE work_items ADD COLUMN review_due INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE work_items ADD COLUMN claude_replied INTEGER NOT NULL DEFAULT 0;
+"#;
+
+/// v3: scratch work items (FLOW §2.1, §4.3): `WorkItem.title`, `WorkItem.pr_title_needs_key`.
+const V3: &str = r#"
+ALTER TABLE work_items ADD COLUMN title TEXT;
+ALTER TABLE work_items ADD COLUMN pr_title_needs_key INTEGER NOT NULL DEFAULT 0;
+"#;
+
+/// v4: Fix with Claude and rebase state on work items (FLOW §8).
+const V4: &str = r#"
+ALTER TABLE work_items ADD COLUMN sent_threads_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE work_items ADD COLUMN rebase_json TEXT;
 "#;
 
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

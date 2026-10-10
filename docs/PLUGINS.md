@@ -8,7 +8,7 @@ Three tiers, none of which keeps a background runtime alive (zero memory when un
 
 Tools, triggers, commands and session templates use the **same schema** in `config.toml`, project files, repo-local `.kelta/config.toml` (trust-gated) and plugin manifests. Types live in `kelta-proto::ext` (`ToolDef`, `TriggerDef`, `ActionDef`, `CommandDef`, `PluginManifest`, `ScreenDef`, `PluginMethod`, `Permission`), JSON Schemas in `schema/tool.schema.json`, `schema/trigger.schema.json`, `schema/plugin-manifest.schema.json` (generated, CI drift-checked).
 
-v0.2 (designed, not built): process plugins speaking JSON-RPC over stdio (KPP) that can contribute **tracker / code-host providers** via the same `Tracker`/`CodeHost` traits; plugin KV storage; WASM logic plugins.
+v0.2 (designed, not built): process plugins speaking JSON-RPC over stdio (KPP) that can contribute **tracker / code-host providers** via the same `Tracker`/`CodeHost` traits; WASM logic plugins.
 
 ---
 
@@ -330,10 +330,11 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `ui.open` | open panes/screens, focus |
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
+| `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
 | `exec:<command>` | run that argv[0] (basename match) in `run` actions |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
 
-Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no storage, no Tauri IPC.
+Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
 
 ## 6. Events catalogue (BusEvent names; payload JSON)
 
@@ -393,10 +394,13 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `ui.toast` / `ui.open_screen` / `ui.focus` | | — / `ui.open` / `ui.open` |
 | `notify.send` | `{title, body}` | `notify` |
 | `clipboard.write` | `{text}` | `clipboard.write` |
+| `kv.get` / `kv.set` / `kv.delete` / `kv.list` | `{key}` → JSON or `null` / `{key, value}` / `{key}` / `{}` → `[key]` (sorted) | `storage` |
+
+`kv.*` is the plugin's own store in SQLite `plugin_kv`, namespaced by the calling screen's plugin id (a plugin can never name another's), shared by all its screens and projects, kept across updates and deleted on uninstall. Keys are 1–256 bytes; a value is any JSON up to 64 KiB serialized; keys + values of one plugin are capped at 1 MiB. Over a cap → `InvalidArgument` and nothing is written.
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 
-SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
+SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
 
 Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 
@@ -421,5 +425,5 @@ Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600
 - The path is POSIX single-quoted (macOS data dir contains a space). `claude.hook_transport = "http"` replaces every event except SessionStart with `{"type":"http","url":"http://127.0.0.1:<port>/hook/<sid>","headers":{"Authorization":"Bearer ${KELTA_HOOK_TOKEN}"},"allowedEnvVars":["KELTA_HOOK_TOKEN"],"timeout":2}`.
 - `kelta-ctl hook` reads stdin (cap 1 MiB), reads `KELTA_SESSION_ID`, `KELTA_HOOK_TOKEN`, `KELTA_SOCK`, writes one line `{"v":1,"cmd":"hook","session":…,"token":…,"payload":{…}}` to the ctl socket, **always exits 0**, < 5 ms.
 - `claude.extra_hooks` is merged in. A user's `disableAllHooks` disables these too → hooks-inactive heuristics (ARCHITECTURE §7.6).
-- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context).
+- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `get_review_feedback()`, `add_review_comment({path, line, body})`, `notify({message})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `add_review_comment` adds a line comment (new-side `line` of `path`) to the pending review of the PR under review in the session's review-kind work item (`CodeHost::add_pending_comment`); nothing is published until the user submits in Kelta (`a` / `c` / `m`); error text "no pull request under review in this session" otherwise. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context).
 - **Gate C1 (verified with `claude` 2.1.295, macOS):** `KELTA_REAL_CLAUDE=1 cargo test -p kelta-core --test real_claude -- --nocapture` runs the launcher through a real `Core` (PTY, ctl socket, installed `kelta-ctl`, loopback MCP) in a Kelta worktree, in print mode via `claude.extra_args = ["-p"]`, haiku/low effort, two model runs: SessionStart → UserPromptSubmit → PermissionRequest (fires in print mode too) → Stop → SessionEnd gives Running → Working → NeedsInput → Done → Exited; `--session-id` is honoured; `mcp__kelta__notify` is callable; `session_restart` on the same session id rebuilds the work item's restore argv (`--resume <uuid>`, files regenerated) and resumes the conversation in the worktree (`source: "resume"`), with `mcp__kelta__notify` still reaching that session; a project `.claude/settings.json` hook still runs next to Kelta's (`--settings` adds) and `~/.claude/settings.json` is untouched. Interactive sessions in a repo Claude does not trust stop at its workspace-trust dialog and hooks start only once it is accepted (a worktree inherits the trust of its main repository); the hooks-inactive fallback covers the gap and the first SessionStart switches back to hooks. Shift+Enter: Claude's own `/terminal-setup` binds it to ESC CR (`\u001b\r`), what Kelta sends for Claude sessions; the live keystroke is checked by hand.

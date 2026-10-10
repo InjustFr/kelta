@@ -451,7 +451,7 @@
             },
             "secret_headers": {
               "additionalProperties": {
-                "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
                 "type": "string"
               },
               "default": {},
@@ -1086,7 +1086,7 @@
               },
               "secret_headers": {
                 "additionalProperties": {
-                  "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
+                  "description": "A reference to a secret, never the secret itself:\n`keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.",
                   "type": "string"
                 },
                 "default": {},

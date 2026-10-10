@@ -11,6 +11,7 @@ import type {
   EffectiveSettings,
   FinishMergedReport,
   FinishOpts,
+  GitStatus,
   JsonValue,
   KeltaError,
   Layer,
@@ -43,6 +44,7 @@ import sessionsJson from './mock/fixtures/sessions.json';
 import ticketsJson from './mock/fixtures/tickets.json';
 import toolsJson from './mock/fixtures/tools.json';
 import workJson from './mock/fixtures/work_items.json';
+import workStatusJson from './mock/fixtures/work_status.json';
 import type { IpcChannel, IpcTransport } from './transport';
 
 // JSON imports widen string-literal unions; the fixtures are validated by mock.test.ts.
@@ -53,6 +55,7 @@ const FIXTURES = {
   tickets: ticketsJson as unknown as TicketItem[],
   reviews: reviewsJson as unknown as ReviewItem[],
   work: workJson as unknown as WorkItem[],
+  git: workStatusJson as Record<string, GitStatus>,
   tools: toolsJson as unknown as ToolInfo[],
 };
 
@@ -88,10 +91,16 @@ export interface MockState {
   tickets: TicketItem[];
   reviews: ReviewItem[];
   work: WorkItem[];
+  /** `work_status` per work item (tests set it to drive phases). */
+  git: Record<string, GitStatus>;
   tools: ToolInfo[];
   settings: EffectiveSettings;
   approved: Set<string>;
   comments: Record<string, string[]>;
+  /** Commits on the remote branch the item does not have (suggestions, Update branch), per item. */
+  remoteNew: Record<string, number>;
+  /** Pending (draft) review line comments per `repo#number`. */
+  pending: Record<string, number>;
   plugins: (typeof samples.pluginInfo)[];
 }
 
@@ -125,18 +134,22 @@ function freshState(): MockState {
     tickets: clone(FIXTURES.tickets),
     reviews: clone(FIXTURES.reviews),
     work: clone(FIXTURES.work),
+    git: clone(FIXTURES.git),
     tools: clone(FIXTURES.tools),
     settings: { value: clone(samples.settingsDefault) as unknown as JsonValue, sources: {} },
     approved: new Set(),
     comments: {},
+    remoteNew: {},
+    pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
   };
 }
 
+const prKey = (r: { repo: string; number: number }): string => `${r.repo}#${r.number}`;
 const refKey = (r: TicketRef): string => `${r.account}:${r.key}`;
 const sameRef = (a: TicketRef, b: TicketRef): boolean => a.account === b.account && a.key === b.key;
 /** Fixture items whose worktree has uncommitted changes (the failed billing item, the merged wip). */
-const dirtyWork = (w: WorkItem): boolean => w.id === FIXTURES.work[1]?.id || w.id === FIXTURES.work[5]?.id;
+const dirtyWork = (w: WorkItem): boolean => w.id === FIXTURES.work[1]?.id || w.id === FIXTURES.work[7]?.id;
 const FINISH_MERGED: FinishOpts = {
   remove_worktree: true,
   delete_branch: true,
@@ -288,6 +301,17 @@ export function createMockTransport(options: MockOptions = {}): {
     if (!w) throw err('not_found', `work item not found: ${id}`);
     return w;
   };
+  // A recorded rebase awaiting its force push is "diverged"; `remoteNew` drives "Remote has new commits".
+  const gitOf = (w: WorkItem): GitStatus => {
+    const base = clone(state.git[w.id] ?? samples.gitStatus);
+    const pending = !!w.rebase && w.rebase.total === 0 && !!w.rebase.remote_sha;
+    return {
+      ...base,
+      unpushed: base.unpushed || pending,
+      diverged: pending,
+      remote_new: state.remoteNew[w.id] ?? 0,
+    };
+  };
   const ticketItem = (ref: TicketRef): TicketItem => {
     const t = state.tickets.find((x) => sameRef(x.ticket.ref, ref));
     if (!t) throw err('not_found', `ticket not found: ${ref.key}`);
@@ -381,6 +405,7 @@ export function createMockTransport(options: MockOptions = {}): {
     // ---- app -------------------------------------------------------------------------------
     app_info: () => clone(samples.appInfo),
     app_ready: () => null,
+    bench_mark: () => null,
     events_subscribe: ({ channel }) => {
       eventChannels.add(channel);
       return { sub_id: eventChannels.size };
@@ -433,6 +458,14 @@ export function createMockTransport(options: MockOptions = {}): {
     secret_set: () => null,
     secret_delete: () => null,
     secret_backends_status: () => clone(samples.secretBackendsStatus),
+    secret_unlock: () => null,
+    oauth_device_start: ({ kind }) => ({
+      user_code: 'WDJB-MJHT',
+      verification_uri:
+        kind === 'github' ? 'https://github.com/login/device' : 'https://gitlab.com/oauth/device',
+      expires_in: 900,
+    }),
+    oauth_device_finish: () => null,
     account_test: ({ account_id }) =>
       account_id.startsWith('broken')
         ? { ok: false, user: null, error: err('needs_auth', '401 Unauthorized') }
@@ -558,7 +591,15 @@ export function createMockTransport(options: MockOptions = {}): {
       }
       return s;
     },
-    session_spawn_template: ({ project_id, template_id, placement }) => {
+    session_spawn_template: ({ project_id, template_id, placement, ctx }) => {
+      const item = ctx.work_item_id ? state.work.find((w) => w.id === ctx.work_item_id) : undefined;
+      const tabTitle = item
+        ? item.ticket
+          ? `${item.ticket.key} ${ticketItem(item.ticket).ticket.title}`
+          : item.title
+            ? `wip ${item.title}`
+            : item.branch
+        : template_id;
       const kinds: SessionKind[] =
         template_id === 'claude+editor'
           ? [{ type: 'claude' }, { type: 'editor', adapter: 'nvim' }]
@@ -574,8 +615,8 @@ export function createMockTransport(options: MockOptions = {}): {
           content: { kind: 'terminal', session_id: s.id },
           placement: i === 0 ? placement : 'split_right',
           focus: i === 0,
-          tab_title: i === 0 ? template_id : null,
-          work_item_id: null,
+          tab_title: i === 0 ? tabTitle : null,
+          work_item_id: item?.id ?? null,
         }).layout;
       });
       backendLayoutChange(project_id, layout);
@@ -646,6 +687,11 @@ export function createMockTransport(options: MockOptions = {}): {
       const s = session(id);
       return Array.from({ length: Math.min(max_lines, 5) }, (_, i) => `${s.name} line ${i + 1}`).join('\n');
     },
+    session_history_search: ({ project_id, session_id, query, limit }) =>
+      state.sessions
+        .filter((s) => s.project_id === project_id && (!session_id || s.id === session_id))
+        .map((s) => ({ session_id: s.id, line: `${s.name}: ${query}` }))
+        .slice(0, limit),
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope, view_id, cursor }) => {
@@ -742,6 +788,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const detail: ReviewDetail = {
         ...clone(samples.reviewDetail),
         review: clone(item.review),
+        pending_comments: state.pending[prKey(review)] ?? 0,
         body_html: `<p>${escapeHtml(item.review.title)}</p><p>Mock description. <a href="${item.review.url}">View on host</a></p>`,
       };
       return detail;
@@ -752,17 +799,24 @@ export function createMockTransport(options: MockOptions = {}): {
         throw err('conflict', 'PR changed, refresh', { head_sha: item.review.head_sha });
       }
       item.review.my_state = 'approved';
-      state.approved.add(`${review.repo}#${review.number}`);
+      item.review.reviewed_head = head_sha;
+      delete state.pending[prKey(review)];
+      state.approved.add(prKey(review));
       emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
       return null;
     },
     review_comment: ({ review }) => {
       const item = reviewItem(review);
-      if (!item.review.my_state) item.review.my_state = 'commented';
+      if (!item.review.my_state || item.review.my_state === 'pending') item.review.my_state = 'commented';
+      item.review.reviewed_head = item.review.head_sha;
+      delete state.pending[prKey(review)];
       return null;
     },
     review_request_changes: ({ review }) => {
-      reviewItem(review).review.my_state = 'changes_requested';
+      const item = reviewItem(review);
+      item.review.my_state = 'changes_requested';
+      item.review.reviewed_head = item.review.head_sha;
+      delete state.pending[prKey(review)];
       return null;
     },
     // ---- work ------------------------------------------------------------------------------
@@ -777,7 +831,7 @@ export function createMockTransport(options: MockOptions = {}): {
       } else if (source.kind === 'review') {
         slug = `pr-${source.review.number}`;
       } else {
-        slug = source.name;
+        slug = source.name || (source.task ?? '').split('\n').find((l) => l.trim() !== '') || '';
       }
       slug = slug
         .toLowerCase()
@@ -790,15 +844,38 @@ export function createMockTransport(options: MockOptions = {}): {
               (w) => w.ticket && sameRef(w.ticket, source.ticket) && w.state.kind !== 'finished',
             )
           : undefined;
+      // Scratch items (FLOW §4.3): wip/{slug}, `{task}` prompt, never adopt an existing branch.
+      const scratch = source.kind === 'branch' && source.task != null;
+      const branch =
+        source.kind === 'review'
+          ? `kelta/${slug}`
+          : source.kind === 'branch'
+            ? source.name || `wip/${slug}`
+            : `feat/${slug}`;
+      if (scratch && slug === '') throw err('invalid_argument', 'describe the task or name the branch');
+      if (scratch && state.work.some((w) => w.branch === branch && w.state.kind !== 'finished')) {
+        throw err(
+          'conflict',
+          `Branch ${branch} has a work item. Edit the branch name or the task's first line.`,
+        );
+      }
+      const repoPick = (source.kind === 'branch' && p.repos.find((r) => r.id === source.repo)) || repo;
       return {
         ...plan,
         project_id,
         source,
-        repo_id: repo?.id ?? plan.repo_id,
+        repo_id: existing?.repo_id ?? repoPick?.id ?? plan.repo_id,
         repo_choices: p.repos.map((r) => r.id),
-        branch: source.kind === 'review' ? `kelta/${slug}` : `feat/${slug}`,
-        worktree_path: `${repo?.path ?? '/tmp'}.worktrees/${slug}`,
+        // An existing item shows its own branch and worktree, not a new plan's (B5).
+        branch: existing?.branch ?? branch,
+        worktree_path:
+          existing?.worktree ?? `${repoPick?.path ?? '/tmp'}.worktrees/${branch.replace(/\//g, '-')}`,
         existing: existing ? existing.id : null,
+        claude: scratch ? { ...plan.claude, prompt: source.task ?? '' } : plan.claude,
+        side_effects:
+          source.kind === 'branch'
+            ? { ...plan.side_effects, assign_me: false, transition_to: null, comment: null }
+            : plan.side_effects,
       };
     },
     work_start: ({ plan }) => {
@@ -836,27 +913,55 @@ export function createMockTransport(options: MockOptions = {}): {
         state: { kind: 'active' },
         steps,
         created_at: now,
+        title:
+          plan.source.kind === 'branch'
+            ? ((plan.source.task ?? '')
+                .split('\n')
+                .map((l) => l.trim())
+                .find((l) => l !== '')
+                ?.slice(0, 72) ?? null)
+            : null,
+        pr_title_needs_key: false,
         review_due: false,
+        claude_replied: false,
       };
-      const spawned = handlers.session_spawn_template({
-        project_id: plan.project_id,
-        template_id: plan.template_id,
-        ctx: {
-          repo_id: plan.repo_id,
-          cwd: plan.worktree_path,
-          session_id: null,
-          work_item_id: item.id,
-          ticket: item.ticket,
-          review: item.review,
-          extra: {},
-        },
-        placement: 'new_tab',
-      }) as SessionInfo[];
+      // Like the saga: sessions run in the worktree, bound to the item, in a new active tab that
+      // carries the item (B5); the UI brings the project to the front once work_start returns.
+      const kinds: SessionKind[] =
+        plan.template_id === 'claude'
+          ? [{ type: 'claude' }]
+          : [{ type: 'claude' }, { type: 'editor', adapter: 'nvim' }];
+      const spawned = kinds.map((k) => spawn(plan.project_id, k, null, plan.worktree_path));
       item.session_ids = spawned.map((s) => s.id);
-      for (const s of spawned) {
-        const live = state.sessions.find((x) => x.id === s.id);
-        if (live) live.work_item_id = item.id;
-      }
+      for (const s of spawned) updateSession(session(s.id), { work_item_id: item.id });
+      const key = item.ticket?.key ?? (item.review ? `#${item.review.number}` : item.branch);
+      const title =
+        plan.source.kind === 'ticket'
+          ? `${key} ${ticketItem(plan.source.ticket).ticket.title}`
+          : item.title
+            ? `wip ${item.title}`
+            : key;
+      let layout = layoutOf(plan.project_id);
+      spawned.forEach((s, i) => {
+        layout = openPane(layout, {
+          content: { kind: 'terminal', session_id: s.id },
+          placement: i === 0 ? 'new_tab' : 'split_right',
+          focus: i === 0,
+          tab_title: i === 0 ? title : null,
+          work_item_id: item.id,
+        }).layout;
+      });
+      backendLayoutChange(plan.project_id, layout);
+      state.git[item.id] = {
+        ahead: 0,
+        behind: 0,
+        dirty: false,
+        unpushed: false,
+        files: 0,
+        insertions: 0,
+        deletions: 0,
+        missing: false,
+      };
       state.work.push(item);
       emit({ type: 'work.updated', work: clone(item) });
       return clone(item);
@@ -868,6 +973,21 @@ export function createMockTransport(options: MockOptions = {}): {
       for (const sid of w.session_ids) {
         const s = state.sessions.find((x) => x.id === sid);
         if (s && s.lifecycle === 'dormant') updateSession(s, { lifecycle: 'live', status: 'running' });
+      }
+      // A closed work tab is recreated around the item's sessions.
+      const current = layoutOf(w.project_id);
+      if (!current.tabs.some((t) => t.work_item_id === w.id) && w.session_ids.length > 0) {
+        let l = current;
+        w.session_ids.forEach((sid, i) => {
+          l = openPane(l, {
+            content: { kind: 'terminal', session_id: sid },
+            placement: i === 0 ? 'new_tab' : 'split_right',
+            focus: i === 0,
+            tab_title: i === 0 ? (w.ticket?.key ?? w.branch) : null,
+            work_item_id: w.id,
+          }).layout;
+        });
+        backendLayoutChange(w.project_id, l);
       }
       return clone(w);
     },
@@ -891,7 +1011,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const w = work(id);
       w.pr_url = w.pr_url ?? `https://github.com/acme/mock/pull/${100 + state.work.indexOf(w)}`;
       w.state = { kind: 'pr_open' };
-      w.review_due = false; // origin: ui
+      w.review_due = false; // a UI Ship counts as review
       void draft;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
@@ -927,6 +1047,8 @@ export function createMockTransport(options: MockOptions = {}): {
         });
       }
       w.state = { kind: 'finished' };
+      w.review_due = false;
+      w.claude_replied = false;
       for (const sid of w.session_ids) {
         if (state.sessions.some((s) => s.id === sid)) {
           state.sessions = state.sessions.filter((s) => s.id !== sid);
@@ -936,12 +1058,120 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
-    work_status: ({ id }) => {
+    work_link: ({ id, ticket, apply_side_effects }) => {
       const w = work(id);
-      if (w.state.kind === 'merged') return { ahead: 0, behind: 0, dirty: dirtyWork(w), unpushed: false };
-      return w.state.kind === 'failed'
-        ? { ahead: 0, behind: 3, dirty: true, unpushed: false }
-        : clone(samples.gitStatus);
+      if (w.kind !== 'branch')
+        throw err('conflict', w.review ? 'Review checkout: read-only' : 'work item already has a ticket');
+      const t = ticketItem(ticket);
+      w.kind = 'ticket';
+      w.ticket = clone(t.ticket.ref);
+      w.pr_title_needs_key = w.pr_url !== null;
+      if (apply_side_effects)
+        t.ticket.status = {
+          ...t.ticket.status,
+          name: w.pr_url ? 'In Review' : 'In Progress',
+          category: 'in_progress',
+        };
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_status: ({ id }) => gitOf(work(id)),
+    work_status_all: () =>
+      Object.fromEntries(state.work.filter((w) => w.state.kind !== 'finished').map((w) => [w.id, gitOf(w)])),
+    work_diff: ({ id }) => {
+      const w = work(id);
+      const s = spawn(w.project_id, { type: 'editor', adapter: 'nvim' }, 'diff', w.worktree);
+      return updateSession(session(s.id), { work_item_id: w.id });
+    },
+    work_send: ({ id, prompt, files, threads }) => {
+      const w = work(id);
+      if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');
+      const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
+      if (claude?.lifecycle === 'live') {
+        if (claude.status === 'working' || claude.status === 'needs_input' || claude.status === 'running') {
+          throw err('conflict', 'Claude is busy; send when it stops.', { reason: 'claude_busy' });
+        }
+        if (claude.status_source !== 'hook') {
+          throw err('conflict', "Kelta can't tell whether Claude is idle (status hooks inactive).", {
+            reason: 'hooks_inactive',
+          });
+        }
+      }
+      void files;
+      if (claude) updateSession(claude, { lifecycle: 'live', status: 'working', status_source: 'hook' });
+      if (threads) w.sent_threads = [...threads];
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_feedback: ({ id }) => {
+      if (!work(id).pr_url) throw err('invalid_argument', 'this work item has no pull request');
+      return clone(samples.feedback);
+    },
+    work_rerequest_review: ({ id }) => {
+      work(id);
+      return clone(samples.feedback.reviewers);
+    },
+    work_resolve_sent_threads: ({ id }) => {
+      const w = work(id);
+      if (!w.sent_threads?.length) throw err('invalid_argument', 'no review threads were sent to Claude');
+      w.sent_threads = [];
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_rebase: ({ id, op }) => {
+      const w = work(id);
+      const claude = state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude');
+      const busy =
+        claude?.lifecycle === 'live' && (claude.status === 'working' || claude.status === 'needs_input');
+      if (busy && op.kind !== 'abort') {
+        throw err('conflict', 'Claude is working in this worktree. Rebase when it stops.', {
+          reason: 'claude_busy',
+        });
+      }
+      const sha = (n: number): string => `${'abcdef0123456789'.repeat(3)}${n}`.slice(0, 40);
+      if (op.kind === 'start' && op.onto === 'remote_branch') {
+        delete state.remoteNew[id];
+        w.rebase = null;
+      } else if (op.kind === 'start') {
+        // A pushed item (with a PR) stops on a conflict; an unpushed one rebases cleanly.
+        w.rebase = w.pr_url
+          ? {
+              onto: `origin/${w.base}`,
+              pre_head: sha(1),
+              remote_sha: sha(1),
+              conflicts: ['src/output.rs'],
+              step: 1,
+              total: 2,
+            }
+          : null;
+      } else if (!w.rebase || w.rebase.total === 0) {
+        throw err('conflict', 'No rebase is in progress.');
+      } else if (op.kind === 'continue') {
+        w.rebase = { ...w.rebase, conflicts: [], step: 0, total: 0 };
+      } else {
+        w.rebase = null;
+      }
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_push: ({ id, force }) => {
+      const w = work(id);
+      if (force && !(w.rebase && w.rebase.total === 0)) {
+        throw err('conflict', 'Force push is only offered to rewrite your own rebased commits.', {
+          reason: 'not_diverged',
+        });
+      }
+      w.rebase = null;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_mark_reviewed: ({ id }) => {
+      const w = work(id);
+      if (w.review_due) {
+        w.review_due = false;
+        emit({ type: 'work.updated', work: clone(w) });
+      }
+      return clone(w);
     },
     editor_open: () => null,
     editor_send_selection: ({ editor_session, claude_session }) => {

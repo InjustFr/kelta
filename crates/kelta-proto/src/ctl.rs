@@ -44,6 +44,12 @@ pub enum CtlCommand {
         #[serde(default)]
         project: Option<ProjectId>,
     },
+    /// Scratch work item from a task (`kelta-ctl start --task`), same saga as New work item.
+    StartTask {
+        task: String,
+        #[serde(default)]
+        project: Option<ProjectId>,
+    },
     New {
         template: String,
         #[serde(default)]

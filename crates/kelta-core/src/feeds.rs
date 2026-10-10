@@ -1152,7 +1152,12 @@ impl Core {
 
     fn policy_for(&self, account: &AccountId, s: &Settings) -> IntervalPolicy {
         let acc = s.accounts.get(account);
-        let floor = if acc.is_some_and(|a| a.kind == AccountKind::Redmine) { 60 } else { 0 };
+        // Bitbucket has no change gate and review polling costs ~50 requests (limit ~1000/h).
+        let floor = match acc.map(|a| a.kind) {
+            Some(AccountKind::Redmine) => 60,
+            Some(AccountKind::Bitbucket) => 300,
+            _ => 0,
+        };
         IntervalPolicy::from_settings(&s.polling, floor, acc.and_then(|a| a.poll_secs))
     }
 

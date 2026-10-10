@@ -80,7 +80,11 @@ export const PLUGIN_METHODS = [
   "ui.open_screen",
   "ui.focus",
   "notify.send",
-  "clipboard.write"
+  "clipboard.write",
+  "kv.get",
+  "kv.set",
+  "kv.delete",
+  "kv.list"
 ] as const;
 
 export const HOOK_EVENTS = ["SessionStart","UserPromptSubmit","PermissionRequest","Notification","PostToolUse","Stop","StopFailure","SessionEnd"] as const;

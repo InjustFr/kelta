@@ -6,7 +6,7 @@
   import { sessions, toasts, work } from '$lib/stores';
   import { Button, Dialog, Icon, TextInput, Toggle } from '$lib/ui';
 
-  import { claudeBusy, prNumber } from './shipPhase';
+  import { claudeBusy, prNumber } from './ship';
 
   interface Props {
     item: WorkItem;

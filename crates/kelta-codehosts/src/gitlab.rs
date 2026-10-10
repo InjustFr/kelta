@@ -12,8 +12,8 @@ use kelta_http::util::{percent_encode, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FileChange, MyReviewState, PrCreate, PrState, Review, ReviewDecision,
-    ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MyReviewState,
+    PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::common::{host_matches, linked_tickets, parse_remote, s};
+use crate::common::{MAX_LOGS, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s};
 
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
@@ -61,7 +61,7 @@ impl GitlabHost {
             .ok_or_else(|| KeltaError::invalid("gitlab account needs a base_url"))?;
         let root = base.strip_suffix("/api/v4").unwrap_or(&base).to_owned();
         let scheme = match account.auth {
-            Some(AuthKind::Bearer | AuthKind::Basic) => {
+            Some(AuthKind::Bearer | AuthKind::Basic | AuthKind::Oauth) => {
                 AuthScheme::from_account(account).unwrap_or(AuthScheme::Bearer)
             }
             _ => AuthScheme::Header("PRIVATE-TOKEN".into()),
@@ -158,17 +158,29 @@ impl GitlabHost {
             .or_else(|| v.get("work_in_progress").and_then(Value::as_bool))
             .unwrap_or(false);
         let pipeline = v.get("head_pipeline").filter(|p| !p.is_null()).or_else(|| v.get("pipeline"));
+        // GitLab has no "changes requested" review state before 17: unresolved blocking threads
+        // are the reviewer's way to ask for changes (FLOW §2.2 notes).
+        let blocked = v.get("blocking_discussions_resolved").and_then(Value::as_bool) == Some(false)
+            || merge_status == Some("discussions_not_resolved");
+        let head_sha = s(v, "sha").unwrap_or("").to_owned();
         Some(Review {
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(v, "web_url").unwrap_or("").to_owned(),
             author: v.get("author").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
             draft,
-            head_sha: s(v, "sha").unwrap_or("").to_owned(),
+            decision_head: blocked.then(|| head_sha.clone()),
+            head_sha,
             source_branch: branch.clone(),
             target_branch: s(v, "target_branch").unwrap_or("").to_owned(),
             ci: ci_from(pipeline.and_then(|p| s(p, "status"))),
-            decision: (merge_status == Some("not_approved")).then_some(ReviewDecision::ReviewRequired),
+            decision: if blocked {
+                Some(ReviewDecision::ChangesRequested)
+            } else {
+                (merge_status == Some("not_approved")).then_some(ReviewDecision::ReviewRequired)
+            },
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
+            // shortcut: GitLab REST keeps no commit per approval, so no "updated since your review"; upgrade via GraphQL reviewer states.
+            reviewed_head: None,
             mergeable: match (merge_status, v.get("has_conflicts").and_then(Value::as_bool)) {
                 (_, Some(true)) | (Some("conflict"), _) => Some(false),
                 (Some("mergeable"), _) => Some(true),
@@ -186,6 +198,18 @@ impl GitlabHost {
             deletions: None,
             title,
         })
+    }
+
+    fn project_url(&self, repo: &str, tail: &str) -> String {
+        format!("{}/projects/{}{tail}", self.api, percent_encode(repo))
+    }
+
+    /// Jobs of the MR's head pipeline (empty without one).
+    async fn pipeline_jobs(&self, repo: &str, mr: &Value) -> Vec<Value> {
+        let Some(pid) = mr.pointer("/head_pipeline/id").and_then(Value::as_u64) else { return Vec::new() };
+        let req = HttpRequest::get(self.project_url(repo, &format!("/pipelines/{pid}/jobs")))
+            .query("per_page", PER_PAGE);
+        self.json(req).await.ok().and_then(|j| j.body.as_array().cloned()).unwrap_or_default()
     }
 
     async fn list_query(
@@ -315,15 +339,26 @@ impl CodeHost for GitlabHost {
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         let me = self.me().await?;
-        let (mr, approvals, changes) = tokio::join!(
+        let (mr, approvals, changes, states, drafts) = tokio::join!(
             self.json(HttpRequest::get(&url)),
             self.json(HttpRequest::get(format!("{url}/approvals"))),
             self.json(HttpRequest::get(format!("{url}/changes"))),
+            self.json(HttpRequest::get(format!("{url}/reviewers"))),
+            self.draft_count(r),
         );
         let mr = mr?.body;
-        // Approvals and changes are best effort (rules / tiers differ between instances).
+        // Approvals, changes and reviewer states are best effort (rules / tiers / versions differ).
         let approvals = approvals.map(|a| a.body).unwrap_or(Value::Null);
         let changes = changes.map(|c| c.body).unwrap_or(Value::Null);
+        // GitLab 17+: `{user, state: "requested_changes" | "reviewed" | "unreviewed" | …}`.
+        let requested_changes: Vec<String> = states
+            .ok()
+            .and_then(|r| r.body.as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter(|x| s(x, "state") == Some("requested_changes"))
+            .filter_map(|x| x.pointer("/user/id").and_then(Value::as_u64).map(|i| i.to_string()))
+            .collect();
         let mine =
             mr.pointer("/author/id").and_then(Value::as_u64).map(|i| i.to_string()) == Some(me.id.clone());
         let kind = if mine { ReviewKind::Authored } else { ReviewKind::ReviewRequested };
@@ -341,7 +376,10 @@ impl CodeHost for GitlabHost {
                     .collect()
             })
             .unwrap_or_default();
-        if approvals.is_object() {
+        if !requested_changes.is_empty() {
+            review.decision = Some(ReviewDecision::ChangesRequested);
+            review.decision_head = Some(review.head_sha.clone());
+        } else if approvals.is_object() && review.decision != Some(ReviewDecision::ChangesRequested) {
             review.decision = Some(if approvals.get("approved").and_then(Value::as_bool) == Some(true) {
                 ReviewDecision::Approved
             } else {
@@ -355,7 +393,9 @@ impl CodeHost for GitlabHost {
                 a.iter()
                     .map(|u| {
                         let user = Self::user_from(u);
-                        let st = if approved_by.contains(&user.id) {
+                        let st = if requested_changes.contains(&user.id) {
+                            MyReviewState::ChangesRequested
+                        } else if approved_by.contains(&user.id) {
                             MyReviewState::Approved
                         } else {
                             MyReviewState::Pending
@@ -398,26 +438,16 @@ impl CodeHost for GitlabHost {
             review.deletions = Some(total_del);
         }
 
-        let mut checks: Vec<CiCheck> = Vec::new();
-        if let Some(pid) = mr.pointer("/head_pipeline/id").and_then(Value::as_u64) {
-            let jobs = self
-                .json(
-                    HttpRequest::get(format!(
-                        "{}/projects/{}/pipelines/{pid}/jobs",
-                        self.api,
-                        percent_encode(&r.repo)
-                    ))
-                    .query("per_page", PER_PAGE),
-                )
-                .await;
-            for j in jobs.ok().and_then(|j| j.body.as_array().cloned()).unwrap_or_default() {
-                checks.push(CiCheck {
-                    name: s(&j, "name").unwrap_or("").to_owned(),
-                    state: ci_from(s(&j, "status")),
-                    url: s(&j, "web_url").map(str::to_owned),
-                });
-            }
-        }
+        let checks: Vec<CiCheck> = self
+            .pipeline_jobs(&r.repo, &mr)
+            .await
+            .iter()
+            .map(|j| CiCheck {
+                name: s(j, "name").unwrap_or("").to_owned(),
+                state: ci_from(s(j, "status")),
+                url: s(j, "web_url").map(str::to_owned),
+            })
+            .collect();
         let state = match s(&mr, "state") {
             Some("merged") => PrState::Merged,
             Some("closed") => PrState::Closed,
@@ -430,10 +460,12 @@ impl CodeHost for GitlabHost {
             reviewers,
             checks,
             files,
+            pending_comments: drafts.unwrap_or(0),
         })
     }
 
     async fn approve(&self, r: &ReviewRef, head_sha: &str) -> Result<(), KeltaError> {
+        self.publish_drafts(r).await?;
         let url = self.mr_url(&r.repo, &format!("/{}/approve", r.number));
         // 409 (head moved: sha mismatch) maps to `Conflict` in the shared status mapping.
         self.auth.send_text(HttpRequest::post(url).json(json!({"sha": head_sha}))).await?;
@@ -441,6 +473,10 @@ impl CodeHost for GitlabHost {
     }
 
     async fn comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
+        let published = self.publish_drafts(r).await?;
+        if published > 0 && body.trim().is_empty() {
+            return Ok(());
+        }
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(())
@@ -456,6 +492,27 @@ impl CodeHost for GitlabHost {
             }
             tracing::debug!(code = %e.code, "unapprove after request-changes note failed (nothing to withdraw?)");
         }
+        Ok(())
+    }
+
+    async fn add_pending_comment(
+        &self,
+        r: &ReviewRef,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> Result<(), KeltaError> {
+        let refs = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+        let refs = refs.get("diff_refs").filter(|d| d.is_object()).ok_or_else(|| {
+            KeltaError::upstream("merge request has no diff_refs yet (still being created?)")
+        })?;
+        // shortcut: old_path = new_path, so a comment on a renamed file is rejected by GitLab; pass the old path when needed.
+        let position = json!({
+            "position_type": "text", "base_sha": refs["base_sha"], "start_sha": refs["start_sha"],
+            "head_sha": refs["head_sha"], "new_path": path, "old_path": path, "new_line": line,
+        });
+        let url = self.mr_url(&r.repo, &format!("/{}/draft_notes", r.number));
+        self.auth.send_text(HttpRequest::post(url).json(json!({"note": body, "position": position}))).await?;
         Ok(())
     }
 
@@ -498,6 +555,128 @@ impl CodeHost for GitlabHost {
         format!("merge-requests/{}/head:{local_branch}", r.number)
     }
 
+    async fn feedback(&self, r: &ReviewRef) -> Result<Feedback, KeltaError> {
+        let refused = feedback_error("GitLab", "review discussions", "read_api");
+        let url = self.mr_url(&r.repo, &format!("/{}", r.number));
+        let (mr, discussions) = tokio::join!(
+            self.json(HttpRequest::get(&url)),
+            self.json(HttpRequest::get(format!("{url}/discussions")).query("per_page", PER_PAGE)),
+        );
+        let mr = mr.map_err(&refused)?.body;
+        let discussions = discussions.map_err(&refused)?.body;
+        let web = s(&mr, "web_url").unwrap_or("").to_owned();
+        let me = self.me().await.ok().and_then(|u| u.login);
+        let username =
+            |n: &Value| n.pointer("/author/username").and_then(Value::as_str).unwrap_or("ghost").to_owned();
+        let threads = discussions
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|d| {
+                let notes: Vec<&Value> = d
+                    .get("notes")
+                    .and_then(Value::as_array)?
+                    .iter()
+                    .filter(|n| n.get("system").and_then(Value::as_bool) != Some(true))
+                    .collect();
+                let first = *notes.first()?;
+                let resolvable =
+                    notes.iter().any(|n| n.get("resolvable").and_then(Value::as_bool) == Some(true));
+                let resolved = notes
+                    .iter()
+                    .filter(|n| n.get("resolvable").and_then(Value::as_bool) == Some(true))
+                    .all(|n| n.get("resolved").and_then(Value::as_bool) == Some(true));
+                if !resolvable || resolved {
+                    return None;
+                }
+                let pos = first.get("position").filter(|p| !p.is_null());
+                let line = pos
+                    .and_then(|p| p.get("new_line").filter(|l| !l.is_null()).or_else(|| p.get("old_line")));
+                Some(FeedbackThread {
+                    id: s(d, "id")?.to_owned(),
+                    author: username(first),
+                    path: pos.and_then(|p| s(p, "new_path").or_else(|| s(p, "old_path"))).map(str::to_owned),
+                    line: line.and_then(Value::as_u64).map(|l| l as u32),
+                    body_md: notes
+                        .iter()
+                        .map(|n| format!("{}: {}", username(n), s(n, "body").unwrap_or("").trim()))
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                    url: first
+                        .get("id")
+                        .and_then(Value::as_u64)
+                        .map(|id| format!("{web}#note_{id}"))
+                        .unwrap_or(web.clone()),
+                })
+            })
+            .collect();
+        let reviewers = mr
+            .get("reviewers")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|u| s(u, "username").map(str::to_owned))
+            .filter(|u| Some(u) != me.as_ref())
+            .collect();
+        let failed: Vec<Value> = self
+            .pipeline_jobs(&r.repo, &mr)
+            .await
+            .into_iter()
+            .filter(|j| s(j, "status") == Some("failed"))
+            .collect();
+        let mut failed_checks = Vec::new();
+        for (i, j) in failed.iter().enumerate() {
+            let log_tail = match j.get("id").and_then(Value::as_u64) {
+                Some(id) if i < MAX_LOGS => {
+                    let req = HttpRequest::get(self.project_url(&r.repo, &format!("/jobs/{id}/trace")));
+                    self.auth.send_text(req).await.ok().map(|t| log_tail(&t.body))
+                }
+                _ => None,
+            };
+            failed_checks.push(FailedCheck {
+                name: s(j, "name").unwrap_or("").to_owned(),
+                url: s(j, "web_url").map(str::to_owned),
+                log_tail,
+            });
+        }
+        // GitLab review summaries are plain notes: the unresolved threads carry the feedback.
+        Ok(Feedback { threads, reviews: Vec::new(), failed_checks, reviewers })
+    }
+
+    async fn rerequest_review(&self, r: &ReviewRef) -> Result<Vec<String>, KeltaError> {
+        let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+        let me = self.me().await?;
+        let logins: Vec<String> = mr
+            .get("reviewers")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|u| s(u, "username").map(str::to_owned))
+            .filter(|u| Some(u) != me.login.as_ref())
+            .collect();
+        if logins.is_empty() {
+            return Err(KeltaError::invalid("this merge request has no reviewers"));
+        }
+        // shortcut: the `/request_review` quick action needs GitLab 17; older servers post it as a
+        // plain comment. Upgrade if a REST re-request endpoint appears.
+        let body = format!(
+            "/request_review {}",
+            logins.iter().map(|l| format!("@{l}")).collect::<Vec<_>>().join(" ")
+        );
+        // Not `comment`: that would also publish my pending draft notes.
+        let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
+        self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
+        Ok(logins)
+    }
+
+    async fn resolve_threads(&self, r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError> {
+        for id in ids {
+            let url = self.mr_url(&r.repo, &format!("/{}/discussions/{}", r.number, percent_encode(id)));
+            self.auth.send_text(HttpRequest::put(url).query("resolved", "true")).await?;
+        }
+        Ok(())
+    }
+
     fn repo_from_remote(&self, url: &str) -> Option<String> {
         let (host, path) = parse_remote(url)?;
         if !host_matches(&host, &self.web_host) {
@@ -510,6 +689,22 @@ impl CodeHost for GitlabHost {
 }
 
 impl GitlabHost {
+    async fn draft_count(&self, r: &ReviewRef) -> Result<u32, KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/draft_notes", r.number));
+        let v = self.json(HttpRequest::get(url).query("per_page", PER_PAGE)).await?.body;
+        Ok(v.as_array().map_or(0, Vec::len) as u32)
+    }
+
+    /// Publishes my draft notes (GitLab's pending review); returns how many went out.
+    async fn publish_drafts(&self, r: &ReviewRef) -> Result<u32, KeltaError> {
+        let n = self.draft_count(r).await?;
+        if n > 0 {
+            let url = self.mr_url(&r.repo, &format!("/{}/draft_notes/bulk_publish", r.number));
+            self.auth.send_text(HttpRequest::post(url)).await?;
+        }
+        Ok(n)
+    }
+
     /// Browser base URL.
     pub fn web_url(&self) -> &str {
         &self.web

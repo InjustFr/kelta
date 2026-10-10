@@ -37,10 +37,15 @@
   style:width="min({width}px, calc(100vw - 32px))"
   {onkeydown}
 >
-  <header>
-    <h2 id={titleId}>{title}</h2>
-    <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
-  </header>
+  {#if side === 'top'}
+    <!-- Palette-like: the input is the top edge; Esc and the backdrop close it. -->
+    <h2 id={titleId} class="k-visually-hidden">{title}</h2>
+  {:else}
+    <header>
+      <h2 id={titleId}>{title}</h2>
+      <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
+    </header>
+  {/if}
   <div class="body">{@render children()}</div>
   {#if actions}<footer>{@render actions()}</footer>{/if}
 </div>
@@ -58,24 +63,30 @@
     z-index: var(--k-z-sheet);
     display: flex;
     flex-direction: column;
-    background: var(--k-bg-elev);
-    border: 1px solid var(--k-border);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+  }
+
+  /* The container only receives focus as a landing spot; its content carries the focus ring. */
+  .k-sheet:focus-visible {
+    outline: none;
   }
 
   .k-sheet.right {
     top: 0;
     right: 0;
     bottom: 0;
-    border-width: 0 0 0 1px;
+    border-radius: var(--k-radius-lg) 0 0 var(--k-radius-lg);
+    animation: k-sheet-in var(--k-duration) ease-out;
   }
 
   .k-sheet.top {
-    top: 10vh;
+    top: 14vh;
     left: 50%;
     transform: translateX(-50%);
     max-height: 75vh;
     border-radius: var(--k-radius-lg);
+    animation: k-float-in var(--k-duration) ease-out;
   }
 
   header {
@@ -83,13 +94,12 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--k-space-4) var(--k-space-4) var(--k-space-3) var(--k-space-5);
-    border-bottom: 1px solid var(--k-border);
   }
 
   h2 {
     margin: 0;
     font-size: var(--k-font-size-lg);
-    font-weight: 600;
+    font-weight: var(--k-weight-strong);
   }
 
   .body {
@@ -103,7 +113,6 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-5);
-    border-top: 1px solid var(--k-border);
+    padding: var(--k-space-3) var(--k-space-5) var(--k-space-5);
   }
 </style>

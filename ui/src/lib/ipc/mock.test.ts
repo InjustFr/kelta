@@ -44,10 +44,10 @@ const PANE_KINDS = [
 ];
 
 describe('mock fixtures', () => {
-  it('has 3 projects + Home, 10 sessions, tickets for every provider, reviews and work items', () => {
+  it('has 3 projects + Home, 11 sessions, tickets for every provider, reviews and work items', () => {
     expect(MOCK_FIXTURES.projects.filter((p) => !p.builtin)).toHaveLength(3);
     expect(MOCK_FIXTURES.projects.filter((p) => p.builtin)).toHaveLength(1);
-    expect(MOCK_FIXTURES.sessions).toHaveLength(10);
+    expect(MOCK_FIXTURES.sessions).toHaveLength(11);
     const accounts = new Set(MOCK_FIXTURES.tickets.map((t) => t.ticket.ref.account));
     expect([...accounts].sort()).toEqual(['github-oss', 'gitlab-corp', 'jira-acme', 'redmine-corp']);
     expect(MOCK_FIXTURES.reviews.length).toBeGreaterThanOrEqual(5);
@@ -116,6 +116,7 @@ describe('mock transport', () => {
     const review = s.reviews[0]!.review;
     const session = s.sessions[0]!;
     const work = s.work[0]!;
+    const withPr = s.work[2]!; // PR open, Claude idle with hook status
     const ctx = {
       repo_id: null,
       cwd: null,
@@ -127,6 +128,7 @@ describe('mock transport', () => {
     };
     const args: Record<string, Record<string, unknown>> = {
       app_ready: { t_ms: 1 },
+      bench_mark: { key: 'k', value: 1 },
       open_external: { url: 'https://example.com' },
       clipboard_read: { kind: 'clipboard' },
       clipboard_write: { kind: 'primary', text: 'x' },
@@ -139,6 +141,9 @@ describe('mock transport', () => {
       repo_trust: { project_id: 'shop', repo_id: 'api', trust: true },
       secret_set: { secret_ref: 'keyring:x', value: 'v' },
       secret_delete: { secret_ref: 'keyring:x' },
+      secret_unlock: { passphrase: 'p', create: false },
+      oauth_device_start: { kind: 'github', base_url: 'https://api.github.com', secret_ref: 'keyring:x' },
+      oauth_device_finish: { user_code: 'WDJB-MJHT' },
       account_test: { account_id: 'jira-acme' },
       project_detect: { path: '/Users/ada/code/new-thing' },
       project_update: {
@@ -184,6 +189,7 @@ describe('mock transport', () => {
       session_mark_seen: { id: session.id },
       session_link: { id: session.id, work_item_id: work.id },
       session_text_tail: { id: session.id, max_lines: 3 },
+      session_history_search: { project_id: session.project_id, query: 'error', limit: 10 },
       terminal_set_palette: { palette: { foreground: '#fff', background: '#000', cursor: '#fff', ansi: [] } },
       tracker_list: { scope: { kind: 'all' }, refresh: false },
       tracker_get: { ticket },
@@ -207,6 +213,15 @@ describe('mock transport', () => {
       work_status: { id: work.id },
       work_pr_draft: { id: work.id },
       work_finish_merged: { ids: [] },
+      work_feedback: { id: withPr.id },
+      work_rerequest_review: { id: withPr.id },
+      work_rebase: { id: withPr.id, op: { kind: 'start', onto: 'base', no_fetch: false } },
+      work_push: { id: withPr.id, force: false },
+      work_send: { id: withPr.id, prompt: 'Fix {file}', files: [], threads: ['t1'] },
+      work_resolve_sent_threads: { id: withPr.id },
+      work_status_all: {},
+      work_diff: { id: work.id },
+      work_mark_reviewed: { id: work.id },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },
       editor_send_selection: { editor_session: s.sessions[1]!.id, claude_session: session.id },
       tool_list: { project_id: 'shop' },
@@ -236,6 +251,7 @@ describe('mock transport', () => {
       'session_attach',
       'session_write',
       'work_start',
+      'work_link',
       'layout_save',
       'project_create',
       'plugin_call',
@@ -250,9 +266,28 @@ describe('mock transport', () => {
       );
     }
     await eventsSubscribe(() => {});
-    const plan = await call('work_plan', { project_id: 'shop', source: { kind: 'branch', name: 'spike' } });
+    const plan = await call('work_plan', {
+      project_id: 'shop',
+      source: { kind: 'branch', name: 'spike', task: null, repo: null },
+    });
     const started = await call('work_start', { plan });
     expect(started.session_ids.length).toBeGreaterThan(0);
+    // Scratch item: wip/ branch from the task, title, no adoption, then linked to a ticket.
+    const task = { kind: 'branch' as const, name: '', task: 'Speed up search\nKeep ranking', repo: null };
+    const scratch = await call('work_plan', { project_id: 'shop', source: task });
+    expect(scratch.branch).toBe('wip/speed-up-search');
+    expect(scratch.claude.prompt).toBe('Speed up search\nKeep ranking');
+    const wip = await call('work_start', { plan: scratch });
+    expect(wip.title).toBe('Speed up search');
+    await expect(call('work_plan', { project_id: 'shop', source: task })).rejects.toMatchObject({
+      code: 'conflict',
+    });
+    const linked = await call('work_link', {
+      id: wip.id,
+      ticket: { account: 'jira-acme', key: 'SHOP-142', id: '10142' },
+      apply_side_effects: true,
+    });
+    expect(linked).toMatchObject({ kind: 'ticket', branch: 'wip/speed-up-search' });
     const layout = await call('layout_get', { project_id: 'shop' });
     await expect(call('layout_save', { layout })).resolves.toEqual({ rev: layout.rev + 1 });
     await expect(call('layout_save', { layout })).rejects.toMatchObject({ code: 'conflict' });
@@ -307,6 +342,26 @@ describe('mock transport', () => {
     ).resolves.toMatchObject({
       state: { kind: 'finished' },
     });
+  });
+
+  it('work_start opens a focused tab bound to the item, sessions in the worktree (B5)', async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport(transport);
+    const ticket = controls.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-151')!.ticket.ref;
+    const plan = await call('work_plan', { project_id: 'shop', source: { kind: 'ticket', ticket } });
+    const item = await call('work_start', { plan });
+    const layout = controls.state.layouts['shop']!;
+    const tab = layout.tabs.find((t) => t.work_item_id === item.id)!;
+    expect(layout.active_tab).toBe(tab.id);
+    expect(tab.title).toBe('SHOP-151 Checkout: show tax breakdown');
+    for (const id of item.session_ids) {
+      const s = controls.state.sessions.find((x) => x.id === id)!;
+      expect([s.cwd, s.work_item_id]).toEqual([plan.worktree_path, item.id]);
+    }
+    // Planning again shows the existing item's branch, not a fresh one.
+    controls.state.work.find((w) => w.id === item.id)!.branch = 'feat/custom';
+    const again = await call('work_plan', { project_id: 'shop', source: { kind: 'ticket', ticket } });
+    expect([again.existing, again.branch]).toEqual([item.id, 'feat/custom']);
   });
 
   it('reset restores the fixtures', async () => {

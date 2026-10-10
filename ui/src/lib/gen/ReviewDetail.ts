@@ -9,4 +9,8 @@ export type ReviewDetail = { review: Review, state: PrState,
 /**
  * Sanitized HTML description.
  */
-body_html: string, reviewers: Array<Reviewer>, checks: Array<CiCheck>, files: Array<FileChange>, };
+body_html: string, reviewers: Array<Reviewer>, checks: Array<CiCheck>, files: Array<FileChange>, 
+/**
+ * Line comments waiting in my pending (draft) review; published by approve / comment / request changes.
+ */
+pending_comments: number, };

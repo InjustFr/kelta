@@ -9,7 +9,7 @@ description = "A minimal custom screen: greets you, shows the current project an
 author = "Kelta contributors"
 license = "MIT"
 platforms = ["macos", "linux"]
-permissions = ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open"]
+permissions = ["projects.read", "sessions.read", "events:session.*", "notify", "ui.open", "storage"]
 activation = ["onScreen:hello", "onCommand:hello-screen.open"]
 
 [[contributes.screens]]

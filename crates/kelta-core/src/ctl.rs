@@ -49,28 +49,35 @@ pub fn ticket_key(input: &str) -> String {
 /// Copy `kelta-ctl` (sibling of the running binary, or `$APPDIR/usr/bin`) to
 /// `<data>/bin/<version>/kelta-ctl` and point `<data>/bin/current` at that version.
 pub fn install_stable_ctl(dirs: &Dirs) -> Result<PathBuf, KeltaError> {
-    let exe = std::env::current_exe()?;
-    let mut candidates: Vec<PathBuf> = exe.parent().map(|d| vec![d.join("kelta-ctl")]).unwrap_or_default();
-    if let Some(appdir) = std::env::var_os("APPDIR") {
-        candidates.push(PathBuf::from(appdir).join("usr/bin/kelta-ctl"));
-    }
-    let src = candidates
-        .into_iter()
-        .find(|p| p.is_file())
-        .ok_or_else(|| KeltaError::not_found("kelta-ctl not found next to the kelta binary"))?;
-    install_ctl_from(&src, &dirs.bin, kelta_proto::VERSION)
+    install_stable_bin(&bundled("kelta-ctl")?, &dirs.bin, kelta_proto::VERSION)
 }
 
-/// Testable part of [`install_stable_ctl`].
-pub fn install_ctl_from(src: &Path, bin: &Path, version: &str) -> Result<PathBuf, KeltaError> {
+/// A binary shipped next to the kelta executable (Tauri externalBin) or in the AppImage.
+pub fn bundled(name: &str) -> Result<PathBuf, KeltaError> {
+    let exe = std::env::current_exe()?;
+    let mut candidates: Vec<PathBuf> = exe.parent().map(|d| vec![d.join(name)]).unwrap_or_default();
+    if let Some(appdir) = std::env::var_os("APPDIR") {
+        candidates.push(PathBuf::from(appdir).join("usr/bin").join(name));
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.is_file())
+        .ok_or_else(|| KeltaError::not_found(format!("{name} not found next to the kelta binary")))
+}
+
+/// Copy `src` to `<bin>/<version>/<file name>` (kept when identical) and point `<bin>/current`
+/// at that version; returns `<bin>/current/<file name>`. Survives app updates and AppImage unmounts.
+pub fn install_stable_bin(src: &Path, bin: &Path, version: &str) -> Result<PathBuf, KeltaError> {
     use std::os::unix::fs::PermissionsExt;
+    let name =
+        src.file_name().ok_or_else(|| KeltaError::invalid(format!("{} has no file name", src.display())))?;
     let dir = bin.join(version);
     std::fs::create_dir_all(&dir)?;
-    let dest = dir.join("kelta-ctl");
+    let dest = dir.join(name);
     let data = std::fs::read(src)?;
     let same = std::fs::read(&dest).map(|d| d == data).unwrap_or(false);
     if !same {
-        let tmp = dir.join(format!(".kelta-ctl.{}", std::process::id()));
+        let tmp = dir.join(format!(".{}.{}", name.to_string_lossy(), std::process::id()));
         std::fs::write(&tmp, &data)?;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
         std::fs::rename(&tmp, &dest)?;
@@ -83,7 +90,7 @@ pub fn install_ctl_from(src: &Path, bin: &Path, version: &str) -> Result<PathBuf
         std::os::unix::fs::symlink(version, &tmp)?;
         std::fs::rename(&tmp, &current)?;
     }
-    Ok(bin.join("current").join("kelta-ctl"))
+    Ok(current.join(name))
 }
 
 /// `open_external`: http/https/mailto only, opened by the OS handler.
@@ -331,6 +338,16 @@ impl Core {
                     Ok(serde_json::to_value(w)?)
                 }
             }
+            CtlCommand::StartTask { task, project } => {
+                // Scripted: no sheet, same plan + saga as New work item (FLOW §4.3).
+                let project = project.unwrap_or_else(|| self.active_project());
+                let source = WorkSource::Branch { name: String::new(), task: Some(task), repo: None };
+                let plan = self.work.plan(&project, source).await?;
+                let w = self.work.start(plan).await?;
+                self.project_activate(&project)?;
+                self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
+                Ok(serde_json::to_value(w)?)
+            }
             CtlCommand::New { template, cwd, project } => {
                 let project = project.unwrap_or_else(|| self.active_project());
                 let ctx = TemplateCtx { cwd, ..TemplateCtx::default() };
@@ -432,12 +449,12 @@ mod tests {
         let src = tmp.path().join("kelta-ctl");
         std::fs::write(&src, b"#!/bin/sh\n").unwrap();
         let bin = tmp.path().join("bin");
-        let p = install_ctl_from(&src, &bin, "0.1.0").unwrap();
+        let p = install_stable_bin(&src, &bin, "0.1.0").unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b"#!/bin/sh\n".to_vec());
         assert_eq!(std::fs::read_link(bin.join("current")).unwrap(), PathBuf::from("0.1.0"));
         // idempotent, then upgrade
-        install_ctl_from(&src, &bin, "0.1.0").unwrap();
-        install_ctl_from(&src, &bin, "0.2.0").unwrap();
+        install_stable_bin(&src, &bin, "0.1.0").unwrap();
+        install_stable_bin(&src, &bin, "0.2.0").unwrap();
         assert_eq!(std::fs::read_link(bin.join("current")).unwrap(), PathBuf::from("0.2.0"));
     }
 

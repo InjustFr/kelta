@@ -33,6 +33,14 @@ export function maxAttention(levels: Iterable<Attention>): Attention {
   return best;
 }
 
+/** What a lamp shows: an attention level, or `working` derived from session status (not an Attention). */
+export type LampLevel = Attention | 'working';
+
+/** Precedence needs_input > error > working > done > activity (DESIGN §6.1). */
+export function lampOf(level: Attention, working: boolean): LampLevel {
+  return working && level !== 'needs_input' && level !== 'error' ? 'working' : level;
+}
+
 /** Stable key for a `Scope` (`all` or `project:<id>`). */
 export function scopeKey(scope: Scope): string {
   return scope.kind === 'all' ? 'all' : `project:${scope.id}`;

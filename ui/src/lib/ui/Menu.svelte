@@ -9,6 +9,10 @@
     danger?: boolean;
     /** Render a separator before this item. */
     separator?: boolean;
+    /** Single key that runs the item while the menu is open (`d`, `F` = Shift+F). */
+    key?: string;
+    /** Tooltip (a disabled item's reason). */
+    title?: string;
   }
 </script>
 
@@ -70,13 +74,18 @@
         break;
       case 'Enter':
       case ' ':
-        if (active >= 0) choose(active);
+        // Nothing highlighted yet: Enter runs the first item (the work menu's primary action).
+        choose(active >= 0 ? active : e.key === 'Enter' ? 0 : -1);
         break;
       case 'Escape':
         onclose();
         break;
-      default:
-        return;
+      default: {
+        // Letters never move: a disabled entry swallows its key.
+        const i = items.findIndex((it) => it.key !== undefined && it.key === e.key);
+        if (i < 0) return;
+        choose(i);
+      }
     }
     e.preventDefault();
     e.stopPropagation();
@@ -106,7 +115,9 @@
       role="menuitem"
       class:active={i === active}
       class:danger={item.danger}
-      disabled={item.disabled}
+      class:off={item.disabled}
+      aria-disabled={item.disabled ? 'true' : undefined}
+      title={item.title}
       onpointerenter={() => (active = item.disabled ? -1 : i)}
       onclick={() => choose(i)}
     >
@@ -132,10 +143,10 @@
     min-width: 180px;
     max-width: 360px;
     padding: var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    background: var(--k-bg-elev);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
+    animation: k-float-in var(--k-duration) ease-out;
   }
 
   button {
@@ -160,7 +171,7 @@
     color: var(--k-danger);
   }
 
-  button:disabled {
+  button.off {
     opacity: 0.5;
     cursor: default;
   }
@@ -181,5 +192,9 @@
     height: 1px;
     margin: var(--k-space-2) 0;
     background: var(--k-border);
+  }
+
+  button :global(.k-kbd) {
+    color: var(--k-fg-subtle);
   }
 </style>

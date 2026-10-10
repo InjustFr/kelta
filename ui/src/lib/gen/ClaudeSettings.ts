@@ -37,6 +37,6 @@ extra_args: Array<string>,
  */
 extra_hooks: { [key in string]: JsonValue }, profiles: { [key in string]: ClaudeProfile }, prompt_templates: { [key in string]: string }, 
 /**
- * v0.2; ignored in v0.1.
+ * Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
  */
 ide_bridge: boolean, };

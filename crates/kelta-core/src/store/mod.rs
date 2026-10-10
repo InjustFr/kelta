@@ -464,14 +464,17 @@ pub mod q {
         c.execute(
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
-             review_due)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+             review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
              claude_uuid = excluded.claude_uuid, nvim_socket = excluded.nvim_socket, tab_id = excluded.tab_id,
              pr_url = excluded.pr_url, state_json = excluded.state_json, updated_at = excluded.updated_at,
-             session_ids_json = excluded.session_ids_json, review_due = excluded.review_due",
+             session_ids_json = excluded.session_ids_json, review_due = excluded.review_due,
+             claude_replied = excluded.claude_replied, title = excluded.title,
+             pr_title_needs_key = excluded.pr_title_needs_key, sent_threads_json = excluded.sent_threads_json,
+             rebase_json = excluded.rebase_json",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -491,6 +494,11 @@ pub mod q {
                 kelta_proto::now_rfc3339(),
                 serde_json::to_string(&w.session_ids)?,
                 w.review_due,
+                w.claude_replied,
+                w.title,
+                w.pr_title_needs_key,
+                serde_json::to_string(&w.sent_threads)?,
+                json_opt(&w.rebase)?,
             ],
         )
         .map_err(db_err)?;
@@ -507,13 +515,18 @@ pub mod q {
     }
 
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
-        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due";
+        claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
+        claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json";
 
-    fn work_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<(WorkItem, String, String, String, String)> {
+    type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
+
+    fn work_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkRaw> {
         let ticket: Option<String> = r.get(3)?;
         let review: Option<String> = r.get(4)?;
         let state: String = r.get(13)?;
         let sessions: String = r.get(15)?;
+        let threads: String = r.get(20)?;
+        let rebase: Option<String> = r.get(21)?;
         let item = WorkItem {
             id: WorkItemId::new(r.get::<_, String>(0)?),
             project_id: ProjectId::new(r.get::<_, String>(1)?),
@@ -533,12 +546,17 @@ pub mod q {
             steps: Vec::new(),
             created_at: r.get(14)?,
             review_due: r.get(16)?,
+            claude_replied: r.get(17)?,
+            title: r.get(18)?,
+            pr_title_needs_key: r.get(19)?,
+            sent_threads: Vec::new(),
+            rebase: None,
         };
-        Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions))
+        Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }
 
-    fn finish_work(c: &Connection, raw: (WorkItem, String, String, String, String)) -> R<WorkItem> {
-        let (mut item, ticket, review, state, sessions) = raw;
+    fn finish_work(c: &Connection, raw: WorkRaw) -> R<WorkItem> {
+        let (mut item, ticket, review, state, sessions, threads, rebase) = raw;
         if !ticket.is_empty() {
             item.ticket = Some(serde_json::from_str::<TicketRef>(&ticket)?);
         }
@@ -547,6 +565,8 @@ pub mod q {
         }
         item.state = serde_json::from_str(&state)?;
         item.session_ids = serde_json::from_str(&sessions).unwrap_or_default();
+        item.sent_threads = serde_json::from_str(&threads).unwrap_or_default();
+        item.rebase = rebase.and_then(|r| serde_json::from_str(&r).ok());
         item.steps = steps(c, &item.id)?;
         Ok(item)
     }
@@ -659,6 +679,56 @@ pub mod q {
             .map_err(db_err)
     }
 
+    pub fn kv_get(c: &Connection, plugin: &PluginId, key: &str) -> R<Option<String>> {
+        c.query_row(
+            "SELECT value FROM plugin_kv WHERE plugin_id = ?1 AND key = ?2",
+            params![plugin.as_str(), key],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db_err)
+    }
+
+    /// Quota check and upsert in one transaction (bytes: `CAST AS BLOB`, `length(text)` counts chars).
+    pub fn kv_set(c: &mut Connection, plugin: &PluginId, key: &str, value: &str, quota: usize) -> R<()> {
+        let tx = c.transaction().map_err(db_err)?;
+        let others: i64 = tx
+            .query_row(
+                "SELECT COALESCE(SUM(length(CAST(key AS BLOB)) + length(CAST(value AS BLOB))), 0)
+                 FROM plugin_kv WHERE plugin_id = ?1 AND key <> ?2",
+                params![plugin.as_str(), key],
+                |r| r.get(0),
+            )
+            .map_err(db_err)?;
+        if others as usize + key.len() + value.len() > quota {
+            return Err(kelta_proto::api::kv_quota_error(quota));
+        }
+        tx.execute(
+            "INSERT INTO plugin_kv (plugin_id, key, value) VALUES (?1, ?2, ?3)
+             ON CONFLICT(plugin_id, key) DO UPDATE SET value = excluded.value",
+            params![plugin.as_str(), key, value],
+        )
+        .map_err(db_err)?;
+        tx.commit().map_err(db_err)
+    }
+
+    /// `key: None` deletes every key of the plugin.
+    pub fn kv_delete(c: &Connection, plugin: &PluginId, key: Option<&str>) -> R<()> {
+        c.execute(
+            "DELETE FROM plugin_kv WHERE plugin_id = ?1 AND (?2 IS NULL OR key = ?2)",
+            params![plugin.as_str(), key],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
+    pub fn kv_keys(c: &Connection, plugin: &PluginId) -> R<Vec<String>> {
+        let mut st =
+            c.prepare("SELECT key FROM plugin_kv WHERE plugin_id = ?1 ORDER BY key").map_err(db_err)?;
+        let rows = st.query_map([plugin.as_str()], |r| r.get(0)).map_err(db_err)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_err)
+    }
+
     pub fn trusted_hash(c: &Connection, path: &Path) -> R<Option<String>> {
         c.query_row("SELECT sha256 FROM repo_trust WHERE path = ?1", [path.to_string_lossy()], |r| r.get(0))
             .optional()
@@ -742,6 +812,37 @@ impl GrantStore for Store {
     async fn revoke_all(&self, plugin: &PluginId) -> Result<(), KeltaError> {
         let plugin = plugin.clone();
         self.call(move |c| q::revoke_all(c, &plugin)).await
+    }
+
+    async fn kv_get(&self, plugin: &PluginId, key: &str) -> Result<Option<String>, KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_get(c, &plugin, &key)).await
+    }
+
+    async fn kv_set(
+        &self,
+        plugin: &PluginId,
+        key: &str,
+        value: String,
+        quota: usize,
+    ) -> Result<(), KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_set(c, &plugin, &key, &value, quota)).await
+    }
+
+    async fn kv_delete(&self, plugin: &PluginId, key: &str) -> Result<(), KeltaError> {
+        let (plugin, key) = (plugin.clone(), key.to_owned());
+        self.call(move |c| q::kv_delete(c, &plugin, Some(&key))).await
+    }
+
+    async fn kv_keys(&self, plugin: &PluginId) -> Result<Vec<String>, KeltaError> {
+        let plugin = plugin.clone();
+        self.call(move |c| q::kv_keys(c, &plugin)).await
+    }
+
+    async fn kv_clear(&self, plugin: &PluginId) -> Result<(), KeltaError> {
+        let plugin = plugin.clone();
+        self.call(move |c| q::kv_delete(c, &plugin, None)).await
     }
 }
 

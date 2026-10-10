@@ -7,7 +7,7 @@ use ts_rs::TS;
 use crate::ids::AccountId;
 
 /// A reference to a secret, never the secret itself:
-/// `keyring:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.
+/// `keyring:<name>` | `file:<name>` | `gh-cli` | `glab-cli` | `command:<argv>` | `env:<VAR>`.
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize, TS, JsonSchema,
 )]
@@ -18,6 +18,8 @@ pub struct SecretRef(pub String);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretSource {
     Keyring(String),
+    /// Entry of the passphrase-encrypted secrets file in the data dir.
+    File(String),
     GhCli,
     GlabCli,
     /// argv string, split shell-words by the resolver.
@@ -47,6 +49,7 @@ impl SecretRef {
         }
         match kind {
             "keyring" => Some(SecretSource::Keyring(rest.to_owned())),
+            "file" => Some(SecretSource::File(rest.to_owned())),
             "command" => Some(SecretSource::Command(rest.to_owned())),
             "env" => Some(SecretSource::Env(rest.to_owned())),
             _ => None,
@@ -113,10 +116,21 @@ pub struct SecretCtx {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SecretBackendStatus {
-    /// `keychain` | `secret-service` | `gh-cli` | `glab-cli` | `command` | `env`.
+    /// `keychain` | `secret-service` | `encrypted-file` | `gh-cli` | `glab-cli` | `command` | `env`.
     pub backend: String,
     pub available: bool,
     pub detail: Option<String>,
+}
+
+/// What the UI shows during "Sign in with browser": the code to type and where. The device
+/// code itself stays in the backend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct OAuthDevicePrompt {
+    /// Also the flow id passed back to `oauth_device_finish`.
+    pub user_code: String,
+    pub verification_uri: String,
+    /// Seconds until the code expires.
+    pub expires_in: u64,
 }
 
 #[cfg(test)]
@@ -129,6 +143,7 @@ mod tests {
             SecretRef::new("keyring:jira-acme").parse(),
             Some(SecretSource::Keyring("jira-acme".into()))
         );
+        assert_eq!(SecretRef::new("file:jira").parse(), Some(SecretSource::File("jira".into())));
         assert_eq!(SecretRef::new("gh-cli").parse(), Some(SecretSource::GhCli));
         assert_eq!(
             SecretRef::new("command:pass show x").parse(),

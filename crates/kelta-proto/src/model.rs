@@ -84,7 +84,7 @@ pub struct RepoDraft {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CodeHostHint {
     pub repo_id: String,
-    /// `"github"` | `"gitlab"`.
+    /// `"github"` | `"gitlab"` | `"bitbucket"` | `"gitea"`.
     pub kind: String,
     /// Host, e.g. `github.com`, `gitlab.acme.example`.
     pub host: String,
@@ -97,7 +97,7 @@ pub struct CodeHostHint {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TrackerHint {
-    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"`.
+    /// `"jira"` | `"redmine"` | `"github"` | `"gitlab"` | `"gitea"`.
     pub kind: String,
     /// Human explanation, e.g. "branch names contain SHOP-123".
     pub reason: String,
@@ -565,19 +565,97 @@ pub struct WorkItem {
     pub state: WorkState,
     pub steps: Vec<WorkStepStatus>,
     pub created_at: String,
-    /// Claude's changes wait for Louis's review (FLOW §2.3). A UI Ship clears it; a Ship Claude
-    /// does through MCP sets it.
+    /// Scratch items: first line of the task, 72 chars max (tab, rows, PR title).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Set by `work_link` on an item with a PR: the next Ship/Push prefixes the ticket key to the PR
+    /// title unless it already carries one (`kelta_work::pr_title_with_key`), then clears it.
+    #[serde(default)]
+    pub pr_title_needs_key: bool,
+    /// Claude stopped with changes Louis has not looked at (FLOW §2.3). Set only from a real `Stop`
+    /// hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
     #[serde(default)]
     pub review_due: bool,
+    /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+    #[serde(default)]
+    pub claude_replied: bool,
+    /// Review thread ids handed to Claude by the last Fix with Claude (resolved on request).
+    #[serde(default)]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub sent_threads: Vec<String>,
+    /// Kelta-driven rebase in progress, or done and awaiting its force push.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub rebase: Option<Box<RebaseState>>,
 }
 
-/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` | `{"kind":"branch","name":".."}`.
+/// `work_rebase` bookkeeping (FLOW §4.4). `pre_head` is the last HEAD that contained the remote
+/// tip `remote_sha`, so a force push can prove it only rewrites the user's own commits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RebaseState {
+    /// Ref rebased onto (`origin/main`, `origin/feat/x`).
+    pub onto: String,
+    pub pre_head: String,
+    /// Remote branch tip before the rebase; `None` when the branch was never pushed.
+    pub remote_sha: Option<String>,
+    /// Conflicted files (worktree-relative); empty when the rebase is not stopped.
+    pub conflicts: Vec<PathBuf>,
+    pub step: u32,
+    pub total: u32,
+}
+
+/// What `work_rebase{op: start}` rebases onto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum RebaseOnto {
+    /// `<remote>/<base>`.
+    Base,
+    /// `<remote>/<branch>`: take commits pushed by others (suggestions, Update branch).
+    RemoteBranch,
+}
+
+/// `{"kind":"start","onto":"base","no_fetch":false}` | `{"kind":"continue"}` | `{"kind":"abort"}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RebaseOp {
+    Start {
+        onto: RebaseOnto,
+        /// Rebase onto the last fetched ref (after a failed fetch).
+        #[serde(default)]
+        no_fetch: bool,
+    },
+    Continue,
+    Abort,
+}
+
+/// A file `work_send` writes into the item's private Claude run dir.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SendFile {
+    /// Plain file name (`feedback.md`).
+    pub name: String,
+    pub content: String,
+}
+
+/// `{"kind":"ticket","ticket":{..}}` | `{"kind":"review","review":{..}}` |
+/// `{"kind":"branch","name":"..","task":"..","repo":".."}` (scratch work, FLOW §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WorkSource {
-    Ticket { ticket: TicketRef },
-    Review { review: ReviewRef },
-    Branch { name: String },
+    Ticket {
+        ticket: TicketRef,
+    },
+    Review {
+        review: ReviewRef,
+    },
+    /// Empty `name` → `work.scratch_branch_template` with `{slug}` from the task's first line.
+    /// `task` is the first Claude prompt (`{task}`); `repo` defaults to the project's primary repo.
+    Branch {
+        name: String,
+        #[serde(default)]
+        task: Option<String>,
+        #[serde(default)]
+        repo: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -628,6 +706,11 @@ pub struct StartWorkPlan {
     pub side_effects: SideEffects,
     /// Existing work item → the sheet becomes "Resume".
     pub existing: Option<WorkItemId>,
+    /// Own PR made outside Kelta: the item is a scratch item on the PR's head branch, linked to
+    /// this PR URL (FLOW §2.1).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub adopt_pr: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -664,10 +747,31 @@ pub struct SkippedItem {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GitStatus {
+    /// Commits on HEAD not in `<remote>/<base>`.
     pub ahead: u32,
+    /// Commits on `<remote>/<base>` not in HEAD.
     pub behind: u32,
     pub dirty: bool,
     pub unpushed: bool,
+    /// Own rewrite: the remote tip is in the pre-rebase HEAD but not in HEAD (force push allowed).
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub diverged: bool,
+    /// Commits on `<remote>/<branch>` the local work does not have (suggestions, Update branch).
+    #[serde(default)]
+    #[ts(as = "Option<u32>", optional)]
+    pub remote_new: u32,
+    /// Diffstat from the merge base with `<remote>/<base>` to the working tree (untracked files
+    /// count in `files` only).
+    #[serde(default)]
+    pub files: u32,
+    #[serde(default)]
+    pub insertions: u32,
+    #[serde(default)]
+    pub deletions: u32,
+    /// The worktree directory is gone (deleted outside Kelta).
+    #[serde(default)]
+    pub missing: bool,
 }
 
 /// `{"kind":"session","id":..}` | `{"kind":"work_item","id":..}`.

@@ -6,7 +6,7 @@
   import { toasts, work } from '$lib/stores';
   import { Button, Dialog, Spinner } from '$lib/ui';
 
-  import { prNumber } from './shipPhase';
+  import { prNumber } from './ship';
 
   // "Finish all merged" (FLOW §4.6): the only bulk destructive action. Lists merged items with a
   // clean worktree; dirty ones and those waiting for a Done choice are listed as skipped. The

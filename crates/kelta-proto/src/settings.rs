@@ -84,6 +84,12 @@ pub struct Settings {
     ))]
     pub accounts: BTreeMap<AccountId, AccountConfig>,
     #[schemars(extend(
+        "x-kelta-category" = "Accounts",
+        "x-kelta-order" = 6,
+        "x-kelta-scope" = ["global"]
+    ))]
+    pub oauth: OAuthSettings,
+    #[schemars(extend(
         "x-kelta-category" = "Worktree & work",
         "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"],
@@ -165,7 +171,7 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
-    /// Confirm quit if a Claude session is Working/NeedsInput.
+    /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
@@ -350,6 +356,17 @@ impl ScrollbackSettings {
     }
 }
 
+/// Where terminal sessions live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionHost {
+    /// PTYs in the app process: quitting ends them.
+    Inprocess,
+    /// PTYs in `keltad`: sessions survive quit and re-attach on the next start.
+    #[default]
+    Daemon,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct TerminalSettings {
@@ -372,6 +389,14 @@ pub struct TerminalSettings {
     pub max_live_views: u32,
     #[schemars(range(min = 32, max = 2048))]
     pub memory_cap_mb: u32,
+    /// Append scrolled-off lines (plain text) to an on-disk log per session: search + restore.
+    pub history_log: bool,
+    /// Per-session log cap (two rotated halves).
+    #[schemars(range(min = 1, max = 1024))]
+    pub history_log_mb: u32,
+    /// Cap of all session logs; oldest files are deleted first.
+    #[schemars(range(min = 16, max = 65536))]
+    pub history_log_total_mb: u32,
     /// macOS.
     pub option_as_meta: OptionAsMeta,
     pub copy_on_select: bool,
@@ -389,6 +414,9 @@ pub struct TerminalSettings {
     #[schemars(extend("x-kelta-exec" = true))]
     pub env: BTreeMap<String, String>,
     pub minimum_contrast_ratio: f64,
+    /// `daemon` = sessions survive quit (keltad).
+    #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
+    pub session_host: SessionHost,
 }
 
 impl Default for TerminalSettings {
@@ -403,8 +431,11 @@ impl Default for TerminalSettings {
             cursor_blink: false,
             scrollback: ScrollbackSettings::default(),
             view_scrollback: 1000,
-            max_live_views: 4,
+            max_live_views: 2,
             memory_cap_mb: 160,
+            history_log: true,
+            history_log_mb: 16,
+            history_log_total_mb: 512,
             option_as_meta: OptionAsMeta::Both,
             copy_on_select: false,
             primary_selection: true,
@@ -419,6 +450,7 @@ impl Default for TerminalSettings {
             shell: String::new(),
             env: BTreeMap::new(),
             minimum_contrast_ratio: 1.0,
+            session_host: SessionHost::Daemon,
         }
     }
 }
@@ -625,7 +657,7 @@ pub struct ClaudeSettings {
     pub extra_hooks: BTreeMap<String, serde_json::Value>,
     pub profiles: BTreeMap<String, ClaudeProfile>,
     pub prompt_templates: BTreeMap<String, String>,
-    /// v0.2; ignored in v0.1.
+    /// Claude IDE bridge: Claude sessions see Kelta as their IDE (ARCHITECTURE §8.5).
     pub ide_bridge: bool,
 }
 
@@ -659,7 +691,15 @@ impl Default for ClaudeSettings {
                     "review".to_owned(),
                     "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files.".to_owned(),
                 ),
-                ("standalone".to_owned(), String::new()),
+                ("standalone".to_owned(), "{task}".to_owned()),
+                (
+                    "feedback".to_owned(),
+                    "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push.".to_owned(),
+                ),
+                (
+                    "conflicts".to_owned(),
+                    "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push.".to_owned(),
+                ),
             ]),
             ide_bridge: false,
         }
@@ -811,7 +851,9 @@ pub struct EditorSettings {
     /// Preset id.
     pub default: String,
     pub follow_claude_edits: FollowEdits,
-    /// Appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]`.
+    /// The diff editor's arguments: appended for review sessions and used by Review diff on own work
+    /// items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
+    /// base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
     #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
     pub review_args: Vec<String>,
     #[schemars(extend("x-kelta-merge" = "by_id", "x-kelta-exec" = true))]
@@ -973,6 +1015,9 @@ pub struct WorkSettings {
     pub on_pr: OnPr,
     pub on_merge: OnMerge,
     pub pr: PrSettings,
+    /// Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
+    /// the task's first line.
+    pub scratch_branch_template: String,
 }
 
 impl Default for WorkSettings {
@@ -985,6 +1030,7 @@ impl Default for WorkSettings {
             on_pr: OnPr::default(),
             on_merge: OnMerge::default(),
             pr: PrSettings::default(),
+            scratch_branch_template: "wip/{slug}".into(),
         }
     }
 }
@@ -1043,11 +1089,15 @@ pub enum AccountKind {
     Github,
     Gitlab,
     Linear,
+    /// Bitbucket Cloud: code host only (its issue tracker was removed in August 2026).
+    Bitbucket,
+    /// Gitea / Forgejo (self-hosted, `base_url` required): issues and pull requests.
+    Gitea,
 }
 
 impl AccountKind {
     pub fn is_code_host(self) -> bool {
-        matches!(self, Self::Github | Self::Gitlab)
+        matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea)
     }
 }
 
@@ -1067,6 +1117,16 @@ pub enum AuthKind {
     Bearer,
     ApiKey,
     Token,
+    /// Bearer token from "Sign in with browser" (device flow), refreshed before it expires.
+    Oauth,
+}
+
+/// OAuth apps used by "Sign in with browser" (device flow, GitHub and GitLab).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct OAuthSettings {
+    /// Client id of the GitHub OAuth App or application id of the GitLab application, per host (`github.com`, `gitlab.com`, `gitlab.acme.example`). Public values; a host without one only offers pasted tokens.
+    pub client_ids: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -1082,12 +1142,12 @@ pub enum TextFormat {
 #[serde(deny_unknown_fields)]
 pub struct AccountConfig {
     pub kind: AccountKind,
-    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; required for jira/redmine.
+    /// github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0`; required for jira/redmine/gitea.
     #[serde(default)]
     pub base_url: Option<String>,
     #[serde(default)]
     pub flavor: JiraFlavor,
-    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key (`bearer` for OAuth).
+    /// Default per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + API token; `bearer` for repository/workspace access tokens), linear raw API key (`bearer` for OAuth).
     #[serde(default)]
     pub auth: Option<AuthKind>,
     #[serde(default)]
@@ -1114,6 +1174,7 @@ impl AccountConfig {
             AccountKind::Github => Some("https://api.github.com".into()),
             AccountKind::Gitlab => Some("https://gitlab.com".into()),
             AccountKind::Linear => Some("https://api.linear.app".into()),
+            AccountKind::Bitbucket => Some("https://api.bitbucket.org/2.0".into()),
             _ => None,
         })
     }
@@ -1273,6 +1334,7 @@ impl Default for Settings {
             web: WebSettings::default(),
             performance: PerformanceSettings::default(),
             accounts: BTreeMap::new(),
+            oauth: OAuthSettings::default(),
             session_templates: default_session_templates(),
             tools: Vec::new(),
             triggers: Vec::new(),
@@ -1364,13 +1426,13 @@ pub struct TrackerView {
     pub search: Option<String>,
     /// github Projects v2.
     pub project_v2: Option<ProjectV2Ref>,
-    /// gitlab: `group/sub/proj`; linear: project name.
+    /// gitlab: `group/sub/proj`; gitea: `owner/name`; linear: project name.
     pub project: Option<String>,
     /// linear: team key (`ENG`).
     pub team: Option<String>,
-    /// gitlab: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
+    /// gitlab, gitea: `assigned_to_me` | `all`; linear: `assigned_to_me` (default) | `all`.
     pub scope: Option<String>,
-    /// gitlab, linear (label names).
+    /// gitlab, gitea, linear (label names).
     pub labels: Option<Vec<String>>,
     /// gitlab scoped-label scope (default `workflow`).
     pub workflow_scope: Option<String>,
@@ -1546,7 +1608,7 @@ mod tests {
         let v = serde_json::to_value(&d).unwrap();
         let back: Settings = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
-        assert_eq!(d.terminal.max_live_views, 4);
+        assert_eq!(d.terminal.max_live_views, 2);
         assert_eq!(d.editor.presets.len(), 6);
         assert_eq!(d.session_templates.len(), 5);
     }
@@ -1613,7 +1675,7 @@ install_hint = "brew install lazydocker"
 id = "isl"
 label = "Sapling ISL"
 kind = "web"
-start = { command = "sl", args = ["web", "--port", "{port}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
+start = { command = "sl", args = ["web", "--no-open", "--foreground", "--json", "--port", "{port}", "--cwd", "{repo.path}"], ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }
 embed = "auto"
 url_is_secret = true
 

@@ -14,9 +14,8 @@
   .loading {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--k-space-2);
-    padding: var(--k-space-6);
+    gap: var(--k-space-3);
+    padding: var(--k-space-5);
     color: var(--k-fg-muted);
     opacity: 0;
     animation: show 0s linear 150ms forwards;

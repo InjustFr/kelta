@@ -208,6 +208,7 @@ impl CodeHost for ListHost {
             state,
             body_html: String::new(),
             reviewers: vec![],
+            pending_comments: 0,
             checks: vec![],
             files: vec![],
         })
@@ -247,14 +248,19 @@ pub struct H {
 
 /// Executable stubs on the test PATH (`claude`, `nvim`, `lazygit`).
 pub fn bin_dir(root: &Path) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let bin = root.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["claude", "nvim", "lazygit"] {
-        let p = bin.join(name);
-        std::fs::write(&p, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    // Written by a child `sh`: a write fd held here leaks into concurrent forks -> ETXTBSY (Linux).
+    let ok = std::process::Command::new("sh")
+        .args([
+            "-c",
+            "for f; do printf '#!/bin/sh\\nexit 0\\n' > \"$f\" && chmod 755 \"$f\" || exit 1; done",
+            "sh",
+        ])
+        .args(["claude", "nvim", "lazygit"].map(|n| bin.join(n)))
+        .status()
+        .unwrap();
+    assert!(ok.success());
     bin
 }
 

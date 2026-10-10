@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]
@@ -69,8 +69,11 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `cursor_blink` | bool | `false` | focused pane only |
 | `scrollback` | table {shell, claude, editor, tool, setup, custom: int} | `{3000, 3000, 500, 500, 1000, 3000}` | Rust model lines |
 | `view_scrollback` | int (100..10000) | `1000` | xterm lines + snapshot history |
-| `max_live_views` | int (1..12) | `4` | hidden xterm instances kept (LRU) |
+| `max_live_views` | int (1..12) | `2` | hidden xterm instances kept (LRU) |
 | `memory_cap_mb` | int (32..2048) | `160` | total scrollback budget across sessions |
+| `history_log` | bool | `true` | append scrolled-off lines (plain text) to `<data>/history/` per session: search + restore (ARCH §9.6) |
+| `history_log_mb` | int (1..1024) | `16` | per-session log cap (two rotated halves) |
+| `history_log_total_mb` | int (16..65536) | `512` | cap of all session logs; oldest files deleted first |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |
 | `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click paste |
@@ -82,9 +85,10 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `shell` | str | `""` | empty = `$SHELL` |
 | `env` | map<str,str> | `{}` | added to every session |
 | `minimum_contrast_ratio` | float | `1` | xterm option |
+| `session_host` | enum(inprocess\|daemon) | `daemon` | restart; global. `daemon` = PTYs live in `keltad`: sessions survive quit and re-attach on the next start (falls back to `inprocess` when keltad cannot start) |
 
 ### [linux.graphics]  (x-kelta-scope global, x-kelta-restart; read by `platform::pre_init` with a minimal TOML parse)
-| `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds |
+| `profile` | enum(auto\|default\|safe) | `auto` | safe = all workarounds; auto also turns compositing off without a GPU render node (`/dev/dri/renderD*`) |
 | `auto_nvidia` | bool | `true` | NVIDIA proprietary → dmabuf off + explicit sync off |
 | `disable_dmabuf` | bool | `false` | `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
 | `disable_compositing` | bool | `false` | `WEBKIT_DISABLE_COMPOSITING_MODE=1` |
@@ -118,13 +122,13 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `extra_args` | list<str> | `[]` | appended before the prompt |
 | `extra_hooks` | JSON-compatible table | `{}` | merged into generated `--settings` hooks |
 | `profiles` | map<str, ClaudeProfile> | `default = {model="opus", effort="high", permission_mode="acceptEdits"}`, `review = {model="opus", effort="high", permission_mode="plan"}`, `plan = {model="opus", effort="high", permission_mode="plan"}` | ClaudeProfile = {model: str, effort: enum(low\|medium\|high\|xhigh\|max), permission_mode: enum(default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions)} |
-| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = ""` | |
-| `ide_bridge` | bool | `false` | v0.2; ignored in v0.1 |
+| `prompt_templates` | map<str, Template> | `ticket = "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing."`, `review = "Review PR {pr.url} ({pr.head} → {pr.base}). Focus on correctness, tests and risks. Do not edit files."`, `standalone = "{task}"`, `feedback = "The review of {pr.url} left feedback, collected in {file}. Address each item (or say why not), run the tests, and commit the fixes. Do not push."`, `conflicts = "The rebase of {branch} onto {onto} stopped at commit {step} of {total} with conflicts, listed in {file}. Resolve them, `git add` the files, then run `GIT_EDITOR=true git rebase --continue` until the rebase is done. Do not push."` | `feedback` is the editable prompt of the Fix with Claude sheet, `conflicts` the one of Ask Claude to resolve. Both are rendered by `work_send` with the work item's placeholders plus `{file}` (absolute path of the brief written to the private run dir: `feedback.md` / `conflicts.md`), `{pr.url}`, and during a rebase `{onto}`, `{step}`, `{total}`. `standalone`'s `{task}` is the task of a New work item or `kelta-ctl start --task`. |
+| `ide_bridge` | bool | `false` | Claude sessions see Kelta as their IDE (loopback WebSocket + `~/.claude/ide/<port>.lock`, `openFile`/`openDiff` in the editor pane); ARCHITECTURE §8.5 |
 
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
 | `follow_claude_edits` | enum(off\|reload\|open) | `reload` | |
-| `review_args` | list<str> | `[]` | appended for review sessions, e.g. `["-c","DiffviewOpen origin/{base}...HEAD"]` |
+| `review_args` | list<str> | `[]` | the diff editor's arguments: appended for review sessions and used by `work_diff` (Review diff, `d`) for own work items, e.g. `["-c","DiffviewOpen {range}"]`. `{range}` renders `<remote>/<base>` for own items (merge base to working tree, uncommitted work included) and `<remote>/<base>...HEAD` for review checkouts. Empty: Review diff runs `git diff $(git merge-base <remote>/<base> HEAD)` in a shell |
 | `presets` | list<EditorPreset> by id | §2.1 | x-kelta-merge by_id, x-kelta-exec |
 
 EditorPreset: `{ id: str, label: str, command: str, args: list<Template>, open: enum(rpc|keys|command|none), open_keys: Template?, open_cmd: list<Template>?, external: bool = false, restore: enum(mksession|none) = none, enabled: bool = true }`. Placeholders: `{sock}`, `{path}` (initial path, default `.`), `{file}`, `{line}`, `{cwd}`, `{sid8}`.
@@ -159,6 +163,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
 | `default_template` | str | `"claude+editor"` | |
 | `review_template` | str | `"review"` | |
+| `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
 | `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}` |
 | `on_pr` | {transition_to: TransitionTarget? = {category="in_review"}, comment: Template? = "PR: {pr.url}"} | | |
 | `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | applied on `pr.merged` (also for merges while Kelta was closed, found on the next launch) only when unambiguous: a `name` target, or a single `category` match, and no required fields. Otherwise the ticket stays as is, the item reads "Merged: choose Done status" and the Finish dialog asks. The project's `status_map.done` wins over it. |
@@ -182,15 +187,20 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 ### [accounts.<id>]  (map; scope global only; ids `[a-z0-9-]+`)
 | Key | Type | Default | Applies to |
 |---|---|---|---|
-| `kind` | enum(jira\|redmine\|github\|gitlab\|linear) | — (required) | all |
-| `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app` | all (jira/redmine required) |
+| `kind` | enum(jira\|redmine\|github\|gitlab\|linear\|bitbucket\|gitea) | — (required) | all |
+| `base_url` | str (URL) | github: `https://api.github.com`; gitlab: `https://gitlab.com`; linear: `https://api.linear.app`; bitbucket: `https://api.bitbucket.org/2.0` | all (jira/redmine/gitea required; gitea accepts a trailing `/api/v1`) |
 | `flavor` | enum(auto\|cloud\|dc) | `auto` | jira |
-| `auth` | enum(basic\|bearer\|api_key\|token) | per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab `token`, linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
-| `email` / `user` | str | — | jira cloud email / basic user |
+| `auth` | enum(basic\|bearer\|api_key\|token\|oauth) | `oauth` = set by browser sign-in (github/gitlab: Bearer, refreshed before expiry); per kind: jira cloud `basic`, dc `bearer`, redmine `api_key`, github/gitlab/gitea `token`, bitbucket `basic` (account `email` + Atlassian API token; `bearer` for repository/workspace access tokens), linear raw API key in `Authorization` (`bearer` for OAuth tokens) | |
+| `email` / `user` | str | — | jira cloud and bitbucket email / basic user |
 | `secret` | SecretRef | — (required) github default `gh-cli`, gitlab default `glab-cli`, linear a personal API key (`keyring:`, `env:` or `command:`) | x-kelta-secret |
 | `text_format` | enum(textile\|markdown) | `textile` | redmine |
 | `poll_secs` | int? | none | override |
-| `web_url` | str? | derived | browser links (GHE/GitLab) |
+| `web_url` | str? | derived | browser links (GHE/GitLab/Gitea); bitbucket: only used to match git remotes (default `https://bitbucket.org`) |
+
+### [oauth]  (scope global only; category Accounts)
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `client_ids` | map<str,str> | `{}` | web host (`github.com`, `gitlab.com`, `gitlab.acme.example`) → OAuth App client id / GitLab application id. Public values. A host without one offers no "Sign in with GitHub / GitLab" (docs/user/oauth.md). |
 
 ### [[session_templates]]  (by_id; scope global+project+repo)
 `{ id, label, layout: TemplateNode, enabled = true }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
@@ -307,8 +317,9 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always):
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
 - github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`, plus the shared `status` and (per-repo views) `assigned_to` keys below.
 - gitlab: `project?` (`group/sub/proj`), `scope = "assigned_to_me"|"all"`, `labels?`, `workflow_scope = "workflow"`, plus the shared `status` key.
+- gitea: `project?` (`owner/name`), `scope = "assigned_to_me"|"all"` (a `project` with `scope = "all"` lists that repository; with `assigned_to_me` the search results are filtered to it), `labels?`, plus the shared `status` key. Columns are Open and Closed; moves are Close / Reopen. Bitbucket Cloud has no tracker (its issues were removed in August 2026): bind a Jira account for tickets and use Bitbucket as the code host.
 - linear: `team?` (team key, e.g. `ENG`), `project?` (project name), `scope = "assigned_to_me"|"all"` (default `assigned_to_me`), `labels?` (label names), plus the shared `status` key. Columns are the team's workflow states; moves resolve state ids by name at runtime.
-- Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
+- Shared keys: `status = "open"|"closed"|"*"` (default `open`) for redmine, github, gitlab, gitea and linear; `assigned_to = "me"|"any"` (default `me`) for redmine and per-repo github views.
 
 `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 
@@ -323,13 +334,16 @@ Config holds only `SecretRef` strings, never tokens:
 | SecretRef | Resolution |
 |---|---|
 | `keyring:<name>` | OS keyring via keyring-core: service `dev.kelta`, user `<name>`. macOS Keychain (`apple-native-keyring-store`, `keychain` feature); Linux Secret Service (`zbus-secret-service-keyring-store`). |
+| `file:<name>` | entry `<name>` of `<data>/secrets.enc`: 0600, XChaCha20-Poly1305 over a JSON map, key = Argon2id(passphrase, per-file salt; 19 MiB, t=2, p=1), header authenticated. Locked until the passphrase is entered in the UI (startup prompt when an account uses `file:`, or Settings → Accounts → Secret storage); the derived key stays in memory for the run (zeroized on drop), the passphrase is wiped after derivation. Writes are serialized and atomic (temp file + rename). |
 | `gh-cli` | `gh auth token --hostname <host of base_url>` (read-only reuse; never copied) |
 | `glab-cli` | plaintext `config.yml` token for host (glab path search order), else `glab auth status --show-token --hostname <host>` |
 | `command:<argv>` | argv split shell-words, exec without a shell, 5 s timeout, stdout trimmed (e.g. `command:pass show jira/acme`, `command:op read op://…`, `command:secret-tool lookup service kelta account jira`) |
 | `env:<VAR>` | process env (login env included) |
 
 - Resolution runs off the UI thread with a 5 s timeout, result cached in memory only (zeroized on drop), invalidated on settings change or 401. Never written to disk, never sent to the UI, never logged.
-- `secret_set` writes only `keyring:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- `secret_set` / `secret_delete` write only `keyring:` and `file:` refs (Accounts wizard "Set token…"). On Linux with no `org.freedesktop.secrets` provider (common on Sway/Hyprland) or a locked collection, `secret_backends_status` reports it and the wizard proposes `file:`/`command:`/`env:` and shows the `gnome-keyring-daemon --start --components=secrets` / KeePassXC snippet.
+- Browser sign-in (`oauth_device_start` / `oauth_device_finish`, RFC 8628, GitHub and GitLab): the device code never leaves the core; the access token goes to the account's `keyring:`/`file:` ref and `<ref>.oauth` holds `{client_id, token_url, refresh_token, expires_at}` in the same backend. With `auth = "oauth"`, the HTTP auth layer refreshes a token expiring within 60 s (one refresh at a time; rotated refresh tokens are stored), and a refused refresh is `needs_auth` ("sign in again"); a network failure stays `network`.
+- `secret_unlock {passphrase, create}` (UI IPC only, no ctl equivalent) unlocks the encrypted file for the run; `create` makes it when missing (`not_found` otherwise). `secret_backends_status` reports it as `encrypted-file` (available = unlocked) and Diagnostics warns while an existing file is locked. A wrong passphrase and a modified file give the same `needs_auth` error.
 - macOS dev builds: Keychain prompts on each rebuild — CONTRIBUTING recommends `env:` refs in development.
 
 ## 6. Templates and placeholders
