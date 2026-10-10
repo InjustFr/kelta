@@ -99,7 +99,7 @@ which is also what `g` does in a narrow pane.
 
 A ticket with work under way shows the work's phase in its row, with its lamp (Claude working, Claude needs
 you, To review, Changes requested, Checks failed, In review, Merged...): the state Now shows, from the same signals. With the
-detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now; `g` opens
+detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
 the detail instead.
 
 From top to bottom: key, title, status (a button: it opens the status picker), the action bar, a grid with
