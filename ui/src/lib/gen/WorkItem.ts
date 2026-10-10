@@ -40,4 +40,8 @@ sent_threads?: Array<string>,
 /**
  * Kelta-driven rebase in progress, or done and awaiting its force push.
  */
-rebase?: RebaseState | null, };
+rebase?: RebaseState | null, 
+/**
+ * First of the item's `PORT_BLOCK` ports (`[ports] range`); `None` = range off, or finished.
+ */
+port_base?: number | null, };

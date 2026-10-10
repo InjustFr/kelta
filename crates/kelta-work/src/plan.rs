@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use kelta_proto::codehost::{CodeHostKind, Review};
 use kelta_proto::error::KeltaError;
 use kelta_proto::model::{
-    BranchChoice, BranchExists, ClaudePlan, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan, WorkItem,
-    WorkSource, WorkState,
+    BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
+    WorkItem, WorkSource, WorkState,
 };
 use kelta_proto::settings::{RepoRule, Settings};
 use kelta_proto::tracker::{Ticket, TrackerKind};
@@ -305,6 +305,37 @@ pub fn assemble(
     }
 }
 
+/// First block of `PORT_BLOCK` ports in `range` (`first-last`) overlapping no `taken` block whose
+/// first port `free` accepts. `Ok(None)` = ports off (empty range).
+pub fn alloc_ports(
+    range: &str,
+    taken: &[u16],
+    free: impl Fn(u16) -> bool,
+) -> Result<Option<u16>, KeltaError> {
+    let range = range.trim();
+    if range.is_empty() {
+        return Ok(None);
+    }
+    let bad = || KeltaError::invalid(format!("ports.range `{range}` must be `first-last`, e.g. 20000-29999"));
+    let (a, b) = range.split_once('-').ok_or_else(bad)?;
+    let first: u16 = a.trim().parse().map_err(|_| bad())?;
+    let last: u16 = b.trim().parse().map_err(|_| bad())?;
+    (first..=last.saturating_sub(PORT_BLOCK - 1))
+        .step_by(PORT_BLOCK.into())
+        .find(|&p| taken.iter().all(|t| t.abs_diff(p) >= PORT_BLOCK) && free(p))
+        .map(Some)
+        .ok_or_else(|| {
+            KeltaError::conflict(format!(
+                "no free block of {PORT_BLOCK} ports in {range}: finish a work item or widen ports.range"
+            ))
+        })
+}
+
+/// Nothing listens on `port` (any address or loopback).
+pub fn port_free(port: u16) -> bool {
+    ["0.0.0.0", "127.0.0.1"].iter().all(|h| std::net::TcpListener::bind((*h, port)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,6 +381,25 @@ mod tests {
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
         item.state = WorkState::Finished;
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+    }
+
+    #[test]
+    fn port_blocks() {
+        let all = |_| true;
+        assert_eq!(alloc_ports("", &[], all).unwrap(), None);
+        assert_eq!(alloc_ports("20000-20029", &[], all).unwrap(), Some(20000));
+        assert_eq!(alloc_ports("20000-20029", &[20000], all).unwrap(), Some(20010));
+        // A block left by another range still overlaps.
+        assert_eq!(alloc_ports("20000-20029", &[20005], all).unwrap(), Some(20020));
+        // Reuse: a freed block is handed out again.
+        assert_eq!(alloc_ports("20000-20029", &[20000, 20020], all).unwrap(), Some(20010));
+        // Bind probe: a busy first port skips the block.
+        assert_eq!(alloc_ports("20000-20029", &[], |p| p != 20000).unwrap(), Some(20010));
+        // Exhaustion, including a range smaller than one block.
+        let e = alloc_ports("20000-20029", &[20000, 20010, 20020], all).unwrap_err();
+        assert!(e.message.contains("no free block"), "{}", e.message);
+        assert!(alloc_ports("20000-20005", &[], all).is_err());
+        assert!(alloc_ports("lots", &[], all).is_err());
     }
 
     #[test]

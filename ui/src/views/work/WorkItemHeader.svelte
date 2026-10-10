@@ -147,6 +147,11 @@
       <Icon name="git-branch" size={14} />
       <code>{item.branch}</code>
     </span>
+    {#if item.port_base != null}
+      <span class="group ports" title="KELTA_PORT … KELTA_PORT_9" data-testid="work-ports"
+        >ports {item.port_base}–{item.port_base + 9}</span
+      >
+    {/if}
     {#if git && !git.missing}
       <span class="group git" title="{git.ahead} commits to push, {git.behind} behind {item.base}">
         <span class="num">
@@ -313,7 +318,8 @@
     text-overflow: ellipsis;
   }
 
-  .git {
+  .git,
+  .ports {
     flex: none;
     color: var(--k-fg-muted);
   }
@@ -386,7 +392,8 @@
   }
 
   @container (max-width: 1000px) {
-    .git {
+    .git,
+    .ports {
       display: none;
     }
   }

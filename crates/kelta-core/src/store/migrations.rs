@@ -131,8 +131,13 @@ const V5: &str = r#"
 ALTER TABLE work_items ADD COLUMN claude_at TEXT;
 "#;
 
+/// v6: per-item port block (`WorkItem.port_base`).
+const V6: &str = r#"
+ALTER TABLE work_items ADD COLUMN port_base INTEGER;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {

@@ -742,6 +742,7 @@ export const workItem: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
@@ -851,6 +852,7 @@ export const workItemFailed: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",
@@ -962,6 +964,7 @@ export const workItemMerged: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/90",
   "project_id": "shop",
@@ -1104,6 +1107,7 @@ export const workItemRebaseStopped: WorkItem = {
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": "https://github.com/acme/shop-api/pull/74",
   "project_id": "shop",
@@ -1850,6 +1854,9 @@ export const settingsDefault: Settings = {
     "min_secs": 30,
     "when_closed": "off"
   },
+  "ports": {
+    "range": "20000-29999"
+  },
   "reviews": {
     "include_drafts": false,
     "include_team_requests": true,
@@ -2041,6 +2048,7 @@ export const settingsDefault: Settings = {
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
     "cleanup": "ask",
+    "env_template": "",
     "fetch_timeout_secs": 20,
     "include": [
       ".env",
@@ -2050,6 +2058,7 @@ export const settingsDefault: Settings = {
     "setup": [],
     "setup_blocking": true,
     "slug_max": 40,
+    "teardown": "",
     "type_map": {
       "bug": "fix",
       "default": "chore",
@@ -3100,6 +3109,7 @@ export const uiEventWorkUpdated: UiEvent = {
     "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
     "kind": "ticket",
     "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+    "port_base": 20140,
     "pr_title_needs_key": false,
     "pr_url": null,
     "project_id": "shop",

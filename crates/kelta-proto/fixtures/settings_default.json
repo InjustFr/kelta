@@ -238,6 +238,9 @@
     "min_secs": 30,
     "when_closed": "off"
   },
+  "ports": {
+    "range": "20000-29999"
+  },
   "reviews": {
     "include_drafts": false,
     "include_team_requests": true,
@@ -429,6 +432,7 @@
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
     "cleanup": "ask",
+    "env_template": "",
     "fetch_timeout_secs": 20,
     "include": [
       ".env",
@@ -438,6 +442,7 @@
     "setup": [],
     "setup_blocking": true,
     "slug_max": 40,
+    "teardown": "",
     "type_map": {
       "bug": "fix",
       "default": "chore",

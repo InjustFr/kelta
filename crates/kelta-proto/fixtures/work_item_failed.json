@@ -8,6 +8,7 @@
   "id": "01928f6e-3c5d-7b20-8d4e-6f7081920314",
   "kind": "ticket",
   "nvim_socket": "/tmp/kelta-1000/s/01928f6e/nvim.sock",
+  "port_base": 20140,
   "pr_title_needs_key": false,
   "pr_url": null,
   "project_id": "shop",

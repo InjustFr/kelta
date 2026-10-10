@@ -290,6 +290,7 @@ pub fn work_item() -> WorkItem {
         claude_at: None,
         sent_threads: Vec::new(),
         rebase: None,
+        port_base: Some(20140),
     }
 }
 

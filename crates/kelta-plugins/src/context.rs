@@ -82,8 +82,9 @@ impl PluginHost {
             (Some(c), Some(id)) => c.session_get(id),
             _ => None,
         };
-        let work: Option<WorkItem> = match (&core, &session_id) {
-            (Some(c), Some(id)) => c.work_for_session(id).await,
+        let work: Option<WorkItem> = match (&core, &session_id, tctx.and_then(|t| t.work_item_id.as_ref())) {
+            (Some(c), Some(id), _) => c.work_for_session(id).await,
+            (Some(c), None, Some(id)) => c.work_get(id).await,
             _ => None,
         };
 
@@ -121,6 +122,8 @@ impl PluginHost {
             }
             v.set("branch", json!(w.branch));
             v.set("base", json!(w.base));
+            // `env` is not a placeholder: `launch_env` adds it to the tool's process.
+            v.set("work", json!({ "port": w.port_base, "env": w.env() }));
         }
         if let Some(s) = &session {
             let visible = self.wiring().ui.map(|ui| {
