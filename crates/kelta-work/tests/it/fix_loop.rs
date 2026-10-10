@@ -152,9 +152,12 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
     let sid = claude(&fx);
-    for status in [SessionStatus::NeedsInput, SessionStatus::Working] {
+    for (status, content) in
+        [(SessionStatus::NeedsInput, "# Checks failed\n"), (SessionStatus::Working, "# Threads\n")]
+    {
         set_status(&fx, &sid, status, StatusSource::Hook);
-        let out = w.send(&item.id, "Fix {file}", brief(), Some(vec!["T1".into()])).await.unwrap();
+        let sent = vec![SendFile { name: "feedback.md".into(), content: content.into() }];
+        let out = w.send(&item.id, "Fix {file}", sent, Some(vec!["T1".into()])).await.unwrap();
         assert_eq!(out.sent_threads, vec!["T1"], "stored at send time while held");
     }
     assert!(fx.core.writes().is_empty(), "nothing typed mid-turn");
@@ -162,7 +165,11 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
         fx.core.toasts().iter().filter(|t| t.text.contains("it gets your message when it stops")).count();
     assert_eq!(held, 2);
     let file = run_dir(&fx).join("feedback.md");
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Review feedback\n", "written before the Stop");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "# Checks failed\n\n---\n\n# Threads\n",
+        "the held brief survives the later send"
+    );
 
     set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
     fx.core.publish(

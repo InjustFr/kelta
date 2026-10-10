@@ -123,8 +123,13 @@ impl WorkService {
             .is_some_and(|s| route(Some(&s)) == Route::Paste && check_idle(&s).is_err());
         let run = self.ensure_claude_run(&item, &mut j)?;
         self.save_journal(id, &j)?;
+        // A prompt already held names these files: append, so its brief is not lost to this one.
+        let held = j.pending_prompt.is_some();
         for f in &sent {
-            files::write_private(&run.join(&f.name), f.content.as_bytes())?;
+            let path = run.join(&f.name);
+            let old = if held { std::fs::read_to_string(&path).ok() } else { None };
+            let body = old.map_or_else(|| f.content.clone(), |o| format!("{o}\n---\n\n{}", f.content));
+            files::write_private(&path, body.as_bytes())?;
         }
         let mut ctx = self.item_ctx(&env, &item, &j);
         if let Some(f) = sent.first() {
