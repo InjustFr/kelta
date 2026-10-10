@@ -9,9 +9,14 @@
   let { onclose }: Props = $props();
 </script>
 
-<EmptyState icon="square" title="Empty pane" body="Start a session here or close the pane.">
+<EmptyState
+  icon="square"
+  title="This pane is empty"
+  body="Start a session here, or close the pane to give the space back."
+>
   {#snippet actions()}
-    <Button variant="primary" icon="plus" onclick={() => dispatch('session.new')}>New session</Button>
+    <Button variant="primary" icon="plus" onclick={() => dispatch('session.new')}>Start a session here</Button
+    >
     <Button icon="x" onclick={onclose}>Close pane</Button>
   {/snippet}
 </EmptyState>

@@ -12,16 +12,16 @@
   let { onclose }: SheetProps = $props();
 
   const BUILTIN = [
-    { value: 'shell', label: 'Shell' },
-    { value: 'claude', label: 'Claude' },
+    { value: 'claude+editor', label: 'Claude and nvim (recommended)' },
+    { value: 'claude', label: 'Claude Code' },
     { value: 'editor', label: 'nvim' },
-    { value: 'claude+editor', label: 'Claude + nvim' },
+    { value: 'shell', label: 'Shell' },
   ];
 
   const rail = railProjects();
   const newWorkChord = effectiveChords('work.new', settings.value()?.keys ?? null, currentPlatform())[0];
   let projectId = $state<ProjectId>(projects.activeId ?? rail[0]?.id ?? 'home');
-  let template = $state('shell');
+  let picked = $state<string | null>(null);
   let placement = $state<Placement>('new_tab');
   let cwdChoice = $state('');
   let custom = $state('');
@@ -59,18 +59,27 @@
     ];
   });
 
+  // Until the user picks one: Claude and nvim when offered, otherwise the first option.
+  const template = $derived(
+    picked ??
+      (templateOptions.some((o) => o.value === 'claude+editor')
+        ? 'claude+editor'
+        : (templateOptions[0]?.value ?? '')),
+  );
+
   const cwdOptions = $derived.by(() => {
-    const out: { value: string; label: string }[] = [{ value: '', label: 'Project default' }];
+    const out: { value: string; label: string }[] = [{ value: '', label: 'Project folder' }];
     const push = (value: string, label: string): void => {
       if (!out.some((o) => o.value === value)) out.push({ value, label });
     };
     const project = projects.byId(projectId);
-    for (const r of project?.repos ?? []) push(r.path, `${r.id} — ${r.path}`);
+    for (const r of project?.repos ?? []) push(r.path, `${r.id} (${r.path})`);
     for (const w of work.forProject(projectId)) {
-      if (w.state.kind !== 'finished') push(w.worktree, `worktree ${w.branch} — ${w.worktree}`);
+      if (w.state.kind !== 'finished')
+        push(w.worktree, `Branch ${w.branch} (separate folder): ${w.worktree}`);
     }
-    for (const s of sessions.forProject(projectId)) push(s.cwd, `recent — ${s.cwd}`);
-    out.push({ value: '__custom', label: 'Other directory…' });
+    for (const s of sessions.forProject(projectId)) push(s.cwd, `Recent: ${s.cwd}`);
+    out.push({ value: '__custom', label: 'Other folder…' });
     return out;
   });
 
@@ -132,14 +141,18 @@
       void start();
     }}
   >
-    <Select label="Template" options={templateOptions} bind:value={template} />
+    <Select
+      label="What to start"
+      options={templateOptions}
+      bind:value={() => template, (v) => (picked = v)}
+    />
     <Select label="Project" options={projectOptions} bind:value={projectId} />
-    <Select label="Directory" options={cwdOptions} bind:value={cwdChoice} />
+    <Select label="Folder" options={cwdOptions} bind:value={cwdChoice} />
     {#if cwdChoice === '__custom'}
-      <TextInput label="Directory path" bind:value={custom} placeholder="/path/to/dir" />
+      <TextInput label="Folder path" bind:value={custom} placeholder="/path/to/dir" />
     {/if}
     <Select
-      label="Placement"
+      label="Open in"
       options={[
         { value: 'new_tab', label: 'New tab' },
         { value: 'split_right', label: 'Split right' },

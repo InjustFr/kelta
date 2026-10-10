@@ -17,6 +17,7 @@
   import InboxHost from './InboxHost.svelte';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
+  import { chordFor } from './labels';
   import { activateProject, focusedPane, focusedSessionId } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
@@ -216,12 +217,16 @@
     {:else if projects.loaded}
       <EmptyState
         icon="folder"
-        title="No project is open"
-        body="Open a project from the rail or the switcher."
+        title="No project open"
+        body="Pick a project in the sidebar, or create one from a code folder."
       >
         {#snippet actions()}
-          <Button variant="primary" onclick={() => ui.openOverlay('switcher')}>Switch project</Button>
-          <Button onclick={() => ui.openSheet('project_new')}>Create project from folder</Button>
+          <Button variant="primary" onclick={() => ui.openSheet('project_new')}
+            >Create project from folder</Button
+          >
+          <Button chord={chordFor('project.switcher')} onclick={() => ui.openOverlay('switcher')}
+            >Switch project</Button
+          >
         {/snippet}
       </EmptyState>
     {:else}
