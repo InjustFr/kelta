@@ -126,7 +126,7 @@ describe('work bar', () => {
     const entries = within(menu).getAllByRole('menuitem');
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
     const labels = entries.map(label);
-    expect(labels.length).toBe(19); // primary + v ⇧V p ⇧R f r c a n s b g l t o ⇧M ⇧P ⇧F
+    expect(labels.length).toBe(20); // primary + v ⇧V p ⇧R f r c a n s b g l ⇧T t o ⇧M ⇧P ⇧F (⇧T create_ticket from main, ⇧P park)
     const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
     expect(cont.getAttribute('aria-disabled')).toBe('true');
     expect(cont.title).toBe('Only while a rebase is stopped');
@@ -136,7 +136,7 @@ describe('work bar', () => {
     expect(screen.getByRole('menu', { name: 'Work' })).toBeTruthy();
   });
 
-  it('review checkouts are read-only: p r f l ⇧M are gated', async () => {
+  it('review checkouts are read-only: p r f l ⇧T ⇧M are gated', async () => {
     const r: WorkItem = {
       ...item(0),
       id: 'review-item',
@@ -151,7 +151,7 @@ describe('work bar', () => {
       .getAllByRole('menuitem')
       .filter((e) => e.title === 'Review checkout: read-only')
       .map((e) => e.querySelector('.label')?.textContent?.split(' ')[0]);
-    expect(reasons).toEqual(['Ship', 'Fix', 'Rebase', 'Link', 'Merge']);
+    expect(reasons).toEqual(['Ship', 'Fix', 'Rebase', 'Link', 'Create', 'Merge']);
   });
 
   it('p ships through the Ship dialog', async () => {

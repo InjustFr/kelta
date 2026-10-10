@@ -211,3 +211,17 @@ async fn sources_search_repositories() {
     );
     assert_eq!(hits[1].detail, None, "empty descriptions are dropped");
 }
+
+#[tokio::test]
+async fn search_sends_the_text_as_q() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/repos/issues/search"))
+        .and(query_param("q", "login"))
+        .and(query_param("assigned", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitea/issues_p1.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert_eq!(gt(&server).search(&view("mine"), "login").await.unwrap().len(), 2);
+}

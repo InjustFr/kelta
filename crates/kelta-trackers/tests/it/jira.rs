@@ -307,6 +307,26 @@ async fn cloud_comments_are_adf_paragraphs_dc_comments_are_text() {
 }
 
 #[tokio::test]
+async fn create_files_a_task_in_the_jql_project() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/issue"))
+        .respond_with(ResponseTemplate::new(201).set_body_string(r#"{"id":"10142","key":"SHOP-142"}"#))
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/rest/api/3/issue/SHOP-142", 200, "jira/issue_assigned_cloud.json").await;
+    let mut v = view("mine");
+    v.jql = Some("project = SHOP AND assignee = currentUser()".into());
+    let t = cloud(&server).create(&v, "Refund export", "line one").await.unwrap();
+    assert_eq!(t.r#ref.key, "SHOP-142");
+    let b = &bodies(&server, "POST", "/rest/api/3/issue").await[0]["fields"];
+    assert_eq!(b["project"]["key"], "SHOP");
+    assert_eq!(b["summary"], "Refund export");
+    assert_eq!(b["issuetype"]["name"], "Task");
+    assert_eq!(b["description"]["type"], "doc");
+}
+
+#[tokio::test]
 async fn assign_uses_account_id_on_cloud_and_name_on_dc() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/rest/api/3/myself", 200, "jira/myself_cloud.json").await;
@@ -731,4 +751,19 @@ async fn a_server_error_on_lookups_is_retried_and_either_story_points_field_coun
     assert!(p.list(&jql_view(), None).await.is_err());
     let t = p.list(&jql_view(), None).await.unwrap().items.remove(0);
     assert_eq!((t.sprint.is_some(), t.estimate.as_deref()), (true, Some("3 pts")));
+}
+
+#[tokio::test]
+async fn search_ands_an_escaped_text_clause_onto_the_view_jql() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    let mut v = view("v");
+    v.jql = Some("project = SHOP ORDER BY rank".into());
+    v.who = Some(Who::Mine);
+    cloud(&server).search(&v, r#"say "hi""#).await.unwrap();
+    let all = bodies(&server, "POST", "/rest/api/3/search/jql").await;
+    assert_eq!(
+        all.last().unwrap()["jql"],
+        r#"((project = SHOP) AND assignee = currentUser()) AND text ~ "say \"hi\"" ORDER BY rank"#
+    );
 }

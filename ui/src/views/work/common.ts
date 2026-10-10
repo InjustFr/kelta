@@ -1,6 +1,6 @@
 // Pure helpers shared by the work views (tickets, reviews, inbox, start-work sheet, work header).
 
-import type { AccountError, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
+import type { AccountError, GitStatus, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
 import type { LampLevel } from '$lib/stores/reducers';
 
 // ---- plan validation ------------------------------------------------------------------------
@@ -36,6 +36,14 @@ export function taskTitle(task: string): string {
       .map((l) => l.trim())
       .find((l) => l !== '') ?? '';
   return [...line].slice(0, 72).join('').trimEnd();
+}
+
+/** Create ticket body: the task (Ship's scratch description), then the branch diffstat. */
+export function ticketBody(task: string, branch: string, git: GitStatus | null): string {
+  const stat = git?.files
+    ? `Branch \`${branch}\`: ${git.files} file${git.files === 1 ? '' : 's'} changed, +${git.insertions} −${git.deletions}.`
+    : '';
+  return [task.trim(), stat].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -322,7 +330,7 @@ export function reviewPhase(r: {
 
 /** Why a work action is unavailable on a review-kind item (a `kelta/pr-<n>` checkout is never pushed). */
 export const REVIEW_READONLY = 'Review checkout: read-only';
-const READONLY_KEYS = ['p', 'r', 'f', 'l', 'M'];
+const READONLY_KEYS = ['p', 'r', 'f', 'l', 'T', 'M'];
 export function workActionDisabled(item: { kind: string }, key: string): string | null {
   return item.kind === 'review' && READONLY_KEYS.includes(key) ? REVIEW_READONLY : null;
 }

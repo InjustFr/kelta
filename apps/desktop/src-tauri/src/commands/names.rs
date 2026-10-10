@@ -100,6 +100,7 @@ pub const COMMANDS: &[&str] = &[
     "work_rebase",
     "work_push",
     "work_link",
+    "work_create_ticket",
     "work_status_all",
     "work_diff",
     "work_mark_reviewed",
