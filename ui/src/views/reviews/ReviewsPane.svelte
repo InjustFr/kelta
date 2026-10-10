@@ -274,7 +274,7 @@
         if (item) mergeWhenReady(item);
         break;
       case 's':
-        if (item) void reviewLocally(item.review.ref, item.project_ids[0] ?? home);
+        if (item) void reviewLocally(item.review.ref, home ?? item.project_ids[0]);
         break;
       case 'n':
         if (item) openNudge(item);
@@ -434,7 +434,7 @@
           <aside class="side" bind:this={side} aria-label="Review detail">
             {#if cur}
               <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
-              {@const pid = cur.item.project_ids[0] ?? home ?? projects.activeId}
+              {@const pid = home ?? cur.item.project_ids[0] ?? projects.activeId}
               {#if pid}
                 <!-- Keyed: the "PR changed" banner and an open dialog belong to one PR. -->
                 {#key cur.id}<ReviewDetailPane
@@ -498,6 +498,7 @@
 
   .split .list {
     min-width: 0;
+    container-type: inline-size;
     background: var(--k-well);
   }
 
