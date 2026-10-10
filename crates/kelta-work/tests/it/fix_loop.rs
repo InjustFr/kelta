@@ -318,6 +318,52 @@ async fn feedback_rerequest_and_resolve_go_to_the_items_pr() {
     assert_eq!(w.resolve_sent_threads(&item.id).await.unwrap_err().code, ErrorCode::InvalidArgument);
 }
 
+// ---- fix_checks trigger action (#252) ---------------------------------------------------------
+
+#[tokio::test]
+async fn fix_checks_sends_each_failing_head_once_and_never_over_budget_or_without_hooks() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, _) = started(&fx, "SHOP-142").await;
+    let sid = claude(&fx);
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    let mut pr = samples::review();
+    pr.url = "https://github.com/acme/shop-api/pull/90".into();
+    pr.head_sha = "aaa".into();
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: no work item owns this PR");
+    let mut it = w.list(None).await.unwrap().remove(0);
+    it.pr_url = Some(pr.url.clone());
+    it.state = WorkState::PrOpen;
+    fx.store.put_item(&it).await.unwrap();
+
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "sent 1 failed check");
+    let brief = std::fs::read_to_string(run_dir(&fx).join("feedback.md")).unwrap();
+    assert!(brief.contains("### ci / test") && !brief.contains("Unresolved threads"), "{brief}");
+    assert!(fx.core.written_text(&sid).contains(&format!("Checks failed on {}", pr.url)));
+    // The next poll, same head and failures: nothing more.
+    let typed = fx.core.writes().len();
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: already sent for this head");
+    assert_eq!(fx.core.writes().len(), typed);
+    pr.head_sha = "bbb".into();
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "sent 1 failed check", "a new failing head");
+    assert!(fx.core.writes().len() > typed);
+
+    pr.head_sha = "ccc".into();
+    let typed = fx.core.writes().len();
+    fx.settings(|s| s.claude.budget_usd = Some(1.0));
+    it = w.list(None).await.unwrap().remove(0);
+    it.cost_usd = 1.5;
+    fx.store.put_item(&it).await.unwrap();
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: over budget");
+    assert!(fx.core.toasts().iter().any(|t| t.text.contains("over its $1.00 budget")));
+
+    fx.settings(|_| {});
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Heuristic);
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: Claude's status hooks are inactive");
+    assert_eq!(fx.core.writes().len(), typed, "nothing typed");
+    assert!(!fx.core.calls().iter().any(|c| c.method == "clipboard_copy"), "nothing copied");
+}
+
 // ---- B2: own PRs -----------------------------------------------------------------------------
 
 #[tokio::test]

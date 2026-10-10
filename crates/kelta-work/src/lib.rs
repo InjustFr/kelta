@@ -291,6 +291,13 @@ impl WorkService {
         self.feedback_impl(id).await
     }
 
+    /// The `fix_checks` trigger action: `review`'s failed checks to its work item's Claude, once per
+    /// head SHA and failed-check set; `Ok` names what was sent or why nothing was.
+    pub async fn fix_checks(&self, review: &Review) -> Result<String, KeltaError> {
+        self.ensure_listener();
+        self.fix_checks_impl(review).await
+    }
+
     /// `work_rerequest_review` → the logins asked again.
     pub async fn rerequest_review(&self, id: &WorkItemId) -> Result<Vec<String>, KeltaError> {
         self.rerequest_impl(id).await

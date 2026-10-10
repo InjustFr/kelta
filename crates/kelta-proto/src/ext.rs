@@ -424,6 +424,8 @@ pub enum ActionDef {
     Command {
         id: String,
     },
+    /// The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).
+    FixChecks,
 }
 
 /// Value of a `secret_headers` entry (PLUGINS §3.1). In a plugin, a string names one of the
