@@ -43,9 +43,8 @@
   let retry = $state(0);
   let seq = 0;
 
-  $effect(() => {
-    if (settings.value() === null) void settings.load().catch(() => undefined);
-  });
+  // once at mount, not in an $effect: load() writes the state value() reads, which would loop while it is pending
+  if (settings.value() === null) void settings.load().catch(() => undefined);
 
   $effect(() => {
     const acc = account;

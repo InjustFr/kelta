@@ -99,6 +99,18 @@ describe('components', () => {
     expect(onchange).toHaveBeenLastCalledWith('list');
   });
 
+  it('Tabs with no selected tab keeps the first enabled one in the Tab order', () => {
+    render(Tabs, {
+      props: {
+        items: [
+          { id: 'a', label: 'A', disabled: true },
+          { id: 'b', label: 'B' },
+        ],
+      },
+    });
+    expect(screen.getAllByRole('tab').map((t) => t.tabIndex)).toEqual([-1, 0]);
+  });
+
   it('Toggle reports changes', async () => {
     const onchange = vi.fn();
     render(Toggle, { props: { label: 'Drafts', onchange } });

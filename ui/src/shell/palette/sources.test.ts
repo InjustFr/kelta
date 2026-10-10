@@ -1,8 +1,11 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
+
+import { sheetRegistry } from '$app/registry';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, sessions, settings, tools, work } from '$lib/stores';
+import { layout, plugins, projects, sessions, settings, tools, ui, work } from '$lib/stores';
 
 import '../actions';
 import { rank } from './fuzzy';
@@ -121,6 +124,26 @@ describe('palette sources', () => {
     expect(mock.calls.find((c) => c.cmd === 'open_external')?.args).toMatchObject({
       url: hits[0]!.ticket.url,
     });
+  });
+
+  it('"Move KEY to…" opens the move menu for that ticket, and a digit moves it', async () => {
+    ui.sheets = [];
+    const hit = mock.state.tickets[0]!;
+    await ticketItems([hit])
+      .find((i) => i.label === `Move ${hit.ticket.ref.key} to…`)!
+      .run();
+    expect(ui.sheet).toMatchObject({ key: 'tickets.move', props: { ticket: hit.ticket } });
+    const Sheet = (await sheetRegistry['tickets.move']()).default;
+    render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet('tickets.move') } });
+    const menu = await screen.findByRole('menu', { name: `Move ${hit.ticket.ref.key}` });
+    await screen.findAllByRole('menuitem');
+    await fireEvent.keyDown(menu, { key: '1' });
+    await waitFor(() =>
+      expect(mock.calls.find((c) => c.cmd === 'tracker_transition')?.args).toMatchObject({
+        ticket: hit.ticket.ref,
+      }),
+    );
+    await waitFor(() => expect(ui.sheet).toBeNull());
   });
 
   it('ranks across groups and keeps the display group order', () => {

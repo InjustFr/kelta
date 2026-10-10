@@ -8,7 +8,6 @@
   import { findPane, replacePaneContent } from '$lib/layout';
   import { layout, projects, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
-  import type { SheetKey } from '$lib/stores/ui.svelte';
   import {
     Badge,
     Button,
@@ -109,8 +108,7 @@
   }
 
   function addSource(): void {
-    // shortcut: the key is WP4's sheet, not yet in SheetKey; drop the cast once it is registered.
-    ui.openSheet('tracker.source_picker' as SheetKey, { projectId: project?.id ?? projectId });
+    ui.openSheet('tracker.source_picker', { projectId: project?.id ?? projectId });
   }
 
   // ---- data ---------------------------------------------------------------------------------

@@ -41,6 +41,7 @@ describe('registries', { timeout: 30_000 }, () => {
         'project_new',
         'ship',
         'start_work',
+        'tickets.move',
         'tool_picker',
         'tracker.source_picker',
         'work_dialog',

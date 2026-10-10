@@ -9,7 +9,7 @@ import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
-import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools } from '$lib/stores';
+import { plugins, projects, reviews, sessions, settings, tickets, toasts, tools, ui } from '$lib/stores';
 import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
@@ -257,8 +257,9 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
   });
   return [
     verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref, project)),
-    // shortcut: the move menu lives in the ticket detail (status button); a palette-level menu needs an export from views/tickets
-    verb('move', `Move ${ref.key} to…`, 'arrow-right', () => openTicket(hit)),
+    verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
+      ui.openSheet('tickets.move', { ticket: hit.ticket }),
+    ),
     verb('assign', `Assign ${ref.key} to me`, 'user', async () => {
       try {
         tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: 'me' } }));

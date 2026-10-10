@@ -70,7 +70,8 @@ export type RegisteredSheetKey =
   | 'merge'
   | 'fix'
   | 'work_dialog'
-  | 'tracker.source_picker';
+  | 'tracker.source_picker'
+  | 'tickets.move';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
   work_new: () => import('../views/work/NewWorkSheet.svelte'),
@@ -87,6 +88,8 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   work_dialog: () => import('../views/work/WorkDialog.svelte'),
   /** props: { projectId } */
   'tracker.source_picker': () => import('../views/tickets/SourcePickerSheet.svelte'),
+  /** props: { ticket } */
+  'tickets.move': () => import('../views/tickets/MoveSheet.svelte'),
 };
 
 export type SettingsSectionId =

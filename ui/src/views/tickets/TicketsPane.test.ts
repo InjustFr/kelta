@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { sheetRegistry } from '$app/registry';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
@@ -238,6 +239,16 @@ describe('TicketsPane states', () => {
     expect(await screen.findByText('No ticket source for this project.')).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
     expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: 'home' } });
+  });
+
+  it('"Add source…" in the source menu opens the source picker sheet for the project', async () => {
+    mountBoard('list');
+    await fireEvent.click(await screen.findByRole('button', { name: /All sources/ }));
+    await fireEvent.click(await screen.findByRole('menuitem', { name: 'Add source…' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: 'shop' } });
+    const Sheet = (await sheetRegistry['tracker.source_picker']()).default;
+    render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet() } });
+    expect(await screen.findByText('Add a ticket source')).toBeTruthy();
   });
 
   it('says why an empty Unassigned list is empty and offers Anyone', async () => {

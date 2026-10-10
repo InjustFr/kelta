@@ -13,10 +13,16 @@
     key?: string;
     /** Tooltip (a disabled item's reason). */
     title?: string;
+    /** Secondary text after the label, in the subtle colour. */
+    detail?: string;
+    /** Colour of a 2px category bar shown in place of the icon. */
+    bar?: string;
   }
 </script>
 
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+
   import Icon from './Icon.svelte';
   import Kbd from './Kbd.svelte';
 
@@ -26,11 +32,14 @@
     x: number;
     y: number;
     label?: string;
+    /** Content above the items; it also describes the menu (`aria-describedby`). */
+    header?: Snippet;
     onselect: (id: string) => void;
     onclose: () => void;
   }
 
-  let { items, x, y, label = 'Menu', onselect, onclose }: Props = $props();
+  let { items, x, y, label = 'Menu', header, onselect, onclose }: Props = $props();
+  const headerId = $props.id();
 
   let el = $state<HTMLDivElement>();
   let active = $state(-1);
@@ -39,7 +48,7 @@
 
   const pos = $derived.by(() => {
     const w = el?.offsetWidth ?? 200;
-    const h = el?.offsetHeight ?? items.length * 32;
+    const h = el?.offsetHeight ?? items.length * 28;
     const vw = typeof window === 'undefined' ? 1e4 : window.innerWidth;
     const vh = typeof window === 'undefined' ? 1e4 : window.innerHeight;
     return { left: Math.max(4, Math.min(x, vw - w - 4)), top: Math.max(4, Math.min(y, vh - h - 4)) };
@@ -83,8 +92,10 @@
       default: {
         // Letters never move: a disabled entry swallows its key.
         const i = items.findIndex((it) => it.key !== undefined && it.key === e.key);
-        if (i < 0) return;
-        choose(i);
+        if (i >= 0) choose(i);
+        else if (e.key === 'j' || e.key === 'k')
+          move(e.key === 'j' ? 1 : -1); // unless an item claims them
+        else return;
       }
     }
     e.preventDefault();
@@ -103,11 +114,13 @@
   class="k-menu"
   role="menu"
   aria-label={label}
+  aria-describedby={header ? headerId : undefined}
   tabindex="-1"
   style:left="{pos.left}px"
   style:top="{pos.top}px"
   {onkeydown}
 >
+  {#if header}<div id={headerId}>{@render header()}</div>{/if}
   {#each items as item, i (item.id)}
     {#if item.separator}<div class="sep" role="separator"></div>{/if}
     <button
@@ -121,10 +134,11 @@
       onpointerenter={() => (active = item.disabled ? -1 : i)}
       onclick={() => choose(i)}
     >
-      <span class="icon"
-        >{#if item.icon}<Icon name={item.icon} size={16} />{/if}</span
-      >
+      {#if item.bar}<span class="bar" style:--bar={item.bar}></span>{:else}<span class="icon"
+          >{#if item.icon}<Icon name={item.icon} size={14} />{/if}</span
+        >{/if}
       <span class="label">{item.label}</span>
+      {#if item.detail}<span class="detail">{item.detail}</span>{/if}
       {#if item.kbd}<Kbd chord={item.kbd} />{/if}
     </button>
   {/each}
@@ -140,8 +154,8 @@
   .k-menu {
     position: fixed;
     z-index: var(--k-z-menu);
-    min-width: 220px;
-    max-width: 400px;
+    min-width: 180px;
+    max-width: 360px;
     padding: var(--k-space-2);
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
@@ -155,7 +169,7 @@
     gap: var(--k-space-3);
     width: 100%;
     height: var(--k-row-height);
-    padding: 0 var(--k-space-4);
+    padding: 0 var(--k-space-3);
     border: none;
     border-radius: var(--k-radius-sm);
     background: transparent;
@@ -177,8 +191,24 @@
   }
 
   .icon {
-    width: 16px;
+    width: 14px;
     display: inline-flex;
+  }
+
+  .bar {
+    flex: none;
+    width: 2px;
+    height: 14px;
+    background: var(--bar);
+  }
+
+  .detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
   }
 
   .label {
@@ -195,8 +225,6 @@
   }
 
   button :global(.k-kbd) {
-    margin-left: auto;
-    justify-content: flex-end;
-    color: var(--k-fg-muted);
+    color: var(--k-fg-subtle);
   }
 </style>

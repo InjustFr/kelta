@@ -17,7 +17,8 @@ export type SheetKey =
   | 'merge'
   | 'fix'
   | 'work_dialog'
-  | 'tracker.source_picker';
+  | 'tracker.source_picker'
+  | 'tickets.move';
 export type OverlayKey = 'palette' | 'switcher';
 
 export interface SheetEntry {
