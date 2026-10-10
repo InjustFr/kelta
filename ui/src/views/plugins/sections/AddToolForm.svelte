@@ -54,7 +54,7 @@
     editor.doc !== null &&
       merged !== undefined &&
       name.trim() !== '' &&
-      (kind === 'app' ? app.trim() !== '' : argv !== null && argv.length > 0),
+      (kind === 'app' ? app.trim() !== '' : argv !== null && !!argv[0]),
   );
   const kinds = [
     { id: 'terminal' as const, label: 'Terminal' },

@@ -103,6 +103,14 @@ describe('Add tool form', () => {
     });
   });
 
+  it('keeps Add disabled when the command line has an empty first token', async () => {
+    await mount('project');
+    await openForm();
+    await fill('Name', 'x');
+    await fill('Command line', '""');
+    expect(addButton().disabled).toBe(true);
+  });
+
   it('splits the command line and rejects an unclosed quote', async () => {
     const m = await mount('project');
     await openForm();
