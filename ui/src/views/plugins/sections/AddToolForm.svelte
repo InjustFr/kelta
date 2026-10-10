@@ -19,7 +19,7 @@
   interface Props {
     editor: SettingsEditor;
     /** Merged tool list of the project (ids are deduped against it, not only the edited layer). */
-    merged: readonly ToolInfo[];
+    merged: readonly ToolInfo[] | undefined;
     bindings: Record<string, string[]>;
     open: boolean;
   }
@@ -36,16 +36,23 @@
   let icon = $state('');
 
   const argv = $derived(splitArgv(commandLine));
+  // tool_list drops disabled stubs, so the edited layer's own ids count too (kelta-config rejects duplicates).
+  const own = $derived.by(() => {
+    const v = editor.layerValue('tools');
+    return Array.isArray(v) ? v : [];
+  });
   const id = $derived(
-    uniqueToolId(
-      name,
-      merged.map((t) => t.id),
-    ),
+    uniqueToolId(name, [
+      ...(merged ?? []).map((t) => t.id),
+      ...own.map((t) => (t as { id?: string } | null)?.id ?? ''),
+    ]),
   );
-  const conflict = $derived(key ? toolKeyConflict(key, id, bindings, merged, platform) : null);
+  const conflict = $derived(key ? toolKeyConflict(key, id, bindings, merged ?? [], platform) : null);
   // The layer document must be loaded: the write replaces the layer's whole `tools` array.
+  // The merged list must be loaded too, or an inherited id would not be deduped.
   const ready = $derived(
     editor.doc !== null &&
+      merged !== undefined &&
       name.trim() !== '' &&
       (kind === 'app' ? app.trim() !== '' : argv !== null && argv.length > 0),
   );
@@ -78,8 +85,7 @@
     }
     if (key) entry.keybinding = key;
     if (icon) entry.icon = icon;
-    const own = editor.layerValue('tools');
-    if (await editor.set('tools', [...(Array.isArray(own) ? own : []), entry])) {
+    if (await editor.set('tools', [...own, entry])) {
       name = commandLine = app = key = icon = '';
       open = false;
     }

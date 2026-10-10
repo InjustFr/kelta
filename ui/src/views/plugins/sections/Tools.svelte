@@ -52,7 +52,7 @@
 
 <SectionForm sectionId="tools" {...props}>
   {#snippet before()}
-    {#if canAdd}<AddToolForm {editor} merged={slot?.data ?? []} {bindings} bind:open={adding} />{/if}
+    {#if canAdd}<AddToolForm {editor} merged={slot?.data ?? undefined} {bindings} bind:open={adding} />{/if}
   {/snippet}
   {#snippet after()}
     <section data-layer={layer} class="tools">
