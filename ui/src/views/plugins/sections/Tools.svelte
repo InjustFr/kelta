@@ -36,6 +36,8 @@
   });
   // The repo layer is trust-gated and read-only until trusted (SETTINGS §2): no quick form there.
   const canAdd = $derived(layer !== 'repo');
+  // Nothing to dedupe against (no project, or tool_list failed) must not block Add; only a pending load does.
+  const dedupeAgainst = $derived(!pid || (slot?.error && !slot.data) ? [] : (slot?.data ?? undefined));
 
   $effect(() => {
     if (pid && (!slot || (slot.fetchedAt === null && !slot.loading && !slot.error))) void tools.load(pid);
@@ -52,7 +54,7 @@
 
 <SectionForm sectionId="tools" {...props}>
   {#snippet before()}
-    {#if canAdd}<AddToolForm {editor} merged={slot?.data ?? undefined} {bindings} bind:open={adding} />{/if}
+    {#if canAdd}<AddToolForm {editor} merged={dedupeAgainst} {bindings} bind:open={adding} />{/if}
   {/snippet}
   {#snippet after()}
     <section data-layer={layer} class="tools">
