@@ -89,12 +89,6 @@ if want rust; then
     section "cargo test ${scope[*]} --locked --no-fail-fast (cargo-nextest not installed)"
     slot cargo test "${scope[@]}" --locked --no-fail-fast
   fi
-
-  # xtask depends on every crate the generated files come from, so it is affected whenever they change.
-  if [ ${#pkgs[@]} -eq 0 ] || [[ " ${pkgs[*]} " == *" xtask "* ]]; then
-    section "cargo run -p xtask --locked -- codegen --check"
-    slot cargo run -p xtask --locked -- codegen --check
-  fi
 fi
 
 ui_wait

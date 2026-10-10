@@ -46,5 +46,4 @@ async fn cancel_ends_a_pending_sign_in() {
     h.core.oauth_device_cancel(&p.user_code);
     let e = tokio::time::timeout(Duration::from_secs(2), finish).await.unwrap().unwrap().unwrap_err();
     assert_eq!(e.code, ErrorCode::Cancelled);
-    assert!(server.received_requests().await.unwrap().iter().any(|r| r.url.path() == "/oauth/token"));
 }

@@ -131,16 +131,9 @@ async fn a_rate_limited_repository_fails_the_whole_review_poll() {
     mount(&server, "GET", "/repositories/acme", 200, "bitbucket/repos.json").await;
     mount(&server, "GET", "/repositories/acme/shop/pullrequests", 429, "bitbucket/prs.json").await;
     // same retries as production, without ~1.75 s of real backoff sleeps
-    use kelta_codehosts::CodeHostFactory;
-    use kelta_http::{HttpClient, HttpCtx, HttpPolicy, ProviderFactory};
-    let policy = HttpPolicy { max_backoff: std::time::Duration::from_millis(1), ..HttpPolicy::default() };
-    let http = HttpCtx::new(
-        HttpClient::with_timeout("kelta-test", None),
-        kelta_proto::ids::AccountId::new("bitbucket-acme"),
-        policy,
-    );
-    let account = account("bitbucket", &server.uri(), json!({"email": "louis@acme.test"}));
-    let h = CodeHostFactory.code_host(&account, http, secrets_with(TOKEN)).unwrap();
+    let policy =
+        kelta_http::HttpPolicy { max_backoff: std::time::Duration::from_millis(1), ..Default::default() };
+    let h = host_over(http_with("bitbucket-acme", policy), "bitbucket", &server.uri(), secrets_with(TOKEN));
     let err = h.list_reviews(&query(ReviewKind::ReviewRequested, true, true)).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::RateLimited);
 }

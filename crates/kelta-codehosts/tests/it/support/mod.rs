@@ -31,7 +31,11 @@ pub fn secrets_with(token: &str) -> Arc<FakeSecrets> {
 }
 
 pub fn http(id: &str) -> HttpCtx {
-    HttpCtx::new(HttpClient::with_timeout("kelta-test", None), AccountId::new(id), HttpPolicy::default())
+    http_with(id, HttpPolicy::default())
+}
+
+pub fn http_with(id: &str, policy: HttpPolicy) -> HttpCtx {
+    HttpCtx::new(HttpClient::with_timeout("kelta-test", None), AccountId::new(id), policy)
 }
 
 pub fn account(kind: &str, base_url: &str, extra: Value) -> AccountConfig {
@@ -46,10 +50,13 @@ pub fn account(kind: &str, base_url: &str, extra: Value) -> AccountConfig {
 
 pub fn host_with(id: &str, kind: &str, base_url: &str, token: &str) -> (Arc<dyn CodeHost>, Arc<FakeSecrets>) {
     let secrets = secrets_with(token);
-    let h = CodeHostFactory
-        .code_host(&account(kind, base_url, json!({"email": "louis@acme.test"})), http(id), secrets.clone())
-        .expect("code host");
-    (h, secrets)
+    (host_over(http(id), kind, base_url, secrets.clone()), secrets)
+}
+
+pub fn host_over(http: HttpCtx, kind: &str, base_url: &str, secrets: Arc<FakeSecrets>) -> Arc<dyn CodeHost> {
+    CodeHostFactory
+        .code_host(&account(kind, base_url, json!({"email": "louis@acme.test"})), http, secrets)
+        .expect("code host")
 }
 
 pub fn host(id: &str, kind: &str, base_url: &str) -> Arc<dyn CodeHost> {
