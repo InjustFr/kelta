@@ -17,7 +17,7 @@
   import DialogHost from './DialogHost.svelte';
   import JumpHud from './JumpHud.svelte';
   import InboxHost from './InboxHost.svelte';
-  import { recordJump } from './jumplist';
+  import { noteFocus } from './jumplist';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
@@ -107,7 +107,7 @@
     const project = projects.activeId;
     const tab = ui.inboxActive ? null : currentTab();
     const pane = tab ? focusedPane() : null;
-    if (project && tab && pane) recordJump({ project, tab: tab.id, pane: pane.id });
+    if (project && tab && pane) noteFocus({ project, tab: tab.id, pane: pane.id });
   });
 
   // ---- keys ------------------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import type { KeltaError } from '$lib/gen';
 import { projects, reviews, sessions, tickets, work } from '$lib/stores';
 
 import { hud } from '../../shell/hud.svelte';
+import { flushJump } from '../../shell/jumplist';
 import { revealSession } from '../../shell/nav';
 import { runPrimary } from '../work/actions';
 import { phaseNow, unfinishedWork } from '../work/live';
@@ -135,6 +136,7 @@ let lastJump: string | null = null;
  * HUD opens Up next (in Now), or Tickets when Up next is empty.
  */
 export async function nextWaiting(delta: 1 | -1 = 1): Promise<void> {
+  flushJump();
   const sections = currentSections();
   const queue = jumpQueue(sections, sessions.all);
   if (queue.length === 0) {

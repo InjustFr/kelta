@@ -83,11 +83,17 @@ test.describe('palette', () => {
     // Then the failed start in billing (error band).
     await dispatch(page, 'attention.next');
     await expect(page.getByTestId('jump-hud')).toContainText(/^2\/\d+ · error · /);
+    const focused = page.locator('[data-testid="pane"][data-focused="true"]');
+    const billingPane = await focused.getAttribute('data-pane-id');
     // Then SHOP-155 to review: its closed work tab is recreated around its Claude session.
     await dispatch(page, 'attention.next');
     await expect.poll(() => activeProject(page)).toBe('shop');
     await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
+    // Back skips shop's old tab, passed through while the work tab was recreated.
+    await dispatch(page, 'nav.back');
+    await expect.poll(() => activeProject(page)).toBe('billing');
+    await expect(focused).toHaveAttribute('data-pane-id', billingPane!);
   });
 
   test('nav.back returns to the exact pane after Mod+J, kelta-ctl next and kelta-ctl focus-project', async ({

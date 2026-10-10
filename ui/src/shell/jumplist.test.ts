@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { JUMP_CAP, Jumplist } from './jumplist';
+import { flushJump, JUMP_CAP, Jumplist, jumplist, noteFocus, SETTLE_MS } from './jumplist';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
 
@@ -28,5 +28,22 @@ describe('Jumplist', () => {
     expect(j.list).toHaveLength(JUMP_CAP);
     expect(j.list[0]).toEqual(loc(5));
     expect(j.at).toBe(JUMP_CAP - 1);
+  });
+
+  it('records a place once focus rests on it, skipping stopovers, and flushes before a jump', () => {
+    vi.useFakeTimers();
+    try {
+      const before = jumplist.list.length;
+      noteFocus(loc(1));
+      vi.advanceTimersByTime(SETTLE_MS);
+      noteFocus(loc(2)); // the target project's old tab, passed through mid-jump
+      noteFocus(loc(3));
+      vi.advanceTimersByTime(SETTLE_MS);
+      noteFocus(loc(4));
+      flushJump(); // Mod+J or nav.back right away still keeps where focus was
+      expect(jumplist.list.slice(before)).toEqual([loc(1), loc(3), loc(4)]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

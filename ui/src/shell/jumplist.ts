@@ -66,12 +66,35 @@ function save(): void {
   }
 }
 
-export function recordJump(loc: JumpLoc): void {
+function recordJump(loc: JumpLoc): void {
   if (jumplist.record(loc)) save();
+}
+
+// A place counts once focus rests on it: a cross-project jump passes through the target's old
+// active tab (between `activateProject` and the tab switch or `work_resume`) and must not record it.
+// shortcut: a real work_resume slower than SETTLE_MS still records that stopover; pause recording
+// around the jump if that shows up.
+export const SETTLE_MS = 300;
+let pending: JumpLoc | null = null;
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+/** Every focus change; recorded when focus stays SETTLE_MS. */
+export function noteFocus(loc: JumpLoc): void {
+  clearTimeout(timer);
+  pending = loc;
+  timer = setTimeout(flushJump, SETTLE_MS);
+}
+
+/** Records the place focus is on now, before a jump leaves it (however briefly it was there). */
+export function flushJump(): void {
+  clearTimeout(timer);
+  if (pending) recordJump(pending);
+  pending = null;
 }
 
 /** `nav.back` / `nav.forward`: the previous / next place that still exists. */
 export function navStep(delta: 1 | -1): void {
+  flushJump();
   for (let loc = jumplist.step(delta); loc; loc = jumplist.step(delta)) {
     const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
     if (!projects.byId(loc.project)?.open || !tab || !findPane(tab.root, loc.pane)) continue;
