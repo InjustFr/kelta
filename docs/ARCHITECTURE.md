@@ -430,6 +430,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `secret_set` | `{secret_ref: String, value: String}` | `()` (value never echoed/logged) | `commands/secrets.rs` (L4) |
 | `secret_delete` | `{secret_ref}` | `()` | |
 | `secret_backends_status` | `{}` | `Vec<SecretBackendStatus{backend, available, detail}>` | |
+| `secret_unlock` | `{passphrase: String, create: bool}` | `()` (unlocks `file:` refs for this run; passphrase zeroized, never logged) | |
 | `account_test` | `{account_id}` | `AccountTestResult{ok, user: Option<User>, error: Option<KeltaError>}` | `commands/settings.rs` (L4) via CoreApi |
 | **projects** | | | `commands/project.rs` (L3) |
 | `project_list` | `{}` | `Vec<ProjectInfo>` | |

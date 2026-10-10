@@ -139,6 +139,7 @@ describe('mock transport', () => {
       repo_trust: { project_id: 'shop', repo_id: 'api', trust: true },
       secret_set: { secret_ref: 'keyring:x', value: 'v' },
       secret_delete: { secret_ref: 'keyring:x' },
+      secret_unlock: { passphrase: 'p', create: false },
       account_test: { account_id: 'jira-acme' },
       project_detect: { path: '/Users/ada/code/new-thing' },
       project_update: {

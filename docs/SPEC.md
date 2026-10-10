@@ -143,7 +143,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 | Worktree dirty on Finish | Dialog listing files; "Force remove" (destructive style) / Cancel. |
 | Repo-local config untrusted | Banner "This repo's .kelta/config.toml wants to run commands — Review & trust". |
 | Invalid config | Toast `file:line:col` + Settings issue list; last good config kept. |
-| Secret Service missing (Linux) | Accounts wizard explains and offers `command:`/`env:` sources. |
+| Secret Service missing (Linux) | Accounts wizard explains and offers the encrypted file (`file:`), `command:` and `env:` sources. |
 | Notification daemon missing | Settings → Notifications warning; in-app toasts still work. |
 | Web tool blocked from framing and proxy fails | "Open in browser". |
 | Plugin screen error | Inline error with plugin id, "Reload screen", "Disable plugin". |
@@ -152,7 +152,7 @@ Terminal key handling: Shift+Enter in Claude sessions sends `ESC CR` (newline in
 
 **In v0.1:** everything above; trackers Jira Cloud + Jira Data Center (basic), Redmine, GitHub Issues (+ Projects v2 Status), GitLab Issues, Linear; code hosts GitHub (incl. GHE) and GitLab (incl. self-managed); editors nvim (RPC), vim (keys), helix (launch only), emacs (emacsclient), external GUI editors (VS Code/Zed/JetBrains launched outside); tools tier, triggers tier, plugin manifests with commands/tools/triggers/screens/settings/keybindings; MCP server; deb + AppImage + dmg (signed/notarized on tag); docs.
 
-**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, encrypted-file secret backend, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
+**Later (designed, not built):** v0.2 — `keltad` session daemon (sessions survive quit), kitty keyboard protocol (xterm 6.1), process (KPP) provider plugins with a conformance suite, plugin KV storage API for screens, child-webview embed mode, Claude IDE WebSocket bridge, Tauri updater (AppImage/macOS), AUR + Homebrew cask publishing, OAuth/device flows, Bitbucket/Gitea, WASM logic plugins, rpm. Windows: out of scope.
 
 ## 7. Notifications
 

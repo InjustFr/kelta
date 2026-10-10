@@ -113,6 +113,7 @@ export interface Commands {
   secret_set: { args: { secret_ref: string; value: string }; result: null };
   secret_delete: { args: { secret_ref: string }; result: null };
   secret_backends_status: { args: NoArgs; result: SecretBackendStatus[] };
+  secret_unlock: { args: { passphrase: string; create: boolean }; result: null };
   account_test: { args: { account_id: AccountId }; result: AccountTestResult };
   // ---- projects ----------------------------------------------------------------------------
   project_list: { args: NoArgs; result: ProjectInfo[] };
@@ -257,6 +258,7 @@ export const COMMAND_NAMES = [
   'secret_set',
   'secret_delete',
   'secret_backends_status',
+  'secret_unlock',
   'account_test',
   'project_list',
   'project_detect',
@@ -397,6 +399,7 @@ export const repoTrust = wrap('repo_trust');
 export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
 export const secretBackendsStatus = wrap('secret_backends_status');
+export const secretUnlock = wrap('secret_unlock');
 export const accountTest = wrap('account_test');
 
 // ---- projects -------------------------------------------------------------------------------

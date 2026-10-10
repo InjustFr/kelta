@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -58,7 +59,7 @@ fn rig_with(extra_env: &[(&str, &str)], timeout: Option<Duration>) -> Rig {
     let store: Arc<keyring_core::CredentialStore> = keyring_core::mock::Store::new().unwrap();
     let secrets = Secrets::with_options(
         settings.clone(),
-        SecretsOptions { store: Some(store), env: Some(env), timeout },
+        SecretsOptions { store: Some(store), env: Some(env), timeout, file: Some(secrets_file(dir.path())) },
     );
     Rig { dir, settings, secrets, log }
 }
@@ -67,9 +68,25 @@ fn rig() -> Rig {
     rig_with(&[], None)
 }
 
+fn secrets_file(dir: &Path) -> PathBuf {
+    dir.join("data").join(kelta_secrets::SECRETS_FILE)
+}
+
 impl Rig {
     fn bin(&self) -> PathBuf {
         self.dir.path().join("bin")
+    }
+
+    fn file(&self) -> PathBuf {
+        secrets_file(self.dir.path())
+    }
+
+    /// A second process run on the same data dir: same file, nothing unlocked.
+    fn next_run(&self) -> Arc<Secrets> {
+        Secrets::with_options(
+            self.settings.clone(),
+            SecretsOptions { file: Some(self.file()), ..SecretsOptions::default() },
+        )
     }
 }
 
@@ -290,6 +307,105 @@ async fn backend_status_lists_every_source() {
     let glab = st.iter().find(|s| s.backend == "glab-cli").unwrap();
     assert!(glab.detail.as_deref().unwrap_or("").contains("glab") || glab.available);
     assert!(st.iter().any(|s| s.backend == "keychain" || s.backend == "secret-service"), "{names:?}");
+    let file = st.iter().find(|s| s.backend == "encrypted-file").unwrap();
+    assert!(!file.available && file.detail.as_deref().unwrap().contains("not set up"), "{file:?}");
+    r.secrets.unlock("pw".into(), true).await.unwrap();
+    let st = r.secrets.backends_status().await;
+    assert!(st.iter().find(|s| s.backend == "encrypted-file").unwrap().available);
+    let st = r.next_run().backends_status().await;
+    let file = st.iter().find(|s| s.backend == "encrypted-file").unwrap();
+    assert!(!file.available && file.detail.as_deref().unwrap().contains("locked"), "{file:?}");
+}
+
+#[tokio::test]
+async fn file_round_trip_across_runs_and_wrong_passphrase() {
+    let r = rig();
+    let jira = SecretRef::new("file:jira-acme");
+    let ctx = SecretCtx::default();
+    // locked (and absent): resolve and set need the passphrase first
+    assert_eq!(r.secrets.resolve(&jira, &ctx).await.unwrap_err().code, ErrorCode::NeedsAuth);
+    assert_eq!(r.secrets.set(&jira, "t").await.unwrap_err().code, ErrorCode::NeedsAuth);
+    assert_eq!(r.secrets.unlock("pw".into(), false).await.unwrap_err().code, ErrorCode::NotFound);
+    assert_eq!(r.secrets.unlock(String::new(), true).await.unwrap_err().code, ErrorCode::InvalidArgument);
+    r.secrets.unlock("correct horse".into(), true).await.unwrap();
+    assert_eq!(r.secrets.resolve(&jira, &ctx).await.unwrap_err().code, ErrorCode::NeedsAuth);
+    r.secrets.set(&jira, "file-token-1").await.unwrap();
+    r.secrets.set(&SecretRef::new("file:other"), "file-token-2").await.unwrap();
+    assert_eq!(token(&r, "file:jira-acme", &ctx).await, "file-token-1");
+    r.secrets.set(&jira, "rotated").await.unwrap();
+    assert_eq!(token(&r, "file:jira-acme", &ctx).await, "rotated");
+    // 0600, and no plaintext on disk
+    let meta = std::fs::metadata(r.file()).unwrap();
+    assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+    let raw = std::fs::read(r.file()).unwrap();
+    assert!(!raw.windows(7).any(|w| w == b"rotated") && !raw.windows(8).any(|w| w == b"jira-acme"));
+    // next run: locked until the right passphrase is given; create never overwrites
+    let next = r.next_run();
+    assert_eq!(next.resolve(&jira, &ctx).await.unwrap_err().code, ErrorCode::NeedsAuth);
+    let e = next.unlock("wrong horse".into(), true).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::NeedsAuth);
+    assert!(e.message.contains("wrong passphrase"), "{}", e.message);
+    assert_eq!(std::fs::read(r.file()).unwrap(), raw);
+    next.unlock("correct horse".into(), false).await.unwrap();
+    assert_eq!(next.resolve(&jira, &ctx).await.unwrap().expose(), "rotated");
+    next.delete(&jira).await.unwrap();
+    next.delete(&jira).await.unwrap();
+    assert_eq!(next.resolve(&jira, &ctx).await.unwrap_err().code, ErrorCode::NeedsAuth);
+    assert_eq!(next.resolve(&SecretRef::new("file:other"), &ctx).await.unwrap().expose(), "file-token-2");
+    // without a configured file, file: refs are unsupported
+    let e = Secrets::new(r.settings.clone()).resolve(&jira, &ctx).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Unsupported);
+}
+
+#[tokio::test]
+async fn tampered_file_is_rejected() {
+    let r = rig();
+    r.secrets.unlock("pw".into(), true).await.unwrap();
+    r.secrets.set(&SecretRef::new("file:a"), "tamper-token").await.unwrap();
+    let good = std::fs::read(r.file()).unwrap();
+    // magic, salt, nonce, ciphertext, tag: any flipped byte fails authentication
+    for i in [0, 9, 30, 50, good.len() - 1] {
+        let mut bad = good.clone();
+        bad[i] ^= 1;
+        std::fs::write(r.file(), &bad).unwrap();
+        assert_eq!(
+            r.next_run().unlock("pw".into(), false).await.unwrap_err().code,
+            ErrorCode::NeedsAuth,
+            "byte {i}"
+        );
+        r.secrets.invalidate(&SecretRef::new("file:a"));
+        let e = r.secrets.resolve(&SecretRef::new("file:a"), &SecretCtx::default()).await.unwrap_err();
+        assert_eq!(e.code, ErrorCode::NeedsAuth, "byte {i}");
+        assert!(!format!("{e:?}").contains("tamper-token"));
+    }
+    std::fs::write(r.file(), &good[..20]).unwrap();
+    assert_eq!(r.next_run().unlock("pw".into(), false).await.unwrap_err().code, ErrorCode::NeedsAuth);
+    std::fs::write(r.file(), &good).unwrap();
+    assert_eq!(token(&r, "file:a", &SecretCtx::default()).await, "tamper-token");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_file_writes_keep_every_token() {
+    let r = rig();
+    r.secrets.unlock("pw".into(), true).await.unwrap();
+    let writers: Vec<_> = (0..24)
+        .map(|i| {
+            let s = r.secrets.clone();
+            tokio::spawn(async move { s.set(&SecretRef::new(format!("file:t{i}")), &format!("v{i}")).await })
+        })
+        .collect();
+    for w in writers {
+        w.await.unwrap().unwrap();
+    }
+    let next = r.next_run();
+    next.unlock("pw".into(), false).await.unwrap();
+    for i in 0..24 {
+        let v = next.resolve(&SecretRef::new(format!("file:t{i}")), &SecretCtx::default()).await.unwrap();
+        assert_eq!(v.expose(), format!("v{i}"));
+    }
+    // temp files were renamed over the target, none left behind
+    let left: Vec<_> = std::fs::read_dir(r.file().parent().unwrap()).unwrap().collect();
+    assert_eq!(left.len(), 1, "{left:?}");
 }
 
 #[tokio::test]
@@ -304,12 +420,18 @@ async fn no_secret_value_reaches_logs_errors_or_serialized_output() {
     let mut seen = String::new();
     let jira = SecretRef::new("keyring:jira");
     r.secrets.set(&jira, "keyring-secret-GGGG7777").await.unwrap();
+    r.secrets.unlock("passphrase-IIII9999".into(), true).await.unwrap();
+    r.secrets.set(&SecretRef::new("file:jira"), "file-secret-HHHH8888").await.unwrap();
+    let e = r.next_run().unlock("passphrase-JJJJ0000".into(), false).await.unwrap_err();
+    seen.push_str(&format!("{e:?} {e} {}", serde_json::to_string(&e).unwrap()));
     for reference in [
         "env:SECRET_ENV",
         "command:pass",
         "gh-cli",
         "glab-cli",
         "keyring:jira",
+        "file:jira",
+        "file:missing",
         "command:leaker",
         "command:slowleak",
     ] {
@@ -337,6 +459,9 @@ async fn no_secret_value_reaches_logs_errors_or_serialized_output() {
         "gh-secret-CCCC3333",
         "glpat-DDDD4444",
         "keyring-secret-GGGG7777",
+        "file-secret-HHHH8888",
+        "passphrase-IIII9999",
+        "passphrase-JJJJ0000",
         "leak-secret-EEEE5555",
         "slow-secret-FFFF6666",
     ];

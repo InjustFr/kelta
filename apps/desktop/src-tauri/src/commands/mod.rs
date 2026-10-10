@@ -110,6 +110,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         secrets::secret_set,
         secrets::secret_delete,
         secrets::secret_backends_status,
+        secrets::secret_unlock,
         settings::account_test,
         // projects
         project::project_list,

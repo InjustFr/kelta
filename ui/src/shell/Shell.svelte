@@ -24,6 +24,7 @@
   import TabBar from './TabBar.svelte';
   import ToastHost from './ToastHost.svelte';
   import WindowChrome from './WindowChrome.svelte';
+  import { startupUnlock } from './unlock';
   import Workspace from './Workspace.svelte';
 
   let prefixArmed = $state(false);
@@ -77,6 +78,11 @@
   $effect(() => {
     terminalPool.setCapacity(settings.value()?.terminal.max_live_views ?? 2);
   });
+
+  // ---- encrypted secrets file ------------------------------------------------------------------
+
+  const unlockOnce = startupUnlock();
+  $effect(() => unlockOnce(settings.value()));
 
   // ---- layouts ---------------------------------------------------------------------------------
 

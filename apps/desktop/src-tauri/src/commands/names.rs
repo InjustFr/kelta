@@ -27,6 +27,7 @@ pub const COMMANDS: &[&str] = &[
     "secret_set",
     "secret_delete",
     "secret_backends_status",
+    "secret_unlock",
     "account_test",
     // projects
     "project_list",
