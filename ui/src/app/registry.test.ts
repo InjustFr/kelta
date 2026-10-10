@@ -26,7 +26,7 @@ describe('registries', { timeout: 30_000 }, () => {
     for (const load of Object.values(paneRegistry)) {
       expect(typeof (await load()).default).toBe('function');
     }
-  });
+  }, 90_000); // cold-transforms every view
 
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
@@ -60,5 +60,5 @@ describe('registries', { timeout: 30_000 }, () => {
       'plugins',
     ]);
     for (const s of settingsSections) expect(typeof (await s.load()).default).toBe('function');
-  });
+  }, 90_000); // cold-transforms every section
 });

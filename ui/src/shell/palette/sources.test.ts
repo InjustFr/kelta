@@ -50,7 +50,7 @@ describe('palette sources', () => {
   });
 
   it('lists tools of the active project and settings sections', () => {
-    expect(toolItems().map((i) => i.label)).toContain('Open tool: lazygit');
+    expect(toolItems().map((i) => i.label)).toContain('Open lazygit');
     expect(settingsItems().map((i) => i.label)).toContain('Settings: Keys');
   });
 
@@ -74,7 +74,7 @@ describe('palette sources', () => {
       },
     ]);
     expect(items[0]).toMatchObject({ group: 'Tickets', label: 'SHOP-1 Rate limit' });
-    expect(items[0]!.detail).toBe('In progress · Shop');
+    expect(items[0]!.detail).toBe('In progress\u2002\u2002Shop');
   });
 
   it('ranks across groups and keeps the display group order', () => {

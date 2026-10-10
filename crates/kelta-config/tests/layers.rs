@@ -200,6 +200,22 @@ command = "psql"
 }
 
 #[test]
+fn external_tool_round_trips_in_config_order() {
+    use kelta_proto::ext::ToolKind;
+    let e = env();
+    e.global("[[tools]]\nid = \"lazydocker\"\nlabel = \"Docker\"\ncommand = \"lazydocker\"\n");
+    e.project(
+        "shop",
+        "[[tools]]\nid = \"fork\"\nlabel = \"Fork\"\nkind = \"external\"\ncommand = \"open\"\nargs = [\"-a\", \"Fork\", \".\"]\nkeybinding = \"mod+shift+f\"\n",
+    );
+    let svc = e.load();
+    let tools = svc.effective(Some(&pid("shop"))).tools.clone();
+    assert_eq!(tools.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["lazydocker", "fork"]);
+    assert_eq!((tools[0].kind, tools[1].kind), (ToolKind::Pty, ToolKind::External));
+    assert_eq!(tools[1].args, ["-a", "Fork", "."]);
+}
+
+#[test]
 fn default_editor_presets_merge_by_id() {
     let e = env();
     e.global("[[editor.presets]]\nid = \"nvim\"\nlabel = \"My nvim\"\ncommand = \"nvim\"\nargs = [\"{path}\"]\n\n[[editor.presets]]\nid = \"vim\"\nenabled = false\n");

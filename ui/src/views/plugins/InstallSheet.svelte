@@ -76,7 +76,7 @@
       <section class="preview" aria-label="Plugin details">
         <h3>{m.name} <span class="muted">{m.version}</span></h3>
         <p>{m.description}</p>
-        <p class="muted">{m.id} · {m.author} · {m.license}</p>
+        <p class="muted"><code>{m.id}</code>&ensp;{m.author}&ensp;{m.license}</p>
 
         <h4>This plugin will be allowed to</h4>
         {#if preview.permissions.length === 0}

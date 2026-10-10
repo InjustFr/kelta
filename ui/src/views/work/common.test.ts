@@ -9,6 +9,9 @@ import {
   parseDirtyFiles,
   parseFields,
   planValid,
+  REVIEW_READONLY,
+  reviewPhase,
+  workActionDisabled,
   validateBranch,
   validatePlan,
 } from './common';
@@ -130,5 +133,25 @@ describe('banners and columns', () => {
     expect(columnFor(cols, { name: 'in progress', category: 'in_progress' })?.id).toBe('doing');
     expect(columnFor(cols, { name: 'Weird', category: 'in_review' })?.id).toBe('rev');
     expect(columnFor(cols, { name: 'Weird', category: 'done' })).toBeNull();
+  });
+});
+
+describe('review-kind items', () => {
+  const head = 'b'.repeat(40);
+  it('derives the three phases', () => {
+    expect(reviewPhase({ my_state: 'pending', head_sha: head })).toBe('pending');
+    expect(reviewPhase({ my_state: null, head_sha: head })).toBe('pending');
+    expect(reviewPhase({ my_state: 'approved', head_sha: head, reviewed_head: 'a'.repeat(40) })).toBe(
+      'updated',
+    );
+    expect(reviewPhase({ my_state: 'approved', head_sha: head, reviewed_head: head })).toBe('reviewed');
+    expect(reviewPhase({ my_state: 'commented', head_sha: head })).toBe('reviewed');
+  });
+  it('makes p/r/f/l read-only on review items only', () => {
+    for (const k of ['p', 'r', 'f', 'l']) {
+      expect(workActionDisabled({ kind: 'review' }, k)).toBe(REVIEW_READONLY);
+      expect(workActionDisabled({ kind: 'ticket' }, k)).toBeNull();
+    }
+    expect(workActionDisabled({ kind: 'review' }, 'g')).toBeNull();
   });
 });

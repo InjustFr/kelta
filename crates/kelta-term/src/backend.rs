@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::ffi::CString;
-use std::os::fd::{OwnedFd, RawFd};
+use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
@@ -148,13 +148,22 @@ impl PtyBackend for RustixPty {
         unlockpt(&master).map_err(|e| KeltaError::internal(format!("unlockpt: {e}")))?;
         let slave_name =
             ptsname(&master, Vec::new()).map_err(|e| KeltaError::internal(format!("ptsname: {e}")))?;
+        // Opened here, not in the child: macOS refuses ioctls on the master (TIOCSWINSZ, and on
+        // some releases the FIONBIO behind O_NONBLOCK) until the slave has been opened.
+        let slave = rustix::fs::open(
+            &slave_name,
+            rustix::fs::OFlags::RDWR | rustix::fs::OFlags::NOCTTY | rustix::fs::OFlags::CLOEXEC,
+            rustix::fs::Mode::empty(),
+        )
+        .map_err(|e| KeltaError::internal(format!("open pty slave: {e}")))?;
         let ws = rustix::termios::Winsize {
             ws_row: req.rows.max(1),
             ws_col: req.cols.max(1),
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
-        let _ = rustix::termios::tcsetwinsize(&master, ws);
+        rustix::termios::tcsetwinsize(&master, ws)
+            .map_err(|e| KeltaError::internal(format!("TIOCSWINSZ: {e}")))?;
 
         // Everything the child needs is prepared before fork: after fork only async-signal-safe
         // calls are made.
@@ -172,7 +181,6 @@ impl PtyBackend for RustixPty {
         argv.push(std::ptr::null());
         let mut envp: Vec<*const libc::c_char> = envp_owned.iter().map(|c| c.as_ptr()).collect();
         envp.push(std::ptr::null());
-        let slave_path = slave_name.as_ptr();
         // SAFETY: sysconf is always safe to call.
         let max_fd = match unsafe { libc::sysconf(libc::_SC_OPEN_MAX) } {
             n if n > 0 => n.min(65_536) as i32,
@@ -180,7 +188,7 @@ impl PtyBackend for RustixPty {
         };
 
         // SAFETY: fork in a multithreaded process; the child only calls async-signal-safe
-        // functions (setsid, open, ioctl, dup2, close, chdir, signal, sigprocmask, execve, _exit)
+        // functions (setsid, ioctl, dup2, close, chdir, signal, sigprocmask, execve, _exit)
         // on data prepared above.
         let pid = unsafe { libc::fork() };
         if pid < 0 {
@@ -189,9 +197,11 @@ impl PtyBackend for RustixPty {
         if pid == 0 {
             // SAFETY: child side of fork, see above.
             unsafe {
-                child_exec(slave_path, &argv, &envp, cwd.as_ptr(), max_fd);
+                child_exec(slave.as_raw_fd(), &argv, &envp, cwd.as_ptr(), max_fd);
             }
         }
+        // The child holds the slave now; ours must close or reads never see EOF/EIO after exit.
+        drop(slave);
         Ok(PtyChild { master, pid })
     }
 }
@@ -199,10 +209,10 @@ impl PtyBackend for RustixPty {
 /// Child side of [`RustixPty::spawn`]. Never returns.
 ///
 /// # Safety
-/// Must only be called in the child right after `fork`; all pointers must be valid C strings /
-/// NULL-terminated arrays.
+/// Must only be called in the child right after `fork`; `slave` must be the open PTY slave and all
+/// pointers valid C strings / NULL-terminated arrays.
 unsafe fn child_exec(
-    slave_path: *const libc::c_char,
+    slave: RawFd,
     argv: &[*const libc::c_char],
     envp: &[*const libc::c_char],
     cwd: *const libc::c_char,
@@ -227,12 +237,7 @@ unsafe fn child_exec(
         if libc::setsid() < 0 {
             libc::_exit(126);
         }
-        let slave = libc::open(slave_path, libc::O_RDWR);
-        if slave < 0 {
-            libc::_exit(126);
-        }
-        // Opening the slave after setsid makes it the controlling terminal on Linux; TIOCSCTTY
-        // does it explicitly (required on macOS).
+        // The slave was opened with O_NOCTTY: make it the controlling terminal explicitly.
         libc::ioctl(slave, libc::TIOCSCTTY as _, 0);
         libc::dup2(slave, 0);
         libc::dup2(slave, 1);

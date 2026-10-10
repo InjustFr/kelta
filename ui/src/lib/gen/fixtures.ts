@@ -615,6 +615,7 @@ export const reviewPage: ReviewPage = {
           "number": 87,
           "repo": "acme/shop-api"
         },
+        "reviewed_head": null,
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
@@ -642,6 +643,7 @@ export const reviewDetail: ReviewDetail = {
       "path": "src/prices.rs"
     }
   ],
+  "pending_comments": 0,
   "review": {
     "additions": 120,
     "author": {
@@ -667,6 +669,7 @@ export const reviewDetail: ReviewDetail = {
       "number": 87,
       "repo": "acme/shop-api"
     },
+    "reviewed_head": null,
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",

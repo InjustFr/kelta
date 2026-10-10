@@ -510,6 +510,9 @@ impl Core {
 
 #[async_trait]
 impl CoreApi for Core {
+    fn login_path(&self) -> Option<String> {
+        self.login_env.path().map(str::to_owned)
+    }
     async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         self.spawn_session(req).await

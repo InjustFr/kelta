@@ -1,11 +1,11 @@
 <script lang="ts">
   import { dispatch } from '$lib/actions';
-  import { attention, projects, settings, work } from '$lib/stores';
-  import { Icon } from '$lib/ui';
+  import type { SessionInfo } from '$lib/gen';
+  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
+  import { Icon, Lamp } from '$lib/ui';
 
-  import AttentionDot from './AttentionDot.svelte';
   import { statusLabel } from './labels';
-  import { focusedSession } from './nav';
+  import { focusedSession, focusedSessionId, revealSession } from './nav';
   import PerfHud from './PerfHud.svelte';
 
   interface Props {
@@ -23,13 +23,35 @@
       ? (session.claude?.hooks_active ?? false)
       : null,
   );
-  const needsInput = $derived(attention.totalNeedsInput);
+  // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
+  const METER: { lamp: LampLevel; label: string }[] = [
+    { lamp: 'needs_input', label: 'need input' },
+    { lamp: 'error', label: 'in error' },
+    { lamp: 'working', label: 'working' },
+    { lamp: 'done', label: 'done' },
+  ];
+  const meter = $derived(
+    METER.map((m) => ({
+      ...m,
+      list: sessions.all.filter((s) => lampOf(s.attention, s.status === 'working') === m.lamp),
+    })).filter((m) => m.list.length > 0),
+  );
+
+  function walk(lamp: LampLevel, list: SessionInfo[]): void {
+    if (lamp === 'needs_input') {
+      void dispatch('attention.next');
+      return;
+    }
+    const at = list.findIndex((s) => s.id === focusedSessionId());
+    const next = list[(at + 1) % list.length];
+    if (next) void revealSession(next.id);
+  }
   const restart = $derived(settings.pendingRestart.length > 0);
 
   let hud = $state(false);
 </script>
 
-<footer class="statusbar" data-testid="statusbar">
+<footer class="statusbar k-num" data-testid="statusbar">
   <span class="seg project" data-testid="status-project">
     {#if inbox}
       <Icon name="inbox" size={12} /> Inbox
@@ -40,18 +62,19 @@
   </span>
   {#if item}
     <span class="seg" data-testid="status-branch" title="Branch of the focused session"
-      ><Icon name="git-branch" size={12} /> {item.branch}</span
+      ><Icon name="git-branch" size={12} /> <span class="k-mono">{item.branch}</span></span
     >
   {/if}
   {#if session}
     <span class="seg" data-testid="status-session" title={session.name}>
-      <AttentionDot level={session.attention} size={7} />
-      {session.name}{statusLabel(session.status) ? ` · ${statusLabel(session.status)}` : ''}
+      <Lamp level={lampOf(session.attention, session.status === 'working')} />
+      {session.name}
+      {#if statusLabel(session.status)}<span class="state">{statusLabel(session.status)}</span>{/if}
     </span>
   {/if}
   {#if hooks !== null}
     <span class="seg" class:warn={!hooks} data-testid="status-hooks"
-      >{hooks ? 'hooks ok' : 'hooks inactive'}</span
+      >{hooks ? 'Hooks ok' : 'Hooks inactive'}</span
     >
   {/if}
   <span class="grow"></span>
@@ -59,20 +82,21 @@
     <span class="seg prefix" data-testid="status-prefix" role="status">prefix…</span>
   {/if}
   {#if restart}
-    <span class="seg warn" title="Some settings need a restart">restart needed</span>
+    <span class="seg warn" title="Some settings need a restart">Restart needed</span>
   {/if}
-  {#if needsInput > 0}
+  {#each meter as m (m.lamp)}
     <button
       type="button"
-      class="seg btn needs"
-      onclick={() => dispatch('attention.next')}
-      title="Next session needing input"
-      data-testid="status-needs-input"
+      class="seg btn"
+      onclick={() => walk(m.lamp, m.list)}
+      title="{m.list.length} {m.label}: go to the next one"
+      aria-label="{m.list.length} {m.label}"
+      data-testid={m.lamp === 'needs_input' ? 'status-needs-input' : `status-${m.lamp}`}
     >
-      <AttentionDot level="needs_input" size={7} />
-      {needsInput} need{needsInput === 1 ? 's' : ''} input
+      <Lamp level={m.lamp} title={m.label} />
+      {m.list.length}
     </button>
-  {/if}
+  {/each}
   <button
     type="button"
     class="seg btn"
@@ -98,18 +122,17 @@
     gap: var(--k-space-4);
     height: var(--k-statusbar-height);
     flex: none;
-    padding: 0 var(--k-space-4);
-    border-top: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
-    color: var(--k-fg-muted);
-    font-size: var(--k-font-size-sm);
+    padding: 0 var(--k-space-3);
+    background: var(--k-bezel-raised);
+    color: var(--k-fg-chrome);
+    font-size: var(--k-font-size-xs);
     white-space: nowrap;
   }
 
   .seg {
     display: inline-flex;
     align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -117,9 +140,12 @@
 
   .swatch {
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
+    width: 3px;
+    height: 12px;
+  }
+
+  .state {
+    color: var(--k-fg-subtle);
   }
 
   .grow {
@@ -132,7 +158,7 @@
 
   .prefix {
     color: var(--k-accent);
-    font-weight: 600;
+    font-weight: var(--k-weight-strong);
   }
 
   .btn {
@@ -148,9 +174,5 @@
   .btn.on {
     background: var(--k-bg-hover);
     color: var(--k-fg);
-  }
-
-  .needs {
-    color: var(--k-att-needs-input);
   }
 </style>

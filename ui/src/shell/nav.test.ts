@@ -123,7 +123,7 @@ describe('sessions', () => {
 
   it('computes tab attention from the sessions shown in the tab', async () => {
     const tab = layout.get('shop')!.tabs[0]!;
-    expect(tabAttention(tab)).toBe('activity'); // the shop Claude session is working
+    expect(tabAttention(tab)).toBe('working'); // the shop Claude session is working (attention: activity)
     sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, attention: 'needs_input' });
     expect(tabAttention(tab)).toBe('needs_input');
   });

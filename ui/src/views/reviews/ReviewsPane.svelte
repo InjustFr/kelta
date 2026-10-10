@@ -13,21 +13,23 @@
     EmptyState,
     ErrorState,
     IconButton,
+    Lamp,
     Select,
     Toggle,
     VirtualList,
     relativeTime,
   } from '$lib/ui';
 
-  import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
+  import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
   import { openContent } from '../work/nav';
+  import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
 
   let { projectId, content, focused }: PaneProps<'reviews'> = $props();
 
-  const ROW_HEIGHT = 34;
+  const ROW_HEIGHT = 26;
   const scope = $derived(content.scope);
   const kinds: { kind: ReviewKind; label: string }[] = [
     { kind: 'review_requested', label: 'Review requested' },
@@ -193,9 +195,12 @@
   }
 </script>
 
+<!-- One list query per focus (not a get per row): it also brings back PRs updated after my review. -->
+<svelte:window onfocus={() => void reviews.load(scope, 'review_requested', true)} />
+
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="pane"
+  class="k-listpane"
   data-testid="reviews-pane"
   bind:this={root}
   tabindex="0"
@@ -203,17 +208,18 @@
   aria-label="Reviews"
   {onkeydown}
 >
-  <header class="bar">
-    <span class="title">{scope.kind === 'all' ? 'Reviews, all projects' : 'Reviews'}</span>
-    <span class="spacer"></span>
+  <header class="k-toolbar">
     <input
-      class="filter"
+      class="k-filter"
       bind:this={filterInput}
       bind:value={filter}
       placeholder="Filter (/)"
       aria-label="Filter reviews"
       onkeydown={filterKeys}
     />
+    <!-- The tab and pane header already say "Reviews"; only the cross-project scope is news. -->
+    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
+    <span class="spacer"></span>
     {#if repos.length > 1}
       <Select
         label="Repository"
@@ -244,11 +250,7 @@
       onretry={refresh}
     />
     {#if totalItems === 0}
-      <EmptyState
-        icon="git-pull-request"
-        title="No review requests."
-        body="Nothing is waiting for you right now."
-      >
+      <EmptyState icon="git-pull-request" title="No review requests.">
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}
@@ -262,10 +264,9 @@
         >
           {#snippet row(r)}
             {#if r.type === 'header'}
-              <div class="section" role="heading" aria-level="2">
+              <div class="k-group" role="heading" aria-level="2">
                 {r.label}
-                <Badge>{r.count}</Badge>
-                {#if r.count === 0}<span class="none">none</span>{/if}
+                <span class="count k-num">{r.count}</span>
               </div>
             {:else}
               {@const rv = r.item.review}
@@ -275,29 +276,31 @@
               <button
                 type="button"
                 tabindex="-1"
-                class="row"
+                class="k-row"
                 class:selected={cur === r}
                 aria-current={cur === r ? 'true' : undefined}
                 data-key={reviewKey(rv.ref)}
                 onclick={() => (selId = r.id)}
                 ondblclick={() => openDetail(r.item)}
               >
-                <span class="ci {ci.tone}" title={ci.label} role="img" aria-label={ci.label}>{ci.glyph}</span>
-                <span class="ttl">{rv.title}</span>
+                <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
+                <span class="k-row-key">#{rv.ref.number}</span>
+                <span class="k-row-title">{rv.title}</span>
                 {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
                 {#if rv.draft}<Badge>draft</Badge>{/if}
                 {#each rv.linked_tickets.slice(0, 2) as t (t)}<Badge tone="info">{t}</Badge>{/each}
                 {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
+                {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge>{/if}
                 {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
                 <Badge title={rv.ref.repo}>{chip(r.item)}</Badge>
-                <span class="meta">{rv.author.name}</span>
+                <span class="k-row-meta">{rv.author.name}</span>
                 {#if rv.additions !== null || rv.deletions !== null}
-                  <span class="size"
+                  <span class="k-row-meta k-mono"
                     ><span class="add">+{rv.additions ?? 0}</span>
-                    <span class="del">-{rv.deletions ?? 0}</span></span
+                    <span class="del">−{rv.deletions ?? 0}</span></span
                   >
                 {/if}
-                <span class="meta">{relativeTime(Date.parse(rv.updated_at))}</span>
+                <span class="k-row-meta">{relativeTime(Date.parse(rv.updated_at))}</span>
               </button>
             {/if}
           {/snippet}
@@ -306,144 +309,24 @@
     {/if}
   {/if}
 
-  <footer class="hints" aria-hidden="true">
-    j/k move · Enter open · / filter · o browser · s review locally · R refresh
-  </footer>
+  <KeyHints
+    hints={[
+      ['j/k', 'move'],
+      ['Enter', 'open'],
+      ['/', 'filter'],
+      ['o', 'browser'],
+      ['s', 'review locally'],
+      ['R', 'refresh'],
+    ]}
+  />
 </div>
 
 <style>
-  .pane {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    outline: none;
-    background: var(--k-bg);
-    color: var(--k-fg);
-  }
-
-  .pane:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--k-focus);
-  }
-
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
-  }
-
-  .title {
-    font-weight: 600;
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .filter {
-    width: 180px;
-    height: 24px;
-    padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius-sm);
-    background: var(--k-bg-sunken);
-    color: var(--k-fg);
-    font: inherit;
-  }
-
-  .list {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .section {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    height: 100%;
-    padding: 0 var(--k-space-3);
-    background: var(--k-bg-sunken);
-    font-weight: 600;
-    font-size: var(--k-font-size-sm);
-  }
-
-  .none {
-    font-weight: 400;
-    color: var(--k-fg-subtle);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    width: 100%;
-    height: 100%;
-    padding: 0 var(--k-space-3);
-    border: 0;
-    border-bottom: 1px solid var(--k-border);
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: default;
-  }
-
-  .row:hover {
-    background: var(--k-bg-hover);
-  }
-
-  .selected {
-    background: var(--k-bg-selected);
-  }
-
-  .ci {
-    flex: none;
-    width: 16px;
-    text-align: center;
-    font-weight: 700;
-  }
-
-  .ci.ok {
-    color: var(--k-ok);
-  }
-
-  .ci.danger {
-    color: var(--k-danger);
-  }
-
-  .ci.warn {
-    color: var(--k-warn);
-  }
-
-  .ttl {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .meta,
-  .size {
-    flex: none;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
   .add {
     color: var(--k-ok);
   }
 
   .del {
     color: var(--k-danger);
-  }
-
-  .hints {
-    padding: var(--k-space-1) var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
   }
 </style>

@@ -108,6 +108,7 @@ pub fn review() -> Review {
         decision: Some(ReviewDecision::ReviewRequired),
         my_state: Some(MyReviewState::Pending),
         mergeable: Some(true),
+        reviewed_head: None,
         labels: vec![],
         kind: ReviewKind::ReviewRequested,
         updated_at: TS.into(),
@@ -799,6 +800,7 @@ pub fn all() -> Vec<Fixture> {
                     url: Some("https://github.com/acme/shop-api/actions/runs/1".into()),
                 }],
                 files: vec![FileChange { path: "src/prices.rs".into(), additions: 120, deletions: 14 }],
+                pending_comments: 0,
             }
         ),
         fx!("start_work_plan", StartWorkPlan, start_work_plan()),

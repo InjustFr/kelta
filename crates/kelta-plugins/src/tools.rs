@@ -34,6 +34,26 @@ pub const TOOL_HANDLE_EVENT: &str = "kelta.tool_handle";
 /// UI event name for a web tool that exited (`{code, log}`).
 pub const TOOL_EXITED_EVENT: &str = "kelta.tool_exited";
 
+/// Detached launch: own process group (no terminal signals from Kelta), no stdio.
+// shortcut: no setsid (needs unsafe pre_exec); a GUI-launched Kelta has no controlling tty anyway.
+pub(crate) fn external_command(
+    program: &str,
+    args: &[String],
+    cwd: &std::path::Path,
+    env: &BTreeMap<String, String>,
+) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args)
+        .current_dir(cwd)
+        .envs(env)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0)
+        .kill_on_drop(false);
+    cmd
+}
+
 #[derive(Clone)]
 pub(crate) struct Resolved {
     pub id: ToolId,
@@ -150,7 +170,7 @@ impl PluginHost {
 
     fn program_of(def: &ToolDef) -> Option<&str> {
         match def.kind {
-            ToolKind::Pty => def.command.as_deref(),
+            ToolKind::Pty | ToolKind::External => def.command.as_deref(),
             ToolKind::Web => def.start.as_ref().map(|s| s.command.as_str()),
         }
     }
@@ -170,17 +190,20 @@ impl PluginHost {
         let r = self.find_tool_any(tool)?;
         let vars = self.build_vars(CtxSpec { plugin: r.plugin.as_deref(), ..Default::default() }).await;
         let hint = r.def.install_hint.clone();
+        // Same PATH the tool will launch with (see `launch_env`).
+        let path = self.core().and_then(|c| c.login_path()).or_else(|| std::env::var("PATH").ok());
         let result = match &r.def.check {
             Some(argv) => {
                 let argv: Vec<String> =
                     argv.iter().map(|a| vars.expand(a).unwrap_or_else(|_| a.clone())).collect();
                 self.check_tool_permission(&r, argv.first().map(String::as_str)).await?;
-                run_check(&argv, hint.clone()).await
+                run_check(&argv, path.as_deref(), hint.clone()).await
             }
             None => match Self::program_of(&r.def) {
                 Some(p) => {
                     let p = vars.expand(p).unwrap_or_else(|_| p.to_owned());
-                    let installed = which::which(&p).is_ok();
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    let installed = which::which_in(&p, path.as_deref(), cwd).is_ok();
                     ToolCheck { installed, version: None, install_hint: if installed { None } else { hint } }
                 }
                 None => ToolCheck { installed: true, version: None, install_hint: None },
@@ -212,6 +235,7 @@ impl PluginHost {
         match r.def.kind {
             ToolKind::Pty => self.open_pty(project, &r, &ctx, &vars, placement).await,
             ToolKind::Web => self.open_web(project, &r, &ctx, vars, placement).await,
+            ToolKind::External => self.open_external(project, &r, &ctx, &vars).await,
         }
     }
 
@@ -240,6 +264,22 @@ impl PluginHost {
         env: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>, KeltaError> {
         env.iter().map(|(k, v)| Ok((k.clone(), vars.expand(v)?))).collect()
+    }
+
+    /// Env of a non-PTY child: project env, the tool's own env on top, and the login shell's PATH
+    /// when neither sets one (a Dock-launched Kelta has a bare PATH, so `sl`/`node` are not found).
+    fn launch_env(
+        &self,
+        project: &ProjectId,
+        vars: &Vars,
+        tool_env: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>, KeltaError> {
+        let mut env = Self::expand_env(vars, &self.settings(Some(project)).env)?;
+        env.extend(Self::expand_env(vars, tool_env)?);
+        if let Some(p) = self.core().and_then(|c| c.login_path()) {
+            env.entry("PATH".to_owned()).or_insert(p);
+        }
+        Ok(env)
     }
 
     async fn open_pty(
@@ -294,6 +334,45 @@ impl PluginHost {
             .with_session(session.id.clone()),
         );
         Ok(ToolHandle::Pty { session_id: session.id })
+    }
+
+    /// Launches the tool detached: Kelta keeps no handle, so closing or crashing Kelta leaves it
+    /// running. Project env first, the tool's own env on top.
+    async fn open_external(
+        &self,
+        project: &ProjectId,
+        r: &Resolved,
+        ctx: &TemplateCtx,
+        vars: &Vars,
+    ) -> Result<ToolHandle, KeltaError> {
+        let def = &r.def;
+        let command = vars.expand(def.command.as_deref().unwrap_or_default())?;
+        if command.is_empty() {
+            return Err(KeltaError::invalid(format!("tool `{}` has no command", r.id)));
+        }
+        self.check_tool_permission(r, Some(&command)).await?;
+        let env = self.launch_env(project, vars, &def.env)?;
+        let cwd = self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?;
+        let mut child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env)
+            .spawn()
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => KeltaError::not_found(format!("`{command}` not found")),
+                _ => KeltaError::internal(format!("cannot start `{command}`: {e}")),
+            })?;
+        // Reap (no zombie from a quick-exiting launcher like `open`) and log failed launches.
+        let id = r.id.clone();
+        tokio::spawn(async move {
+            if let Ok(s) = child.wait().await
+                && !s.success()
+            {
+                tracing::warn!(tool = %id, status = ?s, "external tool exited with error");
+            }
+        });
+        self.publish(
+            BusEvent::new(bus::TOOL_OPENED, json!({ "tool_id": r.id, "kind": "external" }))
+                .with_project(project.clone()),
+        );
+        Ok(ToolHandle::External)
     }
 
     async fn decide_embed(&self, pref: EmbedMode, url: &str) -> EmbedMode {
@@ -366,7 +445,7 @@ impl PluginHost {
                     program,
                     args: vars.expand_all(&start.args)?,
                     cwd: cwd.clone(),
-                    env: Self::expand_env(&vars, &start.env)?,
+                    env: self.launch_env(project, &vars, &start.env)?,
                     ready: start.ready.clone(),
                     ready_timeout: Duration::from_millis(start.ready_timeout_ms.max(100)),
                     port,
@@ -542,12 +621,15 @@ impl PluginHost {
 }
 
 /// Run a `check` argv (5 s cap): exit 0 = installed; first output line = version.
-async fn run_check(argv: &[String], hint: Option<String>) -> ToolCheck {
+async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) -> ToolCheck {
     let Some((program, args)) = argv.split_first() else {
         return ToolCheck { installed: false, version: None, install_hint: hint };
     };
     let mut cmd = tokio::process::Command::new(program);
     cmd.args(args).stdin(std::process::Stdio::null()).kill_on_drop(true);
+    if let Some(p) = path {
+        cmd.env("PATH", p);
+    }
     // one-shot: tool_check deadline
     let out = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await;
     match out {
@@ -558,5 +640,50 @@ async fn run_check(argv: &[String], hint: Option<String>) -> ToolCheck {
             ToolCheck { installed: true, version, install_hint: None }
         }
         _ => ToolCheck { installed: false, version: None, install_hint: hint },
+    }
+}
+
+#[cfg(test)]
+mod external_tests {
+    use super::*;
+
+    #[test]
+    fn external_command_argv_cwd_env() {
+        let env = BTreeMap::from([("A".to_owned(), "1".to_owned())]);
+        let c = external_command(
+            "open",
+            &["-a".into(), "Fork".into(), ".".into()],
+            std::path::Path::new("/tmp"),
+            &env,
+        );
+        let c = c.as_std();
+        assert_eq!(c.get_program(), "open");
+        assert_eq!(c.get_args().collect::<Vec<_>>(), ["-a", "Fork", "."]);
+        assert_eq!(c.get_current_dir(), Some(std::path::Path::new("/tmp")));
+        assert_eq!(
+            c.get_envs().collect::<Vec<_>>(),
+            [(std::ffi::OsStr::new("A"), Some(std::ffi::OsStr::new("1")))]
+        );
+    }
+
+    #[tokio::test]
+    async fn external_command_uses_env_path_for_lookup() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("kelta-ext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("kelta-fake-tool");
+        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let env = BTreeMap::from([("PATH".to_owned(), dir.to_string_lossy().into_owned())]);
+        let st = external_command("kelta-fake-tool", &[], &dir, &env).status().await.unwrap();
+        assert!(st.success());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn kind_serde() {
+        assert_eq!(serde_json::to_string(&ToolKind::External).unwrap(), "\"external\"");
+        let d: ToolDef = serde_json::from_str(r#"{"id":"fork","kind":"external","command":"open"}"#).unwrap();
+        assert_eq!(d.kind, ToolKind::External);
     }
 }

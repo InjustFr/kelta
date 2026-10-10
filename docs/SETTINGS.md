@@ -33,7 +33,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
-| `confirm_quit_with_running` | bool | `true` | confirm if Claude Working/NeedsInput |
+| `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 
 ### [window]
@@ -215,6 +215,24 @@ layout = { session = "shell" }
 
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; scope global+project+repo; x-kelta-exec.
+
+Every enabled tool is a button in the tab bar strip (config order, `label` or its first two letters, tooltip with the `keybinding`) and an "Open <label>" palette entry. Add, edit and remove them in Settings → Tools (Global or Project layer). No tool is built in or auto-detected.
+
+```toml
+[[tools]]                    # embedded: TUI in a pane next to the current one, focused if already open
+id = "lazydocker"
+label = "Docker"
+command = "lazydocker"       # kind defaults to "pty"
+keybinding = "mod+shift+d"
+
+[[tools]]                    # external: launched detached, cwd = project root, never killed by Kelta
+id = "fork"
+label = "Fork"
+kind = "external"
+command = "open"
+args = ["-a", "Fork", "."]
+check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the app is absent
+```
 
 ### [plugins]
 | `dev_paths` | list<path> | `[]` | unpacked plugin dirs loaded in dev mode (global only; still require grants) |

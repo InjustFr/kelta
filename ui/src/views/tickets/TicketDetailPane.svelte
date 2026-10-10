@@ -161,7 +161,7 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="pane"
+  class="pane k-detail"
   data-testid="ticket-detail"
   bind:this={root}
   tabindex="0"
@@ -206,8 +206,6 @@
           </button>
         {/if}
         {#if workItem}<Badge tone="accent">local work</Badge>{/if}
-        <span class="spacer"></span>
-        <span class="proj">{projectName}</span>
       </div>
       <h1>{ticket.title}</h1>
       <div class="line actions">
@@ -231,13 +229,22 @@
         <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
       </div>
-      <div class="line meta">
-        <span>Assignee: {ticket.assignee?.name ?? 'Unassigned'}</span>
-        {#if ticket.priority}<span>Priority: {ticket.priority}</span>{/if}
-        {#if ticket.kind}<span>{ticket.kind}</span>{/if}
-        {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}
-        <span>Updated {relativeTime(Date.parse(ticket.updated_at))}</span>
-      </div>
+      <dl class="k-meta">
+        <dt>Assignee</dt>
+        <dd>{ticket.assignee?.name ?? 'Unassigned'}</dd>
+        <dt>Priority</dt>
+        <dd>{ticket.priority ?? 'None'}</dd>
+        {#if ticket.kind}<dt>Type</dt>
+          <dd>{ticket.kind}</dd>{/if}
+        <dt>Updated</dt>
+        <dd class="k-num">{relativeTime(Date.parse(ticket.updated_at))}</dd>
+        <dt>Project</dt>
+        <dd>{projectName}</dd>
+        {#if ticket.labels.length > 0}<dt>Labels</dt>
+          <dd>
+            {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}
+          </dd>{/if}
+      </dl>
     </header>
 
     <div class="scroll">
@@ -250,7 +257,7 @@
       </section>
 
       <section aria-label="Comments">
-        <h2>Comments ({detail.comments.length})</h2>
+        <h2>Comments <span class="muted k-num">{detail.comments.length}</span></h2>
         {#each detail.comments as c, i (i)}
           <article class="comment">
             <header>
@@ -308,46 +315,36 @@
     height: 100%;
     min-height: 0;
     outline: none;
-    background: var(--k-bg);
+    background: var(--k-well);
     color: var(--k-fg);
   }
 
-  .pane:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--k-focus);
-  }
-
   .head {
-    padding: var(--k-space-3) var(--k-space-4);
-    border-bottom: 1px solid var(--k-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-3);
+    padding: var(--k-space-5) var(--k-space-5) var(--k-space-4);
   }
 
   h1 {
-    margin: var(--k-space-1) 0 var(--k-space-3);
-    font-size: var(--k-font-size-lg);
+    margin: 0;
+    max-width: var(--k-measure);
+    font-size: var(--k-font-size-xl);
+    font-weight: var(--k-weight-strong);
+    line-height: 1.28;
   }
 
   h2 {
+    margin: var(--k-space-5) 0 var(--k-space-3);
     font-size: var(--k-font-size);
+    font-weight: var(--k-weight-strong);
   }
 
   .line {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--k-space-2);
-  }
-
-  .actions {
-    margin-bottom: var(--k-space-2);
-  }
-
-  .meta {
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
-  }
-
-  .spacer {
-    flex: 1;
+    gap: var(--k-space-3);
   }
 
   .key {
@@ -355,9 +352,9 @@
     color: var(--k-fg-muted);
   }
 
-  .proj,
   .muted {
     color: var(--k-fg-subtle);
+    font-weight: 400;
   }
 
   .link,
@@ -369,7 +366,6 @@
     border: 0;
     background: transparent;
     color: var(--k-accent);
-    font: inherit;
     cursor: pointer;
   }
 
@@ -381,25 +377,35 @@
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: var(--k-space-3) var(--k-space-4);
+    padding: 0 var(--k-space-5) var(--k-space-5);
   }
 
   .comment {
-    padding: var(--k-space-2) 0;
+    max-width: var(--k-measure);
+    padding: var(--k-space-3) 0;
+  }
+
+  .comment + .comment {
     border-top: 1px solid var(--k-border);
   }
 
   .comment header {
     display: flex;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
+    margin-bottom: var(--k-space-2);
+  }
+
+  .comment strong {
+    font-weight: var(--k-weight-strong);
   }
 
   .compose {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--k-space-2);
-    margin-top: var(--k-space-3);
+    gap: var(--k-space-3);
+    max-width: var(--k-measure);
+    margin-top: var(--k-space-4);
   }
 
   .compose :global(.k-field) {

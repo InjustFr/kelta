@@ -63,8 +63,9 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    or to branches.
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
-4. Nightly builds run once a day (03:17 UTC), and only when `main` moved since the last one. Tags `v*` build
-   the release.
+4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
+   macOS dmg here and the Linux deb + AppImage (arm64, and amd64 under QEMU) in Docker, moves the `nightly`
+   tag to HEAD and uploads to the prerelease. Tags `v*` build the release.
 
 ## Packaging and benchmarks
 
@@ -79,4 +80,4 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 
 ## Commits
 
-Conventional commits (`feat(scope): ...`). The nightly workflow publishes `main` once a day.
+Conventional commits (`feat(scope): ...`).
