@@ -683,3 +683,37 @@ async fn dc_reads_the_legacy_string_sprint_and_a_refused_field_lookup_just_drops
     let t = dc(&server).get(&tref("jira-dc", "SHOP-1", "1")).await.unwrap().ticket;
     assert_eq!((t.priority_rank, t.sprint, t.due.as_deref()), (None, None, Some("2026-10-14")));
 }
+
+#[tokio::test]
+async fn a_server_error_on_lookups_is_retried_and_either_story_points_field_counts() {
+    let server = MockServer::start().await;
+    Mock::given(path("/rest/api/3/field"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    mount_get(
+        &server,
+        "/rest/api/3/field",
+        json!([
+            {"id": "customfield_10020", "name": "Sprint",
+             "schema": {"type": "array", "custom": "com.pyxis.greenhopper.jira:gh-sprint"}},
+            {"id": "customfield_10016", "name": "Story Points", "schema": {"type": "number"}},
+            {"id": "customfield_10017", "name": "Story point estimate", "schema": {"type": "number"}},
+        ]),
+    )
+    .await;
+    mount_get(&server, "/rest/api/3/priority", json!([{"id": "2", "name": "High"}])).await;
+    let i = issue(
+        json!({"customfield_10017": 3.0, "customfield_10020": [{"id": 1, "name": "S1", "state": "active"}]}),
+    );
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"issues": [i]})))
+        .mount(&server)
+        .await;
+    let p = cloud(&server);
+    assert!(p.list(&jql_view(), None).await.is_err());
+    let t = p.list(&jql_view(), None).await.unwrap().items.remove(0);
+    assert_eq!((t.sprint.is_some(), t.estimate.as_deref()), (true, Some("3 pts")));
+}

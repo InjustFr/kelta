@@ -49,7 +49,7 @@ const LIST_FIELDS: &[&str] = &[
 #[derive(Default)]
 struct Lookups {
     sprint: Option<String>,
-    points: Option<String>,
+    points: Vec<String>,
     priorities: Vec<String>,
 }
 
@@ -57,7 +57,7 @@ impl Lookups {
     /// `LIST_FIELDS` plus the discovered custom fields.
     fn fields(&self) -> Vec<&str> {
         let mut f = LIST_FIELDS.to_vec();
-        f.extend(self.sprint.as_deref().into_iter().chain(self.points.as_deref()));
+        f.extend(self.sprint.as_deref().into_iter().chain(self.points.iter().map(String::as_str)));
         f
     }
 }
@@ -212,27 +212,26 @@ impl JiraTracker {
     async fn lookups(&self, api: &Api) -> Result<&Lookups, KeltaError> {
         self.lookups
             .get_or_try_init(|| async {
+                // Only a refusal means "none"; anything else (5xx, 401, network) is retried on the next call.
                 let soft = |r: Result<Value, KeltaError>| match r {
-                    Err(e)
-                        if matches!(
-                            e.code,
-                            ErrorCode::Network | ErrorCode::Timeout | ErrorCode::RateLimited
-                        ) =>
-                    {
-                        Err(e)
+                    Err(e) if matches!(e.code, ErrorCode::PermissionDenied | ErrorCode::NotFound) => {
+                        Ok(Value::Null)
                     }
-                    r => Ok(r.unwrap_or_default()),
+                    r => r,
                 };
                 let fields = soft(api.json(HttpRequest::get(api.url("/field"))).await)?;
                 let prios = soft(api.json(HttpRequest::get(api.url("/priority"))).await)?;
-                let by = |pred: &dyn Fn(&Value) -> bool| {
-                    fields.as_array()?.iter().find(|f| pred(f)).and_then(|f| s(f, "id")).map(str::to_owned)
+                let by = |pred: &dyn Fn(&Value) -> bool| -> Vec<String> {
+                    let all = fields.as_array().map(Vec::as_slice).unwrap_or_default();
+                    all.iter().filter(|f| pred(f)).filter_map(|f| s(f, "id")).map(str::to_owned).collect()
                 };
                 Ok(Lookups {
                     sprint: by(&|f| {
                         f.pointer("/schema/custom").and_then(Value::as_str)
                             == Some("com.pyxis.greenhopper.jira:gh-sprint")
-                    }),
+                    })
+                    .into_iter()
+                    .next(),
                     points: by(&|f| {
                         matches!(s(f, "name"), Some("Story Points" | "Story point estimate"))
                             && f.pointer("/schema/type").and_then(Value::as_str) == Some("number")
@@ -276,8 +275,8 @@ impl JiraTracker {
             sprint: lk.sprint.as_deref().and_then(|id| f.get(id)).and_then(sprint_from),
             estimate: lk
                 .points
-                .as_deref()
-                .and_then(|id| f.get(id)?.as_f64())
+                .iter()
+                .find_map(|id| f.get(id)?.as_f64())
                 .map(|p| format!("{p} pts"))
                 .or_else(|| f.get("timeoriginalestimate")?.as_u64().map(duration)),
             due: s(f, "duedate").map(str::to_owned),

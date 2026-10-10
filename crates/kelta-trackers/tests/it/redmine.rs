@@ -437,3 +437,31 @@ async fn a_failed_priority_or_version_lookup_leaves_rank_and_an_inactive_sprint(
     let sp = t.sprint.unwrap();
     assert_eq!((sp.name.as_str(), sp.active, sp.ends_at), ("v1", false, None));
 }
+
+#[tokio::test]
+async fn sprints_resolve_from_one_project_versions_call() {
+    let server = MockServer::start().await;
+    mount_priorities(&server).await;
+    mount_json(
+        &server,
+        "/projects/5/versions.json",
+        json!({"versions": [
+            {"id": 1, "name": "v1", "status": "open", "due_date": "2999-01-01"},
+            {"id": 2, "name": "v2", "status": "closed", "due_date": null}]}),
+    )
+    .await;
+    let with = |id, ver: u64| {
+        issue(id, json!({"project": {"id": 5}, "fixed_version": {"id": ver, "name": format!("v{ver}")}}))
+    };
+    mount_json(
+        &server,
+        "/issues.json",
+        json!({"issues": [with(10, 1), with(11, 2), with(12, 1)], "total_count": 3}),
+    )
+    .await;
+    let items = rm(&server, json!({})).list(&view("v"), None).await.unwrap().items;
+    let active: Vec<bool> = items.iter().map(|i| i.sprint.as_ref().unwrap().active).collect();
+    assert_eq!(active, [true, false, true]);
+    assert_eq!(count(&server, "GET", "/projects/5/versions.json").await, 1);
+    assert_eq!(count(&server, "GET", "/versions/1.json").await, 0);
+}

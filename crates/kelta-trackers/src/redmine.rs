@@ -126,16 +126,35 @@ impl RedmineTracker {
     }
 
     /// An issue only carries `fixed_version` `{id, name}`: whether it is current and when it ends come from
-    /// `/versions/{id}.json`, once per distinct version (a failed lookup keeps the sprint as inactive).
+    /// `/projects/{p}/versions.json` once per project (shared versions included), then `/versions/{id}.json`
+    /// for any id that list lacks. A failed lookup keeps the sprint as inactive.
     async fn resolve_sprints(&self, tickets: &mut [Ticket]) {
         let today = today();
+        let mut listed: Vec<Value> = Vec::new();
+        let mut projects: Vec<&str> = Vec::new();
+        for p in tickets.iter().filter(|t| t.sprint.is_some()).filter_map(|t| t.project_hint.as_deref()) {
+            if projects.contains(&p) {
+                continue;
+            }
+            projects.push(p);
+            let url = format!("{}/projects/{p}/versions.json", self.base);
+            if let Ok(v) = self.json(HttpRequest::get(url)).await {
+                listed.extend(v.get("versions").and_then(Value::as_array).cloned().unwrap_or_default());
+            }
+        }
         let mut seen: Vec<(String, bool, Option<String>)> = Vec::new();
         for id in tickets.iter().filter_map(|t| t.sprint.as_ref().map(|s| s.id.clone())) {
             if seen.iter().any(|(i, _, _)| *i == id) {
                 continue;
             }
-            let v = self.json(HttpRequest::get(format!("{}/versions/{id}.json", self.base))).await;
-            let v = v.ok().and_then(|v| v.get("version").cloned()).unwrap_or_default();
+            let v = match listed.iter().find(|v| v.get("id").and_then(idstr).as_deref() == Some(id.as_str()))
+            {
+                Some(v) => v.clone(),
+                None => {
+                    let v = self.json(HttpRequest::get(format!("{}/versions/{id}.json", self.base))).await;
+                    v.ok().and_then(|v| v.get("version").cloned()).unwrap_or_default()
+                }
+            };
             let due = s(&v, "due_date").map(str::to_owned);
             let active =
                 s(&v, "status") == Some("open") && due.as_deref().is_none_or(|d| d >= today.as_str());
@@ -383,7 +402,6 @@ impl Tracker for RedmineTracker {
                     .collect()
             })
             .unwrap_or_default();
-        self.resolve_sprints(&mut items).await;
         if view.query_id.is_some() {
             match view.who {
                 Some(Who::Mine) => {
@@ -394,6 +412,7 @@ impl Tracker for RedmineTracker {
                 _ => {}
             }
         }
+        self.resolve_sprints(&mut items).await;
         let total = v.get("total_count").and_then(Value::as_u64).unwrap_or(0);
         let end = offset as u64 + raw;
         let next = (raw > 0 && end < total).then_some(Cursor::Offset(end as u32));
