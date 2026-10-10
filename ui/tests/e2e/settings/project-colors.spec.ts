@@ -12,7 +12,7 @@ const rgb = (hex: string): string =>
 const bar = (page: Page, id: string) =>
   page
     .locator(`[data-testid="rail-project"][data-project-id="${id}"]`)
-    .evaluate((el) => (el.parentElement as HTMLElement).style.getPropertyValue('--project-color'));
+    .evaluate((el) => (el.closest('[data-testid="rail-band"]') as HTMLElement).style.getPropertyValue('--project-color'));
 
 const accent = (page: Page) =>
   page.evaluate(() => document.documentElement.style.getPropertyValue('--k-project'));
