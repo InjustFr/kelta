@@ -19,8 +19,8 @@ you, all in one light desktop window.
   ticket to In progress, and opens Claude (already briefed on the ticket) next to nvim.
 - **Review without leaving the app.** The pull requests you are asked to review sit next to your tickets: read,
   approve, request changes, or check one out in a worktree with Claude and a diff in nvim.
-- **Many projects, one light window.** Every project and session stays live when you switch. About 220 MB for 3
-  projects and 10 live sessions, 60 MB with the window closed.
+- **Many projects, one light window.** Every project and session stays live when you switch. Memory budget: under
+  220 MB on macOS (250 MB on Linux) for 3 projects and 10 live sessions, 60 MB with the window closed.
 
 ## Features
 
