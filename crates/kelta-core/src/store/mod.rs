@@ -491,9 +491,9 @@ pub mod q {
             "INSERT INTO work_items (id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch,
              base, claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, updated_at, session_ids_json,
              review_due, claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at,
-             claude_message, delta_json, next_note, left_at, port_base, cost_usd)
+             claude_message, delta_json, next_note, left_at, port_base, cost_usd, auto_finish)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
-             ?25, ?26, ?27, ?28, ?29, ?30)
+             ?25, ?26, ?27, ?28, ?29, ?30, ?31)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind = excluded.kind,
              ticket_json = excluded.ticket_json, review_json = excluded.review_json, repo_id = excluded.repo_id,
              worktree = excluded.worktree, branch = excluded.branch, base = excluded.base,
@@ -505,7 +505,8 @@ pub mod q {
              rebase_json = excluded.rebase_json, claude_at = excluded.claude_at,
              claude_message = excluded.claude_message, delta_json = excluded.delta_json,
              next_note = excluded.next_note, left_at = excluded.left_at, port_base = excluded.port_base,
-             cost_usd = excluded.cost_usd",
+             cost_usd = excluded.cost_usd,
+             auto_finish = excluded.auto_finish",
             params![
                 w.id.as_str(),
                 w.project_id.as_str(),
@@ -537,6 +538,7 @@ pub mod q {
                 w.left_at,
                 w.port_base,
                 w.cost_usd,
+                w.auto_finish,
             ],
         )
         .map_err(db_err)?;
@@ -555,7 +557,7 @@ pub mod q {
     const WORK_COLS: &str = "id, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base,
         claude_uuid, nvim_socket, tab_id, pr_url, state_json, created_at, session_ids_json, review_due,
         claude_replied, title, pr_title_needs_key, sent_threads_json, rebase_json, claude_at, claude_message,
-        delta_json, next_note, left_at, port_base, cost_usd";
+        delta_json, next_note, left_at, port_base, cost_usd, auto_finish";
 
     type WorkRaw = (WorkItem, String, String, String, String, String, Option<String>);
 
@@ -597,6 +599,7 @@ pub mod q {
             left_at: r.get(26)?,
             port_base: r.get(27)?,
             cost_usd: r.get(28)?,
+            auto_finish: r.get(29)?,
         };
         Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }

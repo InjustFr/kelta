@@ -1,5 +1,6 @@
 //! Code-host domain types (ARCHITECTURE §8.2). The `CodeHost` trait lives in [`crate::api`].
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -158,6 +159,16 @@ pub struct ReviewDetail {
     /// Line comments waiting in my pending (draft) review; published by approve / comment / request changes.
     #[serde(default)]
     pub pending_comments: u32,
+}
+
+/// How the host merges an armed PR (`work_arm_merge`, `work.pr.merge_method`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeMethod {
+    #[default]
+    Squash,
+    Merge,
+    Rebase,
 }
 
 /// Create-PR request sent to a `CodeHost`.

@@ -110,6 +110,7 @@
           meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
         if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
+        if (item.auto_finish) meta.push('armed');
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),

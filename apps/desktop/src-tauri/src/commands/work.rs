@@ -145,6 +145,21 @@ pub async fn work_mark_reviewed(core: State<'_, Arc<Core>>, id: WorkItemId) -> R
     core.work().mark_reviewed(&id).await
 }
 
+/// Merge when ready: the host's native auto-merge, then Finish once the merge is seen (#143).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_arm_merge(
+    core: State<'_, Arc<Core>>,
+    id: WorkItemId,
+    method: MergeMethod,
+) -> Res<WorkItem> {
+    core.work().arm_merge(&id, method).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_disarm_merge(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().disarm_merge(&id).await
+}
+
 /// Louis's `next:` note on the item (null or blank clears it).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_set_note(

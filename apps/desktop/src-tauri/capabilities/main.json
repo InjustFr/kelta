@@ -105,6 +105,8 @@
     "allow-work-mark-reviewed",
     "allow-work-set-note",
     "allow-work-left",
+    "allow-work-arm-merge",
+    "allow-work-disarm-merge",
     "allow-editor-open",
     "allow-editor-send-selection",
     "allow-editor-quickfix",

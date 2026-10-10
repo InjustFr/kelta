@@ -926,6 +926,7 @@ export function createMockTransport(options: MockOptions = {}): {
         cost_usd: 0,
         review_due: false,
         claude_replied: false,
+        auto_finish: false,
       };
       // Like the saga: sessions run in the worktree, bound to the item, in a new active tab that
       // carries the item (B5); the UI brings the project to the front once work_start returns.
@@ -1187,6 +1188,18 @@ export function createMockTransport(options: MockOptions = {}): {
     work_left: ({ id }) => {
       const w = work(id);
       w.left_at = new Date().toISOString();
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_arm_merge: ({ id }) => {
+      const w = work(id);
+      w.auto_finish = true;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
+    work_disarm_merge: ({ id }) => {
+      const w = work(id);
+      w.auto_finish = false;
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },

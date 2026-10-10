@@ -225,6 +225,8 @@ describe('mock transport', () => {
       work_mark_reviewed: { id: work.id },
       work_set_note: { id: work.id, note: 'next: tests' },
       work_left: { id: work.id },
+      work_arm_merge: { id: withPr.id, method: 'squash' },
+      work_disarm_merge: { id: withPr.id },
       editor_open: { target: { kind: 'session', id: session.id }, path: '/x', line: 3 },
       editor_send_selection: { editor_session: s.sessions[1]!.id, claude_session: session.id },
       editor_quickfix: { target: { kind: 'session', id: session.id }, files: ['src/a.rs'] },

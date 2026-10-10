@@ -13,8 +13,9 @@ use kelta_http::util::{percent_encode, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
-    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MyReviewState,
-    PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery, ReviewRef, Reviewer,
+    CiCheck, CiState, CodeHostKind, FailedCheck, Feedback, FeedbackThread, FileChange, MergeMethod,
+    MyReviewState, PrCreate, PrState, Review, ReviewDecision, ReviewDetail, ReviewKind, ReviewQuery,
+    ReviewRef, Reviewer,
 };
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
@@ -747,6 +748,25 @@ impl CodeHost for GitlabHost {
         let url = self.mr_url(&r.repo, &format!("/{}/notes", r.number));
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(logins)
+    }
+
+    async fn arm_auto_merge(&self, r: &ReviewRef, method: MergeMethod) -> Result<(), KeltaError> {
+        // The merge commit vs fast-forward choice is a project setting on GitLab; only squash is per MR.
+        if method == MergeMethod::Rebase {
+            return Err(KeltaError::invalid(
+                "GitLab sets rebase merges in the project settings: choose squash or merge",
+            ));
+        }
+        let url = self.mr_url(&r.repo, &format!("/{}/merge", r.number));
+        let req = HttpRequest::put(url)
+            .query("merge_when_pipeline_succeeds", "true")
+            .query("squash", if method == MergeMethod::Squash { "true" } else { "false" });
+        self.auth.send_text(req).await.map(|_| ())
+    }
+
+    async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
+        let url = self.mr_url(&r.repo, &format!("/{}/cancel_merge_when_pipeline_succeeds", r.number));
+        self.auth.send_text(HttpRequest::post(url)).await.map(|_| ())
     }
 
     async fn resolve_threads(&self, r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError> {

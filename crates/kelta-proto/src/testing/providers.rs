@@ -8,7 +8,8 @@ use serde_json::Value;
 
 use crate::api::{CodeHost, Tracker};
 use crate::codehost::{
-    CodeHostKind, Feedback, MyReviewState, PrCreate, PrState, Review, ReviewDetail, ReviewQuery, ReviewRef,
+    CodeHostKind, Feedback, MergeMethod, MyReviewState, PrCreate, PrState, Review, ReviewDetail, ReviewQuery,
+    ReviewRef,
 };
 use crate::error::KeltaError;
 use crate::ids::AccountId;
@@ -533,6 +534,14 @@ impl CodeHost for FakeCodeHost {
 
     async fn resolve_threads(&self, r: &ReviewRef, ids: &[String]) -> Result<(), KeltaError> {
         self.enter(&format!("resolve_threads:{}:{}", r.number, ids.join(",")))
+    }
+
+    async fn arm_auto_merge(&self, r: &ReviewRef, method: MergeMethod) -> Result<(), KeltaError> {
+        self.enter(&format!("arm_auto_merge:{}:{method:?}", r.number))
+    }
+
+    async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
+        self.enter(&format!("disarm_auto_merge:{}", r.number))
     }
 
     fn repo_from_remote(&self, url: &str) -> Option<String> {
