@@ -66,7 +66,7 @@
       >
         {#snippet actions()}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open settings'}
+            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open account settings'}
           </Button>
         {/snippet}
       </ErrorState>

@@ -48,7 +48,7 @@
 
   const pos = $derived.by(() => {
     const w = el?.offsetWidth ?? 200;
-    const h = el?.offsetHeight ?? items.length * 28;
+    const h = el?.offsetHeight ?? items.length * 32;
     const vw = typeof window === 'undefined' ? 1e4 : window.innerWidth;
     const vh = typeof window === 'undefined' ? 1e4 : window.innerHeight;
     return { left: Math.max(4, Math.min(x, vw - w - 4)), top: Math.max(4, Math.min(y, vh - h - 4)) };
@@ -135,7 +135,7 @@
       onclick={() => choose(i)}
     >
       {#if item.bar}<span class="bar" style:--bar={item.bar}></span>{:else}<span class="icon"
-          >{#if item.icon}<Icon name={item.icon} size={14} />{/if}</span
+          >{#if item.icon}<Icon name={item.icon} size={16} />{/if}</span
         >{/if}
       <span class="label">{item.label}</span>
       {#if item.detail}<span class="detail">{item.detail}</span>{/if}
@@ -154,8 +154,8 @@
   .k-menu {
     position: fixed;
     z-index: var(--k-z-menu);
-    min-width: 180px;
-    max-width: 360px;
+    min-width: 220px;
+    max-width: 400px;
     padding: var(--k-space-2);
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
@@ -169,7 +169,7 @@
     gap: var(--k-space-3);
     width: 100%;
     height: var(--k-row-height);
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-4);
     border: none;
     border-radius: var(--k-radius-sm);
     background: transparent;
@@ -191,7 +191,7 @@
   }
 
   .icon {
-    width: 14px;
+    width: 16px;
     display: inline-flex;
   }
 
@@ -225,6 +225,8 @@
   }
 
   button :global(.k-kbd) {
-    color: var(--k-fg-subtle);
+    margin-left: auto;
+    justify-content: flex-end;
+    color: var(--k-fg-muted);
   }
 </style>

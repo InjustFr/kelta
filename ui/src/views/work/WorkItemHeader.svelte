@@ -2,19 +2,20 @@
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
+  import { workLeft } from '$lib/ipc/commands';
   import { effectiveChords } from '$lib/keys/manager';
   import { settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
-  import { Button, currentPlatform, Icon, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
   import StatusChip from '../tickets/StatusChip.svelte';
   import StatusPicker from '../tickets/StatusPicker.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
-  import { phaseNow, workTitle } from './live';
+  import { claudeOf, phaseNow, workTitle } from './live';
   import { openContent } from './nav';
-  import { workKey } from './phase';
+  import { returnBrief, workKey } from './phase';
   import { workUi } from './ui.svelte';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
@@ -29,8 +30,54 @@
     effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
   );
 
-  let picking = $state(false);
-  let statusBtn = $state<HTMLElement>();
+  // Return strip: decided when the item is (re)focused; leaving it stamps `left_at` (no timers).
+  let briefFor = $state<string | null>(null);
+  let briefEl = $state<HTMLElement>();
+  // The strip takes the keyboard once per return, so `x` / `v` never land in the Claude or nvim pane.
+  let briefFocus = false;
+  $effect(() => {
+    const id = workItemId;
+    untrack(() => {
+      const w = work.get(id);
+      const mins = settings.value()?.work.return_brief_after_mins ?? 20;
+      briefFor = w && returnBrief(w, claudeOf(w)?.status ?? null, Date.now(), mins) ? id : null;
+      briefFocus = briefFor !== null;
+    });
+    return () =>
+      void workLeft({ id }).then(
+        (w) => work.upsert(w),
+        () => {},
+      );
+  });
+  const brief = $derived(
+    briefFor === workItemId && item && claudeOf(item)?.status !== 'working' ? item : null,
+  );
+
+  $effect(() => {
+    const el = briefEl;
+    if (el && briefFocus) {
+      briefFocus = false;
+      // After the Shell's own give-the-keyboard-back-to-the-terminal microtask (closing the switcher).
+      setTimeout(() => el.focus());
+    }
+  });
+
+  function dismissBrief(): void {
+    briefFor = null;
+    const sid = focusedSessionId();
+    if (sid) terminalPool.focus(sid);
+  }
+
+  function briefKey(e: KeyboardEvent): void {
+    if (e.metaKey || e.ctrlKey || e.altKey || !brief) return;
+    if (e.key === 'x') dismissBrief();
+    else if (e.key === 'v') void runWorkAction('review_delta', brief);
+    else return;
+    e.preventDefault();
+  }
+
+  /** The status button the picker opens under; null = closed. */
+  let picking = $state<HTMLElement | null>(null);
   let workBtn = $state<HTMLElement>();
 
   $effect(() => {
@@ -55,11 +102,11 @@
       out.push({
         id: a.id,
         label: a.label({ item, phase }),
-        kbd: a.key === 'F' ? 'shift+f' : a.key,
+        kbd: a.key === a.key.toLowerCase() ? a.key : `shift+${a.key.toLowerCase()}`,
         key: a.key,
         disabled: reason !== null,
         title: reason ?? undefined,
-        separator: a.id === 'review_diff' || a.id === 'go_claude' || a.id === 'finish',
+        separator: a.id === 'review_delta' || a.id === 'go_claude' || a.id === 'finish',
         danger: a.id === 'finish',
       });
     }
@@ -88,79 +135,92 @@
 
 {#if item && phase}
   <div class="bar" role="toolbar" aria-label="Work item" data-testid="work-header" data-phase={phase.id}>
-    <span class="lamp"><Lamp level={phase.lamp} title={phase.label} /></span>
-    <span class="key" data-testid="work-key">{workKey(item)}</span>
-    <span class="ttl" title={workTitle(item)}>{workTitle(item)}</span>
-    {#if ticketRef}
-      <button
-        type="button"
-        class="status"
-        bind:this={statusBtn}
-        aria-haspopup="menu"
-        title="Move to…"
-        data-testid="work-status"
-        disabled={!detail}
-        onclick={() => (picking = true)}
+    <span class="group identity">
+      <span class="lamp"><Lamp level={phase.lamp} title={phase.label} /></span>
+      <span class="key" data-testid="work-key">{workKey(item)}</span>
+      <span class="ttl" title={workTitle(item)}>{workTitle(item)}</span>
+    </span>
+    <span class="group state">
+      {#if ticketRef}
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-haspopup="menu"
+          title="Move to…"
+          data-testid="work-status"
+          disabled={!detail}
+          onclick={(e: MouseEvent) => (picking = e.currentTarget as HTMLElement)}
+        >
+          {#if detail}<StatusChip status={detail.ticket.status} />{:else}…{/if}
+          <Icon name="chevron-down" size={14} />
+        </Button>
+      {/if}
+      <Button
+        size="sm"
+        variant="secondary"
+        title="Steps and sessions"
+        data-testid="work-phase"
+        onclick={() =>
+          void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
       >
-        {#if detail}<StatusChip status={detail.ticket.status} />{:else}…{/if}
-        <Icon name="chevron-down" size={12} />
-      </button>
-    {/if}
-    <button
-      type="button"
-      class="phase"
-      title="Steps and sessions"
-      data-testid="work-phase"
-      onclick={() =>
-        void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
-    >
-      <span class="label">{phase.label}</span>
-      {#if phase.detail}<span class="detail">{phase.detail}</span>{/if}
-    </button>
-    <span class="branch" title={item.worktree}>
-      <Icon name="git-branch" size={12} />
+        Steps: {phase.label}
+        {#if phase.detail}<span class="detail">{phase.detail}</span>{/if}
+      </Button>
+    </span>
+    <span class="group branch" title={item.worktree}>
+      <Icon name="git-branch" size={14} />
       <code>{item.branch}</code>
     </span>
-    {#if git && !git.missing}
-      <span
-        class="num"
-        title={`${git.ahead} ahead, ${git.behind} behind ${item.base}, ${git.files} files changed since the merge base`}
+    {#if item.port_base != null}
+      <span class="group ports" title="KELTA_PORT … KELTA_PORT_9" data-testid="work-ports"
+        >ports {item.port_base}–{item.port_base + 9}</span
       >
-        <span data-testid="ahead">↑{git.ahead}</span>
-        <span data-testid="behind">↓{git.behind}</span>
+    {/if}
+    {#if git && !git.missing}
+      <span class="group git" title="{git.ahead} commits to push, {git.behind} behind {item.base}">
+        <span class="num">
+          <span data-testid="ahead">↑{git.ahead}</span>
+          <span data-testid="behind">↓{git.behind}</span>
+        </span>
+        <span class="vs">vs {item.base}</span>
         {#if git.insertions || git.deletions}
-          <span class="ins">+{git.insertions}</span><span class="del">−{git.deletions}</span>
+          <span class="num"
+            ><span class="ins">+{git.insertions}</span><span class="del">−{git.deletions}</span></span
+          >
         {/if}
+        {#if git.dirty}<span class="tag" title="Part of the diff is uncommitted">Uncommitted changes</span
+          >{/if}
       </span>
-      {#if git.dirty}<span class="tag" title="Part of the diff is uncommitted">dirty</span>{/if}
     {:else if work.gitError}
       <button type="button" class="link" onclick={() => void work.refreshStatus()}
         >status unavailable, retry</button
       >
     {/if}
     <span class="spacer"></span>
-    {#if phase.primary}
-      <Button
-        size="sm"
-        variant="primary"
-        disabled={primaryBlocked !== null}
-        title={primaryBlocked ?? undefined}
-        onclick={() => void runPrimary(item)}
-      >
-        {phase.primaryLabel}
-      </Button>
-    {/if}
-    <span bind:this={workBtn}>
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-haspopup="menu"
-        title="Work menu"
-        data-testid="work-menu-button"
-        onclick={() => (workUi.menu = item.id)}
-      >
-        Work {#if menuChord}<Kbd chord={menuChord} />{/if}
-      </Button>
+    <span class="group actions">
+      {#if phase.primary}
+        {#if primaryBlocked}<span class="blocked">{primaryBlocked}</span>{/if}
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={primaryBlocked !== null}
+          title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}
+          onclick={() => void runPrimary(item)}
+        >
+          {phase.primaryLabel}
+        </Button>
+      {/if}
+      <span bind:this={workBtn}>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-haspopup="menu"
+          title="Work menu"
+          data-testid="work-menu-button"
+          chord={menuChord}
+          onclick={() => (workUi.menu = item.id)}>Work</Button
+        >
+      </span>
     </span>
   </div>
 {:else}
@@ -169,32 +229,124 @@
   </div>
 {/if}
 
+{#if brief}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="brief"
+    role="region"
+    aria-label="Where you left off"
+    data-testid="return-brief"
+    tabindex="-1"
+    bind:this={briefEl}
+    onkeydown={briefKey}
+  >
+    <div class="brief-text">
+      {#if brief.next_note}<div class="note"><b>next:</b> {brief.next_note}</div>{/if}
+      {#if brief.delta}
+        <div class="since">
+          <span class="ins">+{brief.delta.insertions}</span>/<span class="del">−{brief.delta.deletions}</span> since
+          you reviewed
+        </div>
+      {/if}
+      {#if brief.claude_message}
+        <details>
+          <summary>{brief.claude_message.split('\n')[0]}</summary>
+          <pre>{brief.claude_message}</pre>
+        </details>
+      {/if}
+    </div>
+    {#if brief.delta}
+      <Button
+        size="sm"
+        variant="secondary"
+        chord="v"
+        onclick={() => void runWorkAction('review_delta', brief)}>Review changes</Button
+      >
+    {/if}
+    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>Dismiss</Button>
+  </div>
+{/if}
+
 {#if picking && detail}
-  <StatusPicker tickets={[detail.ticket]} {projectId} anchor={statusBtn} onclose={() => (picking = false)} />
+  <StatusPicker tickets={[detail.ticket]} {projectId} anchor={picking} onclose={() => (picking = null)} />
 {/if}
 {#if menuPos}
   <Menu items={menuItems} x={menuPos.x} y={menuPos.y} label="Work" onselect={onMenu} onclose={closeMenu} />
 {/if}
 
 <style>
+  .brief {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--k-space-3);
+    padding: var(--k-space-2) var(--k-space-4);
+    border-bottom: 1px solid var(--k-border);
+    background: var(--k-bg-elev);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .brief-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+  }
+
+  .brief summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--k-fg-muted);
+    cursor: pointer;
+  }
+
+  .brief pre {
+    max-height: 30vh;
+    margin: var(--k-space-1) 0 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    font: inherit;
+  }
+
   .bar {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: var(--k-space-2) var(--k-space-4);
-    min-height: var(--k-tabbar-height);
-    padding: var(--k-space-1) var(--k-space-3);
+    flex-wrap: nowrap;
+    gap: var(--k-space-3);
+    height: var(--k-work-header-height);
+    padding: 0 var(--k-space-4);
+    container-type: inline-size;
     background: var(--k-bezel-raised);
     color: var(--k-fg-chrome);
     font-size: var(--k-font-size-sm);
     white-space: nowrap;
   }
 
+  .group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-3);
+    min-width: 0;
+  }
+
+  /* Identity, state and actions lay their parts straight into the bar, so each part shrinks with its
+     own floor (title, steps, blocked reason) instead of a group overflowing onto its neighbour. */
+  .identity,
+  .state,
+  .actions {
+    display: contents;
+  }
+
+  .key {
+    flex: none;
+  }
+
   .lamp {
     display: inline-flex;
     justify-content: center;
     flex: none;
-    width: 10px;
+    width: 12px;
   }
 
   .key,
@@ -209,50 +361,60 @@
   }
 
   .ttl {
-    min-width: 0;
+    flex: 0 1 auto;
+    min-width: 16ch;
     max-width: 32ch;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-weight: 600;
-  }
-
-  .phase {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--k-space-2);
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
     color: var(--k-fg);
-    font: inherit;
-    cursor: pointer;
+    font-weight: var(--k-weight-strong);
   }
 
-  .phase:hover .label {
-    text-decoration: underline;
+  /* The status keeps its width; the steps button ellipsises down to a readable "Steps…". */
+  .bar :global(.k-button) {
+    flex: none;
   }
 
-  .phase .detail {
-    max-width: 40ch;
+  .bar :global(.k-button[data-testid='work-phase']) {
+    flex: 0 1 auto;
+    min-width: 9ch;
+    overflow: hidden;
+  }
+
+  .bar :global(.k-button[data-testid='work-phase'] .label) {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .detail {
+    margin-left: var(--k-space-2);
     color: var(--k-fg-muted);
+    font-weight: normal;
   }
 
   .branch {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-1);
-    min-width: 0;
+    flex: 0 1 auto;
+    min-width: 8ch;
+    gap: var(--k-space-2);
     overflow: hidden;
+    color: var(--k-fg-muted);
+  }
+
+  .branch code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .git,
+  .ports {
+    flex: none;
     color: var(--k-fg-muted);
   }
 
   .num {
     display: inline-flex;
     gap: var(--k-space-2);
-    color: var(--k-fg-muted);
   }
 
   .ins {
@@ -264,35 +426,69 @@
   }
 
   .tag {
-    padding: 0 var(--k-space-1);
-    border-radius: 2px;
+    padding: 0 6px;
+    border-radius: var(--k-radius-sm);
     background: var(--k-bg-sunken);
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-xs);
+    line-height: 20px;
+  }
+
+  /* A long primary label ("Retry …") gives way before the branch does. */
+  .actions :global(.k-button) {
+    max-width: 28ch;
+  }
+
+  .actions :global(.k-button .label) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .blocked {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 32ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--k-fg-muted);
   }
 
   .spacer {
     flex: 1;
   }
 
-  .status,
   .link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-1);
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--k-fg-muted);
+    color: var(--k-accent);
     font: inherit;
     cursor: pointer;
   }
 
-  .link {
-    color: var(--k-accent);
-  }
-
   .muted {
     color: var(--k-fg-subtle);
+  }
+
+  /* Narrow bars drop detail in order of value: phase detail and base, then git, then the branch. */
+  @container (max-width: 1240px) {
+    .vs,
+    .detail {
+      display: none;
+    }
+  }
+
+  @container (max-width: 1000px) {
+    .git,
+    .ports {
+      display: none;
+    }
+  }
+
+  @container (max-width: 820px) {
+    .branch {
+      display: none;
+    }
   }
 </style>

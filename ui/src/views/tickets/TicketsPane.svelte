@@ -14,11 +14,11 @@
     EmptyState,
     ErrorState,
     Icon,
-    IconButton,
     Lamp,
     Menu,
     Select,
     Tabs,
+    ROW_HEIGHT,
     VirtualList,
     relativeTime,
     type MenuItem,
@@ -55,7 +55,6 @@
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
 
-  const ROW_HEIGHT = 26;
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
   const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Anyone' };
   const GROUP_LABELS: Record<GroupBy, string> = {
@@ -768,7 +767,7 @@
         onchange={setMode}
       />
     {/if}
-    <IconButton icon="refresh-cw" label="Refresh (R)" size="sm" onclick={refresh} />
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
   {#if noSource}
@@ -783,7 +782,7 @@
     <ErrorState error={list.error} title="Could not load tickets" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
-          >{isAuthError(list.error) ? 'Re-authenticate' : 'Open settings'}</Button
+          >{isAuthError(list.error) ? 'Re-authenticate' : 'Open account settings'}</Button
         >
       {/snippet}
     </ErrorState>
@@ -1036,21 +1035,23 @@
 
   <KeyHints
     hints={[
-      ['j/k', 'move'],
-      ['Space', 'split'],
-      ['Enter', 'open'],
-      ['⇧Enter', 'own pane'],
-      ['1/2/3', 'who'],
-      ['m', 'move to'],
-      ['x', 'select'],
-      ['p/P', 'PR, in browser'],
-      ['f s', 'current sprint'],
-      ['a/A', 'assign me, unassign'],
-      ['s/S', 'start, start now'],
-      ['v', 'source'],
-      ['g', 'group'],
-      ['c', 'comment'],
-      ['o', 'browser'],
+      ['j k', 'Move'],
+      ['space', 'Split'],
+      ['enter', 'Open'],
+      ['shift+enter', 'Own pane'],
+      ['1 2 3', 'Who'],
+      ['/', 'Filter'],
+      ['m', 'Move to'],
+      ['x', 'Select'],
+      ['p shift+p', 'Pull request, in browser'],
+      ['f s', 'Current sprint'],
+      ['a shift+a', 'Assign me, unassign'],
+      ['s shift+s', 'Start work, start now'],
+      ['v', 'Source'],
+      ['g', 'Group'],
+      ['c', 'Comment'],
+      ['o', 'Open in browser'],
+      ['shift+r', 'Refresh'],
     ]}
   />
 </div>
@@ -1396,7 +1397,7 @@
 
   /* Fixed to chip height on every card so titles line up across lanes. */
   .card-row.first {
-    height: 18px;
+    height: 20px;
   }
 
   .key {

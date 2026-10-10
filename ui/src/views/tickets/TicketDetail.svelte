@@ -213,18 +213,17 @@
     </div>
     <h1>{ticket.title}</h1>
     <div class="line">
-      <button
-        type="button"
-        class="status"
-        bind:this={statusBtn}
-        aria-haspopup="menu"
-        aria-label={`Status ${ticket.status.name}, move (m)`}
-        title="Move (m)"
-        onclick={() => (picker = statusBtn ?? null)}
-      >
-        <StatusChip status={ticket.status} />
-        <Icon name="chevron-down" size={12} />
-      </button>
+      <span class="status" bind:this={statusBtn}>
+        <Button
+          aria-haspopup="menu"
+          aria-label={`Status ${ticket.status.name}, move (m)`}
+          title="Move (m)"
+          onclick={() => (picker = statusBtn ?? null)}
+        >
+          <StatusChip status={ticket.status} />
+          <Icon name="chevron-down" size={14} />
+        </Button>
+      </span>
     </div>
     <ActionBar {item} {branch} resume={workItem !== null} onrun={(a) => run(a)} />
   </header>
@@ -436,8 +435,7 @@
     color: var(--k-danger);
   }
 
-  .link,
-  .status {
+  .link {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-1);
@@ -450,7 +448,13 @@
   }
 
   .status {
-    color: var(--k-fg-muted);
+    display: inline-flex;
+  }
+
+  .status :global(.label) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
   }
 
   .scroll {

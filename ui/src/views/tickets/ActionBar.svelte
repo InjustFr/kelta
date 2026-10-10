@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TicketItem } from '$lib/gen';
-  import { Button, Kbd } from '$lib/ui';
+  import { Button } from '$lib/ui';
 
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
 
@@ -52,11 +52,12 @@
       aria-disabled={a.reason ? 'true' : undefined}
       title={a.reason ?? `${a.label} (${a.key})`}
       data-action={a.id}
+      chord={a.key === 'A' ? 'shift+a' : a.key}
       onclick={() => {
         if (!a.reason) onrun(a.id);
       }}
     >
-      {a.label}<Kbd chord={a.key === 'A' ? 'shift+a' : a.key} />
+      {a.label}
     </Button>
   {/each}
 </div>
@@ -77,15 +78,5 @@
 
   .bar :global(.k-button.ghost.off:hover) {
     background: transparent;
-  }
-
-  .bar :global(.k-kbd) {
-    margin-left: var(--k-space-1);
-    font-size: var(--k-font-size-xs);
-  }
-
-  .bar :global(.k-button.primary .k-kbd) {
-    color: inherit;
-    opacity: 0.75;
   }
 </style>

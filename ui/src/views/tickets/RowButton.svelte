@@ -38,7 +38,7 @@
     run(e);
   }}
 >
-  {#if icon}<Icon name={icon} size={12} />{:else}{@render children?.()}{/if}
+  {#if icon}<Icon name={icon} size={14} />{:else}{@render children?.()}{/if}
 </span>
 
 <style>
@@ -51,8 +51,8 @@
 
   .icon {
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     color: var(--k-fg-muted);
   }
 

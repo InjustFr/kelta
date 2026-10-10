@@ -15,8 +15,8 @@
     align-items: center;
     flex: none;
     max-width: 140px;
-    height: 18px;
-    padding: 0 5px 0 7px;
+    height: 20px;
+    padding: 0 6px 0 8px;
     overflow: hidden;
     border-radius: var(--k-radius-sm);
     box-shadow: inset 2px 0 0 var(--bar);
