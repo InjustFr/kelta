@@ -1,7 +1,7 @@
 name: nightly
 
 # Every night (and on a manual run): the newest main commit with a green `ci` push run, unless the `nightly` tag
-# is already on it, built as the macOS Apple silicon dmg + updater bundle (unsigned for Apple; release.yml keeps
+# is already on it, built as the macOS Apple silicon dmg + updater bundle (ad-hoc signed, not notarized; release.yml keeps
 # the universal one) and the Linux deb + AppImage for amd64 and arm64 (native runners), the updater bundles signed
 # with the TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) secrets, then published to the rolling "nightly" prerelease by
 # scripts/publish-nightly.sh. scripts/nightly-local.sh is the same publish from the maintainer's Mac.
@@ -126,8 +126,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # No APPLE_* variables: the app is built unsigned. The updater key only reaches this step.
+      # No Apple certificate: ad-hoc signed ("-"). Unsealed, the linker-only signature makes Gatekeeper call the
+      # downloaded app "damaged"; ad-hoc it is only "unverified" (Open Anyway). The updater key only reaches this step.
       - env:
+          APPLE_SIGNING_IDENTITY: "-"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bash packaging/build.sh
