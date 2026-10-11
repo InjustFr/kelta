@@ -180,10 +180,12 @@ fn stop_peer(sock: &Path, s: &UnixStream) -> Result<(), KeltaError> {
         .and_then(rustix::process::Pid::from_raw)
         .ok_or_else(|| KeltaError::internal("cannot find the pid of the old keltad"))?;
     rustix::process::kill_process(pid, rustix::process::Signal::TERM).map_err(std::io::Error::from)?;
-    s.set_read_timeout(Some(STOP_TIMEOUT))?;
-    let mut buf = [0u8; 256];
-    // EOF once it is gone; a timeout or error ends the wait too (the redial then tells).
-    while matches!((&*s).read(&mut buf), Ok(n) if n > 0) {}
+    // macOS fails setsockopt with EINVAL once the peer has closed (#309): nothing left to wait for.
+    if s.set_read_timeout(Some(STOP_TIMEOUT)).is_ok() {
+        let mut buf = [0u8; 256];
+        // EOF once it is gone; a timeout or error ends the wait too (the redial then tells).
+        while matches!((&*s).read(&mut buf), Ok(n) if n > 0) {}
+    }
     Ok(())
 }
 
@@ -517,6 +519,22 @@ mod tests {
             kind: kelta_proto::model::SessionKind::Shell,
             events,
         }
+    }
+
+    /// #309: the SIGTERM'd keltad can be gone before stop_peer waits on its socket. macOS then fails
+    /// setsockopt with EINVAL: that means stopped, not an InvalidArgument for connect_or_launch.
+    #[test]
+    fn stop_peer_accepts_a_keltad_already_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = tmp.path().join("keltad.sock");
+        let fake = tmp.path().join("keltad");
+        std::os::unix::fs::symlink("/bin/sleep", &fake).unwrap();
+        let mut old = Command::new(&fake).arg("30").spawn().unwrap();
+        std::fs::write(pidfile(&sock), old.id().to_string()).unwrap();
+        let (s, peer) = UnixStream::pair().unwrap();
+        drop(peer);
+        stop_peer(&sock, &s).unwrap();
+        old.wait().unwrap();
     }
 
     /// #299: a spawn keltad does not answer in time fails with Timeout, rolls its handler back, and
