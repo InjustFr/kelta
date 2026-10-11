@@ -118,7 +118,6 @@ impl GiteaHost {
             || upper.starts_with("WIP:")
             || upper.starts_with("[WIP]");
         Some(Review {
-            reviewed_head: None,
             r#ref: ReviewRef { account: self.account().clone(), repo, number },
             url: s(v, "html_url").unwrap_or("").to_owned(),
             author: v.get("user").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
@@ -126,19 +125,6 @@ impl GiteaHost {
             head_sha: v.pointer("/head/sha").and_then(Value::as_str).unwrap_or("").to_owned(),
             source_branch: branch.clone(),
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
-            ci: CiState::None,
-            failed_check_names: vec![],
-            decision: None,
-            decision_head: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             mergeable: v.get("mergeable").and_then(Value::as_bool),
             labels: v
@@ -152,6 +138,7 @@ impl GiteaHost {
             additions: v.get("additions").and_then(Value::as_u64).map(|n| n as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|n| n as u32),
             title,
+            ..Review::default()
         })
     }
 

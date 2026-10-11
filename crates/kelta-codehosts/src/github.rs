@@ -239,10 +239,10 @@ impl GithubHost {
             author_to_act,
             waiting_since: since,
             author_since,
-            nudged_at: None,
             unresolved_threads,
             last_comment_at,
             title,
+            ..Review::default()
         })
     }
 
@@ -260,12 +260,7 @@ impl GithubHost {
             head_sha: v.pointer("/head/sha").and_then(Value::as_str).unwrap_or("").to_owned(),
             source_branch: branch.clone(),
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
-            ci: CiState::None,
-            failed_check_names: vec![],
-            decision: None,
-            my_state: None,
             mergeable: v.get("mergeable").and_then(Value::as_bool),
-            reviewed_head: None,
             labels: v
                 .get("labels")
                 .and_then(Value::as_array)
@@ -276,17 +271,8 @@ impl GithubHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: v.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
-            decision_head: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             title,
+            ..Review::default()
         })
     }
 

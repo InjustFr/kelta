@@ -189,7 +189,6 @@ impl GitlabHost {
             source_branch: branch.clone(),
             target_branch: s(v, "target_branch").unwrap_or("").to_owned(),
             ci: ci_from(pipeline.and_then(|p| s(p, "status"))),
-            failed_check_names: vec![],
             decision: if blocked {
                 Some(ReviewDecision::ChangesRequested)
             } else {
@@ -197,7 +196,6 @@ impl GitlabHost {
             },
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             // shortcut: GitLab REST keeps no commit per approval, so no "updated since your review"; upgrade via GraphQL reviewer states.
-            reviewed_head: None,
             mergeable: match (merge_status, v.get("has_conflicts").and_then(Value::as_bool)) {
                 (_, Some(true)) | (Some("conflict"), _) => Some(false),
                 (Some("mergeable"), _) => Some(true),
@@ -211,18 +209,8 @@ impl GitlabHost {
             kind,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             linked_tickets: linked_tickets(&[&branch, &title]),
-            additions: None,
-            deletions: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             title,
+            ..Review::default()
         })
     }
 
