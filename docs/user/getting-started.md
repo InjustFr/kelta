@@ -24,7 +24,7 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 - macOS: closing the window keeps every session running (background mode). Click the Dock icon to come back.
 - Linux: closing the window quits. Set `window.close_behavior = "background"` to keep sessions running; then
   `kelta`, a second launch or `kelta-ctl toggle` reopens the window.
-- Quitting (Cmd+Q, or closing the window when it quits) while sessions run asks whether to **keep them running**
+- Quitting (Cmd+Q, Dock > Quit, or closing the window when it quits) while sessions run asks whether to **keep them running**
   in the background (they are back, same processes, on the next launch) or **stop all sessions**. Tick "Don't ask
   again" to remember the answer; change it in Settings > General (`app.quit_sessions`).
 - `window.decorations`: `auto` (no title bar on Hyprland and Sway), `native`, `none`, `custom`. Restart to apply.

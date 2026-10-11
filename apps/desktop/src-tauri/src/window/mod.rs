@@ -69,10 +69,25 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
         app.set_menu(app_menu(app.handle())?)?;
         // The predefined Quit item calls NSApp terminate:, which exits without RunEvent::Exit
         // (no Core::shutdown). Route our own item through app.exit instead.
-        app.on_menu_event(|app, ev| {
-            if ev.id() == "quit" && !quit_asks(app) {
-                quit(app);
+        app.on_menu_event(|app, ev| match ev.id().as_ref() {
+            "quit" if !quit_asks(app) => quit(app),
+            // Like the title-bar button: CloseRequested → the UI's close handler.
+            "close_window" => {
+                if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+                    let _ = w.close();
+                }
             }
+            _ => {}
+        });
+        // Dock Quit and logout send terminate:: ask like Cmd+Q (#311). Terminating now still
+        // reaches RunEvent::Exit (tao's applicationWillTerminate), hence Core::shutdown.
+        let handle = app.handle().clone();
+        crate::platform::dock::on_should_terminate(move || {
+            let now = !quit_asks(&handle);
+            if now {
+                save_main_geometry(&handle); // no ExitRequested on this path
+            }
+            now
         });
     }
     create(app.handle())?;
@@ -337,7 +352,9 @@ pub fn on_second_instance(app: &AppHandle, argv: Vec<String>, cwd: String) {
     });
 }
 
-/// macOS app menu replacing Tauri's default (Cmd+W/H/M/Q are intentional).
+/// macOS app menu replacing Tauri's default (Cmd+H/M/Q are intentional). AppKit gives menu key
+/// equivalents before the webview sees the keydown, so a menu key shadows the keymap: Cmd+W is
+/// left to `pane.close` (#324) and Close Window takes Cmd+Shift+W (see `MENU_KEYS`).
 #[cfg(target_os = "macos")]
 fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem as P, Submenu};
@@ -373,7 +390,11 @@ fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         app,
         "Window",
         true,
-        &[&P::minimize(app, None)?, &P::maximize(app, None)?, &P::close_window(app, None)?],
+        &[
+            &P::minimize(app, None)?,
+            &P::maximize(app, None)?,
+            &MenuItem::with_id(app, "close_window", "Close Window", true, Some("CmdOrCtrl+Shift+W"))?,
+        ],
     )?;
     Menu::with_items(app, &[&kelta, &edit, &window])
 }
@@ -381,6 +402,20 @@ fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Key equivalents of `app_menu` that never reach the webview, in keymap chord syntax (the
+    /// Edit items are left out: they send copy:/paste:/… to the webview itself).
+    const MENU_KEYS: &[&str] = &["cmd+q", "cmd+h", "cmd+alt+h", "cmd+m", "cmd+shift+w"];
+
+    #[test]
+    fn app_menu_keys_leave_default_bindings_to_the_keymap() {
+        for a in kelta_proto::actions::ACTIONS {
+            for k in a.mac {
+                assert!(!MENU_KEYS.contains(k), "{k} of {} is eaten by the app menu", a.id);
+            }
+        }
+        assert!(kelta_proto::actions::find("pane.close").is_some_and(|a| a.mac == ["cmd+w"]));
+    }
 
     fn u(s: &str) -> Option<Url> {
         Url::parse(s).ok()
