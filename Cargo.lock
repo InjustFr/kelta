@@ -3138,6 +3138,7 @@ dependencies = [
  "kelta-http",
  "kelta-proto",
  "kelta-work",
+ "libc",
  "parking_lot",
  "reqwest",
  "rustix",

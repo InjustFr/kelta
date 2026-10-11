@@ -187,3 +187,23 @@ async fn several_requests_per_connection() {
     }
     assert_eq!(e.fake.ctl_commands(), vec![CtlCommand::Toggle, CtlCommand::Palette]);
 }
+
+/// Ticket #366: a client that writes its line and closes at once (the statusline relay, a hook
+/// that gave up waiting) is still served: macOS cannot read the pid of a peer that is gone.
+#[tokio::test]
+async fn fire_and_forget_line_is_accepted() {
+    let e = common::env();
+    let path = e.server.start_ctl().await.unwrap();
+    e.server.register_session(&SessionId::new("s"), "t", None);
+    // Blocking client on the single-threaded test runtime: the server accepts only once it is closed.
+    let mut c = std::os::unix::net::UnixStream::connect(&path).unwrap();
+    std::io::Write::write_all(&mut c, format!("{}\n", hook_req("s", "t", "Stop")).as_bytes()).unwrap();
+    drop(c);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    while e.fake.hooks().is_empty() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let hooks = e.fake.hooks();
+    assert_eq!(hooks.len(), 1, "the closed client's Stop was dropped");
+    assert_eq!(hooks[0].1.status, SessionStatus::Done);
+}
