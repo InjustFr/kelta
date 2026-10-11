@@ -1,7 +1,8 @@
 //! Claude sessions Kelta did not start (#345): the user-scope hook relay (`kelta-ctl hook --outside`)
 //! in Claude Code's user settings, and the sessions it reports, keyed by Claude's session id.
 
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -127,7 +128,9 @@ fn write_relay(path: &Path, command: Option<&str>) -> Result<(), KeltaError> {
     let mut tmp = path.clone().into_os_string();
     tmp.push(format!(".kelta-{}", std::process::id()));
     let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, serde_json::to_string_pretty(&v)?)?;
+    let text = serde_json::to_string_pretty(&v)?;
+    create_tmp(&tmp, perms.as_ref().map(PermissionsExt::mode))?.write_all(text.as_bytes())?;
+    // The umask may have narrowed the mode: restore the original exactly.
     if let Some(p) = perms {
         std::fs::set_permissions(&tmp, p)?;
     }
@@ -135,6 +138,17 @@ fn write_relay(path: &Path, command: Option<&str>) -> Result<(), KeltaError> {
         let _ = std::fs::remove_file(&tmp);
     })?;
     Ok(())
+}
+
+/// A new, empty temp file with `mode` (a 0600 settings file can hold env tokens), so the content is
+/// never readable wider than the file it replaces; a stale one from an earlier run is replaced.
+fn create_tmp(tmp: &Path, mode: Option<u32>) -> std::io::Result<std::fs::File> {
+    let _ = std::fs::remove_file(tmp);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode.map_or(0o666, |m| m & 0o7777))
+        .open(tmp)
 }
 
 /// `key` in `hay` as a whole token, ignoring case: `SHOP-14` is not in `shop-142`.
@@ -361,6 +375,27 @@ mod tests {
     fn this_process_is_alive() {
         assert!(alive(std::process::id()));
         assert!(!alive(u32::MAX));
+    }
+
+    #[test]
+    fn temp_file_never_wider_than_the_original() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("settings.json");
+        let t = tmp.path().join("settings.json.kelta-1");
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        // A stale temp left world-readable is not reused as it is.
+        std::fs::write(&t, "stale").unwrap();
+        std::fs::set_permissions(&t, std::fs::Permissions::from_mode(0o644)).unwrap();
+        drop(create_tmp(&t, Some(0o100_600)).unwrap());
+        assert_eq!(mode(&t), 0o600, "before any content is written");
+        assert_eq!(std::fs::read(&t).unwrap(), b"");
+
+        std::fs::write(&path, "{}").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        write_relay(&path, Some("kelta-ctl hook --outside")).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        write_relay(&path, None).unwrap();
+        assert_eq!(mode(&path), 0o600);
     }
 
     #[test]

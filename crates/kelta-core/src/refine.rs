@@ -45,7 +45,8 @@ impl Core {
         // MCP `get_ticket` for this run: a throwaway sid the MCP route resolves to the ticket.
         let sid = SessionId::new(format!("refine-{}", spawn_env::token()));
         let port = if claude.mcp { self.server.ensure_http().await.ok() } else { None };
-        let mut mcp_env = BTreeMap::new();
+        // KELTA_SESSION_ID: the user-scope relay (`kelta-ctl hook --outside`) skips this Kelta-run Claude.
+        let mut run_env = BTreeMap::from([("KELTA_SESSION_ID".to_owned(), sid.as_str().to_owned())]);
         if let Some(port) = port {
             let token = spawn_env::token();
             self.server.register_session(&sid, &spawn_env::token(), Some(&token));
@@ -53,12 +54,12 @@ impl Core {
             let mcp = kelta_work::claude::mcp_json(port, sid.as_str());
             args.extend(["--mcp-config".to_owned(), mcp.to_string()]);
             args.extend(["--allowedTools", "mcp__kelta__get_ticket"].map(str::to_owned));
-            mcp_env.insert("KELTA_MCP_TOKEN".to_owned(), token);
-            mcp_env.insert("KELTA_MCP_URL".to_owned(), format!("http://127.0.0.1:{port}/mcp/{sid}"));
+            run_env.insert("KELTA_MCP_TOKEN".to_owned(), token);
+            run_env.insert("KELTA_MCP_URL".to_owned(), format!("http://127.0.0.1:{port}/mcp/{sid}"));
         }
         args.extend(["--".to_owned(), PROMPT.to_owned()]);
 
-        let env = self.login_env.vars.iter().chain(&settings.env).chain(&mcp_env);
+        let env = self.login_env.vars.iter().chain(&settings.env).chain(&run_env);
         let input = kelta_work::files::ticket_markdown(&detail, kelta_work::files::BRIEF_COMMENTS);
         let out = crate::ctl::claude_oneshot(&binary, args, env, &cwd, Some(input.as_bytes()), TIMEOUT).await;
         if port.is_some() {
