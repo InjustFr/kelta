@@ -253,8 +253,8 @@ async fn answering_a_permission_prompt_clears_needs_input() {
     h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
     assert_eq!(h.core.session_get(&s.id).unwrap().attention, A::NeedsInput);
     // Focus reports, arrows, Shift+Tab, DA/DSR replies, SGR and X10 mouse reports, paste markers,
-    // kitty release/repeat/modified keys: not answers (#303, #306).
-    let moves: [&[u8]; 13] = [
+    // kitty release/repeat/modified keys, unbracketed pastes: not answers (#303, #306, #317).
+    let moves: [&[u8]; 15] = [
         b"\x1b[I",
         b"\x1b[A",
         b"\x1b[B",
@@ -268,6 +268,8 @@ async fn answering_a_permission_prompt_clears_needs_input() {
         b"\x1b[13;1:3u",
         b"\x1b[13;1:2u",
         b"\x1b[121;5u",
+        b"\x1b[121;69u",
+        b"hello y\r",
     ];
     for bytes in moves {
         h.core.session_write(&s.id, bytes).await.unwrap();
@@ -290,6 +292,8 @@ async fn answering_a_permission_prompt_clears_needs_input() {
         b"\x1b[121u",
         b"\x1b[13;1u",
         b"\x1b[110;1:1u",
+        b"\x1b[13;65u",
+        b"\x1b[121;129u",
     ] {
         h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
         h.core.session_write(&s.id, answer).await.unwrap();
