@@ -289,3 +289,78 @@ async fn closed_sessions_are_freed_in_keltad() {
     term.close();
     keltad.join().unwrap();
 }
+
+/// #360: a Claude adopted after quit-and-leave reports its live status from its next hooks (sent
+/// through the ctl socket with the token it was spawned with), and its live status is not "off".
+#[tokio::test(flavor = "multi_thread")]
+async fn adopted_claude_follows_its_hooks() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let sock = Dirs::under(root).keltad_socket();
+    let l = daemon::bind(&sock).unwrap();
+    let host = PtyTerminalHost::new(TerminalLimits::default());
+    let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
+
+    // A Claude that stays up and leaves the hook token its hooks would send.
+    let (stub, token_file) = (root.join("claude-stub"), root.join("token"));
+    let script =
+        format!("#!/bin/sh\nprintf %s \"$KELTA_HOOK_TOKEN\" > '{}'\nexec sleep 60\n", token_file.display());
+    let wrote = std::process::Command::new("sh")
+        .args(["-c", "printf '%s' \"$2\" > \"$1\"; chmod +x \"$1\"", "sh"])
+        .arg(&stub)
+        .arg(&script)
+        .status()
+        .unwrap();
+    assert!(wrote.success());
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app(root, term.clone());
+    let claude = core
+        .session_spawn(SpawnRequest {
+            program: Some(stub.display().to_string()),
+            restore: RestorePolicy::Relaunch,
+            ..req(SessionKind::Claude)
+        })
+        .await
+        .unwrap();
+    let token = || std::fs::read_to_string(&token_file).unwrap_or_default();
+    assert!(eventually(|| !token().is_empty()).await, "the stub never started");
+    core.shutdown().await.unwrap();
+    term.close();
+    drop(core);
+
+    // Second run: adopted Live, hooks drive its status like a Claude started in this run.
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app(root, term.clone());
+    let info = core.session_get(&claude.id).unwrap();
+    assert_eq!(info.lifecycle, Lifecycle::Live);
+    assert!(info.claude.unwrap().hooks_active, "live status shown as off on an adopted Claude");
+    let ctl = core.server().start_ctl().await.unwrap();
+    let token = token();
+    for (payload, status) in [
+        (serde_json::json!({ "hook_event_name": "UserPromptSubmit" }), SessionStatus::Working),
+        (
+            serde_json::json!({ "hook_event_name": "Notification", "notification_type": "permission_prompt" }),
+            SessionStatus::NeedsInput,
+        ),
+        (serde_json::json!({ "hook_event_name": "Stop" }), SessionStatus::Done),
+        (
+            serde_json::json!({ "hook_event_name": "Notification", "notification_type": "idle_prompt" }),
+            SessionStatus::WaitingUser,
+        ),
+    ] {
+        let r = ctl_send(
+            &ctl,
+            serde_json::json!({ "v": 1, "cmd": "hook", "session": claude.id, "token": token, "payload": payload }),
+        )
+        .await;
+        assert_eq!(r["ok"], true, "{r}");
+        let info = core.session_get(&claude.id).unwrap();
+        assert_eq!(info.status, status, "{payload}");
+        assert!(info.claude.unwrap().hooks_active);
+    }
+
+    core.session_kill(&claude.id, false).await.unwrap();
+    core.shutdown().await.unwrap();
+    term.close();
+    keltad.join().unwrap();
+}

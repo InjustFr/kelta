@@ -399,6 +399,11 @@ impl Core {
                 e.info.lifecycle = Lifecycle::Live;
                 e.hook_token = hook.clone();
                 e.mcp_token = mcp.clone();
+                // Its hooks still reach this ctl socket, but its SessionStart (what sets the flag) is past.
+                // shortcut: a Claude whose hooks never worked loses the "Live status off" badge once adopted; persist the flag if that bites.
+                if let Some(c) = e.info.claude.as_mut() {
+                    c.hooks_active = true;
+                }
             }
             self.server.register_session(&id, &hook, mcp.as_deref());
             self.persist_session(&id);
