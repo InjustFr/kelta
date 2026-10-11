@@ -495,6 +495,67 @@ async fn feedback_unresolved_discussions_and_failed_job_traces() {
 }
 
 #[tokio::test]
+async fn past_the_page_cap_the_newest_discussions_are_kept() {
+    let server = MockServer::start().await;
+    mount(&server, "GET", "/api/v4/user", 200, "gitlab/user.json").await;
+    mount(&server, "GET", MR, 200, "gitlab/mr.json").await;
+    mount(&server, "GET", "/api/v4/projects/grp%2Fother/pipelines/908/jobs", 200, "gitlab/jobs.json").await;
+    let discussions = format!("{MR}/discussions");
+    let open = |id: String| {
+        json!([{ "id": id, "notes": [
+            { "id": 1, "system": false, "resolvable": true, "resolved": false, "body": "x", "author": { "username": "zed" } }
+        ]}])
+    };
+    // 7 pages, oldest first: pages 3..=7 are read, 1 and 2 dropped.
+    for page in 2..=7 {
+        let next = if page < 7 { (page + 1).to_string() } else { String::new() };
+        Mock::given(path(&discussions))
+            .and(query_param("page", page.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("x-next-page", next)
+                    .set_body_json(open(format!("d-{page}"))),
+            )
+            .mount(&server)
+            .await;
+    }
+    Mock::given(path(&discussions))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-next-page", "2")
+                .insert_header("x-total-pages", "7")
+                .set_body_json(open("d-1".into())),
+        )
+        .mount(&server)
+        .await;
+    let f = gl(&server).feedback(&rref("gitlab-acme", "grp/other", 8)).await.unwrap();
+    assert_eq!(
+        f.threads.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        ["d-3", "d-4", "d-5", "d-6", "d-7"]
+    );
+}
+
+#[tokio::test]
+async fn draft_count_reads_every_page() {
+    let server = MockServer::start().await;
+    Mock::given(path(format!("{MR}/draft_notes")))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{ "id": 3 }])))
+        .mount(&server)
+        .await;
+    Mock::given(path(format!("{MR}/draft_notes")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-next-page", "2")
+                .set_body_string(fixture_text("gitlab/draft_notes.json")),
+        )
+        .mount(&server)
+        .await;
+    mount_detail(&server, "gitlab/mr.json", "gitlab/approvals.json").await;
+    assert_eq!(gl(&server).get(&rref("gitlab-acme", "grp/other", 8)).await.unwrap().pending_comments, 3);
+}
+
+#[tokio::test]
 async fn feedback_refused_names_the_missing_scope() {
     let server = MockServer::start().await;
     mount(&server, "GET", "/api/v4/user", 200, "gitlab/user.json").await;
@@ -619,12 +680,21 @@ async fn team_list_reads_each_projects_open_mrs_and_who_they_wait_on() {
             .cloned()
             .collect()
     };
-    for (repo, iids) in [("grp%2Fother", vec![8]), ("grp%2Fsub%2Fproj", vec![7, 9])] {
+    // grp/sub/proj spans two pages: MR 9 only shows on page 2.
+    Mock::given(method("GET"))
+        .and(path("/api/v4/projects/grp%2Fsub%2Fproj/merge_requests"))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(of(&[9])))
+        .mount(&server)
+        .await;
+    for (repo, iids, next) in [("grp%2Fother", vec![8], ""), ("grp%2Fsub%2Fproj", vec![7], "2")] {
         Mock::given(method("GET"))
             .and(path(format!("/api/v4/projects/{repo}/merge_requests")))
             .and(query_param("state", "opened"))
             .and(query_param("draft", "no"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(of(&iids)))
+            .respond_with(
+                ResponseTemplate::new(200).insert_header("x-next-page", next).set_body_json(of(&iids)),
+            )
             .mount(&server)
             .await;
     }

@@ -35,7 +35,8 @@ use crate::common::{
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
 const PER_PAGE: &str = "100";
-/// shortcut: at most this many result pages per list, upgrade when someone has more MRs or notes.
+/// shortcut: at most this many result pages per list (discussions keep the newest), upgrade when
+/// someone has more MRs or notes.
 const MAX_PAGES: u32 = 5;
 
 /// `(repo, iid, head sha)`.
@@ -119,18 +120,28 @@ impl GitlabHost {
 
     /// Rows of a paged list, following `x-next-page` up to [`MAX_PAGES`].
     async fn paged(&self, req: HttpRequest) -> Result<Vec<Value>, KeltaError> {
+        self.pages(req, false).await
+    }
+
+    /// [`Self::paged`] for a list GitLab gives oldest first (discussions): past [`MAX_PAGES`] it
+    /// reads the last pages, so the cap drops the oldest rows instead of the newest.
+    async fn paged_newest(&self, req: HttpRequest) -> Result<Vec<Value>, KeltaError> {
+        self.pages(req, true).await
+    }
+
+    async fn pages(&self, req: HttpRequest, newest: bool) -> Result<Vec<Value>, KeltaError> {
+        let page_no = |resp: &kelta_http::HttpResponse<Value>, h: &str| {
+            resp.headers.get(h).and_then(|p| p.trim().parse::<u32>().ok())
+        };
+        let mut resp = self.json(req.clone()).await?;
+        if newest && let Some(total) = page_no(&resp, "x-total-pages").filter(|t| *t > MAX_PAGES) {
+            resp = self.json(req.clone().query("page", (total + 1 - MAX_PAGES).to_string())).await?;
+        }
         let mut out = Vec::new();
-        let mut next = Some(req.clone());
-        for _ in 0..MAX_PAGES {
-            let Some(r) = next.take() else { break };
-            let resp = self.json(r).await?;
+        for read in 1..=MAX_PAGES {
             out.extend(resp.body.as_array().cloned().unwrap_or_default());
-            next = resp
-                .headers
-                .get("x-next-page")
-                .map(|p| p.trim())
-                .filter(|p| p.parse::<u32>().is_ok())
-                .map(|p| req.clone().query("page", p));
+            let Some(next) = page_no(&resp, "x-next-page").filter(|_| read < MAX_PAGES) else { break };
+            resp = self.json(req.clone().query("page", next.to_string())).await?;
         }
         Ok(out)
     }
@@ -347,7 +358,8 @@ impl GitlabHost {
             Some(c) => c,
             None => {
                 let url = self.mr_url(&key.0, &format!("/{}/discussions", key.1));
-                let Ok(discussions) = self.paged(HttpRequest::get(url).query("per_page", PER_PAGE)).await
+                let Ok(discussions) =
+                    self.paged_newest(HttpRequest::get(url).query("per_page", PER_PAGE)).await
                 else {
                     return;
                 };
@@ -445,7 +457,7 @@ fn ci_from(status: Option<&str>) -> CiState {
     match status {
         Some("success") => CiState::Success,
         Some("failed") => CiState::Failure,
-        Some("canceled" | "canceling" | "skipped") => CiState::Error,
+        Some("canceled" | "canceling") => CiState::Error,
         Some(
             "running"
             | "pending"
@@ -814,7 +826,7 @@ impl CodeHost for GitlabHost {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         let (mr, discussions) = tokio::join!(
             self.json(HttpRequest::get(&url)),
-            self.paged(HttpRequest::get(format!("{url}/discussions")).query("per_page", PER_PAGE)),
+            self.paged_newest(HttpRequest::get(format!("{url}/discussions")).query("per_page", PER_PAGE)),
         );
         let mr = mr.map_err(&refused)?.body;
         let discussions = discussions.map_err(&refused)?;
@@ -954,8 +966,7 @@ impl CodeHost for GitlabHost {
 impl GitlabHost {
     async fn draft_count(&self, r: &ReviewRef) -> Result<u32, KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}/draft_notes", r.number));
-        let v = self.json(HttpRequest::get(url).query("per_page", PER_PAGE)).await?.body;
-        Ok(v.as_array().map_or(0, Vec::len) as u32)
+        Ok(self.paged(HttpRequest::get(url).query("per_page", PER_PAGE)).await?.len() as u32)
     }
 
     /// Publishes my draft notes (GitLab's pending review); returns how many went out.
@@ -999,6 +1010,12 @@ fn changes_requested(body: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skipped_pipeline_is_not_a_failure() {
+        assert_eq!(ci_from(Some("skipped")), CiState::None);
+        assert_eq!(ci_from(Some("canceled")), CiState::Error);
+    }
 
     #[test]
     fn traces_lose_sections_ansi_and_progress() {
