@@ -239,6 +239,7 @@ In the Tickets list (not Now; the same in the rail's Tickets view, where the sou
 
 A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 | `N` | New work item |
+| `P` | Park the work row (same gate as the work menu's `P`) |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 

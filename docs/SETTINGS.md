@@ -55,7 +55,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `prefix_timeout_ms` | int (200..5000) | `1000` | one-shot timer |
 | `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
-| `list_keys` | bool | `true` | meant to switch the single-key shortcuts of lists and boards off; nothing reads it yet, so they are always on |
+| `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |
 
 Every action id, label and default chord per platform is in the ActionId catalog (`crates/kelta-proto/src/actions.rs`, generated to `ui/src/lib/gen/actions.ts`); SPEC §4 lists them. Settings → Keys records a chord, flags conflicts and unbinds. `window.toggle` has no in-app chord: bind `kelta-ctl toggle` in your compositor. Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
 
@@ -202,7 +202,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 |---|---|---|---|
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
 | `finish_first` | bool | `true` | starting a new ticket while other work is unfinished lists that work first (Start anyway or go to it); the sheet's "Don't ask again" turns it off |
-| `default_template` | str | `"claude+editor"` | |
+| `default_template` | str | `"claude+editor"` | the session template Start work uses; a project's `[project] default_template` overrides it for that project |
 | `review_template` | str | `"review"` | |
 | `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
 | `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}` |
@@ -434,7 +434,7 @@ id = "shop"                  # [a-z0-9-]{1,40}, must equal the file stem; `home`
 name = "Shop"
 color = "theme:green"         # a theme slot (red, green, yellow, blue, magenta, cyan, or bright-…; follows the theme) or a custom "#rrggbb" (kept as typed; "#rgb" reads as "#rrggbb"; anything else is a warning and the colour is unset)
 icon = "S"                   # 1-2 chars or sprite icon name
-default_template = "claude+editor"   # checked against session_templates; Start work follows work.default_template
+default_template = "claude+editor"   # checked against session_templates; sets this project's work.default_template (over the global one and this file's [work]; a repo .kelta/config.toml [work] still wins)
 
 [[project.repos]]
 id = "api"
@@ -527,7 +527,7 @@ Config holds only `SecretRef` strings, never tokens:
 
 Simple `{path}` substitution (no expressions). Filters: `{x|slug}`, `{x|shell}` (POSIX single-quote; a shell slot refuses any value holding a control character, tab included, since readline would act on it while the line is typed), `{x|json}`, `{a|b}` = first non-empty of `a` or `b` (e.g. `{worktree|project.root}`). An unknown placeholder is a validation error at load time in `worktree.root`, `worktree.branch_template`, `work.on_start.comment`, `work.on_pr.comment`, `work.pr.title_template`, `work.pr.body_template`, `claude.prompt_templates.*`, editor preset `args` / `open_cmd` / `open_keys`, a session template `command`, and a tool's `command`, `cwd`, `args` and `env`. In commands typed into a shell (a session template's `command`), every value is POSIX-quoted by default (`|shell` is implied; writing it does not quote twice), so a ticket title cannot run as shell code.
 
-Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.id` (the work item), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`, `closes` (`work.pr.body_template`). Also valid anywhere: `settings.<path>`, `event.<path>` and `payload.<path>` (trigger events and plugin settings), `plugin.dir`. Prompt templates add `options` (the Start options, §2 `[[session_templates]]`) and, per prompt, `task`, `workflow`, `args`, `file`, `onto`, `step`, `total` (see `claude.prompt_templates`). Editor presets add `sock`, `path`, `file`, `line`, `cwd`, `sid8`.
+Available: `project.{id,name,root}`, `repo.{id,path,name}`, `worktree`, `branch`, `base`, `key` (branch key), `slug`, `type`, `ticket.{key,title,url,file}`, `pr.{url,number,head,base,title}`, `session.{id,name,cwd}`, `sid8`, `run` (session runtime dir), `port` (free port allocated per tool instance), `work.id` (the work item), `work.port` (first port of the work item's block, `[ports]`), `config_dir`, `data_dir`, `home`, `user`, `closes` (`work.pr.body_template`). Also valid anywhere: `settings.<path>`, `event.<path>` and `payload.<path>` (trigger events and plugin settings), `plugin.dir`. Every prompt template also accepts `options` (the Start options, §2 `[[session_templates]]`), `task`, `workflow`, `args`, `file`, `onto`, `step` and `total`; each is filled only where `claude.prompt_templates` says, and empty elsewhere. Editor presets add `sock`, `path`, `file`, `line`, `cwd`, `sid8`.
 
 ## 7. Hot reload
 
