@@ -164,6 +164,14 @@ impl WorkService {
         files::write_private(&path, &serde_json::to_vec_pretty(j)?)
     }
 
+    /// `save_journal` from a copy loaded a while ago: a message held / checks sent meanwhile (not
+    /// under the item lock) are newer than that copy, so they are kept.
+    pub(crate) fn save_journal_fresh(&self, id: &WorkItemId, j: &mut Journal) -> Result<(), KeltaError> {
+        let cur = self.load_journal(id);
+        (j.pending_prompt, j.checks_sent) = (cur.pending_prompt, cur.checks_sent);
+        self.save_journal(id, j)
+    }
+
     pub(crate) fn env(&self, project: &ProjectId, repo_id: &str) -> Result<Env, KeltaError> {
         let core = self.api()?;
         let project = project_of(&core, project)?;
@@ -554,7 +562,7 @@ impl WorkService {
             }
             self.set_step(&mut item, step, StepStatus::Running, None).await?;
             let res = self.exec_step(step, &env, &mut item, &mut j).await;
-            self.save_journal(id, &j)?;
+            self.save_journal_fresh(id, &mut j)?;
             match res {
                 Ok(detail) => {
                     self.set_step(&mut item, step, StepStatus::Done, detail).await?;

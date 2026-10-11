@@ -110,6 +110,32 @@ async fn finish_clean_pushed_without_force() {
 }
 
 #[tokio::test]
+async fn finish_keeps_an_adopted_worktree() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: t }).await.unwrap();
+    // The user's own worktree on the item's branch, with an ignored file Kelta knows nothing of.
+    let own = fx.tmp.path().join("shop-x");
+    git(&fx.repo, &["worktree", "add", "-q", "-b", &plan.branch, own.to_str().unwrap()]);
+    std::fs::write(own.join(".env"), "SECRET=1\n").unwrap();
+    std::fs::write(own.join(".gitignore"), ".env\n").unwrap();
+    git(&own, &["add", ".gitignore"]);
+    git(&own, &["commit", "-q", "-m", "ignore"]);
+    git(&own, &["push", "-q", "-u", "origin", &plan.branch]);
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
+    assert_eq!(item.worktree.canonicalize().unwrap(), own.canonicalize().unwrap(), "adopted");
+
+    let done = w.finish(&item.id, opts(false)).await.unwrap();
+    assert_eq!(done.state, WorkState::Finished);
+    assert!(own.join(".env").exists(), "ignored file kept");
+    assert_eq!(fx.worktree_count(), 2);
+}
+
+#[tokio::test]
 async fn status_ahead_behind_dirty() {
     need_git!();
     let fx = Fx::new();
