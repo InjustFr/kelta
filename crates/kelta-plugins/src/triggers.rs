@@ -13,7 +13,7 @@ use std::time::Duration;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, TriggerChain, bus};
 use kelta_proto::ext::{BlockingOutcome, TriggerDef, TriggerInfo, TriggerOrigin, TriggerRun};
-use kelta_proto::ids::{PluginId, ProjectId};
+use kelta_proto::ids::ProjectId;
 use parking_lot::Mutex;
 use serde_json::{Map, Value};
 use tokio::time::Instant;
@@ -474,12 +474,5 @@ impl PluginHost {
                 let _ = h.await;
             }
         }
-    }
-
-    /// Plugins with a pending trigger subscription (diagnostics).
-    pub fn activated_plugins(&self) -> Vec<PluginId> {
-        let mut v: Vec<PluginId> = self.activated.lock().iter().cloned().collect();
-        v.sort();
-        v
     }
 }

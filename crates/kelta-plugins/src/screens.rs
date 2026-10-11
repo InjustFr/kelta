@@ -27,7 +27,6 @@ use crate::perms::{self, Granted};
 #[derive(Debug, Clone)]
 pub(crate) struct Screen {
     pub plugin: PluginId,
-    pub screen_id: String,
     pub project: Option<ProjectId>,
     pub scope: ScreenScope,
     pub subscriptions: Vec<(String, GlobMatcher)>,
@@ -134,7 +133,6 @@ impl PluginHost {
             instance_id.clone(),
             Screen {
                 plugin: plugin.clone(),
-                screen_id: screen_id.to_owned(),
                 project: project.cloned(),
                 scope: screen.scope,
                 subscriptions: Vec::new(),
@@ -804,11 +802,6 @@ impl PluginHost {
                 payload: ev.payload.clone(),
             });
         }
-    }
-
-    /// Open screen instances: `(instance, plugin, screen id)`.
-    pub fn screen_instances(&self) -> Vec<(ScreenInstanceId, PluginId, String)> {
-        self.screens.lock().iter().map(|(k, s)| (k.clone(), s.plugin.clone(), s.screen_id.clone())).collect()
     }
 }
 

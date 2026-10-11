@@ -18,6 +18,14 @@ const NAME: &str = "kelta";
 pub const INSTALL_ACTION: &str = "claude.mcp_install";
 pub const NEVER_ACTION: &str = "claude.mcp_never";
 
+/// Claude Code's user config: `.claude.json` in a session's config dir when `CLAUDE_CONFIG_DIR` is
+/// set, else in `$HOME` (beside `~/.claude`, not in it).
+fn claude_config_file(env: &kelta_proto::term::LoginEnv) -> PathBuf {
+    let dir = env.get("CLAUDE_CONFIG_DIR").filter(|d| !d.is_empty());
+    let dir = dir.and_then(|_| crate::spawn_env::claude_config_dir(&env.vars));
+    dir.unwrap_or_else(|| crate::projects::home_dir(env)).join(".claude.json")
+}
+
 /// The install token (apart from the per-session tokens): the one Claude Code already holds in
 /// plain text in its registration, else a new one. Never in the Keychain (#275): it would add
 /// prompts, no secrecy.
@@ -212,9 +220,7 @@ impl Core {
 
     /// Claude Code's user config: `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json`.
     fn claude_config(&self) -> PathBuf {
-        let dir =
-            self.login_env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| self.home_dir());
-        dir.join(".claude.json")
+        claude_config_file(&self.login_env)
     }
 
     /// The user-scope registration in Claude Code's user config.
@@ -315,6 +321,25 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_file_follows_the_session_config_dir() {
+        let env = |dir: Option<&str>| kelta_proto::term::LoginEnv {
+            vars: [("HOME", Some("/h")), ("CLAUDE_CONFIG_DIR", dir)]
+                .into_iter()
+                .filter_map(|(k, v)| Some((k.to_owned(), v?.to_owned())))
+                .collect(),
+            ..Default::default()
+        };
+        let tilde = env(Some("~/x"));
+        assert_eq!(claude_config_file(&tilde), PathBuf::from("/h/x/.claude.json"));
+        assert_eq!(
+            claude_config_file(&tilde),
+            crate::spawn_env::claude_config_dir(&tilde.vars).unwrap().join(".claude.json")
+        );
+        assert_eq!(claude_config_file(&env(Some(""))), PathBuf::from("/h/.claude.json"));
+        assert_eq!(claude_config_file(&env(None)), PathBuf::from("/h/.claude.json"));
+    }
 
     #[test]
     fn port_of_registration() {

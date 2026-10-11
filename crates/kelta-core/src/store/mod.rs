@@ -457,10 +457,6 @@ pub mod q {
         tx.commit().map_err(db_err)
     }
 
-    pub fn seen_review_key(r: &ReviewRef) -> (String, String, u64) {
-        (r.account.as_str().to_owned(), r.repo.clone(), r.number)
-    }
-
     // ---- provider_cache ------------------------------------------------------------------------
 
     /// Startup cleanup of rows nothing reads any more: cache entries not refreshed for 30 days (gone
