@@ -8,17 +8,7 @@
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { appInfo } from '$lib/ipc';
-  import {
-    GLOBAL,
-    layout,
-    projects,
-    sessions,
-    toasts,
-    tools,
-    ui,
-    work,
-    type GlobalView,
-  } from '$lib/stores';
+  import { GLOBAL, layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Icon, IconButton, Kbd, Menu, type MenuItem } from '$lib/ui';
 
