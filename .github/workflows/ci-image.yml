@@ -5,7 +5,7 @@ name: ci-image
 # job installs system packages on every run.
 on:
   push:
-    branches: [main, feat/ticket-245] # TEMP bootstrap, removed before merge
+    branches: [main]
     paths: ["docker/ubuntu-build.Dockerfile", "scripts/install-nvim.sh", ".github/workflows/ci-image.yml"]
   workflow_dispatch:
 
