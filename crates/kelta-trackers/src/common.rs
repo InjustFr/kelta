@@ -56,7 +56,7 @@ pub fn last_n<T>(mut v: Vec<T>, n: usize) -> Vec<T> {
 
 /// Status category from a status/column name (used where the provider gives no category).
 /// Matches word starts, never inside a word: "Incomplete" / "Unresolved" are not Done, and a
-/// word after "not" / "non" is skipped ("Not done" is Todo, not Done). Todo wins over InProgress:
+/// "not" / "non" drops the rest of the name ("Not yet done" is Todo, not Done). Todo wins over InProgress:
 /// "Ready for development" is not started.
 pub fn category_from_name(name: &str) -> StatusCategory {
     // Words split on non-alphanumerics and camelCase ("InProgress"); apostrophes dropped ("won't" -> "wont").
@@ -71,16 +71,16 @@ pub fn category_from_name(name: &str) -> StatusCategory {
         }
         prev_lower = c.is_lowercase();
     }
-    let (mut n, mut negated, mut skip) = (String::new(), false, false);
+    let (mut n, mut negated) = (String::new(), false);
     for w in split.split_whitespace() {
-        if std::mem::take(&mut skip) {
+        if w == "not" || w == "non" {
             negated = true;
-        } else if w == "not" || w == "non" {
-            skip = true;
-        } else {
-            n.push(' ');
-            n.push_str(w);
         }
+        if negated {
+            continue;
+        }
+        n.push(' ');
+        n.push_str(w);
     }
     let has = |w: &[&str]| w.iter().any(|x| n.contains(&format!(" {x}")));
     if has(&["done", "closed", "resolved", "complete", "finished", "rejected", "cancel", "wont"]) {
@@ -236,6 +236,10 @@ mod tests {
         assert_eq!(category_from_name("workflow::not-started"), StatusCategory::Todo);
         assert_eq!(category_from_name("Not done"), StatusCategory::Todo);
         assert_eq!(category_from_name("workflow::not-done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Not yet done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("workflow::not-yet-done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Not in progress"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Not in review"), StatusCategory::Todo);
         assert_eq!(category_from_name("Incomplete"), StatusCategory::Unknown);
         assert_eq!(category_from_name("Unresolved"), StatusCategory::Unknown);
         assert_eq!(category_from_name("Inactive"), StatusCategory::Unknown);
