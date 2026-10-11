@@ -530,13 +530,18 @@ pub struct TermModel {
     tail: Tail,
     history_limit: usize,
     kitty_keyboard: bool,
+    osc52_read: bool,
+    /// Last title sent to core (none yet = the next one is sent).
+    title: Option<String>,
     /// Lines for the on-disk history log, drained by the session (None = logging off).
     log: Option<String>,
 }
 
-/// Model configuration (D7: kitty keyboard per `terminal.keyboard_protocol`; OSC 52 copy only).
-fn config(history: usize, kitty_keyboard: bool) -> Config {
-    Config { scrolling_history: history, kitty_keyboard, osc52: Osc52::OnlyCopy, ..Config::default() }
+/// Model configuration (D7: kitty keyboard per `terminal.keyboard_protocol`; OSC 52 copy only unless
+/// `terminal.osc52 = "read-write"`).
+fn config(history: usize, kitty_keyboard: bool, osc52_read: bool) -> Config {
+    let osc52 = if osc52_read { Osc52::CopyPaste } else { Osc52::OnlyCopy };
+    Config { scrolling_history: history, kitty_keyboard, osc52, ..Config::default() }
 }
 
 impl TermModel {
@@ -546,7 +551,7 @@ impl TermModel {
         let listener = Listener::default();
         let events = listener.events.clone();
         Self {
-            term: Term::new(config(history, true), &size, listener),
+            term: Term::new(config(history, true, false), &size, listener),
             processor: Processor::new(),
             shadow: Shadow::new(size.rows),
             events,
@@ -554,6 +559,8 @@ impl TermModel {
             tail: Tail::new(),
             history_limit: history,
             kitty_keyboard: true,
+            osc52_read: false,
+            title: None,
             log: None,
         }
     }
@@ -561,10 +568,21 @@ impl TermModel {
     /// Parse PTY output; replies and events are appended to `out`.
     pub fn advance(&mut self, bytes: &[u8], palette: &Palette, out: &mut Vec<Output>) {
         let mut evs = Vec::new();
-        self.osc.scan(bytes, &mut evs);
         self.tail.update(bytes);
-        let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow, log: &mut self.log };
-        self.processor.advance(&mut h, bytes);
+        let mut rest = bytes;
+        loop {
+            let cut = self.osc.scan(rest, &mut evs);
+            let (now, later) = rest.split_at(cut.unwrap_or(rest.len()));
+            let mut h = Shadowed { term: &mut self.term, shadow: &mut self.shadow, log: &mut self.log };
+            self.processor.advance(&mut h, now);
+            if cut.is_none() {
+                break;
+            }
+            // An OSC past the cap: vte would buffer it forever. A fresh parser (not CAN, which vte
+            // dispatches) drops it; the rest of the chunk is text again.
+            self.processor = Processor::new();
+            rest = later;
+        }
         out.extend(evs.into_iter().map(Output::Event));
         self.drain(palette, out);
     }
@@ -597,6 +615,8 @@ impl TermModel {
 
     fn drain(&mut self, palette: &Palette, out: &mut Vec<Output>) {
         let events = std::mem::take(&mut *self.events.lock());
+        // A flood of BEL or titles (`cat /dev/urandom`) is one event per chunk.
+        let (mut bell, mut title): (bool, Option<String>) = (false, None);
         for ev in events {
             match ev {
                 Event::PtyWrite(s) => out.push(Output::Reply(s.into_bytes())),
@@ -604,9 +624,9 @@ impl TermModel {
                     let rgb = self.term.colors()[index].unwrap_or_else(|| palette.color(index));
                     out.push(Output::Reply(fmt(rgb).into_bytes()));
                 }
-                Event::Title(t) => out.push(Output::Event(TerminalEvent::Title(t))),
-                Event::ResetTitle => out.push(Output::Event(TerminalEvent::Title(String::new()))),
-                Event::Bell => out.push(Output::Event(TerminalEvent::Bell)),
+                Event::Title(t) => title = Some(t),
+                Event::ResetTitle => title = Some(String::new()),
+                Event::Bell => bell = true,
                 Event::ClipboardStore(ty, text) => {
                     out.push(Output::Event(TerminalEvent::ClipboardStore { kind: clipboard_kind(ty), text }))
                 }
@@ -616,6 +636,13 @@ impl TermModel {
                 // TextAreaSizeRequest (CSI 14 t) needs pixel sizes the headless model does not know.
                 _ => {}
             }
+        }
+        if bell {
+            out.push(Output::Event(TerminalEvent::Bell));
+        }
+        if let Some(t) = title.filter(|t| self.title.as_ref() != Some(t)) {
+            self.title = Some(t.clone());
+            out.push(Output::Event(TerminalEvent::Title(t)));
         }
     }
 
@@ -672,8 +699,16 @@ impl TermModel {
         self.shadow.keyboard_depth = [0; 2];
     }
 
+    /// Let programs query the clipboard (OSC 52 `?`): `terminal.osc52 = "read-write"`.
+    pub fn set_osc52_read(&mut self, on: bool) {
+        if on != self.osc52_read {
+            self.osc52_read = on;
+            self.apply_config();
+        }
+    }
+
     fn apply_config(&mut self) {
-        self.term.set_options(config(self.history_limit, self.kitty_keyboard));
+        self.term.set_options(config(self.history_limit, self.kitty_keyboard, self.osc52_read));
         // `set_options` re-announces the title; that is not a change.
         self.events.lock().clear();
     }
@@ -970,18 +1005,59 @@ mod tests {
             out,
             vec![
                 Output::Event(TerminalEvent::Notify { title: Some("T".into()), body: "B".into() }),
-                Output::Event(TerminalEvent::Title("hello".into())),
-                Output::Event(TerminalEvent::Bell),
                 Output::Event(TerminalEvent::ClipboardStore {
                     kind: ClipboardKind::Clipboard,
                     text: "hi".into()
                 }),
+                Output::Event(TerminalEvent::Bell),
+                Output::Event(TerminalEvent::Title("hello".into())),
             ]
         );
-        // OSC 52 read is not allowed (copy only).
+        // OSC 52 read is not allowed (copy only) until `terminal.osc52 = "read-write"`.
         let mut out = Vec::new();
         m.advance(b"\x1b]52;c;?\x07", &Palette::default(), &mut out);
         assert!(out.is_empty());
+        m.set_osc52_read(true);
+        m.advance(b"\x1b]52;c;?\x07", &Palette::default(), &mut out);
+        assert_eq!(out, vec![Output::Event(TerminalEvent::ClipboardLoad { kind: ClipboardKind::Clipboard })]);
+    }
+
+    fn events(m: &mut TermModel, bytes: &[u8]) -> Vec<TerminalEvent> {
+        let mut out = Vec::new();
+        m.advance(bytes, &Palette::default(), &mut out);
+        out.into_iter()
+            .filter_map(|o| match o {
+                Output::Event(e) => Some(e),
+                Output::Reply(_) => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn bell_and_title_floods_collapse() {
+        let mut m = TermModel::new(80, 24, 100);
+        assert_eq!(events(&mut m, &b"\x07".repeat(10_000)), vec![TerminalEvent::Bell]);
+        let flood = b"\x1b]2;a\x07\x1b]2;b\x07".repeat(1000);
+        assert_eq!(events(&mut m, &flood), vec![TerminalEvent::Title("b".into())]);
+        assert!(events(&mut m, &flood).is_empty(), "an unchanged title emits nothing");
+        assert_eq!(events(&mut m, b"\x1b]2;a\x07"), vec![TerminalEvent::Title("a".into())]);
+    }
+
+    #[test]
+    fn unterminated_osc_is_capped_and_text_resumes() {
+        let mut m = TermModel::new(80, 24, 100);
+        // One chunk, then the same split in 64 KiB reads: the OSC never swallows what follows.
+        let mut junk = b"\x1b]2;".to_vec();
+        junk.resize(junk.len() + 8 * 1024 * 1024, b'x');
+        m.feed(&junk);
+        m.feed(b"\r\nafter");
+        assert!(m.text_tail(5).contains("after"));
+        let mut m = TermModel::new(80, 24, 100);
+        for chunk in junk.chunks(64 * 1024) {
+            m.feed(chunk);
+        }
+        m.feed(b"\r\nafter");
+        assert!(m.text_tail(5).contains("after"));
     }
 
     #[test]
