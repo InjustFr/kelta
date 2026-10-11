@@ -13,7 +13,7 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
+use kelta_proto::settings::{AccountConfig, AuthKind, BlockedMarker, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
     TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
@@ -227,6 +227,8 @@ impl Tracker for GiteaIssues {
             comment: true,
             transitions_need_fetch: false,
             projects_v2: false,
+            // core-filled per source
+            block: false,
         }
     }
 
@@ -246,6 +248,33 @@ impl Tracker for GiteaIssues {
 
     async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
         Ok(self.issues(view, None, Some(text)).await?.items)
+    }
+
+    /// Adds the label by name (Gitea 1.21+); removes it by id, read from the issue.
+    async fn set_blocked(
+        &self,
+        t: &TicketRef,
+        marker: &BlockedMarker,
+        blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        let BlockedMarker::Label(l) = marker else {
+            return Err(KeltaError::unsupported("Gitea marks blocked tickets with a label"));
+        };
+        if blocked {
+            self.json(HttpRequest::post(self.issue_url(t, "/labels")?).json(json!({ "labels": [l] })))
+                .await?;
+        } else {
+            let issue = self.json(HttpRequest::get(self.issue_url(t, "")?)).await?.body;
+            let labels = issue.get("labels").and_then(Value::as_array).cloned().unwrap_or_default();
+            let ids = labels.iter().filter(|x| s(x, "name").is_some_and(|n| n.eq_ignore_ascii_case(l)));
+            for id in ids.filter_map(|x| x.get("id").and_then(idstr)) {
+                self.auth
+                    .send_text(HttpRequest::delete(self.issue_url(t, &format!("/labels/{id}"))?))
+                    .await?;
+            }
+        }
+        let v = self.json(HttpRequest::get(self.issue_url(t, "")?)).await?.body;
+        self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitea issue response without number"))
     }
 
     async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {

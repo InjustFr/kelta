@@ -14,9 +14,9 @@ use kelta_http::graphql::graphql;
 use kelta_http::util::{link_rel, percent_encode};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
-use kelta_proto::error::KeltaError;
+use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, ProjectV2Ref, TrackerBinding, TrackerView};
+use kelta_proto::settings::{AccountConfig, BlockedMarker, ProjectV2Ref, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
     TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
@@ -749,6 +749,8 @@ impl Tracker for GithubIssues {
             comment: true,
             transitions_need_fetch: true,
             projects_v2: true,
+            // core-filled per source
+            block: false,
         }
     }
 
@@ -964,6 +966,34 @@ impl Tracker for GithubIssues {
             .ok_or_else(|| KeltaError::not_found(format!("no {PRIORITY_FIELD} option named `{priority}`")))?;
         self.gql(SET_OPTION, json!({"p": item.project_id, "i": item.item_id, "f": field.field_id, "o": opt}))
             .await?;
+        let issue = self.fetch_issue(&repo, number).await?;
+        self.ticket_with_board(&repo, number, &issue)
+            .await
+            .ok_or_else(|| KeltaError::upstream("issue response without repository"))
+    }
+
+    async fn set_blocked(
+        &self,
+        t: &TicketRef,
+        marker: &BlockedMarker,
+        blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        let BlockedMarker::Label(l) = marker else {
+            return Err(KeltaError::unsupported("GitHub marks blocked tickets with a label"));
+        };
+        let (repo, number) = split_repo_number(&t.key)?;
+        let url = format!("{}/repos/{repo}/issues/{number}/labels", self.api);
+        let r = if blocked {
+            self.rest(HttpRequest::post(url).json(json!({ "labels": [l] }))).await
+        } else {
+            self.rest(HttpRequest::delete(format!("{url}/{}", percent_encode(l)))).await
+        };
+        // 404 on remove: the label was not on the issue
+        if let Err(e) = r
+            && (blocked || e.code != ErrorCode::NotFound)
+        {
+            return Err(e);
+        }
         let issue = self.fetch_issue(&repo, number).await?;
         self.ticket_with_board(&repo, number, &issue)
             .await

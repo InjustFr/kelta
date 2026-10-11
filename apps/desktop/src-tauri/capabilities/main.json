@@ -96,6 +96,7 @@
     "allow-tracker-assignable-users",
     "allow-tracker-priorities",
     "allow-tracker-set-priority",
+    "allow-tracker-set-blocked",
     "allow-tracker-refine",
     "allow-workflows-list",
     "allow-workflow-run",
