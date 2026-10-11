@@ -46,24 +46,18 @@ impl HttpClient {
         let mut b = reqwest::Client::builder()
             .user_agent(user_agent)
             .pool_idle_timeout(Duration::from_secs(30))
-            // reqwest strips only Authorization on cross-host redirects, not PRIVATE-TOKEN etc.
-            .redirect(reqwest::redirect::Policy::custom(|a| {
-                // Ten hops, as reqwest's default policy: a no-timeout client must not loop forever.
-                if a.previous().len() <= 10
-                    && a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url()))
-                {
-                    a.follow()
-                } else {
-                    a.stop()
-                }
-            }));
+            .redirect(redirect_policy());
         match timeout {
             Some(t) => b = b.timeout(t),
             None => b = b.pool_max_idle_per_host(0),
         }
         let inner = b.build().unwrap_or_else(|e| {
             tracing::warn!(error = %e, "http client builder failed; using defaults");
-            reqwest::Client::new()
+            // Never reqwest's default policy, which re-sends token headers on redirects.
+            reqwest::Client::builder()
+                .redirect(redirect_policy())
+                .build()
+                .unwrap_or_else(|e| panic!("cannot build an http client: {e}"))
         });
         Self { inner }
     }
@@ -73,9 +67,27 @@ impl HttpClient {
     }
 }
 
-/// A redirect may carry the request's token headers: same host, and never https → http.
+/// reqwest strips only Authorization on cross-host redirects, not PRIVATE-TOKEN etc.
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|a| {
+        // Ten hops, as reqwest's default policy: a no-timeout client must not loop forever.
+        if a.previous().len() <= 10 && a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url()))
+        {
+            a.follow()
+        } else {
+            a.stop()
+        }
+    })
+}
+
+/// A redirect may carry the request's token headers: same host and port (http:80 → https:443 is
+/// fine), and never https → http.
 fn redirect_keeps_secrets_safe(from: &reqwest::Url, to: &reqwest::Url) -> bool {
-    from.host_str() == to.host_str() && !(from.scheme() == "https" && to.scheme() != "https")
+    let (fp, tp) = (from.port_or_known_default(), to.port_or_known_default());
+    let upgrade = from.scheme() == "http" && to.scheme() == "https" && fp == Some(80) && tp == Some(443);
+    from.host_str() == to.host_str()
+        && (fp == tp || upgrade)
+        && !(from.scheme() == "https" && to.scheme() != "https")
 }
 
 /// Per-account limits.
@@ -235,5 +247,9 @@ mod tests {
         assert!(ok(&u("http://git.acme.com/a"), &u("https://git.acme.com/b")), "upgrade is fine");
         assert!(!ok(&u("https://git.acme.com/a"), &u("http://git.acme.com/b")));
         assert!(!ok(&u("https://git.acme.com/a"), &u("https://evil.test/b")));
+        assert!(ok(&u("https://git.acme.com/a"), &u("https://git.acme.com:443/b")));
+        assert!(!ok(&u("https://git.acme.com/a"), &u("https://git.acme.com:8443/b")), "other port");
+        assert!(!ok(&u("http://127.0.0.1:8080/a"), &u("http://127.0.0.1:9090/b")));
+        assert!(!ok(&u("http://git.acme.com:8080/a"), &u("https://git.acme.com/b")));
     }
 }
