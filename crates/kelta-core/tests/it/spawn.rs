@@ -272,6 +272,23 @@ async fn claude_sessions_start_in_the_last_permission_mode() {
 }
 
 #[tokio::test]
+async fn stored_dangerous_permission_mode_is_not_loaded() {
+    let tmp = tempfile::tempdir().unwrap();
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![]);
+        h.core
+            .store()
+            .call(|c| kelta_core::store::q::ui_state_set(c, "claude.permission_mode", "bypassPermissions"))
+            .await
+            .unwrap();
+        h.core.store().flush().await.unwrap();
+        h.core.shutdown().await.unwrap();
+    }
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    assert_eq!(h.core.claude_permission_mode(), None);
+}
+
+#[tokio::test]
 async fn template_shell_command_quotes_placeholders() {
     let tmp = tempfile::tempdir().unwrap();
     let mut settings = Settings::defaults();
