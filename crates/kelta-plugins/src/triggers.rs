@@ -360,6 +360,11 @@ impl PluginHost {
             },
             None => None,
         };
+        if let Some(g) = &granted
+            && !g.covers_events(&ev.name)
+        {
+            return run_record(&t.key, ev, false, Some(format!("missing permission: events:{}", ev.name)));
+        }
         let vars = self
             .build_vars(CtxSpec { event: Some(ev), plugin: t.plugin.as_deref(), ..Default::default() })
             .await;

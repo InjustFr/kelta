@@ -356,7 +356,7 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `sessions.read` / `sessions.spawn` / `sessions.write` | list sessions / spawn sessions & tools / set attention |
 | `terminal.write` | send text into sessions (`send_keys`) |
 | `work.read` | list/get work items: branches, worktrees, linked tickets and PRs (separate from `sessions.read`: it exposes paths and branch names) |
-| `events:<glob>` | receive bus events matching the glob (e.g. `events:ticket.*`) |
+| `events:<glob>` | receive bus events matching the glob (e.g. `events:ticket.*`); a plugin trigger's `on` must be covered by a declared `events:` permission, and it only runs once that permission is granted |
 | `settings.read` | read own namespace always allowed; this adds non-secret effective settings |
 | `ui.open` | open panes/screens, focus |
 | `notify` | desktop notifications |
