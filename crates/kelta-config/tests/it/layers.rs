@@ -529,3 +529,27 @@ fn a_default_template_from_an_untrusted_repo_is_not_an_error() {
     block_on(svc.repo_trust(&p, "api", true, Some(&sha(text)))).unwrap();
     assert!(svc.effective(Some(&p)).session_templates.iter().any(|t| t.id == "repo-tpl"));
 }
+
+#[test]
+fn effective_value_fills_source_defaults() {
+    let e = env();
+    e.global(
+        r#"
+[[sources]]
+id = "mine"
+label = "Mine"
+tracker = { account = "gh", views = [{ id = "v", label = "V", repo = "o/r" }] }
+"#,
+    );
+    let svc = e.load();
+    let eff = svc.effective_doc(None).unwrap();
+    let s = &eff.value["sources"][0];
+    assert_eq!((&s["routes"], &s["projects"]), (&json!([]), &json!([])));
+    assert_eq!((&s["tracker"]["columns"], &s["tracker"]["status_map"]["done"]), (&json!([]), &json!(null)));
+    // badges come from the layers, not the filled value: no path for an omitted key
+    let badges: Vec<_> = eff.sources.iter().filter(|(k, _)| k.starts_with("sources")).collect();
+    assert_eq!(
+        badges,
+        [(&"sources".to_owned(), &Layer::Global), (&"sources.mine".to_owned(), &Layer::Global)]
+    );
+}

@@ -5,6 +5,7 @@ import '../../../src/styles/base.css';
 
 import { mount } from 'svelte';
 
+import * as ipc from '$lib/ipc/commands';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import * as stores from '$lib/stores';
@@ -19,6 +20,7 @@ const { transport, controls } = createMockTransport();
 setTransport(transport);
 window.__keltaMock = controls;
 (window as unknown as { __stores: typeof stores }).__stores = stores;
+(window as unknown as { __ipc: typeof ipc }).__ipc = ipc;
 injectSprite();
 
 const params = new URLSearchParams(location.search);

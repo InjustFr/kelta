@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import type * as Ipc from '$lib/ipc/commands';
+
 const HARNESS = '/tests/e2e/settings/harness.html';
 
 test.describe('settings pane', () => {
@@ -26,6 +28,30 @@ test.describe('settings pane', () => {
     // reset at this layer brings the default back
     await field.getByTestId('reset').click();
     await expect(field.locator('[data-testid="source-badge"]')).toHaveAttribute('data-source', 'default');
+    expect(errors).toEqual([]);
+  });
+
+  test('a source without routes, projects or columns opens Sources and takes a route (#281)', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=terminal`);
+    await expect(page.locator('[data-testid="settings-section"]')).toBeVisible();
+    await page.evaluate(async () => {
+      const { __ipc } = window as unknown as { __ipc: typeof Ipc };
+      const view = { current_iteration: false, id: 'mine', label: 'My tickets', repo: 'InjustFr/kelta' };
+      const value = [
+        { id: 'my-tickets', label: 'My tickets', tracker: { account: 'injustfr', views: [view] } },
+      ];
+      await __ipc.settingsSet({ layer: 'global', path: 'sources', value });
+    });
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Sources').click();
+    const card = page.locator('[data-source-card="my-tickets"]');
+    await expect(card).toBeVisible();
+    await card.getByRole('button', { name: 'Shop' }).click();
+    await card.getByRole('button', { name: 'Add route' }).click();
+    await expect(card.getByTestId('source-routes')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
