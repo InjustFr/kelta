@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::common::{Fx, git, has_git, project};
 use kelta_proto::api::CoreApi;
 use kelta_proto::api::WorkStore;
-use kelta_proto::codehost::ReviewKind;
+use kelta_proto::codehost::{MergeMethod, ReviewKind};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::{AccountId, SessionId};
@@ -374,6 +374,49 @@ async fn fix_checks_sends_each_failing_head_once_and_never_over_budget_or_withou
     assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: Claude's status hooks are inactive");
     assert_eq!(fx.core.writes().len(), typed, "nothing typed");
     assert!(!fx.core.calls().iter().any(|c| c.method == "clipboard_copy"), "nothing copied");
+}
+
+#[tokio::test]
+async fn a_resume_in_flight_keeps_an_armed_merge_and_the_checks_sent_meanwhile() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = started(&fx, "SHOP-142").await;
+    let sid = claude(&fx);
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    let mut pr = samples::review();
+    pr.url = "https://github.com/acme/shop-api/pull/90".into();
+    pr.head_sha = "aaa".into();
+    let mut it = w.list(None).await.unwrap().remove(0);
+    it.pr_url = Some(pr.url.clone());
+    it.state = WorkState::PrOpen;
+    fx.store.put_item(&it).await.unwrap();
+
+    // A send resumes the item (item lock held) and blocks typing into Claude...
+    let gate = fx.core.hold_writes();
+    let send = tokio::spawn({
+        let (w, id) = (w.clone(), item.id.clone());
+        async move { w.send(&id, "go", vec![], None, None).await }
+    });
+    let writes = || fx.core.calls().iter().filter(|c| c.method == "session_write").count();
+    for _ in 0..500 {
+        if writes() > 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(writes(), 1);
+    // ...meanwhile the user arms the merge, and Claude's next turn gets the failing checks held.
+    assert!(w.arm_merge(&item.id, MergeMethod::Squash).await.unwrap().auto_finish);
+    set_status(&fx, &sid, SessionStatus::Working, StatusSource::Hook);
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "sent 1 failed check");
+    gate.add_permits(1000);
+    send.await.unwrap().unwrap();
+
+    assert!(
+        fx.store.get_item(&item.id).await.unwrap().unwrap().auto_finish,
+        "the resume's save kept it armed"
+    );
+    assert_eq!(w.fix_checks(&pr).await.unwrap(), "skipped: already sent for this head");
 }
 
 // ---- B2: own PRs -----------------------------------------------------------------------------

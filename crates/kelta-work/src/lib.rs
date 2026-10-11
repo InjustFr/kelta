@@ -517,7 +517,8 @@ impl WorkService {
     }
 
     /// Persist + publish `work.updated`. The hook-owned fields (`review_due`, `claude_replied`, `claude_at`,
-    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`), Louis's `next_note` / `left_at`, the park (`parked_at`, `nvim_kept`) and a run's claim (`run`) are never written here: `item` takes the stored ones, so a long
+    /// `claude_message`, `delta`, `cost_usd`, a stored `claude_uuid`), Louis's `next_note` / `left_at`, the park (`parked_at`, `nvim_kept`), a run's claim (`run`), the armed merge
+    /// (`auto_finish`), `rebase` and the fix loop's `sent_threads` / `feedback_at` are never written here: `item` takes the stored ones, so a long
     /// operation's final save cannot undo a hook that arrived while it ran (FLOW §2.3). Only
     /// [`Self::update`] writes them; `item`'s uuid is kept only while none is stored (first start).
     pub(crate) async fn save(&self, item: &mut WorkItem) -> Result<(), KeltaError> {
@@ -536,6 +537,10 @@ impl WorkService {
                 item.parked_at = cur.parked_at;
                 item.nvim_kept = cur.nvim_kept;
                 item.run = cur.run;
+                item.auto_finish = cur.auto_finish;
+                item.rebase = cur.rebase;
+                item.sent_threads = cur.sent_threads;
+                item.feedback_at = cur.feedback_at;
             }
             self.store.put_item(item).await?;
         }
