@@ -14,6 +14,7 @@ use kelta_proto::model::{
     WorkState,
 };
 use kelta_proto::samples;
+use kelta_proto::settings::TransitionTarget;
 use kelta_proto::tracker::TicketRef;
 use kelta_work::WorkHost;
 
@@ -332,6 +333,26 @@ async fn startup_marks_interrupted_sagas_failed_then_retry() {
     let done = w2.retry_step(&item.id, "include_files").await.unwrap();
     assert_eq!(done.state, WorkState::Active);
     assert_eq!(fx.worktree_count(), 2);
+}
+
+#[tokio::test]
+async fn retry_side_effects_redoes_failures_but_never_the_comment() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let mut plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    plan.side_effects.comment = Some("On it".into());
+    plan.side_effects.transition_to = Some(TransitionTarget::Name { name: "Nowhere".into() });
+    let item = w.start(plan).await.unwrap();
+    let effects = item.steps.iter().find(|s| s.step == "tracker_side_effects").unwrap();
+    assert!(effects.detail.as_deref().unwrap_or_default().contains("transition failed"), "{effects:?}");
+
+    w.retry_step(&item.id, "tracker_side_effects").await.unwrap();
+    let t = fx.tracker.calls();
+    let count = |p: &str| t.iter().filter(|c| c.starts_with(p)).count();
+    assert_eq!(count("comment:"), 1, "comment posted once: {t:?}");
+    assert_eq!(count("assign:"), 1, "assign succeeded, not redone: {t:?}");
+    assert_eq!(count("transitions:"), 2, "failed transition retried: {t:?}");
 }
 
 #[tokio::test]
