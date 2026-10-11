@@ -969,7 +969,7 @@ describe('TicketsPane in the rail Tickets view', () => {
     expect(screen.queryByRole('tab', { name: 'Display mode' })).toBeNull(); // several sources: no board
     expect(screen.getByRole('tab', { name: /^Team/ })).toBeTruthy();
     await openView();
-    await fireEvent.change(screen.getByLabelText('Group (g)'), { target: { value: 'source' } });
+    await fireEvent.change(screen.getByLabelText('Group (Shift+G)'), { target: { value: 'source' } });
     await waitFor(() => expect(groupNames(container).some((g) => g?.startsWith('Ops board'))).toBe(true));
     expect(groupNames(container)).toContain('Billing board 4');
 

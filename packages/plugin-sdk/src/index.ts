@@ -117,7 +117,7 @@ export interface Kelta {
     set(key: string, value: unknown): Promise<unknown>;
   };
   fetch(url: string, init?: FetchInit): Promise<FetchResult>;
-  /** Runs a headless command (needs `exec:<basename>`): a bare name is looked up on the login PATH,
+  /** Runs a headless command (needs `exec:<command>`, matched exactly against `command`): a bare name is looked up on the login PATH,
    * a path (`./scripts/deploy.sh`) is a file of the plugin. `cwd` defaults to the plugin directory. */
   exec(command: string, args?: string[], opts?: ExecOptions): Promise<ExecResult>;
   ui: {

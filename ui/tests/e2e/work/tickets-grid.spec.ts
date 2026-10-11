@@ -58,7 +58,7 @@ test('rows share one grid: key, title, status, age and source start at one x on 
   await openRailTickets(page);
   await page.setViewportSize({ width: 1600, height: 900 }); // detail open, list past 720px
   await page.getByRole('button', { name: /^View/ }).click();
-  await page.getByLabel('Group (g)').selectOption('none');
+  await page.getByLabel('Group (Shift+G)').selectOption('none');
   await page.keyboard.press('Escape');
   const lefts = await rows(page).evaluateAll((els) =>
     els.map((row) =>
@@ -148,7 +148,8 @@ test('the toolbar shows at most six controls; person, sprint, group and sort sit
   await expect(bar.getByLabel('Sort')).toHaveCount(0);
   await bar.getByRole('button', { name: /^View/ }).click();
   const view = bar.getByRole('dialog', { name: 'View' });
-  for (const label of ['Person', 'Group (g)', 'Sort']) await expect(view.getByLabel(label)).toBeVisible();
+  for (const label of ['Person', 'Group (Shift+G)', 'Sort'])
+    await expect(view.getByLabel(label)).toBeVisible();
   await expect(view.getByRole('button', { name: /Current sprint/ })).toBeVisible();
 });
 

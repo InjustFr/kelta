@@ -348,6 +348,9 @@ pub fn template_error(s: &str, extra: &[&str]) -> Option<String> {
 }
 
 const EDITOR_EXTRA: &[&str] = &["sock", "path", "file", "line", "cwd", "sid8"];
+/// Prompt-template variables beyond the common ones, as the shipped defaults use them. `{options}`:
+/// where the start options go (#357), filled by `Core::work_plan`.
+const PROMPT_EXTRA: &[&str] = &["options", "task", "file", "args", "workflow", "onto", "step", "total"];
 
 fn check_str(out: &mut Vec<RawIssue>, path: &[String], v: Option<&Value>, extra: &[&str]) {
     if let Some(Value::String(s)) = v
@@ -401,8 +404,7 @@ pub fn template_issues(value: &Value) -> Vec<RawIssue> {
     }
     if let Some(Value::Object(m)) = get(value, &s(&["claude", "prompt_templates"])) {
         for (k, v) in m {
-            // `{options}`: where the start options go (#357), filled by `Core::work_plan`.
-            check_str(&mut out, &s(&["claude", "prompt_templates", k]), Some(v), &["options"]);
+            check_str(&mut out, &s(&["claude", "prompt_templates", k]), Some(v), PROMPT_EXTRA);
         }
     }
     if let Some(Value::Array(presets)) = get(value, &s(&["editor", "presets"])) {

@@ -608,6 +608,10 @@ impl ConfigService {
         if let Some(p) = project {
             m.apply(&mut base, &without_project_table(p), Layer::Project);
         }
+        // `[project] default_template` is the project's own `work.default_template`.
+        if let Some(t) = project_default_template {
+            m.apply(&mut base, &serde_json::json!({ "work": { "default_template": t } }), Layer::Project);
+        }
         for r in repos {
             m.apply(&mut base, r, Layer::Repo);
         }
