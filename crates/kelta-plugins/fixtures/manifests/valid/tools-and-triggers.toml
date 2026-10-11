@@ -5,7 +5,7 @@ kelta_api = ">=0.1, <0.2"
 description = "Web tool + triggers"
 author = "a"
 license = "Apache-2.0"
-permissions = ["sessions.spawn", "exec:sl", "exec:sh", "net:*.example.com", "net:127.0.0.1"]
+permissions = ["sessions.spawn", "exec:sl", "exec:sh", "net:*.example.com", "net:127.0.0.1", "events:ticket.before_start", "events:claude.*"]
 activation = ["onEvent:claude.*", "onProjectOpen"]
 
 [[contributes.tools]]

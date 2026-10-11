@@ -47,10 +47,13 @@ async fn setup() -> (common::Env, Arc<FakeSecrets>) {
     env.host.wire(Wiring { secrets: Some(secrets.clone() as Arc<dyn SecretResolver>), ..Default::default() });
     env.write_plugin(
         "qa-hub",
-        &format!("{}{PLUGIN}", common::manifest("qa-hub", &["net:qa.example.com"], "")),
+        &format!("{}{PLUGIN}", common::manifest("qa-hub", &["net:qa.example.com", "events:custom.*"], "")),
         &[("index.html", "x"), ("s.json", SCHEMA)],
     );
-    env.host.grant(&PluginId::new("qa-hub"), vec!["net:qa.example.com".into()]).await.unwrap();
+    env.host
+        .grant(&PluginId::new("qa-hub"), vec!["net:qa.example.com".into(), "events:custom.*".into()])
+        .await
+        .unwrap();
     env.core
         .respond("http_fetch", json!({ "status": 200, "headers": {}, "body": "ok", "body_base64": false }));
     (env, secrets)
