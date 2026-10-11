@@ -271,3 +271,21 @@ fn statusline_round_trip_adds_under_50ms() {
     eprintln!("statusline: {via:?} via kelta-ctl, {direct:?} direct, {added:?} added");
     assert!(added < std::time::Duration::from_millis(50), "statusline relay added {added:?}");
 }
+
+/// Ticket #327: escape codes in the repo config show as text in the prompt; the hash covers the raw bytes.
+#[test]
+fn trust_shows_escape_codes_and_hashes_raw_bytes() {
+    let d = tmp();
+    std::fs::create_dir(d.path().join(".kelta")).unwrap();
+    std::fs::write(d.path().join(".kelta/config.toml"), "a = 1\n\x1b[8mhook = \"evil\"\x1b[0m\rb = 2\n")
+        .unwrap();
+    let sock = d.path().join("c.sock");
+    let srv = fake_server(&sock, r#"{"ok":true,"result":{}}"#);
+    let o = run(&["trust", d.path().to_str().unwrap()], &[("KELTA_SOCK", sock.as_path())], &[], b"y\n");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("a = 1\n\\u{1b}[8mhook = \"evil\"\\u{1b}[0m\\rb = 2\n"), "{err}");
+    assert!(!err.contains('\x1b') && !err.contains('\r'), "{err}");
+    let req: serde_json::Value = serde_json::from_str(&srv.join().unwrap()).unwrap();
+    assert_eq!(req["sha256"], "a3b2e86354ad7e0ec6246758ae1017818cadf67c0379489c55d10eb85bd70a6a");
+}

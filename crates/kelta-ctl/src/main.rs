@@ -247,7 +247,16 @@ fn none(pos: &[String]) -> Result<(), String> {
 fn review_trust(file: &Path) -> Result<String, String> {
     let text = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
     let hash = sha256_hex(&text);
-    eprintln!("{}\n{}\nsha256 {hash}", file.display(), String::from_utf8_lossy(&text));
+    // Escape control chars (ESC, \r, C1) so the terminal cannot hide or erase lines being trusted.
+    let mut shown = String::new();
+    for c in String::from_utf8_lossy(&text).chars() {
+        if c.is_control() && c != '\n' && c != '\t' {
+            shown.extend(c.escape_default());
+        } else {
+            shown.push(c);
+        }
+    }
+    eprintln!("{}\n{shown}\nsha256 {hash}", file.display());
     eprint!("Trust this content? [y/N] ");
     let mut answer = String::new();
     std::io::stdin().read_line(&mut answer).map_err(|e| e.to_string())?;
