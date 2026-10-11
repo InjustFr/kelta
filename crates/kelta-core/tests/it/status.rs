@@ -335,6 +335,22 @@ async fn ask_waits_on_the_session_until_typed_input() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn ask_caps_the_preview_and_keeps_the_question_when_the_write_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::Working)).await.unwrap();
+    h.core.session_ask(&s.id, "x".repeat(10_000), vec!["A".into()], None).unwrap();
+    let preview = h.core.session_get(&s.id).unwrap().claude.unwrap().preview.unwrap();
+    assert_eq!(preview.chars().count(), kelta_core::status::PREVIEW_MAX);
+    // The answer never reaches Claude: the question and its buttons stay.
+    h.term.emit(&s.id, TerminalEvent::Exited { code: Some(1), signal: None });
+    settle().await;
+    assert!(h.core.session_write(&s.id, b"A").await.is_err());
+    assert!(h.core.session_get(&s.id).unwrap().claude.unwrap().question.is_some());
+}
+
+#[tokio::test(start_paused = true)]
 async fn ask_survives_the_stop_hook() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);

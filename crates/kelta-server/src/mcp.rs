@@ -254,8 +254,8 @@ pub(crate) fn tool_defs() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "question": { "type": "string" },
-                    "options": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 9 },
+                    "question": { "type": "string", "maxLength": 500 },
+                    "options": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "minItems": 1, "maxItems": 9 },
                     "body_md": { "type": "string", "description": "Markdown shown under the question" }
                 },
                 "required": ["question", "options"], "additionalProperties": false
@@ -572,15 +572,23 @@ async fn call_session_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str,
 
 fn ask(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> ToolResult {
     let question = str_arg(args, "question")?.trim().to_owned();
+    if question.chars().count() > 500 {
+        return Err(
+            "InvalidArgument: `question` takes at most 500 characters (put details in `body_md`)".into()
+        );
+    }
     // Each option is typed into the terminal: one line of printable text.
     let options = args
         .get("options")
         .and_then(Value::as_array)
         .and_then(|a| a.iter().map(|o| Some(o.as_str()?.trim().to_owned())).collect::<Option<Vec<_>>>())
         .filter(|o| {
-            (1..=9).contains(&o.len()) && !o.iter().any(|o| o.is_empty() || o.contains(char::is_control))
+            (1..=9).contains(&o.len())
+                && !o.iter().any(|o| o.is_empty() || o.chars().count() > 100 || o.contains(char::is_control))
         })
-        .ok_or("InvalidArgument: `options` takes 1 to 9 non-empty one-line strings")?;
+        .ok_or(
+            "InvalidArgument: `options` takes 1 to 9 non-empty one-line strings of at most 100 characters",
+        )?;
     let body_md = opt_arg(args, "body_md").filter(|b| !b.trim().is_empty());
     core.session_ask(sid, question, options, body_md).map_err(coded)?;
     Ok("Question shown in Kelta. End your turn now: the user's answer arrives as the next message."
@@ -973,5 +981,17 @@ mod tests {
             initialize(&json!({"protocolVersion": "1999-01-01"}))["protocolVersion"],
             PROTOCOL_VERSIONS[0]
         );
+    }
+
+    #[test]
+    fn ask_rejects_over_long_question_or_option() {
+        let fake = kelta_proto::testing::FakeCore::new();
+        let core: Arc<dyn CoreApi> = fake.clone();
+        let sid = SessionId::new("s");
+        let long = "x".repeat(10_000);
+        let err = ask(&core, &sid, &json!({"question": long, "options": ["A"]})).unwrap_err();
+        assert!(err.contains("`question`"), "{err}");
+        let err = ask(&core, &sid, &json!({"question": "Q?", "options": ["A", long]})).unwrap_err();
+        assert!(err.contains("`options`"), "{err}");
     }
 }
