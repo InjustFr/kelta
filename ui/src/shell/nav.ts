@@ -212,27 +212,6 @@ export function openView(view: GlobalView, select?: string): void {
   if (view === 'now') workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));
 }
 
-const PLACE = 'kelta.place';
-
-/** The global view Kelta was showing when it closed (`null` = a project). */
-export function savedPlace(): GlobalView | null {
-  try {
-    const v = localStorage.getItem(PLACE);
-    return v === 'tickets' || v === 'now' || v === 'reviews' ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-export function savePlace(view: GlobalView | null): void {
-  try {
-    if (view) localStorage.setItem(PLACE, view);
-    else localStorage.removeItem(PLACE);
-  } catch {
-    // storage blocked: Kelta reopens on the active project
-  }
-}
-
 // ---- focus helpers --------------------------------------------------------------------------
 
 export function currentLayout(projectId: ProjectId | null = projects.activeId): Layout | null {

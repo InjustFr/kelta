@@ -52,7 +52,6 @@ pub const COMMANDS: &[&str] = &[
     // layout
     "layout_get",
     "layout_save",
-    "ui_set_global_view",
     // sessions
     "session_spawn",
     "session_spawn_template",

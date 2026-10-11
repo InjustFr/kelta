@@ -8,7 +8,7 @@
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { appInfo } from '$lib/ipc';
-  import { layout, projects, toasts, tools, ui, work } from '$lib/stores';
+  import { GLOBAL, layout, projects, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Icon, IconButton, Kbd, Menu, type MenuItem } from '$lib/ui';
 
@@ -82,13 +82,13 @@
   const model = $derived(session?.claude?.model ?? null);
 
   const here = $derived.by((): JumpLoc | null => {
-    if (view) return { project: project?.id ?? '', tab: '', pane: '', view };
+    if (view) return { project: GLOBAL, tab: view, pane: view };
     return project && tab && pane ? { project: project.id, tab: tab.id, pane: pane.id } : null;
   });
   const back = $derived(backTarget(here));
 
   function placeLabel(loc: JumpLoc): string {
-    if (loc.view) return VIEW_NAMES[loc.view];
+    if (loc.project === GLOBAL) return VIEW_NAMES[loc.tab as GlobalView];
     const t = layout.get(loc.project)?.tabs.find((x) => x.id === loc.tab);
     return `${projects.byId(loc.project)?.name ?? loc.project} › ${t ? rowLabel(t) : ''}`;
   }

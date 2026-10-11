@@ -24,7 +24,7 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { openFrom, persistPaneContent, saveTicketsView } from '../work/nav';
+  import { openFrom, persistPaneContent } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -112,7 +112,7 @@
   let currentSprint = $state(false);
 
   function persist(patch: Partial<Omit<typeof content, 'kind' | 'scope'>>): void {
-    persistPaneContent(projectId, paneId, patch, () => saveTicketsView(patch));
+    persistPaneContent(projectId, paneId, patch);
   }
 
   function setSource(id: string | null, view: string | null = null): void {

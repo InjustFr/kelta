@@ -7,7 +7,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import {
     Button,
@@ -28,7 +28,7 @@
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
-  import { saveTicketsView } from '../work/nav';
+  import { persistPaneContent } from '../work/nav';
   import { deltaParts, testsMissing, workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -369,7 +369,7 @@
 
   /** Up next's "Show all": the rail's Tickets view, on Mine. */
   function showAll(): void {
-    saveTicketsView({ who: 'mine', person: null });
+    persistPaneContent(GLOBAL, 'tickets', { who: 'mine', person: null });
     openView('tickets');
   }
 

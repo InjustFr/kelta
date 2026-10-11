@@ -65,8 +65,6 @@ pub struct Feeds {
     mes: Mutex<HashMap<(AccountId, bool), User>>,
     /// Cold-cache list fetches by cache key: concurrent misses share one provider call.
     fetches: Mutex<HashMap<String, Arc<FetchGate>>>,
-    /// The pane a global view on the rail shows outside any layout (`ui_set_global_view`).
-    global_view: Mutex<Option<PaneContent>>,
 }
 
 /// Single-flight of one ticket list: `done` counts the fetches made under `lock`.
@@ -1843,20 +1841,16 @@ impl Core {
         IntervalPolicy::from_settings(&s.polling, floor, acc.and_then(|a| a.poll_secs))
     }
 
-    /// Recompute subscriptions: visible panes of the active tab + notification rules.
-    /// `ui_set_global_view`: the rail's Tickets, Now or Reviews view (`None` = a project) is
-    /// polled like a visible pane.
-    pub fn ui_set_global_view(&self, content: Option<PaneContent>) {
-        *self.feeds.global_view.lock() = content;
-        self.resubscribe();
-    }
-
+    /// Recompute subscriptions: visible panes of the active tab + notification rules. A global
+    /// view on screen (the `global` layout's active tab, `None` = a project) is polled like a pane.
     pub(crate) fn resubscribe(&self) {
         let s = self.accounts_settings();
         let active = self.active_project();
-        let mut contents: Vec<PaneContent> =
-            self.layouts.lock().get(&active).map(crate::layout::visible_contents).unwrap_or_default();
-        contents.extend(self.feeds.global_view.lock().clone());
+        let contents: Vec<PaneContent> = {
+            let layouts = self.layouts.lock();
+            let global = layouts.get(&ProjectId::new(ProjectId::GLOBAL)).filter(|l| l.active_tab.is_some());
+            layouts.get(&active).into_iter().chain(global).flat_map(crate::layout::visible_contents).collect()
+        };
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
         let tickets = |scope: &Scope,
                        view: Option<&str>,

@@ -143,7 +143,7 @@ pub fn account_for_host(
 pub fn slug(name: &str) -> String {
     let s: String = kelta_proto::settings::slug(name).chars().take(40).collect();
     let s = s.trim_end_matches('-').to_owned();
-    if s.is_empty() || s == ProjectId::HOME || s == ProjectId::INBOX {
+    if s.is_empty() || s == ProjectId::HOME || s == ProjectId::INBOX || s == ProjectId::GLOBAL {
         format!("project-{s}").trim_end_matches('-').to_owned()
     } else {
         s
@@ -332,6 +332,7 @@ mod tests {
     fn slugs_and_keys() {
         assert_eq!(slug("My Shop_API"), "my-shop-api");
         assert_eq!(slug("home"), "project-home");
+        assert_eq!(slug("global"), "project-global");
         assert_eq!(
             jira_keys(&["feat/SHOP-1-x".into(), "fix/SHOP-2".into(), "OPS-3".into()]),
             vec!["SHOP", "OPS"]

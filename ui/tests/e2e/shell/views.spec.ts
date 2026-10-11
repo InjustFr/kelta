@@ -1,7 +1,15 @@
 // The rail's cross-project views (SPEC §1, #214): Tickets, Now and Reviews render outside any project.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+import type { Layout } from '$lib/gen';
 
 import { activeProject, boot, callsOf } from './helpers';
+
+/** The last save of the global views' built-in layout: its active tab is the view the core polls. */
+async function globalSave(page: Page): Promise<unknown> {
+  const saves = await callsOf(page, 'layout_save');
+  return saves.filter((c) => (c.args as { layout: Layout }).layout.project_id === 'global').at(-1)?.args;
+}
 
 test('Tickets and Reviews show from the rail, leave for the item project and come back after a restart', async ({
   page,
@@ -17,21 +25,20 @@ test('Tickets and Reviews show from the rail, leave for the item project and com
   const pane = host.getByTestId('tickets-pane');
   await expect(pane.locator('[data-key]').first()).toBeVisible();
   expect(await activeProject(page)).toBe('shop');
-  expect((await callsOf(page, 'ui_set_global_view')).at(-1)?.args).toMatchObject({
-    content: { kind: 'tickets', scope: { kind: 'all' }, who: 'mine' },
-  });
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: 'tickets' } });
 
   // Shift+Enter leaves the view for the ticket's project, in a visible pane.
   await pane.focus();
   await page.keyboard.press('Shift+Enter');
   await expect(host).toBeHidden();
   await expect(page.getByTestId('workspace').getByTestId('ticket-detail')).toBeVisible();
-  expect((await callsOf(page, 'ui_set_global_view')).at(-1)?.args).toMatchObject({ content: null });
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: null } });
 
   // Mod+Shift+R: the Reviews view from a project; Kelta reopens on it.
   await page.keyboard.press('Control+Shift+R');
   await expect(host).toHaveAttribute('data-view', 'reviews');
   await expect(host.getByTestId('reviews-pane')).toBeVisible();
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: 'reviews' } });
   await page.reload();
   await expect(page.getByTestId('global-host')).toHaveAttribute('data-view', 'reviews');
 });

@@ -16,7 +16,7 @@ use kelta_proto::codehost::{
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::{ProjectDraft, ProjectPatch};
+use kelta_proto::model::{LayoutNode, PaneContent, ProjectDraft, ProjectPatch, Tab};
 use kelta_proto::settings::{
     AccountConfig, AccountKind, ProjectConfig, RepoConfig, Settings, SettingsDiff, sources_from_trackers,
 };
@@ -347,6 +347,25 @@ pub fn start_in(root: &Path, cfg: Arc<MemConfig>, term: Arc<FakeTerminalHost>, f
 
 pub fn start(root: &Path, settings: Settings, projects: Vec<ProjectConfig>) -> H {
     start_in(root, MemConfig::new(settings, projects), FakeTerminalHost::new(), Arc::new(Factory::default()))
+}
+
+/// Shows `content` as the rail's global view (`None` = a project), as the UI does: through the
+/// `global` layout's active tab, its tabs kept.
+pub fn show_global(core: &Core, content: Option<PaneContent>) {
+    let mut l = core.layout_get(&ProjectId::new(ProjectId::GLOBAL)).unwrap();
+    l.active_tab = content.as_ref().map(|_| "view".into());
+    if let Some(content) = content {
+        let root = LayoutNode::Pane { id: "view".into(), content };
+        l.tabs = vec![Tab {
+            id: "view".into(),
+            title: String::new(),
+            work_item_id: None,
+            root,
+            focused_pane: None,
+            zoomed_pane: None,
+        }];
+    }
+    core.layout_save(l).unwrap();
 }
 
 /// Let spawned tasks run.
