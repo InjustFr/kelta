@@ -174,6 +174,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         tracker::tracker_list,
         tracker::tracker_get,
         tracker::tracker_columns,
+        tracker::tracker_fields,
         tracker::tracker_transitions,
         tracker::tracker_transition,
         tracker::tracker_move,

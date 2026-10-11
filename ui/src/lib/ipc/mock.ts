@@ -992,7 +992,12 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     session_write: ({ id, data }) => {
-      session(id);
+      const s = session(id);
+      // Like core (#356): typed input answers an `ask` question; terminal replies start with ESC.
+      if (s.claude?.question && data[0] !== 0x1b) {
+        s.claude.question = null;
+        emit({ type: 'session.updated', session: clone(s) });
+      }
       // Echo input back like a cooked tty.
       const text = new TextDecoder().decode(data).replace(/\r/g, '\r\n');
       sendFrame(id, FRAME_DATA, new TextEncoder().encode(text));
@@ -1123,6 +1128,15 @@ export function createMockTransport(options: MockOptions = {}): {
         order,
         match_names: c.names,
       }));
+    },
+    tracker_fields: ({ source_id }) => {
+      if (!source(source_id).tracker.account.startsWith('jira'))
+        throw err('unsupported', 'this tracker cannot list its fields');
+      return [
+        { id: 'customfield_10050', label: 'Verified' },
+        { id: 'customfield_10051', label: 'Environment' },
+        { id: 'customfield_10052', label: 'Team' },
+      ];
     },
     tracker_transitions: ({ ticket }) => transitionsFor(ticketItem(ticket).ticket),
     tracker_transition: ({ ticket, transition_id, fields }) => {

@@ -12,6 +12,7 @@
   import { terminalUi } from '$lib/terminal/ui.svelte';
   import type { TerminalView, ViewState } from '$lib/terminal/view';
   import { dispatch } from '$lib/actions';
+  import { outsideJump } from '$lib/ipc/commands';
   import { Button, currentPlatform, EmptyState, ErrorState, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
   import { phaseNow } from '../work/live';
@@ -38,6 +39,17 @@
   const dormant = $derived(session?.lifecycle === 'dormant');
   const exited = $derived(!dormant && (viewState.exited || session?.lifecycle === 'exited'));
   const exitCode = $derived(viewState.exitCode ?? session?.exit_code ?? null);
+  // Its Claude runs in an external terminal or tmux (#347): this pane only waits for it.
+  const host = $derived(session?.claude?.host);
+
+  async function focusHost(): Promise<void> {
+    try {
+      const place = await outsideJump({ id: sessionId });
+      if (place) toasts.info(t('Kelta could not bring it forward: {place}', { place }));
+    } catch (err) {
+      toasts.error(err, t('Could not reach that Claude session'));
+    }
+  }
   // The session was killed or removed: nothing to show (and nothing to attach to).
   const missing = $derived(sessions.loaded && !session);
   const searching = $derived(terminalUi.searchSession === sessionId);
@@ -276,6 +288,17 @@
       </span>
       <Button size="sm" variant="primary" icon="refresh-cw" onclick={restart}>{t('Restart')}</Button>
       <Button size="sm" icon="x" onclick={close}>{t('Close')}</Button>
+    </div>
+  {:else if host}
+    <div class="banner" role="status" data-testid="host-banner">
+      <span class="what"
+        >{host === 'multiplexer'
+          ? t('Claude runs in tmux.')
+          : t('Claude runs in an external terminal.')}</span
+      >
+      <Button size="sm" variant="primary" icon="external-link" onclick={() => void focusHost()}
+        >{t('Focus')}</Button
+      >
     </div>
   {/if}
 </div>

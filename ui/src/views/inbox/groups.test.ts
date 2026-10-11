@@ -368,3 +368,50 @@ describe('Claude sessions Kelta did not start (#345)', () => {
     expect(queue.map((j) => [j.label, rowKey(j.row)])).toEqual([['needs input', 't-a']]);
   });
 });
+
+describe('ask questions (#356)', () => {
+  const question = { question: 'Which one?', options: ['A'], body_html: null };
+  const asking = (id: string): SessionInfo => ({
+    ...samples.sessionInfo,
+    id,
+    status: 'working',
+    work_item_id: null,
+    lifecycle: 'live',
+    claude: { ...samples.sessionInfo.claude!, question },
+  });
+
+  it("lists a plain asking session in Claude needs you, not a listed item's run session", () => {
+    const claimed = entry('asking', 'needs_you', {
+      run: {
+        name: 'w',
+        run_id: 'r',
+        session_id: 'orch',
+        phase: null,
+        state: 'running',
+        note: null,
+        sha: null,
+      },
+    });
+    const sections = nowSections({ ...empty, work: [claimed], sessions: [asking('solo'), asking('orch')] });
+    const ids = sections.find((s) => s.id === 'needs_you')!.rows.map((r) => r.id);
+    expect(ids).toEqual([`w:${claimed.item.id}`, 's:solo']);
+  });
+
+  it("keeps a listed item's run session at a plain permission prompt in Claude needs you", () => {
+    const claimed = entry('run', 'in_flight', {
+      run: {
+        name: 'w',
+        run_id: 'r',
+        session_id: 'orch',
+        phase: null,
+        state: 'running',
+        note: null,
+        sha: null,
+      },
+    });
+    const prompt: SessionInfo = { ...asking('orch'), status: 'needs_input' };
+    prompt.claude = { ...prompt.claude!, question: null };
+    const sections = nowSections({ ...empty, work: [claimed], sessions: [prompt] });
+    expect(sections.find((s) => s.id === 'needs_you')!.rows.map((r) => r.id)).toEqual(['s:orch']);
+  });
+});

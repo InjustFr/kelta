@@ -105,6 +105,7 @@ pub fn ticket() -> Ticket {
             title: "Login hardening".into(),
             url: "https://acme.atlassian.net/browse/SHOP-100".into(),
         }),
+        fields: vec![TicketField { label: "Verified".into(), value: "Yes".into() }],
     }
 }
 
@@ -237,6 +238,8 @@ pub fn session_info() -> SessionInfo {
             files_touched: vec![PathBuf::from("src/login.rs")],
             hooks_active: true,
             usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
+            question: None,
+            host: None,
         }),
         editor: None,
         cols: 120,

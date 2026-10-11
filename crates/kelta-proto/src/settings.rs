@@ -822,6 +822,10 @@ pub struct ClaudeSettings {
     pub queue_hold_pct: Option<f64>,
     /// Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).
     pub auto_park_after_mins: u32,
+    /// Opens a template's Claude when its host is `terminal`: `{command}` (the script to run), `{cwd}`,
+    /// `{shell}`. Empty = Terminal on macOS, `x-terminal-emulator -e` on Linux.
+    #[schemars(extend("x-kelta-exec" = true))]
+    pub terminal_command: Vec<String>,
 }
 
 impl Default for ClaudeSettings {
@@ -879,6 +883,7 @@ impl Default for ClaudeSettings {
             budget_usd: None,
             max_live: 4,
             queue_hold_pct: None,
+            terminal_command: Vec::new(),
             auto_park_after_mins: 45,
         }
     }
@@ -1474,6 +1479,19 @@ impl TemplateNode {
     }
 }
 
+/// Where a template's Claude runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeHost {
+    /// In a Kelta terminal pane.
+    #[default]
+    Builtin,
+    /// In a window of your terminal (`claude.terminal_command`).
+    Terminal,
+    /// In a new window of the repository's tmux session, created when missing.
+    Multiplexer,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct SessionTemplate {
@@ -1481,6 +1499,8 @@ pub struct SessionTemplate {
     pub label: String,
     pub layout: TemplateNode,
     pub enabled: bool,
+    /// Where its Claude runs; Kelta still writes its hooks and MCP and follows its state.
+    pub claude_host: ClaudeHost,
     /// Picked per ticket in the Start sheet, unless the ticket's route declares its own.
     pub options: Vec<StartOption>,
 }
@@ -1492,6 +1512,7 @@ impl Default for SessionTemplate {
             label: String::new(),
             layout: TemplateNode::default(),
             enabled: true,
+            claude_host: ClaudeHost::Builtin,
             options: Vec::new(),
         }
     }
@@ -1513,8 +1534,8 @@ pub fn default_session_templates() -> Vec<SessionTemplate> {
         id: id.to_owned(),
         label: label.to_owned(),
         layout,
-        enabled: true,
         options: Vec::new(),
+        ..SessionTemplate::default()
     };
     vec![
         t(
@@ -1714,6 +1735,11 @@ pub struct TrackerView {
     pub current_iteration: bool,
     /// Account of this view; `None` = the binding's account.
     pub account: Option<AccountId>,
+    /// The source's `fields`, filled by kelta-core for the list call (not configured per view, #351).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub fields: Vec<SourceField>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -1818,6 +1844,23 @@ pub struct Source {
     /// Linear, status elsewhere.
     #[ts(optional)]
     pub blocked: Option<BlockedMarker>,
+    /// Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry
+    /// without an id is dropped with a warning.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<SourceField>>", optional)]
+    pub fields: Vec<SourceField>,
+}
+
+/// A tracker field to show on the tickets.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceField {
+    /// The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.
+    #[schemars(length(min = 1))]
+    pub id: String,
+    /// Shown before the value; empty shows the value alone.
+    #[serde(default)]
+    pub label: String,
 }
 
 /// How the tracker marks a ticket blocked.

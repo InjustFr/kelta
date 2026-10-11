@@ -56,6 +56,7 @@ pub(crate) fn refuse_if_busy(
 /// Typing into Claude is only safe when hooks say it is idle at its prompt: a paste into a
 /// permission prompt would answer it (FLOW §11).
 fn check_idle(s: &SessionInfo) -> Result<(), KeltaError> {
+    s.refuse_hosted()?;
     let reason = if busy(s) {
         "claude_busy"
     } else if s.status_source != StatusSource::Hook {
@@ -87,7 +88,8 @@ pub(crate) async fn paste_prompt(
 
 /// A send to this live Claude goes to the clipboard: Kelta cannot tell when it is idle.
 fn copies(s: &SessionInfo) -> bool {
-    route(Some(s)) == Route::Paste && check_idle(s).is_err()
+    (s.lifecycle == Lifecycle::Live && s.hosted())
+        || (route(Some(s)) == Route::Paste && check_idle(s).is_err())
 }
 
 fn valid_name(name: &str) -> bool {
@@ -367,5 +369,13 @@ mod tests {
         s.status_source = StatusSource::Heuristic;
         let e = check_idle(&s).unwrap_err();
         assert_eq!(e.detail.unwrap()["reason"], "hooks_inactive");
+        s.status_source = StatusSource::Hook;
+        s.claude.get_or_insert_with(Default::default).host =
+            Some(kelta_proto::settings::ClaudeHost::Terminal);
+        assert!(check_idle(&s).is_err() && copies(&s));
+        s.status = SessionStatus::Working; // busy: route is AtStop, still a copy
+        assert!(copies(&s));
+        s.lifecycle = Lifecycle::Dormant; // a dormant hosted Claude resumes, never copies
+        assert!(!copies(&s));
     }
 }

@@ -14,7 +14,8 @@ use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::model::{PlanOptions, Scope, StartWorkPlan, WorkSource};
 use kelta_proto::samples;
 use kelta_proto::settings::{
-    AccountKind, BlockedMarker, RepoMatch, Settings, Source, SourceRoute, StartOption, TrackerView,
+    AccountKind, BlockedMarker, RepoMatch, Settings, Source, SourceField, SourceRoute, StartOption,
+    TrackerView,
 };
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
@@ -396,4 +397,38 @@ async fn a_source_label_marks_tickets_blocked_and_block_round_trips() {
 
     assert!(!h.core.tracker_set_blocked(&t, false).await.unwrap().blocked);
     assert!(blocked(&list("labelled").await).is_empty());
+}
+
+#[tokio::test]
+async fn a_source_field_reaches_the_list_call_and_the_detail() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::defaults();
+    s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    let mut chosen = source("chosen", &["shop"], vec![view("mine", "assignee = currentUser()")]);
+    chosen.fields = vec![SourceField { id: "customfield_1".into(), label: "QA".into() }];
+    s.sources = vec![chosen, source("plain", &[], vec![view("mine", "assignee = currentUser()")])];
+    let factory = Arc::new(Factory::default());
+    factory
+        .trackers
+        .lock()
+        .insert(AccountId::new("jira-acme"), Arc::new(FakeTracker::new()) as Arc<dyn Tracker>);
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(s, vec![project("shop", tmp.path())]),
+        FakeTerminalHost::new(),
+        factory,
+    );
+    let list = |id: &str| {
+        let scope = Scope::Source { id: id.into() };
+        let core = h.core.clone();
+        async move { core.tracker_list(scope, None, None, None, None, true).await.unwrap() }
+    };
+    let page = list("chosen").await;
+    let f = &page.items[0].ticket.fields;
+    assert_eq!((f.len(), f[0].label.as_str(), f[0].value.as_str()), (1, "QA", "customfield_1"));
+    // same view, other fields: its own query and cache entry
+    let plain = list("plain").await;
+    assert!(plain.items.iter().all(|i| i.ticket.fields.iter().all(|f| f.label != "QA")));
+    let d = h.core.tracker_get(&page.items[0].ticket.r#ref).await.unwrap();
+    assert_eq!(&d.ticket.fields, f, "the detail shows the listed fields");
 }

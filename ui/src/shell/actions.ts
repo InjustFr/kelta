@@ -1,4 +1,4 @@
-// Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, tab.*,
+// Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, rail.toggle, tab.*,
 // session.new, pane.*, attention.*, nav.*, terminal.*, editor.send_selection, editor.quickfix_claude, and the
 // terminal file links, app.restart. Loaded eagerly by main.ts.
 
@@ -30,6 +30,7 @@ import {
 } from './nav';
 import { navStep } from './jumplist';
 import { peek, peekWaiting } from './peek.svelte';
+import { sidebar } from './sidebar.svelte';
 import { restartApp } from './updates.svelte';
 
 function focusedView(): TerminalView | null {
@@ -146,6 +147,7 @@ registerAction('project.open', () => ui.toggleOverlay('reopen'));
 registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoRailRow(n));
 registerAction('inbox.open', () => openView('now'));
+registerAction('rail.toggle', () => sidebar.toggle());
 registerAction('toast.run_last', async () => {
   const last = toasts.lastActionable;
   if (last) await toasts.run(last.id);

@@ -63,6 +63,7 @@ import type {
   SessionId,
   SendFile,
   SessionInfo,
+  SourceField,
   SourceHit,
   SpawnRequest,
   StartWorkPlan,
@@ -243,6 +244,8 @@ export interface Commands {
   };
   tracker_get: { args: { ticket: TicketRef }; result: TicketDetail };
   tracker_columns: { args: { source_id: string }; result: Column[] };
+  /** The fields a source's tickets can show (#351); `unsupported` when its tracker cannot list them. */
+  tracker_fields: { args: { source_id: string }; result: SourceField[] };
   tracker_transitions: { args: { ticket: TicketRef }; result: Transition[] };
   tracker_transition: {
     args: { ticket: TicketRef; transition_id: string; fields?: JsonValue | null };
@@ -473,6 +476,7 @@ export const COMMAND_NAMES = [
   'tracker_list',
   'tracker_get',
   'tracker_columns',
+  'tracker_fields',
   'tracker_transitions',
   'tracker_transition',
   'tracker_move',
@@ -715,6 +719,7 @@ export async function sessionWrite(id: SessionId, data: Uint8Array | string): Pr
 export const trackerList = wrap('tracker_list');
 export const trackerGet = wrap('tracker_get');
 export const trackerColumns = wrap('tracker_columns');
+export const trackerFields = wrap('tracker_fields');
 export const trackerTransitions = wrap('tracker_transitions');
 export const trackerTransition = wrap('tracker_transition');
 export const trackerMove = wrap('tracker_move');

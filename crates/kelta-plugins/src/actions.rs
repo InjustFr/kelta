@@ -328,6 +328,9 @@ impl PluginHost {
                         Some(crate::triggers::SEND_KEYS_INTERVAL.as_millis() as u64),
                     ));
                 }
+                if let Some(s) = core.session_get(&target) {
+                    s.refuse_hosted()?;
+                }
                 core.session_write(&target, &keys_bytes(&cx.x(text)?, bracketed.unwrap_or(true))).await?;
                 Ok(String::new())
             }

@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{BlockedMarker, ProjectV2Ref, TrackerBinding};
+use kelta_proto::settings::{BlockedMarker, ProjectV2Ref, SourceField, TrackerBinding};
 use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
@@ -821,5 +821,38 @@ async fn block_adds_the_label_and_unblock_removes_it() {
     );
     t.set_blocked(&r(), &BlockedMarker::Label("on hold".into()), false).await.unwrap();
     let err = t.set_blocked(&r(), &BlockedMarker::Flag, true).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
+}
+
+#[tokio::test]
+async fn project_v2_fields_chosen_by_name_show_their_value() {
+    let server = MockServer::start().await;
+    gql(&server, "projectV2(number", "github/gql_project_items.json").await;
+    let chosen = |id: &str, label: &str| SourceField { id: id.into(), label: label.into() };
+    let view = kelta_proto::settings::TrackerView {
+        fields: vec![chosen("priority", "Prio"), chosen("Budget", ""), chosen("Missing", "X")],
+        ..project_view()
+    };
+    let page = gh(&server).list(&view, None).await.unwrap();
+    let shown = |i: usize| -> Vec<(String, String)> {
+        page.items[i].fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect()
+    };
+    assert_eq!(shown(0), [("Prio".into(), "High".into()), (String::new(), "8".into())]);
+    assert!(shown(1).is_empty(), "no value, no field");
+
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("ProjectV2FieldCommon"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data": {"repositoryOwner": {"projectV2": {
+                "fields": {"nodes": [{"name": "Status"}, {"name": "Verified"}, {}]}
+            }}}}),
+        ))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    let offered = gh(&server).fields(&view).await.unwrap();
+    assert_eq!(offered, [chosen("Status", "Status"), chosen("Verified", "Verified")]);
+    let err = gh(&server).fields(&crate::support::view("repo")).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Unsupported);
 }

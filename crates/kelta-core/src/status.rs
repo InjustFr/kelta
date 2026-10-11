@@ -172,6 +172,17 @@ pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
     }
 }
 
+/// MCP `ask` (#356): it needs the user like a permission prompt, but the status stays the hooks' (the
+/// buttons wait while that status is a real prompt).
+pub fn asked(prev: &SessState) -> Decision {
+    Decision {
+        attention: Attention::NeedsInput,
+        seen: prev.visible,
+        notify: Some(NotifyKind::ClaudeNeedsInput),
+        ..Decision::keep(prev)
+    }
+}
+
 /// Output on a session not driven by hooks or heuristics (shells, editors, tools, hooked Claude).
 pub fn apply_activity(prev: &SessState, kind_is_hooked_claude: bool) -> Decision {
     let mut d = Decision::keep(prev);

@@ -14,10 +14,13 @@ use kelta_proto::events::{BusEvent, Notification, Toast, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    AttachInfo, Attention, ClaudeMeta, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy,
-    SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, WorkItem,
+    AttachInfo, Attention, ClaudeMeta, ClaudeQuestion, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle,
+    RestorePolicy, SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
+    WorkItem,
 };
-use kelta_proto::settings::{BellMode, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost};
+use kelta_proto::settings::{
+    BellMode, ClaudeHost, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost,
+};
 use kelta_proto::store::SessionRow;
 use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
@@ -310,6 +313,11 @@ impl Core {
                     _ => String::new(),
                 },
                 model: spawn_env::arg_value(&spec.args, "--model"),
+                host: Some(crate::claude_host::host_of(
+                    &self.cfg.effective(Some(&row.project_id)).session_templates,
+                    spec.template_id.as_deref(),
+                ))
+                .filter(|h| *h != ClaudeHost::Builtin),
                 ..ClaudeMeta::default()
             });
             let editor = match &kind {
@@ -743,13 +751,18 @@ impl Core {
             Some(p) => spawn_env::resolve_program(p, env.get("PATH").map(String::as_str), &cwd)
                 .map(|path| (path, launch.args.clone())),
         };
-        let (program, args) = match resolved {
+        let (mut program, mut args) = match resolved {
             Ok(x) => x,
             Err(e) => {
                 self.release_http_ref(http_ref);
                 self.server.ide_close(&id);
                 return Err(e);
             }
+        };
+        let host = if is_claude {
+            crate::claude_host::host_of(&settings.session_templates, spec.template_id.as_deref())
+        } else {
+            ClaudeHost::Builtin
         };
 
         let info = SessionInfo {
@@ -775,6 +788,7 @@ impl Core {
             claude: is_claude.then(|| ClaudeMeta {
                 session_uuid: claude_uuid.clone().unwrap_or_default(),
                 model: spawn_env::arg_value(&args, "--model"),
+                host: (host != ClaudeHost::Builtin).then_some(host),
                 ..ClaudeMeta::default()
             }),
             editor: match &spec.kind {
@@ -791,6 +805,33 @@ impl Core {
                 _ => kelta_proto::now_rfc3339(),
             },
         };
+        // #347: the pane runs a wrapper that opens the host and lives as long as Claude there.
+        if host != ClaudeHost::Builtin {
+            let dir = self.dirs.session_runtime(&id.sid8());
+            let name = work.as_ref().map_or(spec.project_id.as_str(), |w| w.repo_id.as_str());
+            let wrapper = kelta_work::files::private_dir(&dir).and_then(|()| {
+                crate::claude_host::prepare(&crate::claude_host::HostLaunch {
+                    host,
+                    terminal_command: &settings.claude.terminal_command,
+                    name,
+                    dir: &dir,
+                    cwd: &cwd,
+                    shell: &shell,
+                    program: &program,
+                    args: &args,
+                    env: &env,
+                    login: &self.login_env.vars,
+                })
+            });
+            match wrapper {
+                Ok(w) => (program, args) = (PathBuf::from("/bin/sh"), vec!["-c".to_owned(), w]),
+                Err(e) => {
+                    self.release_http_ref(http_ref);
+                    self.server.ide_close(&id);
+                    return Err(e);
+                }
+            }
+        }
         let scrollback = settings.terminal.scrollback.for_kind(spec.kind.name());
         let pty = PtySpawnSpec {
             id: id.clone(),
@@ -1023,6 +1064,10 @@ impl Core {
         let typed = bytes != b"\x1b[I" && bytes != b"\x1b[O";
         if typed {
             self.auto_park_status(&info, false, &timers);
+            // Terminal replies (DA/DSR, mouse, paste markers) start with ESC; text and Enter don't.
+            if bytes.first() != Some(&0x1b) {
+                self.clear_question(id);
+            }
         }
         if info.lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
@@ -1268,13 +1313,19 @@ impl Core {
     pub(crate) fn apply_decision(
         &self,
         id: &SessionId,
-        d: Decision,
+        mut d: Decision,
         source: StatusSource,
         preview: Option<String>,
     ) {
         let out = {
             let mut s = self.sessions.lock();
             let Some(e) = s.get_mut(id) else { return };
+            // An open `ask` question keeps the run needing input through Stop/Done and mark_seen (#356).
+            if e.info.claude.as_ref().is_some_and(|c| c.question.is_some())
+                && !matches!(d.status, SessionStatus::Error | SessionStatus::Exited)
+            {
+                d.attention = Attention::NeedsInput;
+            }
             let prev = e.info.status;
             let was_parkable = crate::park::parkable(&e.info);
             let mut changed =
@@ -1445,6 +1496,35 @@ impl Core {
             e.info.clone()
         };
         self.emit(UiEvent::SessionUpdated { session: info });
+        Ok(())
+    }
+
+    /// Any typed input answers an `ask` question, a button or the terminal alike.
+    fn clear_question(&self, id: &SessionId) {
+        let info = {
+            let mut s = self.sessions.lock();
+            let Some(e) = s.get_mut(id) else { return };
+            if e.info.claude.as_mut().and_then(|c| c.question.take()).is_none() {
+                return;
+            }
+            e.info.clone()
+        };
+        self.emit(UiEvent::SessionUpdated { session: info });
+    }
+
+    /// MCP `ask` (#356): keep the question until the next input (`write_session`) and ask for attention.
+    pub(crate) fn ask(&self, id: &SessionId, q: ClaudeQuestion) -> Result<(), KeltaError> {
+        let visible = self.is_visible(id);
+        let preview = q.question.clone();
+        let (state, source) = {
+            let mut s = self.sessions.lock();
+            let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
+            let c = e.info.claude.as_mut().ok_or_else(|| KeltaError::invalid("not a Claude session"))?;
+            c.question = Some(Box::new(q));
+            (e.state(visible), e.info.status_source)
+        };
+        // The preview carries the question (notification body, row detail) and emits the change.
+        self.apply_decision(id, status::asked(&state), source, Some(preview));
         Ok(())
     }
 

@@ -319,6 +319,25 @@ impl CoreApi for FakeCore {
         self.sessions.lock().get(id).cloned()
     }
 
+    fn session_ask(
+        &self,
+        id: &SessionId,
+        question: String,
+        options: Vec<String>,
+        body_md: Option<String>,
+    ) -> Result<(), KeltaError> {
+        self.record(
+            "session_ask",
+            serde_json::json!({ "id": id, "question": question, "options": options, "body_md": body_md }),
+        );
+        let mut s = self.sessions.lock();
+        let c = s.get_mut(id).and_then(|s| s.claude.as_mut());
+        // No sanitizer in proto: the fake keeps no body.
+        let q = crate::model::ClaudeQuestion { question, options, body_html: None };
+        c.ok_or_else(|| KeltaError::not_found(format!("Claude session {id}")))?.question = Some(Box::new(q));
+        Ok(())
+    }
+
     fn session_list(&self, project: Option<&ProjectId>) -> Vec<SessionInfo> {
         self.record("session_list", serde_json::json!({ "project": project }));
         self.sessions

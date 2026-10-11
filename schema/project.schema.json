@@ -1017,7 +1017,8 @@
           "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing.",
           "workflow": "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}."
         },
-        "queue_hold_pct": null
+        "queue_hold_pct": null,
+        "terminal_command": []
       },
       "properties": {
         "allowed_tools": {
@@ -1212,6 +1213,15 @@
             "number",
             "null"
           ]
+        },
+        "terminal_command": {
+          "default": [],
+          "description": "Opens a template's Claude when its host is `terminal`: `{command}` (the script to run), `{cwd}`,\n`{shell}`. Empty = Terminal on macOS, `x-terminal-emulator -e` on Linux.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-kelta-exec": true
         }
       },
       "type": "object",
@@ -2264,6 +2274,7 @@
           "project.next": ")",
           "project.prev": "(",
           "project.switcher": "p",
+          "rail.toggle": "b",
           "reviews.open": "r",
           "session.new": "c",
           "settings.open": ",",
@@ -2335,6 +2346,7 @@
             "project.next": ")",
             "project.prev": "(",
             "project.switcher": "p",
+            "rail.toggle": "b",
             "reviews.open": "r",
             "session.new": "c",
             "settings.open": ",",
@@ -3247,6 +3259,7 @@
     "session_templates": {
       "default": [
         {
+          "claude_host": "builtin",
           "enabled": true,
           "id": "claude+editor",
           "label": "Claude + editor",
@@ -3274,6 +3287,7 @@
           "options": []
         },
         {
+          "claude_host": "builtin",
           "enabled": true,
           "id": "review",
           "label": "Review",
@@ -3316,6 +3330,7 @@
           "options": []
         },
         {
+          "claude_host": "builtin",
           "enabled": true,
           "id": "claude",
           "label": "Claude",
@@ -3328,6 +3343,7 @@
           "options": []
         },
         {
+          "claude_host": "builtin",
           "enabled": true,
           "id": "editor",
           "label": "Editor",
@@ -3340,6 +3356,7 @@
           "options": []
         },
         {
+          "claude_host": "builtin",
           "enabled": true,
           "id": "shell",
           "label": "Shell",
@@ -3355,6 +3372,27 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "claude_host": {
+            "default": "builtin",
+            "description": "Where its Claude runs; Kelta still writes its hooks and MCP and follows its state.",
+            "oneOf": [
+              {
+                "const": "builtin",
+                "description": "In a Kelta terminal pane.",
+                "type": "string"
+              },
+              {
+                "const": "terminal",
+                "description": "In a window of your terminal (`claude.terminal_command`).",
+                "type": "string"
+              },
+              {
+                "const": "multiplexer",
+                "description": "In a new window of the repository's tmux session, created when missing.",
+                "type": "string"
+              }
+            ]
+          },
           "enabled": {
             "default": true,
             "type": "boolean"
@@ -3529,6 +3567,30 @@
             ],
             "default": null,
             "description": "How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on\nLinear, status elsewhere."
+          },
+          "fields": {
+            "description": "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A tracker field to show on the tickets.",
+              "properties": {
+                "id": {
+                  "description": "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "default": "",
+                  "description": "Shown before the value; empty shows the value alone.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "id": {
             "default": "",

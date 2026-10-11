@@ -85,6 +85,7 @@ pub const COMMANDS: &[&str] = &[
     "tracker_list",
     "tracker_get",
     "tracker_columns",
+    "tracker_fields",
     "tracker_transitions",
     "tracker_transition",
     "tracker_move",

@@ -400,6 +400,8 @@
     background: transparent;
     color: var(--k-fg);
     outline: none;
+    /* room for the fr/de placeholder (#362) */
+    width: 30ch;
     min-width: 180px;
   }
 
@@ -441,6 +443,11 @@
     overflow-y: auto;
   }
 
+  /* Rows keep their height and the list scrolls: shrinking them cut sections off (#362). */
+  nav > * {
+    flex: none;
+  }
+
   /* Same grammar as list group headers (DESIGN §6.8): 13/600 muted, sentence case. */
   .nav-group {
     margin: var(--k-space-4) 0 var(--k-space-1);
@@ -458,8 +465,8 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    height: var(--k-row-height);
-    padding: 0 var(--k-space-4);
+    min-height: var(--k-row-height);
+    padding: var(--k-space-1) var(--k-space-4);
     border: none;
     background: transparent;
     color: var(--k-fg-muted);
@@ -501,7 +508,7 @@
     }
 
     nav button {
-      padding: 0 var(--k-space-3);
+      padding: var(--k-space-1) var(--k-space-3);
     }
 
     .nav-group {
@@ -510,6 +517,10 @@
 
     main {
       padding: var(--k-space-4);
+    }
+
+    .search input {
+      width: 180px;
     }
   }
 

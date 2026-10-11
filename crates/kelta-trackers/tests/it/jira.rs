@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{BlockedMarker, ColumnSpec, TrackerBinding, TrackerView};
+use kelta_proto::settings::{BlockedMarker, ColumnSpec, SourceField, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
@@ -896,4 +896,46 @@ async fn the_flagged_field_marks_blocked_and_block_sets_the_flag_or_a_label() {
     );
     let err = p.set_blocked(&r, &BlockedMarker::Relation, true).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::Unsupported);
+}
+
+#[tokio::test]
+async fn chosen_fields_are_fetched_and_shown_and_an_unknown_id_is_left_out() {
+    let server = MockServer::start().await;
+    mount_get(
+        &server,
+        "/rest/api/3/field",
+        json!([{"id": "customfield_10050", "name": "Verified"}, {"id": "customfield_10051", "name": "Env"}]),
+    )
+    .await;
+    mount_get(&server, "/rest/api/3/priority", json!([])).await;
+    let set =
+        issue(json!({"customfield_10050": {"id": "1", "value": "Yes"}, "customfield_10051": ["eu", "us"]}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"issues": [set, issue(json!({"customfield_10050": null}))]})),
+        )
+        .mount(&server)
+        .await;
+    let chosen = |id: &str, label: &str| SourceField { id: id.into(), label: label.into() };
+    let view = TrackerView {
+        fields: vec![
+            chosen("customfield_10050", "Verified"),
+            chosen("customfield_10051", ""),
+            chosen("nope", "X"),
+        ],
+        ..jql_view()
+    };
+    let page = cloud(&server).list(&view, None).await.unwrap();
+    let shown = |i: usize| -> Vec<(String, String)> {
+        page.items[i].fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect()
+    };
+    assert_eq!(shown(0), [("Verified".into(), "Yes".into()), (String::new(), "eu, us".into())]);
+    assert!(shown(1).is_empty());
+    let asked = &bodies(&server, "POST", "/rest/api/3/search/jql").await[0]["fields"];
+    let asked: Vec<&str> = asked.as_array().unwrap().iter().filter_map(|f| f.as_str()).collect();
+    assert!(asked.contains(&"customfield_10050") && !asked.contains(&"nope"), "{asked:?}");
+    let offered = cloud(&server).fields(&view).await.unwrap();
+    assert_eq!(offered.iter().map(|f| f.label.as_str()).collect::<Vec<_>>(), ["Env", "Verified"]);
 }
