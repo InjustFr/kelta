@@ -278,12 +278,6 @@ async fn cache_is_used_and_invalidated() {
     r.secrets.invalidate(&reference);
     r.secrets.resolve(&reference, &ctx).await.unwrap();
     assert_eq!(runs(), 2);
-    // a settings change drops the cache
-    let mut s = Settings::defaults();
-    s.terminal.font_size = 20.0;
-    r.settings.set_global(s);
-    r.secrets.resolve(&reference, &ctx).await.unwrap();
-    assert_eq!(runs(), 3);
     // different hosts are different entries
     script(&r.bin(), "gh", &format!("echo run >> {}\necho \"t-$4\"", counter.display()));
     let a = secret_ctx(None, Some("https://github.com"));
@@ -291,9 +285,52 @@ async fn cache_is_used_and_invalidated() {
     assert_eq!(token(&r, "gh-cli", &a).await, "t-github.com");
     assert_eq!(token(&r, "gh-cli", &b).await, "t-ghe.example");
     assert_eq!(token(&r, "gh-cli", &a).await, "t-github.com");
-    assert_eq!(runs(), 5);
-    // the settings Arc is stable between changes
-    let _ = r.settings.effective(None);
+    assert_eq!(runs(), 4);
+}
+
+/// #301: a reload re-runs a lookup only when the account's `secret` changes, not on every reload.
+#[tokio::test]
+async fn settings_reload_keeps_unchanged_refs() {
+    let r = rig();
+    let counter = r.dir.path().join("count");
+    script(&r.bin(), "counted", &format!("echo \"$1\" >> {}\necho \"token-$1\"", counter.display()));
+    script(&r.bin(), "gh", &format!("echo gh >> {}\necho gh-token", counter.display()));
+    let runs = || std::fs::read_to_string(&counter).unwrap().lines().count();
+    let jira = AccountId::new("jira");
+    let with_secret = |secret: &str| {
+        let mut s = Settings::defaults();
+        let account =
+            serde_json::json!({"kind": "jira", "base_url": "https://jira.example", "secret": secret});
+        s.accounts.insert(jira.clone(), serde_json::from_value(account).unwrap());
+        s
+    };
+    let current = |r: &Rig| {
+        let s = r.settings.effective(None);
+        let acc = &s.accounts[&jira];
+        (acc.effective_secret().unwrap(), secret_ctx(Some(jira.clone()), acc.base_url.as_deref()))
+    };
+    r.settings.set_global(with_secret("command:counted a"));
+    let (reference, ctx) = current(&r);
+    assert_eq!(r.secrets.resolve(&reference, &ctx).await.unwrap().expose(), "token-a");
+    let gh = secret_ctx(None, Some("https://github.com"));
+    assert_eq!(token(&r, "gh-cli", &gh).await, "gh-token");
+    assert_eq!(runs(), 2);
+    // identical content reloaded (a new snapshot), then an unrelated change: nothing re-runs
+    r.settings.set_global(with_secret("command:counted a"));
+    let (reference, ctx) = current(&r);
+    assert_eq!(r.secrets.resolve(&reference, &ctx).await.unwrap().expose(), "token-a");
+    let mut s = with_secret("command:counted a");
+    s.terminal.font_size = 20.0;
+    r.settings.set_global(s);
+    let (reference, ctx) = current(&r);
+    assert_eq!(r.secrets.resolve(&reference, &ctx).await.unwrap().expose(), "token-a");
+    assert_eq!(token(&r, "gh-cli", &gh).await, "gh-token");
+    assert_eq!(runs(), 2, "served from memory across reloads");
+    // the account's secret changed: the new ref runs
+    r.settings.set_global(with_secret("command:counted b"));
+    let (reference, ctx) = current(&r);
+    assert_eq!(r.secrets.resolve(&reference, &ctx).await.unwrap().expose(), "token-b");
+    assert_eq!(runs(), 3);
 }
 
 /// A rig on a mock keyring the test can reach behind the resolver's back.
