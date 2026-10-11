@@ -868,3 +868,15 @@ async fn team_list_chunks_repos_into_aliased_searches_in_one_request() {
     assert!(!a.blocking);
     assert!(gh(&server).list_open(&[], true).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn bad_repos_are_rejected_before_any_request() {
+    let server = MockServer::start().await;
+    let h = gh(&server);
+    for bad in ["acme/shop/../../orgs/acme", "../x", "acme/shop?x", "acme/shop#", "a/b/c"] {
+        let r = rref("github-work", bad, 1);
+        assert_eq!(h.approve(&r, "abc123").await.unwrap_err().code, ErrorCode::InvalidArgument, "{bad}");
+        assert_eq!(h.comment(&r, "x").await.unwrap_err().code, ErrorCode::InvalidArgument, "{bad}");
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
