@@ -6,7 +6,8 @@
 //! (count + max id).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use kelta_http::util::{percent_encode, trim_url, url_host};
@@ -22,11 +23,14 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind};
 use kelta_proto::tracker::User;
 use parking_lot::Mutex;
+use regex::Regex;
 use serde_json::{Value, json};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::common::{MAX_LOGS, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s};
+use crate::common::{
+    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s,
+};
 
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
@@ -36,6 +40,12 @@ const PER_PAGE: &str = "100";
 type DiffKey = (String, u64, String);
 /// My MR's `(repo, iid)` → `((updated_at, user_notes_count), unresolved threads, last comment at)`.
 type ThreadCache = HashMap<(String, u64), ((String, u64), u32, Option<String>)>;
+
+/// `(kind, repo, iid)` → `(updated_at, read at, waiting_on, requested_at, author_to_act)` from `/reviewers`.
+type WaitingCache = HashMap<(ReviewKind, String, u64), (String, Instant, Vec<String>, Option<String>, bool)>;
+
+/// An approval may not bump the MR's `updated_at`, so a cached `/reviewers` read also expires.
+const WAITING_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Default)]
 struct TodoGate {
@@ -59,6 +69,8 @@ pub struct GitlabHost {
     diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
     /// My MRs' thread state: `/discussions` is fetched again only when the MR's stamp moves.
     threads: Mutex<ThreadCache>,
+    /// Who each MR waits on: `/reviewers` is fetched again only when the MR's `updated_at` moves.
+    waiting: Mutex<WaitingCache>,
 }
 
 impl GitlabHost {
@@ -91,6 +103,7 @@ impl GitlabHost {
             gate: Mutex::new(TodoGate::default()),
             diff_sizes: Mutex::new(HashMap::new()),
             threads: Mutex::new(HashMap::new()),
+            waiting: Mutex::new(HashMap::new()),
         })
     }
 
@@ -189,7 +202,6 @@ impl GitlabHost {
             source_branch: branch.clone(),
             target_branch: s(v, "target_branch").unwrap_or("").to_owned(),
             ci: ci_from(pipeline.and_then(|p| s(p, "status"))),
-            failed_check_names: vec![],
             decision: if blocked {
                 Some(ReviewDecision::ChangesRequested)
             } else {
@@ -197,7 +209,6 @@ impl GitlabHost {
             },
             my_state: (kind == ReviewKind::ReviewRequested).then_some(MyReviewState::Pending),
             // shortcut: GitLab REST keeps no commit per approval, so no "updated since your review"; upgrade via GraphQL reviewer states.
-            reviewed_head: None,
             mergeable: match (merge_status, v.get("has_conflicts").and_then(Value::as_bool)) {
                 (_, Some(true)) | (Some("conflict"), _) => Some(false),
                 (Some("mergeable"), _) => Some(true),
@@ -211,18 +222,8 @@ impl GitlabHost {
             kind,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
             linked_tickets: linked_tickets(&[&branch, &title]),
-            additions: None,
-            deletions: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             title,
+            ..Review::default()
         })
     }
 
@@ -289,11 +290,31 @@ impl GitlabHost {
     // shortcut: a `requested_changes` reviewer counts again only once re-requested (GitLab keeps the
     // state across pushes and `/reviewers` has no review time); compare with the push time if it matters.
     async fn waiting_state(&self, review: &mut Review) {
-        let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
-        let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
-        (review.waiting_on, review.requested_at) = pending_reviewers(&r.body);
-        review.waiting_since = review.requested_at.clone();
-        review.author_to_act = changes_requested(&r.body);
+        let key = (review.kind, review.r#ref.repo.clone(), review.r#ref.number);
+        let cached = (self.waiting.lock().get(&key))
+            .filter(|c| c.0 == review.updated_at && c.1.elapsed() < WAITING_TTL)
+            .cloned();
+        let (_, _, waiting_on, requested_at, author_to_act) = match cached {
+            Some(c) => c,
+            None => {
+                let url = self.mr_url(&key.1, &format!("/{}/reviewers", key.2));
+                let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
+                let (on, at) = pending_reviewers(&r.body);
+                let c = (review.updated_at.clone(), Instant::now(), on, at, changes_requested(&r.body));
+                self.waiting.lock().insert(key, c.clone());
+                c
+            }
+        };
+        review.waiting_since = requested_at.clone();
+        (review.waiting_on, review.requested_at, review.author_to_act) =
+            (waiting_on, requested_at, author_to_act);
+    }
+
+    /// Bounded by the current list: closed MRs of `kind` drop out of the waiting cache.
+    fn retain_waiting<'a>(&self, kind: ReviewKind, list: impl Iterator<Item = &'a Review> + Clone) {
+        self.waiting.lock().retain(|(k, repo, n), _| {
+            *k != kind || list.clone().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n)
+        });
     }
 
     /// My MR: unresolved threads and the newest last note not by me among them (`/discussions`,
@@ -387,6 +408,18 @@ fn open_discussions(discussions: &Value) -> Vec<(&Value, Vec<&Value>)> {
             (!notes.is_empty() && !resolvable.is_empty() && !resolved).then_some((d, notes))
         })
         .collect()
+}
+
+/// Tail of a GitLab job trace: no section markers (`section_start:<ts>:<name>[opts]`), ANSI or
+/// `\r` progress overwrites.
+fn gitlab_log_tail(text: &str) -> String {
+    static SECTION: OnceLock<Option<Regex>> = OnceLock::new();
+    let section = SECTION
+        .get_or_init(|| Regex::new(r"section_(?:start|end):\d+:[^\s\[]*(?:\[[^\]]*\])?").ok())
+        .as_ref();
+    let lines: Vec<String> =
+        text.lines().map(|l| clean_log_line(&section.map_or(l.into(), |re| re.replace_all(l, "")))).collect();
+    log_tail(&lines)
 }
 
 fn ci_from(status: Option<&str>) -> CiState {
@@ -502,6 +535,7 @@ impl CodeHost for GitlabHost {
             self.threads.lock().retain(|(repo, n), _| {
                 list.iter().any(|(r, _)| r.r#ref.repo == *repo && r.r#ref.number == *n)
             });
+            self.retain_waiting(ReviewKind::Authored, list.iter().map(|(r, _)| r));
         }
         Ok(list.into_iter().map(|(r, _)| r).collect())
     }
@@ -529,6 +563,7 @@ impl CodeHost for GitlabHost {
         let mut list: Vec<Review> =
             lists.into_iter().flatten().filter(|r| include_drafts || !r.draft).collect();
         futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
+        self.retain_waiting(ReviewKind::Team, list.iter());
         Ok(list)
     }
 
@@ -821,7 +856,7 @@ impl CodeHost for GitlabHost {
             let log_tail = match j.get("id").and_then(Value::as_u64) {
                 Some(id) if i < MAX_LOGS => {
                     let req = HttpRequest::get(self.project_url(&r.repo, &format!("/jobs/{id}/trace")));
-                    self.auth.send_text(req).await.ok().map(|t| log_tail(&t.body, false))
+                    self.auth.send_text(req).await.ok().map(|t| gitlab_log_tail(&t.body))
                 }
                 _ => None,
             };
@@ -945,4 +980,19 @@ fn pending_reviewers(body: &Value) -> (Vec<String>, Option<String>) {
 // author act, even after a newer push; compare with the push time if it misleads.
 fn changes_requested(body: &Value) -> bool {
     body.as_array().into_iter().flatten().any(|x| s(x, "state") == Some("requested_changes"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn traces_lose_sections_ansi_and_progress() {
+        let trace = "\x1b[0Ksection_start:1560896352:build_script[collapsed=true]\r\x1b[0K\x1b[32;1mRunning\x1b[0;m\n\
+                     \x1b]8;;https://x.test\x07link\x1b]8;;\x07\n\
+                     10%\r50%\r100%\n\
+                     \x1b[0Ksection_end:1560896353:build_script\r\x1b[0K\n\
+                     ##[error] stays: not GitHub\nlast";
+        assert_eq!(gitlab_log_tail(trace), "Running\nlink\n100%\n\n##[error] stays: not GitHub\nlast");
+    }
 }

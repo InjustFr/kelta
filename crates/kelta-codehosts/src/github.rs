@@ -5,7 +5,7 @@
 //! with `If-None-Match` and `X-Poll-Interval`, only for classic / `gh` OAuth tokens (fine-grained
 //! tokens cannot read notifications). Actions: REST (`/pulls/{n}/reviews` with `commit_id`).
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -23,11 +23,12 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::AccountConfig;
 use kelta_proto::tracker::User;
 use parking_lot::Mutex;
+use regex::Regex;
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
 use crate::common::{
-    MAX_LOGS, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s, user,
+    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s, user,
 };
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -239,10 +240,10 @@ impl GithubHost {
             author_to_act,
             waiting_since: since,
             author_since,
-            nudged_at: None,
             unresolved_threads,
             last_comment_at,
             title,
+            ..Review::default()
         })
     }
 
@@ -260,12 +261,7 @@ impl GithubHost {
             head_sha: v.pointer("/head/sha").and_then(Value::as_str).unwrap_or("").to_owned(),
             source_branch: branch.clone(),
             target_branch: v.pointer("/base/ref").and_then(Value::as_str).unwrap_or("").to_owned(),
-            ci: CiState::None,
-            failed_check_names: vec![],
-            decision: None,
-            my_state: None,
             mergeable: v.get("mergeable").and_then(Value::as_bool),
-            reviewed_head: None,
             labels: v
                 .get("labels")
                 .and_then(Value::as_array)
@@ -276,17 +272,8 @@ impl GithubHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: v.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
-            decision_head: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             title,
+            ..Review::default()
         })
     }
 
@@ -313,7 +300,7 @@ impl GithubHost {
                 self.auth.http().send_text(HttpRequest::get(loc)).await.ok()?.body
             }
         };
-        Some(log_tail(&text, true))
+        Some(actions_log_tail(&text))
     }
 
     /// Fine-grained / app tokens cannot read `/notifications`.
@@ -334,6 +321,25 @@ pub(crate) fn graphql_url(api: &str) -> String {
         Some(root) => format!("{root}/api/graphql"),
         None => format!("{api}/graphql"),
     }
+}
+
+/// Tail of a GitHub Actions log: no line timestamps, cut after the last `##[error]` line, which
+/// drops the "Post job cleanup" steps.
+fn actions_log_tail(text: &str) -> String {
+    static STAMP: OnceLock<Option<Regex>> = OnceLock::new();
+    let stamp =
+        STAMP.get_or_init(|| Regex::new(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ").ok()).as_ref();
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|l| {
+            let l = clean_log_line(l);
+            stamp.map_or(l.clone(), |re| re.replace(&l, "").into_owned())
+        })
+        .collect();
+    if let Some(last) = lines.iter().rposition(|l| l.contains("##[error]")) {
+        lines.truncate(last + 1);
+    }
+    log_tail(&lines)
 }
 
 fn ci_from_rollup(state: Option<&str>) -> CiState {
@@ -1148,6 +1154,19 @@ impl GithubHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn actions_logs_lose_timestamps_and_post_job_steps() {
+        let log = "2024-05-01T10:00:00.1234567Z ##[group]Run cargo test\n\
+                   2024-05-01T10:00:01.0000000Z test a ... FAILED\n\
+                   2024-05-01T10:00:02.0000000Z ##[error]Process completed with exit code 101.\n\
+                   2024-05-01T10:00:03.0000000Z Post job cleanup.\n\
+                   2024-05-01T10:00:04.0000000Z Cleaning up orphan processes";
+        assert_eq!(
+            actions_log_tail(log),
+            "##[group]Run cargo test\ntest a ... FAILED\n##[error]Process completed with exit code 101."
+        );
+    }
 
     #[test]
     fn another_reviewer_asked_after_their_review_keeps_me_off_the_blocking_band() {

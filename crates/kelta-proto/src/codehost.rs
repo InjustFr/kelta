@@ -18,7 +18,7 @@ pub enum CodeHostKind {
     Plugin,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub struct ReviewRef {
     pub account: AccountId,
     /// `"acme/shop"` | `"grp/sub/proj"`.
@@ -55,16 +55,17 @@ pub enum MyReviewState {
     Commented,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewKind {
+    #[default]
     ReviewRequested,
     Authored,
     /// Every open PR on the repos of my ticket sources' projects (`CodeHost::list_open`).
     Team,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Review {
     #[serde(rename = "ref")]
     pub r#ref: ReviewRef,
