@@ -167,7 +167,7 @@ fn lsof_holders(out: &str, sock: &Path) -> Vec<i32> {
             pid = p.parse().ok();
         } else if let Some(n) = l.strip_prefix('n')
             // Linux appends " type=STREAM".
-            && n.strip_prefix(&*sock).is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+            && n.strip_prefix(&*sock).is_some_and(|rest| rest.is_empty() || rest.starts_with(" type="))
         {
             pids.extend(pid.filter(|p| !pids.contains(p)));
         }
@@ -194,12 +194,15 @@ fn argv0(pid: i32) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
-/// SIGTERM the keltad serving `sock`, then wait (bounded) until it closes `s`.
-fn stop_peer(sock: &Path, s: &UnixStream) -> Result<(), KeltaError> {
-    let pid = keltad_pid(sock)
-        .and_then(rustix::process::Pid::from_raw)
-        .ok_or_else(|| KeltaError::internal("cannot find the pid of the old keltad"))?;
-    rustix::process::kill_process(pid, rustix::process::Signal::TERM).map_err(std::io::Error::from)?;
+/// SIGTERM the old keltad (`pid`, from [`keltad_pid`]), then wait (bounded) until it closes `s`.
+/// No pid, or ESRCH: it exited after refusing our Hello, nothing to stop (#312).
+fn stop_peer(pid: Option<i32>, s: &UnixStream) -> Result<(), KeltaError> {
+    let Some(pid) = pid.and_then(rustix::process::Pid::from_raw) else { return Ok(()) };
+    match rustix::process::kill_process(pid, rustix::process::Signal::TERM) {
+        Ok(()) => {}
+        Err(rustix::io::Errno::SRCH) => return Ok(()),
+        Err(e) => return Err(std::io::Error::from(e).into()),
+    }
     // macOS fails setsockopt with EINVAL once the peer has closed (#309): nothing left to wait for.
     if s.set_read_timeout(Some(STOP_TIMEOUT)).is_ok() {
         let mut buf = [0u8; 256];
@@ -299,7 +302,7 @@ impl DaemonTerminalHost {
                 return Err(e);
             }
             tracing::warn!(error = %e, "replacing a keltad of another protocol");
-            stop_peer(&self.sock, &s)?;
+            stop_peer(keltad_pid(&self.sock), &s)?;
             let _ = std::fs::remove_file(&self.sock);
             s = self.dial()?;
             hello(&s)?;
@@ -553,8 +556,22 @@ mod tests {
         std::fs::write(pidfile(&sock), old.id().to_string()).unwrap();
         let (s, peer) = UnixStream::pair().unwrap();
         drop(peer);
-        stop_peer(&sock, &s).unwrap();
+        stop_peer(keltad_pid(&sock), &s).unwrap();
         old.wait().unwrap();
+    }
+
+    /// #312: the old keltad can exit before its pid is looked up (no pid) or before the kill (ESRCH).
+    #[test]
+    fn stop_peer_accepts_a_keltad_gone_before_the_kill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (s, peer) = UnixStream::pair().unwrap();
+        drop(peer);
+        assert_eq!(keltad_pid(&tmp.path().join("keltad.sock")), None);
+        stop_peer(None, &s).unwrap();
+        let mut reaped = Command::new("true").spawn().unwrap();
+        let pid = reaped.id() as i32;
+        reaped.wait().unwrap();
+        stop_peer(Some(pid), &s).unwrap();
     }
 
     /// #309: lsof also lists sockets of other keltads whose deleted files had the same inode.
@@ -563,7 +580,7 @@ mod tests {
         let linux = "p10\nn/tmp/a/run/keltad.sock type=STREAM\np20\nf3\nn/tmp/b/run/keltad.sock type=STREAM\n\
                      n/tmp/b/run/keltad.sock type=STREAM\np30\nn/tmp/b/run/keltad.sock.old type=STREAM\n";
         assert_eq!(lsof_holders(linux, Path::new("/tmp/b/run/keltad.sock")), [20]);
-        let macos = "p7\nf3\nn/tmp/b/keltad.sock\nf5\nn/tmp/b/keltad.sock\n";
+        let macos = "p7\nf3\nn/tmp/b/keltad.sock\nf5\nn/tmp/b/keltad.sock\np8\nn/tmp/b/keltad.sock x\n";
         assert_eq!(lsof_holders(macos, Path::new("/tmp/b/keltad.sock")), [7]);
     }
 
