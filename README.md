@@ -72,19 +72,16 @@ built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) co
 ## Install
 
 Builds are unsigned test builds of `main`, published to the rolling `nightly` prerelease on the
-[Releases page](https://github.com/InjustFr/kelta/releases) by `bash scripts/nightly-local.sh` (it runs on the
-maintainer's Mac). Expect rough edges; if no build is listed yet, [build from source](#build-from-source).
+[Releases page](https://github.com/InjustFr/kelta/releases) every night by the `nightly` workflow, from the newest
+`main` commit that passed CI. Expect rough edges; if no build is listed yet, [build from source](#build-from-source).
 
 | Platform | File |
 |---|---|
 | macOS 13+ (Apple silicon) | `Kelta_*_aarch64.dmg` |
-| Linux, any distro (arm64) | `kelta_*_aarch64.AppImage` |
-| Debian, Ubuntu 24.04+ (arm64) | `kelta_*_arm64.deb` |
+| Linux, any distro (x86_64 / arm64) | `kelta_*_amd64.AppImage` / `kelta_*_aarch64.AppImage` |
+| Debian, Ubuntu 24.04+ (x86_64 / arm64) | `kelta_*_amd64.deb` / `kelta_*_arm64.deb` |
 
-The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached. A
-nightly has amd64 Linux files (`kelta_*_amd64.AppImage`, `kelta_*_amd64.deb`) only when it was built with
-`--amd64`; otherwise an installed amd64 AppImage does not update itself, so
-[build from source](#build-from-source).
+The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached.
 
 Kelta updates itself: it installs each new nightly in the background and a banner offers **Restart** (sessions
 kept by keltad keep running). See Settings → General → Updates. A `.deb` install never updates itself: apt owns

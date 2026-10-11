@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Local nightly: macOS dmg + signed updater bundle (Apple silicon) on this Mac and, with --linux, the Linux
 # deb + AppImage for arm64 in Docker (--amd64 adds amd64, under QEMU on an arm64 Mac: the slowest step), published
-# to the rolling "nightly" prerelease with gh, with the updater manifest `latest.json` (ARCHITECTURE §2 "Bundling").
+# to the rolling "nightly" prerelease by scripts/publish-nightly.sh (ARCHITECTURE §2 "Bundling"). CI publishes the
+# same nightly every night (.github/workflows/nightly.yml): this is the manual path.
 # Usage: bash scripts/nightly-local.sh [--linux] [--amd64]   (HEAD of a clean tree; moves the remote `nightly` tag)
 # Needs the updater key (CONTRIBUTING "Nightly builds"): ${KELTA_UPDATER_KEY:-~/.tauri/kelta-updater.key}
 # and its password in the login Keychain (service `kelta-updater`).
@@ -65,37 +66,4 @@ for arch in $arches; do
       && cp target/release/bundle/deb/*.deb target/release/bundle/appimage/*.AppImage* /out/'
 done
 
-# Notes: commit + history since the previous nightly (if it is known locally).
-git fetch -q origin tag nightly --force 2>/dev/null || true
-prev="$(git rev-parse -q --verify 'refs/tags/nightly^{commit}' || true)"
-notes="$(mktemp)"
-{
-  echo "Local build $KELTA_VERSION of \`$sha\`. Installed copies update themselves (Settings → General)."
-  echo
-  if [[ -n "$prev" ]]; then git log --oneline "$prev..HEAD"; else git log --oneline -20; fi
-  echo
-  echo "macOS: the app is not signed, see the README (right-click Open, or xattr -dr com.apple.quarantine)."
-} > "$notes"
-bash scripts/update-manifest.sh "$dist" "$KELTA_VERSION" "$notes" \
-  https://github.com/InjustFr/kelta/releases/download/nightly
-(cd "$dist" && shasum -a 256 -- * > SHA256SUMS)
-
-# Update path: upload the new (versioned) assets first, then latest.json, then delete the old assets, so
-# an installed copy never reads a manifest pointing at a missing file. A failed upload leaves the old tag,
-# notes and manifest with the old build (re-run to fix). Create path: the tag must exist first.
-git tag -f nightly "$sha"
-if gh release view nightly >/dev/null 2>&1; then
-  find "$dist" -type f ! -name latest.json -print0 | xargs -0 gh release upload nightly --clobber
-  gh release upload nightly "$dist/latest.json" --clobber
-  git push -f origin refs/tags/nightly
-  gh release edit nightly --prerelease --title nightly --notes-file "$notes"
-  # Delete assets of older builds (names change with the version).
-  gh release view nightly --json assets --jq '.assets[].name' | while read -r a; do
-    [[ -e "$dist/$a" ]] || gh release delete-asset nightly "$a" --yes
-  done
-else
-  git push -f origin refs/tags/nightly
-  gh release create nightly --prerelease --verify-tag --title nightly --notes-file "$notes" "$dist"/*
-fi
-rm "$notes"
-gh release view nightly --json url,assets --jq '.url, (.assets[] | "\(.name) \(.size)")'
+bash scripts/publish-nightly.sh "$dist" "$KELTA_VERSION" "$sha"

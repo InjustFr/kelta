@@ -101,15 +101,18 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    Dockerfile changes on `main`; macOS CI installs the same pinned Neovim (`scripts/install-nvim.sh`).
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
-4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
+4. Nightly builds: the `nightly` workflow runs every night at 03:00 UTC (and on a manual run). It picks the
+   newest `main` commit with a green `ci` push run, skips when the `nightly` tag is already on it, builds the
+   Apple silicon dmg + updater bundle and the deb + AppImage for amd64 and arm64 on native runners, and
+   publishes them with `scripts/publish-nightly.sh`. The same publish by hand, from a Mac:
+   `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
    macOS dmg and signed updater bundle here (and, with `--linux`, the deb + AppImage for arm64 in Docker;
    `--amd64` adds amd64, built under QEMU and the slowest step), moves the `nightly` tag to HEAD and uploads
    to the prerelease, `latest.json` after the other assets. A nightly without `--amd64` drops the amd64
    assets and the `linux-x86_64` entry of `latest.json`, so installed amd64 AppImages stop updating. It runs
    `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key (see Nightly builds).
    Tags `v*` build the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A
-   manual run of `release` builds without publishing (universal dmg); `nightly` only builds and uploads
-   artifacts (Apple silicon dmg, deb, AppImage), it never publishes.
+   manual run of `release` builds without publishing (universal dmg).
 
 ## Nightly builds
 
@@ -126,7 +129,14 @@ Put the content of `~/.tauri/kelta-updater.key.pub` in `packaging/tauri.release.
 password manager: losing either strands every installed build until a manual reinstall. `nightly-local.sh` reads
 the key from `${KELTA_UPDATER_KEY:-~/.tauri/kelta-updater.key}` and the password from the Keychain, and stops
 before building when either is missing or the pubkey is still the placeholder. `packaging/build.sh` without
-`TAURI_SIGNING_PRIVATE_KEY` still builds unsigned installers (no update artifacts) from source.
+`TAURI_SIGNING_PRIVATE_KEY` still builds unsigned installers (no update artifacts) from source. The `nightly`
+workflow reads the same key and password from the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, passed to the build steps only:
+
+```sh
+printf %s "$(cat ~/.tauri/kelta-updater.key)" | gh secret set TAURI_SIGNING_PRIVATE_KEY
+printf %s "$(security find-generic-password -s kelta-updater -w)" | gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
 
 ## Packaging and benchmarks
 

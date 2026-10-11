@@ -1,14 +1,18 @@
 name: nightly
 
-# Manual only: unsigned macOS Apple silicon dmg (what the README ships; release.yml keeps the universal one),
-# Linux AppImage + deb and the macOS cargo --timings report, kept as run artifacts. Nothing is published: the rolling
-# "nightly" prerelease (signed, with latest.json) comes from scripts/nightly-local.sh only.
+# Every night (and on a manual run): the newest main commit with a green `ci` push run, unless the `nightly` tag
+# is already on it, built as the macOS Apple silicon dmg + updater bundle (unsigned for Apple; release.yml keeps
+# the universal one) and the Linux deb + AppImage for amd64 and arm64 (native runners), the updater bundles signed
+# with the TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) secrets, then published to the rolling "nightly" prerelease by
+# scripts/publish-nightly.sh. scripts/nightly-local.sh is the same publish from the maintainer's Mac.
 on:
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 concurrency:
   group: nightly
-  cancel-in-progress: true
+  cancel-in-progress: false # a cancelled publish would leave the release half updated
 
 permissions:
   contents: read
@@ -18,9 +22,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linux:
+  prep:
     runs-on: ubuntu-24.04
-    # The prebuilt image (ci-image.yml) has the system packages and the Rust toolchain.
+    permissions:
+      contents: read
+      actions: read # gh run list
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      version: ${{ steps.pick.outputs.version }}
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          # An unsigned nightly would strand every installed copy: refuse before building anything.
+          [[ "$HAS_KEY" == true ]] || { echo "::error::updater key secrets missing (CONTRIBUTING, Nightly builds)"; exit 1; }
+          # The gate: ci's main push runs cover both OSes; docs-only commits have no run and are not needed.
+          sha="$(gh run list -w ci.yml -b main -e push -s success -L 1 --json headSha --jq '.[0].headSha')"
+          [[ -n "$sha" ]] || { echo "::error::no green ci push run on main"; exit 1; }
+          build=true
+          if [[ "$(git ls-remote origin refs/tags/nightly | cut -f1)" == "$sha" ]]; then
+            build=false; echo "::notice::nightly is already $sha"
+          fi
+          # The updater compares this version; the Cargo version (bin/<version>/ dirs) stays as it is.
+          base="$(git show "$sha:apps/desktop/src-tauri/tauri.conf.json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"
+          { echo "sha=$sha"; echo "build=$build"; echo "version=$base-nightly.$(date -u +%Y%m%d%H%M)"; } >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: prep
+    if: needs.prep.outputs.build == 'true'
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    # The prebuilt image (ci-image.yml, amd64 + arm64) has the system packages and the Rust toolchain.
     container:
       image: ghcr.io/injustfr/kelta-ci:latest
       credentials:
@@ -31,6 +71,8 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: "1" # no FUSE in a container for linuxdeploy
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.prep.outputs.sha }}
       - name: Validate desktop entry and AppStream metadata
         run: |
           desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
@@ -44,19 +86,32 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: bash packaging/build.sh
+      # The signing key only reaches this step.
+      - env:
+          KELTA_VERSION: ${{ needs.prep.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bash packaging/build.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: linux
+          name: nightly-linux-${{ runner.arch }}
+          if-no-files-found: error
           path: |
             target/release/bundle/deb/*.deb
             target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
 
   macos:
+    needs: prep
+    if: needs.prep.outputs.build == 'true'
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      KELTA_VERSION: ${{ needs.prep.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.prep.outputs.sha }}
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: 1.99.0
@@ -70,14 +125,41 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # No APPLE_* variables: the app is built unsigned.
-      - run: bash packaging/build.sh
+      # No APPLE_* variables: the app is built unsigned. The updater key only reaches this step.
+      - env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bash packaging/build.sh
+      # Versioned name: the new bundle is uploaded beside the old one before latest.json points at it.
+      - run: |
+          mkdir dist && cp target/release/bundle/dmg/*.dmg dist/
+          for ext in tar.gz tar.gz.sig; do
+            cp "target/release/bundle/macos/Kelta.app.$ext" "dist/Kelta_${KELTA_VERSION}_aarch64.app.$ext"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: macos
-          path: target/release/bundle/dmg/*.dmg
+          name: nightly-macos
+          if-no-files-found: error
+          path: dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cargo-timings-macos
           path: target/cargo-timings/
 
+  publish:
+    needs: [prep, linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the release and the `nightly` tag
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # release notes: the history since the previous nightly
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: nightly-*
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish-nightly.sh "$PWD/dist" "${{ needs.prep.outputs.version }}" "${{ needs.prep.outputs.sha }}"
