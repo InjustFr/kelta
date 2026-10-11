@@ -11,6 +11,7 @@ import {
   closePaneInLayout,
   closeTab,
   contentEquals,
+  detachPane,
   findPane,
   findSession,
   focusPane,
@@ -25,6 +26,7 @@ import {
   paneRects,
   replacePaneContent,
   resizeGutter,
+  setDetached,
   splitPane,
   toggleZoom,
   validateLayout,
@@ -376,6 +378,7 @@ describe('validateLayout', () => {
           work_item_id: null,
           focused_pane: 'zz',
           zoomed_pane: null,
+          detached: false,
           root: { type: 'split', dir: 'row', ratios: [0.9, 0.9], children: [p('a', '1'), p('a', '1')] },
         },
       ],
@@ -385,5 +388,47 @@ describe('validateLayout', () => {
     expect(problems.some((x) => x.includes('duplicate pane id'))).toBe(true);
     expect(problems.some((x) => x.includes('shown twice'))).toBe(true);
     expect(problems).toContain('active tab missing');
+  });
+});
+
+describe('detached tabs', () => {
+  // t1 holds a | b, t2 holds d; t1 is active.
+  const base = (): Layout =>
+    addTab(layoutOf(splitPane(p('a'), 'a', 'row', p('b'))), makeTab('D', p('d'), { id: 't2' }), {
+      activate: false,
+    });
+
+  it('detaching the active tab hands the main window to the nearest tab; reattaching shows it', () => {
+    const l = setDetached(base(), 't1', true);
+    expect(l.tabs[0]?.detached).toBe(true);
+    expect(l.active_tab).toBe('t2');
+    expect(setDetached(l, 't2', true).active_tab).toBe('t2'); // no tab left: stays
+    const back = setDetached(l, 't1', false);
+    expect(back.tabs[0]?.detached).toBe(false);
+    expect(back.active_tab).toBe('t1');
+  });
+
+  it('focusing a pane of a detached tab keeps the main window on its tab', () => {
+    const l = setDetached(base(), 't2', true);
+    const focused = focusPane(l, 't2', 'd');
+    expect(focused.active_tab).toBe('t1');
+    expect(focused.tabs[1]?.focused_pane).toBe('d');
+  });
+
+  it('moves a pane with neighbours to a new detached tab, and a lone pane with its tab', () => {
+    const { layout: l, tabId } = detachPane(base(), { tabId: 't1', paneId: 'a' });
+    expect(tabId).not.toBeNull();
+    const moved = l.tabs.find((t) => t.id === tabId);
+    expect(moved?.detached).toBe(true);
+    expect(allPanes(moved!.root).map((x) => x.id)).toEqual(['a']);
+    expect(allPanes(l.tabs[0]!.root).map((x) => x.id)).toEqual(['b']);
+    expect(l.active_tab).toBe('t1');
+    expect(validateLayout(l)).toEqual([]);
+
+    const alone = detachPane(base(), { tabId: 't2', paneId: 'd' });
+    expect(alone.tabId).toBe('t2');
+    expect(alone.layout.tabs).toHaveLength(2);
+    expect(alone.layout.tabs[1]?.detached).toBe(true);
+    expect(detachPane(base(), { tabId: 't1', paneId: 'zz' }).tabId).toBeNull();
   });
 });

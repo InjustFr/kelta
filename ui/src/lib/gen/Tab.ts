@@ -4,4 +4,8 @@ import type { PaneId } from "./PaneId";
 import type { TabId } from "./TabId";
 import type { WorkItemId } from "./WorkItemId";
 
-export type Tab = { id: TabId, title: string, work_item_id: WorkItemId | null, root: LayoutNode, focused_pane: PaneId | null, zoomed_pane: PaneId | null, };
+export type Tab = { id: TabId, title: string, work_item_id: WorkItemId | null, root: LayoutNode, focused_pane: PaneId | null, zoomed_pane: PaneId | null, 
+/**
+ * Shown in its own window instead of the main one (#342).
+ */
+detached: boolean, };

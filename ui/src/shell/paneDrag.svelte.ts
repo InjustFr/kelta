@@ -29,3 +29,11 @@ class PaneDragStore {
 }
 
 export const paneDrag = new PaneDragStore();
+
+/**
+ * A drag that ended outside the window (#342: dragged out, the pane or tab moves to a new window).
+ * shortcut: trusts dragend's client coordinates; a webview reporting (0, 0) there just never detaches.
+ */
+export function droppedOutside(e: DragEvent): boolean {
+  return e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight;
+}

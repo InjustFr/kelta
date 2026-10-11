@@ -47,6 +47,7 @@ function toolTab(projectId: string): void {
     root: pane({ kind: 'terminal', session_id: LAZYDOCKER }, 'tool-pane'),
     focused_pane: 'tool-pane',
     zoomed_pane: null,
+    detached: false,
   };
   layout.update(projectId, (l) => addTab(l, tab));
 }

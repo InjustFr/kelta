@@ -24,6 +24,7 @@ import {
   openView,
   revealSession,
   splitFocused,
+  toggleFocusedPaneWindow,
   toggleZoomFocused,
 } from './nav';
 import { navStep } from './jumplist';
@@ -159,6 +160,7 @@ registerAction('pane.focus_up', () => focusDirection('up'));
 registerAction('pane.focus_right', () => focusDirection('right'));
 registerAction('pane.zoom', () => toggleZoomFocused());
 registerAction('pane.close', () => closeFocusedPane());
+registerAction('pane.detach', () => toggleFocusedPaneWindow());
 // Mod+J / Mod+Shift+J walk the jump queue (ticket #136); loaded on first use.
 registerAction('attention.next', async () => (await import('../views/inbox/now')).nextWaiting(1));
 registerAction('attention.prev', async () => (await import('../views/inbox/now')).nextWaiting(-1));

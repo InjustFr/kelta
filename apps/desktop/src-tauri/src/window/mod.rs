@@ -1,6 +1,6 @@
 //! Window management (owner: L10, ARCHITECTURE §2, §12.4, §14): window creation (decorations,
-//! app_id, geometry restore), macOS app menu, close → background / quit, reopen, second instance,
-//! webview crash/hang reload.
+//! app_id, geometry restore), detached tab windows (#342), macOS app menu, close → background / quit,
+//! reopen, second instance, webview crash/hang reload.
 
 pub mod bench;
 pub mod bridge;
@@ -16,8 +16,9 @@ use kelta_proto::api::UiBridge;
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::CliArgs;
 use kelta_proto::events::{BusEvent, Toast, UiEvent, bus};
+use kelta_proto::ids::{ProjectId, TabId};
 use kelta_proto::settings::Decorations;
-use tauri::webview::PageLoadEvent;
+use tauri::webview::{PageLoadEvent, PageLoadPayload};
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, RunEvent, Url, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, Window, WindowEvent,
@@ -27,8 +28,11 @@ use crate::platform::decorations;
 use crate::platform::geometry::{self, Geometry};
 use bridge::TauriBridge;
 
-/// Main window label (capabilities are granted to it only).
+/// Main window label (capabilities are granted to it and the detached windows only).
 pub const MAIN_WINDOW: &str = "main";
+
+/// Label prefix of the windows that each show one detached tab (#342).
+pub const DETACHED_PREFIX: &str = "detached-";
 
 /// Decorations the main window was last built with (reported by `app_info`).
 static EFFECTIVE_DECORATIONS: parking_lot::Mutex<Option<decorations::Effective>> =
@@ -71,9 +75,11 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
         // (no Core::shutdown). Route our own item through app.exit instead.
         app.on_menu_event(|app, ev| match ev.id().as_ref() {
             "quit" if !quit_asks(app) => quit(app),
-            // Like the title-bar button: CloseRequested → the UI's close handler.
+            // Like the title-bar button of the focused window: CloseRequested → the UI's close handler.
             "close_window" => {
-                if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+                let windows = app.webview_windows();
+                let focused = windows.values().find(|w| w.is_focused().unwrap_or(false));
+                if let Some(w) = focused.or_else(|| windows.get(MAIN_WINDOW)) {
                     let _ = w.close();
                 }
             }
@@ -85,13 +91,23 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
         crate::platform::dock::on_should_terminate(move || {
             let now = !quit_asks(&handle);
             if now {
-                save_main_geometry(&handle); // no ExitRequested on this path
+                save_geometries(&handle); // no ExitRequested on this path
             }
             now
         });
     }
     create(app.handle())?;
+    restore_detached(app.handle());
     Ok(())
+}
+
+/// The UI re-subscribes after every load; channels of the window's previous page are dead.
+fn on_page_load(w: WebviewWindow, p: PageLoadPayload<'_>) {
+    if matches!(p.event(), PageLoadEvent::Started)
+        && let Some(b) = w.app_handle().try_state::<Arc<TauriBridge>>()
+    {
+        b.clear_subscribers(w.label());
+    }
 }
 
 /// Creates the main window (also used to bring it back after a background-mode close).
@@ -105,14 +121,7 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
         .inner_size(geometry::DEFAULT_WIDTH, geometry::DEFAULT_HEIGHT)
         .min_inner_size(geometry::MIN_WIDTH, geometry::MIN_HEIGHT)
         .decorations(!eff.undecorated())
-        .on_page_load(|w, p| {
-            // The UI re-subscribes after every load; channels of the previous page are dead.
-            if matches!(p.event(), PageLoadEvent::Started)
-                && let Some(b) = w.app_handle().try_state::<Arc<TauriBridge>>()
-            {
-                b.clear_subscribers();
-            }
-        });
+        .on_page_load(on_page_load);
 
     // macOS custom chrome: the system traffic lights over the context bar's 72px inset, no title bar.
     #[cfg(target_os = "macos")]
@@ -135,6 +144,66 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
     Ok(win)
 }
 
+/// Window label of a detached tab (labels take `a-zA-Z0-9-/:_`).
+fn detached_label(tab: &TabId) -> String {
+    let id: String =
+        tab.as_str().chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    format!("{DETACHED_PREFIX}{id}")
+}
+
+/// Shows the window of a detached tab, creating it where it was last (same rules as the main
+/// window's geometry). The page learns its tab from `window.__KELTA_DETACHED__`.
+pub(crate) fn open_detached(
+    app: &AppHandle,
+    project: &ProjectId,
+    tab: &TabId,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let label = detached_label(tab);
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let core = core(app).ok_or("core not started")?;
+    let title = core.layout_get(project).ok().and_then(|l| l.tabs.into_iter().find(|t| &t.id == tab));
+    let shows = serde_json::json!({ "project_id": project, "tab_id": tab });
+    let mut b = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+        .title(title.map_or_else(|| "Kelta".to_owned(), |t| format!("{} — Kelta", t.title)))
+        .inner_size(geometry::DEFAULT_WIDTH, geometry::DEFAULT_HEIGHT)
+        .min_inner_size(geometry::MIN_WIDTH, geometry::MIN_HEIGHT)
+        .initialization_script(format!("window.__KELTA_DETACHED__ = {shows};"))
+        .on_page_load(on_page_load);
+    let saved = core
+        .config()
+        .effective(None)
+        .window
+        .restore_geometry
+        .then(|| geometry::load_detached(&core.dirs().data).remove(&label))
+        .flatten();
+    if let Some(g) = saved.filter(|g| g.visible_on(&monitors(app))) {
+        b = b.inner_size(g.width, g.height).position(g.x, g.y);
+    }
+    let win = b.build()?;
+    if saved.is_some_and(|g| g.maximized) {
+        let _ = win.maximize();
+    }
+    crate::platform::webview::configure(&win);
+    Ok(())
+}
+
+/// Reopens the windows of the tabs that were detached at the last quit.
+fn restore_detached(app: &AppHandle) {
+    let Some(c) = core(app) else { return };
+    for p in c.project_list().into_iter().filter(|p| p.open) {
+        let Ok(l) = c.layout_get(&p.id) else { continue };
+        for t in l.tabs.iter().filter(|t| t.detached) {
+            if let Err(e) = open_detached(app, &p.id, &t.id) {
+                tracing::warn!(tab = %t.id, "cannot reopen a detached window: {e}");
+            }
+        }
+    }
+}
+
 /// Monitor rectangles in logical pixels.
 fn monitors(app: &AppHandle) -> Vec<(f64, f64, f64, f64)> {
     app.available_monitors()
@@ -148,9 +217,10 @@ fn monitors(app: &AppHandle) -> Vec<(f64, f64, f64, f64)> {
         .collect()
 }
 
-/// Quits through `Core::shutdown` (Cmd+Q, `app_quit`).
+/// Quits through `Core::shutdown` (Cmd+Q, `app_quit`). The detached windows close with it and
+/// their tabs stay detached: they come back on the next launch.
 pub(crate) fn quit(app: &AppHandle) {
-    save_main_geometry(app); // app.exit does not send CloseRequested
+    save_geometries(app); // app.exit does not send CloseRequested
     app.exit(0);
 }
 
@@ -175,11 +245,14 @@ fn quit_asks(app: &AppHandle) -> bool {
 
 /// The UI's close handler (it prevents the default close, which Tauri would otherwise finish
 /// right after the handler whatever Rust does in `CloseRequested`): the quit question, or close.
+/// Out of background mode, closing the main window quits even with detached windows open.
 pub(crate) fn close_requested(app: &AppHandle) {
-    if (background_mode(app) || !quit_asks(app))
-        && let Some(w) = app.get_webview_window(MAIN_WINDOW)
-    {
-        let _ = w.destroy();
+    if background_mode(app) {
+        if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+            let _ = w.destroy();
+        }
+    } else if !quit_asks(app) {
+        quit(app);
     }
 }
 
@@ -187,19 +260,41 @@ fn save_main_geometry(app: &AppHandle) {
     if let Some(c) = core(app)
         && c.config().effective(None).window.restore_geometry
         && let Some(w) = app.get_webview_window(MAIN_WINDOW)
+        && let Some(g) = geometry_of(&w.as_ref().window(), geometry::load(&c.dirs().data))
     {
-        save_geometry(&w.as_ref().window(), &c.dirs().data);
+        geometry::save(&c.dirs().data, &g);
     }
 }
 
-fn save_geometry(win: &Window, data_dir: &Path) {
-    let (Ok(pos), Ok(size), Ok(f)) = (win.outer_position(), win.inner_size(), win.scale_factor()) else {
+/// On quit: the main window's geometry and the open detached windows' (the closed ones are dropped).
+fn save_geometries(app: &AppHandle) {
+    save_main_geometry(app);
+    let Some(c) = core(app) else { return };
+    if !c.config().effective(None).window.restore_geometry {
         return;
+    }
+    let data = &c.dirs().data;
+    let mut prev = geometry::load_detached(data);
+    let map = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with(DETACHED_PREFIX))
+        .filter_map(|(label, w)| {
+            let g = geometry_of(&w.as_ref().window(), prev.remove(&label))?;
+            Some((label, g))
+        })
+        .collect();
+    geometry::save_detached(data, &map);
+}
+
+/// `prev`: the last saved geometry, kept as the normal rect of a maximized window.
+fn geometry_of(win: &Window, prev: Option<Geometry>) -> Option<Geometry> {
+    let (Ok(pos), Ok(size), Ok(f)) = (win.outer_position(), win.inner_size(), win.scale_factor()) else {
+        return None;
     };
     let maximized = win.is_maximized().unwrap_or(false);
-    let prev = geometry::load(data_dir);
     // A maximized window reports the maximized rect: keep the previous normal rect.
-    let g = match (maximized, prev) {
+    Some(match (maximized, prev) {
         (true, Some(p)) => Geometry { maximized: true, ..p },
         _ => {
             let PhysicalPosition { x, y } = pos;
@@ -212,8 +307,7 @@ fn save_geometry(win: &Window, data_dir: &Path) {
                 maximized,
             }
         }
-    };
-    geometry::save(data_dir, &g);
+    })
 }
 
 /// Shows and focuses the window, recreating it after a background-mode close.
@@ -271,10 +365,28 @@ pub(crate) fn reload_url(current: Option<Url>, safe: bool) -> Option<Url> {
 
 /// Window events (close → background/quit per `window.close_behavior`).
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    let app = window.app_handle();
     if window.label() != MAIN_WINDOW {
+        match event {
+            // A detached window: its page reattached its tab before closing.
+            WindowEvent::Destroyed => {
+                if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
+                    b.clear_subscribers(window.label());
+                }
+            }
+            // Focus is any-of over the windows (`window_state`).
+            WindowEvent::Focused(focused) => {
+                if let Some(c) = core(app) {
+                    c.publish(BusEvent::new(
+                        bus::APP_FOCUS_CHANGED,
+                        serde_json::json!({ "focused": focused }),
+                    ));
+                }
+            }
+            _ => {}
+        }
         return;
     }
-    let app = window.app_handle();
     match event {
         // The UI's close handler decides (`close_requested`): Tauri already prevents the close
         // while it listens, and finishes it itself unless the handler prevents the default.
@@ -294,9 +406,12 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 bench::mark("window_closed", 1.0);
             }
             if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
-                b.clear_subscribers();
+                b.clear_subscribers(MAIN_WINDOW);
             }
-            if let Some(c) = core(app) {
+            // Detached windows keep showing their sessions (background mode).
+            if let Some(c) = core(app)
+                && app.webview_windows().keys().all(|l| l == MAIN_WINDOW)
+            {
                 c.detach_all_views();
             }
         }
@@ -309,7 +424,7 @@ pub fn on_run_event(app: &AppHandle, event: &RunEvent) {
     match event {
         // No window left and no explicit quit: stay alive in background mode.
         RunEvent::ExitRequested { code: None, api, .. } if background_mode(app) => api.prevent_exit(),
-        RunEvent::ExitRequested { .. } => save_main_geometry(app),
+        RunEvent::ExitRequested { .. } => save_geometries(app),
         RunEvent::Exit => {
             if let Some(c) = core(app)
                 && let Err(e) = tauri::async_runtime::block_on(c.shutdown())
@@ -431,6 +546,12 @@ mod tests {
         assert_eq!(reload_url(safe, true), None);
         assert_eq!(reload_url(u("http://x/?a=1"), true), u("http://x/?a=1&safe=1"));
         assert_eq!(reload_url(None, true), None);
+    }
+
+    #[test]
+    fn detached_labels_fit_the_capability() {
+        assert_eq!(detached_label(&TabId::new("tab-1a2b")), "detached-tab-1a2b");
+        assert_eq!(detached_label(&TabId::new("t.x/é")), "detached-t_x__");
     }
 
     #[test]

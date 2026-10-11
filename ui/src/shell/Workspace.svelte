@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { ProjectId } from '$lib/gen';
-  import { activeTab, nodeAt, resizeGutter, updateTab } from '$lib/layout';
+  import type { ProjectId, TabId } from '$lib/gen';
+  import { activeTab, findTab, nodeAt, resizeGutter, updateTab } from '$lib/layout';
   import { layout, projects } from '$lib/stores';
   import { Button, EmptyState, ErrorState, Spinner } from '$lib/ui';
 
@@ -11,19 +11,22 @@
   import GutterView from './Gutter.svelte';
   import { chordFor } from './labels';
   import { lazyComponents } from './lazy.svelte';
+  import { attachTab, detachTab } from './nav';
   import PaneHost from './PaneHost.svelte';
   import { paneDrag } from './paneDrag.svelte';
   import { spawnTemplate } from './spawn';
 
   interface Props {
     projectId: ProjectId;
+    /** A detached window's tab (#342); the main window shows the active tab. */
+    tabId?: TabId;
   }
 
-  let { projectId }: Props = $props();
+  let { projectId, tabId }: Props = $props();
 
   const current = $derived(layout.get(projectId));
   const failure = $derived(layout.errors[projectId] ?? null);
-  const tab = $derived(current ? activeTab(current) : null);
+  const tab = $derived(current ? (tabId ? findTab(current, tabId) : activeTab(current)) : null);
   const geometry = $derived(
     tab ? applyZoom(layoutGeometry(tab.root), tab.zoomed_pane) : { panes: [], gutters: [] },
   );
@@ -129,6 +132,19 @@
         {/snippet}
       </EmptyState>
     {/if}
+  {:else if tab.detached && !tabId}
+    <EmptyState
+      icon="app-window"
+      title="This tab is in its own window"
+      body="Its sessions keep running there. Closing that window brings the tab back here."
+    >
+      {#snippet actions()}
+        <Button variant="primary" icon="app-window" onclick={() => detachTab(projectId, tab.id)}
+          >Show window</Button
+        >
+        <Button onclick={() => attachTab(projectId, tab.id)}>Move back here</Button>
+      {/snippet}
+    </EmptyState>
   {:else}
     {#if tab.work_item_id && BriefComponent}
       <BriefComponent {projectId} workItemId={tab.work_item_id} />

@@ -158,6 +158,7 @@ export function seedGlobalLayout(l: Layout): Layout {
     root: makePane(seedContent(v, l.rev === 0), v),
     focused_pane: v,
     zoomed_pane: null,
+    detached: false,
   }));
   const place = stored('kelta.place');
   const active = l.rev === 0 && GLOBAL_VIEWS.includes(place as GlobalView) ? place : l.active_tab;

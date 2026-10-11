@@ -7,13 +7,16 @@
   import { Badge, Button, ErrorState, Icon, IconButton, Lamp, Menu, Spinner, type MenuItem } from '$lib/ui';
 
   import { prompts } from './confirm.svelte';
+  import { detached } from './detached';
   import { ctxHot, itemCost, overBudget, usd } from './usage';
   import EmptyPane from './EmptyPane.svelte';
   import { lazyComponents } from './lazy.svelte';
-  import { paneDrag } from './paneDrag.svelte';
+  import { droppedOutside, paneDrag } from './paneDrag.svelte';
   import { chordFor, paneIcon, paneTitle, statusLabel } from './labels';
   import {
+    attachTab,
     closePaneAndStop,
+    detachPaneToWindow,
     focusPaneById,
     openContent,
     requestClosePane,
@@ -77,6 +80,15 @@
         icon: zoomed ? 'minimize-2' : 'maximize-2',
         kbd: chordFor('pane.zoom'),
       },
+      detached
+        ? { id: 'window', label: 'Move back to main window', icon: 'app-window', separator: true }
+        : {
+            id: 'window',
+            label: 'Move to new window',
+            icon: 'app-window',
+            separator: true,
+            kbd: chordFor('pane.detach'),
+          },
     ];
     if (session) {
       items.push({ id: 'rename', label: 'Rename session…', icon: 'pencil', separator: true });
@@ -99,6 +111,9 @@
         break;
       case 'zoom':
         toggleZoomFocused();
+        break;
+      case 'window':
+        await (detached ? attachTab(projectId, tabId) : detachPaneToWindow(projectId, tabId, node.id));
         break;
       case 'rename': {
         if (!session) break;
@@ -160,7 +175,12 @@
         e.dataTransfer?.setData('text/plain', node.id);
         if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
       }}
-      ondragend={() => paneDrag.end()}
+      ondragend={(e) => {
+        // Still dragging: no drop target took it.
+        const out = paneDrag.current?.paneId === node.id && !detached && droppedOutside(e);
+        paneDrag.end();
+        if (out) void detachPaneToWindow(projectId, tabId, node.id);
+      }}
       oncontextmenu={(e) => {
         e.preventDefault();
         focus();

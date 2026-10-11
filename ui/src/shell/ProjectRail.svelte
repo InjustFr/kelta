@@ -24,8 +24,10 @@
   import { chordFor } from './labels';
   import {
     activateProject,
+    attachTab,
     backgroundSessions,
     currentTab,
+    detachTab,
     focusedPane,
     focusPaneById,
     isToolTab,
@@ -46,7 +48,7 @@
     workItemOfTab,
     type ToolInstance,
   } from './nav';
-  import { paneDrag } from './paneDrag.svelte';
+  import { droppedOutside, paneDrag } from './paneDrag.svelte';
   import { peekHover, peekTarget } from './peek.svelte';
 
   const rail = $derived(railProjects());
@@ -210,6 +212,9 @@
     const index = rows.findIndex((t) => t.id === tab.id);
     return [
       { id: 'close', label: 'Close', icon: 'x' },
+      tab.detached
+        ? { id: 'attach', label: 'Move back to main window', icon: 'app-window' }
+        : { id: 'detach', label: 'Move to new window', icon: 'app-window' },
       { id: 'up', label: 'Move up', icon: 'arrow-up', disabled: index <= 0, separator: true },
       { id: 'down', label: 'Move down', icon: 'arrow-down', disabled: index >= rows.length - 1 },
     ];
@@ -219,6 +224,8 @@
     const rows = rowsOf(project);
     const index = rows.findIndex((t) => t.id === tab.id);
     if (id === 'close') void requestCloseTab(project, tab.id);
+    else if (id === 'detach') void detachTab(project, tab.id);
+    else if (id === 'attach') void attachTab(project, tab.id);
     else moveRow(project, tab.id, rows[index + (id === 'up' ? -1 : 1)]);
   }
 
@@ -235,6 +242,7 @@
   }
 
   function rowIcon(tab: Tab): string {
+    if (tab.detached) return 'app-window';
     if (tab.work_item_id) return 'git-branch';
     if (liveSessionsOfTab(tab).some((s) => s.kind.type === 'claude')) return 'bot';
     return allPanes(tab.root).some((p) => p.content.kind === 'terminal') ? 'terminal' : 'app-window';
@@ -444,7 +452,8 @@
                     e.preventDefault();
                     onRowDrop(p.id, tab);
                   }}
-                  ondragend={() => {
+                  ondragend={(e) => {
+                    if (rowDrag && droppedOutside(e)) void detachTab(p.id, tab.id);
                     rowDrag = null;
                     rowOver = null;
                   }}

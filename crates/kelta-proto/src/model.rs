@@ -410,6 +410,9 @@ pub struct Tab {
     pub root: LayoutNode,
     pub focused_pane: Option<PaneId>,
     pub zoomed_pane: Option<PaneId>,
+    /// Shown in its own window instead of the main one (#342).
+    #[serde(default)]
+    pub detached: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]

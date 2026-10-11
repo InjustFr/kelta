@@ -20,6 +20,7 @@
     ui,
     type GlobalView,
   } from '$lib/stores';
+  import { findTab } from '$lib/layout';
   import { configFromSettings, terminalPool } from '$lib/terminal';
   import { terminalPalette } from '$lib/terminal/theme';
   import { resolveProjectColor, resolveTheme } from '$lib/theme';
@@ -28,6 +29,7 @@
 
   import { confirms, prompts } from './confirm.svelte';
   import ContextBar from './ContextBar.svelte';
+  import { closeDetachedWindow, detached } from './detached';
   import DialogHost from './DialogHost.svelte';
   import JumpHud from './JumpHud.svelte';
   import GlobalHost from './GlobalHost.svelte';
@@ -75,9 +77,11 @@
   });
 
   $effect(() => {
-    // The window takes the hue of the active project (else the theme's); the palette is not re-pushed.
+    // The window takes the hue of the active project, a detached window its tab's (else the theme's);
+    // the palette is not re-pushed.
+    const shown = detached ? projects.byId(detached.project_id) : projects.active;
     const accent =
-      projectAccent(resolveProjectColor(projects.active?.color, resolved)) ?? projectAccent(resolved.accent);
+      projectAccent(resolveProjectColor(shown?.color, resolved)) ?? projectAccent(resolved.accent);
     const style = document.documentElement.style;
     if (accent) style.setProperty('--k-project', accent);
     else style.removeProperty('--k-project');
@@ -113,17 +117,29 @@
   // ---- encrypted secrets file ------------------------------------------------------------------
 
   const unlockOnce = startupUnlock();
-  $effect(() => unlockOnce(settings.value()));
+  $effect(() => {
+    if (!detached) unlockOnce(settings.value()); // asked once, in the main window
+  });
 
   // ---- layouts ---------------------------------------------------------------------------------
 
   $effect(() => {
     // Layouts of every open project are loaded ahead of time so a project switch is warm.
+    if (detached) return;
     for (const p of projects.openProjects) {
       if (!layout.get(p.id)) void layout.ensure(p.id).catch(() => {});
     }
   });
-  void loadGlobalLayout().catch(() => {});
+  if (!detached) void loadGlobalLayout().catch(() => {});
+
+  $effect(() => {
+    // A detached window (#342) goes away once its tab is back in the main window or closed, after
+    // its own save of that change landed.
+    const l = detached ? layout.get(detached.project_id) : null;
+    if (detached && l && !findTab(l, detached.tab_id)?.detached) {
+      void layout.flush(detached.project_id).finally(closeDetachedWindow);
+    }
+  });
 
   // ---- jumplist -------------------------------------------------------------------------------
 
@@ -146,6 +162,7 @@
   // and that layout are known, saved on every change after.
   let placeRestored = false;
   $effect(() => {
+    if (detached) return; // the main window's place, never a detached window's
     const view = ui.view;
     const global = layout.get(GLOBAL);
     // tabs: seeded by `loadGlobalLayout`, which carries the pre-#270 place
@@ -260,7 +277,7 @@
     window.addEventListener('blur', onBlur);
 
     // Cached review requests feed the Inbox badge (no network before first paint: cache only).
-    void reviews.load({ kind: 'all' }, 'review_requested', false);
+    if (!detached) void reviews.load({ kind: 'all' }, 'review_requested', false);
 
     return () => {
       stopKeys();
@@ -278,34 +295,43 @@
   const active = $derived(projects.active);
 </script>
 
-<ContextBar />
+{#if !detached}
+  <ContextBar />
+{/if}
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
-  <ProjectRail />
+  {#if !detached}
+    <ProjectRail />
+  {/if}
   <div class="main">
-    <UpdateBanner />
-    {#if ui.view}
-      <GlobalHost view={ui.view} />
-    {:else if active}
-      <Workspace projectId={active.id} />
-    {:else if projects.loaded}
-      <EmptyState
-        icon="folder"
-        title="No project open"
-        body="Pick a project in the sidebar, or create one from a code folder."
-      >
-        {#snippet actions()}
-          <Button variant="primary" onclick={() => ui.openSheet('project_new')}
-            >Create project from folder</Button
-          >
-          <Button chord={chordFor('project.switcher')} onclick={() => ui.openOverlay('switcher')}
-            >Switch project</Button
-          >
-        {/snippet}
-      </EmptyState>
+    {#if detached}
+      <!-- A detached window (#342): its tab alone, under the native title bar. -->
+      <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
     {:else}
-      <div class="grow"></div>
+      <UpdateBanner />
+      {#if ui.view}
+        <GlobalHost view={ui.view} />
+      {:else if active}
+        <Workspace projectId={active.id} />
+      {:else if projects.loaded}
+        <EmptyState
+          icon="folder"
+          title="No project open"
+          body="Pick a project in the sidebar, or create one from a code folder."
+        >
+          {#snippet actions()}
+            <Button variant="primary" onclick={() => ui.openSheet('project_new')}
+              >Create project from folder</Button
+            >
+            <Button chord={chordFor('project.switcher')} onclick={() => ui.openOverlay('switcher')}
+              >Switch project</Button
+            >
+          {/snippet}
+        </EmptyState>
+      {:else}
+        <div class="grow"></div>
+      {/if}
+      <StatusBar {prefixArmed} view={ui.view} />
     {/if}
-    <StatusBar {prefixArmed} view={ui.view} />
   </div>
 
   {#if ui.overlay === 'palette' && Palette}

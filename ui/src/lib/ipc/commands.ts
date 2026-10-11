@@ -44,6 +44,7 @@ import type {
   NextUpItem,
   ProjectDraft,
   ProjectId,
+  TabId,
   ProjectInfo,
   ProjectPatch,
   RebaseOp,
@@ -136,6 +137,8 @@ export interface Commands {
   app_quit: { args: { stop: boolean }; result: null };
   /** The window close the UI intercepted: the quit question when it applies, else closes the window. */
   app_close: { args: NoArgs; result: null };
+  /** Shows a detached tab in its own window (#342), creating it; save the layout first. */
+  window_detach: { args: { project_id: ProjectId; tab_id: TabId }; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -391,6 +394,7 @@ export const COMMAND_NAMES = [
   'app_restart',
   'app_quit',
   'app_close',
+  'window_detach',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -575,6 +579,7 @@ export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');
 export const appQuit = wrap('app_quit');
 export const appClose = wrap('app_close');
+export const windowDetach = wrap('window_detach');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {

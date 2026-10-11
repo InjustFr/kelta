@@ -4,6 +4,7 @@
   "rev": 7,
   "tabs": [
     {
+      "detached": false,
       "focused_pane": "pane-1",
       "id": "tab-1",
       "root": {
@@ -37,6 +38,7 @@
       "zoomed_pane": null
     },
     {
+      "detached": false,
       "focused_pane": null,
       "id": "tab-2",
       "root": {

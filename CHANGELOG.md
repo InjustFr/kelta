@@ -17,6 +17,9 @@ All notable changes are listed here. The format follows Keep a Changelog, versio
 
 ### Added
 
+- Detached windows: a pane or a tab moves to its own window (pane menu, rail row menu, `pane.detach`) to put
+  it on another screen, sessions untouched; closing that window brings the tab back, and detached windows reopen
+  where they were after a restart.
 - Platform shell: graphics workarounds applied before the webview starts (NVIDIA detection, `--safe-graphics`,
   automatic safe retry after a failed launch), window decorations modes, geometry restore, macOS app menu.
 - Background mode: closing the window destroys the webview and keeps sessions alive; Dock click, a second

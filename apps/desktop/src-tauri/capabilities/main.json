@@ -1,9 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Kelta main window: core defaults + every Kelta command. Local origin only (no remote URLs); plugin and tool iframes get nothing.",
+  "description": "Kelta main window and detached windows: core defaults + every Kelta command. Local origin only (no remote URLs); plugin and tool iframes get nothing.",
   "local": true,
-  "windows": ["main"],
+  "windows": ["main", "detached-*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -33,6 +33,7 @@
     "allow-app-restart",
     "allow-app-quit",
     "allow-app-close",
+    "allow-window-detach",
     "allow-settings-schema",
     "allow-settings-effective",
     "allow-settings-layer-get",

@@ -490,8 +490,12 @@ pub trait UiBridge: Send + Sync {
     fn request_attention(&self);
     /// tauri-plugin-notification.
     fn notify(&self, n: Notification) -> Result<(), KeltaError>;
-    /// `{exists, visible, focused}`.
+    /// `{exists, visible, focused}`, any-of over every window (main and detached).
     fn window_state(&self) -> WindowState;
+    /// The main window alone shows the active tab; detached windows show their own tab.
+    fn main_window_visible(&self) -> bool {
+        self.window_state().visible
+    }
     /// Hang/crash recovery (§12.4).
     fn reload_webview(&self, safe: bool);
     /// WebKit helper pids for `perf_snapshot` (macOS WebContent etc.); default none.
