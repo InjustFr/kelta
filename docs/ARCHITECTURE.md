@@ -39,7 +39,6 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). Verified aga
 | tauri | 2.12.2 | default features; no `unstable`, no `devtools` in release | desktop |
 | tauri-build | 2.7.1 | app manifest lists every command (explicit permissions) | desktop |
 | tauri-plugin-notification | 2.5.1 | | desktop |
-| tauri-plugin-opener | 2.7.0 | open URLs/files externally | desktop |
 | tauri-plugin-single-instance | 2.5.2 | forwards argv of 2nd launch | desktop |
 | tauri-plugin-updater | 2.13.3 | driven from Rust (`platform/update.rs`), no JS permissions; registered only when the build config has `plugins.updater` (release overlay) | desktop |
 | tokio | 1.53.2 | rt-multi-thread, macros, net, process, sync, time, io-util, fs, signal | all async crates |

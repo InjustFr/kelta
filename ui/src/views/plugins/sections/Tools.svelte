@@ -13,6 +13,8 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import { currentPlatform } from '$lib/ui/format';
 
+  import SettingsCard from '../../settings/layout/SettingsCard.svelte';
+  import SettingsGroup from '../../settings/layout/SettingsGroup.svelte';
   import SectionForm from '../../settings/SectionForm.svelte';
   import { effectiveBindings } from '../../settings/lib/chords';
   import { useEditor } from '../../settings/lib/editor.svelte';
@@ -65,11 +67,11 @@
     {/if}
   {/snippet}
   {#snippet after()}
-    <section data-layer={layer} class="tools">
-      <h2>Check if installed</h2>
-      <p class="muted">
-        Every tool from config files or plugins: programs like lazygit that open in a pane, or apps like Fork.
-      </p>
+    <SettingsGroup
+      heading="Your tools"
+      description="Every tool from config files or plugins. Check shows whether its program is installed."
+      data-layer={layer}
+    >
       {#if !pid}
         <EmptyState icon="folder" title="No project selected" />
       {:else if slot?.error && !slot.data}
@@ -91,49 +93,39 @@
           {/snippet}
         </EmptyState>
       {:else}
-        <table>
-          <tbody>
-            {#each slot.data as t (t.id)}
-              {@const c = checks[t.id]}
-              {@const clash = t.keybinding
-                ? toolKeyConflict(t.keybinding, t.id, bindings, slot.data, platform)
-                : null}
-              <tr>
-                <td>
-                  <strong>{t.label}</strong> <span class="muted">{t.id}</span>
-                  {#if clash}<Badge tone="warn" title={clash}>{clash}</Badge>{/if}
-                </td>
-                <td><Badge tone="info">{t.kind}</Badge></td>
-                <td>
-                  <Badge>{t.source.kind === 'plugin' ? `plugin ${t.source.plugin_id}` : t.source.layer}</Badge
-                  >
-                </td>
-                <td class="state">
-                  {#if typeof c === 'string'}
-                    <span class="bad">{c}</span>
-                  {:else if c}
-                    {#if c.installed}<span class="ok">{c.version ?? 'installed'}</span>
-                    {:else}<span class="bad">missing{c.install_hint ? ` · ${c.install_hint}` : ''}</span>{/if}
-                  {:else if t.installed === false}
-                    <span class="bad">missing</span>
-                  {/if}
-                </td>
-                <td><Button size="sm" variant="ghost" onclick={() => check(t.id)}>Check</Button></td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        {#each slot.data as t (t.id)}
+          {@const c = checks[t.id]}
+          {@const clash = t.keybinding
+            ? toolKeyConflict(t.keybinding, t.id, bindings, slot.data, platform)
+            : null}
+          <SettingsCard heading={t.label} data-tool={t.id}>
+            {#snippet head()}
+              <span class="muted">{t.id}</span>
+              <Badge tone="info">{t.kind}</Badge>
+              <Badge>{t.source.kind === 'plugin' ? `plugin ${t.source.plugin_id}` : t.source.layer}</Badge>
+              {#if clash}<Badge tone="warn" title={clash}>{clash}</Badge>{/if}
+            {/snippet}
+            {#snippet actions()}
+              <span class="state">
+                {#if typeof c === 'string'}
+                  <span class="bad">{c}</span>
+                {:else if c}
+                  {#if c.installed}<span class="ok">{c.version ?? 'installed'}</span>
+                  {:else}<span class="bad">missing{c.install_hint ? ` · ${c.install_hint}` : ''}</span>{/if}
+                {:else if t.installed === false}
+                  <span class="bad">missing</span>
+                {/if}
+              </span>
+              <Button size="sm" variant="ghost" onclick={() => check(t.id)}>Check</Button>
+            {/snippet}
+          </SettingsCard>
+        {/each}
       {/if}
-    </section>
+    </SettingsGroup>
   {/snippet}
 </SectionForm>
 
 <style>
-  h2 {
-    margin: 0;
-    font-size: var(--k-font-size-lg);
-  }
-
   .muted {
     color: var(--k-fg-muted);
   }
@@ -144,17 +136,6 @@
     gap: var(--k-space-3);
     margin: 0;
     color: var(--k-fg-muted);
-  }
-
-  table {
-    width: 100%;
-    margin-top: var(--k-space-4);
-    border-collapse: collapse;
-  }
-
-  td {
-    padding: var(--k-space-2) var(--k-space-3);
-    border-bottom: 1px solid var(--k-border);
   }
 
   .state {

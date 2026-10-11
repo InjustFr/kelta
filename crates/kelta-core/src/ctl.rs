@@ -5,6 +5,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
@@ -98,49 +100,6 @@ pub async fn open_external(url: &str) -> Result<(), KeltaError> {
     Ok(())
 }
 
-fn b64_decode(s: &str) -> Result<Vec<u8>, KeltaError> {
-    let val = |c: u8| -> Option<u32> {
-        Some(match c {
-            b'A'..=b'Z' => u32::from(c - b'A'),
-            b'a'..=b'z' => u32::from(c - b'a') + 26,
-            b'0'..=b'9' => u32::from(c - b'0') + 52,
-            b'+' | b'-' => 62,
-            b'/' | b'_' => 63,
-            _ => return None,
-        })
-    };
-    let clean: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=').collect();
-    let mut out = Vec::with_capacity(clean.len() * 3 / 4);
-    for chunk in clean.chunks(4) {
-        let mut n = 0u32;
-        for (i, c) in chunk.iter().enumerate() {
-            n |= val(*c).ok_or_else(|| KeltaError::invalid("invalid base64 body"))? << (18 - 6 * i);
-        }
-        out.push((n >> 16) as u8);
-        if chunk.len() > 2 {
-            out.push((n >> 8) as u8);
-        }
-        if chunk.len() > 3 {
-            out.push(n as u8);
-        }
-    }
-    Ok(out)
-}
-
-fn b64_encode(input: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0)];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
-}
-
 /// Plugin fetches: own client, redirects never followed (a 3xx to another host would bypass the
 /// `net:<host>` grant the caller checked on `req.url`), returned to the plugin as-is.
 fn plugin_client() -> Result<&'static reqwest::Client, KeltaError> {
@@ -181,7 +140,11 @@ pub async fn http_fetch(req: ProxiedRequest) -> Result<ProxiedResponse, KeltaErr
         rb = rb.header(k.as_str(), v.as_str());
     }
     if let Some(body) = req.body {
-        rb = if req.body_base64 { rb.body(b64_decode(&body)?) } else { rb.body(body) };
+        rb = if req.body_base64 {
+            rb.body(B64.decode(&body).map_err(|e| KeltaError::invalid(format!("invalid base64 body: {e}")))?)
+        } else {
+            rb.body(body)
+        };
     }
     if let Some(ms) = req.timeout_ms {
         rb = rb.timeout(Duration::from_millis(ms.clamp(100, 60_000)));
@@ -208,7 +171,7 @@ pub async fn http_fetch(req: ProxiedRequest) -> Result<ProxiedResponse, KeltaErr
     }
     let (body, body_base64) = match String::from_utf8(bytes) {
         Ok(s) => (s, false),
-        Err(e) => (b64_encode(e.as_bytes()), true),
+        Err(e) => (B64.encode(e.as_bytes()), true),
     };
     Ok(ProxiedResponse { status, headers, body, body_base64 })
 }
@@ -468,7 +431,6 @@ mod tests {
     fn helpers() {
         assert_eq!(ticket_key("SHOP-1"), "SHOP-1");
         assert_eq!(ticket_key("https://acme.atlassian.net/browse/SHOP-142?x=1"), "SHOP-142");
-        assert_eq!(b64_decode(&b64_encode(b"hello world!?")).unwrap(), b"hello world!?".to_vec());
     }
 
     #[test]
@@ -520,5 +482,15 @@ mod tests {
         assert!(http_fetch(get(url)).await.unwrap_err().message.contains("5 MB"));
 
         assert!(http_fetch(get("http://example.com/".into())).await.is_err(), "plain http off loopback");
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_malformed_base64_body() {
+        let req = ProxiedRequest {
+            body: Some("A".into()),
+            body_base64: true,
+            ..get("http://127.0.0.1:9/x".into())
+        };
+        assert_eq!(http_fetch(req).await.unwrap_err().code, kelta_proto::error::ErrorCode::InvalidArgument);
     }
 }

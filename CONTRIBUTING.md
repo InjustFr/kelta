@@ -50,7 +50,8 @@ they end. Packages limit the Rust steps to those workspace packages. Rust tests 
 [cargo-nextest](https://nexte.st) (`brew install cargo-nextest`) when it is installed, with one retry: a test
 that passes only on its retry is printed as `FLAKY` (fix it, do not ignore it); doctests still run with
 `cargo test --doc`. Without nextest the gate falls back to `cargo test`. The Playwright suite on mock IPC runs
-with `pnpm e2e`.
+with `pnpm e2e`. The README screenshots (`docs/images/readme/*.webp`) are recaptured from it with
+`cd ui && README_SHOTS=1 pnpm exec playwright test readme-shots` (needs `cwebp`: `brew install webp`).
 
 `ci-local.sh` picks the steps from the diff against `--base` (default `origin/main`, plus uncommitted and
 untracked files), see `scripts/affected.py`:

@@ -1,11 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
+import { settingsSections, type SettingsSectionId } from '$app/registry';
+import { createMockTransport } from '$lib/ipc/mock';
+import { setTransport } from '$lib/ipc/transport';
+
 import schemaJson from '../../../../schema/settings.schema.json';
 import Control from './fields/Control.svelte';
 import SourceBadge from './fields/SourceBadge.svelte';
+import { splitPath } from './lib/paths';
 import { fieldKind, leafFields, nodeAt, type FieldKind, type SchemaNode } from './lib/schema';
-import { FOREIGN_ROOTS, SECTION_ROOTS } from './lib/sections';
+import { ADVANCED, isAdvanced, SECTION_GROUPS, SECTION_ROOTS, TOML_ROOTS } from './lib/sections';
+import SectionForm from './SectionForm.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
 
@@ -34,7 +40,51 @@ describe('schema -> field kinds', () => {
   it('the ticket sources have their own section', () => {
     expect(Object.keys(schema.properties ?? {})).toContain('sources');
     expect(SECTION_ROOTS.sources).toEqual(['sources']);
-    expect(FOREIGN_ROOTS).not.toContain('sources');
+    expect(Object.values(TOML_ROOTS).flat()).not.toContain('sources');
+  });
+});
+
+describe('every schema key stays reachable (#282)', () => {
+  const formRoots = Object.values(SECTION_ROOTS).flat();
+  const tomlRoots = Object.values(TOML_ROOTS).flat();
+
+  it('each top-level key belongs to a section form or is listed as TOML-only (with its Edit TOML link)', () => {
+    for (const r of Object.keys(schema.properties ?? {}))
+      expect(formRoots.includes(r) || tomlRoots.includes(r), r).toBe(true);
+  });
+
+  it('each advanced key exists and is rendered by a section form', () => {
+    for (const p of ADVANCED) {
+      expect(nodeAt(schema, splitPath(p)), p).toBeTruthy();
+      expect(formRoots, p).toContain(splitPath(p)[0]);
+    }
+  });
+
+  it('every section sits in exactly one nav group', () => {
+    const grouped = SECTION_GROUPS.flatMap((g) => g.ids);
+    expect(new Set(grouped).size).toBe(grouped.length);
+    for (const s of settingsSections) expect(grouped, s.id).toContain(s.id);
+  });
+
+  const sections = Object.keys(SECTION_ROOTS) as SettingsSectionId[];
+  it.each(sections)('%s renders a field for each key, the advanced ones collapsed', async (sectionId) => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const { container, unmount } = render(SectionForm, { sectionId, layer: 'global' });
+    await vi.waitFor(() => expect(container.querySelector('[data-path]')).toBeTruthy());
+    const advanced = container.querySelector('[data-testid="advanced"]');
+    expect(advanced?.hasAttribute('open') ?? false).toBe(false);
+    for (const leaf of leafFields(schema, SECTION_ROOTS[sectionId] ?? [])) {
+      // the leaf itself, or the nearest rendered ancestor (a keyed list or a map renders as one field)
+      const el = leaf.segs
+        .map((_, i) => leaf.segs.slice(0, leaf.segs.length - i).join('.'))
+        .map((p) => container.querySelector(`[data-path="${CSS.escape(p)}"]`))
+        .find(Boolean);
+      expect(el, leaf.path).toBeTruthy();
+      const prefixes = leaf.segs.map((_, i) => leaf.segs.slice(0, i + 1).join('.'));
+      expect(!!advanced?.contains(el!), leaf.path).toBe(prefixes.some(isAdvanced));
+    }
+    unmount();
   });
 });
 

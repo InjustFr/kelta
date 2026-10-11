@@ -31,13 +31,6 @@ pub fn snapshot_buffer(capacity: usize) -> Vec<u8> {
     v
 }
 
-/// `0x02` + payload.
-pub fn snapshot(payload: &[u8]) -> Vec<u8> {
-    let mut v = snapshot_buffer(payload.len());
-    v.extend_from_slice(payload);
-    v
-}
-
 /// `0x03` + `i32` LE (`-1` = killed by a signal).
 pub fn exit(code: i32) -> Vec<u8> {
     let mut v = Vec::with_capacity(5);
@@ -80,6 +73,12 @@ pub fn decode(frame: &[u8]) -> Option<Frame<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn snapshot(payload: &[u8]) -> Vec<u8> {
+        let mut v = snapshot_buffer(payload.len());
+        v.extend_from_slice(payload);
+        v
+    }
 
     #[test]
     fn round_trips_every_tag() {

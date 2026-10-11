@@ -6,6 +6,7 @@
   import { Badge, Button, IconButton, Select, Toggle } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
+  import SettingsGroup from './layout/SettingsGroup.svelte';
   import { editSource, iterationWord, viewAccount } from './lib/sources.svelte';
 
   interface Props {
@@ -50,17 +51,16 @@
 
 {#if source}
   {@const b = source.tracker}
-  <section class="tracker" data-testid="tracker-block" data-source-id={source.id}>
-    <div class="head">
-      <h4>Board</h4>
-      <Badge tone="neutral">{b.account}</Badge>
+  <SettingsGroup heading="Board" data-testid="tracker-block" data-source-id={source.id}>
+    {#snippet meta()}<Badge tone="neutral">{b.account}</Badge>{/snippet}
+    {#snippet actions()}
       <Button
         size="sm"
         icon="plus"
         onclick={() => ui.openSheet('tracker.source_picker', { sourceId: source.id })}
         data-testid="add-source">Add view…</Button
       >
-    </div>
+    {/snippet}
     {#if b.views.length === 0}
       <p class="empty">No view: {source.label} lists no ticket.</p>
     {:else}
@@ -92,29 +92,10 @@
         {/each}
       </ul>
     {/if}
-  </section>
+  </SettingsGroup>
 {/if}
 
 <style>
-  .tracker {
-    margin-top: var(--k-space-3);
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    margin-bottom: var(--k-space-2);
-  }
-
-  .head :global(.k-button) {
-    margin-left: auto;
-  }
-
-  h4 {
-    margin: 0;
-  }
-
   .empty {
     margin: 0;
     color: var(--k-fg-muted);

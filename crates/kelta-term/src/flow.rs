@@ -94,10 +94,6 @@ impl Flow {
         self.deadline = None;
     }
 
-    pub fn generation(&self) -> u32 {
-        self.generation
-    }
-
     pub fn attached(&self) -> bool {
         self.attached
     }
