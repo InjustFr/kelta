@@ -146,7 +146,7 @@ fn b64_encode(input: &[u8]) -> String {
 fn plugin_client() -> Result<&'static reqwest::Client, KeltaError> {
     static C: std::sync::OnceLock<Option<reqwest::Client>> = std::sync::OnceLock::new();
     C.get_or_init(|| {
-        reqwest::Client::builder()
+        kelta_http::client_builder()
             .user_agent(kelta_http::default_user_agent())
             .timeout(Duration::from_secs(20))
             .pool_idle_timeout(Duration::from_secs(30))
