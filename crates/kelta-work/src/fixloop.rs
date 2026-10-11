@@ -88,7 +88,7 @@ pub(crate) async fn paste_prompt(
 
 /// A send to this live Claude goes to the clipboard: Kelta cannot tell when it is idle.
 fn copies(s: &SessionInfo) -> bool {
-    s.hosted() || (route(Some(s)) == Route::Paste && check_idle(s).is_err())
+    (s.lifecycle == Lifecycle::Live && s.hosted()) || (route(Some(s)) == Route::Paste && check_idle(s).is_err())
 }
 
 fn valid_name(name: &str) -> bool {
@@ -374,5 +374,7 @@ mod tests {
         assert!(check_idle(&s).is_err() && copies(&s));
         s.status = SessionStatus::Working; // busy: route is AtStop, still a copy
         assert!(copies(&s));
+        s.lifecycle = Lifecycle::Dormant; // a dormant hosted Claude resumes, never copies
+        assert!(!copies(&s));
     }
 }
