@@ -298,6 +298,8 @@ pub async fn refreshed(
     let r: Resp = post_form(http, &grant.token_url, &form).await?;
     if let Some(code) = &r.error {
         tracing::warn!(error = %code, "oauth refresh refused");
+        // the cached grant may be a stale copy (rotated refresh token): re-read the store next time
+        secrets.invalidate(&grant_ref(secret));
         return Err(sign_in_again("the OAuth token could not be refreshed"));
     }
     store(secrets, secret, grant, r).await.map(Some)
