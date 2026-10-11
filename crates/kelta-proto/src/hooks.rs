@@ -67,8 +67,10 @@ pub mod names {
     /// Notification matcher Kelta installs.
     pub const NOTIFICATION_MATCHER: &str =
         "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input";
-    /// PostToolUse matcher Kelta installs: edited files, and `Workflow` launches (#272).
-    pub const POST_TOOL_USE_MATCHER: &str = "Edit|Write|MultiEdit|Workflow";
+    /// PostToolUse matcher Kelta installs: every tool, so a run after a permission prompt clears
+    /// NeedsInput (#278); also edited files and `Workflow` launches (#272). One loopback hook per
+    /// tool call.
+    pub const POST_TOOL_USE_MATCHER: &str = "*";
 }
 
 /// The `--settings` document Kelta generates per Claude session (PLUGINS §8). `hook_command` is

@@ -39,7 +39,7 @@ expression: got
             "type": "command"
           }
         ],
-        "matcher": "Edit|Write|MultiEdit|Workflow"
+        "matcher": "*"
       }
     ],
     "SessionEnd": [

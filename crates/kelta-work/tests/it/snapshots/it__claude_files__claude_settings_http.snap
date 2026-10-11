@@ -54,7 +54,7 @@ expression: got
             "url": "http://127.0.0.1:51234/hook/0192f0c1-0000-7000-8000-000000000001"
           }
         ],
-        "matcher": "Edit|Write|MultiEdit|Workflow"
+        "matcher": "*"
       }
     ],
     "PreToolUse": [

@@ -24,7 +24,7 @@ fn expected_command_settings(ctl: &str) -> serde_json::Value {
         "UserPromptSubmit":  [ { "hooks": [ h ] } ],
         "PermissionRequest": [ { "hooks": [ h ] } ],
         "Notification":      [ { "matcher": "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input", "hooks": [ h ] } ],
-        "PostToolUse":       [ { "matcher": "Edit|Write|MultiEdit|Workflow", "hooks": [ h ] } ],
+        "PostToolUse":       [ { "matcher": "*", "hooks": [ h ] } ],
         "Stop":              [ { "hooks": [ h ] } ],
         "StopFailure":       [ { "hooks": [ h ] } ],
         "SessionEnd":        [ { "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] } ],

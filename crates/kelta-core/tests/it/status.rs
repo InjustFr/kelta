@@ -88,6 +88,19 @@ fn hook_decision_table() {
     // mark_seen keeps a pending needs-input
     assert_eq!(mark_seen(&st(S::NeedsInput, A::NeedsInput, false, true)).attention, A::NeedsInput);
     assert_eq!(mark_seen(&st(S::Done, A::Done, false, true)).attention, A::None);
+    // PostToolUse (any tool) after a permission prompt → Working; otherwise unchanged (#278)
+    let tool = StatusChange { raw_event: "PostToolUse".into(), ..ch(S::Unknown) };
+    let d = apply_hook(&st(S::NeedsInput, A::NeedsInput, false, true), &tool);
+    assert_eq!((d.status, d.attention, d.notify), (S::Working, A::None, None));
+    for prev in [st(S::WaitingUser, A::NeedsInput, false, false), st(S::Done, A::Done, false, false)] {
+        let d = apply_hook(&prev, &tool);
+        assert_eq!((d.status, d.attention, d.seen), (prev.status, prev.attention, prev.seen));
+    }
+    // other "unchanged" changes (plugin set_attention None) don't clear NeedsInput
+    assert_eq!(
+        apply_hook(&st(S::NeedsInput, A::NeedsInput, false, true), &ch(S::Unknown)).status,
+        S::NeedsInput
+    );
     // heuristic
     assert_eq!(apply_heuristic(&st(S::Running, A::None, true, false), Heuristic::Output).status, S::Working);
     assert_eq!(apply_heuristic(&st(S::Working, A::None, true, false), Heuristic::Quiet).status, S::Done);
@@ -229,6 +242,32 @@ async fn hooks_drive_status_attention_badge_and_notifications() {
     // seen clears non-needs-input attention
     h.core.session_mark_seen(&a.id).unwrap();
     assert_eq!(h.core.session_get(&a.id).unwrap().attention, A::None);
+}
+
+#[tokio::test]
+async fn answering_a_permission_prompt_clears_needs_input() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::Running)).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
+    assert_eq!(h.core.session_get(&s.id).unwrap().attention, A::NeedsInput);
+    // A focus report is not an answer.
+    h.core.session_write(&s.id, b"\x1b[I").await.unwrap();
+    assert_eq!(h.core.session_get(&s.id).unwrap().status, S::NeedsInput);
+    h.core.session_write(&s.id, b"1").await.unwrap();
+    let info = h.core.session_get(&s.id).unwrap();
+    assert_eq!((info.status, info.attention, info.status_source), (S::Working, A::None, StatusSource::Hook));
+    assert_eq!(h.ui.badge(), 0);
+
+    // idle_prompt (Claude finished, unseen): typing the next prompt waits for UserPromptSubmit.
+    h.core.session_apply_hook(&s.id, ch(S::Done)).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::WaitingUser)).await.unwrap();
+    let before = h.core.session_get(&s.id).unwrap();
+    assert_eq!((before.status, before.attention), (S::WaitingUser, A::NeedsInput));
+    h.core.session_write(&s.id, b"next").await.unwrap();
+    let after = h.core.session_get(&s.id).unwrap();
+    assert_eq!((after.status, after.attention), (S::WaitingUser, A::NeedsInput));
 }
 
 #[tokio::test(start_paused = true)]

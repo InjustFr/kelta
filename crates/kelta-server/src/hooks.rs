@@ -27,7 +27,7 @@ const EDIT_TOOLS: &[&str] = &["Edit", "Write", "MultiEdit"];
 /// | Stop | Done (preview = `last_assistant_message`, 200 chars) |
 /// | StopFailure | Error |
 /// | SessionEnd | Exited |
-/// | PostToolUse `Edit`/`Write`/`MultiEdit` | Unknown (unchanged) + `file_edited` |
+/// | PostToolUse (any tool) | Unknown (NeedsInput → Working, else unchanged) + `file_edited` for `Edit`/`Write`/`MultiEdit` |
 pub fn map(payload: &HookPayload) -> Option<StatusChange> {
     let event = payload.hook_event_name.as_str();
     let change = |status: SessionStatus| StatusChange {
@@ -56,14 +56,15 @@ pub fn map(payload: &HookPayload) -> Option<StatusChange> {
         }),
         names::STOP_FAILURE => Some(change(SessionStatus::Error)),
         names::SESSION_END => Some(change(SessionStatus::Exited)),
-        names::POST_TOOL_USE => {
-            let tool = payload.tool_name.as_deref()?;
-            if !EDIT_TOOLS.contains(&tool) {
-                return None;
-            }
-            let file = payload.edited_file()?;
-            Some(StatusChange { file_edited: Some(file), ..change(SessionStatus::Unknown) })
-        }
+        // Any tool: core moves NeedsInput → Working (#278); edit tools also report the file.
+        names::POST_TOOL_USE => Some(StatusChange {
+            file_edited: payload
+                .tool_name
+                .as_deref()
+                .filter(|t| EDIT_TOOLS.contains(t))
+                .and_then(|_| payload.edited_file()),
+            ..change(SessionStatus::Unknown)
+        }),
         _ => None,
     }
 }
@@ -162,9 +163,6 @@ mod tests {
         p.hook_event_name = names::NOTIFICATION.into();
         assert!(map(&p).is_none());
         p.notification_type = Some("auth_success".into());
-        assert!(map(&p).is_none());
-        p.hook_event_name = names::POST_TOOL_USE.into();
-        p.tool_name = Some("Bash".into());
         assert!(map(&p).is_none());
     }
 }
