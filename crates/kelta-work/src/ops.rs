@@ -859,7 +859,8 @@ impl WorkService {
         if opts.remove_worktree && is_worktree {
             // Teardown and the kills may have let Claude commit or edit: only this answer is current.
             let report = self.finish_dirty_check(&env, &item, &j, opts.force).await?;
-            verified_clean = report.files.is_empty() && report.unpushed == 0;
+            verified_clean =
+                report.files.is_empty() && report.ignored_edited.is_empty() && report.unpushed == 0;
             // Delete our include copies so git's own clean check (no --force) still guards files
             // written after the dirty report (e.g. by Claude before it was killed).
             for f in &report.copies {
@@ -1007,8 +1008,10 @@ impl WorkService {
         force: bool,
     ) -> Result<DirtyReport, KeltaError> {
         let report = self.dirty_report(env, item, j).await?;
-        if !force && (!report.files.is_empty() || report.unpushed > 0) {
-            let msg = match (report.files.is_empty(), report.unpushed) {
+        // An ignored copy the user edited blocks Finish (the edit would be lost), but not rebase/status.
+        let files: Vec<&String> = report.files.iter().chain(&report.ignored_edited).collect();
+        if !force && (!files.is_empty() || report.unpushed > 0) {
+            let msg = match (files.is_empty(), report.unpushed) {
                 (false, 0) => format!("{} has uncommitted changes", item.worktree.display()),
                 (true, n) => format!("{} has {n} unpushed commit(s)", item.branch),
                 (false, n) => {
@@ -1016,7 +1019,7 @@ impl WorkService {
                 }
             };
             return Err(KeltaError::new(ErrorCode::Dirty, msg).with_detail(serde_json::json!({
-                "files": report.files,
+                "files": files,
                 "unpushed": report.unpushed > 0,
                 "unpushed_commits": report.unpushed,
             })));
@@ -1048,7 +1051,6 @@ impl WorkService {
         for f in entries {
             if j.include_copies.contains(&f) && same_as_source(&f) { copies.push(f) } else { files.push(f) }
         }
-        files.extend(ignored_edited);
         let mut unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
         // Squash/rebase-merged PR whose remote branch was pruned: the work is in the remote base.
         let remote_base = format!("refs/remotes/{}/{}", env.repo.remote, item.base);
@@ -1058,7 +1060,7 @@ impl WorkService {
         {
             unpushed = 0;
         }
-        Ok(DirtyReport { files, copies, unpushed })
+        Ok(DirtyReport { files, ignored_edited, copies, unpushed })
     }
 
     // ---- status ------------------------------------------------------------------------------
@@ -1406,6 +1408,8 @@ impl WorkService {
 
 pub(crate) struct DirtyReport {
     pub files: Vec<String>,
+    /// Edited copies of git-ignored `worktree.include` files: block Finish only (not committable, not rebased).
+    pub ignored_edited: Vec<String>,
     /// Untracked `worktree.include` copies (ours, removed with the worktree).
     pub copies: Vec<String>,
     pub unpushed: u32,

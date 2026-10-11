@@ -267,6 +267,10 @@ async fn finish_keeps_user_files_that_match_include_patterns() {
     // A copy the user edited is theirs too.
     std::fs::remove_file(item.worktree.join("local.staging")).unwrap();
     std::fs::write(item.worktree.join("local.cfg"), "x=2\n").unwrap();
+    assert!(
+        !w.status(&item.id).await.unwrap().dirty,
+        "an ignored edit is not committable: status and rebase ignore it"
+    );
     let e = w.finish(&item.id, opts(false)).await.unwrap_err();
     assert_eq!(e.detail.unwrap()["files"], serde_json::json!(["local.cfg"]));
     assert!(w.status(&item.id).await.unwrap().dirty);
