@@ -28,6 +28,7 @@ export type * from './CheckStatus';
 export type * from './CiCheck';
 export type * from './CiState';
 export type * from './ClaudeEffort';
+export type * from './ClaudeHost';
 export type * from './ClaudeMeta';
 export type * from './ClaudePlan';
 export type * from './ClaudeProfile';

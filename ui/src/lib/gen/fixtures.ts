@@ -2011,7 +2011,8 @@ export const settingsDefault: Settings = {
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing.",
       "workflow": "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}."
     },
-    "queue_hold_pct": null
+    "queue_hold_pct": null,
+    "terminal_command": []
   },
   "commands": [],
   "editor": {
@@ -2234,6 +2235,7 @@ export const settingsDefault: Settings = {
   },
   "session_templates": [
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "claude+editor",
       "label": "Claude + editor",
@@ -2261,6 +2263,7 @@ export const settingsDefault: Settings = {
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "review",
       "label": "Review",
@@ -2303,6 +2306,7 @@ export const settingsDefault: Settings = {
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "claude",
       "label": "Claude",
@@ -2315,6 +2319,7 @@ export const settingsDefault: Settings = {
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "editor",
       "label": "Editor",
@@ -2327,6 +2332,7 @@ export const settingsDefault: Settings = {
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "shell",
       "label": "Shell",
@@ -3133,6 +3139,7 @@ export const accountConfig: AccountConfig = {
 
 export const sessionTemplatesDefault: SessionTemplate[] = [
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "claude+editor",
     "label": "Claude + editor",
@@ -3160,6 +3167,7 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
     "options": []
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "review",
     "label": "Review",
@@ -3202,6 +3210,7 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
     "options": []
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "claude",
     "label": "Claude",
@@ -3214,6 +3223,7 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
     "options": []
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "editor",
     "label": "Editor",
@@ -3226,6 +3236,7 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
     "options": []
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "shell",
     "label": "Shell",

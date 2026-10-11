@@ -10,6 +10,7 @@
 
 pub mod attention;
 pub mod bus;
+mod claude_host;
 pub mod claude_mcp;
 mod claude_runs;
 pub mod clipboard;
