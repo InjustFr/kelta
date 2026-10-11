@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use kelta_http::util::{percent_encode, trim_url, url_host};
@@ -40,8 +41,11 @@ type DiffKey = (String, u64, String);
 /// My MR's `(repo, iid)` → `((updated_at, user_notes_count), unresolved threads, last comment at)`.
 type ThreadCache = HashMap<(String, u64), ((String, u64), u32, Option<String>)>;
 
-/// `(kind, repo, iid)` → `(updated_at, waiting_on, requested_at, author_to_act)` as read from `/reviewers`.
-type WaitingCache = HashMap<(ReviewKind, String, u64), (String, Vec<String>, Option<String>, bool)>;
+/// `(kind, repo, iid)` → `(updated_at, read at, waiting_on, requested_at, author_to_act)` from `/reviewers`.
+type WaitingCache = HashMap<(ReviewKind, String, u64), (String, Instant, Vec<String>, Option<String>, bool)>;
+
+/// An approval may not bump the MR's `updated_at`, so a cached `/reviewers` read also expires.
+const WAITING_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Default)]
 struct TodoGate {
@@ -287,14 +291,16 @@ impl GitlabHost {
     // state across pushes and `/reviewers` has no review time); compare with the push time if it matters.
     async fn waiting_state(&self, review: &mut Review) {
         let key = (review.kind, review.r#ref.repo.clone(), review.r#ref.number);
-        let cached = self.waiting.lock().get(&key).filter(|c| c.0 == review.updated_at).cloned();
-        let (_, waiting_on, requested_at, author_to_act) = match cached {
+        let cached = (self.waiting.lock().get(&key))
+            .filter(|c| c.0 == review.updated_at && c.1.elapsed() < WAITING_TTL)
+            .cloned();
+        let (_, _, waiting_on, requested_at, author_to_act) = match cached {
             Some(c) => c,
             None => {
                 let url = self.mr_url(&key.1, &format!("/{}/reviewers", key.2));
                 let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
                 let (on, at) = pending_reviewers(&r.body);
-                let c = (review.updated_at.clone(), on, at, changes_requested(&r.body));
+                let c = (review.updated_at.clone(), Instant::now(), on, at, changes_requested(&r.body));
                 self.waiting.lock().insert(key, c.clone());
                 c
             }
