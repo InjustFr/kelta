@@ -1,6 +1,7 @@
 //! Tickets T10: refine a ticket with a one-shot `claude -p` (acceptance criteria, open questions,
 //! optional sub-tasks). The proposal is returned as Markdown; nothing is written to the tracker.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use kelta_proto::error::KeltaError;
@@ -27,48 +28,39 @@ impl Core {
         project: Option<&ProjectId>,
     ) -> Result<String, KeltaError> {
         self.rt.capture();
-        let detail = self.tracker_of(&t.account)?.get(t).await?;
+        let detail = self.tracker_get(t).await?;
         let settings = self.cfg.effective(project);
-        let cwd = project
-            .and_then(|id| self.project_info(id))
-            .and_then(|p| p.repos.iter().find(|r| r.primary).or(p.repos.first()).map(|r| r.path.clone()))
-            .filter(|p| p.is_dir())
-            .unwrap_or_else(|| self.home_dir());
+        let cwd = project.map_or_else(|| self.home_dir(), |id| self.project_cwd(id, None));
         let claude = &settings.claude;
         let binary = spawn_env::resolve_program(&claude.binary, self.login_env.path(), &cwd)?;
         let profile = claude.profiles.get("default").cloned().unwrap_or_default();
 
-        let mut cmd = tokio::process::Command::new(binary);
-        cmd.arg("-p");
+        let mut args = vec!["-p".to_owned()];
         if !profile.model.is_empty() {
-            cmd.args(["--model", &profile.model]);
+            args.extend(["--model".to_owned(), profile.model.clone()]);
         }
-        cmd.args(["--effort", &kelta_work::claude::enum_str(&profile.effort)])
-            .args(["--disallowedTools", "Edit,Write,NotebookEdit"])
-            .current_dir(&cwd)
-            .env_clear()
-            .envs(self.login_env.vars.iter())
-            .envs(settings.env.iter())
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
+        args.extend(["--effort".to_owned(), kelta_work::claude::enum_str(&profile.effort)]);
+        args.extend(["--disallowedTools", "Edit,Write,NotebookEdit"].map(str::to_owned));
 
         // MCP `get_ticket` for this run: a throwaway sid the MCP route resolves to the ticket.
         let sid = SessionId::new(format!("refine-{}", spawn_env::token()));
         let port = if claude.mcp { self.server.ensure_http().await.ok() } else { None };
+        let mut mcp_env = BTreeMap::new();
         if let Some(port) = port {
             let token = spawn_env::token();
             self.server.register_session(&sid, &spawn_env::token(), Some(&token));
             self.refines.lock().insert(sid.clone(), t.clone());
             let mcp = kelta_work::claude::mcp_json(port, sid.as_str());
-            cmd.args(["--mcp-config", &mcp.to_string(), "--allowedTools", "mcp__kelta__get_ticket"])
-                .env("KELTA_MCP_TOKEN", token)
-                .env("KELTA_MCP_URL", format!("http://127.0.0.1:{port}/mcp/{sid}"));
+            args.extend(["--mcp-config".to_owned(), mcp.to_string()]);
+            args.extend(["--allowedTools", "mcp__kelta__get_ticket"].map(str::to_owned));
+            mcp_env.insert("KELTA_MCP_TOKEN".to_owned(), token);
+            mcp_env.insert("KELTA_MCP_URL".to_owned(), format!("http://127.0.0.1:{port}/mcp/{sid}"));
         }
-        cmd.args(["--", PROMPT]);
+        args.extend(["--".to_owned(), PROMPT.to_owned()]);
 
-        let out = run(cmd, kelta_work::files::ticket_markdown(&detail)).await;
+        let env = self.login_env.vars.iter().chain(&settings.env).chain(&mcp_env);
+        let input = kelta_work::files::ticket_markdown(&detail);
+        let out = crate::ctl::claude_oneshot(&binary, args, env, &cwd, Some(input.as_bytes()), TIMEOUT).await;
         if port.is_some() {
             self.refines.lock().remove(&sid);
             self.server.unregister_session(&sid);
@@ -83,18 +75,4 @@ impl Core {
         }
         Ok(text)
     }
-}
-
-async fn run(mut cmd: tokio::process::Command, input: String) -> Result<std::process::Output, KeltaError> {
-    use tokio::io::AsyncWriteExt;
-    let io = |e: std::io::Error| KeltaError::internal(format!("claude: {e}"));
-    let mut child = cmd.spawn().map_err(io)?;
-    if let Some(mut stdin) = child.stdin.take() {
-        // A Claude that exits before reading its stdin is reported by its exit status, not here.
-        let _ = stdin.write_all(input.as_bytes()).await;
-    }
-    tokio::time::timeout(TIMEOUT, child.wait_with_output())
-        .await
-        .map_err(|_| KeltaError::timeout("Claude did not answer within 5 minutes"))?
-        .map_err(io)
 }

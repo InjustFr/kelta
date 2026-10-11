@@ -213,18 +213,47 @@ pub async fn http_fetch(req: ProxiedRequest) -> Result<ProxiedResponse, KeltaErr
     Ok(ProxiedResponse { status, headers, body, body_base64 })
 }
 
+/// One-shot `claude <args>` in `cwd` with exactly `env` (the login environment, plus the caller's
+/// extras): `stdin` is written to it (null when `None`), and it is killed after `timeout`.
+pub(crate) async fn claude_oneshot<'a, A: AsRef<std::ffi::OsStr>>(
+    bin: &Path,
+    args: impl IntoIterator<Item = A>,
+    env: impl IntoIterator<Item = (&'a String, &'a String)>,
+    cwd: &Path,
+    stdin: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<std::process::Output, KeltaError> {
+    use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
+    let io = |e: std::io::Error| KeltaError::internal(format!("claude: {e}"));
+    let mut child = tokio::process::Command::new(bin)
+        .args(args)
+        .current_dir(cwd)
+        .env_clear()
+        .envs(env)
+        .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(io)?;
+    if let (Some(input), Some(mut pipe)) = (stdin, child.stdin.take()) {
+        // A Claude that exits before reading its stdin is reported by its exit status, not here.
+        let _ = pipe.write_all(input).await;
+    }
+    tokio::time::timeout(timeout, child.wait_with_output())
+        .await
+        .map_err(|_| KeltaError::timeout(format!("Claude did not answer within {} s", timeout.as_secs())))?
+        .map_err(io)
+}
+
 /// `claude --version` in the login PATH (5 s budget), compared with `claude.min_version`.
 pub async fn probe_claude(login: LoginEnv, claude: ClaudeSettings) -> Option<ToolVersion> {
     let cwd = std::env::temp_dir();
     let path = crate::spawn_env::resolve_program(&claude.binary, login.path(), &cwd).ok()?;
-    let mut cmd = tokio::process::Command::new(&path);
-    cmd.arg("--version")
-        .env_clear()
-        .envs(login.vars.iter())
-        .stdin(std::process::Stdio::null())
-        .kill_on_drop(true);
     // one-shot: bounded probe, armed once at startup.
-    let out = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await.ok()?.ok()?;
+    let out =
+        claude_oneshot(&path, ["--version"], &login.vars, &cwd, None, Duration::from_secs(5)).await.ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let version =
         text.split_whitespace().find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))?.to_owned();
