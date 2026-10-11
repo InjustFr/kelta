@@ -10,6 +10,7 @@
   import { ctxHot, itemCost, overBudget, usd } from './usage';
   import EmptyPane from './EmptyPane.svelte';
   import { lazyComponents } from './lazy.svelte';
+  import { paneDrag } from './paneDrag.svelte';
   import { chordFor, paneIcon, paneTitle, statusLabel } from './labels';
   import {
     closePaneAndStop,
@@ -152,6 +153,14 @@
   <section class="pane" class:focused aria-label={paneTitle(content, session)}>
     <header
       class:asks={level === 'needs_input'}
+      draggable="true"
+      data-testid="pane-header"
+      ondragstart={(e) => {
+        paneDrag.start(projectId, { tabId, paneId: node.id });
+        e.dataTransfer?.setData('text/plain', node.id);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      }}
+      ondragend={() => paneDrag.end()}
       oncontextmenu={(e) => {
         e.preventDefault();
         focus();
