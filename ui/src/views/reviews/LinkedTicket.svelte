@@ -23,7 +23,7 @@
 </script>
 
 <span
-  class="link"
+  class="link k-row-keep"
   role="button"
   {tabindex}
   title={`Open ${ticketKey}`}
