@@ -275,9 +275,11 @@ async fn failed_refresh_is_needs_auth() {
         .await;
     let secrets =
         FakeSecrets::with(&[("keyring:gl", "glpat_OLD"), ("keyring:gl.oauth", &grant(&server, -10))]);
-    let e = oauth_authed(&server, secrets).prepare(HttpRequest::get("http://h/")).await.unwrap_err();
+    let e = oauth_authed(&server, secrets.clone()).prepare(HttpRequest::get("http://h/")).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::NeedsAuth);
     assert!(e.message.contains("sign in again"), "{}", e.message);
+    // a cached grant may be stale: the next request must read the stored one again
+    assert_eq!(secrets.invalidated(), ["keyring:gl.oauth"]);
     assert_no_secret(&log.contents());
 }
 
