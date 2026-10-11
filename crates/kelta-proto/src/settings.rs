@@ -785,6 +785,10 @@ pub struct ClaudeSettings {
     /// At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub mcp_offer: bool,
+    /// At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions
+    /// Kelta did not start show in Now (#345); false = never ask.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub hooks_offer: bool,
     /// Passed via `--allowedTools`.
     pub allowed_tools: Vec<String>,
     /// Appended to the generated `context.md`.
@@ -825,6 +829,7 @@ impl Default for ClaudeSettings {
             mcp: true,
             mcp_board_writes: true,
             mcp_offer: true,
+            hooks_offer: true,
             allowed_tools: vec!["mcp__kelta__*".into()],
             append_system_prompt: String::new(),
             extra_args: Vec::new(),
@@ -1771,6 +1776,10 @@ pub struct Source {
     /// `repo_rules` must stay empty: `routes` replace them.
     pub tracker: TrackerBinding,
     pub routes: Vec<SourceRoute>,
+    /// Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped
+    /// statuses keep their category colour. A bad colour is dropped with a warning.
+    #[schemars(extend("additionalProperties" = {"type": "string", "pattern": COLOR_PATTERN}))]
+    pub status_colors: BTreeMap<String, String>,
     /// How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on
     /// Linear, status elsewhere.
     #[ts(optional)]
@@ -1922,6 +1931,10 @@ pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) ->
     out
 }
 
+/// A project or status colour: `theme:<slot>` or a hex.
+const COLOR_PATTERN: &str =
+    r"^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$";
+
 /// `[project]` table.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -1931,9 +1944,7 @@ pub struct ProjectConfig {
     pub name: String,
     /// `theme:<slot>` follows the active theme's ANSI colour (`red`..`cyan`, `bright-red`..`bright-cyan`);
     /// a `#rrggbb` hex stays as typed (`#rgb` reads as `#rrggbb`).
-    #[schemars(regex(
-        pattern = r"^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$"
-    ))]
+    #[schemars(regex(pattern = COLOR_PATTERN))]
     pub color: Option<String>,
     /// 1-2 chars or sprite icon name.
     pub icon: Option<String>,

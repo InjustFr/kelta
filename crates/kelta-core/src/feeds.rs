@@ -749,6 +749,12 @@ impl Core {
         self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
     }
 
+    /// The tickets of every list loaded since startup, from the cache; none is fetched.
+    pub(crate) async fn listed_tickets(&self) -> Vec<Ticket> {
+        let keys = self.feeds.views.lock().keys().cloned().collect();
+        self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
+    }
+
     /// `tracker_list`: `source_id` / `view_id` are the pane's raw picks, resolved by `list_scope`.
     pub async fn tracker_list(
         &self,

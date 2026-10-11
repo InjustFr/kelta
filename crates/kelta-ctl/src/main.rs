@@ -4,7 +4,8 @@
 //! `kelta_proto::ctl` (one JSON line per request/response) without linking kelta-proto.
 //!
 //! - `hook` reads ≤ 1 MiB of stdin, relays it with `KELTA_SESSION_ID` / `KELTA_HOOK_TOKEN` to
-//!   `KELTA_SOCK` and ALWAYS exits 0, silently.
+//!   `KELTA_SOCK` and ALWAYS exits 0, silently. `hook --outside` (the user-scope hook, #345) relays it
+//!   as a session Kelta did not start, with its parent pid; inside a Kelta pane it does nothing.
 //! - `statusline` relays Claude's statusline JSON the same way without waiting for an answer, then
 //!   runs the user's own statusline (`KELTA_USER_STATUSLINE`) on the same stdin and prints its output.
 //! - Other commands print the JSON result on stdout (exit 0) or the JSON error on stderr (exit 1).
@@ -31,7 +32,7 @@ const USAGE: &str = "usage: kelta-ctl <command>
   trust <repo path>                        review and trust a repository's .kelta config
   editor-open <file>[:line]                open a file in the editor
   plugin install <src>                     install a plugin (path, git URL or archive)
-  hook                                     (internal) relay a Claude Code hook from stdin
+  hook [--outside]                         (internal) relay a Claude Code hook from stdin
   statusline                               (internal) relay Claude Code's statusline, print the user's
   version                                  print versions";
 
@@ -50,7 +51,7 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("hook") => {
             // Never fail Claude: every error is swallowed.
-            let _ = hook();
+            let _ = if args.get(1).is_some_and(|a| a == "--outside") { outside_hook() } else { hook() };
             ExitCode::SUCCESS
         }
         Some("statusline") => statusline(),
@@ -129,6 +130,24 @@ fn hook() -> Result<(), String> {
     if session.is_empty() || token.is_empty() {
         return Err("empty session or token".into());
     }
+    let payload = hook_stdin()?;
+    let req = envelope("hook", json!({ "session": session, "token": token, "payload": payload }));
+    request(&req, HOOK_TIMEOUT).map(|_| ())
+}
+
+/// The user-scope hook: skipped in a Kelta pane, whose Claude reports through its own hooks.
+fn outside_hook() -> Result<(), String> {
+    if std::env::var_os("KELTA_SESSION_ID").is_some_and(|s| !s.is_empty()) {
+        return Ok(());
+    }
+    let payload = hook_stdin()?;
+    // Claude runs the hook through `sh -c`, which execs a lone command: the parent is Claude.
+    let pid = std::os::unix::process::parent_id();
+    request(&envelope("outside_hook", json!({ "payload": payload, "pid": pid })), HOOK_TIMEOUT).map(|_| ())
+}
+
+/// ≤ 1 MiB of stdin, a JSON object.
+fn hook_stdin() -> Result<Value, String> {
     let mut input = Vec::new();
     std::io::stdin().lock().take(MAX_HOOK_STDIN + 1).read_to_end(&mut input).map_err(|e| e.to_string())?;
     if input.len() as u64 > MAX_HOOK_STDIN {
@@ -138,8 +157,7 @@ fn hook() -> Result<(), String> {
     if !payload.is_object() {
         return Err("hook payload is not a JSON object".into());
     }
-    let req = envelope("hook", json!({ "session": session, "token": token, "payload": payload }));
-    request(&req, HOOK_TIMEOUT).map(|_| ())
+    Ok(payload)
 }
 
 // ---- statusline --------------------------------------------------------------------------------

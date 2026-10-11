@@ -985,6 +985,7 @@
         "extra_args": [],
         "extra_hooks": {},
         "hook_transport": "command",
+        "hooks_offer": true,
         "ide_bridge": false,
         "max_live": 4,
         "mcp": true,
@@ -1087,6 +1088,14 @@
             "http"
           ],
           "type": "string"
+        },
+        "hooks_offer": {
+          "default": true,
+          "description": "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.",
+          "type": "boolean",
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "ide_bridge": {
           "default": false,
@@ -3028,6 +3037,15 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "status_colors": {
+            "additionalProperties": {
+              "pattern": "^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$",
+              "type": "string"
+            },
+            "default": {},
+            "description": "Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped\nstatuses keep their category colour. A bad colour is dropped with a warning.",
+            "type": "object"
           },
           "tracker": {
             "additionalProperties": false,

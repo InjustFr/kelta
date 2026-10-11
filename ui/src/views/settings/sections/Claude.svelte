@@ -14,6 +14,9 @@
   // Kelta's MCP in Claude Code (user scope): undefined = loading, null = Claude Code not found.
   let installed = $state<boolean | null | undefined>(undefined);
   let busy = $state(false);
+  // Kelta's hook relay in Claude Code's user settings (#345), same states.
+  let hooks = $state<boolean | null | undefined>(undefined);
+  let hooksBusy = $state(false);
   // Mode of sessions whose profile sets none (#277): undefined = loading, null = Claude's default.
   let mode = $state<PermissionMode | null | undefined>(undefined);
 
@@ -22,6 +25,10 @@
       .claudeMcpStatus()
       .then((s) => (installed = s))
       .catch(() => (installed = null));
+    void ipc
+      .claudeHooksStatus()
+      .then((s) => (hooks = s))
+      .catch(() => (hooks = null));
     void ipc
       .claudePermissionMode()
       .then((m) => (mode = m))
@@ -41,6 +48,19 @@
       );
     } finally {
       busy = false;
+    }
+  }
+
+  async function toggleHooks(): Promise<void> {
+    hooksBusy = true;
+    try {
+      if (hooks) await ipc.claudeHooksRemove();
+      else await ipc.claudeHooksInstall();
+      hooks = !hooks;
+    } catch (err) {
+      toasts.error(err, hooks ? t("Removing Kelta's hooks failed") : t("Installing Kelta's hooks failed"));
+    } finally {
+      hooksBusy = false;
     }
   }
 </script>
@@ -63,6 +83,24 @@
             {t("Kelta's ticket tools are installed in Claude Code: every Claude session can use them.")}
           {:else}
             {t("Install Kelta's ticket tools in Claude Code to use them from any Claude session.")}
+          {/if}
+        </p>
+      </SettingsRow>
+    {/if}
+    {#if hooks !== undefined && hooks !== null}
+      <SettingsRow label={t('Claude sessions started outside Kelta')} actions data-testid="claude-hooks">
+        {#snippet control()}
+          <Button size="sm" icon={hooks ? 'trash-2' : 'plug'} loading={hooksBusy} onclick={toggleHooks}>
+            {hooks ? t('Remove') : t('Install')}
+          </Button>
+        {/snippet}
+        <p>
+          {#if hooks}
+            {t('Claude sessions you start in another terminal show in Now, with their state.')}
+          {:else}
+            {t(
+              "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in Now.",
+            )}
           {/if}
         </p>
       </SettingsRow>

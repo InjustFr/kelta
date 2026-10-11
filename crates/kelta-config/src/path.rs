@@ -121,9 +121,14 @@ pub fn set(root: &mut Value, segs: &[String], value: Value) -> Result<(), String
     }
 }
 
-/// Remove a value; parents that become empty objects are pruned. Returns whether it existed.
+/// Remove a value (array items on the way are stepped through by index); parents that become empty
+/// objects are pruned. Returns whether it existed.
 pub fn remove(root: &mut Value, segs: &[String]) -> bool {
     fn rec(v: &mut Value, segs: &[String]) -> bool {
+        if let Value::Array(a) = v {
+            let item = segs[0].parse::<usize>().ok().and_then(|i| a.get_mut(i));
+            return segs.len() > 1 && item.is_some_and(|c| rec(c, &segs[1..]));
+        }
         let Value::Object(m) = v else { return false };
         if segs.len() == 1 {
             return m.remove(&segs[0]).is_some();

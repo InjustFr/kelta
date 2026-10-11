@@ -17,6 +17,11 @@ projects: Array<ProjectId>,
  */
 tracker: TrackerBinding, routes: Array<SourceRoute>, 
 /**
+ * Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped
+ * statuses keep their category colour. A bad colour is dropped with a warning.
+ */
+status_colors: { [key in string]: string }, 
+/**
  * How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on
  * Linear, status elsewhere.
  */

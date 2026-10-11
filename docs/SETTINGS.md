@@ -124,6 +124,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `mcp` | bool | `true` | Kelta MCP server for Claude sessions |
 | `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
 | `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
+| `hooks_offer` | bool | `true` | at startup, offer to register Kelta's hook relay (`kelta-ctl hook --outside`) in Claude Code's user settings when it is found and not registered, so Claude sessions Kelta did not start show in Now; the toast's Never sets it to `false`. Global |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |
 | `append_system_prompt` | str (x-kelta-exec) | `""` | appended to generated `context.md` |
 | `extra_args` | list<str> | `[]` | appended before the prompt |
@@ -283,6 +284,8 @@ id = "product"
 label = "Product board"
 projects = ["web", "api"]          # projects this board feeds; may be empty
 blocked = { label = "blocked" }    # how this tracker marks a ticket blocked (below)
+# status name → chip colour, like a project `color`; unmapped statuses keep their category colour
+status_colors = { "In QA" = "theme:magenta", "Ready for release" = "#2f8c86" }
 
 [sources.tracker]                  # the §3 tracker binding without repo_rules
 account = "jira-acme"
@@ -298,11 +301,11 @@ repo = "web"
 
 `blocked` says how the tracker marks a ticket blocked without changing its status: `"status"` (the status name reads blocked, on hold, waiting or impediment), `"flag"` (the Jira flag), `"relation"` (a Linear "blocked by" an open issue) or `{ label = "<name>" }`. Unset, it follows the provider: `flag` on Jira, `relation` on Linear, `status` elsewhere. A blocked ticket shows a Blocked chip, goes to Waiting in Flow and sorts last in its group; **Block / Unblock** (`b` in the detail) sets the flag, adds or removes the label (Jira, GitHub, GitLab, Gitea), or moves a `status` ticket to a blocked status and back to in progress (else to do). A Linear relation, or a label on Linear or Redmine, is set in the tracker: the action is off with that reason. A status name that reads blocked still puts the ticket in Waiting whatever the setting.
 
-Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account.
+Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or `#rrggbb` is a warning: that entry is dropped, the rest applies (IPC writes reject it).
 
 `ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
 
-**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
+**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Status colours** (every status of the source's columns, plus any already coloured, each with the project colour picker); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
 
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.

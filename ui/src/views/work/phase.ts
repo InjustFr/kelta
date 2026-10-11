@@ -2,13 +2,30 @@
 // Pure; used by Now, the work bar, the tab lamp, the rail tile and the palette.
 
 import { msg, t, tn } from '$lib/i18n/index.svelte';
-import type { GitStatus, Review, ReviewDelta, RunState, SessionInfo, WorkItem } from '$lib/gen';
+import type {
+  GitStatus,
+  OutsideSession,
+  Review,
+  ReviewDelta,
+  RunState,
+  SessionInfo,
+  WorkItem,
+} from '$lib/gen';
 
 /** Lamp shapes (DESIGN §6.1). `working` and `parked` are derived, not Attention levels. */
 export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'parked' | 'none';
 
 export type NowSection =
-  'needs_you' | 'to_review' | 'next_up' | 'new' | 'fix' | 'requests' | 'ship' | 'in_flight' | 'up_next';
+  | 'needs_you'
+  | 'to_review'
+  | 'next_up'
+  | 'new'
+  | 'fix'
+  | 'requests'
+  | 'ship'
+  | 'in_flight'
+  | 'elsewhere'
+  | 'up_next';
 
 /** Ids of the work action registry (`actions.ts`). */
 export type WorkActionId =
@@ -67,7 +84,8 @@ export type PhaseId =
   | 'no_changes'
   | 'reviewing'
   | 'reviewed'
-  | 'updated';
+  | 'updated'
+  | 'elsewhere';
 
 export interface Phase {
   id: PhaseId;
@@ -429,6 +447,22 @@ const LAMP_RANK: Record<Lamp, number> = {
 };
 
 /** Aggregate lamp (DESIGN §6.1): needs input > error > working > done > activity. */
+/** A Claude session Kelta did not start (#345): its lamp and words, in Now and on its ticket's row. */
+export function outsidePhase(s: Pick<OutsideSession, 'status' | 'preview'>): Phase {
+  const [lamp, label]: [Lamp, string] =
+    s.status === 'needs_input'
+      ? ['needs_input', t('Claude needs you, outside Kelta')]
+      : s.status === 'working'
+        ? ['working', t('Claude working outside Kelta')]
+        : s.status === 'error'
+          ? ['error', t('Claude stopped on an error, outside Kelta')]
+          : s.status === 'done' || s.status === 'waiting_user'
+            ? ['done', t('Claude done, outside Kelta')]
+            : ['none', t('Claude open outside Kelta')];
+  const section = s.status === 'needs_input' ? 'needs_you' : 'elsewhere';
+  return p('elsewhere', label, s.preview ?? '', lamp, null, '', section);
+}
+
 export function maxLamp(lamps: Iterable<Lamp>): Lamp {
   let best: Lamp = 'none';
   for (const l of lamps) if (LAMP_RANK[l] > LAMP_RANK[best]) best = l;

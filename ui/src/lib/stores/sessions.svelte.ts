@@ -1,6 +1,14 @@
 // Sessions across all projects. Fed by session.* UiEvents.
 
-import type { ClaudeRun, KeltaError, ProjectId, SessionId, SessionInfo, UiEvent } from '$lib/gen';
+import type {
+  ClaudeRun,
+  KeltaError,
+  OutsideSession,
+  ProjectId,
+  SessionId,
+  SessionInfo,
+  UiEvent,
+} from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
 import { toKeltaError } from './loadable';
@@ -41,10 +49,30 @@ export class SessionsStore {
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a load guard, never rendered
   #runsLoaded = new Set<SessionId>();
 
+  /** Claude sessions Kelta did not start, by Claude session id (#345). */
+  outside = $state<Record<string, OutsideSession>>({});
+
+  get elsewhere(): OutsideSession[] {
+    return Object.values(this.outside);
+  }
+
+  /** Startup and Now's refresh: core also drops the ones whose process is gone. */
+  async loadOutside(): Promise<void> {
+    try {
+      this.outside = Object.fromEntries((await ipc.outsideList()).map((s) => [s.id, s]));
+    } catch {
+      // Kept as the events left it.
+    }
+  }
+
   apply(ev: UiEvent): void {
     const next = reduceSessions(this.byId, ev);
     if (next !== this.byId) this.byId = next;
-    if (ev.type === 'workflow.updated') this.putRun(ev.run);
+    if (ev.type === 'outside.updated') this.outside = { ...this.outside, [ev.session.id]: ev.session };
+    else if (ev.type === 'outside.removed' && ev.id in this.outside) {
+      const { [ev.id]: _gone, ...rest } = this.outside;
+      this.outside = rest;
+    } else if (ev.type === 'workflow.updated') this.putRun(ev.run);
     else if (ev.type === 'session.removed' && ev.id in this.runs) {
       const { [ev.id]: _gone, ...rest } = this.runs;
       this.runs = rest;

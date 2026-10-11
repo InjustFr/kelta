@@ -1240,3 +1240,61 @@ async fn review_by_ref_reads_the_cache_then_fetches_when_cold_and_none_on_error(
     let gone = ReviewRef { number: 999, ..cold.r#ref };
     assert_eq!(e.h.core.review(&gone).await, None);
 }
+
+#[tokio::test]
+async fn outside_sessions_follow_their_hooks_and_link_a_listed_ticket() {
+    use kelta_proto::hooks::HookPayload;
+    use kelta_proto::model::SessionStatus;
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
+    let ticket = page.items[0].ticket.r#ref.clone();
+    let cwd = tmp.path().join(format!("{}-login", ticket.key));
+    let hook = |event: &str, extra: serde_json::Value| -> HookPayload {
+        let mut v = serde_json::json!({"hook_event_name": event, "session_id": "u1", "cwd": cwd});
+        v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(v).unwrap()
+    };
+    let me = Some(std::process::id());
+    let updates = |h: &H| -> Vec<kelta_proto::model::OutsideSession> {
+        h.ui.take_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                UiEvent::OutsideUpdated { session } => Some(session),
+                _ => None,
+            })
+            .collect()
+    };
+    e.h.ui.take_events();
+
+    e.h.core.outside_hook(hook("SessionStart", serde_json::json!({"source": "startup"})), me).await;
+    let s = updates(&e.h).pop().unwrap();
+    assert_eq!((s.id.as_str(), s.status, s.pid), ("u1", SessionStatus::Running, me));
+    assert_eq!(s.ticket.as_ref(), Some(&ticket), "the cwd carries the ticket's branch key");
+    assert_eq!(s.title, format!("{}-login", ticket.key));
+
+    e.h.core
+        .outside_hook(hook("UserPromptSubmit", serde_json::json!({"prompt": "fix login\nplease"})), me)
+        .await;
+    e.h.core
+        .outside_hook(hook("Notification", serde_json::json!({"notification_type": "permission_prompt"})), me)
+        .await;
+    let s = updates(&e.h).pop().unwrap();
+    assert_eq!((s.status, s.title.as_str()), (SessionStatus::NeedsInput, "fix login"));
+    // A tool ran: answered. The same state again emits nothing.
+    e.h.core.outside_hook(hook("PostToolUse", serde_json::json!({"tool_name": "Bash"})), me).await;
+    assert_eq!(updates(&e.h).pop().unwrap().status, SessionStatus::Working);
+    e.h.core.outside_hook(hook("PostToolUse", serde_json::json!({"tool_name": "Bash"})), me).await;
+    assert!(updates(&e.h).is_empty());
+    assert_eq!(e.h.core.outside_list().len(), 1);
+
+    // A session whose process is gone is dropped on the next list.
+    let mut gone = hook("SessionStart", serde_json::json!({}));
+    gone.session_id = Some("u2".into());
+    e.h.core.outside_hook(gone, Some(999_999_999)).await;
+    assert_eq!(e.h.core.outside_list().iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["u1"]);
+    assert!(e.h.ui.events().iter().any(|e| matches!(e, UiEvent::OutsideRemoved { id } if id == "u2")));
+
+    e.h.core.outside_hook(hook("SessionEnd", serde_json::json!({"reason": "exit"})), me).await;
+    assert!(e.h.core.outside_list().is_empty());
+}

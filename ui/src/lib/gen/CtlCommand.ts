@@ -8,7 +8,7 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * Commands accepted on the ctl socket. Serde tag `cmd`.
  */
-export type CtlCommand = { "cmd": "hook", session: SessionId, token: string, payload: HookPayload, } | { "cmd": "toggle" } | { "cmd": "palette" } | { "cmd": "next" } | { "cmd": "back" } | { "cmd": "open", path: string, } | { "cmd": "focus_project", id: ProjectId, } | { "cmd": "start", ticket: string, project: ProjectId | null, 
+export type CtlCommand = { "cmd": "hook", session: SessionId, token: string, payload: HookPayload, } | { "cmd": "outside_hook", payload: HookPayload, pid: number | null, } | { "cmd": "toggle" } | { "cmd": "palette" } | { "cmd": "next" } | { "cmd": "back" } | { "cmd": "open", path: string, } | { "cmd": "focus_project", id: ProjectId, } | { "cmd": "start", ticket: string, project: ProjectId | null, 
 /**
  * Set by the backend when it asks the app to show the Start sheet: the ticket `ticket` resolved to.
  */

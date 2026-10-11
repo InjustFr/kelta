@@ -60,14 +60,15 @@ fn registration_in(config: &[u8]) -> Option<Registration> {
 /// workspace-wide `preserve_order` feature (it changes other crates' output) it re-sorts every key of the
 /// user's config (#310).
 #[derive(Default)]
-struct Ordered(Vec<(String, Json)>);
+pub(crate) struct Ordered(pub(crate) Vec<(String, Json)>);
 
 /// A value of an [`Ordered`] object: as read, or rebuilt by Kelta and so indented at its depth (#322).
 #[derive(serde::Serialize)]
 #[serde(untagged)]
-enum Json {
+pub(crate) enum Json {
     Raw(Box<RawValue>),
     Object(Ordered),
+    Array(Vec<Json>),
     Value(serde_json::Value),
 }
 
@@ -99,7 +100,7 @@ impl serde::Serialize for Ordered {
 
 impl Ordered {
     /// `key` as read from the file.
-    fn get(&self, key: &str) -> Option<&RawValue> {
+    pub(crate) fn get(&self, key: &str) -> Option<&RawValue> {
         self.0.iter().find_map(|(k, v)| match v {
             Json::Raw(raw) if k == key => Some(&**raw),
             _ => None,
@@ -107,14 +108,14 @@ impl Ordered {
     }
 
     /// Replaces `key` in place, else appends it.
-    fn set(&mut self, key: &str, value: Json) {
+    pub(crate) fn set(&mut self, key: &str, value: Json) {
         match self.0.iter_mut().find(|(k, _)| k == key) {
             Some((_, v)) => *v = value,
             None => self.0.push((key.to_owned(), value)),
         }
     }
 
-    fn remove(&mut self, key: &str) -> bool {
+    pub(crate) fn remove(&mut self, key: &str) -> bool {
         let n = self.0.len();
         self.0.retain(|(k, _)| k != key);
         self.0.len() != n
@@ -161,11 +162,11 @@ fn write_registration(path: &Path, reg: Option<&Registration>) -> Result<(), Kel
 /// Claude Code's lock on its config (proper-lockfile): a `<config>.lock` directory, refreshed while
 /// held, stale after 10 s. Kelta holds it across its read-modify-write so a concurrent Claude Code save
 /// re-reads Kelta's change instead of overwriting it (#322). Removed on drop.
-struct ConfigLock(PathBuf);
+pub(crate) struct ConfigLock(PathBuf);
 
 impl ConfigLock {
     /// `None` when the config's directory does not exist yet: no Claude Code to race with.
-    async fn acquire(config: &Path) -> Result<Option<Self>, KeltaError> {
+    pub(crate) async fn acquire(config: &Path) -> Result<Option<Self>, KeltaError> {
         const STALE: Duration = Duration::from_secs(10);
         let mut dir = config.as_os_str().to_owned();
         dir.push(".lock");
@@ -213,7 +214,7 @@ async fn ensure_registration(path: &Path, reg: &Registration) -> Result<bool, Ke
 const RECHECK: Duration = Duration::from_secs(5);
 
 impl Core {
-    fn claude_bin(&self) -> Option<PathBuf> {
+    pub(crate) fn claude_bin(&self) -> Option<PathBuf> {
         let bin = self.cfg.effective(None).claude.binary.clone();
         crate::spawn_env::resolve_program(&bin, self.login_env.path(), &std::env::temp_dir()).ok()
     }

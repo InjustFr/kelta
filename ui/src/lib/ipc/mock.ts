@@ -17,6 +17,7 @@ import type {
   KeltaError,
   Layer,
   NextUp,
+  OutsideSession,
   Layout,
   Person,
   ProjectInfo,
@@ -126,6 +127,8 @@ export interface MockState {
   workflows: WorkflowInfo[];
   /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
   claudeRuns: ClaudeRun[];
+  /** Claude sessions Kelta did not start (`outside_list`, #345). */
+  outside: OutsideSession[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
 }
@@ -217,14 +220,23 @@ function rebaseAges(items: TicketItem[]): TicketItem[] {
 function settingsWithSources(projects: ProjectInfo[]): JsonValue {
   const sources: Source[] = projects.flatMap((p) =>
     p.tracker
-      ? [{ id: p.id, label: `${p.name} board`, projects: [p.id], tracker: clone(p.tracker), routes: [] }]
+      ? [
+          {
+            id: p.id,
+            label: `${p.name} board`,
+            projects: [p.id],
+            tracker: clone(p.tracker),
+            routes: [],
+            status_colors: {},
+          },
+        ]
       : [],
   );
   const base = projects.find((p) => p.tracker)?.tracker;
   if (base) {
     const view = { ...base.views[0]!, id: 'ops', label: 'Ops issues', jql: null, account: null };
     const tracker = { ...clone(base), account: 'gitlab-corp', views: [view], columns: [] };
-    sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [] });
+    sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [], status_colors: {} });
   }
   return { ...clone(samples.settingsDefault), sources } as unknown as JsonValue;
 }
@@ -250,6 +262,7 @@ function freshState(): MockState {
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
     claudeRuns: [],
+    outside: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
@@ -404,6 +417,7 @@ const withSourceDefaults = (s: Partial<Source>): Source => ({
   label: '',
   projects: [],
   routes: [],
+  status_colors: {},
   ...s,
   tracker: {
     account: '',
@@ -470,6 +484,7 @@ export function createMockTransport(options: MockOptions = {}): {
   const screens = new Map<ScreenInstanceId, string>();
   // Claude Code found, Kelta's MCP not registered yet.
   let claudeMcp: boolean | null = false;
+  let claudeHooks: boolean | null = false;
 
   const emit = (event: UiEvent): void => {
     for (const ch of eventChannels) {
@@ -651,6 +666,16 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     claude_mcp_status: () => claudeMcp,
     claude_permission_mode: () => 'auto',
+    claude_hooks_status: () => claudeHooks,
+    claude_hooks_install: () => {
+      claudeHooks = true;
+      return null;
+    },
+    claude_hooks_remove: () => {
+      claudeHooks = false;
+      return null;
+    },
+    outside_list: () => clone(state.outside),
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;
