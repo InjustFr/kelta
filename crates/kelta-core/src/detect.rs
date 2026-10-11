@@ -141,15 +141,7 @@ pub fn account_for_host(
 
 /// Slug `[a-z0-9-]{1,40}` from a folder name.
 pub fn slug(name: &str) -> String {
-    let mut s = String::new();
-    for c in name.chars().flat_map(char::to_lowercase) {
-        if c.is_ascii_alphanumeric() {
-            s.push(c);
-        } else if !s.ends_with('-') {
-            s.push('-');
-        }
-    }
-    let s: String = s.trim_matches('-').chars().take(40).collect();
+    let s: String = kelta_proto::settings::slug(name).chars().take(40).collect();
     let s = s.trim_end_matches('-').to_owned();
     if s.is_empty() || s == ProjectId::HOME || s == ProjectId::INBOX {
         format!("project-{s}").trim_end_matches('-').to_owned()

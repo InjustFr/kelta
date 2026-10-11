@@ -107,7 +107,7 @@
           break;
         case 'up':
         case 'down':
-          await move(p.id, id === 'up' ? -1 : 1);
+          await reorder(p.id, indexOf(p.id) + (id === 'up' ? -1 : 1));
           break;
         case 'close':
           await closeProject(p, false);
@@ -154,14 +154,16 @@
     if (wasActive) fallbackActive();
   }
 
-  async function move(id: string, delta: -1 | 1): Promise<void> {
+  /** Moves `fromId` to `toIndex` among the reorderable projects; out of range does nothing. */
+  async function reorder(fromId: string, toIndex: number): Promise<void> {
     const ids = reorderable.map((p) => p.id);
-    const at = ids.indexOf(id);
-    const to = at + delta;
-    if (at < 0 || to < 0 || to >= ids.length) return;
-    ids.splice(to, 0, ...ids.splice(at, 1));
+    const at = ids.indexOf(fromId);
+    if (at < 0 || toIndex < 0 || toIndex >= ids.length) return;
+    ids.splice(toIndex, 0, ...ids.splice(at, 1));
     await applyOrder(ids);
   }
+
+  const indexOf = (id: string) => reorderable.findIndex((p) => p.id === id);
 
   /** Writes the new order of the reorderable projects back into the full list order. */
   async function applyOrder(orderedOpen: string[]): Promise<void> {
@@ -176,13 +178,8 @@
     dragId = null;
     overId = null;
     if (!from || from === targetId) return;
-    const ids = reorderable.map((p) => p.id);
-    const fromAt = ids.indexOf(from);
-    const toAt = ids.indexOf(targetId);
-    if (fromAt < 0 || toAt < 0) return;
-    ids.splice(toAt, 0, ...ids.splice(fromAt, 1));
     try {
-      await applyOrder(ids);
+      await reorder(from, indexOf(targetId));
     } catch (err) {
       toasts.error(err, 'Reordering projects failed');
     }

@@ -138,7 +138,6 @@ impl BitbucketHost {
         };
         let mine = parts.iter().find(|p| p.pointer("/user/uuid").and_then(Value::as_str) == me);
         Some(Review {
-            reviewed_head: None,
             r#ref,
             url: v.pointer("/links/html/href").and_then(Value::as_str).unwrap_or("").to_owned(),
             author: v.get("author").map(Self::user_from).unwrap_or_else(|| Self::user_from(&Value::Null)),
@@ -150,29 +149,14 @@ impl BitbucketHost {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_owned(),
-            ci: CiState::None,
-            failed_check_names: vec![],
             decision,
-            decision_head: None,
-            requested_at: None,
-            blocking: false,
-            waiting_on: Vec::new(),
-            author_to_act: false,
-            waiting_since: None,
-            author_since: None,
-            nudged_at: None,
-            unresolved_threads: None,
-            last_comment_at: None,
             my_state: (kind == ReviewKind::ReviewRequested)
                 .then(|| mine.map_or(MyReviewState::Pending, |p| state_of(p))),
-            mergeable: None,
-            labels: Vec::new(),
             kind,
             updated_at: s(v, "updated_on").unwrap_or("").to_owned(),
             linked_tickets: linked_tickets(&[&branch, &title]),
-            additions: None,
-            deletions: None,
             title,
+            ..Review::default()
         })
     }
 

@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use kelta_proto::api::{SettingsSource, TrustStore};
@@ -152,7 +153,7 @@ pub struct ConfigService {
     pub(crate) trust_store: RwLock<Option<Arc<dyn TrustStore>>>,
     pub(crate) watcher: Mutex<Option<crate::watch::WatchHandle>>,
     /// Project-layer tool entries moved to the global file by this load (#243).
-    pub(crate) tools_migrated: usize,
+    pub(crate) tools_migrated: AtomicUsize,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -346,11 +347,6 @@ impl ConfigService {
         if let Some(c) = &overrides.config_dir {
             dirs.config = c.clone();
         }
-        // before the first build, so the global-only `tools` scope never reports a migrated file
-        let tools_migrated = Self::migrate_project_tools(&dirs).unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "project tools not moved to the global settings");
-            0
-        });
         let defaults = serde_json::to_value(Settings::defaults())?;
         let (runtime, runtime_issues) = build_runtime(&overrides);
         let empty = Inner {
@@ -380,7 +376,7 @@ impl ConfigService {
             trusted: RwLock::new(HashMap::new()),
             trust_store: RwLock::new(None),
             watcher: Mutex::new(None),
-            tools_migrated,
+            tools_migrated: AtomicUsize::new(0),
         });
         {
             let _g = svc.gate.lock();
@@ -389,6 +385,12 @@ impl ConfigService {
             *svc.issues.write() = svc.collect_issues(&cand);
             *svc.inner.write() = cand;
         }
+        // on the loaded layers; each commit refreshes the issues, so a migrated file reports none
+        let moved = svc.migrate_project_tools().unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "project tools not moved to the global settings");
+            0
+        });
+        svc.tools_migrated.store(moved, Ordering::Relaxed);
         Ok(svc)
     }
 
@@ -398,7 +400,7 @@ impl ConfigService {
 
     /// Project-layer tool entries this load moved to the global file (0 = nothing to tell).
     pub fn tools_migrated(&self) -> usize {
-        self.tools_migrated
+        self.tools_migrated.load(Ordering::Relaxed)
     }
 
     pub fn overrides(&self) -> &RuntimeOverrides {

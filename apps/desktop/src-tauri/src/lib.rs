@@ -8,7 +8,6 @@ pub mod platform;
 pub mod window;
 
 use std::process::ExitCode;
-use std::sync::Arc;
 
 use kelta_core::{Core, CoreConfig};
 use kelta_proto::dirs::{CliArgs, Dirs, DirsOverrides};
@@ -86,7 +85,7 @@ pub fn run() -> ExitCode {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("kelta-plugin", |ctx, request, responder| {
-            let Some(core) = ctx.app_handle().try_state::<Arc<Core>>().map(|c| c.inner().clone()) else {
+            let Some(core) = window::core(ctx.app_handle()) else {
                 let mut r = tauri::http::Response::new(b"core not ready".to_vec());
                 *r.status_mut() = tauri::http::StatusCode::SERVICE_UNAVAILABLE;
                 return responder.respond(r);

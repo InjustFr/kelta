@@ -41,7 +41,7 @@ pub fn effective_decorations() -> Option<Decorations> {
     })
 }
 
-fn core(app: &AppHandle) -> Option<Arc<Core>> {
+pub(crate) fn core(app: &AppHandle) -> Option<Arc<Core>> {
     app.try_state::<Arc<Core>>().map(|s| s.inner().clone())
 }
 

@@ -6,12 +6,11 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use kelta_core::Core;
 use kelta_proto::api::SettingsSource;
 use kelta_proto::ipc::{UpdateChannel, UpdateState, UpdateStatus};
 use parking_lot::Mutex;
 use semver::Version;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
 
 const NIGHTLY_URL: &str = "https://github.com/InjustFr/kelta/releases/download/nightly/latest.json";
@@ -84,10 +83,6 @@ fn unsupported(app: &AppHandle) -> Option<&'static str> {
     }
 }
 
-fn core(app: &AppHandle) -> Option<std::sync::Arc<Core>> {
-    app.try_state::<std::sync::Arc<Core>>().map(|s| s.inner().clone())
-}
-
 /// Ready is sticky: once installed, only a newer install replaces it.
 fn set(inner: &mut Inner, next: UpdateState) {
     if !matches!(inner.state, UpdateState::Ready { .. }) || matches!(next, UpdateState::Ready { .. }) {
@@ -107,13 +102,13 @@ pub fn status(app: &AppHandle) -> UpdateStatus {
         current,
         state,
         checked_at: inner.checked_at.clone(),
-        restart_needs_confirm: core(app).is_some_and(|c| c.quit_needs_confirm()),
+        restart_needs_confirm: crate::window::core(app).is_some_and(|c| c.quit_needs_confirm()),
     }
 }
 
 /// `app_ready` and window focus: check in the background when due.
 pub fn auto_check(app: &AppHandle) {
-    let updates = core(app).is_some_and(|c| c.config().effective(None).app.updates);
+    let updates = crate::window::core(app).is_some_and(|c| c.config().effective(None).app.updates);
     if !due(updates, STATE.lock().last, Instant::now()) {
         return;
     }

@@ -175,7 +175,7 @@
         <span data-testid="behind">↓{git.behind}</span>
       </span>
     {:else if work.gitError}
-      <button type="button" class="link" onclick={() => void work.refreshStatus()}
+      <button type="button" class="k-link" onclick={() => void work.refreshStatus()}
         >status unavailable, retry</button
       >
     {/if}
@@ -318,15 +318,6 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--k-accent);
-    font: inherit;
-    cursor: pointer;
   }
 
   .muted {

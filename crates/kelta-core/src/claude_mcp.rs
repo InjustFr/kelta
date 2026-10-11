@@ -35,18 +35,12 @@ impl Core {
 
     /// `claude mcp <args>` in the login environment; stdout, or an error when it exits non-zero.
     async fn claude_mcp(&self, bin: &Path, args: &[&str]) -> Result<String, KeltaError> {
-        let mut cmd = tokio::process::Command::new(bin);
-        cmd.arg("mcp")
-            .args(args)
-            .current_dir(self.home_dir())
-            .env_clear()
-            .envs(self.login_env.vars.iter())
-            .stdin(std::process::Stdio::null())
-            .kill_on_drop(true);
+        let home = self.home_dir();
+        let argv = std::iter::once("mcp").chain(args.iter().copied());
         // one-shot: bounded `claude mcp` call (the `get` health check connects to the server).
-        let out = tokio::time::timeout(Duration::from_secs(30), cmd.output())
-            .await
-            .map_err(|_| KeltaError::internal("`claude mcp` timed out"))??;
+        let out =
+            crate::ctl::claude_oneshot(bin, argv, &self.login_env.vars, &home, None, Duration::from_secs(30))
+                .await?;
         if !out.status.success() {
             let err = String::from_utf8_lossy(if out.stderr.is_empty() { &out.stdout } else { &out.stderr });
             return Err(KeltaError::upstream(format!("claude mcp {}: {}", args[0], err.trim())));

@@ -515,7 +515,7 @@
     <StateBanner error={noData ? null : firstError} errors={accountErrors} onretry={refresh} />
     {#if noSource && lines.length > 0}
       <div class="nosource" data-testid="now-no-source">
-        No ticket source yet · <button type="button" class="link" onclick={pickBoard}>Pick a board</button>
+        No ticket source yet · <button type="button" class="k-link" onclick={pickBoard}>Pick a board</button>
       </div>
     {/if}
     {#if lines.length === 0 && noSource && !filter}
@@ -812,15 +812,6 @@
     border-bottom: 1px solid var(--k-border);
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-sm);
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--k-accent);
-    font: inherit;
-    cursor: pointer;
   }
 
   .msgline {

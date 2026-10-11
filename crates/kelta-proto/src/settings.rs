@@ -1292,6 +1292,10 @@ impl AccountKind {
     pub fn is_code_host(self) -> bool {
         matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea | Self::PluginCodehost)
     }
+
+    pub fn is_tracker(self) -> bool {
+        !matches!(self, Self::Bitbucket | Self::PluginCodehost)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -1755,7 +1759,9 @@ fn same_board(a: &TrackerBinding, b: &TrackerBinding) -> bool {
     same_views(a, b) && a.columns == b.columns && a.status_map == b.status_map
 }
 
-fn slug(s: &str) -> String {
+/// Lowercase `[a-z0-9-]*`: runs of anything else become one `-`, none at either end (empty when
+/// nothing is left; callers pick their own fallback).
+pub fn slug(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars().flat_map(char::to_lowercase) {
         if c.is_ascii_alphanumeric() {
@@ -1764,8 +1770,7 @@ fn slug(s: &str) -> String {
             out.push('-');
         }
     }
-    let out = out.trim_matches('-');
-    if out.is_empty() { "source".into() } else { out.into() }
+    out.trim_matches('-').to_owned()
 }
 
 /// `existing` plus the projects' deprecated `[project.tracker]` blocks (the migration and the read
@@ -1809,7 +1814,7 @@ pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) ->
             let name = first.map(|p| if p.name.is_empty() { p.id.to_string() } else { p.name.clone() });
             label = format!("{label} · {}", name.unwrap_or_default());
         }
-        let base = slug(&label);
+        let base = Some(slug(&label)).filter(|s| !s.is_empty()).unwrap_or_else(|| "source".into());
         let (mut id, mut n) = (base.clone(), 2);
         while out.iter().any(|s| s.id == id) {
             id = format!("{base}-{n}");

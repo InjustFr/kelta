@@ -747,7 +747,7 @@ impl WorkService {
         let run = self.ensure_claude_run(&item, &mut j)?;
         files::write_private(
             &run.join(crate::claude::TICKET_FILE),
-            files::ticket_markdown(&detail).as_bytes(),
+            files::ticket_markdown(&detail, files::BRIEF_COMMENTS).as_bytes(),
         )?;
         j.ticket =
             Some(plan::TicketSnap::from_ticket(&detail.ticket, tracker.branch_key(&ticket), tracker.kind()));

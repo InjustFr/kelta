@@ -7,12 +7,12 @@
   import { Button } from '$lib/ui';
 
   import { releasePage, restartApp, updates } from '../../shell/updates.svelte';
+  import { clock } from '../../shell/usage';
 
   onMount(() => void updates.refresh().catch(() => {}));
 
   const s = $derived(updates.status);
-  const at = (iso: string | null): string =>
-    iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const at = (iso: string | null): string => (iso ? clock(Date.parse(iso) / 1000) : '');
 
   const line = $derived.by(() => {
     if (!s) return '';

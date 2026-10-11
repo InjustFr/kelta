@@ -750,10 +750,7 @@ impl PluginHost {
             .wiring()
             .secrets
             .ok_or_else(|| KeltaError::unsupported("`secret_headers` need a secret resolver"))?;
-        let ctx = SecretCtx {
-            host: req.url.parse::<axum::http::Uri>().ok().and_then(|u| u.host().map(str::to_owned)),
-            ..Default::default()
-        };
+        let ctx = SecretCtx { host: kelta_http::util::url_host(&req.url), ..Default::default() };
         let settings = self.settings(project);
         let mut refs = Vec::new();
         for (header, spec) in secret_headers {

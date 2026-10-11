@@ -3214,6 +3214,7 @@ dependencies = [
  "bytes",
  "futures",
  "kelta-proto",
+ "kelta-work",
  "parking_lot",
  "reqwest",
  "rustix",

@@ -359,3 +359,14 @@ pub async fn ctl_send(sock: &Path, req: serde_json::Value) -> serde_json::Value 
     tokio::io::BufReader::new(s).read_line(&mut line).await.unwrap();
     serde_json::from_str(&line).unwrap()
 }
+
+/// `git <args>` in `dir`, unsigned, as a test identity; panics on failure.
+pub fn git(dir: &Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .args(["-c", "commit.gpgsign=false", "-c", "user.name=Kelta Test", "-c", "user.email=test@kelta.dev"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+}

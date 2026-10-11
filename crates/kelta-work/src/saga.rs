@@ -480,32 +480,12 @@ impl WorkService {
             branch,
             base: plan.base.clone(),
             claude_uuid: has_claude.then(|| uuid::Uuid::new_v4().to_string()),
-            nvim_socket: None,
-            session_ids: Vec::new(),
-            tab_id: None,
             pr_url: plan.adopt_pr.clone(),
-            state: WorkState::Planned,
-            steps: Vec::new(),
             created_at: kelta_proto::now_rfc3339(),
-            sent_threads: Vec::new(),
-            feedback_at: None,
-            rebase: None,
             title: title.filter(|t| !t.is_empty()),
-            pr_title_needs_key: false,
-            review_due: false,
-            claude_replied: false,
-            claude_at: None,
-            claude_message: None,
-            delta: None,
-            next_note: None,
-            left_at: None,
             port_base,
-            cost_usd: 0.0,
-            auto_finish: false,
-            parked_at: None,
-            nvim_kept: 0,
-            run: None,
             ticket_source: plan.ticket_source.clone(),
+            ..WorkItem::default()
         };
         let journal = Journal { plan: Some(plan), ..Journal::default() };
         self.save_journal(&item.id, &journal)?;
@@ -757,7 +737,10 @@ impl WorkService {
                 let tracker = env.core.tracker_for(&t.account).await?;
                 let d = tracker.get(t).await?;
                 let run = self.ensure_claude_run(item, j)?;
-                files::write_private(&run.join(claude::TICKET_FILE), files::ticket_markdown(&d).as_bytes())?;
+                files::write_private(
+                    &run.join(claude::TICKET_FILE),
+                    files::ticket_markdown(&d, files::BRIEF_COMMENTS).as_bytes(),
+                )?;
                 j.ticket = Some(TicketSnap::from_ticket(&d.ticket, tracker.branch_key(t), tracker.kind()));
                 Ok(Some(format!("{} — {}", d.ticket.r#ref.key, d.ticket.title)))
             }

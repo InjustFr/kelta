@@ -9,14 +9,16 @@
   import type { Feedback, KeltaError, WorkItemId } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { isIpcError, toIpcError } from '$lib/ipc/transport';
-  import { sessions, toasts, work } from '$lib/stores';
+  import { toasts, work } from '$lib/stores';
   import { Button, Sheet, Spinner, TextInput } from '$lib/ui';
   import { currentPlatform, relativeTime } from '$lib/ui/format';
 
   import {
+    claudeBusy,
     feedbackEntries,
     feedbackMarkdown,
     isNew,
+    liveClaude,
     newestAt,
     prLabel,
     promptTemplate,
@@ -35,15 +37,10 @@
   const submitChord = currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter';
 
   const item = $derived(work.get(id));
-  const claude = $derived(
-    sessions.all.find((s) => s.work_item_id === id && s.kind.type === 'claude' && s.lifecycle === 'live') ??
-      null,
-  );
+  const claude = $derived(liveClaude(id));
   const hooksInactive = $derived(claude !== null && claude.status_source !== 'hook');
   // Held by core until Claude's next Stop.
-  const busy = $derived(
-    !hooksInactive && claude !== null && ['working', 'needs_input'].includes(claude.status),
-  );
+  const busy = $derived(claude !== null && claudeBusy(claude));
 
   let feedback = $state<Feedback | null>(null);
   let loadError = $state<KeltaError | null>(null);

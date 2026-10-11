@@ -124,6 +124,13 @@ export function slugify(text: string): string {
     .slice(0, 40);
 }
 
+/** `base`, else `base-2`, `base-3`… : the first one not in `taken`. */
+export function uniqueId(base: string, taken: readonly string[]): string {
+  let id = base;
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
 /** Suggested id: `jira-acme` from the kind and the host of the base URL. */
 export function suggestId(kind: AccountKind, baseUrl: string, taken: readonly string[]): string {
   let host: string;
@@ -134,9 +141,7 @@ export function suggestId(kind: AccountKind, baseUrl: string, taken: readonly st
     host = '';
   }
   const base = slugify(host && !['com', 'org', 'io'].includes(host) ? `${kind}-${host}` : kind);
-  if (!taken.includes(base)) return base;
-  for (let i = 2; i < 100; i++) if (!taken.includes(`${base}-${i}`)) return `${base}-${i}`;
-  return base;
+  return uniqueId(base, taken);
 }
 
 export function emptyDraft(kind: AccountKind): AccountDraft {

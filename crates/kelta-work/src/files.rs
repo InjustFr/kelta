@@ -256,8 +256,12 @@ pub fn html_to_text(html: &str) -> String {
     out.trim().to_owned()
 }
 
-/// `ticket.md`: key, title, URL, status, labels, Markdown body, last 10 comments.
-pub fn ticket_markdown(d: &TicketDetail) -> String {
+/// Comments a brief file keeps: the newest ones are what a run needs.
+pub const BRIEF_COMMENTS: usize = 10;
+
+/// `ticket.md` (and MCP `get_ticket`): key, title, URL, status, labels, parent, sub-tasks, Markdown body,
+/// the last `comments` comments.
+pub fn ticket_markdown(d: &TicketDetail, comments: usize) -> String {
     let t = &d.ticket;
     let mut s = format!("# {}: {}\n\n", t.r#ref.key, t.title);
     s.push_str(&format!("- URL: {}\n- Status: {}\n", t.url, t.status.name));
@@ -270,10 +274,20 @@ pub fn ticket_markdown(d: &TicketDetail) -> String {
     if let Some(p) = &t.priority {
         s.push_str(&format!("- Priority: {p}\n"));
     }
+    if let Some(a) = &t.assignee {
+        s.push_str(&format!("- Assignee: {}\n", a.name));
+    }
+    if let Some(p) = &d.parent {
+        s.push_str(&format!("- Parent: {}\n", p.key));
+    }
+    if !d.children.is_empty() {
+        let keys: Vec<&str> = d.children.iter().map(|c| c.ticket.r#ref.key.as_str()).collect();
+        s.push_str(&format!("- Sub-tasks: {}\n", keys.join(", ")));
+    }
     s.push_str("\n## Description\n\n");
     s.push_str(if d.body_md.trim().is_empty() { "_(empty)_" } else { d.body_md.trim() });
     s.push('\n');
-    let start = d.comments.len().saturating_sub(10);
+    let start = d.comments.len().saturating_sub(comments);
     if start < d.comments.len() {
         s.push_str("\n## Comments\n");
         for c in &d.comments[start..] {
@@ -305,6 +319,37 @@ pub fn lazygit_config(ctl: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ticket_markdown_lists_relations_and_strips_comment_html() {
+        use kelta_proto::samples;
+        use kelta_proto::tracker::{BodyFormat, Comment, Ticket, TicketItem, TicketRef};
+        let child = |key: &str| TicketItem {
+            ticket: Ticket {
+                r#ref: TicketRef { key: key.into(), ..samples::ticket_ref() },
+                ..samples::ticket()
+            },
+            ..TicketItem::default()
+        };
+        let d = TicketDetail {
+            ticket: samples::ticket(),
+            body_md: String::new(),
+            body_html: String::new(),
+            body_format: BodyFormat::Adf,
+            comments: vec![Comment {
+                author: samples::user(),
+                created_at: "t".into(),
+                body_html: "<p>a &amp; <b>b</b></p>".into(),
+            }],
+            parent: Some(TicketRef { key: "SHOP-1".into(), ..samples::ticket_ref() }),
+            children: vec![child("SHOP-2"), child("SHOP-3")],
+            prs: Vec::new(),
+            caps: Default::default(),
+        };
+        let md = ticket_markdown(&d, BRIEF_COMMENTS);
+        assert!(md.contains("- Parent: SHOP-1\n- Sub-tasks: SHOP-2, SHOP-3\n"), "{md}");
+        assert!(md.contains("\n\na & b\n"), "{md}");
+    }
 
     #[test]
     fn env_template_renders_once_and_never_clobbers() {

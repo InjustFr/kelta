@@ -5,8 +5,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { findPane, replacePaneContent } from '$lib/layout';
-  import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -26,7 +25,7 @@
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
-  import { openFrom, saveReviewsView } from '../work/nav';
+  import { openFrom, persistPaneContent, saveReviewsView } from '../work/nav';
   import { groupByTicket } from './group';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
@@ -61,14 +60,8 @@
 
   function setTab(k: ReviewKind): void {
     tabOverride = k;
-    if (projectId === GLOBAL) return saveReviewsView(k);
-    const current = layout.get(projectId);
-    if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
     // The core polls Team only while a visible pane shows it (its `tab`).
-    layout.update(projectId, (l) => ({
-      ...l,
-      tabs: l.tabs.map((t) => ({ ...t, root: replacePaneContent(t.root, paneId, { ...content, tab: k }) })),
-    }));
+    persistPaneContent(projectId, paneId, { tab: k }, () => saveReviewsView(k));
   }
 
   const lists = $derived({
@@ -77,8 +70,6 @@
     authored: reviews.list(scope, 'authored'),
   });
   const shown = $derived(lists[tab]);
-  const noData = $derived(!shown.data);
-  const firstError = $derived(shown.error);
   const accountErrors = $derived.by(() => {
     const seen: Record<string, AccountError> = {};
     for (const e of shown.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
@@ -412,13 +403,13 @@
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
-  {#if shown.loading && noData}
+  {#if shown.loading && !shown.data}
     <Loading label="Loading reviews" />
-  {:else if noData && firstError}
-    <ErrorState error={firstError} title="Could not load reviews" onretry={refresh}>
+  {:else if !shown.data && shown.error}
+    <ErrorState error={shown.error} title="Could not load reviews" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
+          {isAuthError(shown.error) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -426,7 +417,7 @@
     <StateBanner
       stale={shown.stale}
       fetchedAt={shown.fetchedAt}
-      error={noData ? null : firstError}
+      error={shown.data ? shown.error : null}
       errors={accountErrors}
       onretry={refresh}
     />
@@ -455,7 +446,7 @@
         {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
       </EmptyState>
     {:else}
-      <div class="split">
+      <div class="k-split">
         <div class="list">
           <VirtualList
             bind:this={vlist}
@@ -528,7 +519,7 @@
           </VirtualList>
         </div>
         {#if splitShown}
-          <aside class="side" bind:this={side} aria-label="Review detail">
+          <aside class="k-split-side" bind:this={side} aria-label="Review detail">
             {#if cur}
               <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
               {@const pid = home ?? cur.item.project_ids[0] ?? projects.activeId}
@@ -545,7 +536,7 @@
                   />{/key}
               {/if}
             {:else}
-              <p class="side-empty">Select a pull request to see it here.</p>
+              <p class="k-split-empty">Select a pull request to see it here.</p>
             {/if}
           </aside>
         {/if}
@@ -586,33 +577,6 @@
 {/if}
 
 <style>
-  /* Split view: list left, the selected PR's detail right, the 1px splitter gap between. */
-  .split {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    gap: 1px;
-    background: var(--k-border);
-  }
-
-  .split .list {
-    min-width: 0;
-    container-type: inline-size;
-    background: var(--k-well);
-  }
-
-  .side {
-    flex: 0 0 clamp(320px, 44%, 640px);
-    min-width: 0;
-    background: var(--k-well);
-  }
-
-  .side-empty {
-    margin: 0;
-    padding: var(--k-space-5) var(--k-space-4);
-    color: var(--k-fg-subtle);
-  }
-
   .add {
     color: var(--k-ok);
   }

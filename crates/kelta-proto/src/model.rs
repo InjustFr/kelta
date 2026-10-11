@@ -536,17 +536,19 @@ pub struct PaneRef {
 // Work items (SPEC §3.1)
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkKind {
+    #[default]
     Ticket,
     Review,
     Branch,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WorkState {
+    #[default]
     Planned,
     Starting,
     /// Worktree ready, waiting for a Claude slot (`claude.max_live`); lowest `pos` starts first.
@@ -611,7 +613,7 @@ pub struct WorkStepStatus {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct WorkItem {
     pub id: WorkItemId,
     pub project_id: ProjectId,
@@ -706,7 +708,7 @@ pub struct WorkItem {
 }
 
 /// A background run's claim on a ticket and how far it got (MCP `claim_ticket` / `report_progress`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RunClaim {
     /// Workflow name (`kelta-ticket-pass`).
     pub name: Option<String>,
@@ -720,9 +722,10 @@ pub struct RunClaim {
     pub sha: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum RunState {
+    #[default]
     Running,
     Blocked,
     Failed,

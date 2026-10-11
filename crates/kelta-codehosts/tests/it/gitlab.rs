@@ -615,3 +615,33 @@ async fn team_list_reads_each_projects_open_mrs_and_who_they_wait_on() {
     assert_eq!(a.waiting_on, ["anna"]);
     assert_eq!(a.waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"));
 }
+
+#[tokio::test]
+async fn team_waiting_state_is_fetched_only_when_the_mr_moves() {
+    let server = MockServer::start().await;
+    common(&server, "gitlab/version_16.json").await;
+    let mrs = fixture("gitlab/mrs_review.json");
+    let mr8: serde_json::Value = mrs.as_array().unwrap().iter().find(|m| m["iid"] == 8).unwrap().clone();
+    let mut moved = mr8.clone();
+    moved["updated_at"] = json!("2030-01-01T00:00:00Z");
+    for (body, polls) in [(mr8, 2), (moved, 1)] {
+        Mock::given(path("/api/v4/projects/grp%2Fother/merge_requests"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(vec![body]))
+            .up_to_n_times(polls)
+            .mount(&server)
+            .await;
+    }
+    Mock::given(path("/api/v4/projects/grp%2Fother/merge_requests/8/reviewers"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            { "user": { "id": 44, "username": "anna" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+        ])))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let h = gl(&server);
+    for _ in 0..3 {
+        let list = h.list_open(&["grp/other".to_owned()], false).await.unwrap();
+        assert_eq!(list[0].waiting_on, ["anna"]);
+        assert_eq!(list[0].waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"));
+    }
+}

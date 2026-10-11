@@ -296,7 +296,6 @@ pub fn work_item() -> WorkItem {
         project_id: ProjectId::new("shop"),
         kind: WorkKind::Ticket,
         ticket: Some(ticket_ref()),
-        review: None,
         repo_id: "api".into(),
         worktree: PathBuf::from("/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login"),
         branch: "feat/SHOP-142-rate-limit-login".into(),
@@ -305,7 +304,6 @@ pub fn work_item() -> WorkItem {
         nvim_socket: Some(PathBuf::from("/tmp/kelta-1000/s/01928f6e/nvim.sock")),
         session_ids: vec![SessionId::new(SID), SessionId::new(SID2)],
         tab_id: Some(TabId::new("tab-1")),
-        pr_url: None,
         state: WorkState::Active,
         steps: crate::model::WORK_STEPS
             .iter()
@@ -317,25 +315,9 @@ pub fn work_item() -> WorkItem {
             })
             .collect(),
         created_at: TS.into(),
-        title: None,
-        pr_title_needs_key: false,
-        review_due: false,
-        claude_replied: false,
-        claude_at: None,
-        sent_threads: Vec::new(),
-        feedback_at: None,
-        rebase: None,
-        claude_message: None,
-        delta: None,
-        next_note: None,
-        left_at: None,
         port_base: Some(20140),
         cost_usd: 3.5,
-        auto_finish: false,
-        parked_at: None,
-        nvim_kept: 0,
-        run: None,
-        ticket_source: None,
+        ..WorkItem::default()
     }
 }
 
