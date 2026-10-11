@@ -12,8 +12,10 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
@@ -46,6 +48,12 @@ enum Msg {
 pub(crate) struct HistoryLog {
     tx: SyncSender<Msg>,
     dir: PathBuf,
+    /// Messages handed to `send` and not yet in the writer queue: appends wait behind them.
+    backlog: Arc<AtomicUsize>,
+    /// Forwards messages that found the queue full, in order.
+    send: Lane,
+    /// Disk reads a caller may abandon (hung disk).
+    read: Lane,
 }
 
 /// `(per-session, total)` caps in bytes.
@@ -71,11 +79,26 @@ impl HistoryLog {
                 move || Writer::new(dir, per, total).run(rx)
             })
             .map_err(|e| KeltaError::internal(format!("history thread: {e}")))?;
-        Ok(Self { tx, dir })
+        Ok(Self::new(tx, dir))
     }
 
-    /// Queue a batch without waiting; a full queue hands the text back.
+    fn new(tx: SyncSender<Msg>, dir: PathBuf) -> Self {
+        let backlog = Arc::default();
+        Self {
+            tx,
+            dir,
+            backlog,
+            send: Lane::new("kelta-history-send"),
+            read: Lane::new("kelta-history-read"),
+        }
+    }
+
+    /// Queue a batch without waiting; a full queue (or deferred messages it must not overtake)
+    /// hands the text back.
     pub fn append(&self, id: &SessionId, text: String) -> Result<(), String> {
+        if self.backlog.load(Ordering::SeqCst) > 0 {
+            return Err(text);
+        }
         match self.tx.try_send(Msg::Append(id.clone(), text)) {
             Ok(()) | Err(TrySendError::Disconnected(_)) => Ok(()),
             Err(TrySendError::Full(Msg::Append(_, t))) => Err(t),
@@ -101,64 +124,102 @@ impl HistoryLog {
         self.send_later([Msg::Delete(id.clone())]);
     }
 
-    /// Reads on the calling thread once queued batches landed (or [`SYNC_WAIT`] passed).
+    /// Reads once queued batches landed; the wait and the read share one [`SYNC_WAIT`].
+    // shortcut: a rotation between the reads of the two halves can skip or repeat lines near the
+    // boundary; snapshot the files first if restores must be exact.
     pub fn tail(&self, id: &SessionId, max_lines: usize) -> String {
-        self.request(Msg::Sync);
-        self.tail_now(id, max_lines)
+        let deadline = Instant::now() + SYNC_WAIT;
+        self.request(Msg::Sync, deadline);
+        self.read_tail(id, max_lines, deadline)
     }
 
-    /// What is on disk, without waiting for the writer. The read runs on a short thread and is
-    /// abandoned after [`SYNC_WAIT`] (empty): a hung disk must not hold the caller (keltad's connection loop).
+    /// What is on disk, without waiting for the writer.
     pub fn tail_now(&self, id: &SessionId, max_lines: usize) -> String {
+        self.read_tail(id, max_lines, Instant::now() + SYNC_WAIT)
+    }
+
+    /// The read runs on the read lane and is abandoned at `deadline` (empty): a hung disk must not
+    /// hold the caller (keltad's connection loop), and holds one thread however many give up on it.
+    fn read_tail(&self, id: &SessionId, max_lines: usize, deadline: Instant) -> String {
         let (tx, rx) = mpsc::channel();
         let (dir, id) = (self.dir.clone(), id.clone());
-        detach("kelta-history-read", move || {
+        self.read.run(move || {
             let _ = tx.send(tail(&dir, &id, max_lines));
         });
-        rx.recv_timeout(SYNC_WAIT).unwrap_or_default()
+        rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).unwrap_or_default()
     }
 
     /// Scans on the calling thread (a long scan must not stall the writer) once queued batches landed.
     // shortcut: a rotation during the scan can skip or repeat lines near the boundary; snapshot the
     // files first if search results must be exact.
     pub fn search(&self, ids: &[SessionId], query: &str, limit: usize) -> Vec<HistoryHit> {
-        self.request(Msg::Sync);
+        self.request(Msg::Sync, Instant::now() + SYNC_WAIT);
         search(&self.dir, ids, &query.to_lowercase(), limit)
     }
 
     /// `None` when the wait timed out (stalled writer).
-    fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg) -> Option<T> {
+    fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg, deadline: Instant) -> Option<T> {
         let (tx, rx) = mpsc::channel();
         self.send_later([msg(tx)]);
-        rx.recv_timeout(SYNC_WAIT).ok()
+        rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).ok()
     }
 
-    /// Never waits: callers serve keystrokes (keltad's connection loop). On a full queue the
-    /// rest goes, in order, to a short-lived thread.
+    /// Never waits: callers serve keystrokes (keltad's connection loop). On a full queue, and
+    /// while earlier messages wait there, messages go in order through the send lane.
     fn send_later<const N: usize>(&self, msgs: [Msg; N]) {
-        let mut it = msgs.into_iter();
-        while let Some(msg) = it.next() {
-            if let Err(TrySendError::Full(msg)) = self.tx.try_send(msg) {
-                let tx = self.tx.clone();
-                detach("kelta-history-send", move || {
-                    for m in std::iter::once(msg).chain(it) {
-                        if tx.send(m).is_err() {
-                            break;
-                        }
-                    }
-                });
-                return;
+        for msg in msgs {
+            let msg = match self.backlog.load(Ordering::SeqCst) {
+                0 => match self.tx.try_send(msg) {
+                    Err(TrySendError::Full(m)) => m,
+                    _ => continue,
+                },
+                _ => msg,
+            };
+            self.backlog.fetch_add(1, Ordering::SeqCst);
+            let (tx, backlog) = (self.tx.clone(), self.backlog.clone());
+            // Counted down once queued, never before: an append must not overtake it.
+            let queued = self.send.run(move || {
+                let _ = tx.send(msg);
+                backlog.fetch_sub(1, Ordering::SeqCst);
+            });
+            if !queued {
+                self.backlog.fetch_sub(1, Ordering::SeqCst);
             }
         }
     }
 }
 
-/// Run `f` on a short-lived thread nobody joins.
-fn detach(name: &str, f: impl FnOnce() + Send + 'static) {
-    #[allow(clippy::disallowed_methods)] // allowlisted (ARCHITECTURE §9.6)
-    let r = std::thread::Builder::new().name(name.into()).stack_size(256 * 1024).spawn(f);
-    if let Err(e) = r {
-        tracing::warn!("history log: {name} thread: {e}");
+/// One thread, started on first use, running jobs in order (it ends with its `Lane`).
+struct Lane {
+    name: &'static str,
+    tx: OnceLock<mpsc::Sender<Box<dyn FnOnce() + Send>>>,
+}
+
+#[cfg(test)]
+thread_local!(static LANES_STARTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) });
+
+impl Lane {
+    fn new(name: &'static str) -> Self {
+        Self { name, tx: OnceLock::new() }
+    }
+
+    /// `false` when the thread could not start (the job is dropped).
+    fn run(&self, f: impl FnOnce() + Send + 'static) -> bool {
+        let tx = self.tx.get_or_init(|| {
+            #[cfg(test)]
+            LANES_STARTED.with(|n| n.set(n.get() + 1));
+            let (tx, rx) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+            #[allow(clippy::disallowed_methods)] // allowlisted (ARCHITECTURE §9.6)
+            let r = std::thread::Builder::new()
+                .name(self.name.into())
+                .stack_size(256 * 1024)
+                .spawn(move || rx.into_iter().for_each(|job| job()));
+            if let Err(e) = r {
+                tracing::warn!("history log: {} thread: {e}", self.name);
+            }
+            tx
+        });
+        tx.send(Box::new(f)).is_ok()
     }
 }
 
@@ -444,15 +505,66 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         // A writer that never drains: the queue stays full.
         let (tx, _rx) = mpsc::sync_channel(QUEUE);
-        let log = HistoryLog { tx, dir: d.path().to_owned() };
+        let log = HistoryLog::new(tx, d.path().to_owned());
         let id = SessionId::new("s");
         while log.tx.try_send(Msg::Caps(1, 1)).is_ok() {}
         let t = std::time::Instant::now();
         log.append_sync(&id, "last words\n".into());
-        assert_eq!(log.tail(&id, 5), "");
         assert!(log.search(std::slice::from_ref(&id), "x", 5).is_empty());
         // Each call waits SYNC_WAIT at most; none waits for the writer.
-        assert!(t.elapsed() < SYNC_WAIT * 4, "{:?}", t.elapsed());
+        assert!(t.elapsed() < SYNC_WAIT * 3, "{:?}", t.elapsed());
+        // The writer wait and the read share one SYNC_WAIT (keltad's connection loop).
+        let t = std::time::Instant::now();
+        assert_eq!(log.tail(&id, 5), "");
+        assert!(t.elapsed() < SYNC_WAIT + SYNC_WAIT / 4, "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn deferred_sends_keep_order_on_one_thread() {
+        let d = tempfile::tempdir().unwrap();
+        let (tx, rx) = mpsc::sync_channel(QUEUE);
+        let log = HistoryLog::new(tx, d.path().to_owned());
+        while log.tx.try_send(Msg::Caps(0, 0)).is_ok() {}
+        for i in 1..=50 {
+            log.set_caps(&TerminalLimits { history_log_mb: i, ..TerminalLimits::default() });
+            log.delete(&SessionId::new(i.to_string()));
+        }
+        assert!(LANES_STARTED.with(std::cell::Cell::get) <= 1);
+        let got: Vec<String> = rx
+            .iter()
+            .skip(QUEUE)
+            .take(100)
+            .map(|m| match m {
+                Msg::Caps(per, _) => format!("caps {}", per >> 20),
+                Msg::Delete(id) => format!("delete {id}"),
+                _ => "other".into(),
+            })
+            .collect();
+        let want: Vec<String> = (1..=50).flat_map(|i| [format!("caps {i}"), format!("delete {i}")]).collect();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)] // test thread standing in for a slow disk
+    fn deferred_delete_never_removes_a_later_append() {
+        let d = tempfile::tempdir().unwrap();
+        let id = SessionId::new("s");
+        fs::write(d.path().join("s.log"), "old\n").unwrap();
+        let (tx, rx) = mpsc::sync_channel(QUEUE);
+        let log = HistoryLog::new(tx, d.path().to_owned());
+        while log.tx.try_send(Msg::Caps(1 << 20, 1 << 30)).is_ok() {}
+        log.delete(&id);
+        let w = writer(d.path(), 1 << 20, 1 << 30);
+        std::thread::spawn(move || w.run(rx));
+        // Held back while the delete waits, whether or not the queue has room yet.
+        let mut buf = String::from("new\n");
+        let deadline = std::time::Instant::now() + SYNC_WAIT;
+        while !buf.is_empty() && std::time::Instant::now() < deadline {
+            flush(&log, &id, &mut buf, 0);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(buf.is_empty());
+        assert_eq!(log.tail(&id, 5), "new");
     }
 
     #[test]
@@ -461,7 +573,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         // Full queue, drained only after a pause shorter than SYNC_WAIT.
         let (tx, rx) = mpsc::sync_channel(QUEUE);
-        let log = HistoryLog { tx, dir: d.path().to_owned() };
+        let log = HistoryLog::new(tx, d.path().to_owned());
         let id = SessionId::new("s");
         while log.tx.try_send(Msg::Delete(SessionId::new("other"))).is_ok() {}
         let w = writer(d.path(), 1 << 20, 1 << 30);
