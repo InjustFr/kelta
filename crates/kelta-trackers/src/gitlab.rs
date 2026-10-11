@@ -13,7 +13,7 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
+use kelta_proto::settings::{AccountConfig, AuthKind, BlockedMarker, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
     TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
@@ -237,6 +237,7 @@ impl GitlabIssues {
             sprint: sprint(v, &common::today()),
             estimate: estimate(v),
             due: s(v, "due_date").map(str::to_owned),
+            blocked: false,
             // The epic (Premium); a parent work item is filled by `work_item_parents`.
             parent: v.get("epic").filter(|e| !e.is_null()).and_then(|e| {
                 let url = s(e, "url").unwrap_or("");
@@ -495,6 +496,8 @@ impl Tracker for GitlabIssues {
             comment: true,
             transitions_need_fetch: true,
             projects_v2: false,
+            // core-filled per source
+            block: false,
         }
     }
 
@@ -783,6 +786,19 @@ impl Tracker for GitlabIssues {
         let others: Vec<String> = others.iter().map(|n| format!("priority::{n}")).collect();
         let body = json!({"add_labels": format!("priority::{chosen}"), "remove_labels": others.join(",")});
         self.put(&project, iid, body).await
+    }
+
+    async fn set_blocked(
+        &self,
+        t: &TicketRef,
+        marker: &BlockedMarker,
+        blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        let BlockedMarker::Label(l) = marker else {
+            return Err(KeltaError::unsupported("GitLab marks blocked tickets with a label"));
+        };
+        let (project, iid) = Self::split(t)?;
+        self.put(&project, iid, json!({ if blocked { "add_labels" } else { "remove_labels" }: l })).await
     }
 
     async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError> {

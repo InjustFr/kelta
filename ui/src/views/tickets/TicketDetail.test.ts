@@ -104,7 +104,14 @@ describe('TicketDetail', () => {
       within(more)
         .getAllByRole('menuitem')
         .map((b) => b.querySelector('.label')?.textContent),
-    ).toEqual(['Unassign', 'Refine with Claude', 'Run workflow…', 'Copy branch', 'Open in browser']);
+    ).toEqual([
+      'Unassign',
+      'Block ticket',
+      'Refine with Claude',
+      'Run workflow…',
+      'Copy branch',
+      'Open in browser',
+    ]);
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
@@ -173,6 +180,28 @@ describe('TicketDetail', () => {
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 'a' });
     expect(mock.calls.some((c) => c.cmd === 'tracker_assign')).toBe(false);
     expect(toasts.list.at(-1)?.toast.text).toBe('This tracker does not let Kelta change the assignee.');
+  });
+
+  it('b blocks the ticket through its tracker', async () => {
+    await fireEvent.keyDown(mount('SHOP-142'), { key: 'b' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_set_blocked').at(-1)?.args).toMatchObject({
+        blocked: true,
+      }),
+    );
+    expect(toasts.list.at(-1)?.toast.text).toBe('SHOP-142 blocked');
+  });
+
+  it('a blocked ticket offers Unblock ticket, which clears the marker', async () => {
+    itemOf('SHOP-142').ticket.blocked = true;
+    mount('SHOP-142');
+    await fireEvent.click(action('More'));
+    await fireEvent.click(screen.getByRole('menuitem', { name: /^Unblock ticket/ }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_set_blocked').at(-1)?.args).toMatchObject({
+        blocked: false,
+      }),
+    );
   });
 
   it('u assigns to anyone the tracker offers, ! changes the priority', async () => {

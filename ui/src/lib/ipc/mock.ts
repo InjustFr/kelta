@@ -677,6 +677,8 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     outside_list: () => clone(state.outside),
+    // No window control in the browser: Peek with a note.
+    outside_jump: () => 'Terminal',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;
@@ -1132,6 +1134,12 @@ export function createMockTransport(options: MockOptions = {}): {
       if (rank < 0) throw err('not_found', `no priority named ${priority}`);
       item.ticket.priority = priority;
       item.ticket.priority_rank = rank;
+      return clone(item.ticket);
+    },
+    tracker_set_blocked: ({ ticket, blocked }) => {
+      const item = ticketItem(ticket);
+      if (!item.caps.block) throw err('unsupported', `${ticket.account} cannot set this blocked marker`);
+      item.ticket.blocked = blocked;
       return clone(item.ticket);
     },
     tracker_refine: ({ ticket }) => {

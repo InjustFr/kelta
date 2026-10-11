@@ -29,7 +29,7 @@ use crate::model::{
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
-use crate::settings::{Layer, ProjectConfig, Settings, TrackerBinding};
+use crate::settings::{BlockedMarker, Layer, ProjectConfig, Settings, TrackerBinding};
 use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
@@ -156,6 +156,16 @@ pub trait Tracker: Send + Sync {
     /// Replaces `t`'s description (MCP `update_ticket_body`).
     async fn set_body(&self, _t: &TicketRef, _body_md: &str) -> Result<(), KeltaError> {
         Err(KeltaError::unsupported("this tracker cannot edit ticket descriptions"))
+    }
+
+    /// Sets or clears `marker` on `t` (flag or label; kelta-core moves statuses itself) (#348).
+    async fn set_blocked(
+        &self,
+        _t: &TicketRef,
+        _marker: &BlockedMarker,
+        _blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot set this blocked marker"))
     }
 
     /// Closes `t`, on trackers where closing is apart from the board status (MCP `close_ticket`).

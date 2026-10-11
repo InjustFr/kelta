@@ -151,6 +151,12 @@ pub async fn outside_list(core: State<'_, Arc<Core>>) -> Res<Vec<OutsideSession>
     Ok(core.outside_list())
 }
 
+/// Brings an outside session's tmux pane and window forward (#346): `None` when it did, else where it runs.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn outside_jump(core: State<'_, Arc<Core>>, id: String) -> Res<Option<String>> {
+    core.outside_jump(&id).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn claude_mcp_remove(core: State<'_, Arc<Core>>) -> Res<()> {
     core.claude_mcp_remove().await
