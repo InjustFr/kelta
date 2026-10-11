@@ -138,13 +138,9 @@ fn spawn_kill_cycles_do_not_leak(h: &PtyTerminalHost) {
 
 #[test]
 fn memory_and_leaks() {
-    // The app caps glibc arenas at start (apps/desktop platform::limit_malloc_arenas); without it the ten reader
-    // threads each get an arena and the runner measures ~21 MB, a footprint the app never has.
-    #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    // SAFETY: mallopt only adjusts allocator tunables; it runs before the host spawns its threads.
-    unsafe {
-        libc::mallopt(libc::M_ARENA_MAX, 2);
-    }
+    // The app and keltad cap glibc arenas at start; without it the ten reader threads each get an
+    // arena and the runner measures ~21 MB, a footprint production never has.
+    kelta_term::limit_malloc_arenas();
     let h = PtyTerminalHost::new(TerminalLimits::default());
     // Sessions fill one after another.
     idle_sessions_stay_small(&h, false);

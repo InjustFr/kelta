@@ -67,6 +67,8 @@ use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::DaemonTerminalHost;
+/// For the app's `main` (keltad calls it from kelta-term).
+pub use kelta_term::limit_malloc_arenas;
 use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;

@@ -131,6 +131,23 @@ fn kill_reaches_the_whole_process_group() {
     }
 }
 
+/// A background job still holding the pty slave (no EIO on Linux) must not keep a dead shell Live.
+#[test]
+fn background_job_holding_the_pty_does_not_keep_the_session_alive() {
+    for b in backends() {
+        let name = b.name();
+        let h = host(b);
+        let id = format!("bg-{name}");
+        let ev = sh(&h, &id, "trap '' HUP; sleep 30 & echo PGID=$$; exit 4");
+        let text = wait_text(&h, &id, "PGID=");
+        let pgid: i32 = text.split("PGID=").nth(1).unwrap().lines().next().unwrap().trim().parse().unwrap();
+        let exited = wait_until(Duration::from_secs(3), || ev.exited());
+        // SAFETY: killing the job our test started (same process group as the shell).
+        unsafe { libc::kill(-pgid, libc::SIGKILL) };
+        assert_eq!(exited, Some((Some(4), None)), "{name}");
+    }
+}
+
 #[test]
 fn hup_ignored_then_kill() {
     let h = host(Arc::new(RustixPty));
@@ -208,7 +225,7 @@ fn events_title_bell_cwd_notify_clipboard() {
         TerminalEvent::Title("my title".into()),
         TerminalEvent::Bell,
         TerminalEvent::Cwd("/tmp/a b".into()),
-        TerminalEvent::Notify { title: None, body: "hello".into() },
+        // The OSC 9 shares the chunk: only its last notification is kept (model unit tests).
         TerminalEvent::Notify { title: Some("T".into()), body: "B".into() },
         TerminalEvent::ClipboardStore { kind: ClipboardKind::Clipboard, text: "hi".into() },
     ] {
