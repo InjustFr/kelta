@@ -175,21 +175,16 @@ impl BitbucketHost {
         let cutoff = (OffsetDateTime::now_utc() - time::Duration::days(STALE_AFTER_DAYS))
             .replace_time(time::Time::MIDNIGHT);
         let repos = self
-            .json(
+            .paged(
                 HttpRequest::get(format!("{}/repositories/{}", self.api, percent_encode(ws)))
                     .query("role", "member")
                     .query("sort", "-updated_on")
                     .query("q", format!("updated_on>={}", cutoff.format(&Rfc3339).unwrap_or_default()))
                     .query("pagelen", PAGELEN),
             )
-            .await?
-            .body;
+            .await?;
         let q = format!("state=\"OPEN\" AND reviewers.uuid=\"{me}\"");
-        let slugs: Vec<&str> = repos
-            .get("values")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|r| s(r, "full_name")).collect())
-            .unwrap_or_default();
+        let slugs: Vec<&str> = repos.iter().filter_map(|r| s(r, "full_name")).collect();
         let results = futures::future::join_all(slugs.into_iter().map(|full| {
             let q = q.clone();
             async move {
