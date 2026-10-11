@@ -28,7 +28,7 @@ rusqlite = { workspace = true }
 arboard = { workspace = true }
 base64 = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
 which = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }

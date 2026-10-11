@@ -815,7 +815,11 @@ impl PluginHost {
 /// Bytes for `send_keys` / `sessions.send_text` (bracketed paste by default).
 pub(crate) fn keys_bytes(text: &str, bracketed: bool) -> Vec<u8> {
     if bracketed {
-        let clean = text.replace("\x1b[201~", "");
+        // Until stable: one pass over `\x1b[2\x1b[201~01~` would reassemble a closing marker.
+        let mut clean = text.to_owned();
+        while clean.contains("\x1b[201~") {
+            clean = clean.replace("\x1b[201~", "");
+        }
         format!("\x1b[200~{clean}\x1b[201~").into_bytes()
     } else {
         text.as_bytes().to_vec()
@@ -901,4 +905,15 @@ fn non_secret_settings(s: &kelta_proto::settings::Settings, reg: &crate::registr
         }
     }
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::keys_bytes;
+
+    #[test]
+    fn keys_bytes_strips_nested_paste_end_markers() {
+        assert_eq!(keys_bytes("a\x1b[2\x1b[201~01~b", true), b"\x1b[200~ab\x1b[201~");
+        assert_eq!(keys_bytes("x\x1b[201~", false), b"x\x1b[201~");
+    }
 }

@@ -271,6 +271,11 @@ pre,
   min-width: 0;
 }
 
+/* The most identifying chip (a linked ticket key) keeps its full width; the others shrink first. */
+.k-row-tail > .k-row-keep {
+  flex: none;
+}
+
 .k-row .k-row-tail .k-badge {
   display: block;
   min-width: 0;

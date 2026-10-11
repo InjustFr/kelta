@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use kelta_proto::api::CoreApi;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{Toast, ToastAction};
+use serde_json::value::RawValue;
 
 use crate::Core;
 
@@ -45,36 +46,86 @@ fn registration_in(config: &[u8]) -> Option<Registration> {
     Some((url, auth.to_owned()))
 }
 
+/// A JSON object in file order, its values left as written. Not `serde_json::Value`: without the
+/// workspace-wide `preserve_order` feature (it changes other crates' output) it re-sorts every key of the
+/// user's config (#310).
+#[derive(Default)]
+struct Ordered(Vec<(String, Box<RawValue>)>);
+
+impl<'de> serde::Deserialize<'de> for Ordered {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Ordered;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a JSON object")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Ordered, A::Error> {
+                let mut v = Vec::new();
+                while let Some(e) = m.next_entry()? {
+                    v.push(e);
+                }
+                Ok(Ordered(v))
+            }
+        }
+        d.deserialize_map(V)
+    }
+}
+
+impl serde::Serialize for Ordered {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_map(self.0.iter().map(|(k, v)| (k, v)))
+    }
+}
+
+impl Ordered {
+    fn get(&self, key: &str) -> Option<&RawValue> {
+        self.0.iter().find(|(k, _)| k == key).map(|(_, v)| &**v)
+    }
+
+    /// Replaces `key` in place, else appends it.
+    fn set(&mut self, key: &str, value: Box<RawValue>) {
+        match self.0.iter_mut().find(|(k, _)| k == key) {
+            Some((_, v)) => *v = value,
+            None => self.0.push((key.to_owned(), value)),
+        }
+    }
+
+    fn remove(&mut self, key: &str) -> bool {
+        let n = self.0.len();
+        self.0.retain(|(k, _)| k != key);
+        self.0.len() != n
+    }
+}
+
 /// Set (`Some`) or drop (`None`) `mcpServers.kelta` in a Claude Code config file, keeping the other
-/// keys: written beside it, 0600 (it holds the token), then renamed over it. Not `claude mcp add`:
-/// its argv would show the token to any local user in `ps` (#294).
+/// keys in their order: written beside it, 0600 (it holds the token), then renamed over it. Not
+/// `claude mcp add`: its argv would show the token to any local user in `ps` (#294).
 fn write_registration(path: &Path, reg: Option<&Registration>) -> Result<(), KeltaError> {
     // A symlinked config (dotfiles) is updated where it points.
     let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
-    let mut v: serde_json::Value = match std::fs::read(&path) {
-        // Unparsable: refuse rather than clobber Claude Code's settings.
-        Ok(b) => {
-            serde_json::from_slice(&b).map_err(|e| KeltaError::invalid(format!("{}: {e}", path.display())))?
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+    let invalid = |e: serde_json::Error| KeltaError::invalid(format!("{}: {e}", path.display()));
+    let mut v: Ordered = match std::fs::read(&path) {
+        // Unparsable or not an object: refuse rather than clobber Claude Code's settings.
+        Ok(b) => serde_json::from_slice(&b).map_err(invalid)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ordered::default(),
         Err(e) => return Err(e.into()),
     };
-    let not_object = || KeltaError::invalid(format!("{}: mcpServers is not an object", path.display()));
-    let servers = v
-        .as_object_mut()
-        .ok_or_else(not_object)?
-        .entry("mcpServers")
-        .or_insert_with(|| serde_json::json!({}))
-        .as_object_mut()
-        .ok_or_else(not_object)?;
+    let mut servers: Ordered = match v.get("mcpServers") {
+        Some(raw) => serde_json::from_str(raw.get())
+            .map_err(|_| KeltaError::invalid(format!("{}: mcpServers is not an object", path.display())))?,
+        None => Ordered::default(),
+    };
     match reg {
         Some((url, auth)) => {
             let entry = serde_json::json!({"type": "http", "url": url, "headers": {"Authorization": auth}});
-            servers.insert(NAME.to_owned(), entry);
+            servers.set(NAME, serde_json::value::to_raw_value(&entry)?);
         }
-        None if servers.remove(NAME).is_none() => return Ok(()),
+        None if !servers.remove(NAME) => return Ok(()),
         None => {}
     }
+    // shortcut: mcpServers is indented as if at the top level (cosmetic), fine while Claude Code reformats on its next write.
+    v.set("mcpServers", RawValue::from_string(serde_json::to_string_pretty(&servers)?)?);
     let mut tmp = path.clone().into_os_string();
     tmp.push(format!(".kelta-{}", std::process::id()));
     let tmp = PathBuf::from(tmp);
@@ -244,5 +295,26 @@ mod tests {
         assert!(!fresh.exists());
         write_registration(&fresh, Some(&("u".into(), "a".into()))).unwrap();
         assert_eq!(registration_in(&std::fs::read(&fresh).unwrap()), Some(("u".into(), "a".into())));
+    }
+
+    #[test]
+    fn registration_keeps_the_config_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".claude.json");
+        let keys = |p: &Path| {
+            let v: Ordered = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
+            let s: Ordered = serde_json::from_str(v.get("mcpServers").unwrap().get()).unwrap();
+            let names = |o: &Ordered| o.0.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+            (names(&v), names(&s))
+        };
+        std::fs::write(&path, r#"{"zeta":1,"mcpServers":{"z":{},"a":{}},"alpha":2}"#).unwrap();
+        let before =
+            (vec!["zeta".to_owned(), "mcpServers".into(), "alpha".into()], vec!["z".to_owned(), "a".into()]);
+        assert_eq!(keys(&path), before, "read in file order");
+        write_registration(&path, Some(&("u".into(), "a".into()))).unwrap();
+        let (top, servers) = keys(&path);
+        assert_eq!((top, &servers[..2]), (before.0.clone(), &before.1[..]));
+        write_registration(&path, None).unwrap();
+        assert_eq!(keys(&path), before);
     }
 }

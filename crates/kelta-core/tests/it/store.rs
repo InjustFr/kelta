@@ -157,6 +157,29 @@ async fn work_list_reads_every_items_steps_in_one_query() {
 }
 
 #[tokio::test]
+async fn work_open_skips_a_corrupt_state_json_row() {
+    let s = Store::open_in_memory().unwrap();
+    let mut ids = Vec::new();
+    for _ in 0..2 {
+        let mut w = kelta_proto::samples::work_item();
+        w.id = WorkItemId::generate();
+        w.state = WorkState::Active;
+        s.put_item(&w).await.unwrap();
+        ids.push(w.id);
+    }
+    let bad = ids[0].clone();
+    let open = s
+        .call(move |c| {
+            c.execute("UPDATE work_items SET state_json = '{not json' WHERE id = ?1", [bad.as_str()])
+                .map_err(kelta_core::store::db_err)?;
+            q::work_open(c)
+        })
+        .await
+        .unwrap();
+    assert_eq!(open.iter().map(|w| &w.id).collect::<Vec<_>>(), [&ids[1]]);
+}
+
+#[tokio::test]
 async fn claim_item_is_atomic_and_round_trips_the_run() {
     use kelta_proto::model::{RunClaim, RunState};
     let s = std::sync::Arc::new(Store::open_in_memory().unwrap());

@@ -127,6 +127,15 @@ test('Reviews rows beside the split detail never cut a chip on the left: it fits
         }),
       );
       expect(bad, `clipped chips at ${width}px, tab ${tab}`).toEqual([]);
+      if (width === 1440) {
+        // The linked ticket key, the most identifying chip, is never the one that gives way (#310).
+        const cut = await host
+          .locator('.k-row-tail .k-row-keep .k-badge')
+          .evaluateAll((bs) =>
+            bs.filter((b) => b.checkVisibility() && b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+          );
+        expect(cut, `truncated ticket keys at tab ${tab}`).toEqual([]);
+      }
     }
   }
 });
