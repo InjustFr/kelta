@@ -125,8 +125,18 @@ pub async fn workflow_run(
     core: State<'_, Arc<Core>>,
     ticket: TicketRef,
     workflow: String,
-) -> Res<SessionInfo> {
+) -> Res<WorkflowStart> {
     core.workflow_run(ticket, &workflow).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn workflow_run_on(
+    core: State<'_, Arc<Core>>,
+    project_id: ProjectId,
+    workflow: String,
+    review: Option<ReviewRef>,
+) -> Res<WorkflowStart> {
+    core.workflow_run_on(project_id, &workflow, review).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

@@ -198,6 +198,8 @@ pub struct Core {
     pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
     /// Running refines (Tickets T10): their MCP sid → the ticket `get_ticket` returns.
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
+    /// Config workflow runs on a PR (#355): `account:repo#number` → the run's session.
+    pub(crate) pr_runs: Mutex<std::collections::HashMap<String, SessionId>>,
     /// The registration Kelta serves while the global `/mcp` holds an HTTP server reference (Claude Code
     /// registration, ticket #234); locked for a whole install / remove so concurrent ones take one reference
     /// and one token (#294).
@@ -365,6 +367,7 @@ impl Core {
                 oauth: Mutex::default(),
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
+                pr_runs: Mutex::default(),
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),

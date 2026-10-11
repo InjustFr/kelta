@@ -24,6 +24,7 @@ import type { TriggerDef } from "./TriggerDef";
 import type { WebSettings } from "./WebSettings";
 import type { WindowSettings } from "./WindowSettings";
 import type { WorkSettings } from "./WorkSettings";
+import type { WorkflowDef } from "./WorkflowDef";
 import type { WorktreeSettings } from "./WorktreeSettings";
 
 /**
@@ -33,7 +34,11 @@ export type Settings = { app: AppSettings, window: WindowSettings, keys: KeysSet
 /**
  * Ticket boards, each feeding zero or more projects (SETTINGS §2).
  */
-sources: Array<Source>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, plugins: PluginsSettings, 
+sources: Array<Source>, tools: Array<ToolDef>, triggers: Array<TriggerDef>, commands: Array<CommandDef>, 
+/**
+ * Prompt or slash command workflows run on a ticket, a PR or with no ticket.
+ */
+workflows: Array<WorkflowDef>, plugins: PluginsSettings, 
 /**
  * Environment added to every session of the project (project/repo files).
  */

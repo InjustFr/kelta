@@ -89,6 +89,7 @@ import type {
   User,
   ValidationIssue,
   WorkflowInfo,
+  WorkflowStart,
   WorkItem,
   WorkItemId,
   WorkSource,
@@ -261,8 +262,14 @@ export interface Commands {
   tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
   /** Saved Claude workflows a run on the ticket can use (#233): its project's primary repo, then home. */
   workflows_list: { args: { ticket: TicketRef }; result: WorkflowInfo[] };
-  /** Claims the ticket, then runs the workflow in a background Claude session (new tab, no focus). */
-  workflow_run: { args: { ticket: TicketRef; workflow: string }; result: SessionInfo };
+  /** Claims the ticket, then runs the workflow in a background Claude session (new tab, no focus);
+   * `running`: a run already held the ticket, returned instead. */
+  workflow_run: { args: { ticket: TicketRef; workflow: string }; result: WorkflowStart };
+  /** A config workflow (#355): `on = "pr"` on `review`, `on = "global"` with none; one run per PR. */
+  workflow_run_on: {
+    args: { project_id: ProjectId; workflow: string; review: ReviewRef | null };
+    result: WorkflowStart;
+  };
   tracker_search: { args: { scope: Scope; text: string }; result: TicketItem[] };
   tracker_sources: { args: { account_id: AccountId; query: string }; result: SourceHit[] };
   /** The scope's team: people in its cached tickets and PRs, identities merged (cache only, #240). */
@@ -478,6 +485,7 @@ export const COMMAND_NAMES = [
   'tracker_refine',
   'workflows_list',
   'workflow_run',
+  'workflow_run_on',
   'tracker_search',
   'tracker_sources',
   'next_up_list',
@@ -719,6 +727,7 @@ export const trackerSetBlocked = wrap('tracker_set_blocked');
 export const trackerRefine = wrap('tracker_refine');
 export const workflowsList = wrap('workflows_list');
 export const workflowRun = wrap('workflow_run');
+export const workflowRunOn = wrap('workflow_run_on');
 export const trackerSearch = wrap('tracker_search');
 export const trackerSources = wrap('tracker_sources');
 export const nextUpList = wrap('next_up_list');

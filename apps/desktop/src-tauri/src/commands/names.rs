@@ -97,6 +97,7 @@ pub const COMMANDS: &[&str] = &[
     "tracker_refine",
     "workflows_list",
     "workflow_run",
+    "workflow_run_on",
     "tracker_search",
     "tracker_sources",
     "next_up_list",

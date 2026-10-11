@@ -2,6 +2,19 @@
 import type { WorkflowSource } from "./WorkflowSource";
 
 /**
- * A saved Claude Code workflow (#233): a `*.js` file whose `export const meta` names it.
+ * A workflow a run can use: a saved Claude Code workflow (#233), a `*.js` file whose
+ * `export const meta` names it, or a `[[workflows]]` entry of the config (#355).
  */
-export type WorkflowInfo = { name: string, description: string, path: string, source: WorkflowSource, };
+export type WorkflowInfo = { 
+/**
+ * What `workflow_run` takes: the meta `name`, or the config `id`.
+ */
+name: string, 
+/**
+ * The config `label`; the `name` for a `*.js` workflow.
+ */
+label: string, description: string, 
+/**
+ * The `*.js` file; `None` for a config workflow.
+ */
+path: string | null, source: WorkflowSource, };

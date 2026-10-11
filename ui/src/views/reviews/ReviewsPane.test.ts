@@ -12,6 +12,7 @@ import { openPr } from '../tickets/prs';
 import TicketsPane from '../tickets/TicketsPane.svelte';
 import { globalContent, loadGlobalLayout } from '../work/nav';
 import ReviewsPane from './ReviewsPane.svelte';
+import { sheetRegistry } from '$app/registry';
 
 let mock: MockControls;
 
@@ -367,5 +368,43 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     mountGlobal();
     await waitFor(() => expect(selectedKey()).toBe(`${ref.account}:${ref.repo}#999`));
     expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^Team/);
+  });
+});
+
+describe('ReviewsPane workflows (#355)', () => {
+  it('w runs a PR workflow on the row; a second run opens the running one', async () => {
+    await settings.load();
+    mountReviews();
+    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'w' });
+    await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
+    const { review, workflows } = ui.sheet!.props as {
+      review: { repo: string; number: number };
+      workflows: { name: string }[];
+    };
+    expect(workflows.map((w) => w.name)).toEqual(['describe-pr']);
+    Element.prototype.scrollIntoView ??= () => {}; // not in jsdom
+    const Sheet = (await sheetRegistry.workflow_run()).default;
+    const props = { ...ui.sheet!.props, onclose: () => {} };
+    const pick = async () => {
+      const sheet = render(Sheet, { props });
+      const name = `Run workflow on ${review.repo}#${review.number}`;
+      await fireEvent.keyDown(screen.getByRole('textbox', { name }), { key: 'Enter' });
+      sheet.unmount();
+    };
+    await pick();
+    await waitFor(() =>
+      expect(toasts.list.at(-1)?.toast.text).toBe(`Describe PR started on ${review.repo}#${review.number}`),
+    );
+    expect(mock.calls.find((c) => c.cmd === 'workflow_run_on')?.args).toEqual({
+      project_id: 'shop',
+      workflow: 'describe-pr',
+      review,
+    });
+    await pick();
+    await waitFor(() =>
+      expect(toasts.list.at(-1)?.toast.text).toBe('A workflow is already running here: opened it'),
+    );
+    expect(mock.state.sessions.filter((s) => s.name?.startsWith('Describe PR'))).toHaveLength(1);
   });
 });

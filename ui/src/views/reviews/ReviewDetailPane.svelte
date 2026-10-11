@@ -16,6 +16,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import { configWorkflows, pickPrWorkflow } from '../tickets/workflow.svelte';
   import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
@@ -149,6 +150,9 @@
       case 't':
         openTags();
         break;
+      case 'w':
+        pickPrWorkflow(ref, projectId);
+        break;
       default:
         return;
     }
@@ -273,6 +277,14 @@
             >{t('Tags')}</Button
           ></span
         >
+        {#if configWorkflows('pr').length > 0}
+          <Button
+            variant="ghost"
+            icon="play"
+            title={t('Run workflow (w)')}
+            onclick={() => pickPrWorkflow(ref, projectId)}>{t('Run workflow')}</Button
+          >
+        {/if}
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>{t('Refresh')}</Button>
         <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       </div>

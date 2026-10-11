@@ -101,6 +101,7 @@
     "allow-tracker-refine",
     "allow-workflows-list",
     "allow-workflow-run",
+    "allow-workflow-run-on",
     "allow-tracker-search",
     "allow-tracker-sources",
     "allow-next-up-list",

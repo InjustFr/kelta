@@ -5521,6 +5521,78 @@
       "x-kelta-category": "Worktree & work",
       "x-kelta-order": 9
     },
+    "workflows": {
+      "default": [],
+      "description": "Prompt or slash command workflows run on a ticket, a PR or with no ticket.",
+      "items": {
+        "additionalProperties": false,
+        "description": "A workflow declared in config (`[[workflows]]`): a prompt or slash command Claude runs in a background tab.",
+        "properties": {
+          "cwd": {
+            "default": null,
+            "description": "Default: the PR's worktree or repo for `pr`, else the project's primary repo.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "id": {
+            "default": "",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "type": "string"
+          },
+          "on": {
+            "default": "ticket",
+            "description": "Where a config workflow is offered (`[[workflows]] on`).",
+            "oneOf": [
+              {
+                "const": "ticket",
+                "description": "Run workflow (`w`) on a ticket, which the run claims.",
+                "type": "string"
+              },
+              {
+                "const": "pr",
+                "description": "Run workflow (`w`) on a pull request row or detail.",
+                "type": "string"
+              },
+              {
+                "const": "global",
+                "description": "The palette: a run with no ticket.",
+                "type": "string"
+              }
+            ]
+          },
+          "prompt": {
+            "default": "",
+            "description": "Any prompt or slash command. Placeholders: `{workflow}`; on a ticket `{ticket.key}`, `{ticket.title}`,\n`{ticket.url}`, `{file}` (the ticket as Markdown); on a PR `{pr.number}`, `{pr.url}`, `{pr.head}`,\n`{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (its linked ticket, else empty).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array",
+      "x-kelta-category": "Tools",
+      "x-kelta-exec": true,
+      "x-kelta-merge": "by_id",
+      "x-kelta-order": 13,
+      "x-kelta-scope": [
+        "global"
+      ]
+    },
     "worktree": {
       "additionalProperties": false,
       "default": {

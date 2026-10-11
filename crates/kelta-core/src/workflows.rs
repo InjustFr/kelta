@@ -1,19 +1,24 @@
-//! Saved Claude Code workflows (#233): `*.js` files in `<primary repo>/.claude/workflows/` or
-//! `~/.claude/workflows/`, and a run of one on a ticket in a background Claude session.
+//! Workflows run in a background Claude session: saved Claude Code workflows (#233), `*.js` files in
+//! `<primary repo>/.claude/workflows/` or `~/.claude/workflows/`, run on a ticket; and `[[workflows]]`
+//! prompts or slash commands of the config (#355), run on a ticket, a pull request or with none.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use kelta_proto::codehost::ReviewRef;
 use kelta_proto::error::KeltaError;
-use kelta_proto::ids::ProjectId;
+use kelta_proto::ext::{WorkflowDef, WorkflowOn};
+use kelta_proto::ids::{ProjectId, SessionId};
 use kelta_proto::model::{
-    OpenPaneRequest, PaneContent, Placement, RestorePolicy, RunClaim, SessionInfo, SessionKind, SpawnRequest,
-    WorkflowInfo, WorkflowSource,
+    Lifecycle, OpenPaneRequest, PaneContent, Placement, RestorePolicy, RunClaim, RunState, SessionInfo,
+    SessionKind, SpawnRequest, WorkState, WorkflowInfo, WorkflowSource, WorkflowStart,
 };
+use kelta_proto::settings::Settings;
 use kelta_proto::tracker::TicketRef;
 use kelta_work::template::{Ctx, Mode, render};
 
 use crate::Core;
+use crate::projects::repo_path;
 use crate::templates::write_private;
 
 impl Core {
@@ -23,7 +28,7 @@ impl Core {
         Ok(self.workflows_in(&project))
     }
 
-    /// Repo workflows first: a home one with the same name is shadowed.
+    /// Repo workflows first: a home one with the same name is shadowed, then a config one.
     fn workflows_in(&self, project: &ProjectId) -> Vec<WorkflowInfo> {
         let home = self.home_dir();
         let repo = self.project_cwd(project, None);
@@ -32,12 +37,32 @@ impl Core {
             scan(&repo.join(".claude/workflows"), WorkflowSource::Repo, &mut out);
         }
         scan(&home.join(".claude/workflows"), WorkflowSource::Home, &mut out);
+        for d in self.workflow_defs(project, WorkflowOn::Ticket) {
+            if !out.iter().any(|w| w.name == d.id) {
+                let label = if d.label.is_empty() { d.id.clone() } else { d.label };
+                let description = d.description.unwrap_or_default();
+                out.push(WorkflowInfo {
+                    name: d.id,
+                    label,
+                    description,
+                    path: None,
+                    source: WorkflowSource::Config,
+                });
+            }
+        }
         out
     }
 
+    /// The enabled `[[workflows]]` offered `on`.
+    fn workflow_defs(&self, project: &ProjectId, on: WorkflowOn) -> Vec<WorkflowDef> {
+        let s = self.cfg.effective(Some(project));
+        s.workflows.iter().filter(|d| d.enabled && d.on == on).cloned().collect()
+    }
+
     /// `workflow_run`: claims the ticket for the run, then starts Claude in the project's primary repo
-    /// in a new tab that does not take focus, told to run `workflow` with `args.json`.
-    pub async fn workflow_run(&self, ticket: TicketRef, workflow: &str) -> Result<SessionInfo, KeltaError> {
+    /// in a new tab that does not take focus, told to run `workflow` with `args.json` (a `*.js` one) or
+    /// given the config prompt. A run already holding the ticket is returned instead (`running`).
+    pub async fn workflow_run(&self, ticket: TicketRef, workflow: &str) -> Result<WorkflowStart, KeltaError> {
         self.rt.capture();
         let project = self.ticket_project(&ticket).await?;
         let wf = self
@@ -45,19 +70,29 @@ impl Core {
             .into_iter()
             .find(|w| w.name == workflow)
             .ok_or_else(|| KeltaError::not_found(format!("workflow {workflow}")))?;
+        if let Some(session) = self.ticket_run(&ticket).await? {
+            return Ok(WorkflowStart { session, running: true });
+        }
+        let def = match wf.source {
+            WorkflowSource::Config => {
+                self.workflow_defs(&project, WorkflowOn::Ticket).into_iter().find(|d| d.id == wf.name)
+            }
+            _ => None,
+        };
         let sid = self.fresh_session_id();
         let run_id = format!("{}-{}", wf.name, sid.sid8());
         let run = RunClaim {
             name: Some(wf.name.clone()),
             run_id: Some(run_id.clone()),
             session_id: Some(sid.clone()),
-            phase: Some("Starting".into()),
+            // A prompt reports no phases.
+            phase: def.is_none().then(|| "Starting".into()),
             ..RunClaim::default()
         };
         self.work.claim(&project, ticket.clone(), None, None, run).await?;
         let owner = sid.clone();
-        let title = format!("{} · {}", wf.name, ticket.key);
-        let info = match self.launch(&project, &ticket, &wf.name, &run_id, sid, &title).await {
+        let title = format!("{} · {}", wf.label, ticket.key);
+        let info = match self.launch(&project, &ticket, &wf.name, def.as_ref(), &run_id, sid, &title).await {
             Ok(i) => i,
             Err(e) => {
                 // Adopted worktrees are never removed: this only ends the claim.
@@ -66,26 +101,108 @@ impl Core {
             }
         };
         self.session_link(&info.id, None, Some(ticket))?;
-        let content = PaneContent::Terminal { session_id: info.id.clone() };
-        let req = OpenPaneRequest {
-            content,
-            placement: Placement::NewTab,
-            focus: false,
-            tab_title: Some(title),
-            work_item_id: None,
-        };
-        self.open_pane(&project, req)?;
-        Ok(info)
+        self.background_tab(&project, &info, title)?;
+        Ok(WorkflowStart { session: info, running: false })
+    }
+
+    /// `workflow_run_on`: the `[[workflows]]` entry `workflow` of `project`, `on = "pr"` on `review` or
+    /// `on = "global"` without one, in a background Claude tab. A run already on the PR is returned
+    /// instead (`running`).
+    pub async fn workflow_run_on(
+        &self,
+        project: ProjectId,
+        workflow: &str,
+        review: Option<ReviewRef>,
+    ) -> Result<WorkflowStart, KeltaError> {
+        self.rt.capture();
+        let on = if review.is_some() { WorkflowOn::Pr } else { WorkflowOn::Global };
+        let def = self
+            .workflow_defs(&project, on)
+            .into_iter()
+            .find(|d| d.id == workflow)
+            .ok_or_else(|| KeltaError::not_found(format!("workflow {workflow}")))?;
+        let mut title = if def.label.is_empty() { def.id.clone() } else { def.label.clone() };
+        let mut vars = Ctx::new().with("workflow", def.id.clone());
+        let mut cwd = self.project_cwd(&project, None);
+        let mut key = None;
+        if let Some(r) = &review {
+            let k = format!("{}:{}#{}", r.account, r.repo, r.number);
+            let running = self.pr_runs.lock().get(&k).cloned();
+            if let Some(session) = running.and_then(|sid| self.live_session(&sid)) {
+                return Ok(WorkflowStart { session, running: true });
+            }
+            let pr = self.review_get(r).await?.review;
+            cwd = self.pr_cwd(r, &pr.url).await.unwrap_or(cwd);
+            title = format!("{title} · {}#{}", r.repo, r.number);
+            vars = vars
+                .with("pr.number", r.number.to_string())
+                .with("pr.url", pr.url)
+                .with("pr.head", pr.source_branch)
+                .with("pr.base", pr.target_branch)
+                .with("pr.repo", r.repo.clone())
+                .with("pr.title", pr.title)
+                .with("ticket.key", pr.linked_tickets.into_iter().next().unwrap_or_default());
+            key = Some(k);
+        }
+        if let Some(c) = def.cwd.as_deref() {
+            cwd = repo_path(c, &self.home_dir());
+        }
+        let prompt = render(&def.prompt, &vars, Mode::Lenient)?;
+        let s = self.cfg.effective(Some(&project));
+        let info = self.spawn_run(&project, self.fresh_session_id(), &title, cwd, Some(&prompt), &s).await?;
+        // shortcut: in memory, so a run started before a restart is not found; persist when that matters.
+        if let Some(k) = key {
+            self.pr_runs.lock().insert(k, info.id.clone());
+        }
+        self.background_tab(&project, &info, title)?;
+        Ok(WorkflowStart { session: info, running: false })
+    }
+
+    fn live_session(&self, sid: &SessionId) -> Option<SessionInfo> {
+        self.sessions.lock().get(sid).map(|e| e.info.clone()).filter(|s| s.lifecycle == Lifecycle::Live)
+    }
+
+    /// The live session of a run holding `ticket`.
+    async fn ticket_run(&self, ticket: &TicketRef) -> Result<Option<SessionInfo>, KeltaError> {
+        let items = self.work.list(None).await?;
+        Ok(items
+            .iter()
+            .filter(|w| w.state != WorkState::Finished)
+            .filter(|w| w.ticket.as_ref().is_some_and(|t| t.account == ticket.account && t.key == ticket.key))
+            .find_map(|w| {
+                let r = w.run.as_ref().filter(|r| r.state == RunState::Running)?;
+                self.live_session(r.session_id.as_ref()?)
+            }))
+    }
+
+    /// The worktree of the PR's work item, else the repo bound to its code host repo.
+    async fn pr_cwd(&self, r: &ReviewRef, url: &str) -> Option<PathBuf> {
+        let items = self.work.list(None).await.unwrap_or_default();
+        let item = items.iter().find(|w| {
+            w.state != WorkState::Finished
+                && (w.review.as_ref() == Some(r) || w.pr_url.as_deref() == Some(url))
+        });
+        if let Some(w) = item {
+            return Some(w.worktree.clone());
+        }
+        let home = self.home_dir();
+        let projects = self.cfg.projects();
+        let repo = projects.iter().flat_map(|p| p.repos.iter()).find(|repo| {
+            repo.code_host.as_ref().is_some_and(|c| c.account == r.account && c.repo == r.repo)
+        })?;
+        Some(repo_path(&repo.path, &home)).filter(|p| p.is_dir())
     }
 
     /// Writes `ticket.md` and `args.json` to the session's private run dir, then spawns Claude.
+    #[allow(clippy::too_many_arguments)]
     async fn launch(
         &self,
         project: &ProjectId,
         ticket: &TicketRef,
         workflow: &str,
+        def: Option<&WorkflowDef>,
         run_id: &str,
-        sid: kelta_proto::ids::SessionId,
+        sid: SessionId,
         title: &str,
     ) -> Result<SessionInfo, KeltaError> {
         let detail = self.tracker_get(ticket).await?;
@@ -109,10 +226,30 @@ impl Core {
             .with("ticket.url", t.url.clone())
             .with("file", file.to_string_lossy())
             .with("args", args.to_string_lossy());
-        let prompt = match s.claude.prompt_templates.get("workflow") {
+        let tpl = match def {
+            Some(d) => Some(&d.prompt),
+            None => s.claude.prompt_templates.get("workflow"),
+        };
+        let prompt = match tpl {
             Some(tpl) => Some(render(tpl, &vars, Mode::Lenient)?),
             None => None,
         };
+        let cwd = match def.and_then(|d| d.cwd.as_deref()) {
+            Some(c) => repo_path(c, &self.home_dir()),
+            None => self.project_cwd(project, None),
+        };
+        self.spawn_run(project, sid, title, cwd, prompt.as_deref(), &s).await
+    }
+
+    async fn spawn_run(
+        &self,
+        project: &ProjectId,
+        sid: SessionId,
+        title: &str,
+        cwd: PathBuf,
+        prompt: Option<&str>,
+        s: &Settings,
+    ) -> Result<SessionInfo, KeltaError> {
         let base = SpawnRequest {
             id: None,
             project_id: project.clone(),
@@ -120,7 +257,7 @@ impl Core {
             name: Some(title.to_owned()),
             program: None,
             args: Vec::new(),
-            cwd: Some(self.project_cwd(project, None)),
+            cwd: Some(cwd),
             env: BTreeMap::new(),
             cols: 80,
             rows: 24,
@@ -129,7 +266,24 @@ impl Core {
             close_on_exit: Default::default(),
             template_id: None,
         };
-        self.spawn_claude(sid, base, &s, None, prompt.as_deref()).await
+        self.spawn_claude(sid, base, s, None, prompt).await
+    }
+
+    /// The run's session in a new tab that does not take focus.
+    fn background_tab(
+        &self,
+        project: &ProjectId,
+        info: &SessionInfo,
+        title: String,
+    ) -> Result<(), KeltaError> {
+        let req = OpenPaneRequest {
+            content: PaneContent::Terminal { session_id: info.id.clone() },
+            placement: Placement::NewTab,
+            focus: false,
+            tab_title: Some(title),
+            work_item_id: None,
+        };
+        self.open_pane(project, req).map(|_| ())
     }
 }
 
@@ -145,7 +299,7 @@ fn scan(dir: &Path, source: WorkflowSource, out: &mut Vec<WorkflowInfo>) {
             continue;
         };
         if !out.iter().any(|w| w.name == name) {
-            out.push(WorkflowInfo { name, description, path, source });
+            out.push(WorkflowInfo { label: name.clone(), name, description, path: Some(path), source });
         }
     }
 }

@@ -1,15 +1,27 @@
 <script lang="ts">
   import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
-  import type { TicketRef, WorkflowInfo } from '$lib/gen';
+  import type { ProjectId, ReviewRef, TicketRef, WorkflowInfo } from '$lib/gen';
+  import { projects } from '$lib/stores';
 
   import { rank } from '../../shell/palette/fuzzy';
   import Picker from '../../shell/palette/Picker.svelte';
-  import { runWorkflow } from './workflow.svelte';
+  import { runWorkflow, runWorkflowOn } from './workflow.svelte';
 
-  // Sheet `workflow_run` (#233): the workflows `pickWorkflow` just listed; Enter runs one on the ticket.
-  let { ticket, workflows, onclose }: SheetProps & { ticket: TicketRef; workflows: WorkflowInfo[] } =
-    $props();
+  // Sheet `workflow_run` (#233): the workflows `pickWorkflow` just listed; Enter runs one on the ticket,
+  // or on the PR `pickPrWorkflow` passed (#355).
+  let {
+    ticket,
+    review,
+    project_id,
+    workflows,
+    onclose,
+  }: SheetProps & {
+    ticket?: TicketRef;
+    review?: ReviewRef;
+    project_id?: ProjectId | null;
+    workflows: WorkflowInfo[];
+  } = $props();
 
   let query = $state('');
 
@@ -17,7 +29,7 @@
     rank(
       workflows.map((w) => ({
         id: w.name,
-        label: w.name,
+        label: w.label,
         detail: [w.description, w.source].filter(Boolean).join(' · '),
         icon: 'play',
       })),
@@ -28,12 +40,19 @@
 
   function pick(name: string): void {
     onclose();
-    void runWorkflow(ticket, name);
+    const w = workflows.find((x) => x.name === name);
+    if (ticket) void runWorkflow(ticket, name);
+    else if (review && w) {
+      const project = project_id ?? projects.activeId;
+      if (project) void runWorkflowOn(project, w, review);
+    }
   }
 </script>
 
 <Picker
-  title={t('Run workflow on {key}', { key: ticket.key })}
+  title={t('Run workflow on {key}', {
+    key: ticket ? ticket.key : `${review?.repo}#${review?.number}`,
+  })}
   placeholder={t('Workflow name…')}
   {items}
   {query}

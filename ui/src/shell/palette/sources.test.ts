@@ -25,6 +25,7 @@ import {
   settingsItems,
   ticketItems,
   toolItems,
+  workflowItems,
 } from './sources';
 
 let mock: MockControls;
@@ -361,6 +362,19 @@ describe('palette sources', () => {
         props: { ticket: hit.ticket.ref, workflows: mock.state.workflows },
       }),
     );
+  });
+
+  it('a global config workflow runs from the palette with no ticket; a second run starts another', async () => {
+    const item = workflowItems().find((i) => i.label === 'Run Daily report')!;
+    expect(workflowItems().map((i) => i.label)).toEqual(['Run Daily report']);
+    await item.run();
+    await item.run();
+    const runs = mock.calls.filter((c) => c.cmd === 'workflow_run_on').map((c) => c.args);
+    expect(runs).toEqual([
+      { project_id: projects.activeId, workflow: 'daily', review: null },
+      { project_id: projects.activeId, workflow: 'daily', review: null },
+    ]);
+    expect(buildItems().some((i) => i.id === 'workflow:daily')).toBe(true);
   });
 
   it('offers no assign verb on a tracker that cannot assign', () => {

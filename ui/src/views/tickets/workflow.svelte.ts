@@ -1,14 +1,30 @@
-// Run a saved Claude workflow on a ticket (#233): `w` in the detail and the list, and the palette
-// verb open the picker; the run claims the ticket and starts Claude in a background tab.
+// Run a workflow on a ticket (#233): `w` in the detail and the list, and the palette verb open the
+// picker; the run claims the ticket and starts Claude in a background tab. Config workflows (#355)
+// also run on a PR (`w` in Reviews) or with no ticket (the palette).
 
 import { msg, t } from '$lib/i18n/index.svelte';
-import type { TicketRef, WorkflowInfo } from '$lib/gen';
-import { workflowRun, workflowsList } from '$lib/ipc/commands';
+import { dispatch } from '$lib/actions';
+import type { ProjectId, ReviewRef, TicketRef, WorkflowInfo, WorkflowOn, WorkflowStart } from '$lib/gen';
+import { workflowRun, workflowRunOn, workflowsList } from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
-import { toasts, ui } from '$lib/stores';
+import { settings, toasts, ui } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 export const NO_WORKFLOWS = msg('No workflows in .claude/workflows or ~/.claude/workflows');
+export const NO_PR_WORKFLOWS = msg('No [[workflows]] with on = "pr" in the config');
+
+/** The enabled `[[workflows]]` offered `on`, as the picker lists them. */
+export function configWorkflows(on: WorkflowOn): WorkflowInfo[] {
+  return (settings.value()?.workflows ?? [])
+    .filter((d) => d.enabled && d.on === on)
+    .map((d) => ({
+      name: d.id,
+      label: d.label || d.id,
+      description: d.description ?? '',
+      path: null,
+      source: 'config',
+    }));
+}
 
 /** Per ticket key: its workflows, or why none can run (no project). Read again by each picker. */
 export const workflows = $state<Record<string, WorkflowInfo[] | string>>({});
@@ -43,16 +59,55 @@ export async function pickWorkflow(ref: TicketRef): Promise<void> {
 
 export async function runWorkflow(ref: TicketRef, workflow: string): Promise<void> {
   try {
-    const s = await workflowRun({ ticket: ref, workflow });
-    const args = { session_id: s.id };
-    toasts.push({
-      level: 'info',
-      text: t('{workflow} started on {key}', { workflow, key: ref.key }),
-      action: { label: t('Open'), command: 'session.reveal', args },
-      secondary: { label: t('Peek'), command: 'session.peek', args },
-    });
+    announce(
+      await workflowRun({ ticket: ref, workflow }),
+      t('{workflow} started on {key}', { workflow, key: ref.key }),
+    );
   } catch (err) {
-    // Held: the backend names the holder (`KEY is held by session …`).
+    // Held by a work item that is not a run: the backend names the holder (`KEY is held by …`).
     toasts.error(err);
   }
+}
+
+/** Opens the picker on the PR's workflows, or says there are none. */
+export function pickPrWorkflow(review: ReviewRef, projectId: ProjectId | null): void {
+  const list = configWorkflows('pr');
+  if (list.length === 0) toasts.info(t(NO_PR_WORKFLOWS));
+  else ui.openSheet('workflow_run', { review, project_id: projectId, workflows: list });
+}
+
+/** A `pr` workflow on `review`, or a `global` one with none. */
+export async function runWorkflowOn(
+  projectId: ProjectId,
+  w: WorkflowInfo,
+  review: ReviewRef | null,
+): Promise<void> {
+  try {
+    const start = await workflowRunOn({ project_id: projectId, workflow: w.name, review });
+    const on = review ? `${review.repo}#${review.number}` : null;
+    announce(
+      start,
+      on
+        ? t('{workflow} started on {key}', { workflow: w.label, key: on })
+        : t('{workflow} started', { workflow: w.label }),
+    );
+  } catch (err) {
+    toasts.error(err);
+  }
+}
+
+/** A new run: a toast to open or peek it. One already running on the ticket or PR: opened. */
+function announce(start: WorkflowStart, text: string): void {
+  const args = { session_id: start.session.id };
+  if (start.running) {
+    toasts.info(t('A workflow is already running here: opened it'));
+    void dispatch('session.reveal', args);
+    return;
+  }
+  toasts.push({
+    level: 'info',
+    text,
+    action: { label: t('Open'), command: 'session.reveal', args },
+    secondary: { label: t('Peek'), command: 'session.peek', args },
+  });
 }

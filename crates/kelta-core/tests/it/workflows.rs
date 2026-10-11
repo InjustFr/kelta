@@ -1,19 +1,21 @@
 //! Saved workflows run on a ticket (#233): discovery, the pre-claim, the background Claude session
-//! and the workflow taking the claim over through `args.run`.
+//! and the workflow taking the claim over through `args.run`. Config workflows (#355): a prompt on a
+//! ticket, a PR or with no ticket, and a second run opening the first.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::common::*;
 use kelta_proto::ErrorCode;
-use kelta_proto::api::{CoreApi, Tracker};
+use kelta_proto::api::{CodeHost, CoreApi, Tracker};
 use kelta_proto::error::KeltaError;
+use kelta_proto::ext::{WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, WorkflowSource,
 };
 use kelta_proto::samples;
-use kelta_proto::settings::{AccountKind, Settings};
+use kelta_proto::settings::{AccountKind, CodeHostBinding, Settings};
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
 
 fn workflow(dir: &Path, file: &str, meta: &str) {
@@ -29,8 +31,28 @@ fn workflow(dir: &Path, file: &str, meta: &str) {
 fn env(root: &Path) -> (H, PathBuf) {
     let mut s = Settings::defaults();
     s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    s.accounts.insert("github-work".into(), account(AccountKind::Github));
+    let def = |id: &str, on, prompt: &str| WorkflowDef {
+        id: id.into(),
+        label: format!("{id} label"),
+        prompt: prompt.into(),
+        on,
+        ..WorkflowDef::default()
+    };
+    s.workflows = vec![
+        def("brief", WorkflowOn::Ticket, "/brief {ticket.key} {ticket.title} from {file}"),
+        def(
+            "describe",
+            WorkflowOn::Pr,
+            "/describe-pr {pr.number} {pr.url} {pr.head}..{pr.base} {pr.repo} {ticket.key}",
+        ),
+        def("daily", WorkflowOn::Global, "Write the daily report"),
+        WorkflowDef { enabled: false, ..def("off", WorkflowOn::Ticket, "x") },
+    ];
     let mut shop = project("shop", root);
     shop.tracker = Some(samples::tracker_binding());
+    shop.repos[0].code_host =
+        Some(CodeHostBinding { account: AccountId::new("github-work"), repo: "acme/shop-api".into() });
     let repo = PathBuf::from(&shop.repos[0].path);
     std::fs::remove_dir_all(repo.join(".git")).unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);
@@ -38,6 +60,8 @@ fn env(root: &Path) -> (H, PathBuf) {
     let factory = Arc::new(Factory::default());
     let tracker: Arc<dyn Tracker> = Arc::new(FakeTracker::new());
     factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker);
+    let host: Arc<dyn CodeHost> = ListHost::new(vec![samples::review()]);
+    factory.hosts.lock().insert(AccountId::new("github-work"), host);
     let h = start_in(root, MemConfig::new(s, vec![shop]), FakeTerminalHost::new(), factory);
     h.core.project_open(&ProjectId::new("shop")).unwrap();
     let home = root.join("home/.claude/workflows");
@@ -55,15 +79,19 @@ async fn lists_repo_and_home_workflows_and_the_repo_shadows_home() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, repo) = env(tmp.path());
     let list = h.core.workflows_list(&samples::ticket_ref()).await.unwrap();
-    let got: Vec<_> = list.iter().map(|w| (w.name.as_str(), w.description.as_str(), w.source)).collect();
+    let got: Vec<_> =
+        list.iter().map(|w| (w.name.as_str(), w.label.as_str(), w.description.as_str(), w.source)).collect();
     assert_eq!(
         got,
         [
-            ("shared", "from the repo", WorkflowSource::Repo),
-            ("kelta-ticket-pass", "Implement, review, merge", WorkflowSource::Home)
-        ]
+            ("shared", "shared", "from the repo", WorkflowSource::Repo),
+            ("kelta-ticket-pass", "kelta-ticket-pass", "Implement, review, merge", WorkflowSource::Home),
+            ("brief", "brief label", "", WorkflowSource::Config),
+        ],
+        "PR, global and disabled config workflows are not offered on a ticket"
     );
-    assert_eq!(list[0].path, repo.join(".claude/workflows/shared.js"));
+    assert_eq!(list[0].path, Some(repo.join(".claude/workflows/shared.js")));
+    assert_eq!(list[2].path, None);
 }
 
 #[tokio::test]
@@ -103,7 +131,9 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     h.core.layout_open(&shop, req(shell.id.clone())).await.unwrap();
     let active = h.core.layout_get(&shop).unwrap().active_tab;
 
-    let info = h.core.workflow_run(t.clone(), "kelta-ticket-pass").await.unwrap();
+    let start = h.core.workflow_run(t.clone(), "kelta-ticket-pass").await.unwrap();
+    assert!(!start.running);
+    let info = start.session;
     assert!(matches!(info.kind, SessionKind::Claude));
     let (args, cwd) = h.term.with_session(&info.id, |s| (s.spec.args.clone(), s.spec.cwd.clone())).unwrap();
     assert_eq!(cwd, repo, "the run's cwd is the primary repo");
@@ -135,11 +165,11 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert_eq!(layout.tabs[1].title, "kelta-ticket-pass · SHOP-142");
     assert_eq!(layout.active_tab, active, "focus stays where it was");
 
-    // Held: refused, nothing spawned.
+    // Held by a live run: that run is returned, nothing spawned.
     let spawned = h.term.spawned_ids().len();
-    let err = h.core.workflow_run(t.clone(), "shared").await.unwrap_err();
-    assert_eq!(err.code, ErrorCode::Conflict, "{err:?}");
-    assert!(err.message.starts_with("SHOP-142 is held by session "), "{}", err.message);
+    let again = h.core.workflow_run(t.clone(), "shared").await.unwrap();
+    assert!(again.running);
+    assert_eq!(again.session.id, info.id);
     assert_eq!(h.term.spawned_ids().len(), spawned);
     let err = h.core.workflow_run(t.clone(), "nope").await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
@@ -173,4 +203,72 @@ async fn a_failed_spawn_leaves_no_live_claim() {
     assert!(items.iter().all(|w| w.run.as_ref().is_some_and(|r| r.state == RunState::Done)), "{items:?}");
     // The ticket is free again.
     h.core.workflow_run(t, "kelta-ticket-pass").await.unwrap();
+}
+
+fn spawned(h: &H, info: &kelta_proto::model::SessionInfo) -> (String, PathBuf) {
+    h.term.with_session(&info.id, |s| (s.spec.args.last().cloned().unwrap(), s.spec.cwd.clone())).unwrap()
+}
+
+#[tokio::test]
+async fn a_config_prompt_runs_on_a_ticket_with_its_placeholders() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let t = samples::ticket_ref();
+    let start = h.core.workflow_run(t.clone(), "brief").await.unwrap();
+    let (prompt, cwd) = spawned(&h, &start.session);
+    assert!(prompt.starts_with("/brief SHOP-142 "), "{prompt}");
+    assert!(prompt.ends_with("ticket.md"), "{prompt}");
+    assert_eq!(cwd, repo);
+    let run = h.core.work_list(None).await.unwrap()[0].run.clone().unwrap();
+    assert_eq!((run.name.as_deref(), run.phase), (Some("brief"), None));
+    assert_eq!(
+        h.core.layout_get(&ProjectId::new("shop")).unwrap().tabs.last().unwrap().title,
+        "brief label · SHOP-142"
+    );
+    let err = h.core.workflow_run(t, "off").await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound, "a disabled workflow is not offered");
+}
+
+#[tokio::test]
+async fn a_pr_workflow_runs_in_the_bound_repo_once_per_pr() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let r = samples::review_ref();
+    let start = h.core.workflow_run_on(shop.clone(), "describe", Some(r.clone())).await.unwrap();
+    assert!(!start.running);
+    let (prompt, cwd) = spawned(&h, &start.session);
+    assert_eq!(
+        prompt,
+        "/describe-pr 87 https://github.com/acme/shop-api/pull/87 feat/SHOP-140-cache-prices..main acme/shop-api SHOP-140"
+    );
+    assert_eq!(cwd, repo, "no work item: the repo bound to acme/shop-api");
+    assert!(h.core.work_list(None).await.unwrap().is_empty(), "no ticket claimed");
+    assert_eq!(
+        h.core.layout_get(&shop).unwrap().tabs.last().unwrap().title,
+        "describe label · acme/shop-api#87"
+    );
+
+    // A second run on the PR opens the first.
+    let n = h.term.spawned_ids().len();
+    let again = h.core.workflow_run_on(shop.clone(), "describe", Some(r.clone())).await.unwrap();
+    assert!(again.running);
+    assert_eq!(again.session.id, start.session.id);
+    assert_eq!(h.term.spawned_ids().len(), n);
+
+    // A ticket workflow is not a PR one.
+    let err = h.core.workflow_run_on(shop, "brief", Some(r)).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+#[tokio::test]
+async fn a_global_workflow_runs_with_no_ticket() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let start = h.core.workflow_run_on(ProjectId::new("shop"), "daily", None).await.unwrap();
+    let (prompt, cwd) = spawned(&h, &start.session);
+    assert_eq!((prompt.as_str(), cwd), ("Write the daily report", repo));
+    assert!(h.core.work_list(None).await.unwrap().is_empty());
+    let err = h.core.workflow_run_on(ProjectId::new("shop"), "describe", None).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound, "a PR workflow needs its PR");
 }

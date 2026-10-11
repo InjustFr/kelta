@@ -2347,5 +2347,18 @@
   "Picked per ticket in the Start sheet, unless the ticket's route declares its own.": "Pro Ticket im Start-Blatt gewählt, sofern die Route des Tickets keine eigenen festlegt.",
   "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.": "Eine Startoption: ein Wert ergibt ein Kontrollkästchen, mehrere eine Einfachauswahl. Die gewählten Werte kommen\nin `{options}` des Claude-Prompts, sonst an sein Ende, in der festgelegten Reihenfolge.",
   "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.": "z. B. `[\"--auto\"]` oder `[\"--mode=quick\", \"--mode=skip\"]`.",
-  "Picked per ticket in the Start sheet; replace the template's options.": "Pro Ticket im Start-Blatt gewählt; ersetzen die Optionen der Vorlage."
+  "Picked per ticket in the Start sheet; replace the template's options.": "Pro Ticket im Start-Blatt gewählt; ersetzen die Optionen der Vorlage.",
+  "A workflow declared in config (`[[workflows]]`): a prompt or slash command Claude runs in a background tab.": "Ein in der Konfiguration deklarierter Workflow (`[[workflows]]`): ein Prompt oder Slash-Befehl, den Claude in einem Hintergrund-Tab ausführt.",
+  "A workflow is already running here: opened it": "Hier läuft bereits ein Workflow: geöffnet",
+  "Any prompt or slash command. Placeholders: `{workflow}`; on a ticket `{ticket.key}`, `{ticket.title}`,\n`{ticket.url}`, `{file}` (the ticket as Markdown); on a PR `{pr.number}`, `{pr.url}`, `{pr.head}`,\n`{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (its linked ticket, else empty).": "Beliebiger Prompt oder Slash-Befehl. Platzhalter: `{workflow}`; bei einem Ticket `{ticket.key}`, `{ticket.title}`,\n`{ticket.url}`, `{file}` (das Ticket als Markdown); bei einem PR `{pr.number}`, `{pr.url}`, `{pr.head}`,\n`{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (sein verknüpftes Ticket, sonst leer).",
+  "Default: the PR's worktree or repo for `pr`, else the project's primary repo.": "Standard: der Worktree oder das Repo des PR bei `pr`, sonst das primäre Repo des Projekts.",
+  "No [[workflows]] with on = \"pr\" in the config": "Keine [[workflows]] mit on = \"pr\" in der Konfiguration",
+  "Prompt or slash command workflows run on a ticket, a PR or with no ticket.": "Workflows als Prompt oder Slash-Befehl, gestartet auf einem Ticket, einem PR oder ohne Ticket.",
+  "Run workflow (`w`) on a pull request row or detail.": "Workflow ausführen (`w`) aus einer Pull-Request-Zeile oder -Detailansicht.",
+  "Run workflow (`w`) on a ticket, which the run claims.": "Workflow ausführen (`w`) auf einem Ticket, das der Lauf beansprucht.",
+  "Run workflow (w)": "Workflow ausführen (w)",
+  "Run {workflow}": "{workflow} ausführen",
+  "The palette: a run with no ticket.": "Die Palette: ein Lauf ohne Ticket.",
+  "Where a config workflow is offered (`[[workflows]] on`).": "Wo ein Konfigurations-Workflow angeboten wird (`[[workflows]] on`).",
+  "{workflow} started": "{workflow} gestartet"
 }
