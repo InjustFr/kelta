@@ -7,11 +7,12 @@
   import { Button, EmptyState, ErrorState, Spinner } from '$lib/ui';
 
   import WelcomePane from '../views/welcome/WelcomePane.svelte';
-  import { applyZoom, layoutGeometry, type Gutter as GutterSpec } from './geometry';
+  import { applyZoom, dropTarget, layoutGeometry, type Gutter as GutterSpec } from './geometry';
   import GutterView from './Gutter.svelte';
   import { chordFor } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import PaneHost from './PaneHost.svelte';
+  import { paneDrag } from './paneDrag.svelte';
   import { spawnTemplate } from './spawn';
 
   interface Props {
@@ -41,6 +42,27 @@
     if (tab?.work_item_id) lazyComponents.ensure('tabheader:brief', tabHeaderRegistry.brief);
   });
 
+  const dragging = $derived(paneDrag.current?.projectId === projectId ? paneDrag.current : null);
+
+  /** Drop indicator under the pointer; none over the dragged pane itself. */
+  function dragOver(e: DragEvent): void {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const shown = geometry.panes.filter((p) => !tab?.zoomed_pane || p.pane.id === tab.zoomed_pane);
+    const hit = dropTarget(shown, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    paneDrag.over =
+      hit && hit.pane.id !== dragging?.paneId
+        ? { paneId: hit.pane.id, zone: hit.zone, area: hit.area }
+        : null;
+    if (paneDrag.over) e.preventDefault();
+  }
+
+  function drop(e: DragEvent): void {
+    e.preventDefault();
+    const over = paneDrag.over;
+    if (over && tab) paneDrag.drop(projectId, { tabId: tab.id, paneId: over.paneId, zone: over.zone });
+    else paneDrag.end();
+  }
+
   function ratioOf(g: GutterSpec): number {
     const node = tab ? nodeAt(tab.root, g.path) : null;
     return node && node.type === 'split' ? (node.ratios[g.index] ?? 0.5) : 0.5;
@@ -54,6 +76,12 @@
     );
   }
 </script>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && dragging) paneDrag.end();
+  }}
+/>
 
 <div class="workspace" data-testid="workspace" data-project-id={projectId}>
   {#if failure && !current}
@@ -127,6 +155,30 @@
           onresize={(d) => resize(g, d)}
         />
       {/each}
+      {#if dragging}
+        <!-- Catches the drag over every pane (web views included) while a pane header is dragged. -->
+        <div
+          class="drop-layer"
+          role="presentation"
+          data-testid="pane-drop-layer"
+          ondragover={dragOver}
+          ondragleave={() => (paneDrag.over = null)}
+          ondrop={drop}
+        >
+          {#if paneDrag.over}
+            {@const a = paneDrag.over.area}
+            <div
+              class="drop-indicator"
+              data-testid="pane-drop-indicator"
+              data-zone={paneDrag.over.zone}
+              style:left="{a.x * 100}%"
+              style:top="{a.y * 100}%"
+              style:width="{a.w * 100}%"
+              style:height="{a.h * 100}%"
+            ></div>
+          {/if}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -146,6 +198,21 @@
     min-height: 0;
     margin: calc(var(--k-gap) / 2);
     background: var(--k-bezel);
+  }
+
+  .drop-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3; /* above the gutters */
+  }
+
+  .drop-indicator {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px solid var(--k-accent);
+    border-radius: var(--k-radius-screen);
+    background: color-mix(in oklab, var(--k-accent) 18%, transparent);
+    pointer-events: none;
   }
 
   .loading {

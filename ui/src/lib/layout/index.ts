@@ -541,6 +541,55 @@ export function openPane(
   return { layout: next, location };
 }
 
+export type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center';
+
+/** Where a dragged pane lands: a pane's side or centre, a tab (`paneId` unset), or a new tab (`tabId: null`). */
+export interface PaneDrop {
+  tabId: TabId | null;
+  paneId?: PaneId;
+  zone?: DropZone;
+}
+
+/**
+ * Moves a pane: split next to `to.paneId` on `to.zone`'s side, swapped with it on `center`, split right
+ * of the focused pane of tab `to.tabId`, or alone in a new tab. The pane node (id, content) is kept, so
+ * its view and session survive, and it ends focused.
+ */
+export function movePane(layout: Layout, from: PaneLocation, to: PaneDrop): Layout {
+  const src = findTab(layout, from.tabId);
+  const hit = src ? findPane(src.root, from.paneId) : null;
+  if (!src || !hit || to.paneId === from.paneId) return layout;
+  const moved = hit.pane;
+  if (to.tabId === null) {
+    if (allPanes(src.root).length === 1) return layout;
+    const tab = makeTab(defaultTitle(moved.content), moved);
+    return addTab(closePaneInLayout(layout, from.tabId, from.paneId), tab);
+  }
+  const dest = findTab(layout, to.tabId);
+  if (!dest || (to.tabId === from.tabId && !to.paneId)) return layout;
+  if (to.paneId && to.zone === 'center') {
+    const other = findPane(dest.root, to.paneId);
+    if (!other) return layout;
+    let next = updateTab(layout, to.tabId, (t) => ({ ...t, root: replaceAt(t.root, other.path, moved) }));
+    next = updateTab(next, from.tabId, (t) =>
+      fixTabRefs({ ...t, root: replaceAt(t.root, hit.path, other.pane) }),
+    );
+    return focusPane(next, to.tabId, moved.id);
+  }
+  const next = closePaneInLayout(layout, from.tabId, from.paneId);
+  const target = findTab(next, to.tabId);
+  const anchor = to.paneId ?? target?.focused_pane ?? (target ? allPanes(target.root)[0]?.id : undefined);
+  if (!target || !anchor || !findPane(target.root, anchor)) return layout;
+  const zone = (to.paneId && to.zone) || 'right';
+  const dir: SplitDir = zone === 'left' || zone === 'right' ? 'row' : 'column';
+  const before = zone === 'left' || zone === 'top';
+  const placed = updateTab(next, to.tabId, (t) => ({
+    ...t,
+    root: splitPane(t.root, anchor, dir, moved, { before }),
+  }));
+  return focusPane(placed, to.tabId, moved.id);
+}
+
 /** Checks the structural invariants (used by tests and dev assertions). Returns problems found. */
 export function validateLayout(layout: Layout): string[] {
   const problems: string[] = [];

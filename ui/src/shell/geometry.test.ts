@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { LayoutNode } from '$lib/gen';
 import { MIN_RATIO, pane, resizeGutter } from '$lib/layout';
 
-import { applyZoom, dragDelta, layoutGeometry } from './geometry';
+import { applyZoom, dragDelta, dropTarget, layoutGeometry } from './geometry';
 
 const terminal = (id: string): ReturnType<typeof pane> =>
   pane({ kind: 'terminal', session_id: `s-${id}` }, id);
@@ -116,5 +116,26 @@ describe('dragDelta', () => {
     const narrow = resizeGutter(root, [], 0, -10);
     expect(wide.type === 'split' && wide.ratios[1]).toBeCloseTo(MIN_RATIO);
     expect(narrow.type === 'split' && narrow.ratios[0]).toBeCloseTo(MIN_RATIO);
+  });
+});
+
+describe('dropTarget', () => {
+  const g = layoutGeometry({
+    type: 'split',
+    dir: 'row',
+    ratios: [0.5, 0.5],
+    children: [terminal('a'), terminal('b')],
+  });
+
+  it('picks the nearest edge, or the centre in the middle half', () => {
+    expect(dropTarget(g.panes, 0.05, 0.5)).toMatchObject({ pane: { id: 'a' }, zone: 'left' });
+    expect(dropTarget(g.panes, 0.25, 0.5)).toMatchObject({ pane: { id: 'a' }, zone: 'center' });
+    expect(dropTarget(g.panes, 0.75, 0.95)).toMatchObject({
+      pane: { id: 'b' },
+      zone: 'bottom',
+      area: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+    });
+    expect(dropTarget(g.panes, 0.95, 0.4)?.area).toEqual({ x: 0.75, y: 0, w: 0.25, h: 1 });
+    expect(dropTarget(g.panes, 2, 2)).toBeNull();
   });
 });

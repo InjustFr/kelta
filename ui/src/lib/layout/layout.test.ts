@@ -15,6 +15,7 @@ import {
   findSession,
   focusPane,
   makeTab,
+  movePane,
   moveTab,
   neighbor,
   normalizeRatios,
@@ -303,6 +304,62 @@ describe('openPane', () => {
     );
     expect(layout.tabs).toHaveLength(1);
     expect(validateLayout(layout)).toEqual([]);
+  });
+});
+
+describe('movePane', () => {
+  // a | b | c side by side in tab t1, plus tab t2 holding d.
+  const base = (): Layout => {
+    const root = splitPane(splitPane(p('a'), 'a', 'row', p('b')), 'b', 'row', p('c'));
+    const l = layoutOf(root);
+    return addTab(l, makeTab('D', p('d'), { id: 't2' }), { activate: false });
+  };
+  const ids = (l: Layout, tab = 0) => allPanes(l.tabs[tab]!.root).map((x) => x.id);
+  const from = { tabId: 't1', paneId: 'a' };
+
+  it('moves a pane to the side of another', () => {
+    const l = movePane(base(), from, { tabId: 't1', paneId: 'c', zone: 'right' });
+    expect(ids(l)).toEqual(['b', 'c', 'a']);
+    expect(l.tabs[0]?.focused_pane).toBe('a');
+    const down = movePane(base(), from, { tabId: 't1', paneId: 'c', zone: 'top' });
+    expect(down.tabs[0]?.root).toMatchObject({
+      type: 'split',
+      dir: 'row',
+      children: [{ id: 'b' }, { dir: 'column' }],
+    });
+    expect(ids(down)).toEqual(['b', 'a', 'c']);
+    expect(validateLayout(down)).toEqual([]);
+  });
+
+  it('swaps on the centre and keeps the pane nodes', () => {
+    const l = movePane(base(), from, { tabId: 't1', paneId: 'c', zone: 'center' });
+    expect(ids(l)).toEqual(['c', 'b', 'a']);
+    expect(findPane(l.tabs[0]!.root, 'a')?.pane.content).toEqual(term('s-a'));
+    expect(validateLayout(l)).toEqual([]);
+  });
+
+  it('moves to another tab or a new one', () => {
+    const other = movePane(base(), from, { tabId: 't2' });
+    expect(ids(other)).toEqual(['b', 'c']);
+    expect(ids(other, 1)).toEqual(['d', 'a']);
+    expect(other.active_tab).toBe('t2');
+    expect(other.tabs[1]?.focused_pane).toBe('a');
+    const fresh = movePane(base(), from, { tabId: null });
+    expect(fresh.tabs).toHaveLength(3);
+    expect(ids(fresh, 2)).toEqual(['a']);
+    expect(fresh.active_tab).toBe(fresh.tabs[2]?.id);
+    expect(validateLayout(fresh)).toEqual([]);
+    // The last pane of a tab takes its tab along.
+    const last = movePane(base(), { tabId: 't2', paneId: 'd' }, { tabId: 't1', paneId: 'a', zone: 'left' });
+    expect(last.tabs).toHaveLength(1);
+    expect(ids(last)).toEqual(['d', 'a', 'b', 'c']);
+  });
+
+  it('ignores drops that change nothing', () => {
+    const l = base();
+    expect(movePane(l, from, { tabId: 't1', paneId: 'a', zone: 'left' })).toBe(l);
+    expect(movePane(l, from, { tabId: 't1' })).toBe(l);
+    expect(movePane(l, { tabId: 't2', paneId: 'd' }, { tabId: null })).toBe(l);
   });
 });
 
