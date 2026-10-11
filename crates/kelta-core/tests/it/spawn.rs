@@ -195,7 +195,8 @@ async fn template_spawns_a_tab_with_claude_hooks() {
 }
 
 /// #277: a Claude session starts in the last mode a session switched to, kept across restarts; a
-/// mode Kelta forced at launch (plan) is not remembered.
+/// mode Kelta forced at launch (plan) is not remembered. #304: neither are the dangerous modes, and a
+/// resumed session drops its launch-time mode for the remembered one.
 #[tokio::test]
 async fn claude_sessions_start_in_the_last_permission_mode() {
     use kelta_proto::hooks::HookPayload;
@@ -216,12 +217,34 @@ async fn claude_sessions_start_in_the_last_permission_mode() {
         let spawn = || {
             h.core.session_spawn_template(&shop, "claude+editor", TemplateCtx::default(), Placement::NewTab)
         };
+        let hr = &h;
+        let resume = move |id| async move {
+            hr.term.emit(id, kelta_proto::term::TerminalEvent::Exited { code: Some(0), signal: None });
+            settle().await;
+            hr.core.session_restart(id).await.unwrap();
+        };
+        let old = h
+            .core
+            .session_spawn(req(
+                SessionKind::Claude,
+                Some("claude"),
+                &["--session-id", "U-1", "--permission-mode", "acceptEdits"],
+            ))
+            .await
+            .unwrap();
+        resume(&old.id).await;
+        assert_eq!(mode_arg(&h, &old.id), None, "resumed, nothing remembered: no flag");
         let first = spawn().await.unwrap();
         assert_eq!(mode_arg(&h, &first[0].id), None, "nothing remembered: Claude's own default");
         hook(&h, &first[0].id, "auto");
         assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::Auto));
         let next = spawn().await.unwrap();
         assert_eq!(mode_arg(&h, &next[0].id).as_deref(), Some("auto"));
+        hook(&h, &next[0].id, "bypassPermissions");
+        hook(&h, &next[0].id, "dontAsk");
+        assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::Auto), "dangerous modes stay put");
+        resume(&old.id).await;
+        assert_eq!(mode_arg(&h, &old.id).as_deref(), Some("auto"), "resumed in the remembered mode");
 
         let planned = h
             .core
@@ -246,6 +269,23 @@ async fn claude_sessions_start_in_the_last_permission_mode() {
     }
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
     assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::AcceptEdits));
+}
+
+#[tokio::test]
+async fn stored_dangerous_permission_mode_is_not_loaded() {
+    let tmp = tempfile::tempdir().unwrap();
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![]);
+        h.core
+            .store()
+            .call(|c| kelta_core::store::q::ui_state_set(c, "claude.permission_mode", "bypassPermissions"))
+            .await
+            .unwrap();
+        h.core.store().flush().await.unwrap();
+        h.core.shutdown().await.unwrap();
+    }
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    assert_eq!(h.core.claude_permission_mode(), None);
 }
 
 #[tokio::test]

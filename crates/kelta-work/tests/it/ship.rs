@@ -357,3 +357,30 @@ async fn startup_finishes_an_armed_item_merged_before_a_crash() {
     assert_eq!(fx.store.get_item(&item.id).await.unwrap().unwrap().state, WorkState::Finished);
     assert!(!item.worktree.exists());
 }
+
+#[tokio::test]
+async fn finish_merged_keeps_a_branch_with_unpushed_commits_when_head_moved_away() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    commit(&item, "a.txt");
+    with_pr(&fx, &item, 99).await;
+    let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
+    it.state = WorkState::Merged { detail: None };
+    fx.store.put_item(&it).await.unwrap();
+    // Follow-up never pushed, then HEAD moves to a clean branch: HEAD alone looks safe to delete.
+    commit(&item, "b.txt");
+    git(&item.worktree, &["checkout", "-q", "-b", "tmp", "origin/main"]);
+    let opts = kelta_proto::model::FinishOpts {
+        remove_worktree: true,
+        delete_branch: true,
+        force: false,
+        transition_to: None,
+    };
+    assert_eq!(w.finish(&item.id, opts).await.unwrap().state, WorkState::Finished);
+    assert!(!item.worktree.exists());
+    assert!(!git(&fx.repo, &["branch", "--list", &item.branch]).is_empty(), "unpushed branch kept");
+    let texts: Vec<String> = fx.core.toasts().into_iter().map(|t| t.text).collect();
+    assert!(texts.iter().any(|t| t.starts_with(&format!("Branch {} kept", item.branch))), "{texts:?}");
+}

@@ -180,19 +180,20 @@ pub fn default_restore(
     }
 }
 
-/// Launch for a restore policy.
+/// Launch for a restore policy; `mode` = the `--permission-mode` a resumed Claude starts in.
 pub fn restore_launch(
     spec: &SpawnRequest,
     policy: &RestorePolicy,
     claude_binary: &str,
     use_continue: bool,
+    mode: Option<&str>,
 ) -> Launch {
     let exists = |p: &Path| p.exists();
     match policy {
         RestorePolicy::ShellInCwd => Launch { program: None, args: Vec::new(), resume_attempt: false },
         RestorePolicy::ClaudeResume { uuid } => Launch {
             program: Some(spec.program.clone().unwrap_or_else(|| claude_binary.to_owned())),
-            args: spawn_env::claude_restore_args(&spec.args, uuid, use_continue, &exists),
+            args: spawn_env::claude_restore_args(&spec.args, uuid, use_continue, mode, &exists),
             resume_attempt: !use_continue,
         },
         RestorePolicy::Editor { session_file } => Launch {
@@ -771,7 +772,7 @@ impl Core {
                 last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
                 claude_runs: Default::default(),
-                permission_mode: crate::permission_mode::launched_with(&spec.args),
+                permission_mode: crate::permission_mode::launched_with(&launch.args),
             };
             s.insert(id.clone(), entry)
         };
@@ -872,8 +873,18 @@ impl Core {
         policy: &RestorePolicy,
         use_continue: bool,
     ) -> Launch {
-        let binary = self.cfg.effective(Some(&spec.project_id)).claude.binary.clone();
-        let mut launch = restore_launch(spec, policy, &binary, use_continue);
+        use kelta_proto::settings::PermissionMode;
+        let settings = self.cfg.effective(Some(&spec.project_id));
+        let claude = &settings.claude;
+        // #304: the new-session rule, not the launch-time mode. shortcut: the session's profile is not
+        // stored, so a launch-time plan (a plan profile) is kept and other modes follow the default
+        // profile; store the profile on the session if a profile forcing another mode needs it.
+        let mode = match crate::permission_mode::launched_with(&spec.args) {
+            Some(PermissionMode::Plan) => Some(PermissionMode::Plan),
+            _ => claude.profiles.get("default").and_then(|p| p.permission_mode).or(*self.claude_mode.lock()),
+        }
+        .map(|m| kelta_work::claude::enum_str(&m));
+        let mut launch = restore_launch(spec, policy, &claude.binary, use_continue, mode.as_deref());
         // A work item's Claude needs its per-session files regenerated (the runtime dir does not
         // survive a reboot): kelta-work builds the full argv.
         if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
