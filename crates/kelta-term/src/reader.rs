@@ -14,6 +14,7 @@
 //! ```
 
 use std::os::fd::OwnedFd;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -46,7 +47,16 @@ pub(crate) fn start(
     let r = std::thread::Builder::new()
         .name(format!("kelta-pty-{}", session.id))
         .stack_size(READER_STACK_SIZE)
-        .spawn(move || run(&session, &sh, &master, wake));
+        .spawn(move || {
+            // A parser (alacritty/vte) panic must still reap the child and send Exited
+            // (ARCHITECTURE §12.1); parking_lot mutexes don't poison.
+            if std::panic::catch_unwind(AssertUnwindSafe(|| run(&session, &sh, &master, wake))).is_err() {
+                tracing::error!(session = %session.id, "reader thread panicked; ending the session");
+                // Our master fd hangs up the PTY with close_io's: the child gets SIGHUP, so reap returns.
+                drop(master);
+                exit(&session, &sh);
+            }
+        });
     match r {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -200,6 +210,10 @@ fn process(session: &Session, shared: &Shared, chunk: &[u8], now: Instant) {
             st.activity_pending = false;
             outs.push(Output::Event(TerminalEvent::Activity));
         }
+        #[cfg(test)]
+        if chunk.windows(tests::PANIC.len()).any(|w| w == tests::PANIC) {
+            panic!("test hook: model panic");
+        }
         st.model.advance(chunk, &palette, &mut outs);
         st.bytes_in += chunk.len() as u64;
         st.flush_log(&session.id, shared, BATCH);
@@ -304,5 +318,52 @@ fn reap(session: &Session) -> (Option<i32>, Option<i32>) {
         (None, Some(libc::WTERMSIG(status)))
     } else {
         (None, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::time::{Duration, Instant};
+
+    use kelta_proto::api::TerminalHost;
+    use kelta_proto::ids::SessionId;
+    use kelta_proto::model::SessionKind;
+    use kelta_proto::term::{KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits};
+    use kelta_proto::testing::RecordingTerminalEvents;
+
+    /// Output that makes `process` panic, as a parser bug would.
+    pub(super) const PANIC: &[u8] = b"KELTA_TEST_PANIC";
+
+    /// #291: a panicking reader still sends Exited and gives its thread back.
+    #[test]
+    fn panicking_reader_exits_the_session() {
+        let h = crate::PtyTerminalHost::new(TerminalLimits::default());
+        let ev = RecordingTerminalEvents::new();
+        let id = SessionId::new("panic");
+        h.spawn(PtySpawnSpec {
+            id: id.clone(),
+            program: "/bin/sh".into(),
+            // The child outlives the panic: only the PTY hangup ends it.
+            args: vec!["-c".into(), "echo KELTA_TEST_PANIC; exec sleep 30".into()],
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: SessionKind::Shell,
+            events: ev.clone(),
+        })
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ev.events().iter().any(|(_, e)| matches!(e, TerminalEvent::Exited { .. })) {
+            assert!(Instant::now() < deadline, "no Exited after the panic");
+            #[allow(clippy::disallowed_methods)] // allowlisted: test polling
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(h.stats().reader_threads, 0);
+        // kill closes it, freeing the id.
+        h.kill(&id, KillSignal::Kill).unwrap();
+        assert!(h.text_tail(&id, 1).is_err());
     }
 }
