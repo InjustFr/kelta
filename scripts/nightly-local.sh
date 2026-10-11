@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # Local nightly: macOS dmg + signed updater bundle (Apple silicon) on this Mac and, with --linux, the Linux
-# deb + AppImage for arm64 and amd64 in Docker (amd64 under QEMU on an arm64 Mac: slow), published to the
-# rolling "nightly" prerelease with gh, with the updater manifest `latest.json` (ARCHITECTURE §2 "Bundling").
-# Usage: bash scripts/nightly-local.sh [--linux]   (HEAD of a clean tree; moves the remote `nightly` tag to HEAD)
+# deb + AppImage for arm64 in Docker (--amd64 adds amd64, under QEMU on an arm64 Mac: the slowest step), published
+# to the rolling "nightly" prerelease with gh, with the updater manifest `latest.json` (ARCHITECTURE §2 "Bundling").
+# Usage: bash scripts/nightly-local.sh [--linux] [--amd64]   (HEAD of a clean tree; moves the remote `nightly` tag)
 # Needs the updater key (CONTRIBUTING "Nightly builds"): ${KELTA_UPDATER_KEY:-~/.tauri/kelta-updater.key}
 # and its password in the login Keychain (service `kelta-updater`).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-linux=0
+linux=0 amd64=0
 for arg in "$@"; do
   case "$arg" in
     --linux) linux=1 ;;
-    *) echo "usage: nightly-local.sh [--linux]" >&2; exit 2 ;;
+    --amd64) linux=1 amd64=1 ;;
+    *) echo "usage: nightly-local.sh [--linux] [--amd64]" >&2; exit 2 ;;
   esac
 done
 
@@ -50,7 +51,8 @@ done
 
 # Linux only on request: a broken Linux build (#207) must not block the macOS nightly.
 arches=""
-if ((linux)); then arches="arm64 amd64"; fi
+if ((linux)); then arches="arm64"; fi
+if ((amd64)); then arches="$arches amd64"; fi
 for arch in $arches; do
   docker build --platform "linux/$arch" -f docker/ubuntu-build.Dockerfile -t "kelta-nightly-$arch" .
   # Source comes from `git archive` so only HEAD is built; /work/target is a per-arch volume (warm rebuilds).

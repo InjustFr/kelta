@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 fn client() -> reqwest::Client {
-    reqwest::Client::builder().no_proxy().build().unwrap()
+    kelta_http::client_builder().no_proxy().build().unwrap()
 }
 
 /// Raw HTTP/1.1 request (full control of the Host header); returns the status code.

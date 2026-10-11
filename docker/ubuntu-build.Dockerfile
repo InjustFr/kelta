@@ -13,8 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config curl ca-certificates git rsync file python3 lsof zstd \
       desktop-file-utils appstream \
       libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
-      libssl-dev libxdo-dev patchelf \
+      libssl-dev libxdo-dev patchelf mold \
     && rm -rf /var/lib/apt/lists/*
+
+# arm64 (Docker on Apple silicon) links with GNU ld by default: mold cut kelta-core's test links from ~25 s to
+# ~2 s (#191). x86_64 already links with rust-lld.
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=mold"
 
 # The Neovim CI installs (scripts/install-nvim.sh), not apt's older one.
 COPY scripts/install-nvim.sh /tmp/install-nvim.sh

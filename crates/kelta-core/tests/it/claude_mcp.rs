@@ -76,7 +76,7 @@ async fn offer_install_and_silent_reregistration() {
     assert!(token.len() >= 32);
     assert_eq!(h.core.claude_mcp_status().await, Some(true));
     let ping = |tok: &str| {
-        reqwest::Client::builder()
+        kelta_http::client_builder()
             .no_proxy()
             .build()
             .unwrap()

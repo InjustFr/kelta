@@ -28,6 +28,14 @@ pub fn default_user_agent() -> String {
     format!("kelta/{}", env!("CARGO_PKG_VERSION"))
 }
 
+/// Start of every reqwest client: reqwest is built without a TLS provider (no aws-lc C build, #191), so
+/// building a client before one is installed panics. Installs rustls' ring provider for the process.
+pub fn client_builder() -> reqwest::ClientBuilder {
+    // Err = a provider is already installed (an earlier call, or the updater's ring one).
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
+
 /// One shared client for the whole app (20 s timeout, pool idle 30 s).
 #[derive(Clone)]
 pub struct HttpClient {
@@ -43,7 +51,7 @@ impl HttpClient {
     /// and no connection pooling, so the client arms no timer at all (tests that run under paused
     /// tokio time would otherwise see the clock auto-advance to reqwest's own timers).
     pub fn with_timeout(user_agent: &str, timeout: Option<Duration>) -> Self {
-        let mut b = reqwest::Client::builder()
+        let mut b = client_builder()
             .user_agent(user_agent)
             .pool_idle_timeout(Duration::from_secs(30))
             .redirect(redirect_policy());
@@ -54,7 +62,7 @@ impl HttpClient {
         let inner = b.build().unwrap_or_else(|e| {
             tracing::warn!(error = %e, "http client builder failed; using defaults");
             // Never reqwest's default policy, which re-sends token headers on redirects.
-            reqwest::Client::builder()
+            client_builder()
                 .redirect(redirect_policy())
                 .build()
                 .unwrap_or_else(|e| panic!("cannot build an http client: {e}"))
