@@ -181,7 +181,7 @@ pub fn default_restore(
     match kind {
         SessionKind::Shell => RestorePolicy::ShellInCwd,
         SessionKind::Claude => match claude_uuid {
-            Some(u) => RestorePolicy::ClaudeResume { uuid: u.to_owned() },
+            Some(u) => RestorePolicy::ClaudeResume { uuid: u.to_owned(), profile: None },
             None => RestorePolicy::Relaunch,
         },
         SessionKind::Editor { adapter } if adapter == "nvim" => {
@@ -203,7 +203,7 @@ pub fn restore_launch(
     let exists = |p: &Path| p.exists();
     match policy {
         RestorePolicy::ShellInCwd => Launch { program: None, args: Vec::new(), resume_attempt: false },
-        RestorePolicy::ClaudeResume { uuid } => Launch {
+        RestorePolicy::ClaudeResume { uuid, .. } => Launch {
             program: Some(spec.program.clone().unwrap_or_else(|| claude_binary.to_owned())),
             args: spawn_env::claude_restore_args(&spec.args, uuid, use_continue, mode, &exists),
             resume_attempt: !use_continue,
@@ -306,7 +306,7 @@ impl Core {
             }
             let claude = matches!(kind, SessionKind::Claude).then(|| ClaudeMeta {
                 session_uuid: match &restore {
-                    RestorePolicy::ClaudeResume { uuid } => uuid.clone(),
+                    RestorePolicy::ClaudeResume { uuid, .. } => uuid.clone(),
                     _ => String::new(),
                 },
                 model: spawn_env::arg_value(&spec.args, "--model"),
@@ -639,7 +639,7 @@ impl Core {
         let mut claude_uuid = None;
         if is_claude {
             claude_uuid = spawn_env::claude_uuid_from_args(&spec.args).or_else(|| match &spec.restore {
-                RestorePolicy::ClaudeResume { uuid } => Some(uuid.clone()),
+                RestorePolicy::ClaudeResume { uuid, .. } => Some(uuid.clone()),
                 _ => None,
             });
             let selects =
@@ -931,12 +931,16 @@ impl Core {
         use kelta_proto::settings::PermissionMode;
         let settings = self.cfg.effective(Some(&spec.project_id));
         let claude = &settings.claude;
-        // #304: the new-session rule, not the launch-time mode. shortcut: the session's profile is not
-        // stored, so a launch-time plan (a plan profile) is kept and other modes follow the default
-        // profile; store the profile on the session if a profile forcing another mode needs it.
-        let mode = match crate::permission_mode::launched_with(&spec.args) {
-            Some(PermissionMode::Plan) => Some(PermissionMode::Plan),
-            _ => claude.profiles.get("default").and_then(|p| p.permission_mode).or(*self.claude_mode.lock()),
+        // #304/#318: the new-session rule re-read from the launch profile, not the launch-time mode.
+        let remembered = *self.claude_mode.lock();
+        let mode = match (policy, crate::permission_mode::launched_with(&spec.args)) {
+            (RestorePolicy::ClaudeResume { profile: Some(p), .. }, _) => {
+                crate::templates::launch_mode(claude, Some(p), remembered)
+            }
+            // shortcut: no stored profile (raw spawn, older session), so a launch-time plan is kept and
+            // other modes follow the default profile; store the profile in that spawn if it matters.
+            (_, Some(PermissionMode::Plan)) => Some(PermissionMode::Plan),
+            _ => crate::templates::launch_mode(claude, None, remembered),
         }
         .map(|m| kelta_work::claude::enum_str(&m));
         let mut launch = restore_launch(spec, policy, &claude.binary, use_continue, mode.as_deref());
@@ -1469,8 +1473,12 @@ impl Core {
                 false
             } else {
                 c.session_uuid = uuid.to_owned();
-                if matches!(e.restore, RestorePolicy::ClaudeResume { .. } | RestorePolicy::Relaunch) {
-                    e.restore = RestorePolicy::ClaudeResume { uuid: uuid.to_owned() };
+                match &mut e.restore {
+                    RestorePolicy::ClaudeResume { uuid: u, .. } => *u = uuid.to_owned(),
+                    RestorePolicy::Relaunch => {
+                        e.restore = RestorePolicy::ClaudeResume { uuid: uuid.to_owned(), profile: None }
+                    }
+                    _ => {}
                 }
                 true
             }
