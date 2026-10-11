@@ -3212,6 +3212,8 @@ dependencies = [
  "axum",
  "bytes",
  "futures",
+ "hyper",
+ "hyper-util",
  "kelta-proto",
  "kelta-work",
  "parking_lot",
