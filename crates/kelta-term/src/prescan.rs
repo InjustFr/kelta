@@ -267,10 +267,6 @@ impl Tail {
         &self.pending
     }
 
-    pub fn clear(&mut self) {
-        self.pending.clear();
-    }
-
     /// Account for a chunk of output.
     pub fn update(&mut self, chunk: &[u8]) {
         if chunk.is_empty() {

@@ -24,9 +24,6 @@ use kelta_proto::secret::{KEYRING_SERVICE, Secret, SecretBackendStatus, SecretCt
 use keyring_core::CredentialStore;
 use parking_lot::{Mutex, RwLock};
 
-pub use glab::{token_from_status as glab_token_from_status, token_from_yaml as glab_token_from_yaml};
-pub use words::split as split_command;
-
 /// Timeout of every external lookup (SETTINGS §5).
 pub const RESOLVE_TIMEOUT: Duration = Duration::from_secs(5);
 

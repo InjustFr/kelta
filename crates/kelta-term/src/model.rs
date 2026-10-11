@@ -602,11 +602,6 @@ impl TermModel {
         self.processor.sync_timeout().sync_timeout()
     }
 
-    /// Bytes buffered by a pending synchronized update.
-    pub fn sync_pending(&self) -> usize {
-        self.processor.sync_bytes_count()
-    }
-
     /// End a synchronized update (deadline expired, snapshot, exit).
     pub fn flush_sync(&mut self, palette: &Palette, out: &mut Vec<Output>) {
         if self.processor.sync_timeout().sync_timeout().is_none() {
