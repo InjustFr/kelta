@@ -105,7 +105,7 @@ async fn dynamic_permissions_check_their_argument() {
     let e = call(PluginMethod::SessionsSpawn, json!({ "command": "/bin/rm" })).await.unwrap_err();
     assert_eq!(
         (e.code, e.detail.unwrap()["permission"].clone()),
-        (ErrorCode::PermissionDenied, json!("exec:rm"))
+        (ErrorCode::PermissionDenied, json!("exec:/bin/rm"))
     );
     let e = call(PluginMethod::NetFetch, json!({ "url": "https://evil.example.org/" })).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::PermissionDenied);

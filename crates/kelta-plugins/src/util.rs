@@ -1,6 +1,6 @@
 //! Small shared helpers: hashing, process-group signals, bounded byte ring, JSON paths.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::Path;
 
 use kelta_proto::error::KeltaError;
@@ -133,6 +133,15 @@ pub fn basename(cmd: &str) -> &str {
     Path::new(cmd).file_name().and_then(|s| s.to_str()).unwrap_or(cmd)
 }
 
+/// Environment of a plugin-run process: the plugin's own variables, minus loader injection
+/// (`DYLD_*`, `LD_*`), with `PATH` always the login shell's so a granted name is the program it names.
+pub fn plugin_env(env: &mut BTreeMap<String, String>, login_path: Option<String>) {
+    env.retain(|k, _| k != "PATH" && !k.starts_with("DYLD_") && !k.starts_with("LD_"));
+    if let Some(p) = login_path {
+        env.insert("PATH".to_owned(), p);
+    }
+}
+
 /// True for `127.0.0.1`, `::1`, `[::1]` and `localhost`.
 pub fn is_loopback_host(host: &str) -> bool {
     let h = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
@@ -180,5 +189,20 @@ mod tests {
         assert_eq!(basename("/usr/bin/kubectl"), "kubectl");
         assert_eq!(sha256_hex(b"").len(), 64);
         assert_eq!(truncate("héllo", 2), "h…");
+    }
+
+    #[test]
+    fn plugin_env_keeps_the_login_path_and_drops_loader_variables() {
+        let mut env: BTreeMap<String, String> =
+            [("PATH", "/evil"), ("DYLD_INSERT_LIBRARIES", "x"), ("LD_PRELOAD", "x"), ("K", "v")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect();
+        plugin_env(&mut env, Some("/login".into()));
+        let kept: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        assert_eq!(kept, [("K", "v"), ("PATH", "/login")]);
+        let mut env = BTreeMap::from([("PATH".to_owned(), "/evil".to_owned())]);
+        plugin_env(&mut env, None);
+        assert!(env.is_empty(), "no login PATH: Kelta's own is inherited");
     }
 }

@@ -429,9 +429,7 @@ impl PluginHost {
                 } else {
                     q.command.into()
                 };
-                if let Some(path) = core.login_path() {
-                    q.env.entry("PATH".to_owned()).or_insert(path);
-                }
+                crate::util::plugin_env(&mut q.env, core.login_path());
                 let cwd = dir.join(q.cwd.unwrap_or_default());
                 let out = crate::actions::run_process(
                     &command.to_string_lossy(),

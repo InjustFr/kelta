@@ -11,7 +11,7 @@ use kelta_proto::ext::{MethodPermission, Permission, PluginMethod};
 use serde_json::Value;
 
 use crate::matcher;
-use crate::util::{basename, is_loopback_host};
+use crate::util::is_loopback_host;
 
 /// The effective permission set of one plugin.
 #[derive(Debug, Clone, Default)]
@@ -48,9 +48,9 @@ impl Granted {
         if self.has(&p) { Ok(()) } else { Err(KeltaError::permission_denied(p.to_string())) }
     }
 
-    /// `exec:<basename(argv0)>`.
+    /// `exec:<argv0>` exactly: a name (run from the login PATH) or the very path the grant names.
     pub fn require_exec(&self, command: &str) -> Result<(), KeltaError> {
-        self.require(Permission::Exec(basename(command).to_owned()))
+        self.require(Permission::Exec(command.to_owned()))
     }
 
     /// `events:<glob>` covering `requested` (a name or a glob).
@@ -202,7 +202,11 @@ mod tests {
         assert!(g.covers_events("ticket.*"));
         assert!(!g.covers_events("pr.merged"));
         assert!(!g.covers_events("*"));
-        assert!(g.require_exec("/usr/local/bin/kubectl").is_ok());
+        assert!(g.require_exec("kubectl").is_ok());
         assert!(g.require_exec("rm").is_err());
+        // A path needs a grant naming that path: a same-named file elsewhere is not `kubectl`.
+        assert!(g.require_exec("/tmp/evil/kubectl").is_err());
+        assert!(g.require_exec("./kubectl").is_err());
+        assert!(granted(&["exec:./bin/x.sh"]).require_exec("./bin/x.sh").is_ok());
     }
 }

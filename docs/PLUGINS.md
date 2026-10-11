@@ -140,7 +140,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 |---|---|---|---|
 | `notify` | `title`, `body?`, `urgency? (low\|normal\|critical)` | desktop notification (respects quiet hours) | `notify` |
 | `toast` | `text`, `level?` | in-app toast | — |
-| `run` | `command`, `args?`, `cwd?`, `env?`, `stdin? = "event"\|"none"`, `timeout_ms? = 60000`, `show? = none\|toast_on_error\|pane` | background exec (no shell; `sh -c` must be explicit) with the login shell's `PATH` unless `env` sets one (a Dock-launched Kelta finds `kubectl`, `gh`, Homebrew tools); output to trigger log; `pane` runs it in a visible session instead | `exec:<command>` |
+| `run` | `command`, `args?`, `cwd?`, `env?`, `stdin? = "event"\|"none"`, `timeout_ms? = 60000`, `show? = none\|toast_on_error\|pane` | background exec (no shell; `sh -c` must be explicit) with the login shell's `PATH` (a Dock-launched Kelta finds `kubectl`, `gh`, Homebrew tools; a plugin's `env` cannot set `PATH`, `DYLD_*` or `LD_*`); output to trigger log; `pane` runs it in a visible session instead | `exec:<command>` |
 | `spawn_session` | `template? \| command+args`, `cwd?`, `placement?`, `focus? = false` | new session in the event's project | `sessions.spawn` |
 | `send_keys` | `session = "{event.session_id}"\|"claude"\|"editor"`, `text`, `bracketed? = true` | writes into a PTY | `terminal.write` |
 | `open_tool` | `tool`, `placement?` (default: the tool's) | `tool_open` | `sessions.spawn` |
@@ -361,7 +361,7 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
 | `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
-| `exec:<command>` | run that argv[0] (basename match) in `run` actions and `exec.run` |
+| `exec:<command>` | run that argv[0] in `run` actions and `exec.run`: a name runs from the login shell's `PATH`; a relative path inside the plugin (`exec:./bin/deploy.sh`) grants that path exactly as written |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
 | `provider` | run the `[provider]` program for the accounts that name the plugin, handing it their settings and secret (§9); its own network access is its business |
 
@@ -429,7 +429,7 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `sessions.send_text` | `{session_id, text, bracketed?}` | `terminal.write` |
 | `work.list` / `work.get` | `{project?}` → `[WorkItem]` (default the screen's project; `project: null` = all, global screens only) / `{id}` → `WorkItem` (`NotFound` for another project's item on a project screen). Without `claude_uuid`, `nvim_socket`, `claude_message`, `next_note`, `sent_threads`. A ticket's item: match `item.ticket.key`, or `work_item_id` from `tickets.list` | `work.read` |
 | `tools.open` | `{tool_id, placement?}` | `sessions.spawn` |
-| `exec.run` | `{command, args?, cwd?, env?, stdin?, timeout_ms?}` → `{code, stdout, stderr}`. Headless, no shell (argv only), login-shell `PATH`. `command` without `/` is looked up on that PATH; a path (`./scripts/deploy.sh`) must be a file inside the plugin directory (`..`, absolute paths and symlinks leaving it → `InvalidArgument`). `cwd` default the plugin directory (any absolute path, e.g. a worktree from `work.get`); `env` literal; `stdin` UTF-8 text; `timeout_ms` default 60000, max 600000, then the process group is killed and the call fails with `Timeout`; stdout/stderr capped at 64 KiB each (`…` marks the cut). A non-zero exit is a result, not an error. Not tied to the screen: closing it drops the result, the process runs on | `exec:<basename(command)>` |
+| `exec.run` | `{command, args?, cwd?, env?, stdin?, timeout_ms?}` → `{code, stdout, stderr}`. Headless, no shell (argv only), login-shell `PATH`. `command` without `/` is looked up on that PATH; a path (`./scripts/deploy.sh`) must be a file inside the plugin directory (`..`, absolute paths and symlinks leaving it → `InvalidArgument`). `cwd` default the plugin directory (any absolute path, e.g. a worktree from `work.get`); `env` literal (`PATH`, `DYLD_*` and `LD_*` are dropped); `stdin` UTF-8 text; `timeout_ms` default 60000, max 600000, then the process group is killed and the call fails with `Timeout`; stdout/stderr capped at 64 KiB each (`…` marks the cut). A non-zero exit is a result, not an error. Not tied to the screen: closing it drops the result, the process runs on | `exec:<command>` (exact) |
 | `events.subscribe` / `events.unsubscribe` | `{names: [glob]}` | `events:<glob>` covering each |
 | `settings.get` | `{}` → own namespace values (+ effective non-secret settings with `settings.read`) | — / `settings.read` |
 | `settings.set` | `{key, value}` (own namespace, Global layer) | — |

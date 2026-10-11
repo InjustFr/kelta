@@ -153,13 +153,13 @@ step change; `pr.merged` carries `{review, linked_tickets}`. The full list is PL
 ## 7. The permissions to request
 
 ```toml
-permissions = ["work.read", "exec:run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"]
+permissions = ["work.read", "exec:./run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"]
 ```
 
 | Permission | Why |
 |---|---|
 | `work.read` | `work.get` / `work.list`: they expose branch names and worktree paths |
-| `exec:run.sh` | `exec.run ./run.sh` (matched on the basename) |
+| `exec:./run.sh` | `exec.run ./run.sh` (a path is matched exactly as written) |
 | `storage` | `kv.get` / `kv.set` for the last runs |
 | `events:work.updated`, `events:pr.merged` | the two subscriptions, by exact name rather than `events:*` |
 | `ui.open` | the actions' `open_screen` step (the `Open Branch script` palette entry needs none) |

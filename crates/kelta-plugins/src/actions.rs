@@ -226,7 +226,9 @@ impl PluginHost {
                 let mut env: std::collections::BTreeMap<String, String> =
                     env.iter().map(|(k, v)| Ok((k.clone(), cx.x(v)?))).collect::<Result<_, KeltaError>>()?;
                 // A Dock-launched Kelta has a bare PATH: find `kubectl`, `gh`, Homebrew tools.
-                if let Some(p) = core.login_path() {
+                if cx.granted.is_some() {
+                    crate::util::plugin_env(&mut env, core.login_path());
+                } else if let Some(p) = core.login_path() {
                     env.entry("PATH".to_owned()).or_insert(p);
                 }
                 if *show == Some(RunShow::Pane) && block.is_none() {

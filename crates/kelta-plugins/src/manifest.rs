@@ -238,8 +238,10 @@ pub fn validate(m: &PluginManifest) -> Vec<String> {
                 }
             }
             Some(Permission::Exec(c)) => {
-                if c.contains('/') {
-                    errors.push(format!("permission `{p}`: expected a program name, not a path"));
+                if c.contains('/') && !is_safe_relative(&c) {
+                    errors.push(format!(
+                        "permission `{p}`: expected a program name or a relative path inside the plugin"
+                    ));
                 }
             }
             Some(_) => {}

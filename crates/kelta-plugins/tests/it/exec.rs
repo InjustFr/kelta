@@ -12,7 +12,14 @@ use kelta_proto::ids::{PluginId, ProjectId, ScreenInstanceId};
 use serde_json::{Value, json};
 
 const SCREEN: &str = "\n[[contributes.screens]]\nid = \"main\"\ntitle = \"Main\"\nentry = \"index.html\"\n";
-const PERMS: &[&str] = &["exec:echo", "exec:x.sh", "exec:out.sh", "exec:sh", "exec:kelta-login-only"];
+const PERMS: &[&str] = &[
+    "exec:echo",
+    "exec:./bin/x.sh",
+    "exec:bin/x.sh",
+    "exec:./bin/out.sh",
+    "exec:sh",
+    "exec:kelta-login-only",
+];
 
 fn executable(path: &Path, script: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -62,7 +69,7 @@ async fn exec_run_returns_the_result_behind_its_exec_grant() {
 
 #[tokio::test]
 async fn exec_run_relative_command_stays_inside_the_plugin_dir() {
-    let (env, i) = setup(&["exec:x.sh", "exec:out.sh"]).await;
+    let (env, i) = setup(&["exec:./bin/x.sh", "exec:bin/x.sh", "exec:./bin/out.sh"]).await;
     let elsewhere = env.tmp.path().canonicalize().unwrap();
     let out =
         exec(&env, &i, json!({ "command": "./bin/x.sh", "args": ["qa"], "cwd": elsewhere })).await.unwrap();
@@ -74,12 +81,13 @@ async fn exec_run_relative_command_stays_inside_the_plugin_dir() {
         "cwd defaults to the plugin dir"
     );
 
-    for bad in ["../x.sh", "./bin/../../x.sh", "/bin/x.sh", "./bin/out.sh"] {
-        let e = exec(&env, &i, json!({ "command": bad })).await.unwrap_err();
-        assert_eq!(e.code, ErrorCode::InvalidArgument, "{bad}: {e:?}");
+    let e = exec(&env, &i, json!({ "command": "./bin/out.sh" })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "symlink leaving the plugin dir: {e:?}");
+    // A path is checked as written: a grant for `./bin/x.sh` is not one for another `x.sh`.
+    for other in ["../x.sh", "./bin/../../x.sh", "/bin/x.sh", "./bin/rm"] {
+        let e = exec(&env, &i, json!({ "command": other })).await.unwrap_err();
+        assert_eq!(e.detail.unwrap()["permission"], format!("exec:{other}"), "{other}");
     }
-    let e = exec(&env, &i, json!({ "command": "./bin/rm" })).await.unwrap_err();
-    assert_eq!(e.detail.unwrap()["permission"], "exec:rm", "checked against the basename");
 }
 
 #[tokio::test]
@@ -115,7 +123,13 @@ async fn run_action_and_exec_run_use_the_login_path() {
         "not on the dev PATH"
     );
 
+    // The plugin cannot point a granted name at another program through `PATH`.
+    let shadow = env.tmp.path().join("shadow-bin");
+    executable(&shadow.join("kelta-login-only"), "#!/bin/sh\necho shadow\n");
+    let shadowed = json!({ "command": "kelta-login-only", "env": { "PATH": shadow } });
     env.core.respond("login_path", json!(bin_dir));
+    let out = exec(&env, &i, shadowed).await.unwrap();
+    assert_eq!(out["stdout"], "{\"veto\":\"found\"}\n");
     let out = exec(&env, &i, call).await.unwrap();
     assert_eq!(out["stdout"], "{\"veto\":\"found\"}\n");
 
