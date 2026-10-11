@@ -21,6 +21,7 @@ which = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
 globset = { workspace = true }
+sha2 = { workspace = true }
 semver = { workspace = true }
 rustix = { workspace = true }
 parking_lot = { workspace = true }

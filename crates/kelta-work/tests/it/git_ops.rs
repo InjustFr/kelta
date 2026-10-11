@@ -432,6 +432,28 @@ async fn finish_reports_an_edited_ignored_include_copy() {
 }
 
 #[tokio::test]
+async fn finish_compares_include_copies_to_their_copy_not_the_main_checkout() {
+    need_git!();
+    let fx = Fx::new();
+    std::fs::write(fx.repo.join(".git/info/exclude"), "local.cfg\n").unwrap();
+    std::fs::write(fx.repo.join("local.cfg"), "x=1\n").unwrap();
+    std::fs::write(fx.repo.join(".worktreeinclude"), "local.cfg\n").unwrap();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    // The main checkout moves on: the untouched copy is still ours.
+    std::fs::write(fx.repo.join("local.cfg"), "x=9\n").unwrap();
+    let (w2, item2) = started(&fx, "SHOP-142").await;
+    // An edited copy force-added and committed on the branch is committed work, not an ignored edit.
+    std::fs::write(item2.worktree.join("local.cfg"), "x=2\n").unwrap();
+    git(&item2.worktree, &["add", "-f", "local.cfg"]);
+    git(&item2.worktree, &["commit", "-q", "-m", "cfg"]);
+    let e = w2.finish(&item2.id, opts(false)).await.unwrap_err();
+    assert_eq!(e.detail.unwrap()["files"], serde_json::json!([]), "only the unpushed commit");
+
+    assert_eq!(w.finish(&item.id, opts(false)).await.unwrap().state, WorkState::Finished);
+    assert!(!item.worktree.exists());
+}
+
+#[tokio::test]
 async fn snapshot_takes_untracked_files_and_leaves_head_index_and_stash() {
     need_git!();
     let fx = Fx::new();

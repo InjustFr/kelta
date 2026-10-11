@@ -202,6 +202,7 @@ impl WorkService {
         let mut items = self.store.list_items(project).await?;
         for it in &mut items {
             it.steps = self.merged_steps(&it.id, &it.steps).await?;
+            self.shown(it);
         }
         items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(items)
@@ -578,6 +579,8 @@ impl WorkService {
     }
 
     pub(crate) fn publish_updated(&self, item: &WorkItem) {
+        let mut item = item.clone();
+        self.shown(&mut item);
         if let Ok(core) = self.api() {
             core.publish(
                 BusEvent::new(bus::WORK_UPDATED, serde_json::json!({ "work": item }))
