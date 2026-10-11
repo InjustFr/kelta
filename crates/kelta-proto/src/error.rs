@@ -142,11 +142,6 @@ impl KeltaError {
         self
     }
 
-    pub fn with_retry_after_ms(mut self, ms: u64) -> Self {
-        self.retry_after_ms = Some(ms);
-        self
-    }
-
     pub fn is(&self, code: ErrorCode) -> bool {
         self.code == code
     }

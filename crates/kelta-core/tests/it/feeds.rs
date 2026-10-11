@@ -520,6 +520,23 @@ async fn merge_while_kelta_was_closed_lands_as_merged_on_next_launch() {
 }
 
 #[tokio::test]
+async fn pr_merged_carries_the_project_whatever_the_repo_case() {
+    let tmp = tempfile::tempdir().unwrap();
+    // Bound as `acme/shop-api`; the host reports `Acme/Shop-API`.
+    let pr = review("Acme/Shop-API", 90, ReviewKind::Authored);
+    let e = env(tmp.path(), vec![pr.clone()]);
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    e.host.reviews.lock().clear();
+    e.host.ended.lock().push((pr, PrState::Merged));
+    let mut rx = e.h.core.subscribe();
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap(); // live diff
+    settle().await;
+    let merged: Vec<_> = bus_names(&mut rx).into_iter().filter(|ev| ev.name == bus::PR_MERGED).collect();
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged[0].project_id, Some(ProjectId::new("shop")));
+}
+
+#[tokio::test]
 async fn closed_pr_leaving_the_authored_list_is_pr_closed() {
     let tmp = tempfile::tempdir().unwrap();
     let pr = review("acme/shop-api", 91, ReviewKind::Authored);

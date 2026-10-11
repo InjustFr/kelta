@@ -104,10 +104,6 @@ impl TauriBridge {
         self.hub.subs.lock().clear();
     }
 
-    pub fn subscriber_count(&self) -> usize {
-        self.hub.subs.lock().len()
-    }
-
     /// Commands that need a visible UI: bring the window back (recreating it in background mode).
     fn deliver_command(&self, ev: UiEvent) {
         super::raise(&self.handle);

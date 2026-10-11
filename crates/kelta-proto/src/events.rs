@@ -206,11 +206,6 @@ impl BusEvent {
         self
     }
 
-    pub fn with_chain(mut self, chain: TriggerChain) -> Self {
-        self.chain = chain;
-        self
-    }
-
     /// `*.before_*` events allow blocking triggers.
     pub fn is_blocking(&self) -> bool {
         bus::BLOCKING.contains(&self.name.as_str())
