@@ -263,6 +263,7 @@ pub struct H {
     pub cfg: Arc<MemConfig>,
     pub factory: Arc<Factory>,
     pub clip: Arc<MemClipboard>,
+    pub secrets: Arc<FakeSecrets>,
     pub root: PathBuf,
 }
 
@@ -334,7 +335,8 @@ pub fn start_in(root: &Path, cfg: Arc<MemConfig>, term: Arc<FakeTerminalHost>, f
     let mut deps = CoreDeps::new(Dirs::under(root), CliArgs::default(), ui.clone());
     deps.config = Some(cfg.clone());
     deps.terminal = Some(term.clone());
-    deps.secrets = Some(FakeSecrets::new());
+    let secrets = FakeSecrets::new();
+    deps.secrets = Some(secrets.clone());
     deps.trackers = Some(factory.clone());
     deps.code_hosts = Some(factory.clone());
     deps.login_env = Some(login_env(root));
@@ -342,7 +344,7 @@ pub fn start_in(root: &Path, cfg: Arc<MemConfig>, term: Arc<FakeTerminalHost>, f
     deps.install_ctl = false;
     deps.start_services = false;
     let core = Core::start_with(deps).unwrap();
-    H { core, term, ui, cfg, factory, clip, root: root.to_path_buf() }
+    H { core, term, ui, cfg, factory, clip, secrets, root: root.to_path_buf() }
 }
 
 pub fn start(root: &Path, settings: Settings, projects: Vec<ProjectConfig>) -> H {

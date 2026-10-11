@@ -9,10 +9,10 @@ use std::time::{Duration, Instant};
 use kelta_proto::api::{SecretResolver, SettingsSource};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::AccountId;
-use kelta_proto::secret::{SecretCtx, SecretRef};
+use kelta_proto::secret::{KEYRING_SERVICE, SecretCtx, SecretRef};
 use kelta_proto::settings::Settings;
 use kelta_proto::testing::FakeSettings;
-use kelta_secrets::{Secrets, SecretsOptions};
+use kelta_secrets::{RESOLVE_TIMEOUT, Secrets, SecretsOptions};
 
 #[path = "support/capture.rs"]
 mod capture;
@@ -294,6 +294,53 @@ async fn cache_is_used_and_invalidated() {
     assert_eq!(runs(), 5);
     // the settings Arc is stable between changes
     let _ = r.settings.effective(None);
+}
+
+/// A rig on a mock keyring the test can reach behind the resolver's back.
+fn keyring_rig(timeout: Duration) -> (Arc<FakeSettings>, Arc<keyring_core::mock::Store>, Arc<Secrets>) {
+    let settings = FakeSettings::defaults();
+    let store = keyring_core::mock::Store::new().unwrap();
+    let opts =
+        SecretsOptions { store: Some(store.clone()), timeout: Some(timeout), ..SecretsOptions::default() };
+    (settings.clone(), store, Secrets::with_options(settings, opts))
+}
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)] // the point: the keyring blocks across the resolve
+async fn keyring_timeout_is_not_missing_and_writes_nothing() {
+    let (_settings, store, secrets) = keyring_rig(Duration::from_millis(100));
+    let jira = SecretRef::new("keyring:jira-acme");
+    let ctx = SecretCtx::default();
+    {
+        // A held store lock stands for the macOS access dialog nobody answered yet.
+        let pending = store.inner.lock().unwrap();
+        let e = secrets.resolve(&jira, &ctx).await.unwrap_err();
+        assert_eq!(e.code, ErrorCode::Timeout, "{e:?}");
+        drop(pending);
+    }
+    // Answered later: still nothing stored, and a missing entry is reported as such.
+    assert_eq!(secrets.resolve(&jira, &ctx).await.unwrap_err().code, ErrorCode::NeedsAuth);
+}
+
+#[tokio::test]
+async fn settings_reload_keeps_keyring_values() {
+    let (settings, store, secrets) = keyring_rig(RESOLVE_TIMEOUT);
+    let jira = SecretRef::new("keyring:jira-acme");
+    let ctx = SecretCtx::default();
+    secrets.set(&jira, "first").await.unwrap();
+    assert_eq!(secrets.resolve(&jira, &ctx).await.unwrap().expose(), "first");
+    // Changed behind the cache: a re-read would see it.
+    let entry =
+        keyring_core::api::CredentialStoreApi::build(&*store, KEYRING_SERVICE, "jira-acme", None).unwrap();
+    entry.set_password("second").unwrap();
+    let mut s = Settings::defaults();
+    s.terminal.font_size = 20.0;
+    settings.set_global(s);
+    secrets.set_env(BTreeMap::new());
+    assert_eq!(secrets.resolve(&jira, &ctx).await.unwrap().expose(), "first", "served from memory");
+    // A 401 still drops it.
+    secrets.invalidate(&jira);
+    assert_eq!(secrets.resolve(&jira, &ctx).await.unwrap().expose(), "second");
 }
 
 #[tokio::test]

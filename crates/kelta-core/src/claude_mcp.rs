@@ -8,17 +8,24 @@ use std::time::Duration;
 use kelta_proto::api::CoreApi;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{Toast, ToastAction};
-use kelta_proto::secret::{SecretCtx, SecretRef};
 
 use crate::Core;
 
 /// Server name in Claude Code's MCP list.
 const NAME: &str = "kelta";
-/// The install token, apart from the per-session tokens.
-const TOKEN_REF: &str = "keyring:kelta-mcp";
 /// UI actions of the offer toast (registered in the settings view).
 pub const INSTALL_ACTION: &str = "claude.mcp_install";
 pub const NEVER_ACTION: &str = "claude.mcp_never";
+
+/// The install token (apart from the per-session tokens): the one Claude Code already holds in
+/// plain text in its registration, else a new one. Never in the Keychain (#275): it would add
+/// prompts, no secrecy.
+fn install_token(current: Option<&Registration>) -> String {
+    current
+        .and_then(|(_, auth)| auth.strip_prefix("Bearer "))
+        .filter(|t| !t.is_empty())
+        .map_or_else(crate::spawn_env::token, str::to_owned)
+}
 
 /// Port of a registered global `/mcp` URL.
 fn registered_port(url: &str) -> Option<u16> {
@@ -97,18 +104,7 @@ impl Core {
     /// Open the global `/mcp` and make the user-scope registration point at it. `current` = an
     /// existing registration.
     async fn claude_mcp_serve(&self, bin: &Path, current: Option<&Registration>) -> Result<(), KeltaError> {
-        let r = SecretRef::new(TOKEN_REF);
-        let token = match self.resolver.resolve(&r, &SecretCtx::default()).await {
-            Ok(s) => s.expose().to_owned(),
-            Err(_) => {
-                let t = crate::spawn_env::token();
-                // Unsaved, it still serves this run; the next start registers a new one.
-                if let Err(e) = self.resolver.set(&r, &t).await {
-                    tracing::warn!(error = %e.message, "kelta MCP install token not saved");
-                }
-                t
-            }
-        };
+        let token = install_token(current);
         self.server.set_install_token(Some(&token));
         let port = match self.server.http_port().filter(|_| self.claude_mcp_ref.load(Ordering::SeqCst)) {
             Some(p) => p,
@@ -148,13 +144,12 @@ impl Core {
         self.claude_mcp_serve(&bin, None).await
     }
 
-    /// Remove: `claude mcp remove`, then revoke the install token and close the global `/mcp`.
+    /// Remove: `claude mcp remove` (the token goes with the registration), then revoke it and close
+    /// the global `/mcp`. A `dev.kelta`/`kelta-mcp` Keychain item left by builds before #275 is not
+    /// deleted: touching it would prompt.
     pub async fn claude_mcp_remove(&self) -> Result<(), KeltaError> {
         if let Some(bin) = self.claude_bin() {
             self.claude_mcp(&bin, &["remove", "--scope", "user", NAME]).await?;
-        }
-        if let Err(e) = self.resolver.delete(&SecretRef::new(TOKEN_REF)).await {
-            tracing::warn!(error = %e.message, "kelta MCP install token not deleted");
         }
         self.server.set_install_token(None);
         if self.claude_mcp_ref.swap(false, Ordering::SeqCst) {
@@ -173,6 +168,17 @@ mod tests {
         assert_eq!(registered_port("http://127.0.0.1:45678/mcp"), Some(45678));
         assert_eq!(registered_port("http://127.0.0.1:45678/mcp/s1"), Some(45678));
         assert_eq!(registered_port("http://127.0.0.1:45678/other"), None);
+    }
+
+    #[test]
+    fn token_from_the_registration() {
+        let reg = |auth: &str| ("http://127.0.0.1:1/mcp".to_owned(), auth.to_owned());
+        assert_eq!(install_token(Some(&reg("Bearer abc"))), "abc");
+        for fresh in
+            [install_token(None), install_token(Some(&reg(""))), install_token(Some(&reg("Bearer ")))]
+        {
+            assert!(fresh.len() >= 32, "{fresh}");
+        }
     }
 
     #[test]
