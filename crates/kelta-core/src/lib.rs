@@ -29,6 +29,7 @@ mod refine;
 pub mod rt;
 pub mod scheduler;
 pub mod sessions;
+mod setup;
 pub mod spawn_env;
 mod start;
 pub mod status;
@@ -703,6 +704,33 @@ impl CoreApi for Core {
     }
     fn settings(&self, project: Option<&ProjectId>) -> Arc<Settings> {
         self.cfg.effective(project)
+    }
+    fn project_list(&self) -> Vec<ProjectInfo> {
+        Core::project_list(self)
+    }
+    fn project_add(&self, path: &Path) -> Result<(ProjectInfo, ProjectDraft), KeltaError> {
+        let draft = self.project_detect(path)?;
+        // Claude adds projects mid-setup: keep the user on the setup tab instead of jumping to each one.
+        let prev = self.active_project();
+        let created = self.project_create(&draft)?;
+        self.project_activate(&prev)?;
+        let info = self.project_info(&created.id).unwrap_or(created);
+        Ok((info, draft))
+    }
+    fn settings_write(
+        &self,
+        layer: Layer,
+        project: Option<&ProjectId>,
+        path: &str,
+        value: serde_json::Value,
+    ) -> Result<(), KeltaError> {
+        self.config.layer_set(layer, project, None, path, value).map(drop)
+    }
+    async fn account_test(
+        &self,
+        account: &AccountId,
+    ) -> Result<kelta_proto::ipc::AccountTestResult, KeltaError> {
+        Ok(self.test_account(account).await)
     }
     async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
         self.rt.capture();

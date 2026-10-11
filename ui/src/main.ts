@@ -16,6 +16,7 @@ import { injectSprite } from '$lib/ui/icons';
 
 import * as registry from './app/registry';
 import Shell from './shell/Shell.svelte';
+import { offerOnboarding } from './views/onboarding/firstRun';
 
 // Action handlers of every lane (BUILD_PLAN §2.4): ui/src/shell/actions.ts + ui/src/views/*/actions.ts.
 import.meta.glob(['./shell/actions.ts', './views/*/actions.ts'], { eager: true });
@@ -50,7 +51,7 @@ async function start(): Promise<void> {
   const target = document.getElementById('app');
   if (!target) throw new Error('#app missing');
   mount(Shell, { target });
-  void stores.bootstrap();
+  void stores.bootstrap().then(offerOnboarding);
 
   // First frame after mount: clears the launch crash guard (ARCH §12.4) and marks cold start (the
   // main window's, not a detached one's).

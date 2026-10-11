@@ -1,6 +1,6 @@
 <script lang="ts">
   // First run (SPEC §5): dependency checks (claude, nvim, git, gh, glab, secret backend,
-  // notification daemon), then the two first steps: a project and an account.
+  // notification daemon), then the first steps: set up with Claude (#343), or a project and an account.
   import type { SheetProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { AppInfo, Diagnostics } from '$lib/gen';
@@ -14,6 +14,7 @@
 
   import { openDiagnostics } from '../diagnostics/open';
   import { needsAttention, sortChecks, STATUS_ICON } from '../diagnostics/report';
+  import { ONBOARDING_DONE } from './firstRun';
 
   let { onclose }: SheetProps = $props();
 
@@ -45,7 +46,7 @@
 
   function finish(): void {
     try {
-      localStorage.setItem('kelta.onboarding.done', '1');
+      localStorage.setItem(ONBOARDING_DONE, '1');
     } catch {
       // storage can be unavailable; the sheet simply shows again next time
     }
@@ -60,6 +61,11 @@
   async function addAccount(): Promise<void> {
     ui.closeSheet('onboarding');
     await dispatch('settings.open', { section: 'accounts' });
+  }
+
+  async function setUpWithClaude(): Promise<void> {
+    finish();
+    await dispatch('claude.setup');
   }
 
   async function showDiagnostics(): Promise<void> {
@@ -115,6 +121,18 @@
     <section>
       <h3>First steps</h3>
       <div class="steps">
+        <div class="step">
+          <Icon name="bot" size={18} />
+          <div>
+            <strong>Set up with Claude</strong>
+            <p>Claude Code finds your repositories and asks for the rest. Tokens stay in Kelta.</p>
+          </div>
+          <Button
+            variant={hasProject ? 'secondary' : 'primary'}
+            onclick={setUpWithClaude}
+            data-testid="onboarding-claude-setup">Set up with Claude</Button
+          >
+        </div>
         <div class="step" data-done={hasProject}>
           <Icon name={hasProject ? 'circle-check' : 'folder-plus'} size={18} />
           <div>

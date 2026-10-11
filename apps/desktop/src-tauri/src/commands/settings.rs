@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use kelta_core::Core;
 use kelta_proto::prelude::*;
-use kelta_proto::redact::redact_text;
 use serde_json::Value;
 use tauri::State;
 
@@ -166,43 +165,9 @@ pub async fn repo_trust(
     core.config().repo_trust(&project_id, &repo_id, trust, sha256.as_deref()).await
 }
 
-/// Resolve the account's provider through the core (so the cached provider / secret chain is
-/// exercised exactly as in normal use) and call `me()`. Provider failures are data, not errors.
+/// The account's provider `me()` through the core; provider failures are data, not errors.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn account_test(core: State<'_, Arc<Core>>, account_id: AccountId) -> Res<AccountTestResult> {
-    unpanic(test_account(core.inner().clone(), account_id)).await
-}
-
-async fn test_account(core: Arc<Core>, account_id: AccountId) -> Res<AccountTestResult> {
-    let settings = core.config().effective(None);
-    let Some(account) = settings.accounts.get(&account_id) else {
-        return Ok(AccountTestResult {
-            ok: false,
-            user: None,
-            error: Some(KeltaError::not_found(format!("unknown account `{account_id}`"))),
-        });
-    };
-    // a token typed seconds ago must win over a cached failure
-    if let Some(secret) = account.effective_secret() {
-        core.secret_resolver().invalidate(&secret);
-    }
-    let api: &Core = &core;
-    let result = if account.kind.is_code_host() {
-        match api.code_host_for(&account_id).await {
-            Ok(host) => host.me().await,
-            Err(e) => Err(e),
-        }
-    } else {
-        match api.tracker_for(&account_id).await {
-            Ok(tracker) => tracker.me().await,
-            Err(e) => Err(e),
-        }
-    };
-    Ok(match result {
-        Ok(user) => AccountTestResult { ok: true, user: Some(user), error: None },
-        Err(mut e) => {
-            e.message = redact_text(&e.message);
-            AccountTestResult { ok: false, user: None, error: Some(e) }
-        }
-    })
+    let core = core.inner().clone();
+    unpanic(async move { core.account_test(&account_id).await }).await
 }

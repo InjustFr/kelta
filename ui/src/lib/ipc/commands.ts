@@ -123,6 +123,8 @@ export interface Commands {
   /** Kelta's MCP registered in Claude Code at user scope; `null` = Claude Code not found. */
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
+  /** Installs Kelta's MCP in Claude Code if needed, then starts the setup session in Home (#343). */
+  claude_setup: { args: NoArgs; result: SessionInfo };
   claude_mcp_remove: { args: NoArgs; result: null };
   /** The last mode a Claude session switched to (#277); `null` = Claude's own default. */
   claude_permission_mode: { args: NoArgs; result: PermissionMode | null };
@@ -384,6 +386,7 @@ export const COMMAND_NAMES = [
   'notify_test',
   'claude_mcp_status',
   'claude_mcp_install',
+  'claude_setup',
   'claude_mcp_remove',
   'claude_permission_mode',
   'app_update_status',
@@ -568,6 +571,7 @@ export const clipboardWrite = wrap('clipboard_write');
 export const notifyTest = wrap('notify_test');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
+export const claudeSetup = wrap('claude_setup');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
 export const claudePermissionMode = wrap('claude_permission_mode');
 export const appUpdateStatus = wrap('app_update_status');

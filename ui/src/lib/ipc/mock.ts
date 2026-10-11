@@ -655,6 +655,19 @@ export function createMockTransport(options: MockOptions = {}): {
       claudeMcp = true;
       return null;
     },
+    claude_setup: () => {
+      claudeMcp = true;
+      const s = spawn('home', { type: 'claude' }, 'Set up Kelta', null);
+      const { layout } = openPane(layoutOf('home'), {
+        content: { kind: 'terminal', session_id: s.id },
+        placement: 'new_tab',
+        focus: true,
+        tab_title: 'Set up Kelta',
+        work_item_id: null,
+      });
+      backendLayoutChange('home', layout);
+      return s;
+    },
     claude_mcp_remove: () => {
       claudeMcp = false;
       return null;

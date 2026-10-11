@@ -225,7 +225,12 @@ async fn mcp_initialize_list_and_call() {
             "close_ticket",
             "claim_ticket",
             "report_progress",
-            "release_ticket"
+            "release_ticket",
+            "get_setup",
+            "add_project",
+            "set_setting",
+            "test_account",
+            "request_token"
         ]
     );
     for t in v["result"]["tools"].as_array().unwrap() {
@@ -457,7 +462,12 @@ async fn global_mcp_serves_the_board_tools() {
             "close_ticket",
             "claim_ticket",
             "report_progress",
-            "release_ticket"
+            "release_ticket",
+            "get_setup",
+            "add_project",
+            "set_setting",
+            "test_account",
+            "request_token"
         ]
     );
     let v = global(
@@ -532,7 +542,12 @@ async fn global_mcp_serves_the_board_tools() {
             "get_ticket_by_key",
             "claim_ticket",
             "report_progress",
-            "release_ticket"
+            "release_ticket",
+            "get_setup",
+            "add_project",
+            "set_setting",
+            "test_account",
+            "request_token"
         ]
     );
     let v = global(
@@ -542,5 +557,77 @@ async fn global_mcp_serves_the_board_tools() {
     )
     .await;
     assert_eq!(v["error"]["code"], -32602);
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn global_mcp_sets_kelta_up() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let setup = || async {
+        let (text, err) = global_call(port, "get_setup", json!({})).await;
+        assert!(!err, "{text}");
+        serde_json::from_str::<Value>(&text).unwrap()
+    };
+
+    // A fresh install: everything is missing.
+    assert!(setup().await["missing"][0].as_str().unwrap().starts_with("No project"));
+
+    let mut s = kelta_proto::settings::Settings::defaults();
+    let jira =
+        serde_json::from_value(json!({"kind": "jira", "base_url": "https://acme.atlassian.net"})).unwrap();
+    s.accounts.insert(AccountId::new("jira"), jira);
+    e.fake.set_settings(s);
+    let mut p = samples::project_info();
+    p.tracker = None;
+    e.fake.add_project(p.clone());
+    let v = setup().await;
+    let missing: Vec<&str> = v["missing"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(missing.contains(&"Account jira has no secret reference."), "{missing:?}");
+    assert!(missing.contains(&"Account jira feeds no ticket source."), "{missing:?}");
+    assert!(missing.contains(&format!("Project {} has no ticket source.", p.id).as_str()), "{missing:?}");
+    assert_eq!(v["projects"][0]["id"], json!(p.id));
+
+    // Writes go through core's validated settings write, on the layer asked for.
+    let (text, err) =
+        global_call(port, "set_setting", json!({"path": "accounts.jira.secret", "value": "keyring:jira"}))
+            .await;
+    assert!(!err, "{text}");
+    let (_, err) =
+        global_call(port, "set_setting", json!({"path": "x", "value": 1, "layer": "project"})).await;
+    assert!(err, "the project layer needs a project");
+    let args = json!({"path": "worktree.setup", "value": [], "layer": "project", "project": p.id});
+    let (_, err) = global_call(port, "set_setting", args).await;
+    assert!(!err);
+    let writes: Vec<Value> =
+        e.fake.calls().into_iter().filter(|c| c.method == "settings_write").map(|c| c.args).collect();
+    assert_eq!(
+        writes[0],
+        json!({"layer": "global", "project": null, "path": "accounts.jira.secret", "value": "keyring:jira"})
+    );
+    assert_eq!((&writes[1]["layer"], &writes[1]["project"]), (&json!("project"), &json!(p.id)));
+    e.fake.fail(
+        "settings_write",
+        kelta_proto::error::KeltaError::invalid("accounts.jira.secret: expected a reference"),
+    );
+    let (text, err) =
+        global_call(port, "set_setting", json!({"path": "accounts.jira.secret", "value": "x"})).await;
+    assert!(err && text.starts_with("InvalidArgument:"), "{text}");
+
+    // The token is typed in Kelta: a toast opening Settings → Accounts.
+    let (_, err) = global_call(port, "request_token", json!({"account": "nope"})).await;
+    assert!(err);
+    let (_, err) = global_call(port, "request_token", json!({"account": "jira"})).await;
+    assert!(!err);
+    let action = e.fake.toasts().pop().unwrap().action.unwrap();
+    assert_eq!(
+        (action.command.as_str(), action.args),
+        ("settings.open", Some(json!({"section": "accounts"})))
+    );
+
+    e.fake.respond("account_test", json!({"ok": true, "user": samples::user(), "error": null}));
+    let (text, err) = global_call(port, "test_account", json!({"account": "jira"})).await;
+    assert!(!err && text.starts_with("jira: signed in as"), "{text}");
     e.server.release_http();
 }

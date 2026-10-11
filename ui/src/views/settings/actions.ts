@@ -6,7 +6,7 @@
 import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
 import { findContent, focusPane, replacePaneContent, updateTab } from '$lib/layout';
-import { toasts, layout, projects } from '$lib/stores';
+import { toasts, layout, projects, sessions } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 
@@ -83,4 +83,16 @@ registerAction('claude.mcp_install', async () => {
 });
 registerAction('claude.mcp_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.mcp_offer', value: false });
+});
+
+// "Set up with Claude" (#343), from the onboarding and the palette: core installs Kelta's MCP when
+// needed and opens the setup session in Home.
+registerAction('claude.setup', async () => {
+  try {
+    const info = await ipc.claudeSetup();
+    sessions.upsert(info);
+    await activateProject(info.project_id);
+  } catch (err) {
+    toasts.error(err, 'Could not start the setup with Claude');
+  }
 });

@@ -123,6 +123,12 @@ pub async fn claude_mcp_install(core: State<'_, Arc<Core>>) -> Res<()> {
     core.claude_mcp_install().await
 }
 
+/// "Set up with Claude" (#343): installs Kelta's MCP if needed, then starts the setup session in Home.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_setup(core: State<'_, Arc<Core>>) -> Res<SessionInfo> {
+    core.claude_setup().await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn claude_mcp_remove(core: State<'_, Arc<Core>>) -> Res<()> {
     core.claude_mcp_remove().await
