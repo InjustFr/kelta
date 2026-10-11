@@ -61,9 +61,11 @@ export interface RailRow {
 }
 
 /** The rail's rows: every non-tool tab of every open project, in rail order then tab order. */
-export function railRows(): RailRow[] {
+export function railRows(lines = toolSubLines()): RailRow[] {
   return railProjects().flatMap((p) =>
-    (layout.get(p.id)?.tabs ?? []).filter((tab) => !isToolTab(tab)).map((tab) => ({ project: p.id, tab })),
+    (layout.get(p.id)?.tabs ?? [])
+      .filter((tab) => !isToolTab(tab, lines))
+      .map((tab) => ({ project: p.id, tab })),
   );
 }
 
@@ -78,12 +80,7 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** The tool a pane shows: a live tool session's or web instance's tool id; null otherwise (a tool the config no longer knows included). */
-export function paneTool(p: PaneNode): string | null {
-  const id = livePaneTool(p);
-  return id && tools.find(id) ? id : null;
-}
-
+/** The tool a pane shows: a live tool session's or web instance's tool id. */
 function livePaneTool(p: PaneNode): string | null {
   if (p.content.kind === 'web') {
     // webTools is in-memory: after a restart a persisted web tab has no instance, so it is a closable row.
@@ -96,18 +93,37 @@ function livePaneTool(p: PaneNode): string | null {
   return s?.kind.type === 'tool' && s.lifecycle === 'live' ? s.kind.tool_id : null;
 }
 
+/** A tool pane of an open project, listed under Tools: a sub-line, or a `user` tool's own row. */
+export interface ToolInstance {
+  project: ProjectId;
+  tab: Tab;
+  pane: PaneNode;
+  tool: string;
+}
+
+/**
+ * Every tool instance the rail's Tools section stands for, by pane id, in rail then tab order: the one
+ * definition behind the rail, `isToolTab` and `liveToolPane`. Components keep it in a `$derived`.
+ */
+export function toolSubLines(): Map<PaneId, ToolInstance> {
+  const home = projects.home?.id;
+  const lines = new Map<PaneId, ToolInstance>();
+  for (const p of railProjects())
+    for (const tab of layout.get(p.id)?.tabs ?? [])
+      for (const pane of allPanes(tab.root)) {
+        const id = livePaneTool(pane);
+        const tool = id ? tools.find(id) : undefined;
+        // A tool the config no longer knows is none; a `user` tool lives in Home, elsewhere its tab is a band row.
+        if (tool && (p.id === home || tool.scope !== 'user'))
+          lines.set(pane.id, { project: p.id, tab, pane, tool: tool.id });
+      }
+  return lines;
+}
+
 /** A tab made only of tool panes: the rail lists it under Tools, not in its project's band. */
-export function isToolTab(tab: Tab): boolean {
+export function isToolTab(tab: Tab, lines = toolSubLines()): boolean {
   const panes = allPanes(tab.root);
-  // A `user` tool has no rail sub-line, so outside Home its tab stays a closable row in its band.
-  const inHome = layout.get(projects.home?.id ?? '')?.tabs.some((t) => t.id === tab.id) ?? false;
-  return (
-    panes.length > 0 &&
-    panes.every((p) => {
-      const id = paneTool(p);
-      return id !== null && (inHome || tools.find(id)?.scope !== 'user');
-    })
-  );
+  return panes.length > 0 && panes.every((p) => lines.get(p.id)?.tab.id === tab.id);
 }
 
 /** Live sessions of a project that no pane shows (tools aside): the dim rows at the end of its band. */
@@ -117,23 +133,6 @@ export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
   return sessions
     .forProject(projectId)
     .filter((s) => s.lifecycle === 'live' && s.kind.type !== 'tool' && !findSession(l, s.id));
-}
-
-/** A tool pane of an open project (a Tools sub-line). */
-export interface ToolInstance {
-  project: ProjectId;
-  tab: Tab;
-  pane: PaneNode;
-}
-
-export function toolInstances(toolId: string): ToolInstance[] {
-  return railProjects().flatMap((p) =>
-    (layout.get(p.id)?.tabs ?? []).flatMap((tab) =>
-      allPanes(tab.root)
-        .filter((pane) => paneTool(pane) === toolId)
-        .map((pane) => ({ project: p.id, tab, pane })),
-    ),
-  );
 }
 
 /** Rail label of a tab: `KEY title` for a work tab whose title lacks the key. */

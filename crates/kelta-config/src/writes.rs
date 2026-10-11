@@ -40,19 +40,15 @@ fn ensure_newline(mut s: String) -> String {
 }
 
 /// Only hand-written files are lenient about the colour: an IPC caller gets an error, nothing is written.
-fn check_color(color: Option<&str>) -> Result<(), KeltaError> {
-    match color {
-        Some(c)
-            if !validate::schema_issues(
-                Layer::Project,
-                &json!({"project": {"id": "x", "name": "x", "color": c}}),
-            )
-            .is_empty() =>
-        {
-            Err(KeltaError::invalid(validate::PROJECT_COLOR))
-        }
-        _ => Ok(()),
+fn check_color(doc: &DocumentMut) -> Result<(), KeltaError> {
+    let color = ["project".to_owned(), "color".to_owned()];
+    if validate::schema_issues(Layer::Project, &toml_io::item_to_json(doc.as_item()))
+        .iter()
+        .any(|i| i.path == color)
+    {
+        return Err(KeltaError::invalid(validate::PROJECT_COLOR));
     }
+    Ok(())
 }
 
 fn issues_error(file: &Path, issues: &[ValidationIssue]) -> KeltaError {
@@ -489,7 +485,6 @@ impl ConfigService {
                 "`{id}` is not a valid project id (use [a-z0-9-], 1-40 chars; `home` and `inbox` are reserved)"
             )));
         }
-        check_color(draft.color.as_deref())?;
         let path = self.dirs.projects_dir().join(format!("{id}.toml"));
         let g = self.gate.lock();
         if path.exists() || self.inner.read().projects.contains_key(&id) {
@@ -508,6 +503,7 @@ impl ConfigService {
         )?;
         if let Some(c) = &draft.color {
             set(&mut doc, &["project", "color"], json!(c))?;
+            check_color(&doc)?;
         }
         if let Some(i) = &draft.icon {
             set(&mut doc, &["project", "icon"], json!(i))?;
@@ -538,7 +534,6 @@ impl ConfigService {
         id: &ProjectId,
         patch: &ProjectPatch,
     ) -> Result<Arc<ProjectConfig>, KeltaError> {
-        check_color(patch.color.as_deref())?;
         let target = self.resolve_target(Layer::Project, Some(id), None)?;
         let g = self.gate.lock();
         let mut doc = self.read_doc(&target)?;
@@ -550,6 +545,7 @@ impl ConfigService {
         }
         if let Some(c) = &patch.color {
             set(&mut doc, "color", json!(c))?;
+            check_color(&doc)?;
         }
         if let Some(i) = &patch.icon {
             set(&mut doc, "icon", json!(i))?;

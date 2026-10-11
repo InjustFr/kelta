@@ -6,12 +6,12 @@
 
 import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, ToolScope, WorkItemId } from '$lib/gen';
 import { dispatch, registerAction } from '$lib/actions';
-import { findSession, focusPane, type PaneLocation } from '$lib/layout';
+import { focusPane, paneSession, type PaneLocation } from '$lib/layout';
 import { toolCheck, toolOpen } from '$lib/ipc/commands';
 import { rememberWebTool } from '$lib/plugin-host/web.svelte';
 import { layout, projects, sessions, toasts, tools, ui } from '$lib/stores';
 import { flushJump, navStep } from '../../shell/jumplist';
-import { activateProject, focusedPane, railTools } from '../../shell/nav';
+import { activateProject, focusedPane, railTools, toolSubLines } from '../../shell/nav';
 import { focusedWorkItem } from '../work/fixloop.svelte';
 
 export const EMPTY_CTX: TemplateCtx = {
@@ -27,8 +27,8 @@ export const EMPTY_CTX: TemplateCtx = {
 /**
  * Opens a tool in its host per its `scope`: `work` (default) at its placement in `projectId`, one
  * instance per work item (`ctx.work_item_id`); `project` as its own tab, one per project; `user` as
- * its own tab in Home, one for the app. A running PTY instance gets focus instead of a second copy
- * (web tools reopen). Activates the host first. Returns true when opened or focused, the failed
+ * its own tab in Home, one for the app. A shown instance (PTY or web) gets focus instead of a second
+ * copy. Activates the host first. Returns true when opened or focused, the failed
  * check when the open failed because the binary is missing, false otherwise (toasted). Checks only
  * after a failed open.
  */
@@ -64,8 +64,8 @@ export async function openTool(
 }
 
 /**
- * The live PTY instance of `toolId` in `projectId`, if shown: of this work item (`null` = none) for a
- * `work` tool, any for a `project` or `user` one (the caller passes Home for `user`).
+ * The shown instance of `toolId` in `projectId` (a Tools sub-line, PTY or web): of this work item
+ * (`null` = none) for a `work` tool, any for a `project` or `user` one (the caller passes Home for `user`).
  */
 export function liveToolPane(
   projectId: ProjectId,
@@ -73,20 +73,12 @@ export function liveToolPane(
   workItemId: WorkItemId | null,
   scope: ToolScope = 'work',
 ): PaneLocation | null {
-  const l = layout.get(projectId);
-  const live = sessions
-    .forProject(projectId)
-    .filter(
-      (s) =>
-        s.kind.type === 'tool' &&
-        s.kind.tool_id === toolId &&
-        s.lifecycle === 'live' &&
-        (scope !== 'work' || (s.work_item_id ?? null) === workItemId),
-    );
-  // A live instance in no pane (kept running) must not mask a shown one.
-  for (const s of live) {
-    const at = l && findSession(l, s.id);
-    if (at) return at;
+  for (const x of toolSubLines().values()) {
+    if (x.project !== projectId || x.tool !== toolId) continue;
+    const sid = paneSession(x.pane);
+    // A web instance carries no work item: its tab's stands in.
+    const item = sid ? (sessions.get(sid)?.work_item_id ?? null) : (x.tab.work_item_id ?? null);
+    if (scope !== 'work' || item === workItemId) return { tabId: x.tab.id, paneId: x.pane.id };
   }
   return null;
 }
