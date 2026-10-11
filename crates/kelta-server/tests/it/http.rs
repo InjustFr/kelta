@@ -217,6 +217,7 @@ async fn mcp_initialize_list_and_call() {
             "get_review_feedback",
             "add_review_comment",
             "notify",
+            "ask",
             "list_tickets",
             "get_ticket_by_key",
             "transition_ticket_by_key",
@@ -314,6 +315,19 @@ async fn mcp_initialize_list_and_call() {
 
     let (text, err) = call(port, sid.as_str(), "mt", "notify", json!({})).await;
     assert!(err && text.contains("message"));
+
+    let ask = json!({"question":"Which one?","options":["A","B","C"],"body_md":"**why**"});
+    let (text, err) = call(port, sid.as_str(), "mt", "ask", ask).await;
+    assert!(!err && text.contains("End your turn"), "{text}");
+    let q = e.fake.sessions()[0].claude.clone().unwrap().question.unwrap();
+    assert_eq!(q.options, ["A", "B", "C"]);
+    let asked = e.fake.calls().into_iter().find(|c| c.method == "session_ask").unwrap();
+    assert_eq!(asked.args["body_md"], "**why**");
+    for options in [json!([]), json!([""]), json!(["a\rb"]), json!([1])] {
+        let (text, err) =
+            call(port, sid.as_str(), "mt", "ask", json!({"question":"?","options":options})).await;
+        assert!(err && text.contains("options"), "{text}");
+    }
     e.server.release_http();
 }
 

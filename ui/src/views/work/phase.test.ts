@@ -356,6 +356,18 @@ describe('background run claims (#235)', () => {
     });
     expect(phaseOf(run('done'), null, null, null).id).not.toBe('run');
   });
+
+  it("an `ask` question (#356) beats the run's phase while its session is live", () => {
+    const question = { question: 'Which one?', options: ['A', 'B'], body_html: null };
+    const asker = { ...claude('waiting_user'), claude: { ...samples.sessionInfo.claude!, question } };
+    expect(phaseOf(run('running'), asker, null, null)).toMatchObject({
+      id: 'asking',
+      label: 'Which one?',
+      lamp: 'needs_input',
+      section: 'needs_you',
+    });
+    expect(phaseOf(run('running'), { ...asker, lifecycle: 'exited' }, null, null).id).toBe('run');
+  });
 });
 
 describe('New comments (#208): the Fix with Claude watermark', () => {

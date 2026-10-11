@@ -55,7 +55,8 @@
       "ticket": "Work on {ticket.key}: {ticket.title}. The full ticket is in {run}/ticket.md. Read it, then propose a short plan before editing.",
       "workflow": "Run the saved workflow \"{workflow}\" with the JSON in {args} as its args. The ticket is {ticket.key}: {ticket.title}; its full text is in {file}."
     },
-    "queue_hold_pct": null
+    "queue_hold_pct": null,
+    "terminal_command": []
   },
   "commands": [],
   "editor": {
@@ -279,6 +280,7 @@
   },
   "session_templates": [
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "claude+editor",
       "label": "Claude + editor",
@@ -306,6 +308,7 @@
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "review",
       "label": "Review",
@@ -348,6 +351,7 @@
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "claude",
       "label": "Claude",
@@ -360,6 +364,7 @@
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "editor",
       "label": "Editor",
@@ -372,6 +377,7 @@
       "options": []
     },
     {
+      "claude_host": "builtin",
       "enabled": true,
       "id": "shell",
       "label": "Shell",

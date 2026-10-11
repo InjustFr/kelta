@@ -32,7 +32,7 @@ import {
   rebaseStep,
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
-import { claudeOf, phaseNow, prOf } from './live';
+import { askerOf, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
@@ -69,7 +69,7 @@ async function step(c: Ctx, step: string): Promise<void> {
 }
 
 async function goClaude({ item }: Ctx): Promise<void> {
-  const claude = claudeOf(item);
+  const claude = askerOf(item) ?? claudeOf(item);
   // A live or dormant Claude is shown (attaching resumes a dormant one); a dead one is respawned.
   if (claude && claude.lifecycle !== 'exited' && (await revealSession(claude.id))) return;
   await goToWork(item);

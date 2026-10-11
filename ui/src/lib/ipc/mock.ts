@@ -947,7 +947,12 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     session_write: ({ id, data }) => {
-      session(id);
+      const s = session(id);
+      // Like core (#356): typed input answers an `ask` question; terminal replies start with ESC.
+      if (s.claude?.question && data[0] !== 0x1b) {
+        s.claude.question = null;
+        emit({ type: 'session.updated', session: clone(s) });
+      }
       // Echo input back like a cooked tty.
       const text = new TextDecoder().decode(data).replace(/\r/g, '\r\n');
       sendFrame(id, FRAME_DATA, new TextEncoder().encode(text));

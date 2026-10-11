@@ -3,6 +3,7 @@
 
 import { msg, t, tn } from '$lib/i18n/index.svelte';
 import type {
+  ClaudeQuestion,
   GitStatus,
   OutsideSession,
   Review,
@@ -58,6 +59,7 @@ export type WorkActionId =
   | 'finish';
 
 export type PhaseId =
+  | 'asking'
   | 'run'
   | 'failed'
   | 'starting'
@@ -120,6 +122,10 @@ function p(
   return { id, label, detail, lamp, primary, primaryLabel, section };
 }
 
+/** The open MCP `ask` question of a live session (#356). */
+export const questionOf = (s: SessionInfo | null | undefined): ClaudeQuestion | null =>
+  (s?.lifecycle === 'live' && s.claude?.question) || null;
+
 /** `1.8k` for big counts. */
 const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${n}`);
 
@@ -175,6 +181,9 @@ function phaseRow(
   pr: PhasePr | null,
   git: PhaseGit | null,
 ): Phase {
+  // `claude` is the asking session when one asks (`phaseNow`): its question beats the run's phase.
+  const q = questionOf(claude);
+  if (q) return p('asking', q.question, '', 'needs_input', 'go_claude', t('Go to Claude'), 'needs_you');
   const run = item.run;
   // A background run's claim (#235): its own phase and state, `note` as the detail.
   if (run && run.state !== 'done') {

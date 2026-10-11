@@ -165,15 +165,24 @@ async fn focus_window(env: &LoginEnv, procs: &HashMap<u32, (u32, String)>, chain
 }
 
 impl Core {
-    /// Brings forward the tmux pane, then the window, a Claude session Kelta did not start runs in.
+    /// Brings forward the tmux pane, then the window, a Claude session Kelta did not start runs in, or a
+    /// Kelta session whose Claude runs in an external terminal or tmux (#347).
     /// `None` when it did; else where it runs (terminal or tmux pane, may be empty) for the UI's note.
     pub async fn outside_jump(&self, id: &str) -> Result<Option<String>, KeltaError> {
-        let pid = self
-            .outside
-            .lock()
-            .get(id)
-            .map(|s| s.pid)
-            .ok_or_else(|| KeltaError::not_found("session ended"))?;
+        let outside = self.outside.lock().get(id).map(|s| s.pid);
+        let pid = match outside {
+            Some(p) => p,
+            None => {
+                let sid = kelta_proto::ids::SessionId::new(id);
+                let hosted = self.sessions.lock().get(&sid).is_some_and(|e| {
+                    e.info.lifecycle == kelta_proto::model::Lifecycle::Live
+                        && e.info.claude.as_ref().is_some_and(|c| c.host.is_some())
+                });
+                hosted
+                    .then(|| crate::claude_host::pid(&self.dirs.session_runtime(&sid.sid8())))
+                    .ok_or_else(|| KeltaError::not_found("session ended"))?
+            }
+        };
         let Some(pid) = pid else { return Ok(Some(String::new())) };
         let env = &self.login_env;
         let procs = parse_ps(&out(env, "ps", &["-wwAo", "pid=,ppid=,comm="]).await.unwrap_or_default());

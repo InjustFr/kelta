@@ -69,4 +69,9 @@ queue_hold_pct: number | null,
 /**
  * Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).
  */
-auto_park_after_mins: number, };
+auto_park_after_mins: number, 
+/**
+ * Opens a template's Claude when its host is `terminal`: `{command}` (the script to run), `{cwd}`,
+ * `{shell}`. Empty = Terminal on macOS, `x-terminal-emulator -e` on Linux.
+ */
+terminal_command: Array<string>, };

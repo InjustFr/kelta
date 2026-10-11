@@ -298,6 +298,15 @@ pub trait CoreApi: Send + Sync {
     async fn session_set_usage(&self, _id: &SessionId, _usage: ClaudeUsage) -> Result<(), KeltaError> {
         Ok(())
     }
+    /// MCP `ask` (#356): show the question on the session (needs input) until its next input.
+    /// `body_md` comes from the session: core renders and sanitizes it.
+    fn session_ask(
+        &self,
+        id: &SessionId,
+        question: String,
+        options: Vec<String>,
+        body_md: Option<String>,
+    ) -> Result<(), KeltaError>;
     /// Every hook of a session, for its Claude `Workflow` runs (#272): core re-reads the runs the
     /// hook concerns and emits `workflow.updated`. Never fails: the files are Claude internals.
     fn session_claude_runs_hook(&self, _id: &SessionId, _payload: &crate::hooks::HookPayload) {}

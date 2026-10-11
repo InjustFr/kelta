@@ -5,6 +5,7 @@
   import { projects, sessions, toasts, work } from '$lib/stores';
   import { Button, Kbd } from '$lib/ui';
 
+  import AskBar from '../views/work/AskBar.svelte';
   import { sessionLabel } from '../views/work/live';
   import { flushJump } from './jumplist';
   import { revealSession } from './nav';
@@ -131,6 +132,7 @@
       <span class="proj">{projects.byId(s.project_id)?.name ?? ''}</span>
       <span class="name">{sessionLabel(s)}</span>
     </header>
+    <AskBar session={s} full onanswer={() => peek.close()} />
     {#if message && !asking}
       <p class="message" data-testid="peek-message">{message}</p>
       <details class="screen">
