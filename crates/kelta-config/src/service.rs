@@ -17,7 +17,7 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId};
 use kelta_proto::settings::{
     EffectiveSettings, Layer, ProjectConfig, REPO_EXEC_KEYS, RuntimeOverrides, Settings, SettingsDiff,
-    Severity, ValidationIssue,
+    Severity, ValidationIssue, sources_from_trackers,
 };
 use parking_lot::{Mutex, RwLock};
 use serde_json::{Map, Value};
@@ -103,6 +103,20 @@ impl FileLayer {
 pub(crate) struct Computed {
     pub settings: Arc<Settings>,
     pub doc: Arc<EffectiveSettings>,
+}
+
+impl Computed {
+    /// `sources` plus the deprecated `[project.tracker]` blocks (#264): folded once per build, so
+    /// core and the UI read the same list. Idempotent (an already folded block only joins its source).
+    fn with_legacy_trackers(&self, legacy: &[ProjectConfig]) -> Self {
+        let mut settings = (*self.settings).clone();
+        settings.sources = sources_from_trackers(&settings.sources, legacy);
+        let mut doc = (*self.doc).clone();
+        if let (Some(o), Ok(v)) = (doc.value.as_object_mut(), serde_json::to_value(&settings.sources)) {
+            o.insert("sources".into(), v);
+        }
+        Self { settings: Arc::new(settings), doc: Arc::new(doc) }
+    }
 }
 
 #[derive(Clone)]
@@ -824,6 +838,15 @@ impl ConfigService {
                 }
             };
             projects.insert(stem, ProjectEntry { file, config: cfg, repos, eff });
+        }
+        let legacy: Vec<ProjectConfig> =
+            projects.values().filter(|e| e.config.tracker.is_some()).map(|e| (*e.config).clone()).collect();
+        let mut global_eff = global_eff;
+        if !legacy.is_empty() {
+            global_eff = global_eff.with_legacy_trackers(&legacy);
+            for e in projects.values_mut() {
+                e.eff = e.eff.with_legacy_trackers(&legacy);
+            }
         }
         Inner { global, keybindings, projects, rejected, global_eff, plugin_defaults }
     }

@@ -261,7 +261,11 @@ describe('TicketDetail', () => {
     await waitFor(() =>
       expect(mock.calls.filter((c) => c.cmd === 'work_plan').map((c) => c.args)).toEqual([
         // the parent has no work item: no pick, the backend picks (not the account's project)
-        { project_id: null, source: { kind: 'ticket', ticket: itemOf('SHOP-160').ticket.ref } },
+        {
+          project_id: null,
+          source: { kind: 'ticket', ticket: itemOf('SHOP-160').ticket.ref },
+          source_id: null,
+        },
       ]),
     );
   });

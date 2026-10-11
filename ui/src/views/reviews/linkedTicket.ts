@@ -24,7 +24,9 @@ export async function openLinkedTicket(
   const tv = ui.view !== null ? globalContent('tickets') : null;
   const loaded =
     tv?.kind === 'tickets' &&
-    tickets.items(tv.scope, tv.view_id, tv.who).find((i) => sameKey(i.ticket.ref.key, key, repo));
+    tickets
+      .items(tv.scope, tv.view_id, tv.who, tv.source_id ?? null)
+      .find((i) => sameKey(i.ticket.ref.key, key, repo));
   if (loaded) {
     openView('tickets', ticketKey(loaded.ticket.ref));
     return;

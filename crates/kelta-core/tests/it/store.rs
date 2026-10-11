@@ -36,7 +36,7 @@ async fn migrations_from_empty_and_idempotent() {
     assert_eq!(rows, SCHEMA_VERSION, "one row per applied migration");
     assert_eq!(s.call(|c| q::ui_state_get(c, "onboarding_done")).await.unwrap().as_deref(), Some("true"));
     // migrate again explicitly: still one version row
-    let v = s.call(|c| migrations::migrate(c).map_err(kelta_core::store::db_err)).await.unwrap();
+    let v = s.call(|c| migrations::migrate(c, &[]).map_err(kelta_core::store::db_err)).await.unwrap();
     assert_eq!(v, SCHEMA_VERSION);
 }
 
@@ -153,6 +153,55 @@ async fn claim_item_is_atomic_and_round_trips_the_run() {
     let again = s.claim_item(&claim("s9")).await.unwrap().unwrap();
     assert_eq!(again.id, got.id);
     assert_eq!(again.run.unwrap().session_id, Some(SessionId::new("s9")));
+}
+
+#[tokio::test]
+async fn v17_backfills_the_ticket_source_once_from_the_only_source_on_the_account() {
+    use kelta_proto::settings::Source;
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let src = |id: &str, account: &str| {
+        let mut s = Source { id: id.into(), ..Source::default() };
+        s.tracker.account = account.into();
+        s
+    };
+    let item = |id: &str, account: &str| {
+        let mut w = kelta_proto::samples::work_item();
+        w.id = WorkItemId::new(id);
+        w.ticket = Some(TicketRef { account: account.into(), key: id.into(), id: id.into() });
+        w.ticket_source = None;
+        w
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        for w in [item("a", "jira"), item("b", "linear"), item("c", "gone")] {
+            s.put_item(&w).await.unwrap();
+        }
+        // back to a v16 database holding items started before sources were stored
+        s.call(|c| {
+            c.execute("DELETE FROM schema_version WHERE v = 17", []).map_err(kelta_core::store::db_err)
+        })
+        .await
+        .unwrap();
+    }
+    let sources = vec![src("product", "jira"), src("eng", "linear"), src("ops", "linear")];
+    async fn source_of(s: &Store, id: &str) -> Option<String> {
+        s.get_item(&WorkItemId::new(id)).await.unwrap().unwrap().ticket_source
+    }
+    {
+        let s = Store::open_with_sources(&db, sources.clone()).unwrap();
+        assert_eq!(source_of(&s, "a").await.as_deref(), Some("product"), "the only source on jira");
+        assert_eq!(source_of(&s, "b").await, None, "two sources on linear: unknown");
+        assert_eq!(source_of(&s, "c").await, None, "no source on the account");
+        s.call(|c| {
+            c.execute("UPDATE work_items SET ticket_source = NULL", []).map_err(kelta_core::store::db_err)
+        })
+        .await
+        .unwrap();
+    }
+    // once: a later open never guesses again
+    let s = Store::open_with_sources(&db, sources).unwrap();
+    assert_eq!(source_of(&s, "a").await, None);
 }
 
 #[tokio::test]

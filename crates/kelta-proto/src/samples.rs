@@ -861,6 +861,8 @@ pub fn all() -> Vec<Fixture> {
                     error: KeltaError::network("offline"),
                 }],
                 people: vec![],
+                scope: Scope::Source { id: "product".into() },
+                view_id: Some("mine".into()),
             }
         ),
         fx!("ticket", Ticket, ticket()),

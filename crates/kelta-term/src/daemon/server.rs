@@ -146,8 +146,20 @@ fn serve_as(listener: UnixListener, host: PtyTerminalHost, idle_grace: Duration,
     }
 }
 
+fn reply(tx: &Sender<Vec<u8>>, seq: u64, result: Result<Value, KeltaError>) {
+    if seq == 0 {
+        return;
+    }
+    match encode(&Out::Reply { seq, result }, &[]) {
+        Ok(m) => {
+            let _ = tx.send(m);
+        }
+        Err(e) => tracing::warn!(error = %e, "keltad: reply not encodable"),
+    }
+}
+
 impl Daemon {
-    fn serve_conn(&self, stream: UnixStream) {
+    fn serve_conn(self: Arc<Self>, stream: UnixStream) {
         match peer_uid(&stream) {
             Ok(u) if u == self.uid => {}
             Ok(u) => return tracing::warn!(peer_uid = u, "keltad: rejected connection from another uid"),
@@ -180,15 +192,20 @@ impl Daemon {
                 break;
             };
             let seq = call.seq;
-            let result = self.handle(&tx, seq, call.req, raw);
-            if seq != 0 {
-                match encode(&Out::Reply { seq, result }, &[]) {
-                    Ok(m) => {
-                        let _ = tx.send(m);
-                    }
-                    Err(e) => tracing::warn!(error = %e, "keltad: reply not encodable"),
+            if matches!(call.req, Req::HistorySearch { .. } | Req::HistoryTail { .. }) {
+                // Scans of the on-disk logs take a while: keystrokes, resizes and acks of every
+                // terminal on this connection must not wait behind them.
+                let (d, t, req) = (self.clone(), tx.clone(), call.req);
+                let r = std::thread::Builder::new()
+                    .name("keltad-history".into())
+                    .stack_size(THREAD_STACK)
+                    .spawn(move || reply(&t, seq, d.handle(&t, seq, req, &[])));
+                if let Err(e) = r {
+                    reply(&tx, seq, Err(KeltaError::internal(format!("keltad: history thread: {e}"))));
                 }
+                continue;
             }
+            reply(&tx, seq, self.handle(&tx, seq, call.req, raw));
         }
         let _ = tx.send(Vec::new());
         self.idle.update(|s| s.0 -= 1);
@@ -333,6 +350,64 @@ mod tests {
         let mut buf = Vec::new();
         let _ = s.read_to_end(&mut buf);
         assert!(buf.is_empty(), "rejected peer got a reply");
+    }
+
+    /// #262: a client's slow history search must not hold up its other calls.
+    #[test]
+    fn write_completes_while_a_history_search_blocks() {
+        use std::os::unix::ffi::OsStrExt;
+
+        use super::super::{SpawnSpec, read_msg};
+        let tmp = tempfile::tempdir().unwrap();
+        let hist = tmp.path().join("history");
+        std::fs::create_dir(&hist).unwrap();
+        // The search opens `slow.1.log` first: a FIFO blocks it until a writer opens it.
+        let fifo = hist.join("slow.1.log");
+        let c = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        // SAFETY: plain syscall with a NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        let sock = tmp.path().join("run/keltad.sock");
+        let l = bind(&sock).unwrap();
+        let h = PtyTerminalHost::with_history_dir(
+            TerminalLimits::default(),
+            crate::backend::default_backend(),
+            hist,
+        );
+        std::thread::spawn(move || serve(l, h, Duration::from_secs(30)));
+        let mut s = UnixStream::connect(&sock).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let cat = SessionId::new("cat");
+        let spec = SpawnSpec {
+            id: cat.clone(),
+            program: "/bin/cat".into(),
+            args: Vec::new(),
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+        };
+        let search =
+            Req::HistorySearch { ids: vec![SessionId::new("slow")], query: "needle".into(), limit: 10 };
+        for (seq, req, raw) in
+            [(1, Req::Spawn { spec }, &b""[..]), (2, search, b""), (3, Req::Write { id: cat }, b"x")]
+        {
+            s.write_all(&encode(&Call { seq, req }, raw).unwrap()).unwrap();
+        }
+        let mut r = BufReader::new(s);
+        let mut reply = || loop {
+            let body = read_msg(&mut r).unwrap().unwrap();
+            if let Some((Out::Reply { seq, result }, _)) = decode::<Out>(&body) {
+                return (seq, result.unwrap());
+            }
+        };
+        assert_eq!(reply(), (1, Value::Null));
+        assert_eq!(reply(), (3, Value::Null), "the write waited for the search");
+        std::fs::write(&fifo, "a needle\n").unwrap();
+        let (seq, hits) = reply();
+        assert_eq!(seq, 2);
+        assert!(hits.to_string().contains("a needle"), "{hits}");
     }
 
     #[test]

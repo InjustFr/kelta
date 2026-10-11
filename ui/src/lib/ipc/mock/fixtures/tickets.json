@@ -38,6 +38,7 @@
     "project_ids": ["shop"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [
       {
         "url": "https://github.com/acme/shop-api/pull/309",
@@ -114,6 +115,7 @@
     "project_ids": ["shop"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": true,
@@ -158,6 +160,7 @@
     "project_ids": ["shop"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": true,
@@ -207,6 +210,7 @@
     "project_ids": ["shop"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [
       {
         "url": "https://github.com/acme/shop-api/pull/88",
@@ -283,6 +287,7 @@
     "project_ids": ["billing"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [
       {
         "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/42",
@@ -346,6 +351,7 @@
     "project_ids": ["billing"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [
       {
         "url": "https://gitlab.corp.example/fin/billing/core/-/merge_requests/44",
@@ -409,6 +415,7 @@
     "project_ids": ["billing"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": false,
@@ -458,6 +465,7 @@
     "project_ids": ["kelta-tools"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [
       {
         "url": "https://github.com/ada/kelta-tools/pull/13",
@@ -516,6 +524,7 @@
     "project_ids": ["kelta-tools"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a009",
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": true,
@@ -565,6 +574,7 @@
     "project_ids": [],
     "work_item_id": null,
     "view_ids": [],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": false,
@@ -609,6 +619,7 @@
     "project_ids": [],
     "work_item_id": null,
     "view_ids": [],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": false,
@@ -658,6 +669,7 @@
     "project_ids": ["shop"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": true,
@@ -702,6 +714,7 @@
     "project_ids": ["billing"],
     "work_item_id": null,
     "view_ids": ["mine"],
+    "source_ids": [],
     "prs": [],
     "caps": {
       "board_columns": false,

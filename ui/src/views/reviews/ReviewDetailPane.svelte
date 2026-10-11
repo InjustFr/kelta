@@ -235,7 +235,7 @@
           </Button>
         {/if}
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
-        <PluginActions kind="review" size="md" ctx={reviewCtx(rv, projectId)} />
+        <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       </div>
     </header>
 

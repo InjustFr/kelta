@@ -19,6 +19,7 @@ use kelta_proto::ids::{PluginId, ProjectId, SessionId, TabId, WorkItemId};
 use kelta_proto::model::{
     NextUp, NextUpItem, ReviewNote, StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus,
 };
+use kelta_proto::settings::Source;
 use kelta_proto::store::{
     LayoutRow, ProjectOpenRow, ProviderCacheRow, SeenReviewRow, SessionRow, TRIGGER_LOG_CAP, TriggerLogRow,
 };
@@ -40,19 +41,24 @@ pub struct Store {
 impl Store {
     /// Open (or create) `<data>/kelta.db`.
     pub fn open(path: &Path) -> Result<Arc<Self>, KeltaError> {
+        Self::open_with_sources(path, Vec::new())
+    }
+
+    /// `open`, with the config's ticket sources for the migrations that need them (v17).
+    pub fn open_with_sources(path: &Path, sources: Vec<Source>) -> Result<Arc<Self>, KeltaError> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
         let p = path.to_path_buf();
-        Self::start(Some(p.clone()), move || Connection::open(&p))
+        Self::start(Some(p.clone()), sources, move || Connection::open(&p))
     }
 
     /// In-memory database (tests, or fallback when the data dir is unusable).
     pub fn open_in_memory() -> Result<Arc<Self>, KeltaError> {
-        Self::start(None, Connection::open_in_memory)
+        Self::start(None, Vec::new(), Connection::open_in_memory)
     }
 
-    fn start<F>(path: Option<PathBuf>, open: F) -> Result<Arc<Self>, KeltaError>
+    fn start<F>(path: Option<PathBuf>, sources: Vec<Source>, open: F) -> Result<Arc<Self>, KeltaError>
     where
         F: FnOnce() -> rusqlite::Result<Connection> + Send + 'static,
     {
@@ -63,7 +69,7 @@ impl Store {
             std::thread::Builder::new().name("kelta-sqlite".into()).stack_size(512 * 1024).spawn(move || {
                 let opened = open().and_then(|mut c| {
                     configure(&c)?;
-                    migrations::migrate(&mut c)?;
+                    migrations::migrate(&mut c, &sources)?;
                     if let Err(e) = q::prune(&c) {
                         tracing::warn!(error = %e, "cannot prune the provider cache and seen reviews");
                     }

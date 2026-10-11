@@ -673,8 +673,8 @@ impl ConfigService {
             .read()
             .projects
             .values()
-            // an account-less block is no valid source: it stays on the read path, untouched
-            .filter(|e| e.config.tracker.as_ref().is_some_and(|t| !t.account.as_str().is_empty()))
+            // a block naming no account at all is no source: it stays, unused, until edited
+            .filter(|e| e.config.tracker.as_ref().is_some_and(|t| t.source_account().is_some()))
             .map(|e| (e.file.path.clone(), (*e.config).clone()))
             .collect();
         if found.is_empty() {

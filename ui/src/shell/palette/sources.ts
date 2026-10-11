@@ -10,7 +10,7 @@ import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
 import { plugins, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
-import { attentionRank, lampOf, reviewKey, type LampLevel } from '$lib/stores/reducers';
+import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
@@ -180,12 +180,8 @@ function commandCtx(cmd: CommandDef): Partial<TemplateCtx> | null {
     case 'ticket':
       if (content?.kind !== 'ticket_detail') return null;
       return ticketCtx(content.ticket, work.forTicket(content.ticket)?.id ?? null, [], projects.activeId);
-    case 'review': {
-      if (content?.kind !== 'review_detail') return null;
-      // The pane's own review once loaded; its ref alone before (no `{pr.*}` yet).
-      const rv = reviews.details[reviewKey(content.review)]?.data?.review;
-      return rv ? reviewCtx(rv, projects.activeId) : { review: content.review };
-    }
+    case 'review':
+      return content?.kind === 'review_detail' ? reviewCtx(content.review, projects.activeId) : null;
     case 'work': {
       const w = focusedWorkItem();
       return w ? workCtx(w) : null;

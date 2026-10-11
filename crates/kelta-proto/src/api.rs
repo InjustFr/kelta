@@ -358,6 +358,10 @@ pub trait CoreApi: Send + Sync {
         draft: PrDraft,
         origin: ShipOrigin,
     ) -> Result<WorkItem, KeltaError>;
+    /// A PR from the review cache, fetched when cold (plugin action `{pr.*}` vars from a ref, #267).
+    async fn review(&self, _r: &ReviewRef) -> Option<Review> {
+        None
+    }
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
     /// The `fix_checks` trigger action (#252): `review`'s failed checks to the Claude of the work item

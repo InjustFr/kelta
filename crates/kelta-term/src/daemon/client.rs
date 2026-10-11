@@ -156,9 +156,22 @@ fn keltad_pid(sock: &Path) -> Option<i32> {
 }
 
 fn is_keltad(pid: &i32) -> bool {
-    let out = Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output();
-    *pid != std::process::id() as i32
-        && out.is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim().ends_with("keltad"))
+    *pid != std::process::id() as i32 && argv0(*pid).is_some_and(|a| a.ends_with("keltad"))
+}
+
+/// The path `pid` was started as. Not Linux's `comm`: that is the 15-char name of the thread that
+/// forked it. Not `/proc/<pid>/exe` either: it reads `… (deleted)` once an update replaced keltad.
+#[cfg(target_os = "linux")]
+fn argv0(pid: i32) -> Option<String> {
+    let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    cmdline.split(|&b| b == 0).next().map(|a| String::from_utf8_lossy(a).into_owned())
+}
+
+/// macOS `comm` is the exec path.
+#[cfg(not(target_os = "linux"))]
+fn argv0(pid: i32) -> Option<String> {
+    let out = Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
 /// SIGTERM the keltad serving `sock`, then wait (bounded) until it closes `s`.

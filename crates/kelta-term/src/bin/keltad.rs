@@ -14,6 +14,7 @@ use kelta_term::daemon;
 const IDLE_GRACE: Duration = Duration::from_secs(30);
 
 fn main() -> ExitCode {
+    kelta_term::limit_malloc_arenas();
     let mut args = std::env::args_os().skip(1);
     let (sock, history) = match (args.next(), args.next(), args.next(), args.next()) {
         (Some(flag), Some(path), None, None) if flag == "--socket" => (PathBuf::from(path), None),

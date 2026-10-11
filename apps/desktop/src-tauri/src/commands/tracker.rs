@@ -13,12 +13,13 @@ use super::Res;
 pub async fn tracker_list(
     core: State<'_, Arc<Core>>,
     scope: Scope,
+    source_id: Option<String>,
     view_id: Option<String>,
     cursor: Option<Cursor>,
     refresh: bool,
     who: Option<Who>,
 ) -> Res<TicketPage> {
-    core.tracker_list(scope, view_id, who, cursor, refresh).await
+    core.tracker_list(scope, source_id, view_id, who, cursor, refresh).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

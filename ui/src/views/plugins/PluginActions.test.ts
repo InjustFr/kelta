@@ -130,7 +130,7 @@ describe('plugin ticket/review actions', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('shows review actions on the review detail with the PR ref and branches', async () => {
+  it('shows review actions on the review detail with the PR ref', async () => {
     withPlugins({ id: 'qa', review: [toast] });
     render(ReviewDetailPane, {
       props: {
@@ -149,10 +149,6 @@ describe('plugin ticket/review actions', () => {
     await waitFor(() => expect(runs()).toHaveLength(1));
     const { ctx } = runs()[0]!;
     expect(ctx.review).toEqual({ account: 'github-acme', repo: 'acme/shop-api', number: 311 });
-    expect(ctx.extra).toMatchObject({
-      project_id: 'shop',
-      'pr.head': expect.any(String),
-      'pr.base': expect.any(String),
-    });
+    expect(ctx.extra).toEqual({ project_id: 'shop' });
   });
 });

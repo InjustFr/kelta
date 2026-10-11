@@ -234,7 +234,10 @@
     switch (action) {
       case 'start':
         // The backend picks the project (SPEC §3.1): the account's project is no pick.
-        void startWorkOnTicket(ref, null, browser ? { preview: false } : {});
+        void startWorkOnTicket(ref, null, {
+          source: item.source_ids[0] ?? null,
+          ...(browser ? { preview: false } : {}),
+        });
         break;
       case 'move':
         picker = statusBtn ?? null;

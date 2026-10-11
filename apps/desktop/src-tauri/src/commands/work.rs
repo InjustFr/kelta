@@ -16,8 +16,9 @@ pub async fn work_plan(
     core: State<'_, Arc<Core>>,
     project_id: Option<ProjectId>,
     source: WorkSource,
+    source_id: Option<String>,
 ) -> Res<StartWorkPlan> {
-    core.work_plan(project_id, source).await
+    core.work_plan(project_id, source, source_id).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

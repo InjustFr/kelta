@@ -67,6 +67,8 @@ use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::DaemonTerminalHost;
+/// For the app's `main` (keltad calls it from kelta-term).
+pub use kelta_term::limit_malloc_arenas;
 use kelta_work::{WorkHost, WorkService};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -272,7 +274,7 @@ impl Core {
         let store = if in_memory_store {
             Store::open_in_memory()?
         } else {
-            match Store::open(&dirs.db_path()) {
+            match Store::open_with_sources(&dirs.db_path(), settings.sources.clone()) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!(error = %e, "cannot open the state database; using an in-memory store");
@@ -716,7 +718,7 @@ impl CoreApi for Core {
         cursor: Option<Cursor>,
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
-        self.tracker_list(scope, view_id, None, cursor, refresh).await
+        self.tracker_list(scope, None, view_id, None, cursor, refresh).await
     }
     async fn ticket_by_key(
         &self,
@@ -756,6 +758,13 @@ impl CoreApi for Core {
     }
     async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.work.feedback(id).await
+    }
+    async fn review(&self, r: &kelta_proto::codehost::ReviewRef) -> Option<kelta_proto::codehost::Review> {
+        let cached = self.cached_reviews().await.into_iter().find(|rv| &rv.r#ref == r);
+        match cached {
+            Some(rv) => Some(rv),
+            None => self.review_get(r).await.ok().map(|d| d.review),
+        }
     }
     async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
         self.work.fix_checks(review).await

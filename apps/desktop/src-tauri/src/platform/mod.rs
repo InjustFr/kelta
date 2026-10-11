@@ -68,7 +68,7 @@ pub fn pre_init(args: &[String]) -> PreInit {
 fn linux_pre_init(args: &[String], safe_flag: bool) -> PreInit {
     use kelta_proto::dirs::{CliArgs, Dirs, DirsOverrides};
 
-    limit_malloc_arenas();
+    kelta_core::limit_malloc_arenas();
 
     let cli = CliArgs::parse(args);
     let dirs =
@@ -104,18 +104,6 @@ fn linux_pre_init(args: &[String], safe_flag: bool) -> PreInit {
     });
     PreInit { safe_graphics: safe }
 }
-
-/// `mallopt(M_ARENA_MAX, 2)` on glibc: fewer malloc arenas, smaller RSS with few threads.
-#[cfg(all(target_os = "linux", target_env = "gnu"))]
-fn limit_malloc_arenas() {
-    // SAFETY: mallopt only adjusts allocator tunables and is called before other threads exist.
-    unsafe {
-        libc::mallopt(libc::M_ARENA_MAX, 2);
-    }
-}
-
-#[cfg(all(target_os = "linux", not(target_env = "gnu")))]
-fn limit_malloc_arenas() {}
 
 #[cfg(test)]
 mod tests {

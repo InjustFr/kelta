@@ -525,7 +525,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `session_history_search` | `{project_id, session_id?, query, limit}` | `Vec<HistoryHit{session_id, line}>` | on-disk history log (§9.6) of one session or every session of the project; case-insensitive substring |
 | `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
 | **tickets** | | | `commands/tracker.rs` (L3) |
-| `tracker_list` | `{scope, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?, prs: Vec<PrLink>, caps: TrackerCaps}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>, people: Vec<Person>}` (`people`: who the page, the scope's cached Team list and the cached review lists mention, identities merged) | |
+| `tracker_list` | `{scope, source_id?, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`source_id`/`view_id` are the pane's raw picks, resolved once in core: `TicketPage.scope`/`view_id` say what the page lists and the UI renders that; `who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?, prs: Vec<PrLink>, caps: TrackerCaps}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>, people: Vec<Person>, scope: Scope, view_id?}` (`people`: who the page, the scope's cached Team list and the cached review lists mention, identities merged) | |
 | `tracker_get` | `{ticket: TicketRef}` | `TicketDetail` (with `prs` and the account's `caps`) | |
 | `tracker_columns` | `{source_id}` | `Vec<Column>` | |
 | `tracker_transitions` | `{ticket}` | `Vec<Transition>` | one call per ticket; the UI's StatusPicker matches several tickets by target status name |
@@ -549,7 +549,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_request_changes` | `{review, body}` | `()` | publishes my pending line comments too (as do `review_approve` / `review_comment`) |
 | `review_nudge` | `{review, who, comment?}` | `()` | my PR: re-request `who` (its `waiting_on`; `comment` null, `CodeHost::rerequest_review`; GitHub drops then re-adds a pending request so it notifies again) or post `comment`; `InvalidArgument` within 24 h of the last nudge (`nudges`) |
 | **work** | | | `commands/work.rs` (L6) |
-| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/}` | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
+| `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/, source_id?}` (`source_id`: the ticket's source from its row; none = guessed from the account) | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |
 | `work_list` | `{project_id?}` | `Vec<WorkItem>` | |
 | `work_resume` | `{id}` | `WorkItem` | |

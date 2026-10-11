@@ -26,9 +26,11 @@ export function needsChoice(plan: StartWorkPlan): boolean {
   );
 }
 
-/** Options of a start: `preview` overrides `work.plan_preview` (`false` = start with no sheet). */
+/** Options of a start: `preview` overrides `work.plan_preview` (`false` = start with no sheet);
+ * `source` is the ticket's source as its row lists it (`TicketItem.source_ids`). */
 export interface StartOpts {
   preview?: boolean;
+  source?: string | null;
 }
 
 /** Requests a plan and shows the sheet, or starts/resumes directly when previews are off.
@@ -39,7 +41,7 @@ export async function beginStartWork(
   opts: StartOpts = {},
 ): Promise<WorkItem | null> {
   try {
-    const plan = await ipc.workPlan({ project_id: projectId, source });
+    const plan = await ipc.workPlan({ project_id: projectId, source, source_id: opts.source ?? null });
     if (source.kind === 'ticket') withCriteria(plan, source.ticket);
     const preview = opts.preview ?? settings.value()?.work.plan_preview ?? true;
     if (preview || (needsChoice(plan) && plan.existing === null)) {
