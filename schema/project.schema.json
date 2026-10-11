@@ -2961,7 +2961,7 @@
                   },
                   "board_id": {
                     "default": null,
-                    "description": "jira: columns from board config when set.",
+                    "description": "jira: the board's filter narrows the view (ANDed with `jql`); columns from the board config.",
                     "format": "uint64",
                     "minimum": 0,
                     "type": [
@@ -3083,6 +3083,17 @@
                     "description": "redmine: `open` (default) | `closed` | `*`.",
                     "type": [
                       "string",
+                      "null"
+                    ]
+                  },
+                  "statuses": {
+                    "default": null,
+                    "description": "jira: only tickets in these statuses (names); none or empty = every status the query lists.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
                       "null"
                     ]
                   },
@@ -3765,7 +3776,7 @@
                     },
                     "board_id": {
                       "default": null,
-                      "description": "jira: columns from board config when set.",
+                      "description": "jira: the board's filter narrows the view (ANDed with `jql`); columns from the board config.",
                       "format": "uint64",
                       "minimum": 0,
                       "type": [
@@ -3887,6 +3898,17 @@
                       "description": "redmine: `open` (default) | `closed` | `*`.",
                       "type": [
                         "string",
+                        "null"
+                      ]
+                    },
+                    "statuses": {
+                      "default": null,
+                      "description": "jira: only tickets in these statuses (names); none or empty = every status the query lists.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
                         "null"
                       ]
                     },

@@ -572,6 +572,34 @@ async fn a_view_without_jql_gets_a_default_from_its_project_or_board_or_who() {
 }
 
 #[tokio::test]
+async fn a_board_and_statuses_narrow_the_view() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/rest/api/3/search/jql", 200, "jira/search_jql_p2.json").await;
+    mount(&server, "GET", "/rest/agile/1.0/board/7/configuration", 200, "jira/board_config.json").await;
+    let t = cloud(&server);
+    // Onboarding's default JQL, bound to a board and limited to two statuses.
+    let mut v = view("mine");
+    v.jql = Some("project = SHOP AND statusCategory != Done".into());
+    v.board_id = Some(7);
+    v.statuses = Some(vec!["In Progress".into(), "Code \"Review\"".into()]);
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = SHOP AND statusCategory != Done) AND filter = 10010 AND status in (\"In Progress\", \"Code \\\"Review\\\"\")"
+    );
+    // The recently-done fetch keeps the board, not the open statuses.
+    v.status = Some("closed".into());
+    assert_eq!(
+        jql_sent(&t, &server, &v).await,
+        "(project = SHOP AND statusCategory = Done) AND filter = 10010"
+    );
+    // No board, no status: the JQL as written.
+    let mut plain = view("p");
+    plain.jql = Some("project = SHOP AND statusCategory != Done".into());
+    plain.statuses = Some(Vec::new());
+    assert_eq!(jql_sent(&t, &server, &plain).await, "project = SHOP AND statusCategory != Done");
+}
+
+#[tokio::test]
 async fn sources_offer_projects_boards_sprints_and_favourite_filters() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

@@ -1628,8 +1628,10 @@ pub struct TrackerView {
     pub label: String,
     /// jira (required for jira).
     pub jql: Option<String>,
-    /// jira: columns from board config when set.
+    /// jira: the board's filter narrows the view (ANDed with `jql`); columns from the board config.
     pub board_id: Option<u64>,
+    /// jira: only tickets in these statuses (names); none or empty = every status the query lists.
+    pub statuses: Option<Vec<String>>,
     /// redmine.
     pub project_id: Option<String>,
     /// redmine.

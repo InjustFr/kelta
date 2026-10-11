@@ -12,9 +12,13 @@ export type TrackerView = { id: string, label: string,
  */
 jql: string | null, 
 /**
- * jira: columns from board config when set.
+ * jira: the board's filter narrows the view (ANDed with `jql`); columns from the board config.
  */
 board_id: number | null, 
+/**
+ * jira: only tickets in these statuses (names); none or empty = every status the query lists.
+ */
+statuses: Array<string> | null, 
 /**
  * redmine.
  */

@@ -396,7 +396,7 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys val
 - `current_iteration = true|false` (default `false`): only the current sprint (Jira), cycle (Linear), iteration (GitHub Projects v2), started milestone (GitLab) or next open version (Redmine). Ignored on gitea.
 - `account = "<id>"` (optional): take this source from another account; absent uses the binding's `account`. Board mode and columns stay on the binding account.
 
-- jira: `jql` (required), `board_id?` (columns from board config when set).
+- jira: `jql` (required), `board_id?` (the board's filter narrows the view, ANDed with `jql`; columns from the board config), `statuses?` (status names; only tickets in those statuses are listed, unset or empty = every status the query lists). Settings → Sources sets both per view: the board from the account's boards, the statuses from the source's open columns.
 - redmine: `project_id?`, `query_id?`, `assigned_to = "me"|"any"` (default `me`), `status = "open"|"closed"|"*"` (default `open`).
 - github: `repo?` (`owner/name`), `search?` (search query), `project_v2? = { owner, number, status_field = "Status" }`, plus the shared `status` and (per-repo views) `assigned_to` keys below.
 - gitlab: `project?` (`group/sub/proj`), `scope = "assigned_to_me"|"all"`, `labels?`, `workflow_scope = "workflow"`, plus the shared `status` key.

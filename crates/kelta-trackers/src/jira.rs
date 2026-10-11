@@ -759,6 +759,9 @@ impl Tracker for JiraTracker {
             who: None,
             current_iteration: false,
             status: None,
+            // already in `jql`
+            board_id: None,
+            statuses: None,
             ..view.clone()
         };
         Ok(self.list(&view, None).await?.items)
@@ -886,38 +889,58 @@ impl Tracker for JiraTracker {
 }
 
 impl JiraTracker {
-    /// The view's own JQL, else a default built from its board / project (newest first).
+    /// The view's own JQL, else a default built from its board / project (newest first), narrowed to the
+    /// view's board and statuses.
     async fn base_jql(&self, view: &TrackerView) -> Result<String, KeltaError> {
         let closed = view.status.as_deref() == Some("closed");
-        if let Some(j) = view.jql.as_deref().filter(|j| !j.trim().is_empty()) {
-            // `closed` (the core's recently-done fetch) flips the view's own open clause; other JQL is kept.
-            return Ok(if closed { j.replace(OPEN, DONE) } else { j.to_owned() });
-        }
-        let cond = if let Some(board) = view.board_id {
-            // shortcut: the board's filter only; a kanban board's `subQuery` is ignored.
-            let conf = self
-                .api()
-                .await?
-                .json(HttpRequest::get(format!("{}/rest/agile/1.0/board/{board}/configuration", self.base)))
-                .await?;
-            let id = conf.pointer("/filter/id").and_then(idstr);
-            let id = id.ok_or_else(|| KeltaError::upstream(format!("jira board {board} has no filter")))?;
-            format!("filter = {id}")
-        } else {
-            match view.project_id.as_deref().or(view.project.as_deref()).filter(|p| !p.trim().is_empty()) {
-                Some(p) => format!("project = \"{}\"", p.replace('"', "")),
-                None => String::new(),
+        let board = match view.board_id {
+            Some(board) => {
+                // shortcut: the board's filter only; a kanban board's `subQuery` is ignored.
+                let conf = self
+                    .api()
+                    .await?
+                    .json(HttpRequest::get(format!(
+                        "{}/rest/agile/1.0/board/{board}/configuration",
+                        self.base
+                    )))
+                    .await?;
+                let id = conf.pointer("/filter/id").and_then(idstr);
+                let id =
+                    id.ok_or_else(|| KeltaError::upstream(format!("jira board {board} has no filter")))?;
+                Some(format!("filter = {id}"))
             }
+            None => None,
         };
-        // open tickets only, like the other providers; `status = "*"` lists every state
-        let cond = if cond.is_empty() || view.status.as_deref() == Some("*") {
-            cond
-        } else if closed {
-            format!("{cond} AND {DONE}")
+        let mut extra = Vec::new();
+        let base = if let Some(j) = view.jql.as_deref().filter(|j| !j.trim().is_empty()) {
+            extra.extend(board);
+            // `closed` (the core's recently-done fetch) flips the view's own open clause; other JQL is kept.
+            if closed { j.replace(OPEN, DONE) } else { j.to_owned() }
         } else {
-            format!("{cond} AND {OPEN}")
+            let cond = board.unwrap_or_else(|| {
+                match view.project_id.as_deref().or(view.project.as_deref()).filter(|p| !p.trim().is_empty())
+                {
+                    Some(p) => format!("project = \"{}\"", p.replace('"', "")),
+                    None => String::new(),
+                }
+            });
+            // open tickets only, like the other providers; `status = "*"` lists every state
+            let cond = if cond.is_empty() || view.status.as_deref() == Some("*") {
+                cond
+            } else if closed {
+                format!("{cond} AND {DONE}")
+            } else {
+                format!("{cond} AND {OPEN}")
+            };
+            format!("{cond} ORDER BY updated DESC")
         };
-        Ok(format!("{cond} ORDER BY updated DESC"))
+        // The recently-done fetch ignores the statuses: they pick among the open ones.
+        if let Some(st) = view.statuses.as_ref().filter(|s| !s.is_empty() && !closed) {
+            let names: Vec<String> =
+                st.iter().map(|s| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))).collect();
+            extra.push(format!("status in ({})", names.join(", ")));
+        }
+        Ok(and_jql(&base, &extra))
     }
 
     fn tickets_from(&self, v: &Value, lk: &Lookups) -> Result<Vec<Ticket>, KeltaError> {
@@ -991,6 +1014,17 @@ fn split_order_by(jql: &str) -> (&str, &str) {
         Some(m) => (jql[..m.start()].trim(), jql[m.start()..].trim()),
         None => (jql.trim(), ""),
     }
+}
+
+/// AND `clauses` onto `base`, keeping its `ORDER BY` last.
+fn and_jql(base: &str, clauses: &[String]) -> String {
+    if clauses.is_empty() {
+        return base.to_owned();
+    }
+    let (cond, order) = split_order_by(base);
+    let cond = (!cond.is_empty()).then(|| format!("({cond})"));
+    let parts: Vec<String> = cond.into_iter().chain(clauses.iter().cloned()).collect();
+    format!("{} {order}", parts.join(" AND ")).trim_end().to_owned()
 }
 
 /// AND the `who` / current-sprint clauses onto `base`, keeping its `ORDER BY` last. Untouched when there is

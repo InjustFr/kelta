@@ -57,17 +57,21 @@ describe('Board block of a source', () => {
   it('saves who, current iteration and removal to the global sources', async () => {
     render(TrackerSources, { sourceId: 'shop' });
     const id = views()[0]!.dataset.viewId!;
-    await fireEvent.change(within(views()[0]!).getByRole('combobox'), { target: { value: 'unassigned' } });
+    await fireEvent.change(within(views()[0]!).getByRole('combobox', { name: /^Whose tickets/ }), {
+      target: { value: 'unassigned' },
+    });
     await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.who).toBe('unassigned'));
     expect(mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args).toMatchObject({
       layer: 'global',
       path: 'sources',
     });
     // a view with a query can go back to letting the query decide
-    await fireEvent.change(within(views()[0]!).getByRole('combobox'), { target: { value: '' } });
+    await fireEvent.change(within(views()[0]!).getByRole('combobox', { name: /^Whose tickets/ }), {
+      target: { value: '' },
+    });
     await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.who).toBeNull());
 
-    await fireEvent.click(within(views()[0]!).getByRole('switch'));
+    await fireEvent.click(within(views()[0]!).getByRole('switch', { name: 'Current sprint only' }));
     await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.current_iteration).toBe(true));
 
     const n = views().length;
@@ -77,6 +81,51 @@ describe('Board block of a source', () => {
     await waitFor(() => expect(shop()?.tracker.views.map((v) => v.id)).not.toContain(id));
     await waitFor(() => expect(views()).toHaveLength(n - 1));
     expect(mock.calls.some((c) => c.cmd === 'project_update')).toBe(false);
+  });
+
+  it("binds a Jira view to a board and to statuses of the source's open columns", async () => {
+    const plain = JSON.parse(JSON.stringify(settings.value()!.sources)) as SourceList;
+    const sources = plain.map((s) =>
+      s.id === 'shop'
+        ? {
+            ...s,
+            tracker: {
+              ...s.tracker,
+              columns: [
+                {
+                  id: 'doing',
+                  label: 'Doing',
+                  categories: ['in_progress'],
+                  names: ['In Progress', 'Code Review'],
+                },
+                { id: 'done', label: 'Done', categories: ['done'], names: ['Resolved'] },
+              ],
+            },
+          }
+        : s,
+    );
+    await ipc.settingsSet({ layer: 'global', path: 'sources', value: sources as unknown as JsonValue });
+    await settings.load();
+    render(TrackerSources, { sourceId: 'shop' });
+    const id = views()[0]!.dataset.viewId!;
+    const row = within(views()[0]!);
+    const board = row.getByRole('combobox', { name: /^Board of / });
+    await waitFor(() => expect(within(board).getByRole('option', { name: 'SHOP board' })).toBeTruthy());
+    await fireEvent.change(board, { target: { value: '12' } });
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.board_id).toBe(12));
+
+    // Done statuses are not offered; ticking then unticking the only one clears the filter.
+    await waitFor(() => expect(row.getByRole('switch', { name: 'Code Review' })).toBeTruthy());
+    expect(row.queryByRole('switch', { name: 'Resolved' })).toBeNull();
+    await fireEvent.click(row.getByRole('switch', { name: 'Code Review' }));
+    await waitFor(() =>
+      expect(shop()?.tracker.views.find((v) => v.id === id)?.statuses).toEqual(['Code Review']),
+    );
+    await fireEvent.click(row.getByRole('switch', { name: 'Code Review' }));
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.statuses).toBeNull());
+
+    await fireEvent.change(board, { target: { value: '' } });
+    await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.board_id).toBeNull());
   });
 
   it('Add view… opens the source picker on that source', async () => {
@@ -148,6 +197,7 @@ describe('Settings → Sources', () => {
     await waitFor(() => expect(seen).toHaveBeenCalled());
     expect((seen.mock.contexts[0] as HTMLElement).dataset.sourceCard).toBe('billing');
     // a save replaces the sources list: it must not scroll back to the card
+    await new Promise((r) => setTimeout(r)); // the settings reload lands first: it would reset the typed label
     const label = card('shop').getByLabelText('Label');
     await fireEvent.input(label, { target: { value: 'Renamed' } });
     await fireEvent.change(label);
