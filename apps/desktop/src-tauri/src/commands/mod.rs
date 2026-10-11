@@ -106,6 +106,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         app::app_update_check,
         app::app_restart,
         app::app_quit,
+        app::app_close,
         // settings
         settings::settings_schema,
         settings::settings_effective,

@@ -653,6 +653,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     app_restart: () => null,
     app_quit: () => null,
+    app_close: () => null,
     // ---- settings --------------------------------------------------------------------------
     settings_schema: async () => {
       const schema = await import('../../../../schema/settings.schema.json');

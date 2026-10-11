@@ -481,6 +481,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `app_update_check` | `{}` | `UpdateStatus` after checking and installing what it found ("Check now") | `commands/app.rs` |
 | `app_restart` | `{}` | `()` (`request_restart`: the normal exit path, then the installed build starts) | `commands/app.rs` |
 | `app_quit` | `{stop}` | `()` (the quit dialog's answer: `app.exit`, `stop` = `Core::stop_sessions_on_quit` first) | `commands/app.rs` |
+| `app_close` | `{}` | `()` (the UI's close handler, after saving its layout and preventing the default close: the quit question per `app.quit_sessions`, else destroys the window) | `commands/app.rs` |
 | **settings** | | | `commands/settings.rs` (L4) |
 | `settings_schema` | `{}` | `serde_json::Value` (flattened JSON Schema incl. `plugins.<id>`) | |
 | `settings_effective` | `{project_id?}` | `EffectiveSettings{value: Value, sources: BTreeMap<String /*dotted path*/, Layer>}` | |

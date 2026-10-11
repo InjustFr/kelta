@@ -158,6 +158,16 @@ fn quit_asks(app: &AppHandle) -> bool {
     }
 }
 
+/// The UI's close handler (it prevents the default close, which Tauri would otherwise finish
+/// right after the handler whatever Rust does in `CloseRequested`): the quit question, or close.
+pub(crate) fn close_requested(app: &AppHandle) {
+    if (background_mode(app) || !quit_asks(app))
+        && let Some(w) = app.get_webview_window(MAIN_WINDOW)
+    {
+        let _ = w.destroy();
+    }
+}
+
 fn save_main_geometry(app: &AppHandle) {
     if let Some(c) = core(app)
         && c.config().effective(None).window.restore_geometry
@@ -251,13 +261,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     }
     let app = window.app_handle();
     match event {
-        WindowEvent::CloseRequested { api, .. } => {
-            save_main_geometry(app);
-            // Closing the window quits (Linux by default): same question as Cmd+Q.
-            if !background_mode(app) && quit_asks(app) {
-                api.prevent_close();
-            }
-        }
+        // The UI's close handler decides (`close_requested`): Tauri already prevents the close
+        // while it listens, and finishes it itself unless the handler prevents the default.
+        WindowEvent::CloseRequested { .. } => save_main_geometry(app),
         // Scheduler intervals and triggers follow focus (`app.focus_changed`).
         WindowEvent::Focused(focused) => {
             if let Some(c) = core(app) {

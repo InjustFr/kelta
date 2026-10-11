@@ -69,6 +69,13 @@ pub async fn app_quit(app: AppHandle, core: State<'_, Arc<Core>>, stop: bool) ->
     Ok(())
 }
 
+/// The window close the UI intercepted (it saved its layout): ask keep / stop, or close the window.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn app_close(app: AppHandle) -> Res<()> {
+    crate::window::close_requested(&app);
+    Ok(())
+}
+
 /// kelta-bench metric measured in the UI (no-op unless `KELTA_BENCH_MARKS` is set).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn bench_mark(key: String, value: f64) -> Res<()> {
