@@ -273,6 +273,11 @@ async fn project_moves_resolve_field_and_option_ids_by_name_and_cache_them() {
     assert_eq!(moved.status.category, StatusCategory::InReview);
     assert_eq!(moved.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
     assert_eq!(moved.priority_rank, Some(1));
+    assert_eq!(
+        moved.parent.as_ref().map(|p| p.key.as_str()),
+        Some("acme/shop#10"),
+        "a move keeps the parent"
+    );
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     let field_queries =
         gql_bodies.iter().filter(|b| b["query"].as_str().unwrap_or("").contains("node(id")).count();

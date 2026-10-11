@@ -627,6 +627,7 @@ impl GithubIssues {
                             .ok_or_else(|| KeltaError::upstream("issue response without repository"))?;
                         // a move changes Status only; keep the board fields read before it
                         apply_project_fields(&mut t, &item.vals, &common::today());
+                        t.parent = info.parent.clone();
                         return Ok(t);
                     }
                     Err(e) => {
