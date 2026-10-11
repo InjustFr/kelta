@@ -317,6 +317,76 @@ fn primary_repo_wins_on_conflict() {
 }
 
 #[test]
+fn reorder_with_semantic_error_keeps_each_repo_value_and_trust() {
+    let e = env();
+    let b = e.tmp.path().join("repo-b");
+    std::fs::create_dir_all(b.join(".kelta")).unwrap();
+    std::fs::write(b.join(".kelta/config.toml"), "[worktree]\ninclude = [\".b\"]\n\n[env]\nEVIL = \"1\"\n")
+        .unwrap();
+    e.repo_file("[worktree]\nsetup = [\"make a\"]\n");
+    let project = |order: [(&str, &std::path::Path); 2], extra: &str| {
+        let repos: String = order
+            .iter()
+            .map(|(id, path)| format!("[[project.repos]]\nid = \"{id}\"\npath = \"{}\"\n\n", path.display()))
+            .collect();
+        let text = format!("[project]\nid = \"duo\"\nname = \"Duo\"\n\n{repos}{extra}");
+        std::fs::write(e.dirs.projects_dir().join("duo.toml"), text).unwrap();
+    };
+    project([("a", &e.repo), ("b", &b)], "");
+    let svc = e.load();
+    block_on(svc.set_trust_store(Arc::new(MemTrustStore::new())));
+    let p = pid("duo");
+    let doc = svc.layer_get(Layer::Repo, Some(&p), Some("a")).unwrap();
+    block_on(svc.repo_trust(&p, "a", true, Some(&sha(&doc.text)))).unwrap();
+    let check = |svc: &ConfigService| {
+        let s = svc.effective(Some(&p));
+        assert_eq!(s.worktree.setup, vec!["make a".to_owned()]);
+        assert!(s.env.is_empty(), "untrusted repo b's env must stay inert");
+        assert_eq!(s.worktree.include, vec![".b".to_owned()]);
+        let a = svc.layer_get(Layer::Repo, Some(&p), Some("a")).unwrap().value;
+        let b = svc.layer_get(Layer::Repo, Some(&p), Some("b")).unwrap().value;
+        assert_eq!(a, json!({"worktree": {"setup": ["make a"]}}));
+        assert_eq!(b, json!({"worktree": {"include": [".b"]}, "env": {"EVIL": "1"}}));
+    };
+    check(&svc);
+
+    // reorder + semantic error in the same save: reverted, each repo keeps its own value
+    project([("b", &b), ("a", &e.repo)], "[editor]\ndefault = \"ghost\"\n");
+    svc.reload();
+    assert!(svc.issues().iter().any(|i| i.issue.message.contains("change rejected")), "{:?}", svc.issues());
+    check(&svc);
+
+    // fixing the typo keeps the right values
+    project([("b", &b), ("a", &e.repo)], "");
+    svc.reload();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    check(&svc);
+}
+
+#[test]
+fn trusted_invalid_text_never_applies_another_versions_value() {
+    let e = env();
+    e.project("shop", "");
+    let t = "[worktree]\nsetup = [\"make t\"]\n\n[terminal]\nfont_size = 30\n";
+    let path = e.repo_file(t);
+    let svc = e.load();
+    block_on(svc.set_trust_store(Arc::new(MemTrustStore::new())));
+    let p = pid("shop");
+    block_on(svc.repo_trust(&p, "api", true, Some(&sha(t)))).unwrap();
+    assert!(svc.effective(Some(&p)).worktree.setup.is_empty(), "invalid file contributes nothing");
+
+    // X: valid, with exec keys, untrusted
+    std::fs::write(&path, "[worktree]\nsetup = [\"evil\"]\n").unwrap();
+    svc.reload();
+    assert!(svc.effective(Some(&p)).worktree.setup.is_empty());
+
+    // back to T: its hash is trusted, but the kept value is X's
+    std::fs::write(&path, t).unwrap();
+    svc.reload();
+    assert!(svc.effective(Some(&p)).worktree.setup.is_empty(), "X's exec keys must not apply");
+}
+
+#[test]
 fn env_and_cli_overrides() {
     let e = env();
     e.global("[terminal]\nfont_size = 14\n");
