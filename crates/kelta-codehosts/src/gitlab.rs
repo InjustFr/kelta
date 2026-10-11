@@ -40,6 +40,9 @@ type DiffKey = (String, u64, String);
 /// My MR's `(repo, iid)` → `((updated_at, user_notes_count), unresolved threads, last comment at)`.
 type ThreadCache = HashMap<(String, u64), ((String, u64), u32, Option<String>)>;
 
+/// `(kind, repo, iid)` → `(updated_at, waiting_on, requested_at, author_to_act)` as read from `/reviewers`.
+type WaitingCache = HashMap<(ReviewKind, String, u64), (String, Vec<String>, Option<String>, bool)>;
+
 #[derive(Default)]
 struct TodoGate {
     disabled: bool,
@@ -62,6 +65,8 @@ pub struct GitlabHost {
     diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
     /// My MRs' thread state: `/discussions` is fetched again only when the MR's stamp moves.
     threads: Mutex<ThreadCache>,
+    /// Who each MR waits on: `/reviewers` is fetched again only when the MR's `updated_at` moves.
+    waiting: Mutex<WaitingCache>,
 }
 
 impl GitlabHost {
@@ -94,6 +99,7 @@ impl GitlabHost {
             gate: Mutex::new(TodoGate::default()),
             diff_sizes: Mutex::new(HashMap::new()),
             threads: Mutex::new(HashMap::new()),
+            waiting: Mutex::new(HashMap::new()),
         })
     }
 
@@ -280,11 +286,29 @@ impl GitlabHost {
     // shortcut: a `requested_changes` reviewer counts again only once re-requested (GitLab keeps the
     // state across pushes and `/reviewers` has no review time); compare with the push time if it matters.
     async fn waiting_state(&self, review: &mut Review) {
-        let url = self.mr_url(&review.r#ref.repo, &format!("/{}/reviewers", review.r#ref.number));
-        let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
-        (review.waiting_on, review.requested_at) = pending_reviewers(&r.body);
-        review.waiting_since = review.requested_at.clone();
-        review.author_to_act = changes_requested(&r.body);
+        let key = (review.kind, review.r#ref.repo.clone(), review.r#ref.number);
+        let cached = self.waiting.lock().get(&key).filter(|c| c.0 == review.updated_at).cloned();
+        let (_, waiting_on, requested_at, author_to_act) = match cached {
+            Some(c) => c,
+            None => {
+                let url = self.mr_url(&key.1, &format!("/{}/reviewers", key.2));
+                let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
+                let (on, at) = pending_reviewers(&r.body);
+                let c = (review.updated_at.clone(), on, at, changes_requested(&r.body));
+                self.waiting.lock().insert(key, c.clone());
+                c
+            }
+        };
+        review.waiting_since = requested_at.clone();
+        (review.waiting_on, review.requested_at, review.author_to_act) =
+            (waiting_on, requested_at, author_to_act);
+    }
+
+    /// Bounded by the current list: closed MRs of `kind` drop out of the waiting cache.
+    fn retain_waiting<'a>(&self, kind: ReviewKind, list: impl Iterator<Item = &'a Review> + Clone) {
+        self.waiting.lock().retain(|(k, repo, n), _| {
+            *k != kind || list.clone().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n)
+        });
     }
 
     /// My MR: unresolved threads and the newest last note not by me among them (`/discussions`,
@@ -505,6 +529,7 @@ impl CodeHost for GitlabHost {
             self.threads.lock().retain(|(repo, n), _| {
                 list.iter().any(|(r, _)| r.r#ref.repo == *repo && r.r#ref.number == *n)
             });
+            self.retain_waiting(ReviewKind::Authored, list.iter().map(|(r, _)| r));
         }
         Ok(list.into_iter().map(|(r, _)| r).collect())
     }
@@ -532,6 +557,7 @@ impl CodeHost for GitlabHost {
         let mut list: Vec<Review> =
             lists.into_iter().flatten().filter(|r| include_drafts || !r.draft).collect();
         futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
+        self.retain_waiting(ReviewKind::Team, list.iter());
         Ok(list)
     }
 
