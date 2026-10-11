@@ -73,30 +73,19 @@ test('rows share one grid: key, title, status, age and source start at one x on 
   expect(await rows(page).locator('.c-source').first().isVisible()).toBe(true);
 });
 
-test('the title takes the free width: a 60-character title shows 45 or more with the detail open', async ({
+test('the title takes the free width: its cell keeps a fixed share of the row with the detail open', async ({
   page,
 }) => {
   await openRailTickets(page);
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
   const row = page.locator('[data-key="jira-acme:SHOP-9111"]');
   await expect(row).not.toHaveAttribute('aria-current', 'true');
-  // How many leading characters fit the cell: the laid-out text, measured with a range.
-  const fit = await row.locator('.c-title .text').evaluate((el) => {
-    const text = el.firstChild!;
-    const range = document.createRange();
-    let n = 0;
-    while (n < text.textContent!.length) {
-      range.setStart(text, 0);
-      range.setEnd(text, n + 1);
-      if (range.getBoundingClientRect().width > el.clientWidth) break;
-      n++;
-    }
-    return { n, len: text.textContent!.length };
-  });
-  expect(fit.len).toBe(60);
-  // 45 is #251's count with macOS's system-ui font (the cell is 295px wide at 1440px). The ubuntu CI
-  // runner's system-ui font is ~7% wider: the same cell holds 42 there (#256).
-  expect(fit.n).toBeGreaterThanOrEqual(process.platform === 'linux' ? 42 : 45);
+  await expect(row.locator('.c-title .text')).toHaveText(LONG);
+  // Layout, not glyphs: the tracks are sized in px around one 1fr title, so the share holds whatever the
+  // runner's system-ui font. At #251's 1440px the share is 0.44: the ~295px cell that showed 45 of the 60
+  // characters with macOS's font (42 with the ubuntu runner's, #256).
+  const share = await row.evaluate((r) => r.querySelector('.c-title .text')!.clientWidth / r.clientWidth);
+  expect(share).toBeGreaterThanOrEqual(0.43);
 });
 
 for (const scheme of ['light', 'dark'] as const) {

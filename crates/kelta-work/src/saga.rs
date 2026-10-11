@@ -468,7 +468,7 @@ impl WorkService {
         };
         // Under `start_lock`: no two new items can pick the same free block.
         let taken: Vec<u16> = self.store.list_items(None).await?.iter().filter_map(|w| w.port_base).collect();
-        let port_base = plan::alloc_ports(&env.settings.ports.range, &taken, plan::port_free)?;
+        let port_base = plan::alloc_ports(&env.settings.ports.range, &taken, *self.port_free.lock())?;
         let mut item = WorkItem {
             id: WorkItemId::generate(),
             project_id: plan.project_id.clone(),
