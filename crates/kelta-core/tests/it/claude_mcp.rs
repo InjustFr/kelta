@@ -98,7 +98,7 @@ async fn offer_install_and_silent_reregistration() {
     h.core.claude_mcp_startup().await;
     assert!(log(root)[calls..].is_empty(), "{:?}", &log(root)[calls..]);
 
-    // Stale (another port and token): updated without asking.
+    // Stale port: updated without asking, keeping the token Claude Code holds.
     std::fs::write(
         config(root),
         r#"{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:1/mcp","headers":{"Authorization":"Bearer old"}}}}"#,
@@ -109,13 +109,23 @@ async fn offer_install_and_silent_reregistration() {
     h.core.claude_mcp_startup().await;
     assert_eq!(offers(&h), 0);
     let tail = &log(root)[calls..];
-    assert_eq!(tail, ["mcp remove --scope user kelta".to_owned(), format!("{prefix}{token}")]);
+    assert_eq!(tail, ["mcp remove --scope user kelta".to_owned(), format!("{prefix}old")]);
+    assert_eq!(ping("old").await.unwrap().status(), 200);
+
+    // The token lives in the registration only: no Keychain access at all (#275).
+    assert!(h.secrets.resolved().is_empty(), "{:?}", h.secrets.resolved());
+    assert!(h.secrets.invalidated().is_empty());
 
     // Remove: unregistered, endpoint closed.
     h.core.claude_mcp_remove().await.unwrap();
     assert_eq!(log(root).last().unwrap(), "mcp remove --scope user kelta");
     assert_eq!(h.core.claude_mcp_status().await, Some(false));
     assert_eq!(h.core.server().http_port(), None);
+    // Nothing written to, read from or deleted in the Keychain.
+    assert!(h.secrets.resolved().is_empty(), "{:?}", h.secrets.resolved());
+    let r = kelta_proto::secret::SecretRef::new("keyring:kelta-mcp");
+    let ctx = kelta_proto::secret::SecretCtx::default();
+    assert!(kelta_proto::api::SecretResolver::resolve(&*h.secrets, &r, &ctx).await.is_err());
 }
 
 #[tokio::test]

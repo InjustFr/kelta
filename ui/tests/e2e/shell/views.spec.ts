@@ -66,3 +66,34 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
   await expect(host.locator('[data-key="redmine-corp:4567"]')).toHaveClass(/selected/);
   expect(await activeProject(page)).toBe('shop');
 });
+
+test('Now, Reviews and Tickets fill the window: their hint bar sits at the bottom, even above an empty state', async ({
+  page,
+}) => {
+  await boot(page);
+  const host = page.getByTestId('global-host');
+  for (const height of [900, 600]) {
+    await page.setViewportSize({ width: 1440, height });
+    for (const view of ['inbox', 'reviews', 'tickets']) {
+      await page.getByTestId(`rail-${view}`).click();
+      const pane = host.getByTestId(`${view}-pane`);
+      await expect(pane.locator('footer')).toBeVisible();
+      for (const filter of ['', 'no-such-item-zzz']) {
+        if (filter) {
+          await page.keyboard.press('/');
+          await page.keyboard.type(filter);
+        }
+        const bottom = async (l: typeof host): Promise<number> => {
+          const b = (await l.boundingBox())!;
+          return b.y + b.height;
+        };
+        const want = await bottom(host);
+        const msg = `${view} at ${height}px, filter "${filter}"`;
+        await expect.poll(async () => Math.abs((await bottom(pane)) - want), msg).toBeLessThanOrEqual(1);
+        await expect
+          .poll(async () => Math.abs((await bottom(pane.locator('footer'))) - want), msg)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+  }
+});

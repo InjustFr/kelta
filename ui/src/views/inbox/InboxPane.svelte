@@ -879,6 +879,7 @@
     align-items: center;
     gap: 0 var(--k-space-5);
     flex: none;
+    margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
     height: var(--k-statusbar-height);
     overflow: hidden;
     padding: 0 var(--k-space-3);
