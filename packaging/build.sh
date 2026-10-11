@@ -15,7 +15,12 @@ mkdir -p "$bins"
 
 # Sidecars (externalBin): kelta-ctl and the keltad session daemon.
 sidecars=(kelta-ctl keltad)
-build_sidecars() { cargo build --release --locked -p kelta-ctl -p kelta-term --bin kelta-ctl --bin keltad "$@"; }
+# Selecting kelta-desktop (none of its targets: its build script needs the sidecars) unifies dependency features
+# with the app build below, so `tauri build` reuses the shared dependencies instead of compiling them again.
+build_sidecars() {
+  cargo build --release --locked -p kelta-ctl -p kelta-term -p kelta-desktop --features tauri/custom-protocol \
+    --bin kelta-ctl --bin keltad "$@"
+}
 
 if [[ "$(uname)" == Darwin && "${UNIVERSAL:-0}" == 1 ]]; then
   for t in aarch64-apple-darwin x86_64-apple-darwin; do

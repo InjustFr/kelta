@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  packages: read # the ghcr.io/injustfr/kelta-ci image
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,23 +17,25 @@ env:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The prebuilt image (ci-image.yml) has the system packages and the Rust toolchain.
+    container:
+      image: ghcr.io/injustfr/kelta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 30
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: "1" # no FUSE in a container for linuxdeploy
     steps:
       - uses: actions/checkout@v4
-      - name: System packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config neovim desktop-file-utils appstream \
-            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
-            libssl-dev libxdo-dev patchelf file
       - name: Validate desktop entry and AppStream metadata
         run: |
           desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
           appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.99.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release # nightly and release share their release builds
+          cache-on-failure: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -48,14 +51,18 @@ jobs:
 
   macos:
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+      # Caches both targets' dependencies (target/<triple>/release).
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          cache-on-failure: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

@@ -18,6 +18,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read # the ghcr.io/injustfr/kelta-ci image
 
 env:
   CARGO_TERM_COLOR: always
@@ -69,7 +70,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20 # a hung test must not burn macOS minutes
+    # Linux runs in the prebuilt image (ci-image.yml: system packages, Neovim, Rust, nextest); an empty image
+    # runs on the macOS host.
+    container:
+      image: ${{ startsWith(matrix.os, 'ubuntu') && 'ghcr.io/injustfr/kelta-ci:latest' || '' }}
+      options: --init # PID 1 reaps orphans: the process-group kill tests wait for their grandchildren to go
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 15 # budget: 10 min warm; a hung test must not burn macOS minutes
     strategy:
       fail-fast: false
       matrix:
@@ -77,22 +86,23 @@ jobs:
         os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04","macos-14"]') }}
     steps:
       - uses: actions/checkout@v4
-      - name: Linux system packages
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config \
-            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
-            libssl-dev libxdo-dev patchelf
-      - run: sudo bash scripts/install-nvim.sh
-      - uses: dtolnay/rust-toolchain@master
+      # macOS gets by hand what the Linux image has.
+      - if: runner.os == 'macOS'
+        run: sudo bash scripts/install-nvim.sh
+      - if: runner.os == 'macOS'
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
           components: rustfmt, clippy
+      # Saved even when the job fails (a red run must not leave the next one cold); PRs only read it.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          save-if: ${{ github.event_name != 'pull_request' }}
       # nextest gives every test its own process and the per-test timeouts in .config/nextest.toml.
       - name: cargo-nextest (pinned, as in docker/ubuntu-build.Dockerfile)
-        run: curl -fsSL "https://get.nexte.st/0.9.148/${{ runner.os == 'macOS' && 'mac' || 'linux' }}" | tar -xz -C ~/.cargo/bin
+        if: runner.os == 'macOS'
+        run: curl -fsSL "https://get.nexte.st/0.9.148/mac" | tar -xz -C ~/.cargo/bin
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -105,7 +115,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -114,7 +124,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: bash scripts/qa.sh ui
-      - run: pnpm --filter @kelta/ui exec playwright install --with-deps chromium
+      - run: pnpm --filter @kelta/ui exec playwright install chromium # the runner image has Chrome's system libraries
       - run: pnpm --filter @kelta/ui run e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -140,9 +150,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.packaging == 'true'
     runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/injustfr/kelta-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
       - run: |
           desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
           appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml

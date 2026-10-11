@@ -266,8 +266,8 @@ cargo run -p xtask --locked -- codegen --check
 
 **Linux check** (from the macOS dev machine): `bash scripts/linux-check.sh`, i.e.
 ```
-docker build -f docker/ubuntu-build.Dockerfile -t kelta-ci .
+docker pull ghcr.io/injustfr/kelta-ci:latest   # the CI image (ci-image.yml); built locally when the pull fails
 docker run --rm -v "$PWD":/src:ro -v kelta-cargo:/root/.cargo/registry -v kelta-pnpm:/root/.local/share/pnpm/store \
-  kelta-ci bash -lc 'rsync -a --delete --exclude target --exclude node_modules --exclude .git /src/ /work/ && cd /work && bash scripts/qa.sh'
+  -v kelta-linux-target:/work/target ghcr.io/injustfr/kelta-ci:latest bash -lc 'rsync -a --delete --exclude target --exclude node_modules --exclude .git /src/ /work/ && cd /work && bash scripts/qa.sh'
 ```
 The image (ubuntu:24.04) installs `build-essential pkg-config curl git rsync file neovim libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libssl-dev libxdo-dev patchelf`, rustup toolchain 1.99.0 (rustfmt, clippy), Node 22 + pnpm 9 via corepack. Copying into `/work` keeps macOS `target/` and `node_modules/` untouched.
