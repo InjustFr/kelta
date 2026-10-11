@@ -11,3 +11,10 @@ playwright-report/
 .env
 apps/desktop/src-tauri/binaries/
 __pycache__/
+
+# Local tooling, per developer: graft's graph cache (`graft build`), its ripgrep override and MCP entry, Claude Code's
+# project folder (settings, hooks, agent worktrees).
+/graft/
+/.ignore
+/.mcp.json
+/.claude/
