@@ -101,8 +101,8 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
-   macOS dmg and signed updater bundle here (and, with `--linux`, the deb + AppImage for arm64, and amd64 under
-   QEMU, in Docker), moves the `nightly` tag to HEAD and uploads to the prerelease, `latest.json` after the
+   macOS dmg and signed updater bundle here (and, with `--linux`, the deb + AppImage for arm64 in Docker;
+   `--amd64` adds amd64, built under QEMU and the slowest step), moves the `nightly` tag to HEAD and uploads to the prerelease, `latest.json` after the
    other assets. It runs `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key
    (see Nightly builds). Tags `v*` build
    the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A manual run of
