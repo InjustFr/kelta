@@ -71,7 +71,8 @@ impl HttpClient {
 fn redirect_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|a| {
         // Ten hops, as reqwest's default policy: a no-timeout client must not loop forever.
-        if a.previous().len() <= 10 && a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url()))
+        if a.previous().len() <= 10
+            && a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url()))
         {
             a.follow()
         } else {

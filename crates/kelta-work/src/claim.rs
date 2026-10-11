@@ -162,7 +162,7 @@ impl WorkService {
         Ok(())
     }
 
-    /// The live claim on `key` that `caller` may drive: a claim owned by a session answers only to it.
+    /// The live claim on `key` that `caller` may drive: a claim owned by a live session answers only to it.
     // shortcut: matched by ticket key, not (account, key); MCP progress/release take no account, so two
     // claims of one caller on equal keys of different accounts pick the first. Add `account` if that happens.
     async fn claimed(&self, key: &str, caller: Option<&SessionId>) -> Result<WorkItem, KeltaError> {
@@ -180,11 +180,18 @@ impl WorkService {
         if hits.is_empty() {
             return Err(KeltaError::not_found(format!("no claim on {key}")));
         }
-        let owned_by_caller = |w: &WorkItem| {
-            w.run.as_ref().and_then(|r| r.session_id.as_ref()).is_none_or(|o| Some(o) == caller)
+        // The caller's own claim first, then an unowned one, then an orphaned one (its session is gone).
+        let rank = |w: &WorkItem| {
+            let r = w.run.as_ref()?;
+            match &r.session_id {
+                Some(o) if Some(o) == caller => Some(0),
+                None => Some(1),
+                Some(_) if r.state == RunState::Orphaned => Some(2),
+                Some(_) => None,
+            }
         };
-        match hits.iter().position(owned_by_caller) {
-            Some(i) => Ok(hits.swap_remove(i)),
+        match hits.iter().enumerate().filter_map(|(i, w)| Some((rank(w)?, i))).min() {
+            Some((_, i)) => Ok(hits.swap_remove(i)),
             None => Err(KeltaError::conflict(format!("{key} is claimed by another session"))),
         }
     }

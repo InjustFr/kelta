@@ -266,3 +266,43 @@ async fn claim_refuses_a_branch_git_would_not_accept() {
     }
     assert!(fx.store.list_items(None).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn the_callers_claim_wins_over_an_unowned_one_and_orphans_are_open_to_all() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let (wt1, wt2) = (run_worktree(&fx, "feat/a"), run_worktree(&fx, "feat/b"));
+    // Same key on two accounts: one claimed from the global endpoint, one by orch-a.
+    let other = kelta_proto::tracker::TicketRef {
+        account: kelta_proto::ids::AccountId::new("gh"),
+        ..samples::ticket_ref()
+    };
+    let unowned = RunClaim { session_id: None, ..run("x") };
+    let free = w.claim(&project(), samples::ticket_ref(), Some(wt1), None, unowned).await.unwrap();
+    let mine = w.claim(&project(), other, Some(wt2), None, run("orch-a")).await.unwrap();
+    let r = w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&orch_a())).await.unwrap();
+    assert_eq!(r.id, mine.id, "exact owner match first");
+    assert_eq!(run_state(&fx, &free.id).await, RunState::Running);
+
+    // orch-a exits: its claim is orphaned, and anyone may release it.
+    w.report("SHOP-142", None, RunState::Running, None, None, Some(&orch_a())).await.unwrap();
+    fx.core.exit_session(&orch_a(), 0);
+    assert!(common_wait(&fx, &mine.id, RunState::Orphaned).await);
+    w.release("SHOP-142", None, None).await.unwrap(); // the unowned one
+    let done = w.release("SHOP-142", None, Some(&SessionId::new("orch-b"))).await.unwrap();
+    assert_eq!((done.id, done.state), (mine.id, WorkState::Finished));
+}
+
+async fn common_wait(fx: &Fx, id: &WorkItemId, want: RunState) -> bool {
+    for _ in 0..500 {
+        if run_state(fx, id).await == want {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+}
