@@ -146,7 +146,7 @@ async fn create_pr_pushes_in_a_pane_creates_and_applies_on_pr() {
         .into_iter()
         .find(|c| c.method == "session_spawn" && c.args["name"] == "git push")
         .unwrap();
-    assert_eq!(call.args["args"], serde_json::json!(["push", "-u", "origin", item.branch]));
+    assert_eq!(call.args["args"], serde_json::json!(["push", "-u", "origin", "--", item.branch]));
     assert_eq!(call.args["close_on_exit"], "on_success");
     // Really push (the transient session is simulated), then report success.
     git(&item.worktree, &["push", "-q", "-u", "origin", &item.branch]);

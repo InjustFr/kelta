@@ -46,6 +46,8 @@ impl WorkService {
         let branch = branch.filter(|b| !b.trim().is_empty()).or(wt.branch).ok_or_else(|| {
             KeltaError::invalid(format!("{} has no branch checked out; pass `branch`", path.display()))
         })?;
+        // Later pushed and shown verbatim: refuse anything git would not take as a branch name.
+        let branch = git::check_branch_name(&wt.path, &branch).await?;
         let item = WorkItem {
             id: kelta_proto::ids::WorkItemId::generate(),
             project_id: project.clone(),
@@ -88,7 +90,7 @@ impl WorkService {
         }
     }
 
-    /// `report_progress`.
+    /// `report_progress`; `caller` is the MCP session (`None`: the global endpoint).
     pub async fn report(
         &self,
         key: &str,
@@ -96,8 +98,9 @@ impl WorkService {
         state: RunState,
         note: Option<String>,
         sha: Option<String>,
+        caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
-        let id = self.claimed(key).await?.id;
+        let id = self.claimed(key, caller).await?.id;
         self.update(&id, |w| {
             let Some(r) = w.run.as_mut() else { return false };
             r.state = state;
@@ -110,8 +113,13 @@ impl WorkService {
     }
 
     /// `release_ticket` (merged or abandoned): Finish, which leaves an adopted worktree and branch alone.
-    pub async fn release(&self, key: &str, sha: Option<String>) -> Result<WorkItem, KeltaError> {
-        let id = self.claimed(key).await?.id;
+    pub async fn release(
+        &self,
+        key: &str,
+        sha: Option<String>,
+        caller: Option<&SessionId>,
+    ) -> Result<WorkItem, KeltaError> {
+        let id = self.claimed(key, caller).await?.id;
         self.update(&id, |w| {
             let Some(r) = w.run.as_mut() else { return false };
             r.state = RunState::Done;
@@ -154,16 +162,30 @@ impl WorkService {
         Ok(())
     }
 
-    async fn claimed(&self, key: &str) -> Result<WorkItem, KeltaError> {
-        self.store
+    /// The live claim on `key` that `caller` may drive: a claim owned by a session answers only to it.
+    // shortcut: matched by ticket key, not (account, key); MCP progress/release take no account, so two
+    // claims of one caller on equal keys of different accounts pick the first. Add `account` if that happens.
+    async fn claimed(&self, key: &str, caller: Option<&SessionId>) -> Result<WorkItem, KeltaError> {
+        let mut hits: Vec<WorkItem> = self
+            .store
             .list_items(None)
             .await?
             .into_iter()
-            .find(|w| {
+            .filter(|w| {
                 w.run.is_some()
                     && w.state != WorkState::Finished
                     && w.ticket.as_ref().is_some_and(|t| t.key == key)
             })
-            .ok_or_else(|| KeltaError::not_found(format!("no claim on {key}")))
+            .collect();
+        if hits.is_empty() {
+            return Err(KeltaError::not_found(format!("no claim on {key}")));
+        }
+        let owned_by_caller = |w: &WorkItem| {
+            w.run.as_ref().and_then(|r| r.session_id.as_ref()).is_none_or(|o| Some(o) == caller)
+        };
+        match hits.iter().position(owned_by_caller) {
+            Some(i) => Ok(hits.swap_remove(i)),
+            None => Err(KeltaError::conflict(format!("{key} is claimed by another session"))),
+        }
     }
 }

@@ -372,11 +372,18 @@ pub trait CoreApi: Send + Sync {
         _state: RunState,
         _note: Option<String>,
         _sha: Option<String>,
+        _caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
         Err(KeltaError::unsupported("work_report"))
     }
     /// MCP `release_ticket`: finishes the claimed item without touching its worktree or branch.
-    async fn work_release(&self, _key: &str, _sha: Option<String>) -> Result<WorkItem, KeltaError> {
+    /// A claim owned by a session answers only to that session (`caller` `None`: the global endpoint).
+    async fn work_release(
+        &self,
+        _key: &str,
+        _sha: Option<String>,
+        _caller: Option<&SessionId>,
+    ) -> Result<WorkItem, KeltaError> {
         Err(KeltaError::unsupported("work_release"))
     }
     async fn editor_open(
