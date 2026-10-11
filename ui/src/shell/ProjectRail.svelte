@@ -509,6 +509,20 @@
         <p class="none">{t('No projects yet')}</p>
       {/each}
 
+      {#if projects.list.some((p) => !p.open)}
+        <!-- Closed projects are not on the rail: this is the way back to them (#363). -->
+        <div class="heading">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="folder-open"
+            title={t('Reopen a closed project')}
+            onclick={() => void dispatch('project.open')}
+            data-testid="rail-reopen">{t('Open project…')}</Button
+          >
+        </div>
+      {/if}
+
       {#if sessions.elsewhere.length > 0}
         <!-- Claude sessions Kelta did not start (#345): dimmed, Now lists them. -->
         <section class="band tools" aria-label={t('Elsewhere')} data-testid="rail-elsewhere">

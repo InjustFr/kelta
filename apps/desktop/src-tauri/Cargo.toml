@@ -26,6 +26,7 @@ kelta-core = { workspace = true }
 kelta-config = { workspace = true }
 kelta-plugins = { workspace = true }
 tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-updater = { workspace = true }

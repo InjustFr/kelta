@@ -8,6 +8,7 @@
   import { plugins, projects, sessions, settings, toasts, tools, work } from '$lib/stores';
   import { Button, currentPlatform, Kbd, Select, Sheet, TextInput } from '$lib/ui';
 
+  import BrowseButton from './BrowseButton.svelte';
   import { jumplist } from './jumplist';
   import { activateProject, currentTab, focusedSessionId, isToolTab, railProjects } from './nav';
 
@@ -171,7 +172,10 @@
     <Select label={t('Project')} options={projectOptions} bind:value={projectId} />
     <Select label={t('Folder')} options={cwdOptions} bind:value={cwdChoice} />
     {#if cwdChoice === '__custom'}
-      <TextInput label={t('Folder path')} bind:value={custom} placeholder={t('/path/to/dir')} />
+      <div class="pick">
+        <TextInput label={t('Folder path')} bind:value={custom} placeholder={t('/path/to/dir')} />
+        <BrowseButton value={custom} onpick={(p) => (custom = p)} />
+      </div>
     {/if}
     <Select
       label={t('Open in')}
@@ -218,5 +222,15 @@
     display: flex;
     flex-direction: column;
     gap: var(--k-space-4);
+  }
+
+  .pick {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--k-space-3);
+  }
+
+  .pick :global(.k-field) {
+    flex: 1;
   }
 </style>

@@ -1189,6 +1189,8 @@ impl Default for PrSettings {
 pub struct WorkSettings {
     /// Show the StartWorkPlan sheet.
     pub plan_preview: bool,
+    /// Starting a new work item while other work is unfinished lists that work first.
+    pub finish_first: bool,
     pub default_template: String,
     pub review_template: String,
     pub on_start: OnStart,
@@ -1207,6 +1209,7 @@ impl Default for WorkSettings {
     fn default() -> Self {
         Self {
             plan_preview: true,
+            finish_first: true,
             default_template: "claude+editor".into(),
             review_template: "review".into(),
             on_start: OnStart::default(),

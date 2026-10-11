@@ -27,6 +27,8 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await page.keyboard.press('s');
   const sheet = page.getByRole('dialog', { name: /Start work on SHOP-151/ });
   await expect(sheet).toBeVisible();
+  await page.keyboard.press('Enter'); // Start anyway: the mock has unfinished work (#354)
+  await expect(sheet.getByLabel('Branch', { exact: true })).toBeVisible();
   await page.keyboard.press('Control+Enter');
   await expect(sheet).toBeHidden();
   await expect(now(page)).toBeHidden();

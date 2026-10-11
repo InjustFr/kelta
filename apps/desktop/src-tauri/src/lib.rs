@@ -100,6 +100,7 @@ pub fn run() -> ExitCode {
     }
     let app = builder
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol("kelta-plugin", |ctx, request, responder| {
             let Some(core) = window::core(ctx.app_handle()) else {
                 let mut r = tauri::http::Response::new(b"core not ready".to_vec());

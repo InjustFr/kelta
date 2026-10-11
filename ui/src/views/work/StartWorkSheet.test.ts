@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Source, StartWorkPlan, WorkItem } from '$lib/gen';
@@ -33,6 +33,8 @@ async function mountSheet(
     setTransport(created.transport);
   }
   const plan = await workPlan({ project_id: 'shop', source: { kind: 'ticket', ticket } });
+  // An earlier test's late start can land here: the sheet lists unfinished work (#354).
+  work.byId = {};
   mutate(plan);
   const onclose = vi.fn();
   render(StartWorkSheet, { props: { plan, onclose } });
@@ -272,5 +274,59 @@ describe('StartWorkSheet project', () => {
     await fireEvent.click(start());
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect([sentPlan().project_id, sentPlan().repo_id]).toEqual(['billing', 'core']);
+  });
+});
+
+describe('StartWorkSheet finish first (#354)', () => {
+  /** Two work items in review (an open PR each) and one in progress, none of them SHOP-151. */
+  function unfinishedWork(): void {
+    const items = mock.state.work as WorkItem[];
+    const byId = (id: string) => structuredClone(items.find((w) => w.id.endsWith(id))!);
+    const pr = (w: WorkItem, n: number): WorkItem => ({
+      ...w,
+      state: { kind: 'pr_open' },
+      pr_url: `https://github.com/acme/shop-api/pull/${n}`,
+    });
+    for (const w of [byId('a001'), pr(byId('a003'), 13), pr(byId('a004'), 14)]) work.upsert(w);
+  }
+  const finish = () => screen.queryByTestId('finish-first');
+
+  it('lists the work in review before the plan; Start anyway goes on with the plan', async () => {
+    await mountSheet(unfinishedWork);
+    const rows = within(finish()!).getAllByRole('button');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^#12.*In review/),
+      expect.stringMatching(/^SHOP-155/), // review_due: To review
+      expect.stringMatching(/^SHOP-142/),
+    ]);
+    expect(screen.queryByLabelText('Branch')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Start anyway' }));
+    expect(finish()).toBeNull();
+    expect(screen.getByLabelText('Branch')).toBeTruthy();
+  });
+
+  it('never shows the list when resuming', async () => {
+    await mountSheet((p) => {
+      unfinishedWork();
+      p.existing = '0199a6b2-0000-7000-8000-00000000a001';
+    });
+    expect(finish()).toBeNull();
+    expect(screen.getByTestId('resume-note')).toBeTruthy();
+  });
+
+  it('work.finish_first = false skips it; Don’t ask again sets it', async () => {
+    await settings.load();
+    await mountSheet(unfinishedWork);
+    await fireEvent.click(screen.getByRole('button', { name: "Don't ask again" }));
+    await waitFor(() => expect(finish()).toBeNull());
+    expect(mock.calls.find((c) => c.cmd === 'settings_set')?.args).toMatchObject({
+      path: 'work.finish_first',
+      value: false,
+    });
+    settings.value()!.work.finish_first = false;
+    cleanup();
+    await mountSheet(unfinishedWork);
+    expect(finish()).toBeNull();
+    expect(screen.getByLabelText('Branch')).toBeTruthy();
   });
 });
