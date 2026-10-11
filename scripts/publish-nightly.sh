@@ -27,18 +27,26 @@ bash scripts/update-manifest.sh "$dist" "$version" "$notes" \
 # Update path: upload the new (versioned) assets first, then latest.json, then delete the old assets, so
 # an installed copy never reads a manifest pointing at a missing file. A failed upload leaves the old tag,
 # notes and manifest with the old build (re-run to fix). Create path: the tag must exist first.
-git tag -f nightly "$sha"
+# The tag moves through the API: CI's GITHUB_TOKEN may not git-push a ref that brings in workflow files.
+move_tag() {
+  local refs=repos/InjustFr/kelta/git/refs
+  if git ls-remote --exit-code origin refs/tags/nightly >/dev/null; then
+    gh api -X PATCH "$refs/tags/nightly" -f sha="$sha" -F force=true >/dev/null
+  else
+    gh api "$refs" -f ref=refs/tags/nightly -f sha="$sha" >/dev/null
+  fi
+}
 if gh release view nightly >/dev/null 2>&1; then
   find "$dist" -type f ! -name latest.json -print0 | xargs -0 gh release upload nightly --clobber
   gh release upload nightly "$dist/latest.json" --clobber
-  git push -f origin refs/tags/nightly
+  move_tag
   gh release edit nightly --prerelease --title nightly --notes-file "$notes"
   # Delete assets of older builds (names change with the version).
   gh release view nightly --json assets --jq '.assets[].name' | while read -r a; do
     [[ -e "$dist/$a" ]] || gh release delete-asset nightly "$a" --yes
   done
 else
-  git push -f origin refs/tags/nightly
+  move_tag
   gh release create nightly --prerelease --verify-tag --title nightly --notes-file "$notes" "$dist"/*
 fi
 rm "$notes"
