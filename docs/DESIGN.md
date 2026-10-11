@@ -244,7 +244,7 @@ No web fonts and no bundled woff2. Terminals already render in the user's chosen
 | base | 13 / 18 | 400 | list rows, forms, settings, menu rows |
 | lg | 15 / 20 | 600 | view titles, dialog and sheet titles |
 | xl | 18 / 23 | 600 | ticket / review detail title only |
-| read | 13 / 19.5 | 400 | HtmlContent bodies, max-width `--k-measure` (72ch) |
+| read | 13 / 19.5 | 400 | HtmlContent bodies, max-width `--k-measure` (72ch); headings inside stay 1em/600 |
 
 Rules:
 - Weights 400 and 600 only (500 renders poorly in Linux system fonts). 600 is reserved for the active tab, the focused pane title, view titles and group headers.
@@ -386,8 +386,9 @@ One row grammar for all three, so they read as one instrument:
 ### 6.9 Detail panes (ticket, review) *(meta grid and measure from Spine)*
 
 - Key in mono 13 (copyable), title 18/600, then a label/value meta grid: `display: grid; grid-template-columns: auto 1fr auto 1fr`, labels 12 `--k-fg-muted`, values 13. Stacks to `auto 1fr` under 480px pane width.
-- Section heads (Description, Discussion, Checks) 13/600.
+- Section heads (Description, Discussion, Checks) are `.k-section-title`: content size, 600, a 1px `--k-border` rule above with 12px padding and 24px margin. They are the largest headings in the pane after the title.
 - `HtmlContent`: 13/1.5, `max-width: var(--k-measure)`, links `--k-accent` underlined, code/pre mono on `--k-bezel-raised` radius 2, blockquote 2px `--k-border-strong` left rule.
+- `HtmlContent` headings never outgrow the section heads: `h1`-`h6` at 1em/600 (`h4`-`h6` `--k-fg-muted`), `margin: 1em 0 0.4em`, none above a first child. Lists 1.5em indent, 0.2em between items; task-list checkboxes hang in the bullet gutter, read-only. `hr` is a 1px `--k-border` rule. A ticket description sits in an indented block with a 1px `--k-border` left rule, so its headings read as content.
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
 - Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the StatusPicker of §6.8. Order: key, title, status, action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated; assignee `u` and priority `!` are buttons opening a filtered picker), Pull request rows, description, comments with a compose box.
 - Pull request rows: one line each, `#N` chip, title filling, then CI lamp and review state in words; wraps under the title when narrow.
