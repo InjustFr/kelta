@@ -156,3 +156,64 @@ async fn user_config_trigger_resolves_a_secret_ref() {
     assert!(run.ok, "{run:?}");
     assert_eq!(sent_headers(&env)["Authorization"], "cfg-tok");
 }
+
+/// #331: v1 has `token` as a plain string and the screen `settings.set`s it to a raw ref; v2 flips
+/// it to `x-kelta-secret`. The plugin must not get the ref it chose resolved, the user's value must.
+#[tokio::test]
+async fn a_value_the_plugin_set_itself_is_not_resolved_after_a_schema_flip() {
+    let env = common::Env::new().with_settings(|_| {});
+    let secrets = FakeSecrets::with(&[("gh-cli", "gh-secret"), ("env:TOK", "user-tok")]);
+    let core = env.core.clone();
+    let writer: kelta_plugins::SettingsWriter = Arc::new(move |id, key, value| {
+        let mut s = (*core.settings(None)).clone();
+        s.plugins.settings.entry(id.to_string()).or_insert_with(|| json!({}))[key] = value;
+        core.set_settings(s);
+        Ok(())
+    });
+    env.host.wire(Wiring {
+        secrets: Some(secrets.clone() as Arc<dyn SecretResolver>),
+        settings_writer: Some(writer),
+        ..Default::default()
+    });
+    let manifest = format!(
+        "{}{}\n[contributes.settings]\nschema = \"s.json\"\n",
+        common::manifest("flip", &["net:qa.example.com", "storage"], ""),
+        "[[contributes.screens]]\nid = \"main\"\ntitle = \"Main\"\nentry = \"index.html\"\n"
+    );
+    let v1 = r#"{"type":"object","properties":{"token":{"type":"string"}}}"#;
+    env.write_plugin("flip", &manifest, &[("index.html", "x"), ("s.json", v1)]);
+    env.host
+        .grant(&PluginId::new("flip"), vec!["net:qa.example.com".into(), "storage".into()])
+        .await
+        .unwrap();
+    env.core
+        .respond("http_fetch", json!({ "status": 200, "headers": {}, "body": "ok", "body_base64": false }));
+    let s = env.host.screen_open(&PluginId::new("flip"), "main", None, Value::Null).await.unwrap();
+    let o = CallOrigin::Screen { instance_id: s.instance_id.clone() };
+    let call = |m: PluginMethod, params: Value| {
+        let (host, i, o) = (env.host.clone(), s.instance_id.clone(), o.clone());
+        async move { host.call(&i, m, params, o).await }
+    };
+    call(PluginMethod::SettingsSet, json!({ "key": "token", "value": "gh-cli" })).await.unwrap();
+
+    // The mark is out of the plugin's reach.
+    let e = call(PluginMethod::KvDelete, json!({ "key": "$kelta/settings.set" })).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
+    assert_eq!(call(PluginMethod::KvList, json!({})).await.unwrap(), json!([]));
+
+    let v2 = r#"{"type":"object","properties":{"token":{"type":"string","x-kelta-secret":true}}}"#;
+    env.write_plugin("flip", &manifest, &[("s.json", v2)]);
+    let fetch =
+        json!({ "url": "https://qa.example.com/x", "secret_headers": { "A": { "setting": "token" } } });
+    let e = call(PluginMethod::NetFetch, fetch.clone()).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert!(e.message.contains("written by plugin flip itself"), "{e:?}");
+    assert!(secrets.resolved().is_empty(), "{:?}", secrets.resolved());
+
+    // The user sets the value in Settings → Plugins: it resolves.
+    let mut st = (*env.core.settings(None)).clone();
+    st.plugins.settings.insert("flip".into(), json!({ "token": "env:TOK" }));
+    env.core.set_settings(st);
+    call(PluginMethod::NetFetch, fetch).await.unwrap();
+    assert_eq!(sent_headers(&env)["A"], "user-tok");
+}

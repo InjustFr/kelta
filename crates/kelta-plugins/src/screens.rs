@@ -38,6 +38,8 @@ pub const NET_FETCH_CAP: usize = 5 * 1024 * 1024;
 pub const KV_KEY_CAP: usize = 256;
 pub const KV_VALUE_CAP: usize = 64 * 1024;
 pub const KV_QUOTA: usize = 1024 * 1024;
+/// Host-reserved `kv` entry: `{key: value}` the plugin wrote through `settings.set` (#331).
+pub(crate) const PLUGIN_SET_KEY: &str = "$kelta/settings.set";
 
 #[derive(Deserialize)]
 struct KvKey {
@@ -48,6 +50,9 @@ impl KvKey {
     fn checked(self) -> Result<String, KeltaError> {
         if self.key.is_empty() || self.key.len() > KV_KEY_CAP {
             return Err(KeltaError::invalid(format!("kv: `key` must be 1..={KV_KEY_CAP} bytes")));
+        }
+        if self.key == PLUGIN_SET_KEY {
+            return Err(KeltaError::invalid(format!("kv: `{PLUGIN_SET_KEY}` is reserved")));
         }
         Ok(self.key)
     }
@@ -536,6 +541,11 @@ impl PluginHost {
                     .wiring()
                     .settings_writer
                     .ok_or_else(|| KeltaError::unsupported("settings.set is not available"))?;
+                // Marked before the write: `secret_ref` refuses a value the plugin chose (#331).
+                let mut set = self.plugin_set_settings(&screen.plugin).await?;
+                set.insert(q.key.clone(), q.value.clone());
+                let set = serde_json::to_string(&set)?;
+                self.grant_store().kv_set(&screen.plugin, PLUGIN_SET_KEY, set, KV_QUOTA).await?;
                 writer(&screen.plugin, &q.key, q.value)?;
                 Ok(Value::Null)
             }
@@ -604,7 +614,11 @@ impl PluginHost {
                 self.grant_store().kv_delete(&screen.plugin, &key).await?;
                 Ok(Value::Null)
             }
-            PluginMethod::KvList => to_value(self.grant_store().kv_keys(&screen.plugin).await?),
+            PluginMethod::KvList => {
+                let mut keys = self.grant_store().kv_keys(&screen.plugin).await?;
+                keys.retain(|k| k != PLUGIN_SET_KEY);
+                to_value(keys)
+            }
             PluginMethod::UiToast => {
                 #[derive(Deserialize)]
                 struct Q {
