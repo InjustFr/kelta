@@ -35,7 +35,6 @@ kelta-core = { path = "crates/kelta-core" }
 tauri = { version = "=2.12.2" }
 tauri-build = { version = "=2.7.1" }
 tauri-plugin-notification = { version = "=2.5.1" }
-tauri-plugin-opener = { version = "=2.7.0" }
 tauri-plugin-single-instance = { version = "=2.5.2" }
 tauri-plugin-updater = { version = "=2.13.3" }
 

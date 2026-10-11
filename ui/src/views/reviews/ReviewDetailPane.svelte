@@ -249,7 +249,7 @@
       </section>
 
       <section aria-label="Reviewers">
-        <h2>Reviewers</h2>
+        <h2 class="k-section-title">Reviewers</h2>
         {#if detail.reviewers.length === 0}
           <p class="muted">No reviewers.</p>
         {:else}
@@ -267,7 +267,7 @@
       </section>
 
       <section aria-label="Checks">
-        <h2>Checks</h2>
+        <h2 class="k-section-title">Checks</h2>
         {#if detail.checks.length === 0}
           <p class="muted">No checks reported.</p>
         {:else}
@@ -295,7 +295,7 @@
       </section>
 
       <section aria-label="Files">
-        <h2>Files <span class="muted k-num">{detail.files.length}</span></h2>
+        <h2 class="k-section-title">Files <span class="muted k-num">{detail.files.length}</span></h2>
         <ul class="plain files">
           {#each detail.files as f (f.path)}
             <li>
@@ -395,12 +395,6 @@
     font-size: var(--k-font-size-xl);
     font-weight: var(--k-weight-strong);
     line-height: 1.28;
-  }
-
-  h2 {
-    margin: var(--k-space-5) 0 var(--k-space-3);
-    font-size: var(--k-font-size);
-    font-weight: var(--k-weight-strong);
   }
 
   .line {

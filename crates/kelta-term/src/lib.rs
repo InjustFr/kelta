@@ -96,13 +96,6 @@ impl PtyTerminalHost {
             .ok_or_else(|| KeltaError::not_found(format!("terminal session {id}")))
     }
 
-    fn view_scrollback(&self) -> usize {
-        match self.shared.limits.lock().view_scrollback {
-            0 => VIEW_SCROLLBACK,
-            n => n as usize,
-        }
-    }
-
     fn history_for(&self, spec: &PtySpawnSpec) -> usize {
         if spec.scrollback_lines > 0 {
             spec.scrollback_lines as usize
@@ -197,7 +190,7 @@ impl TerminalHost for PtyTerminalHost {
         if let Some(h) = self.shared.history_on() {
             // Same id again (restore, restart): earlier output goes back into the scrollback,
             // above a cleared screen, before logging starts so it is not logged twice.
-            let tail = h.tail(&spec.id, self.view_scrollback());
+            let tail = h.tail_now(&spec.id, self.shared.view_scrollback());
             if !tail.is_empty() {
                 model.feed(format!("{}\r\n\x1b[2J\x1b[H", tail.replace('\n', "\r\n")).as_bytes());
             }

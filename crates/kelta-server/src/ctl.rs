@@ -9,7 +9,6 @@ use std::time::Duration;
 use kelta_proto::api::CoreApi;
 use kelta_proto::ctl::{CTL_MAX_LINE, CTL_PROTOCOL_VERSION, CtlCommand, CtlRequest, CtlResponse};
 use kelta_proto::error::KeltaError;
-use kelta_proto::events::bus;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
@@ -162,14 +161,6 @@ async fn dispatch(ctx: &CtlCtx, cmd: CtlCommand) -> Result<serde_json::Value, Ke
             }
             crate::hooks::ingest(&core, &session, *payload).await?;
             Ok(serde_json::Value::Null)
-        }
-        CtlCommand::Emit { name, payload } => {
-            if !name.starts_with(bus::CUSTOM_PREFIX) || name.len() == bus::CUSTOM_PREFIX.len() {
-                return Err(KeltaError::invalid(format!(
-                    "only custom.* events can be emitted, got {name:?}"
-                )));
-            }
-            core.ctl(CtlCommand::Emit { name, payload }).await
         }
         other => core.ctl(other).await,
     }
