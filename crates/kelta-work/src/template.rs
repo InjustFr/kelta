@@ -78,7 +78,12 @@ fn render_with(template: &str, ctx: &Ctx, mode: Mode, quote: bool) -> Result<Str
             break;
         };
         let expr = &tail[1..end];
-        match eval(expr, ctx) {
+        let value = eval(expr, ctx);
+        // Readline acts on control characters while the line is typed (Ctrl-U clears it), defeating quoting.
+        if quote && value.as_deref().is_some_and(|v| v.chars().any(|c| c.is_control() && c != '\t')) {
+            return Err(KeltaError::invalid(format!("{{{expr}}} contains a control character")));
+        }
+        match value {
             Some(v) if quote && expr.rsplit('|').next().map(str::trim) != Some("shell") => {
                 out.push_str(&shell_quote(&v));
             }
@@ -317,6 +322,15 @@ mod tests {
         );
         assert_eq!(render_shell("git log {base} {{x}}", &ctx, Mode::Strict).unwrap(), "git log 'main' {x}");
         assert!(render_shell("echo {nope}", &ctx, Mode::Strict).is_err());
+        let ctx = Ctx::new().with("t", "café \"$(x)\"\tok");
+        assert_eq!(render_shell("echo {t}", &ctx, Mode::Strict).unwrap(), "echo 'café \"$(x)\"\tok'");
+        for bad in ["x\u{15}rm -rf ~;: '", "a\x1b[A", "a\rb", "a\nb"] {
+            let ctx = Ctx::new().with("t", bad);
+            for tpl in ["echo {t}", "echo {t|shell}"] {
+                let err = render_shell(tpl, &ctx, Mode::Strict).unwrap_err();
+                assert!(err.to_string().contains("{t"), "{err}");
+            }
+        }
     }
 
     #[test]
