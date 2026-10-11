@@ -3,8 +3,9 @@
 //! `SecretRef` resolution chain (SETTINGS §5): `keyring:` (macOS Keychain / Linux Secret Service
 //! via keyring-core), `file:` (passphrase-encrypted file, unlocked once per run), `gh-cli`, `glab-cli`, `command:`, `env:`. Resolution runs off the caller's
 //! thread with a 5 s timeout, results are cached in memory only (zeroized on drop) and the cache
-//! is dropped whenever the effective settings change, on [`SecretResolver::invalidate`] (401) and
-//! on `set` / `delete`. Secret values are never logged, serialized or put in error messages.
+//! is dropped whenever the effective settings or the login environment change (except `keyring:`
+//! values, which neither can change and which may cost a Keychain prompt each), on
+//! [`SecretResolver::invalidate`] (401) and on `set` / `delete`. Secret values are never logged, serialized or put in error messages.
 
 mod file;
 mod glab;
@@ -151,8 +152,14 @@ impl Secrets {
 
     // ---- cache -----------------------------------------------------------------------------
 
+    /// Drop every entry but `keyring:` ones: the settings and the environment cannot change them,
+    /// and re-reading one can prompt for Keychain access again (#275).
     fn clear_cache(&self) {
-        self.cache.lock().map.clear();
+        Self::drop_unpinned(&mut self.cache.lock().map);
+    }
+
+    fn drop_unpinned(map: &mut HashMap<String, Secret>) {
+        map.retain(|k, _| k.starts_with("keyring:"));
     }
 
     fn cache_key(r: &SecretRef, ctx: &SecretCtx) -> String {
@@ -164,7 +171,7 @@ impl Secrets {
         let mut c = self.cache.lock();
         let same = c.generation.as_ref().is_some_and(|g| Arc::ptr_eq(g, &current));
         if !same {
-            c.map.clear();
+            Self::drop_unpinned(&mut c.map);
             c.generation = Some(current);
         }
         c.map.get(key).cloned()
@@ -373,7 +380,9 @@ impl Secrets {
         });
         // one-shot: the Secret Service can block on a locked collection prompt
         match tokio::time::timeout(self.timeout, job).await {
-            Err(_) => Err(KeltaError::timeout("secret storage did not answer within 5 s (is it locked?)")),
+            Err(_) => Err(KeltaError::timeout(
+                "secret storage did not answer within 5 s (waiting for Keychain access, or locked?)",
+            )),
             Ok(Err(_)) => Err(KeltaError::internal("secret storage task failed")),
             Ok(Ok(Err(e))) => Err(map_keyring(&e, &label)),
             Ok(Ok(Ok(v))) => Ok(v),
