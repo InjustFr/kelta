@@ -2371,6 +2371,7 @@ export const settingsDefault: Settings = {
   },
   "work": {
     "default_template": "claude+editor",
+    "finish_first": true,
     "on_merge": {
       "offer_cleanup": true,
       "transition_to": {

@@ -14,7 +14,14 @@
     TransitionTarget,
     WorkItem,
   } from '$lib/gen';
-  import { openExternal, workPlan, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
+  import {
+    openExternal,
+    settingsSet,
+    workPlan,
+    workResume,
+    workRetryStep,
+    workStart,
+  } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { projects, settings, tickets, toasts, work } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
@@ -31,6 +38,8 @@
     unapplyOptions,
     validatePlan,
   } from './common';
+  import FinishFirst from './FinishFirst.svelte';
+  import { finishFirst } from './finishFirst';
 
   interface Props extends SheetProps {
     plan: StartWorkPlan;
@@ -54,6 +63,18 @@
   let retrying = $state<string | null>(null);
 
   const resuming = $derived(seed.existing !== null);
+  // Finish before starting (#354): a step before the plan, never for a resume.
+  const unfinished = $derived(finishFirst(seed));
+  let asking = $state(untrack(() => unfinished.length > 0));
+
+  async function stopAsking(): Promise<void> {
+    try {
+      settings.accept(null, await settingsSet({ layer: 'global', path: 'work.finish_first', value: false }));
+      asking = false;
+    } catch (err) {
+      toasts.error(err, t("Don't ask again"));
+    }
+  }
   const projectName = (id: string): string => projects.byId(id)?.name ?? id;
   // The guess hint names the ticket's source, else its account.
   const sourceName = (p: StartWorkPlan, account: string): string =>
@@ -278,7 +299,9 @@
 </script>
 
 <Sheet {title} width={560} {onclose}>
-  {#if phase === 'edit'}
+  {#if asking}
+    <FinishFirst rows={unfinished} ongo={onclose} />
+  {:else if phase === 'edit'}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <form
       id="start-work-form"
@@ -487,7 +510,11 @@
   {/if}
 
   {#snippet actions()}
-    {#if phase === 'failed'}
+    {#if asking}
+      <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
+      <Button variant="ghost" onclick={() => void stopAsking()}>{t("Don't ask again")}</Button>
+      <Button variant="primary" onclick={() => (asking = false)}>{t('Start anyway')}</Button>
+    {:else if phase === 'failed'}
       {#if ticketUrl}<Button variant="ghost" icon="external-link" onclick={browse}
           >{t('Open in browser')}</Button
         >{/if}

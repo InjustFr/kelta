@@ -14,6 +14,8 @@
   import Sheet from '$lib/ui/Sheet.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
+  import BrowseButton from '../../shell/BrowseButton.svelte';
+
   let { onclose, source: initial }: SheetProps = $props();
 
   let source = $state(untrack(() => (typeof initial === 'string' ? initial : '')));
@@ -63,6 +65,13 @@
         bind:value={source}
         label={t('Source')}
         placeholder={t('~/code/my-plugin, a git URL or a .tgz file')}
+      />
+      <BrowseButton value={source} onpick={(p) => (source = p)} />
+      <BrowseButton
+        value={source}
+        extensions={['tgz', 'gz']}
+        label={t('Archive…')}
+        onpick={(p) => (source = p)}
       />
       <Button type="submit" loading={busy && !preview} disabled={!source.trim()}>{t('Inspect')}</Button>
     </form>

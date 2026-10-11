@@ -59,6 +59,7 @@ The project belongs to the work item (where the session runs), not to the ticket
      existing: Option<WorkItemId>  // → sheet becomes "Resume"
    }
    ```
+   **Finish before starting** (#354, `work.finish_first`, default on): a new ticket start (never a Resume) with other work unfinished first lists it in the sheet, even with `S`: my unfinished work items, then my tickets in progress or in review with none (blocked ones included), each with its phase or status, closest to done first (merged, approved, in review, in progress). A row goes to that item; **Start anyway** (`Enter`) shows the plan; **Don't ask again** sets `work.finish_first = false`.
 2. **Start** → `work_start` runs the journaled saga (each step idempotent; progress checklist in the sheet/toast; `Retry`/`Skip` per failed step):
    1. `ticket.before_start` (blocking triggers may veto with a message).
    2. Fetch ticket; write `<runtime>/s/<sid8>/ticket.md` (key, title, URL, status, labels, Markdown body, last 10 comments).

@@ -14,6 +14,8 @@
   import Sheet from '$lib/ui/Sheet.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
+  import BrowseButton from '../../shell/BrowseButton.svelte';
+
   import ColorPicker from './ColorPicker.svelte';
   import { bindTracker, hasIssues, newRepo, removeRepo, setPrimary, slugify, validateDraft } from './draft';
 
@@ -110,6 +112,7 @@
         placeholder={t('Path to a code folder, e.g. ~/code/shop')}
         data-testid="project-path"
       />
+      <BrowseButton value={path} onpick={(p) => (path = p)} />
       {#if draft}<Button icon="search" loading={detecting} disabled={!path.trim()} onclick={detect}
           >{t('Scan again')}</Button
         >{/if}

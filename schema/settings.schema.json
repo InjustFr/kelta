@@ -5225,6 +5225,7 @@
       "additionalProperties": false,
       "default": {
         "default_template": "claude+editor",
+        "finish_first": true,
         "on_merge": {
           "offer_cleanup": true,
           "transition_to": {
@@ -5259,6 +5260,11 @@
         "default_template": {
           "default": "claude+editor",
           "type": "string"
+        },
+        "finish_first": {
+          "default": true,
+          "description": "Starting a new work item while other work is unfinished lists that work first.",
+          "type": "boolean"
         },
         "on_merge": {
           "additionalProperties": false,

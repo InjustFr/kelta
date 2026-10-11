@@ -9,6 +9,8 @@
   import TextInput from '$lib/ui/TextInput.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
+  import BrowseButton from '../../../shell/BrowseButton.svelte';
+
   import { clone, equal, isRecord } from '../lib/paths';
   import {
     childEntries,
@@ -34,9 +36,20 @@
     /** Show "(unset)" for optional fields. */
     template?: boolean;
     id?: string;
+    /** A list of folders: adds a Browse… button. */
+    browse?: boolean;
   }
 
-  let { node, value, onchange, label, readonly = false, template = false, id }: Props = $props();
+  let {
+    node,
+    value,
+    onchange,
+    label,
+    readonly = false,
+    template = false,
+    id,
+    browse = false,
+  }: Props = $props();
 
   const resolved = $derived(resolve(node));
   const kind = $derived(fieldKind(node));
@@ -252,6 +265,13 @@
           }}
           onblur={addChip}
         />
+        {#if browse}<BrowseButton
+            value=""
+            onpick={(p) => {
+              chip = p;
+              addChip();
+            }}
+          />{/if}
       {/if}
     </div>
   {:else if kind === 'string-map' || kind === 'enum-map' || kind === 'list-map'}
