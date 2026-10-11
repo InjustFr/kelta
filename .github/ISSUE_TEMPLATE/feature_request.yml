@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a new feature or a change to an existing one.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Search the [existing issues](https://github.com/InjustFr/kelta/issues?q=is%3Aissue) first; add your use case there if one matches.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What you would like Kelta to do.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use now, or other ways to solve it.
