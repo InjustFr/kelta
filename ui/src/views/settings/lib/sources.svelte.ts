@@ -3,7 +3,7 @@
 
 import type { AccountKind, JsonValue, Source, SourceHit, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
-import { settings } from '$lib/stores';
+import { settings, toasts } from '$lib/stores';
 
 import { emptyBinding } from '../../onboarding/draft';
 import { slugify, uniqueId } from './accounts';
@@ -60,6 +60,15 @@ export async function saveSources(next: readonly Source[]): Promise<void> {
 /** The global sources with `id` replaced by `f(it)`. */
 export const withEdited = (all: readonly Source[], id: string, f: (s: Source) => Source): Source[] =>
   all.map((s) => (s.id === id ? f(s) : s));
+
+/** Saves source `id` as `f(it)`; a failure is a toast. */
+export async function editSource(id: string, f: (s: Source) => Source): Promise<void> {
+  try {
+    await saveSources(withEdited(settings.value()?.sources ?? [], id, f));
+  } catch (err) {
+    toasts.error(err, 'Could not save the ticket source');
+  }
+}
 
 const ITERATION: Record<string, string> = {
   jira: 'sprint',
