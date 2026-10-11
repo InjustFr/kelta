@@ -186,6 +186,7 @@ export const projectInfo: ProjectInfo = {
         "scope": null,
         "search": null,
         "status": null,
+        "statuses": null,
         "team": null,
         "who": null,
         "workflow_scope": null
@@ -622,6 +623,7 @@ export const sourceHit: SourceHit = {
     "scope": null,
     "search": null,
     "status": null,
+    "statuses": null,
     "team": null,
     "who": "mine",
     "workflow_scope": null
@@ -3452,6 +3454,7 @@ export const uiEventProjectUpdated: UiEvent = {
           "scope": null,
           "search": null,
           "status": null,
+          "statuses": null,
           "team": null,
           "who": null,
           "workflow_scope": null

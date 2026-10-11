@@ -77,6 +77,7 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
     label: 'My tickets',
     jql: null,
     board_id: null,
+    statuses: null,
     project_id: null,
     query_id: null,
     assigned_to: null,
