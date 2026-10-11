@@ -67,12 +67,21 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
     #[cfg(target_os = "macos")]
     {
         app.set_menu(app_menu(app.handle())?)?;
-        // The predefined Quit item calls NSApp terminate:, which exits without RunEvent::Exit
-        // (no Core::shutdown). Route our own item through app.exit instead.
+        // Our own Quit item (not the predefined one, which sends terminate:) asks, then app.exit.
         app.on_menu_event(|app, ev| {
             if ev.id() == "quit" && !quit_asks(app) {
                 quit(app);
             }
+        });
+        // Dock Quit and logout send terminate:: ask like Cmd+Q (#311). Terminating now still
+        // reaches RunEvent::Exit (tao's applicationWillTerminate), hence Core::shutdown.
+        let handle = app.handle().clone();
+        crate::platform::dock::on_should_terminate(move || {
+            let now = !quit_asks(&handle);
+            if now {
+                save_main_geometry(&handle); // no ExitRequested on this path
+            }
+            now
         });
     }
     create(app.handle())?;
