@@ -1,5 +1,5 @@
 //! Provider authentication: resolve the account secret per request, apply the right header,
-//! invalidate the cached secret on 401 (SETTINGS §5: "invalidated on settings change or 401").
+//! invalidate the cached secret on 401 (SETTINGS §5).
 
 use std::sync::Arc;
 
