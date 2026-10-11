@@ -29,6 +29,11 @@ mcp_board_writes: boolean,
  */
 mcp_offer: boolean, 
 /**
+ * At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions
+ * Kelta did not start show in Now (#345); false = never ask.
+ */
+hooks_offer: boolean, 
+/**
  * Passed via `--allowedTools`.
  */
 allowed_tools: Array<string>, 

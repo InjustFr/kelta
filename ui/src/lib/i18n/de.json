@@ -2272,5 +2272,21 @@
   "#{n} is a draft again": "#{n} ist wieder ein Entwurf",
   "Mark ready / draft (my PRs)": "Freigeben / Entwurf (meine PRs)",
   "Mark ready / Convert to draft": "Freigeben / In Entwurf umwandeln",
-  "Mark ready…": "Freigeben…"
+  "Mark ready…": "Freigeben…",
+  "Elsewhere": "Anderswo",
+  "Claude needs you, outside Kelta": "Claude braucht Sie, außerhalb von Kelta",
+  "Claude working outside Kelta": "Claude arbeitet außerhalb von Kelta",
+  "Claude stopped on an error, outside Kelta": "Claude wurde durch einen Fehler gestoppt, außerhalb von Kelta",
+  "Claude done, outside Kelta": "Claude fertig, außerhalb von Kelta",
+  "Claude open outside Kelta": "Claude außerhalb von Kelta geöffnet",
+  "{title}: {label}": "{title}: {label}",
+  "Claude sessions started outside Kelta": "Außerhalb von Kelta gestartete Claude-Sitzungen",
+  "Claude sessions you start in another terminal show in Now, with their state.": "Claude-Sitzungen, die Sie in einem anderen Terminal starten, erscheinen in Jetzt, mit ihrem Status.",
+  "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in Now.": "Installieren Sie Keltas Hooks in den Benutzereinstellungen von Claude Code, um die in einem anderen Terminal gestarteten Claude-Sitzungen in Jetzt anzuzeigen.",
+  "Removing Kelta's hooks failed": "Entfernen von Keltas Hooks fehlgeschlagen",
+  "Installing Kelta's hooks failed": "Installieren von Keltas Hooks fehlgeschlagen",
+  "Installed: Claude sessions you start from now on show in Now": "Installiert: Claude-Sitzungen, die Sie ab jetzt starten, erscheinen in Jetzt",
+  "Show the Claude sessions you start outside Kelta in Now?": "Die außerhalb von Kelta gestarteten Claude-Sitzungen in Jetzt anzeigen?",
+  "Hooks offer": "Hooks-Angebot",
+  "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.": "Beim Start anbieten, Keltas Hook-Relay in den Benutzereinstellungen von Claude Code zu registrieren, damit außerhalb von\nKelta gestartete Sitzungen in Jetzt erscheinen (#345); false = nie fragen."
 }

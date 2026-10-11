@@ -2272,5 +2272,21 @@
   "#{n} is a draft again": "#{n} est de nouveau un brouillon",
   "Mark ready / draft (my PRs)": "Marquer prête / brouillon (mes PR)",
   "Mark ready / Convert to draft": "Marquer prête / Repasser en brouillon",
-  "Mark ready…": "Marquer prête…"
+  "Mark ready…": "Marquer prête…",
+  "Elsewhere": "Ailleurs",
+  "Claude needs you, outside Kelta": "Claude a besoin de vous, hors de Kelta",
+  "Claude working outside Kelta": "Claude travaille hors de Kelta",
+  "Claude stopped on an error, outside Kelta": "Claude s’est arrêté sur une erreur, hors de Kelta",
+  "Claude done, outside Kelta": "Claude a terminé, hors de Kelta",
+  "Claude open outside Kelta": "Claude ouvert hors de Kelta",
+  "{title}: {label}": "{title} : {label}",
+  "Claude sessions started outside Kelta": "Sessions Claude lancées hors de Kelta",
+  "Claude sessions you start in another terminal show in Now, with their state.": "Les sessions Claude que vous lancez dans un autre terminal apparaissent dans Maintenant, avec leur état.",
+  "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in Now.": "Installez les hooks de Kelta dans les paramètres utilisateur de Claude Code pour afficher dans Maintenant les sessions Claude que vous lancez dans un autre terminal.",
+  "Removing Kelta's hooks failed": "Échec du retrait des hooks de Kelta",
+  "Installing Kelta's hooks failed": "Échec de l’installation des hooks de Kelta",
+  "Installed: Claude sessions you start from now on show in Now": "Installé : les sessions Claude que vous lancez désormais apparaissent dans Maintenant",
+  "Show the Claude sessions you start outside Kelta in Now?": "Afficher dans Maintenant les sessions Claude que vous lancez hors de Kelta ?",
+  "Hooks offer": "Proposition des hooks",
+  "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.": "Au démarrage, proposer d’enregistrer le relais de hooks de Kelta dans les paramètres utilisateur de Claude Code, pour que les sessions\nlancées hors de Kelta apparaissent dans Maintenant (#345) ; false = ne jamais demander."
 }

@@ -5,7 +5,7 @@ import type { SessionId } from "./SessionId";
 import type { TicketRef } from "./TicketRef";
 import type { JsonValue } from "./serde_json/JsonValue";
 
-export type CtlRequest = { v: number, } & ({ "cmd": "hook", session: SessionId, token: string, payload: HookPayload, } | { "cmd": "toggle" } | { "cmd": "palette" } | { "cmd": "next" } | { "cmd": "back" } | { "cmd": "open", path: string, } | { "cmd": "focus_project", id: ProjectId, } | { "cmd": "start", ticket: string, project: ProjectId | null, 
+export type CtlRequest = { v: number, } & ({ "cmd": "hook", session: SessionId, token: string, payload: HookPayload, } | { "cmd": "outside_hook", payload: HookPayload, pid: number | null, } | { "cmd": "toggle" } | { "cmd": "palette" } | { "cmd": "next" } | { "cmd": "back" } | { "cmd": "open", path: string, } | { "cmd": "focus_project", id: ProjectId, } | { "cmd": "start", ticket: string, project: ProjectId | null, 
 /**
  * Set by the backend when it asks the app to show the Start sheet: the ticket `ticket` resolved to.
  */

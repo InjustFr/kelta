@@ -31,6 +31,13 @@ pub enum CtlCommand {
         token: String,
         payload: Box<HookPayload>,
     },
+    /// Hook of a Claude session Kelta did not start (`kelta-ctl hook --outside`, #345); `pid` = the
+    /// relay's parent process.
+    OutsideHook {
+        payload: Box<HookPayload>,
+        #[serde(default)]
+        pid: Option<u32>,
+    },
     Toggle,
     Palette,
     /// Jump to the next thing waiting on me (`attention.next`).

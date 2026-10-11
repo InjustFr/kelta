@@ -984,6 +984,7 @@
         "extra_args": [],
         "extra_hooks": {},
         "hook_transport": "command",
+        "hooks_offer": true,
         "ide_bridge": false,
         "max_live": 4,
         "mcp": true,
@@ -1086,6 +1087,14 @@
             "http"
           ],
           "type": "string"
+        },
+        "hooks_offer": {
+          "default": true,
+          "description": "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.",
+          "type": "boolean",
+          "x-kelta-scope": [
+            "global"
+          ]
         },
         "ide_bridge": {
           "default": false,

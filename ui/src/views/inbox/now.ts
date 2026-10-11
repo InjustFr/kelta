@@ -38,6 +38,7 @@ export function currentSections(): Section[] {
   return nowSections({
     work: unfinishedWork().map((item) => ({ item, phase: phaseNow(item) })),
     sessions: sessions.all,
+    outside: sessions.elsewhere,
     requested: reviews.items(ALL, 'review_requested'),
     authored: reviews.items(ALL, 'authored'),
     tickets: mine,
@@ -99,6 +100,7 @@ export async function refreshNow(force = false): Promise<void> {
     reviews.load(ALL, 'review_requested', force),
     reviews.load(ALL, 'authored', force),
     work.refreshStatus(),
+    sessions.loadOutside(),
     ...unfinishedWork().flatMap((w) => (w.review ? [reviews.loadDetail(w.review)] : [])),
   ]);
   await nextUp.prune();
@@ -130,6 +132,9 @@ export async function goToRow(row: NowRow): Promise<void> {
       return;
     case 'session':
       await revealSession(row.session.id);
+      return;
+    case 'outside':
+      // shortcut: Kelta cannot reach its window yet (#346); the row and the HUD say where it runs.
       return;
     case 'review': {
       const pid = rowProject(row.review.project_ids);

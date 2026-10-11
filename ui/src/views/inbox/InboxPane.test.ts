@@ -360,5 +360,6 @@ function rowProject(row: NowRow): string | null {
   if (row.type === 'work') return row.item.project_id;
   if (row.type === 'session') return row.session.project_id;
   if (row.type === 'review') return row.review.project_ids[0] ?? null;
+  if (row.type === 'outside') return null;
   return row.ticket.project_ids[0] ?? null;
 }
