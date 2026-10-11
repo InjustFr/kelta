@@ -92,14 +92,15 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bash packaging/build.sh
+      # Flat: several paths would upload as deb/ and appimage/ folders, which publish-nightly.sh does not read.
+      - run: |
+          mkdir dist
+          cp target/release/bundle/deb/*.deb target/release/bundle/appimage/*.AppImage target/release/bundle/appimage/*.AppImage.sig dist/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nightly-linux-${{ runner.arch }}
           if-no-files-found: error
-          path: |
-            target/release/bundle/deb/*.deb
-            target/release/bundle/appimage/*.AppImage
-            target/release/bundle/appimage/*.AppImage.sig
+          path: dist/*
 
   macos:
     needs: prep
