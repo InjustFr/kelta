@@ -88,8 +88,10 @@
     const own = (boards[account] ?? []).map((h) => ({ value: String(h.view.board_id), label: h.label }));
     const id = v.board_id == null ? '' : String(v.board_id);
     const known = id === '' || own.some((o) => o.value === id);
+    // Without a jql or project of its own the board is the view's only scope: it cannot be cleared.
+    const scoped = !!(v.jql?.trim() || v.project_id?.trim() || v.project?.trim());
     return [
-      { value: '', label: 'Any board' },
+      ...(scoped || id === '' ? [{ value: '', label: 'Any board' }] : []),
       ...(known ? [] : [{ value: id, label: `Board ${id}` }]),
       ...own,
     ];
