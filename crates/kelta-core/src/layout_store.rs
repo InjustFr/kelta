@@ -86,9 +86,14 @@ impl Core {
         self.resubscribe();
     }
 
+    /// A project's layout, or the global views' built-in one (`ProjectId::GLOBAL`).
+    fn has_layout(&self, id: &ProjectId) -> bool {
+        id.as_str() == ProjectId::GLOBAL || self.project_exists(id)
+    }
+
     /// `layout_get` (empty layout with `rev = 0` for a project never saved).
     pub fn layout_get(&self, project: &ProjectId) -> Result<Layout, KeltaError> {
-        if !self.project_exists(project) {
+        if !self.has_layout(project) {
             return Err(KeltaError::not_found(format!("project {project}")));
         }
         Ok(self.layouts.lock().get(project).cloned().unwrap_or_else(|| layout::empty(project)))
@@ -96,7 +101,7 @@ impl Core {
 
     /// `layout_save`: optimistic concurrency on `rev`.
     pub fn layout_save(&self, mut l: Layout) -> Result<LayoutSaveResult, KeltaError> {
-        if !self.project_exists(&l.project_id) {
+        if !self.has_layout(&l.project_id) {
             return Err(KeltaError::not_found(format!("project {}", l.project_id)));
         }
         let rev = {

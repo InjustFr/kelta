@@ -31,7 +31,6 @@ import type {
   Layout,
   LayoutSaveResult,
   MergeMethod,
-  PaneContent,
   PerfSnapshot,
   Placement,
   PluginId,
@@ -165,7 +164,6 @@ export interface Commands {
   layout_get: { args: { project_id: ProjectId }; result: Layout };
   layout_save: { args: { layout: Layout }; result: LayoutSaveResult };
   /** The global view shown on the rail (`null` = a project): polled like a visible pane. */
-  ui_set_global_view: { args: { content: PaneContent | null }; result: null };
   // ---- sessions ----------------------------------------------------------------------------
   session_spawn: { args: { req: SpawnRequest }; result: SessionInfo };
   session_spawn_template: {
@@ -402,7 +400,6 @@ export const COMMAND_NAMES = [
   'project_reorder',
   'layout_get',
   'layout_save',
-  'ui_set_global_view',
   'session_spawn',
   'session_spawn_template',
   'session_attach',
@@ -593,7 +590,6 @@ export const projectReorder = wrap('project_reorder');
 // ---- layout ---------------------------------------------------------------------------------
 export const layoutGet = wrap('layout_get');
 export const layoutSave = wrap('layout_save');
-export const uiSetGlobalView = wrap('ui_set_global_view');
 
 // ---- sessions -------------------------------------------------------------------------------
 export const sessionSpawn = wrap('session_spawn');

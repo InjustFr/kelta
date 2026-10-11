@@ -57,7 +57,6 @@
     "allow-project-reorder",
     "allow-layout-get",
     "allow-layout-save",
-    "allow-ui-set-global-view",
     "allow-session-spawn",
     "allow-session-spawn-template",
     "allow-session-attach",

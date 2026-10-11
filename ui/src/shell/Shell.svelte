@@ -6,9 +6,20 @@
   import type { AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { onUiEvent } from '$lib/ipc/events';
-  import { sessionSpawnTemplate, terminalSetPalette, uiSetGlobalView } from '$lib/ipc/commands';
+  import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
-  import { layout, projects, reviews, sessions, settings, toasts, tools, ui } from '$lib/stores';
+  import {
+    GLOBAL,
+    layout,
+    projects,
+    reviews,
+    sessions,
+    settings,
+    toasts,
+    tools,
+    ui,
+    type GlobalView,
+  } from '$lib/stores';
   import { configFromSettings, terminalPool } from '$lib/terminal';
   import { terminalPalette } from '$lib/terminal/theme';
   import { resolveProjectColor, resolveTheme } from '$lib/theme';
@@ -26,15 +37,7 @@
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
   import { fileRoots, openFileLink } from './actions';
-  import {
-    activateProject,
-    currentTab,
-    focusedPane,
-    focusedSessionId,
-    openView,
-    savedPlace,
-    savePlace,
-  } from './nav';
+  import { activateProject, currentTab, focusedPane, focusedSessionId, openView } from './nav';
   import ProjectRail from './ProjectRail.svelte';
   import SheetHost from './SheetHost.svelte';
   import StatusBar from './StatusBar.svelte';
@@ -42,7 +45,7 @@
   import { startupUnlock } from './unlock';
   import UpdateBanner from './UpdateBanner.svelte';
   import Workspace from './Workspace.svelte';
-  import { globalContent } from '../views/work/nav';
+  import { GLOBAL_VIEWS, loadGlobalLayout } from '../views/work/nav';
 
   let prefixArmed = $state(false);
 
@@ -119,6 +122,7 @@
       if (!layout.get(p.id)) void layout.ensure(p.id).catch(() => {});
     }
   });
+  void loadGlobalLayout().catch(() => {});
 
   // ---- jumplist -------------------------------------------------------------------------------
 
@@ -126,7 +130,7 @@
     // Every focus change, wherever it came from; `nav.back` landing on an entry records nothing.
     const project = projects.activeId;
     if (ui.view) {
-      noteFocus({ project: project ?? '', tab: '', pane: '', view: ui.view });
+      noteFocus({ project: GLOBAL, tab: ui.view, pane: ui.view });
       return;
     }
     const tab = currentTab();
@@ -136,21 +140,21 @@
 
   // ---- global views ----------------------------------------------------------------------------
 
-  // Kelta reopens on the last place: restored once the projects are known, saved on every change after.
+  // The view shown is the active tab of the built-in GLOBAL layout (`null` = the project): the core
+  // polls it like a visible pane and keeps it, so Kelta reopens on it. Restored once the projects
+  // and that layout are known, saved on every change after.
   let placeRestored = false;
   $effect(() => {
     const view = ui.view;
-    if (!projects.loaded) return;
-    if (placeRestored) return savePlace(view);
-    placeRestored = true;
-    const saved = savedPlace();
-    if (saved && view === null) openView(saved);
-  });
-
-  $effect(() => {
-    // A shown view is polled like a visible pane; `null` hands polling back to the project.
-    const view = ui.view;
-    uiSetGlobalView({ content: view ? globalContent(view) : null }).catch(() => {});
+    const global = layout.get(GLOBAL);
+    // tabs: seeded by `loadGlobalLayout`, which carries the pre-#270 place
+    if (!projects.loaded || !global?.tabs.length) return;
+    const saved = global.active_tab;
+    if (!placeRestored) {
+      placeRestored = true;
+      if (view === null && GLOBAL_VIEWS.includes(saved as GlobalView)) return openView(saved as GlobalView);
+    }
+    if (saved !== view) layout.update(GLOBAL, (l) => ({ ...l, active_tab: view }));
   });
 
   // ---- keys ------------------------------------------------------------------------------------
