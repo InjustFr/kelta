@@ -266,14 +266,23 @@ const FINISH_MERGED: FinishOpts = {
   transition_to: null,
 };
 
+/** Realistic descriptions for the items the README screenshots show; other fixtures keep the filler. */
+const BLURBS: Record<string, string> = {
+  '4567': 'Invoices with several lines round each line, the ledger rounds the total: they differ by a cent.',
+  'acme/shop-api#311':
+    'Product images are fetched from S3 on every page view. Cache them at the edge for a day.',
+};
+const MOCK_BODY = 'Mock body rendered from the in-memory fixtures.';
+
 function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
   // Headings, lists, a rule and a task list, as tracker descriptions carry them. No `#`: the title is the only h1.
-  const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.\n\n## Acceptance\n\n- [x] Shown in the detail\n- [ ] Covered by a test\n\n---\n\n### Notes\n\n1. First\n2. Second`;
+  const blurb = BLURBS[t.ref.key] ?? MOCK_BODY;
+  const body = `Ticket **${t.ref.key}** (${t.title}).\n\n${blurb}\n\n## Acceptance\n\n- [x] Shown in the detail\n- [ ] Covered by a test\n\n---\n\n### Notes\n\n1. First\n2. Second`;
   return {
     ticket: t,
     body_md: body,
     body_html:
-      `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>Mock body rendered from the in-memory fixtures. <a href="${t.url}">Open in tracker</a></p>` +
+      `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>${escapeHtml(blurb)} <a href="${t.url}">Open in tracker</a></p>` +
       '<h2>Acceptance</h2><ul><li><input disabled="" type="checkbox" checked="">Shown in the detail</li><li><input disabled="" type="checkbox">Covered by a test</li></ul>' +
       '<hr><h3>Notes</h3><ol><li>First</li><li>Second</li></ol>',
     body_format: 'markdown',
@@ -1232,7 +1241,7 @@ export function createMockTransport(options: MockOptions = {}): {
         ...clone(samples.reviewDetail),
         review: clone(item.review),
         pending_comments: state.pending[prKey(review)] ?? 0,
-        body_html: `<p>${escapeHtml(item.review.title)}</p><p>Mock description. <a href="${item.review.url}">View on host</a></p>`,
+        body_html: `<p>${escapeHtml(item.review.title)}</p><p>${escapeHtml(BLURBS[prKey(review)] ?? 'Mock description.')} <a href="${item.review.url}">View on host</a></p>`,
       };
       return detail;
     },

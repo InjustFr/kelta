@@ -249,8 +249,8 @@ pre,
   text-overflow: ellipsis;
 }
 
-/* Chips and meta after the title: they give way before the title does. Overflow is clipped on the
-   left, so the age and diffstat at the end stay readable. */
+/* Chips and meta after the title. Overflow is clipped on the left, so the age and diffstat at the
+   end stay readable. */
 .k-row-tail {
   display: flex;
   align-items: center;
@@ -263,6 +263,20 @@ pre,
 
 .k-row-tail > * {
   flex: none;
+}
+
+/* Chips give way with an end ellipsis, never cut on the left; the meta after them keeps its width. */
+.k-row-tail > :not(.k-row-meta) {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.k-row .k-row-tail .k-badge {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 20px;
 }
 
 .k-narrow-hide {
