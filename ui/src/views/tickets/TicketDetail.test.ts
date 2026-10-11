@@ -45,7 +45,6 @@ describe('TicketDetail', () => {
   it('w opens the workflow picker; Enter runs the workflow on the ticket and toasts Open and Peek', async () => {
     const ref = itemOf('SHOP-151').ticket.ref;
     const detail = mount('SHOP-151');
-    await waitFor(() => expect(workflows[ticketKey(ref)]).toHaveLength(2));
     await fireEvent.keyDown(detail, { key: 'w' });
     await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
     Element.prototype.scrollIntoView ??= () => {}; // not in jsdom
@@ -66,20 +65,20 @@ describe('TicketDetail', () => {
     expect([toast.action?.command, toast.secondary?.command]).toEqual(['session.reveal', 'session.peek']);
   });
 
-  it('turns Run workflow off with the reason when no workflow is found', async () => {
+  it('says why when no workflow is found, then turns Run workflow off with the reason', async () => {
     mock.state.workflows = [];
     const detail = mount('SHOP-151');
-    await waitFor(() => expect(workflows[ticketKey(itemOf('SHOP-151').ticket.ref)]).toEqual([]));
+    expect(mock.calls.some((c) => c.cmd === 'workflows_list')).toBe(false);
+    await fireEvent.keyDown(detail, { key: 'w' });
+    await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toBe(NO_WORKFLOWS));
+    expect(ui.sheet).toBeNull();
+    expect(workflows[ticketKey(itemOf('SHOP-151').ticket.ref)]).toEqual([]);
     await fireEvent.click(action('More'));
     const entry = within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', {
       name: /Run workflow…/,
     });
     expect(entry.getAttribute('aria-disabled')).toBe('true');
     expect(entry.getAttribute('title')).toBe(NO_WORKFLOWS);
-    await fireEvent.keyDown(screen.getByRole('menu', { name: 'More actions' }), { key: 'Escape' });
-    await fireEvent.keyDown(detail, { key: 'w' });
-    expect(toasts.list.at(-1)?.toast.text).toBe(NO_WORKFLOWS);
-    expect(ui.sheet).toBeNull();
   });
 
   it('shows the header from the item at once, then the meta grid, PRs, description and comments', async () => {

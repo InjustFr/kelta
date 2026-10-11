@@ -552,6 +552,7 @@ export const ticketPage: TicketPage = {
     "kind": "token",
     "value": "eyJuZXh0IjoyfQ"
   },
+  "people": [],
   "stale": false
 };
 
