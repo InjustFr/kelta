@@ -160,9 +160,14 @@ impl PluginHost {
         if let Some(t) = ticket {
             v.set("ticket", t);
         }
-        let pr = tctx
-            .and_then(|t| t.review.as_ref())
-            .and_then(|r| serde_json::to_value(r).ok())
+        // A ref alone (UI entry points) resolves to the full review, so `{pr.head}` etc. are set.
+        let review_ref = tctx.and_then(|t| t.review.as_ref());
+        let review = match (&core, review_ref) {
+            (Some(c), Some(r)) => c.review(r).await.and_then(|rv| serde_json::to_value(rv).ok()),
+            _ => None,
+        };
+        let pr = review
+            .or_else(|| review_ref.and_then(|r| serde_json::to_value(r).ok()))
             .or_else(|| payload.get("review").cloned())
             .and_then(|r| pr_value(&r));
         if let Some(p) = pr {

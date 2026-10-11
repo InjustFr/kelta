@@ -6,9 +6,8 @@ import { sheetRegistry } from '$app/registry';
 import type { ActionButtonDef, PaneContent, PluginInfo, ScreenDef, TemplateCtx } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, reviews, sessions, settings, tools, ui, work } from '$lib/stores';
+import { layout, plugins, projects, sessions, settings, tools, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
-import { reviewKey } from '$lib/stores/reducers';
 
 import '../actions';
 import '../../views/tools/actions';
@@ -128,7 +127,7 @@ describe('plugin subject actions in the palette', () => {
     expect(qa().map((i) => i.label)).toEqual(['Open STATS', 'Open ALL']);
   });
 
-  it('runs a ticket action with its work item and a review action with the pr.* vars', async () => {
+  it('runs a ticket action with its work item and a review action with its ref before the detail loads', async () => {
     withPlugin();
     const w = work.all.find((x) => x.ticket && x.state.kind !== 'finished')!;
     focus({ kind: 'ticket_detail', ticket: w.ticket! });
@@ -139,17 +138,14 @@ describe('plugin subject actions in the palette', () => {
     expect(runs()[0]).toMatchObject({
       ctx: { ticket: w.ticket, work_item_id: w.id, extra: { project_id: w.project_id } },
     });
+    // No detail loaded: the ref alone, core resolves `{pr.*}` (#267).
     const rv = mock.state.reviews[0]!.review;
-    reviews.details[reviewKey(rv.ref)] = { ...idle(), data: { review: rv } } as never;
     focus({ kind: 'review_detail', review: rv.ref });
     await qa()
       .find((i) => i.label === 'r')!
       .run();
     await waitFor(() => expect(runs()).toHaveLength(2));
-    expect(runs()[1]!.ctx).toMatchObject({
-      review: rv.ref,
-      extra: { 'pr.head': rv.source_branch, 'pr.base': rv.target_branch, 'pr.title': rv.title },
-    });
+    expect(runs()[1]!.ctx).toMatchObject({ review: rv.ref, extra: { project_id: projects.activeId } });
   });
 
   it('lists a work action only with a focused work item and runs it with the item and its project', async () => {

@@ -1138,3 +1138,22 @@ async fn a_failing_side_keeps_the_account_status_until_it_recovers() {
         "the failing side recovered"
     );
 }
+
+#[tokio::test]
+async fn review_by_ref_reads_the_cache_then_fetches_when_cold_and_none_on_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (cached, cold) = (
+        review("acme/shop-api", 87, ReviewKind::ReviewRequested),
+        review("acme/shop-api", 88, ReviewKind::Authored),
+    );
+    let e = env(tmp.path(), vec![cached.clone(), cold.clone()]);
+    e.h.core.review_page(Scope::All, ReviewKind::ReviewRequested, true).await.unwrap();
+    // Cached: the host no longer has it, so only the cache can answer.
+    e.host.reviews.lock().retain(|r| r.r#ref != cached.r#ref);
+    assert_eq!(e.h.core.review(&cached.r#ref).await.map(|r| r.r#ref), Some(cached.r#ref.clone()));
+    // Cold (its kind was never listed): fetched from the host.
+    assert_eq!(e.h.core.review(&cold.r#ref).await.map(|r| r.r#ref), Some(cold.r#ref.clone()));
+    // Neither cached nor on the host: the failed fetch is None.
+    let gone = ReviewRef { number: 999, ..cold.r#ref };
+    assert_eq!(e.h.core.review(&gone).await, None);
+}
