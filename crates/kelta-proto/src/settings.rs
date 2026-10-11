@@ -770,6 +770,10 @@ pub struct ClaudeSettings {
     /// At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub mcp_offer: bool,
+    /// At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions
+    /// Kelta did not start show in Now (#345); false = never ask.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub hooks_offer: bool,
     /// Passed via `--allowedTools`.
     pub allowed_tools: Vec<String>,
     /// Appended to the generated `context.md`.
@@ -810,6 +814,7 @@ impl Default for ClaudeSettings {
             mcp: true,
             mcp_board_writes: true,
             mcp_offer: true,
+            hooks_offer: true,
             allowed_tools: vec!["mcp__kelta__*".into()],
             append_system_prompt: String::new(),
             extra_args: Vec::new(),

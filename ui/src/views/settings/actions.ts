@@ -84,6 +84,14 @@ registerAction('claude.mcp_install', async () => {
 registerAction('claude.mcp_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.mcp_offer', value: false });
 });
+// The startup offer of Kelta's hook relay (#345): sessions started outside Kelta show in Now.
+registerAction('claude.hooks_install', async () => {
+  await ipc.claudeHooksInstall();
+  toasts.info('Installed: Claude sessions you start from now on show in Now');
+});
+registerAction('claude.hooks_never', async () => {
+  await ipc.settingsSet({ layer: 'global', path: 'claude.hooks_offer', value: false });
+});
 
 // "Set up with Claude" (#343), from the onboarding and the palette: core installs Kelta's MCP when
 // needed and opens the setup session in Home.

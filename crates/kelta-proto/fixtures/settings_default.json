@@ -21,6 +21,7 @@
     "extra_args": [],
     "extra_hooks": {},
     "hook_transport": "command",
+    "hooks_offer": true,
     "ide_bridge": false,
     "max_live": 4,
     "mcp": true,

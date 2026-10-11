@@ -76,7 +76,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, FinishOpts,
         GitStatus, EditorTarget, TemplateCtx, RebaseState, RunClaim, RunState, RebaseOnto, RebaseOp, SendFile,
         FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta, NoteState, ReviewNote, ReviewNotes,
-        NextUpItem, NextUp, WorkflowInfo, WorkflowSource, ClaudeRun, ClaudeRunPhase, ClaudeRunAgent,
+        NextUpItem, NextUp, WorkflowInfo, WorkflowSource, ClaudeRun, ClaudeRunPhase, ClaudeRunAgent, OutsideSession,
         TranscriptLine,
         // tracker / codehost
         TrackerKind, TrackerCaps, User, TicketRef, StatusCategory, Status, Ticket, BodyFormat,

@@ -20,6 +20,7 @@
   import { formatChord } from '$lib/ui/format';
 
   import { nowSummary, refreshNow } from '../views/inbox/now';
+  import { outsidePhase } from '../views/work/phase';
   import { confirms } from './confirm.svelte';
   import { chordFor } from './labels';
   import {
@@ -495,6 +496,32 @@
       {:else}
         <p class="none">No projects yet</p>
       {/each}
+
+      {#if sessions.elsewhere.length > 0}
+        <!-- Claude sessions Kelta did not start (#345): dimmed, Now lists them. -->
+        <section class="band tools" aria-label="Elsewhere" data-testid="rail-elsewhere">
+          <h2 class="tools-heading">Elsewhere</h2>
+          <ul class="rows">
+            {#each sessions.elsewhere as s (s.id)}
+              {@const ph = outsidePhase(s)}
+              <li class="row">
+                <button
+                  type="button"
+                  class="item tab-row background"
+                  title={`${s.title}: ${ph.label}${s.cwd ? `\n${s.cwd}` : ''}`}
+                  data-testid="rail-outside"
+                  data-attention={ph.lamp}
+                  onclick={() => void dispatch('inbox.open')}
+                >
+                  <span class="socket" aria-hidden="true"><Lamp level={ph.lamp} /></span>
+                  <span class="kind" aria-hidden="true"><Icon name="bot" size={14} /></span>
+                  <span class="text"><span class="name">{s.title}</span></span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
       {#if toolList.length > 0}
         <section class="band tools" aria-label="Tools" data-testid="rail-tools">

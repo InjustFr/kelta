@@ -20,6 +20,7 @@ pub mod layout;
 pub mod layout_store;
 pub mod notifier;
 pub mod oauth;
+pub mod outside;
 mod park;
 pub mod perf;
 mod permission_mode;
@@ -203,6 +204,8 @@ pub struct Core {
     pub(crate) claude_mcp_recheck: rt::OneShot,
     /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
     pub(crate) claude_mode: Mutex<Option<kelta_proto::settings::PermissionMode>>,
+    /// Claude sessions Kelta did not start, by Claude session id (#345).
+    pub(crate) outside: Mutex<std::collections::BTreeMap<String, kelta_proto::model::OutsideSession>>,
     /// Startup toasts held until `app_ready`: the bridge drops events while no window listens.
     boot_toast: Mutex<Vec<Toast>>,
     started: AtomicBool,
@@ -363,6 +366,7 @@ impl Core {
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),
+                outside: Mutex::default(),
                 boot_toast: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
@@ -488,6 +492,7 @@ impl Core {
             self.rt.spawn(async move {
                 if let Some(core) = weak.upgrade() {
                     core.claude_mcp_startup().await;
+                    core.claude_hooks_startup().await;
                 }
             });
         }

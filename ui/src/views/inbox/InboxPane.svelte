@@ -40,7 +40,14 @@
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { loadGlobalLayout, persistPaneContent } from '../work/nav';
-  import { deltaParts, testsMissing, workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
+  import {
+    deltaParts,
+    outsidePhase,
+    testsMissing,
+    workKey,
+    type Lamp as LampKind,
+    type WorkActionId,
+  } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -106,6 +113,8 @@
     more: string;
     /** Ghost buttons: key + label. */
     actions: { key: string; label: string }[];
+    /** A Claude session Kelta did not start: shown dimmed. */
+    dim?: boolean;
   }
 
   function projectOf(ids: readonly string[]): { name: string | null; color: string | null } {
@@ -217,6 +226,23 @@
           age: age(s.created_at),
           more: preview,
           actions: [{ key: 'enter', label: 'Go to session' }],
+        };
+      }
+      case 'outside': {
+        const s = row.session;
+        const ph = outsidePhase(s);
+        return {
+          lamp: ph.lamp,
+          id: s.ticket?.key ?? 'claude',
+          title: s.title,
+          project: null,
+          color: null,
+          reason: ph.label,
+          meta: s.branch ? [s.branch] : [],
+          age: age(s.updated_at),
+          more: [s.cwd, s.preview].filter(Boolean).join('  ·  '),
+          actions: [],
+          dim: true,
         };
       }
       case 'review': {
@@ -572,6 +598,7 @@
                   type="button"
                   tabindex="-1"
                   class="row"
+                  class:dim={v.dim}
                   class:selected={cur === l.row}
                   aria-current={cur === l.row ? 'true' : undefined}
                   data-row={l.row.id}
@@ -759,6 +786,11 @@
 
   .row:hover {
     background: var(--k-bg-hover);
+  }
+
+  /* Outside Kelta (#345): the lamp at full strength, the words quieter. */
+  .row.dim > :not(.slot) {
+    opacity: 0.6;
   }
 
   .selected,
