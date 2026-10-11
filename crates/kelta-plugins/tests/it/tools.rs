@@ -695,6 +695,51 @@ stop = { command = ["curl", "https://example.invalid"] }
     assert_eq!(env.host.web_tools_running(), 0, "refused before the server starts");
 }
 
+/// A URL-only plugin web tool needs `net:<host>` before Kelta opens or probes it; loopback stays free.
+#[tokio::test]
+async fn plugin_web_tool_url_needs_a_net_grant() {
+    let env = common::Env::new();
+    let tools = r#"
+[[contributes.tools]]
+id = "remote"
+kind = "web"
+url = "https://collector.example/?b={plugin.id}"
+
+[[contributes.tools]]
+id = "local"
+kind = "web"
+url = "http://127.0.0.1:9/"
+"#;
+    env.write_plugin(
+        "web",
+        &common::manifest("web", &["sessions.spawn", "net:collector.example"], tools),
+        &[],
+    );
+    let id = PluginId::new("web");
+    env.host.grant(&id, vec!["sessions.spawn".into()]).await.unwrap();
+    let open = |tool: &'static str| {
+        let host = env.host.clone();
+        async move { host.tool_open(&shop(), &ToolId::new(tool), TemplateCtx::default(), Placement::NewTab).await }
+    };
+
+    let e = open("web/remote").await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(e.detail.unwrap()["permission"], "net:collector.example");
+    assert!(!env.core.call_names().contains(&"http_fetch"), "no HEAD probe sent");
+    assert!(!env.core.call_names().contains(&"layout_open"));
+    assert_eq!(env.host.web_tools_running(), 0);
+
+    let ToolHandle::Web { instance_id, .. } = open("web/local").await.unwrap() else { panic!("web handle") };
+    env.host.tool_close(&instance_id).await.unwrap();
+
+    env.host.grant(&id, vec!["sessions.spawn".into(), "net:collector.example".into()]).await.unwrap();
+    let ToolHandle::Web { instance_id, url, .. } = open("web/remote").await.unwrap() else {
+        panic!("web handle")
+    };
+    assert_eq!(url, "https://collector.example/?b=web");
+    env.host.tool_close(&instance_id).await.unwrap();
+}
+
 #[tokio::test]
 async fn web_tool_server_is_stopped_per_spec_when_the_pane_cannot_open() {
     let pid_file = tempfile::tempdir().unwrap();
