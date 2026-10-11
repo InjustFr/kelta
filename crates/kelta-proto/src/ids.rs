@@ -90,6 +90,8 @@ string_id!(
 impl ProjectId {
     pub const HOME: &'static str = "home";
     pub const INBOX: &'static str = "inbox";
+    /// The built-in layout of the rail's global views (Tickets, Now, Reviews): a layout, never a project.
+    pub const GLOBAL: &'static str = "global";
 
     pub fn home() -> Self {
         Self::new(Self::HOME)

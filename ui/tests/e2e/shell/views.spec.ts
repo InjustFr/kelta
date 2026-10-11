@@ -1,7 +1,15 @@
 // The rail's cross-project views (SPEC §1, #214): Tickets, Now and Reviews render outside any project.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+import type { Layout } from '$lib/gen';
 
 import { activeProject, boot, callsOf } from './helpers';
+
+/** The last save of the global views' built-in layout: its active tab is the view the core polls. */
+async function globalSave(page: Page): Promise<unknown> {
+  const saves = await callsOf(page, 'layout_save');
+  return saves.filter((c) => (c.args as { layout: Layout }).layout.project_id === 'global').at(-1)?.args;
+}
 
 test('Tickets and Reviews show from the rail, leave for the item project and come back after a restart', async ({
   page,
@@ -17,21 +25,20 @@ test('Tickets and Reviews show from the rail, leave for the item project and com
   const pane = host.getByTestId('tickets-pane');
   await expect(pane.locator('[data-key]').first()).toBeVisible();
   expect(await activeProject(page)).toBe('shop');
-  expect((await callsOf(page, 'ui_set_global_view')).at(-1)?.args).toMatchObject({
-    content: { kind: 'tickets', scope: { kind: 'all' }, who: 'mine' },
-  });
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: 'tickets' } });
 
   // Shift+Enter leaves the view for the ticket's project, in a visible pane.
   await pane.focus();
   await page.keyboard.press('Shift+Enter');
   await expect(host).toBeHidden();
   await expect(page.getByTestId('workspace').getByTestId('ticket-detail')).toBeVisible();
-  expect((await callsOf(page, 'ui_set_global_view')).at(-1)?.args).toMatchObject({ content: null });
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: null } });
 
   // Mod+Shift+R: the Reviews view from a project; Kelta reopens on it.
   await page.keyboard.press('Control+Shift+R');
   await expect(host).toHaveAttribute('data-view', 'reviews');
   await expect(host.getByTestId('reviews-pane')).toBeVisible();
+  await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: 'reviews' } });
   await page.reload();
   await expect(page.getByTestId('global-host')).toHaveAttribute('data-view', 'reviews');
 });
@@ -58,4 +65,35 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
   await expect(host).toHaveAttribute('data-view', 'tickets');
   await expect(host.locator('[data-key="redmine-corp:4567"]')).toHaveClass(/selected/);
   expect(await activeProject(page)).toBe('shop');
+});
+
+test('Now, Reviews and Tickets fill the window: their hint bar sits at the bottom, even above an empty state', async ({
+  page,
+}) => {
+  await boot(page);
+  const host = page.getByTestId('global-host');
+  for (const height of [900, 600]) {
+    await page.setViewportSize({ width: 1440, height });
+    for (const view of ['inbox', 'reviews', 'tickets']) {
+      await page.getByTestId(`rail-${view}`).click();
+      const pane = host.getByTestId(`${view}-pane`);
+      await expect(pane.locator('footer')).toBeVisible();
+      for (const filter of ['', 'no-such-item-zzz']) {
+        if (filter) {
+          await page.keyboard.press('/');
+          await page.keyboard.type(filter);
+        }
+        const bottom = async (l: typeof host): Promise<number> => {
+          const b = (await l.boundingBox())!;
+          return b.y + b.height;
+        };
+        const want = await bottom(host);
+        const msg = `${view} at ${height}px, filter "${filter}"`;
+        await expect.poll(async () => Math.abs((await bottom(pane)) - want), msg).toBeLessThanOrEqual(1);
+        await expect
+          .poll(async () => Math.abs((await bottom(pane.locator('footer'))) - want), msg)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+  }
 });

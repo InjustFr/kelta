@@ -8,7 +8,9 @@ use crate::codehost::ReviewRef;
 use crate::ctl::CtlCommand;
 use crate::ext::Urgency;
 use crate::ids::{AccountId, ProjectId, ScreenInstanceId, SessionId, WorkItemId};
-use crate::model::{Attention, Layout, OpenPaneRequest, ProjectInfo, Scope, SessionInfo, WorkItem};
+use crate::model::{
+    Attention, ClaudeRun, Layout, OpenPaneRequest, ProjectInfo, Scope, SessionInfo, WorkItem,
+};
 use crate::settings::Layer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -121,6 +123,9 @@ pub enum UiEvent {
     /// Backend asks the UI to open a pane.
     #[serde(rename = "ui.open")]
     UiOpen { request: OpenPaneRequest, project_id: ProjectId },
+    /// A Claude `Workflow` run of a session changed (#272).
+    #[serde(rename = "workflow.updated")]
+    WorkflowUpdated { run: ClaudeRun },
 }
 
 impl UiEvent {
@@ -142,6 +147,7 @@ impl UiEvent {
             Self::PluginEvent { .. } => "plugin.event",
             Self::CtlCommand { .. } => "ctl.command",
             Self::UiOpen { .. } => "ui.open",
+            Self::WorkflowUpdated { .. } => "workflow.updated",
         }
     }
 }

@@ -924,7 +924,7 @@ export const startWorkPlan: StartWorkPlan = {
   "claude": {
     "effort": "high",
     "model": "opus",
-    "permission_mode": "acceptEdits",
+    "permission_mode": null,
     "profile": "default",
     "prompt": "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing."
   },
@@ -1930,7 +1930,7 @@ export const settingsDefault: Settings = {
       "default": {
         "effort": "high",
         "model": "opus",
-        "permission_mode": "acceptEdits"
+        "permission_mode": null
       },
       "plan": {
         "effort": "high",
@@ -3766,6 +3766,35 @@ export const uiEventUiOpen: UiEvent = {
   "type": "ui.open"
 };
 
+export const uiEventWorkflowUpdated: UiEvent = {
+  "run": {
+    "duration_ms": null,
+    "logs": [
+      "Picked #222"
+    ],
+    "name": "kelta-ticket-pass",
+    "phases": [
+      {
+        "agents": [
+          {
+            "done": false,
+            "id": "aee124594e7f7c00b",
+            "label": "implement-#222"
+          }
+        ],
+        "title": "Implement"
+      }
+    ],
+    "result": null,
+    "run_id": "wf_00c72039-31f",
+    "session_id": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
+    "status": "running",
+    "total_tokens": null,
+    "total_tool_calls": null
+  },
+  "type": "workflow.updated"
+};
+
 /** Every fixture by file stem. */
 export const fixtures: Readonly<Record<string, unknown>> = {
   "kelta_error": keltaError,
@@ -3877,4 +3906,5 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_plugin_event": uiEventPluginEvent,
   "ui_event_ctl_command": uiEventCtlCommand,
   "ui_event_ui_open": uiEventUiOpen,
+  "ui_event_workflow_updated": uiEventWorkflowUpdated,
 };

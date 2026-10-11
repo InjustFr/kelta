@@ -31,7 +31,7 @@
       const last = jumplist.list
         .slice(0, jumplist.at + 1)
         .reverse()
-        .find((l) => !l.view && l.project !== active && projects.byId(l.project)?.open);
+        .find((l) => l.project !== active && projects.byId(l.project)?.open);
       if (last) return last.project;
     }
     return active ?? rail[0]?.id ?? 'home';

@@ -4,6 +4,7 @@
 //! derives changes from terminal output (heuristic). Both are folded into the session state by the
 //! functions below, which are table-tested.
 
+use kelta_proto::hooks::names;
 use kelta_proto::model::{Attention, SessionStatus, StatusChange};
 
 /// Notification candidates; whether they fire is decided by [`crate::notifier`].
@@ -62,6 +63,12 @@ fn unless_visible(prev: &SessState, a: Attention) -> (Attention, bool) {
 pub fn apply_hook(prev: &SessState, change: &StatusChange) -> Decision {
     let mut d = Decision::keep(prev);
     match change.status {
+        // A tool ran after a permission prompt: the user answered, Claude is working again (#278).
+        SessionStatus::Unknown
+            if prev.status == SessionStatus::NeedsInput && change.raw_event == names::POST_TOOL_USE =>
+        {
+            return apply_hook(prev, &StatusChange { status: SessionStatus::Working, ..change.clone() });
+        }
         // PostToolUse & co: status unchanged.
         SessionStatus::Unknown => {}
         SessionStatus::Starting | SessionStatus::Running => {
@@ -120,6 +127,8 @@ pub enum Heuristic {
     Alert,
     /// 3 s without output after output.
     Quiet,
+    /// User input written to the pane (applied with hooks active too).
+    Input,
 }
 
 pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
@@ -145,6 +154,17 @@ pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
             } else {
                 Decision::keep(prev)
             }
+        }
+        // The keystroke answering a permission prompt / elicitation: the user saw it (#278). Only
+        // NeedsInput: an idle_prompt (WaitingUser) waits for UserPromptSubmit.
+        Heuristic::Input => {
+            let mut d = Decision::keep(prev);
+            if prev.status == SessionStatus::NeedsInput {
+                d.status = SessionStatus::Working;
+                d.attention = Attention::None;
+                d.seen = true;
+            }
+            d
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Background runs claiming tickets (#235): adopt, conflict, progress, release, orphan + takeover.
+//! Liveness is computed from the owner session (#271): no sweep, `w.list` shows `orphaned`.
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::common::{Fx, git, has_git, project};
 use kelta_proto::api::WorkStore;
@@ -43,6 +43,11 @@ fn run_worktree(fx: &Fx, branch: &str) -> PathBuf {
 
 async fn run_state(fx: &Fx, id: &WorkItemId) -> RunState {
     fx.store.get_item(id).await.unwrap().unwrap().run.unwrap().state
+}
+
+/// The run as `work_list` shows it (liveness computed).
+async fn shown(w: &kelta_work::WorkService, id: &WorkItemId) -> RunClaim {
+    w.list(None).await.unwrap().into_iter().find(|i| &i.id == id).unwrap().run.unwrap()
 }
 
 #[tokio::test]
@@ -126,6 +131,7 @@ async fn progress_then_release_leaves_the_worktree_alone() {
         return;
     }
     let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
     let w = fx.service();
     let wt = run_worktree(&fx, "feat/ticket-142");
     let item =
@@ -190,13 +196,8 @@ async fn exited_session_orphans_its_running_claims_and_a_new_claim_takes_over() 
         w.claim(&project(), samples::ticket_ref(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
 
     fx.core.exit_session(&SessionId::new("orch-a"), 0);
-    for _ in 0..500 {
-        if run_state(&fx, &item.id).await == RunState::Orphaned {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    assert_eq!(run_state(&fx, &item.id).await, RunState::Orphaned);
+    assert_eq!(shown(&w, &item.id).await.state, RunState::Orphaned, "computed, nothing stored");
+    assert_eq!(run_state(&fx, &item.id).await, RunState::Running);
 
     let again = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-b")).await.unwrap();
     assert_eq!(again.id, item.id, "same work item");
@@ -205,27 +206,63 @@ async fn exited_session_orphans_its_running_claims_and_a_new_claim_takes_over() 
 }
 
 #[tokio::test]
-async fn startup_orphans_claims_of_dormant_or_missing_sessions_but_not_live_ones() {
+async fn a_dormant_or_missing_owner_is_orphaned_without_a_sweep() {
     if !has_git() {
         return;
     }
     let fx = Fx::new();
     session(&fx, "orch-a", "kelta-a6");
+    session(&fx, "orch-b", "kelta-b2");
     let w = fx.service();
     let wt = run_worktree(&fx, "feat/ticket-142");
-    let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
+    let item =
+        w.claim(&project(), samples::ticket_ref(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
+    assert_eq!(shown(&w, &item.id).await.state, RunState::Running, "live owner keeps its claim");
+    let e = w.claim(&project(), samples::ticket_ref(), Some(wt.clone()), None, run("orch-b")).await;
+    assert_eq!(e.unwrap_err().code, ErrorCode::Conflict);
 
-    w.startup().await.unwrap();
-    assert_eq!(run_state(&fx, &item.id).await, RunState::Running, "live owner keeps its claim");
-
-    // Kelta quit: after relaunch the owner is restored Dormant, its workflow is dead.
+    // Kelta quit: after relaunch the owner is restored Dormant, its workflow is dead. No startup sweep.
     fx.core.insert_session(SessionInfo {
         id: SessionId::new("orch-a"),
         lifecycle: Lifecycle::Dormant,
         ..samples::session_info()
     });
-    w.startup().await.unwrap();
-    assert_eq!(run_state(&fx, &item.id).await, RunState::Orphaned);
+    assert_eq!(shown(&w, &item.id).await.state, RunState::Orphaned);
+    let taken = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-b")).await.unwrap();
+    assert_eq!((taken.id, taken.run.unwrap().session_id), (item.id.clone(), Some(SessionId::new("orch-b"))));
+
+    // A missing owner (no session at all) can be released by anyone.
+    let ghost = RunClaim { session_id: Some(SessionId::new("ghost")), ..run("orch-b") };
+    w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&SessionId::new("orch-b"))).await.unwrap();
+    let t = samples::ticket_ref();
+    w.claim(&project(), t, None, None, RunClaim { run_id: Some("r2".into()), ..ghost }).await.unwrap();
+    assert_eq!(shown(&w, &item.id).await.state, RunState::Orphaned);
+    let done = w.release("SHOP-142", None, Some(&SessionId::new("orch-b"))).await.unwrap();
+    assert_eq!(done.state, WorkState::Finished);
+}
+
+#[tokio::test]
+async fn a_non_owner_driving_a_dead_owners_claim_takes_it_over() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    session(&fx, "orch-b", "kelta-b2");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
+    fx.core.exit_session(&orch_a(), 0);
+
+    let b = SessionId::new("orch-b");
+    w.report("SHOP-142", None, RunState::Running, None, None, Some(&b)).await.unwrap();
+    let r = shown(&w, &item.id).await;
+    assert_eq!((r.state, r.session_id), (RunState::Running, Some(b.clone())), "not the dead session's");
+    // Now orch-b's live claim: a third session is refused, orch-b drives it.
+    let c = SessionId::new("orch-c");
+    let e = w.report("SHOP-142", None, RunState::Failed, None, None, Some(&c)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert_eq!(w.release("SHOP-142", None, Some(&b)).await.unwrap().state, WorkState::Finished);
 }
 
 #[tokio::test]
@@ -234,6 +271,7 @@ async fn only_the_owner_session_reports_or_releases_its_claim() {
         return;
     }
     let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
     let w = fx.service();
     let wt = run_worktree(&fx, "feat/ticket-142");
     let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
@@ -291,18 +329,8 @@ async fn the_callers_claim_wins_over_an_unowned_one_and_orphans_are_open_to_all(
     // orch-a exits: its claim is orphaned, and anyone may release it.
     w.report("SHOP-142", None, RunState::Running, None, None, Some(&orch_a())).await.unwrap();
     fx.core.exit_session(&orch_a(), 0);
-    assert!(common_wait(&fx, &mine.id, RunState::Orphaned).await);
+    assert_eq!(shown(&w, &mine.id).await.state, RunState::Orphaned);
     w.release("SHOP-142", None, None).await.unwrap(); // the unowned one
     let done = w.release("SHOP-142", None, Some(&SessionId::new("orch-b"))).await.unwrap();
     assert_eq!((done.id, done.state), (mine.id, WorkState::Finished));
-}
-
-async fn common_wait(fx: &Fx, id: &WorkItemId, want: RunState) -> bool {
-    for _ in 0..500 {
-        if run_state(fx, id).await == want {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    false
 }

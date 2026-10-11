@@ -3,13 +3,14 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sheetRegistry } from '$app/registry';
+import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import type { PaneContent, Settings } from '$lib/gen';
 import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
-import { globalContent } from '../work/nav';
+import { globalContent, loadGlobalLayout } from '../work/nav';
 import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
 import { batch } from '../work/batch.svelte';
@@ -287,6 +288,25 @@ describe('TicketsPane states', () => {
     const Sheet = (await sheetRegistry['tracker.source_picker']()).default;
     render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet() } });
     expect(await screen.findByText('Add a ticket source')).toBeTruthy();
+  });
+
+  it('the source menu takes sources that omit routes, columns or views (#281)', async () => {
+    const view = { id: 'sp', label: 'Sparse', jql: 'x' };
+    const value = [
+      ...mockSources(),
+      {
+        id: 'sparse',
+        label: 'Sparse board',
+        projects: ['shop'],
+        tracker: { account: 'jira-acme', views: [view] },
+      },
+      { id: 'bare', label: 'Bare board', projects: ['shop'], tracker: { account: 'jira-acme' } },
+    ];
+    settings.accept(null, await ipc.settingsSet({ layer: 'global', path: 'sources', value: value as never }));
+    mountBoard('list');
+    await fireEvent.click(await screen.findByRole('button', { name: /All sources/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Sparse board' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Bare board' })).toBeNull();
   });
 
   it('says why an empty Unassigned list is empty and offers Team', async () => {
@@ -898,15 +918,18 @@ describe('TicketsPane in the rail Tickets view', () => {
   beforeEach(() => localStorage.removeItem('kelta.view.tickets'));
 
   it('remembers who across restarts and opens a ticket in its own project, leaving the view', async () => {
+    // Pre-#270 state seeds the GLOBAL layout once.
     localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone' }));
+    await loadGlobalLayout();
+    expect(globalContent('tickets')).toMatchObject({ who: 'anyone', mode: 'list' });
     await activateProject('billing');
     ui.view = 'tickets';
     const { container } = mountGlobal();
     await ready(container, 'SHOP-151');
     await press('2');
     expect(globalContent('tickets')).toMatchObject({ who: 'unassigned', scope: { kind: 'all' } });
-    const polled = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1)?.args;
-    expect(polled).toMatchObject({ content: { kind: 'tickets', who: 'unassigned' } });
+    await layout.flush(GLOBAL);
+    expect(JSON.stringify(mock.state.layouts[GLOBAL])).toContain('"who":"unassigned"');
     await press('3');
     await ready(container, 'SHOP-151');
     await press('Enter', { shiftKey: true });

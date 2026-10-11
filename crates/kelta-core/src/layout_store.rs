@@ -2,18 +2,48 @@
 //! through to `layouts`; optimistic `rev` (stale → `Conflict` with `detail.rev`); backend-initiated
 //! changes emit `layout.changed`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::UiEvent;
 use kelta_proto::ids::{ProjectId, SessionId};
 use kelta_proto::ipc::LayoutSaveResult;
-use kelta_proto::model::{Layout, LayoutNode, OpenPaneRequest, PaneContent, PaneRef};
+use kelta_proto::model::{Layout, LayoutNode, OpenPaneRequest, PaneContent, PaneRef, Tab};
 use kelta_proto::store::LayoutRow;
 
 use crate::Core;
 use crate::layout;
 use crate::store::q;
+
+/// Where the tabs of a pre-#270 project with the (now reserved) id `global` go.
+const GLOBAL_PROJECT: &str = "global-project";
+
+/// Before #270 a project could have the id `global`, now the views' layout (the config refuses that id
+/// since): its tabs, any that is not a view's, move once to `global-project`, so they never mix with the
+/// views and come back if the project is renamed so. `true` when tabs moved.
+fn split_global_project(map: &mut HashMap<ProjectId, Layout>) -> bool {
+    const VIEWS: [&str; 3] = ["tickets", "now", "reviews"];
+    let global = ProjectId::new(ProjectId::GLOBAL);
+    let moved = ProjectId::new(GLOBAL_PROJECT);
+    if map.contains_key(&moved) {
+        return false;
+    }
+    let Some(l) = map.get_mut(&global) else { return false };
+    let (views, tabs): (Vec<Tab>, Vec<Tab>) =
+        std::mem::take(&mut l.tabs).into_iter().partition(|t| VIEWS.contains(&t.id.as_str()));
+    l.tabs = views;
+    if tabs.is_empty() {
+        return false;
+    }
+    let active = l.active_tab.take_if(|a| !VIEWS.contains(&a.as_str()));
+    l.rev += 1;
+    if l.tabs.is_empty() {
+        // Never a view: the UI seeds the views as on a first start.
+        map.remove(&global);
+    }
+    map.insert(moved.clone(), Layout { project_id: moved, tabs, active_tab: active, rev: 1 });
+    true
+}
 
 impl Core {
     pub(crate) fn load_layouts(&self) -> Result<(), KeltaError> {
@@ -27,6 +57,17 @@ impl Core {
                     map.insert(r.project_id, l);
                 }
                 Err(e) => tracing::warn!(error = %e, project = %r.project_id, "dropping unreadable layout"),
+            }
+        }
+        let split = split_global_project(&mut map);
+        drop(map);
+        if split {
+            let global = ProjectId::new(ProjectId::GLOBAL);
+            self.persist_layout(&ProjectId::new(GLOBAL_PROJECT));
+            if self.layouts.lock().contains_key(&global) {
+                self.persist_layout(&global);
+            } else {
+                self.store.exec("layout_delete", move |c| q::layout_delete(c, &global));
             }
         }
         Ok(())
@@ -86,9 +127,14 @@ impl Core {
         self.resubscribe();
     }
 
+    /// A project's layout, or the global views' built-in one (`ProjectId::GLOBAL`).
+    fn has_layout(&self, id: &ProjectId) -> bool {
+        id.as_str() == ProjectId::GLOBAL || self.project_exists(id)
+    }
+
     /// `layout_get` (empty layout with `rev = 0` for a project never saved).
     pub fn layout_get(&self, project: &ProjectId) -> Result<Layout, KeltaError> {
-        if !self.project_exists(project) {
+        if !self.has_layout(project) {
             return Err(KeltaError::not_found(format!("project {project}")));
         }
         Ok(self.layouts.lock().get(project).cloned().unwrap_or_else(|| layout::empty(project)))
@@ -96,7 +142,7 @@ impl Core {
 
     /// `layout_save`: optimistic concurrency on `rev`.
     pub fn layout_save(&self, mut l: Layout) -> Result<LayoutSaveResult, KeltaError> {
-        if !self.project_exists(&l.project_id) {
+        if !self.has_layout(&l.project_id) {
             return Err(KeltaError::not_found(format!("project {}", l.project_id)));
         }
         let rev = {

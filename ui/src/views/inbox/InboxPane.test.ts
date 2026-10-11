@@ -5,9 +5,20 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 
-import { globalContent } from '../work/nav';
+import { globalContent, loadGlobalLayout, persistPaneContent } from '../work/nav';
 import type { Settings } from '$lib/gen';
-import { layout, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
+import {
+  GLOBAL,
+  layout,
+  projects,
+  reviews,
+  sessions,
+  settings,
+  tickets,
+  toasts,
+  ui,
+  work,
+} from '$lib/stores';
 
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
@@ -188,10 +199,33 @@ describe('Now', () => {
     expect(lists.length).toBeGreaterThan(0);
     // Mine for Up next; unassigned only to resolve Next up items (#145).
     expect(lists.every((c) => ['mine', 'unassigned'].includes((c.args as { who: string }).who))).toBe(true);
-    localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone', person: 'u-bob' }));
+    await loadGlobalLayout();
+    persistPaneContent(GLOBAL, 'tickets', { who: 'anyone', person: 'u-bob' });
     await fireEvent.click(more);
     expect(ui.view).toBe('tickets');
     expect(globalContent('tickets')).toMatchObject({ scope: { kind: 'all' }, who: 'mine', person: null });
+  });
+
+  it('Show all opens Tickets on Mine even when the layout failed to load at startup', async () => {
+    const mine = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
+    if (!mine) throw new Error('fixture missing');
+    for (let i = 0; i < 12; i += 1) {
+      mock.state.tickets.push({
+        ...mine,
+        ticket: { ...mine.ticket, ref: { ...mine.ticket.ref, key: `MINE-${i}`, id: `m${i}` } },
+      });
+      mock.state.nextUp.seen.push(`${mine.ticket.ref.account}:MINE-${i}`);
+    }
+    mock.failNext('layout_get', { code: 'internal' });
+    await expect(loadGlobalLayout()).rejects.toBeTruthy();
+    expect(layout.get(GLOBAL)).toBeNull();
+    mountNow();
+    await screen.findByText('MINE-0');
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
+    await fireEvent.click(await screen.findByRole('button', { name: /more, show all$/ }));
+    await waitFor(() => expect(ui.view).toBe('tickets'));
+    const tab = layout.get(GLOBAL)?.tabs.find((t) => t.id === 'tickets');
+    expect(tab?.root.type === 'pane' && tab.root.content).toMatchObject({ who: 'mine', person: null });
   });
 
   it('a ticket row says who it waits on instead of the bare assignee', async () => {

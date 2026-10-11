@@ -728,16 +728,14 @@ pub enum PermissionMode {
 pub struct ClaudeProfile {
     pub model: String,
     pub effort: ClaudeEffort,
-    pub permission_mode: PermissionMode,
+    /// Forced with `--permission-mode`; unset = the last mode a Claude session reported, else Claude's
+    /// own `permissions.defaultMode`.
+    pub permission_mode: Option<PermissionMode>,
 }
 
 impl Default for ClaudeProfile {
     fn default() -> Self {
-        Self {
-            model: "opus".into(),
-            effort: ClaudeEffort::High,
-            permission_mode: PermissionMode::AcceptEdits,
-        }
+        Self { model: "opus".into(), effort: ClaudeEffort::High, permission_mode: None }
     }
 }
 
@@ -789,7 +787,7 @@ impl Default for ClaudeSettings {
         let plan = ClaudeProfile {
             model: "opus".into(),
             effort: ClaudeEffort::High,
-            permission_mode: PermissionMode::Plan,
+            permission_mode: Some(PermissionMode::Plan),
         };
         Self {
             binary: "claude".into(),
@@ -2085,7 +2083,7 @@ view_id = "sprint"
         assert_eq!(s.accounts.len(), 2);
         assert_eq!(s.triggers.len(), 2);
         assert!(s.plugins.settings.contains_key("sprint-burndown"));
-        assert_eq!(s.claude.profiles["default"].permission_mode, PermissionMode::AcceptEdits);
+        assert_eq!(s.claude.profiles["default"].permission_mode, Some(PermissionMode::AcceptEdits));
     }
 
     #[test]

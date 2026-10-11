@@ -7,6 +7,7 @@
 
 import * as samples from '$lib/gen/fixtures';
 import type {
+  ClaudeRun,
   Column,
   EffectiveSettings,
   FinishMergedReport,
@@ -123,6 +124,8 @@ export interface MockState {
   nextUp: NextUp;
   /** Saved Claude workflows (`workflows_list`, #233). */
   workflows: WorkflowInfo[];
+  /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
+  claudeRuns: ClaudeRun[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
 }
@@ -130,6 +133,8 @@ export interface MockState {
 interface MockOptions {
   /** Artificial latency per call in ms (one-shot timer per call). Default 0. */
   latencyMs?: number;
+  /** Keeps the `global` layout across reloads, as the core's DB does (the app; unit tests start fresh). */
+  keepGlobalLayout?: boolean;
 }
 
 type Handler<K extends CommandName> = (args: CommandArgs<K>) => CommandResult<K> | Promise<CommandResult<K>>;
@@ -244,6 +249,7 @@ function freshState(): MockState {
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
+    claudeRuns: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
@@ -379,6 +385,23 @@ function setPath(root: JsonValue, path: string, value: JsonValue | undefined): J
   return out;
 }
 
+/** Core's effective value carries serde defaults for the keys a `[[sources]]` entry omits (#281). */
+const withSourceDefaults = (s: Partial<Source>): Source => ({
+  id: '',
+  label: '',
+  projects: [],
+  routes: [],
+  ...s,
+  tracker: {
+    account: '',
+    views: [],
+    columns: [],
+    status_map: { start: null, review: null, done: null },
+    repo_rules: [],
+    ...s.tracker,
+  },
+});
+
 function getPath(root: JsonValue, path: string): JsonValue | undefined {
   let node: JsonValue | undefined = root;
   for (const part of path.split('.').filter(Boolean)) {
@@ -410,11 +433,20 @@ export function lastSettingsValue<T>(mock: MockControls): T | undefined {
   return (mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as { value: T } | undefined)?.value;
 }
 
+const GLOBAL_LAYOUT_KEY = 'kelta.mock.layout.global';
+
 export function createMockTransport(options: MockOptions = {}): {
   transport: IpcTransport;
   controls: MockControls;
 } {
   let state = freshState();
+  const keep = options.keepGlobalLayout === true;
+  try {
+    const saved = keep ? sessionStorage.getItem(GLOBAL_LAYOUT_KEY) : null;
+    if (saved) state.layouts.global = JSON.parse(saved) as Layout;
+  } catch {
+    // no storage: a reload starts without the global layout, like a fresh profile
+  }
   const calls: MockCall[] = [];
   const failOnce = new Map<string, KeltaError>();
   const held = new Map<string, Promise<KeltaError | null>>();
@@ -573,10 +605,9 @@ export function createMockTransport(options: MockOptions = {}): {
     return clone(s);
   };
   const settingsWith = (layer: Layer, path: string, value: JsonValue | undefined): EffectiveSettings => {
-    state.settings = {
-      value: setPath(state.settings.value, path, value),
-      sources: { ...state.settings.sources },
-    };
+    const next = setPath(state.settings.value, path, value) as unknown as Settings;
+    if (path.split('.')[0] === 'sources') next.sources = (next.sources ?? []).map(withSourceDefaults);
+    state.settings = { value: next as unknown as JsonValue, sources: { ...state.settings.sources } };
     if (value === undefined) delete state.settings.sources[path];
     else state.settings.sources[path] = layer;
     if (path.split('.')[0] === 'sources') syncProjectTrackers();
@@ -606,6 +637,7 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     claude_mcp_status: () => claudeMcp,
+    claude_permission_mode: () => 'auto',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;
@@ -771,7 +803,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     // ---- layout ----------------------------------------------------------------------------
     layout_get: ({ project_id }) => {
-      project(project_id);
+      if (project_id !== 'global') project(project_id);
       return clone(layoutOf(project_id));
     },
     layout_save: ({ layout }) => {
@@ -782,9 +814,14 @@ export function createMockTransport(options: MockOptions = {}): {
         });
       const rev = current.rev + 1;
       state.layouts[layout.project_id] = { ...clone(layout), rev };
+      if (keep && layout.project_id === 'global')
+        try {
+          sessionStorage.setItem(GLOBAL_LAYOUT_KEY, JSON.stringify(state.layouts.global));
+        } catch {
+          // no storage: kept until reload
+        }
       return { rev };
     },
-    ui_set_global_view: () => null,
     // ---- sessions --------------------------------------------------------------------------
     session_spawn: ({ req }) => {
       const s = spawn(req.project_id, req.kind, req.name, req.cwd);
@@ -896,6 +933,13 @@ export function createMockTransport(options: MockOptions = {}): {
         .filter((s) => s.project_id === project_id && (!session_id || s.id === session_id))
         .map((s) => ({ session_id: s.id, line: `${s.name}: ${query}` }))
         .slice(0, limit),
+    claude_runs_list: ({ id }) => clone(state.claudeRuns.filter((r) => r.session_id === id)),
+    // Any run and agent: e2e specs emit runs the state does not hold.
+    claude_run_tail: ({ agent_id }) => [
+      { kind: 'text', text: `${agent_id}: reading the code` },
+      { kind: 'tool', text: 'Bash: Run the tests' },
+      { kind: 'result', text: 'ok. 12 passed' },
+    ],
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope: asked, source_id, view_id: askedView, cursor, who }) => {
@@ -1104,6 +1148,21 @@ export function createMockTransport(options: MockOptions = {}): {
       };
       state.work.push(item);
       emit({ type: 'work.updated', work: clone(item) });
+      // What the hooks then report: the run, its first agent spawned (#272).
+      const wf: ClaudeRun = {
+        run_id: `wf_${s.id.slice(0, 8)}-000`,
+        session_id: s.id,
+        name: workflow,
+        status: 'running',
+        phases: [{ title: 'Pick', agents: [{ id: `a${s.id.slice(0, 8)}`, label: 'pick', done: false }] }],
+        duration_ms: null,
+        total_tokens: null,
+        total_tool_calls: null,
+        result: null,
+        logs: [],
+      };
+      state.claudeRuns.push(wf);
+      emit({ type: 'workflow.updated', run: clone(wf) });
       const content = { kind: 'terminal' as const, session_id: s.id };
       const req = {
         content,
@@ -1898,6 +1957,11 @@ export function createMockTransport(options: MockOptions = {}): {
     output: (sessionId, text) => sendFrame(sessionId, FRAME_DATA, new TextEncoder().encode(text)),
     reset: () => {
       state = freshState();
+      try {
+        sessionStorage.removeItem(GLOBAL_LAYOUT_KEY);
+      } catch {
+        // no storage
+      }
       calls.length = 0;
       attached.clear();
     },

@@ -16,7 +16,7 @@ use kelta_proto::codehost::{
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::{ProjectDraft, ProjectPatch};
+use kelta_proto::model::{LayoutNode, PaneContent, ProjectDraft, ProjectPatch, Tab};
 use kelta_proto::settings::{
     AccountConfig, AccountKind, ProjectConfig, RepoConfig, Settings, SettingsDiff, sources_from_trackers,
 };
@@ -263,6 +263,7 @@ pub struct H {
     pub cfg: Arc<MemConfig>,
     pub factory: Arc<Factory>,
     pub clip: Arc<MemClipboard>,
+    pub secrets: Arc<FakeSecrets>,
     pub root: PathBuf,
 }
 
@@ -334,7 +335,8 @@ pub fn start_in(root: &Path, cfg: Arc<MemConfig>, term: Arc<FakeTerminalHost>, f
     let mut deps = CoreDeps::new(Dirs::under(root), CliArgs::default(), ui.clone());
     deps.config = Some(cfg.clone());
     deps.terminal = Some(term.clone());
-    deps.secrets = Some(FakeSecrets::new());
+    let secrets = FakeSecrets::new();
+    deps.secrets = Some(secrets.clone());
     deps.trackers = Some(factory.clone());
     deps.code_hosts = Some(factory.clone());
     deps.login_env = Some(login_env(root));
@@ -342,11 +344,30 @@ pub fn start_in(root: &Path, cfg: Arc<MemConfig>, term: Arc<FakeTerminalHost>, f
     deps.install_ctl = false;
     deps.start_services = false;
     let core = Core::start_with(deps).unwrap();
-    H { core, term, ui, cfg, factory, clip, root: root.to_path_buf() }
+    H { core, term, ui, cfg, factory, clip, secrets, root: root.to_path_buf() }
 }
 
 pub fn start(root: &Path, settings: Settings, projects: Vec<ProjectConfig>) -> H {
     start_in(root, MemConfig::new(settings, projects), FakeTerminalHost::new(), Arc::new(Factory::default()))
+}
+
+/// Shows `content` as the rail's global view (`None` = a project), as the UI does: through the
+/// `global` layout's active tab, its tabs kept.
+pub fn show_global(core: &Core, content: Option<PaneContent>) {
+    let mut l = core.layout_get(&ProjectId::new(ProjectId::GLOBAL)).unwrap();
+    l.active_tab = content.as_ref().map(|_| "view".into());
+    if let Some(content) = content {
+        let root = LayoutNode::Pane { id: "view".into(), content };
+        l.tabs = vec![Tab {
+            id: "view".into(),
+            title: String::new(),
+            work_item_id: None,
+            root,
+            focused_pane: None,
+            zoomed_pane: None,
+        }];
+    }
+    core.layout_save(l).unwrap();
 }
 
 /// Let spawned tasks run.

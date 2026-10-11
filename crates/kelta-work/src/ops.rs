@@ -860,8 +860,13 @@ impl WorkService {
         if opts.remove_worktree && is_worktree {
             // Teardown and the kills may have let Claude commit or edit: only this answer is current.
             let report = self.finish_dirty_check(&env, &item, &j, opts.force).await?;
-            verified_clean =
-                report.files.is_empty() && report.ignored_edited.is_empty() && report.unpushed == 0;
+            // The report reads HEAD: it only vouches for `item.branch` while that is what's checked out.
+            let on_branch = git::worktree_at(&repo, &item.worktree).await?.and_then(|w| w.branch).as_deref()
+                == Some(item.branch.as_str());
+            verified_clean = on_branch
+                && report.files.is_empty()
+                && report.ignored_edited.is_empty()
+                && report.unpushed == 0;
             // Delete our include copies so git's own clean check (no --force) still guards files
             // written after the dirty report (e.g. by Claude before it was killed).
             for f in &report.copies {
@@ -1042,15 +1047,25 @@ impl WorkService {
                 .ok()
                 .is_some_and(|b| std::fs::read(env.repo.path.join(f)).is_ok_and(|src| src == b))
         };
-        // Ignored copies are absent from `status`: report the edited ones too.
-        let ignored_edited: Vec<String> = j
-            .include_copies
-            .iter()
-            .filter(|f| !entries.contains(f) && item.worktree.join(f).is_file() && !same_as_source(f))
-            .cloned()
-            .collect();
+        // Unchanged since the copy (a journal from before #271 has no hash: compare to the main checkout).
+        let unchanged = |f: &String| match j.include_hashes.get(f) {
+            Some(h) => crate::files::content_hash(&item.worktree.join(f)).as_ref() == Some(h),
+            None => same_as_source(f),
+        };
+        // Ignored copies are absent from `status`: report the edited ones too, unless force-added on the
+        // branch (then committed work).
+        let mut ignored_edited = Vec::new();
+        for f in &j.include_copies {
+            if !entries.contains(f)
+                && item.worktree.join(f).is_file()
+                && !unchanged(f)
+                && !git::is_tracked(&item.worktree, f).await?
+            {
+                ignored_edited.push(f.clone());
+            }
+        }
         for f in entries {
-            if j.include_copies.contains(&f) && same_as_source(&f) { copies.push(f) } else { files.push(f) }
+            if j.include_copies.contains(&f) && unchanged(&f) { copies.push(f) } else { files.push(f) }
         }
         let mut unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
         // Squash/rebase-merged PR whose remote branch was pruned: the work is in the remote base.
@@ -1369,10 +1384,6 @@ impl WorkService {
             if let Err(e) = crate::review::prune_refs(&r, &keep).await {
                 tracing::warn!(repo = %r.display(), error = %e.message, "review refs prune failed");
             }
-        }
-        // Claims of sessions that did not survive the restart.
-        if let Err(e) = self.orphan_claims(None).await {
-            tracing::warn!(error = %e.message, "orphaning claims failed");
         }
         // Armed items merged right before a quit/crash: their Finish never ran.
         for w in items.iter().filter(|w| w.auto_finish) {

@@ -16,6 +16,8 @@ Only the latest release and the current `main` get fixes while Kelta is at 0.x.
 - The webview loads only local assets. Plugin and tool pages run in sandboxed iframes without access to Tauri
   IPC, the parent page, or the network, and plugins act only through the permissions you grant.
 - Secrets come from the OS keyring, `command:` or `env:` references. Plugins cannot read them.
+- The token of Kelta's global MCP endpoint (`127.0.0.1` only) lives in Claude Code's user config
+  (`~/.claude.json`, `mcpServers.kelta`), which Claude must send anyway; Kelta does not copy it to the Keychain.
 - Repository configuration that can run commands stays inert until you trust its exact content.
 
 See `docs/ARCHITECTURE.md` section 11 for the full model.

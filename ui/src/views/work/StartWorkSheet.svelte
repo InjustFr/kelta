@@ -226,7 +226,9 @@
     { value: 'xhigh', label: 'xhigh' },
     { value: 'max', label: 'max' },
   ];
-  const modes: { value: PermissionMode; label: string }[] = [
+  // '' = no forced mode: the last one used, else Claude's own default.
+  const modes: { value: PermissionMode | ''; label: string }[] = [
+    { value: '', label: 'last used' },
     { value: 'default', label: 'default' },
     { value: 'acceptEdits', label: 'accept edits' },
     { value: 'plan', label: 'plan' },
@@ -327,7 +329,13 @@
             <TextInput label="Model" bind:value={plan.claude.model} />
             <Select label="Effort" bind:value={plan.claude.effort} options={efforts} />
           </div>
-          <Select label="Permission mode" bind:value={plan.claude.permission_mode} options={modes} />
+          <Select
+            label="Permission mode"
+            bind:value={
+              () => plan.claude.permission_mode ?? '', (v) => (plan.claude.permission_mode = v || null)
+            }
+            options={modes}
+          />
           <TextInput
             label="Prompt"
             bind:value={plan.claude.prompt}

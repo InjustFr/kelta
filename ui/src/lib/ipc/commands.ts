@@ -14,6 +14,7 @@ import type {
   AppInfo,
   Assignee,
   AttachInfo,
+  ClaudeRun,
   ClipboardKind,
   Column,
   Cursor,
@@ -31,8 +32,8 @@ import type {
   Layout,
   LayoutSaveResult,
   MergeMethod,
-  PaneContent,
   PerfSnapshot,
+  PermissionMode,
   Placement,
   PluginId,
   PluginInfo,
@@ -65,6 +66,7 @@ import type {
   SubscribeResult,
   TemplateCtx,
   TerminalPalette,
+  TranscriptLine,
   Ticket,
   TicketDetail,
   TicketItem,
@@ -121,6 +123,8 @@ export interface Commands {
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
   claude_mcp_remove: { args: NoArgs; result: null };
+  /** The last mode a Claude session switched to (#277); `null` = Claude's own default. */
+  claude_permission_mode: { args: NoArgs; result: PermissionMode | null };
   app_update_status: { args: NoArgs; result: UpdateStatus };
   /** Checks now and installs what it finds (resolves once done). */
   app_update_check: { args: NoArgs; result: UpdateStatus };
@@ -165,7 +169,6 @@ export interface Commands {
   layout_get: { args: { project_id: ProjectId }; result: Layout };
   layout_save: { args: { layout: Layout }; result: LayoutSaveResult };
   /** The global view shown on the rail (`null` = a project): polled like a visible pane. */
-  ui_set_global_view: { args: { content: PaneContent | null }; result: null };
   // ---- sessions ----------------------------------------------------------------------------
   session_spawn: { args: { req: SpawnRequest }; result: SessionInfo };
   session_spawn_template: {
@@ -200,6 +203,10 @@ export interface Commands {
     args: { project_id: ProjectId; session_id?: SessionId | null; query: string; limit: number };
     result: HistoryHit[];
   };
+  /** The session's Claude `Workflow` runs, as core last read them from Claude's files (#272). */
+  claude_runs_list: { args: { id: SessionId }; result: ClaudeRun[] };
+  /** The last lines of one workflow agent's transcript. */
+  claude_run_tail: { args: { id: SessionId; run_id: string; agent_id: string }; result: TranscriptLine[] };
   terminal_set_palette: { args: { palette: TerminalPalette }; result: null };
   // ---- tickets -----------------------------------------------------------------------------
   tracker_list: {
@@ -371,6 +378,7 @@ export const COMMAND_NAMES = [
   'claude_mcp_status',
   'claude_mcp_install',
   'claude_mcp_remove',
+  'claude_permission_mode',
   'app_update_status',
   'app_update_check',
   'app_restart',
@@ -402,7 +410,6 @@ export const COMMAND_NAMES = [
   'project_reorder',
   'layout_get',
   'layout_save',
-  'ui_set_global_view',
   'session_spawn',
   'session_spawn_template',
   'session_attach',
@@ -418,6 +425,8 @@ export const COMMAND_NAMES = [
   'session_link',
   'session_text_tail',
   'session_history_search',
+  'claude_runs_list',
+  'claude_run_tail',
   'terminal_set_palette',
   'tracker_list',
   'tracker_get',
@@ -550,6 +559,7 @@ export const notifyTest = wrap('notify_test');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
+export const claudePermissionMode = wrap('claude_permission_mode');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');
@@ -593,7 +603,6 @@ export const projectReorder = wrap('project_reorder');
 // ---- layout ---------------------------------------------------------------------------------
 export const layoutGet = wrap('layout_get');
 export const layoutSave = wrap('layout_save');
-export const uiSetGlobalView = wrap('ui_set_global_view');
 
 // ---- sessions -------------------------------------------------------------------------------
 export const sessionSpawn = wrap('session_spawn');
@@ -609,6 +618,8 @@ export const sessionMarkSeen = wrap('session_mark_seen');
 export const sessionLink = wrap('session_link');
 export const sessionTextTail = wrap('session_text_tail');
 export const sessionHistorySearch = wrap('session_history_search');
+export const claudeRunsList = wrap('claude_runs_list');
+export const claudeRunTail = wrap('claude_run_tail');
 export const terminalSetPalette = wrap('terminal_set_palette');
 
 /** Normalizes what a Tauri raw channel delivers into bytes. */

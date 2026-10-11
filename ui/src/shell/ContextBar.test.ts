@@ -6,7 +6,7 @@ import { appInfo as sampleAppInfo } from '$lib/gen/fixtures';
 import { createMockTransport } from '$lib/ipc/mock';
 import { getTransport, setTransport } from '$lib/ipc/transport';
 import { addTab, pane, updateTab } from '$lib/layout';
-import { layout, projects, sessions, tools, ui, work } from '$lib/stores';
+import { GLOBAL, layout, projects, sessions, tools, ui, work } from '$lib/stores';
 
 import './actions';
 import ContextBar from './ContextBar.svelte';
@@ -91,7 +91,7 @@ describe('context bar', () => {
     toolTab('home');
     // Opened from Now: the jumplist holds Now, then the tool.
     jumplist.list = [
-      { project: '', tab: '', pane: '', view: 'now' },
+      { project: GLOBAL, tab: 'now', pane: 'now' },
       { project: 'home', tab: 'tool-tab', pane: 'tool-pane' },
     ];
     jumplist.at = 1;
@@ -143,7 +143,7 @@ describe('context bar', () => {
   });
 
   it('‹ names the jumplist target', async () => {
-    jumplist.list = [{ project: '', tab: '', pane: '', view: 'reviews' }];
+    jumplist.list = [{ project: GLOBAL, tab: 'reviews', pane: 'reviews' }];
     jumplist.at = 0;
     render(ContextBar);
     await waitFor(() =>

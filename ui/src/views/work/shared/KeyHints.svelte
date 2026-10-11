@@ -23,6 +23,7 @@
     align-items: center;
     gap: 0 var(--k-space-5);
     flex: none;
+    margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
     /* One line tall: hints that wrap fall out of view instead of adding a second line. */
     height: var(--k-statusbar-height);
     overflow: hidden;

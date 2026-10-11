@@ -87,6 +87,12 @@ pub async fn claude_mcp_status(core: State<'_, Arc<Core>>) -> Res<Option<bool>> 
     Ok(core.claude_mcp_status().await)
 }
 
+/// Settings → Claude (#277): the mode sessions whose profile forces none start in; `None` = Claude's default.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_permission_mode(core: State<'_, Arc<Core>>) -> Res<Option<PermissionMode>> {
+    Ok(core.claude_permission_mode())
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn claude_mcp_install(core: State<'_, Arc<Core>>) -> Res<()> {
     core.claude_mcp_install().await

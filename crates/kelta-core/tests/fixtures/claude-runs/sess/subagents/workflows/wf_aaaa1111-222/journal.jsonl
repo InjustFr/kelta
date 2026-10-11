@@ -1,0 +1,8 @@
+{"type":"launched"}
+{"type":"started","key":"v2:k1","agentId":"a1","label":"implement-#202","phase":"Implement"}
+{"type":"result","key":"v2:k1","agentId":"a1","result":{"summary":"done"}}
+{"type":"started","key":"v2:k2","agentId":"a2","label":"review-#202-r1","phase":"Review"}
+not json at all
+{"type":"some_future_event","agentId":"a2","whatever":[1,2]}
+{"type":"started","key":"v2:k3","agentId":"a3","phase":"Review"}
+{"type":"started","key":"v2:k1","agentId":"a1","label":"implement-#202","phase":"Implement"}

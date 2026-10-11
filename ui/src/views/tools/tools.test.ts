@@ -6,7 +6,7 @@ import type { ToolScope } from '$lib/gen';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { activeTab, allPanes } from '$lib/layout';
-import { layout, projects, sessions, tools, ui } from '$lib/stores';
+import { GLOBAL, layout, projects, sessions, tools, ui } from '$lib/stores';
 
 import { jumplist, noteFocus } from '../../shell/jumplist';
 import NewSessionSheet from '../../shell/NewSessionSheet.svelte';
@@ -211,7 +211,7 @@ describe('tools.open', () => {
   it('pressed again in front, a tool with no project argument goes back, here to Now', async () => {
     const { id, opens } = await inTab(null);
     ui.view = 'now';
-    noteFocus({ project: 'shop', tab: '', pane: '', view: 'now' }); // what the shell records
+    noteFocus({ project: GLOBAL, tab: 'now', pane: 'now' }); // what the shell records
     await dispatch('tools.open', { tool_id: id });
     await Promise.all([sessions.load(), layout.load('home')]);
     expect([ui.view, projects.activeId]).toEqual([null, 'home']);
@@ -226,7 +226,7 @@ describe('tools.open', () => {
   it('a focus-only open (the rail click) on the tool in front stays there', async () => {
     const { id } = await inTab(null);
     ui.view = 'now';
-    noteFocus({ project: 'shop', tab: '', pane: '', view: 'now' });
+    noteFocus({ project: GLOBAL, tab: 'now', pane: 'now' });
     await dispatch('tools.open', { tool_id: id });
     await Promise.all([sessions.load(), layout.load('home')]);
     const pane = focusedPane()!;

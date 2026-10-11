@@ -18,6 +18,7 @@ pub const COMMANDS: &[&str] = &[
     "claude_mcp_status",
     "claude_mcp_install",
     "claude_mcp_remove",
+    "claude_permission_mode",
     "app_update_status",
     "app_update_check",
     "app_restart",
@@ -52,7 +53,6 @@ pub const COMMANDS: &[&str] = &[
     // layout
     "layout_get",
     "layout_save",
-    "ui_set_global_view",
     // sessions
     "session_spawn",
     "session_spawn_template",
@@ -69,6 +69,8 @@ pub const COMMANDS: &[&str] = &[
     "session_link",
     "session_text_tail",
     "session_history_search",
+    "claude_runs_list",
+    "claude_run_tail",
     "terminal_set_palette",
     // tickets
     "tracker_list",

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ui } from '$lib/stores';
+import { GLOBAL, ui } from '$lib/stores';
 
 import {
   backTarget,
@@ -14,6 +14,7 @@ import {
 } from './jumplist';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
+const view = (v: 'now' | 'reviews') => ({ project: GLOBAL, tab: v, pane: v });
 
 describe('Jumplist', () => {
   it('walks back and forward, and a new jump drops the forward entries', () => {
@@ -67,24 +68,34 @@ describe('Jumplist', () => {
     expect(jumplist.at).toBe(1);
   });
 
-  it('a global view is an entry: the same view under any project is one entry, and back opens it', () => {
+  it('a global view is its tab in the GLOBAL layout, and back opens it', () => {
     const j = new Jumplist();
-    const now = { project: 'p', tab: '', pane: '', view: 'now' as const };
+    const now = view('now');
     j.record(now);
-    expect(j.record({ ...now, project: 'q' })).toBe(false);
+    expect(j.record(view('now'))).toBe(false);
     j.record(loc(1));
     expect(j.step(-1)).toEqual(now);
 
     ui.view = null;
-    jumplist.list = [{ project: '', tab: '', pane: '', view: 'reviews' }, loc(1)];
+    jumplist.list = [view('reviews'), loc(1)];
     jumplist.at = 1;
     navStep(-1);
     expect([ui.view, jumplist.at]).toEqual(['reviews', 0]);
     ui.view = null;
   });
 
+  it('loads pre-#270 view entries as GLOBAL places', async () => {
+    localStorage.setItem(
+      'kelta.jumplist.v1',
+      JSON.stringify({ list: [{ project: 'shop', tab: '', pane: '', view: 'now' }, loc(1)], at: 1 }),
+    );
+    vi.resetModules();
+    const fresh = await import('./jumplist');
+    expect(fresh.jumplist.list).toEqual([view('now'), loc(1)]);
+    localStorage.removeItem('kelta.jumplist.v1');
+  });
+
   it('backTarget names where nav.back lands: the last live place before here, without moving', () => {
-    const view = (v: 'now' | 'reviews') => ({ project: '', tab: '', pane: '', view: v });
     jumplist.list = [view('reviews'), loc(1), view('now')];
     jumplist.at = 2;
     // Here is Now (recorded): back skips it and the dead pane, landing on Reviews.

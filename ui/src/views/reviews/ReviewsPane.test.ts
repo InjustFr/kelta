@@ -1,15 +1,16 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import type { ReviewKind, Settings } from '$lib/gen';
+import type { JsonValue, ReviewKind, Settings } from '$lib/gen';
 import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui } from '$lib/stores';
 
 import { openPr } from '../tickets/prs';
 import TicketsPane from '../tickets/TicketsPane.svelte';
-import { globalContent } from '../work/nav';
+import { globalContent, loadGlobalLayout } from '../work/nav';
 import ReviewsPane from './ReviewsPane.svelte';
 
 let mock: MockControls;
@@ -267,6 +268,7 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     });
 
   it('For me / Team / Mine with counts, switched by 1 2 3; the rail view saves the tab and polls it', async () => {
+    await loadGlobalLayout();
     ui.view = 'reviews';
     mountGlobal();
     await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team', 'Mine 3']));
@@ -279,8 +281,8 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     await press('2');
     await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team 7', 'Mine 3']));
     expect(globalContent('reviews')).toMatchObject({ tab: 'team' });
-    const set = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1);
-    expect(set?.args).toMatchObject({ content: { kind: 'reviews', tab: 'team' } });
+    await layout.flush(GLOBAL);
+    expect(JSON.stringify(mock.state.layouts[GLOBAL])).toContain('"tab":"team"');
   });
 
   it('a project pane keeps its tab; a project no source feeds has no Team tab', async () => {
@@ -317,6 +319,16 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     mountTab('team', { kind: 'project', id: 'shop' });
     await waitFor(() => expect(tabs().map((t) => t?.split(' ')[0])).toEqual(['For', 'Mine']));
     expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^For me/);
+  });
+
+  it('sources that omit projects, routes or views still offer Team in the project it feeds (#281)', async () => {
+    const value: JsonValue[] = [
+      { id: 'other', label: 'Other', tracker: { account: 'jira-acme' } },
+      { id: 'fed', label: 'Fed', projects: ['shop'], tracker: { account: 'jira-acme' } },
+    ];
+    settings.accept(null, await ipc.settingsSet({ layer: 'global', path: 'sources', value }));
+    mountTab(null, { kind: 'project', id: 'shop' });
+    await waitFor(() => expect(tabs()[1]).toBe('Team'));
   });
 
   it('Team rows read "you" on my PRs; G groups them by first ticket, No ticket last; j k skip headers', async () => {

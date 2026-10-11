@@ -24,10 +24,12 @@ fn expected_command_settings(ctl: &str) -> serde_json::Value {
         "UserPromptSubmit":  [ { "hooks": [ h ] } ],
         "PermissionRequest": [ { "hooks": [ h ] } ],
         "Notification":      [ { "matcher": "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input", "hooks": [ h ] } ],
-        "PostToolUse":       [ { "matcher": "Edit|Write|MultiEdit", "hooks": [ h ] } ],
+        "PostToolUse":       [ { "matcher": "*", "hooks": [ h ] } ],
         "Stop":              [ { "hooks": [ h ] } ],
         "StopFailure":       [ { "hooks": [ h ] } ],
-        "SessionEnd":        [ { "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] } ]
+        "SessionEnd":        [ { "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] } ],
+        "SubagentStart":     [ { "hooks": [ h ] } ],
+        "SubagentStop":      [ { "hooks": [ h ] } ]
     },
     "statusLine": { "type": "command", "command": format!("'{ctl}' statusline") } })
 }
@@ -100,7 +102,7 @@ fn argv_with_spaces() {
         name: "SHOP-142 Rate-limit login".into(),
         model: "opus".into(),
         effort: ClaudeEffort::High,
-        permission_mode: PermissionMode::AcceptEdits,
+        permission_mode: Some(PermissionMode::AcceptEdits),
         settings_file: run.join("claude-settings.json"),
         mcp_file: Some(run.join("mcp.json")),
         allowed_tools: vec!["mcp__kelta__*".into()],

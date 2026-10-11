@@ -11,6 +11,7 @@
 pub mod attention;
 pub mod bus;
 pub mod claude_mcp;
+mod claude_runs;
 pub mod clipboard;
 pub mod ctl;
 pub mod detect;
@@ -21,6 +22,7 @@ pub mod notifier;
 pub mod oauth;
 mod park;
 pub mod perf;
+mod permission_mode;
 pub mod projects;
 pub mod providers;
 mod refine;
@@ -192,6 +194,8 @@ pub struct Core {
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
     /// The global `/mcp` holds an HTTP server reference (Claude Code registration, ticket #234).
     pub(crate) claude_mcp_ref: AtomicBool,
+    /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
+    pub(crate) claude_mode: Mutex<Option<kelta_proto::settings::PermissionMode>>,
     /// Startup toast held until `app_ready`: the bridge drops events while no window listens.
     boot_toast: Mutex<Option<Toast>>,
     started: AtomicBool,
@@ -349,6 +353,7 @@ impl Core {
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
                 claude_mcp_ref: AtomicBool::new(false),
+                claude_mode: Mutex::new(None),
                 boot_toast: Mutex::new(None),
                 started: AtomicBool::new(false),
                 start_services,
@@ -372,6 +377,7 @@ impl Core {
         self.load_projects()?;
         self.load_layouts()?;
         self.load_sessions()?;
+        self.load_permission_mode()?;
         self.adopt_live_sessions();
         let weak = self.me.clone();
         self.cfg.watch(Box::new(move |diff| {
@@ -665,6 +671,13 @@ impl CoreApi for Core {
     }
     async fn session_set_usage(&self, id: &SessionId, usage: ClaudeUsage) -> Result<(), KeltaError> {
         self.set_usage(id, usage)
+    }
+    fn session_claude_runs_hook(&self, id: &SessionId, payload: &kelta_proto::hooks::HookPayload) {
+        self.remember_permission_mode(id, payload);
+        self.claude_runs_hook(id, payload);
+    }
+    fn claude_permission_mode(&self) -> Option<kelta_proto::settings::PermissionMode> {
+        *self.claude_mode.lock()
     }
     async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError> {
         self.rt.capture();

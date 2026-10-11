@@ -131,6 +131,23 @@ pub async fn session_history_search(
     .map_err(|e| KeltaError::internal(format!("history search task failed: {e}")))?
 }
 
+/// The session's Claude `Workflow` runs (#272).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_runs_list(core: State<'_, Arc<Core>>, id: SessionId) -> Res<Vec<ClaudeRun>> {
+    Ok(core.claude_runs_list(&id))
+}
+
+/// The tail of one workflow agent's transcript.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_run_tail(
+    core: State<'_, Arc<Core>>,
+    id: SessionId,
+    run_id: String,
+    agent_id: String,
+) -> Res<Vec<TranscriptLine>> {
+    core.claude_run_tail(&id, &run_id, &agent_id)
+}
+
 /// Pushed on theme change (OSC 4/10/11/12 replies).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn terminal_set_palette(core: State<'_, Arc<Core>>, palette: TerminalPalette) -> Res<()> {

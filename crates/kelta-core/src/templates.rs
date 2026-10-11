@@ -13,7 +13,7 @@ use kelta_proto::model::{
     LayoutNode, OpenPaneRequest, PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind,
     SpawnRequest, TemplateCtx,
 };
-use kelta_proto::settings::{ClaudeSettings, EditorPreset, Settings, TemplateNode};
+use kelta_proto::settings::{ClaudeSettings, EditorPreset, PermissionMode, Settings, TemplateNode};
 use kelta_work::template::{Ctx, Mode, render, render_shell};
 
 use crate::Core;
@@ -38,7 +38,7 @@ pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Va
         if *name == names::NOTIFICATION {
             entry["matcher"] = serde_json::json!(names::NOTIFICATION_MATCHER);
         } else if *name == names::POST_TOOL_USE {
-            entry["matcher"] = serde_json::json!(names::EDIT_TOOLS_MATCHER);
+            entry["matcher"] = serde_json::json!(names::POST_TOOL_USE_MATCHER);
         }
         hooks.insert((*name).to_owned(), serde_json::json!([entry]));
     }
@@ -53,10 +53,12 @@ pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Va
     serde_json::json!({ "hooks": hooks, "statusLine": { "type": "command", "command": format!("{ctl} statusline") } })
 }
 
-/// Claude argv for a standalone/template session.
+/// Claude argv for a standalone/template session; `remembered` = the mode used when the profile
+/// forces none (none either: Claude's own default).
 pub fn claude_args(
     claude: &ClaudeSettings,
     profile: Option<&str>,
+    remembered: Option<PermissionMode>,
     uuid: &str,
     settings_file: &Path,
     prompt: Option<&str>,
@@ -65,16 +67,15 @@ pub fn claude_args(
     let p = profile.and_then(|p| claude.profiles.get(p)).or_else(|| claude.profiles.get("default"));
     if let Some(p) = p {
         let effort = serde_json::to_value(p.effort).ok().and_then(|v| v.as_str().map(str::to_owned));
-        let mode = serde_json::to_value(p.permission_mode).ok().and_then(|v| v.as_str().map(str::to_owned));
         if !p.model.is_empty() {
             a.extend(["--model".to_owned(), p.model.clone()]);
         }
         if let Some(e) = effort {
             a.extend(["--effort".to_owned(), e]);
         }
-        if let Some(m) = mode {
-            a.extend(["--permission-mode".to_owned(), m]);
-        }
+    }
+    if let Some(m) = p.and_then(|p| p.permission_mode).or(remembered) {
+        a.extend(["--permission-mode".to_owned(), kelta_work::claude::enum_str(&m)]);
     }
     a.extend(["--settings".to_owned(), settings_file.to_string_lossy().into_owned()]);
     for t in &claude.allowed_tools {
@@ -158,7 +159,7 @@ impl Core {
             id: None,
             kind: SessionKind::Claude,
             program: Some(s.claude.binary.clone()),
-            args: claude_args(&s.claude, profile, &uuid, &file, prompt),
+            args: claude_args(&s.claude, profile, *self.claude_mode.lock(), &uuid, &file, prompt),
             restore: RestorePolicy::ClaudeResume { uuid },
             ..base
         };
@@ -402,10 +403,23 @@ mod tests {
 
     #[test]
     fn claude_argv() {
-        let a =
-            claude_args(&ClaudeSettings::default(), Some("review"), "U", Path::new("/r/s.json"), Some("hi"));
+        let c = ClaudeSettings::default();
+        let a = claude_args(&c, Some("review"), None, "U", Path::new("/r/s.json"), Some("hi"));
         assert_eq!(&a[..2], &["--session-id".to_owned(), "U".to_owned()]);
         assert!(a.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "plan"));
         assert_eq!(a.last().map(String::as_str), Some("hi"));
+    }
+
+    /// #277: the default profile forces no mode, the remembered one applies; a profile mode wins.
+    #[test]
+    fn claude_argv_permission_mode() {
+        let c = ClaudeSettings::default();
+        let mode = |profile, remembered| {
+            let a = claude_args(&c, profile, remembered, "U", Path::new("/r/s.json"), None);
+            a.windows(2).find(|w| w[0] == "--permission-mode").map(|w| w[1].clone())
+        };
+        assert_eq!(mode(None, None), None);
+        assert_eq!(mode(None, Some(PermissionMode::Auto)).as_deref(), Some("auto"));
+        assert_eq!(mode(Some("plan"), Some(PermissionMode::Auto)).as_deref(), Some("plan"));
     }
 }

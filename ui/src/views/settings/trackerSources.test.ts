@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
-import type { SourceRoute, TrackerBinding, TrackerView } from '$lib/gen';
+import type { JsonValue, SourceRoute, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -167,6 +167,28 @@ describe('Settings → Sources', () => {
     });
     expect(within(row).getByTestId('fed-by').textContent).toBe('Fed by Shop board');
     expect(screen.queryByTestId('tracker-block')).toBeNull();
+  });
+
+  it('a source that omits routes, projects or views still renders and edits (#281)', async () => {
+    // the TOML keeps only what the user wrote; core (and the mock) fill serde defaults
+    const sparse: JsonValue[] = [
+      {
+        id: 'mine',
+        label: 'Mine',
+        tracker: { account: 'jira-acme', views: [{ id: 'v', label: 'V', jql: 'x' }] },
+      },
+      { id: 'fed', label: 'Fed', projects: ['shop'], tracker: { account: 'jira-acme' } },
+    ];
+    await ipc.settingsSet({ layer: 'global', path: 'sources', value: sparse });
+    await settings.load();
+    expect(settings.hasSources()).toBe(true);
+    render(Projects, { layer: 'global', projectId: null, repoId: null });
+    const row = await waitFor(() => document.querySelector<HTMLElement>('[data-project-id="shop"]')!);
+    expect(within(row).getByTestId('fed-by').textContent).toBe('Fed by Fed');
+    mountSources();
+    await waitFor(() => expect(screen.getAllByTestId('source-card')).toHaveLength(2));
+    await fireEvent.click(card('fed').getByRole('button', { name: 'Add route' }));
+    await waitFor(() => expect(lastSources()?.find((s) => s.id === 'fed')?.routes).toHaveLength(1));
   });
 
   it('names the iteration per provider and hides it for gitea', () => {
