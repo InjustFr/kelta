@@ -735,6 +735,50 @@ async fn mount_paged_reviews(server: &MockServer) {
         .await;
 }
 
+/// `p` split over two pages linked by `Link: rel="next"`.
+async fn mount_two_pages(server: &MockServer, p: &str, page1: Value, page2: Value) {
+    Mock::given(method("GET"))
+        .and(path(p))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page2))
+        .mount(server)
+        .await;
+    let next = format!("<{}{p}?per_page=100&page=2>; rel=\"next\"", server.uri());
+    Mock::given(method("GET"))
+        .and(path(p))
+        .respond_with(ResponseTemplate::new(200).insert_header("link", next.as_str()).set_body_json(page1))
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn check_runs_and_pending_comments_follow_the_link_header() {
+    let server = MockServer::start().await;
+    let run = |name: &str, conclusion: &str| json!({ "name": name, "status": "completed", "conclusion": conclusion });
+    mount_two_pages(
+        &server,
+        "/repos/acme/shop/commits/abc123/check-runs",
+        json!({ "total_count": 2, "check_runs": [run("build", "success")] }),
+        json!({ "total_count": 2, "check_runs": [run("deploy", "failure")] }),
+    )
+    .await;
+    mount_two_pages(
+        &server,
+        "/repos/acme/shop/pulls/101/reviews/9/comments",
+        json!([{ "id": 5 }, { "id": 6 }]),
+        json!([{ "id": 7 }]),
+    )
+    .await;
+    mount_detail(&server, "github/pull.json", "github/reviews_pending.json", "github/check_runs.json").await;
+    let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    assert_eq!(
+        d.checks.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        vec!["build", "deploy", "ci/legacy"]
+    );
+    assert_eq!(d.review.ci, CiState::Failure, "the page-2 failure counts");
+    assert_eq!(d.pending_comments, 3);
+}
+
 #[tokio::test]
 async fn reviews_follow_the_link_header() {
     let server = MockServer::start().await;
