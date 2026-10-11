@@ -17,7 +17,6 @@ import {
   settings,
   tickets,
   toasts,
-  tools,
   ui,
   work,
 } from '$lib/stores';
@@ -32,7 +31,7 @@ import { goToWork } from '../../views/work/nav';
 import { startWorkOnTicket } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
 import { sessionIcon, sessionKindName, statusLabel } from '../labels';
-import { activateProject, focusedPane, openContent, revealSession } from '../nav';
+import { activateProject, focusedPane, openContent, railTools, revealSession } from '../nav';
 
 export type PaletteGroup =
   | 'Work items'
@@ -154,8 +153,7 @@ export function actionItems(): PaletteItem[] {
 }
 
 export function toolItems(): PaletteItem[] {
-  // Tools are global: any project's list is the same one.
-  return tools.list(projects.activeId ?? projects.home?.id ?? 'home').flatMap((t) => {
+  return railTools().flatMap((t) => {
     const item = {
       id: `tool:${t.id}`,
       group: 'Tools' as const,
