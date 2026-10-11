@@ -103,6 +103,31 @@ async fn review_requests_query_recent_member_repositories_by_reviewer_uuid() {
 }
 
 #[tokio::test]
+async fn review_requests_follow_the_repository_listing_past_the_first_page() {
+    let server = MockServer::start().await;
+    common(&server).await;
+    Mock::given(method("GET"))
+        .and(path("/repositories/acme"))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("bitbucket/repos.json")))
+        .mount(&server)
+        .await;
+    let next = format!("{}/repositories/acme?page=2", server.uri());
+    Mock::given(method("GET"))
+        .and(path("/repositories/acme"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"values": [{"full_name": "acme/old"}], "next": next})),
+        )
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/repositories/acme/shop/pullrequests", 200, "bitbucket/prs.json").await;
+    let list = bb(&server).list_reviews(&query(ReviewKind::ReviewRequested, true, true)).await.unwrap();
+    assert_eq!(list.len(), 2, "the PRs of acme/shop, listed on page 2");
+    assert!(list.iter().all(|r| r.r#ref.repo == "acme/shop"));
+}
+
+#[tokio::test]
 async fn detail_rolls_up_statuses_and_sums_the_diffstat() {
     let server = MockServer::start().await;
     common(&server).await;
