@@ -396,4 +396,22 @@ describe('ask questions (#356)', () => {
     const ids = sections.find((s) => s.id === 'needs_you')!.rows.map((r) => r.id);
     expect(ids).toEqual([`w:${claimed.item.id}`, 's:solo']);
   });
+
+  it("keeps a listed item's run session at a plain permission prompt in Claude needs you", () => {
+    const claimed = entry('run', 'in_flight', {
+      run: {
+        name: 'w',
+        run_id: 'r',
+        session_id: 'orch',
+        phase: null,
+        state: 'running',
+        note: null,
+        sha: null,
+      },
+    });
+    const prompt: SessionInfo = { ...asking('orch'), status: 'needs_input' };
+    prompt.claude = { ...prompt.claude!, question: null };
+    const sections = nowSections({ ...empty, work: [claimed], sessions: [prompt] });
+    expect(sections.find((s) => s.id === 'needs_you')!.rows.map((r) => r.id)).toEqual(['s:orch']);
+  });
 });

@@ -115,13 +115,12 @@ export function nowSections(input: NowInput): Section[] {
     );
 
   // Plain sessions asking (WaitingUser is idle, never "needs you"), or with an `ask` question (#356);
-  // a listed item's run session asks on that item's row.
+  // a listed item's run session shows its question on that item's row (a permission prompt stays a row here).
   const runIds = new Set(input.work.map((w) => w.item.run?.session_id));
   for (const s of input.sessions)
     if (
-      (s.status === 'needs_input' || questionOf(s)) &&
       !(s.work_item_id && itemIds.has(s.work_item_id)) &&
-      !runIds.has(s.id)
+      (questionOf(s) ? !runIds.has(s.id) : s.status === 'needs_input')
     )
       add('needs_you', { type: 'session', id: `s:${s.id}`, session: s }, 0, s.created_at);
   for (const s of input.outside ?? [])
