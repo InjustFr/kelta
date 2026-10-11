@@ -89,6 +89,8 @@ pub async fn open_external(url: &str) -> Result<(), KeltaError> {
     let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
     let mut child = tokio::process::Command::new(opener)
         .arg(url.trim())
+        .env_clear()
+        .envs(LoginEnv::inherited().vars)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

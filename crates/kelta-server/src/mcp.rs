@@ -732,6 +732,8 @@ async fn add_review_comment(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Val
     // Line numbers come from the local checkout; the pending review lands on the remote head.
     let remote = host.get(&r).await.map_err(|e| e.message)?.review.head_sha;
     let local = tokio::process::Command::new("git")
+        .env_clear()
+        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .arg("-C")
         .arg(&w.worktree)
         .args(["rev-parse", "HEAD"])

@@ -93,7 +93,9 @@ pub fn parse_path_helper(output: &str) -> BTreeMap<String, String> {
 /// until EOF or `timeout`. The process group is killed on timeout.
 pub fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Option<Vec<u8>> {
     let mut cmd = Command::new(program);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // The probed shell starts from the user's environment, not the AppImage runtime's.
+    cmd.args(args).env_clear().envs(LoginEnv::inherited().vars);
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     // SAFETY: `setsid` is async-signal-safe; it detaches the probe from our controlling tty and
     // makes it a process group leader so a timeout can kill the whole group.
     unsafe {

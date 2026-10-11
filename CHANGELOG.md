@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows Keep a Changelog, versio
 
 ## [Unreleased]
 
+### Fixed
+
+- AppImage: terminals, Claude sessions and every other child process start from the user's environment, without
+  the AppImage runtime's `PYTHONHOME`, `LD_LIBRARY_PATH`, `GTK_*` or `$APPDIR` entries in `PATH`.
+
 ### Changed
 
 - Plugin `exec:` grants match the command exactly: a command with a `/` needs a grant naming that path
