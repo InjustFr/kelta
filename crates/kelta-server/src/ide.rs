@@ -81,11 +81,13 @@ pub(crate) fn open(
     write_private(&lock, &serde_json::to_vec(&body).unwrap_or_default())?;
     let cx = Arc::new(Cx { core, sid, token, folders, scratch: runtime.join("ide") });
     let app = Router::new().fallback(upgrade).with_state(cx);
-    let task = tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, app).await {
-            tracing::warn!(error = %e, "ide bridge stopped with an error");
-        }
-    })
+    let task = tokio::spawn(crate::serve::serve(
+        listener,
+        app,
+        crate::serve::MAX_CONNS,
+        crate::serve::REQUEST_TIMEOUT,
+        std::future::pending(),
+    ))
     .abort_handle();
     tracing::debug!(port, "ide bridge listening");
     Ok((Bridge { lock, task }, port))

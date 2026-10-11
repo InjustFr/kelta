@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
 use crate::auth::{TokenKind, TokenTable, bearer};
-use crate::mcp;
+use crate::{mcp, serve};
 
 /// Request body cap for `/hook` and `/mcp`.
 const BODY_LIMIT: usize = CTL_MAX_LINE;
@@ -75,12 +75,10 @@ pub(crate) fn ensure(
     let app = router(ctx);
     let (tx, rx) = oneshot::channel::<()>();
     tokio::spawn(async move {
-        let serve = axum::serve(listener, app).with_graceful_shutdown(async move {
+        let shutdown = async move {
             let _ = rx.await;
-        });
-        if let Err(e) = serve.await {
-            tracing::warn!(error = %e, "http server stopped with an error");
-        }
+        };
+        serve::serve(listener, app, serve::MAX_CONNS, serve::REQUEST_TIMEOUT, shutdown).await;
         tracing::debug!(port, "http server stopped");
     });
     tracing::debug!(port, "http server started");
@@ -129,7 +127,15 @@ async fn host_guard(State(ctx): State<Arc<Ctx>>, req: Request, next: Next) -> Re
         tracing::warn!("http: request with an unexpected Host header rejected");
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
     }
-    next.run(req).await
+    // A stalled body would hold a connection slot forever (#293).
+    let (parts, body) = req.into_parts();
+    let body =
+        match tokio::time::timeout(serve::REQUEST_TIMEOUT, axum::body::to_bytes(body, BODY_LIMIT)).await {
+            Ok(Ok(b)) => b,
+            Ok(Err(_)) => return (StatusCode::PAYLOAD_TOO_LARGE, "request body too large").into_response(),
+            Err(_) => return (StatusCode::REQUEST_TIMEOUT, "request body timeout").into_response(),
+        };
+    next.run(Request::from_parts(parts, body.into())).await
 }
 
 fn presented(headers: &HeaderMap) -> Option<&str> {
