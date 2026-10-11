@@ -8,7 +8,7 @@ use kelta_proto::model::{
     BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
     WorkItem, WorkSource, WorkState,
 };
-use kelta_proto::settings::Settings;
+use kelta_proto::settings::{Settings, StartOption};
 use kelta_proto::tracker::{Ticket, TrackerKind};
 
 use crate::git;
@@ -259,6 +259,23 @@ pub fn claude_plan(settings: &Settings, profile: &str, prompt_key: &str, ctx: &C
     }
 }
 
+/// `picked` kept to the declared values, at most one per option, in the declared order (#357).
+pub fn picked_options(declared: &[StartOption], picked: &[String]) -> Vec<String> {
+    declared.iter().filter_map(|o| o.values.iter().find(|v| picked.contains(v)).cloned()).collect()
+}
+
+/// `prompt` with the picked values in its `{options}`, else after it (the UI's `applyOptions`).
+pub fn apply_options(prompt: &str, declared: &[StartOption], picked: &[String]) -> String {
+    let text = picked_options(declared, picked).join(" ");
+    if prompt.contains("{options}") {
+        prompt.replace("{options}", &text)
+    } else if text.is_empty() {
+        prompt.to_owned()
+    } else {
+        format!("{} {text}", prompt.trim_end())
+    }
+}
+
 /// Assemble a plan from its parts (shared by the three sources).
 #[allow(clippy::too_many_arguments)]
 pub fn assemble(
@@ -291,6 +308,7 @@ pub fn assemble(
         side_effects,
         existing: existing.map(|w| w.id.clone()),
         adopt_pr: None,
+        options: None,
     }
 }
 
@@ -327,6 +345,22 @@ pub fn port_free(port: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn options_go_to_the_placeholder_else_the_end_in_declared_order() {
+        use kelta_proto::settings::StartOption;
+        let opt = |label: &str, values: &[&str]| StartOption {
+            label: label.into(),
+            values: values.iter().map(|v| (*v).to_owned()).collect(),
+        };
+        let declared = [opt("Auto", &["--auto"]), opt("Mode", &["--mode=quick", "--mode=skip"])];
+        let picked: Vec<String> = ["--mode=skip", "--mode=quick", "--gone", "--auto"].map(Into::into).into();
+        assert_eq!(super::picked_options(&declared, &picked), ["--auto", "--mode=quick"]);
+        assert_eq!(super::apply_options("/pass X \n", &declared, &picked), "/pass X --auto --mode=quick");
+        assert_eq!(super::apply_options("/pass {options} X", &declared, &picked[..1]), "/pass --mode=skip X");
+        assert_eq!(super::apply_options("/pass {options} X", &declared, &[]), "/pass  X");
+        assert_eq!(super::apply_options("/pass X", &[], &picked), "/pass X");
+    }
+
     use super::*;
     use kelta_proto::samples;
 

@@ -4,6 +4,7 @@ import * as samples from '$lib/gen/fixtures';
 
 import {
   accountErrorBanner,
+  applyOptions,
   columnFor,
   parseCandidates,
   parseDirtyFiles,
@@ -12,12 +13,32 @@ import {
   scratchBranch,
   taskTitle,
   ticketBody,
+  unapplyOptions,
   REVIEW_READONLY,
   reviewPhase,
   workActionDisabled,
   validateBranch,
   validatePlan,
 } from './common';
+
+describe('start options', () => {
+  const declared = [
+    { label: 'Auto', values: ['--auto'] },
+    { label: 'Mode', values: ['--mode=quick', '--mode=skip'] },
+  ];
+  it('puts the picks in {options}, else at the end, in the declared order (as kelta-work)', () => {
+    const picked = ['--mode=skip', '--gone', '--auto'];
+    expect(applyOptions('/pass X\n', declared, picked)).toBe('/pass X --auto --mode=skip');
+    expect(applyOptions('/pass {options} X', declared, ['--mode=quick'])).toBe('/pass --mode=quick X');
+    expect(applyOptions('/pass {options} X', declared, [])).toBe('/pass  X');
+    expect(applyOptions('/pass X', [], picked)).toBe('/pass X');
+  });
+  it('turns an edited prompt back into its {options} form', () => {
+    expect(unapplyOptions('/pass Y --auto', '--auto')).toBe('/pass Y {options}');
+    expect(unapplyOptions('/pass Y', '--auto')).toBe('/pass Y');
+    expect(unapplyOptions('/pass Y', '')).toBe('/pass Y');
+  });
+});
 
 describe('scratch branch preview', () => {
   it('slugs the first line like the backend', () => {

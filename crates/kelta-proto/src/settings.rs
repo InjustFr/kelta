@@ -1194,6 +1194,8 @@ impl Default for PrSettings {
 pub struct WorkSettings {
     /// Show the StartWorkPlan sheet.
     pub plan_preview: bool,
+    /// Starting a new work item while other work is unfinished lists that work first.
+    pub finish_first: bool,
     pub default_template: String,
     pub review_template: String,
     pub on_start: OnStart,
@@ -1212,6 +1214,7 @@ impl Default for WorkSettings {
     fn default() -> Self {
         Self {
             plan_preview: true,
+            finish_first: true,
             default_template: "claude+editor".into(),
             review_template: "review".into(),
             on_start: OnStart::default(),
@@ -1489,6 +1492,8 @@ pub struct SessionTemplate {
     pub enabled: bool,
     /// Where its Claude runs; Kelta still writes its hooks and MCP and follows its state.
     pub claude_host: ClaudeHost,
+    /// Picked per ticket in the Start sheet, unless the ticket's route declares its own.
+    pub options: Vec<StartOption>,
 }
 
 impl Default for SessionTemplate {
@@ -1499,8 +1504,19 @@ impl Default for SessionTemplate {
             layout: TemplateNode::default(),
             enabled: true,
             claude_host: ClaudeHost::Builtin,
+            options: Vec::new(),
         }
     }
+}
+
+/// A start option: one value is a checkbox, several a single choice. The picked values go
+/// to the Claude prompt's `{options}`, else after it, in the declared order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct StartOption {
+    pub label: String,
+    /// e.g. `["--auto"]`, or `["--mode=quick", "--mode=skip"]`.
+    pub values: Vec<String>,
 }
 
 /// SETTINGS §2 defaults.
@@ -1509,6 +1525,7 @@ pub fn default_session_templates() -> Vec<SessionTemplate> {
         id: id.to_owned(),
         label: label.to_owned(),
         layout,
+        options: Vec::new(),
         ..SessionTemplate::default()
     };
     vec![
@@ -1708,6 +1725,11 @@ pub struct TrackerView {
     pub current_iteration: bool,
     /// Account of this view; `None` = the binding's account.
     pub account: Option<AccountId>,
+    /// The source's `fields`, filled by kelta-core for the list call (not configured per view, #351).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub fields: Vec<SourceField>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -1789,6 +1811,8 @@ pub struct SourceRoute {
     /// Must be listed in the source's `projects`.
     pub project: ProjectId,
     pub repo: String,
+    /// Picked per ticket in the Start sheet; replace the template's options.
+    pub options: Vec<StartOption>,
 }
 
 /// `[[sources]]`: a ticket board, global, feeding zero or more projects (SETTINGS §2).
@@ -1810,6 +1834,23 @@ pub struct Source {
     /// Linear, status elsewhere.
     #[ts(optional)]
     pub blocked: Option<BlockedMarker>,
+    /// Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry
+    /// without an id is dropped with a warning.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<SourceField>>", optional)]
+    pub fields: Vec<SourceField>,
+}
+
+/// A tracker field to show on the tickets.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceField {
+    /// The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.
+    #[schemars(length(min = 1))]
+    pub id: String,
+    /// Shown before the value; empty shows the value alone.
+    #[serde(default)]
+    pub label: String,
 }
 
 /// How the tracker marks a ticket blocked.
@@ -1926,8 +1967,12 @@ pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) ->
             s.projects.push(p.id.clone());
         }
         for r in &t.repo_rules {
-            let route =
-                SourceRoute { r#match: r.r#match.clone(), project: p.id.clone(), repo: r.repo.clone() };
+            let route = SourceRoute {
+                r#match: r.r#match.clone(),
+                project: p.id.clone(),
+                repo: r.repo.clone(),
+                ..SourceRoute::default()
+            };
             if !s.routes.contains(&route) {
                 s.routes.push(route);
             }

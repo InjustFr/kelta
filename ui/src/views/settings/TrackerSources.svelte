@@ -1,14 +1,14 @@
 <script lang="ts">
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
-  // Whose tickets, current iteration, a Jira view's board and statuses, removal and the status colours
-  // save at once to the global `[[sources]]`.
+  // Whose tickets, current iteration, a Jira view's board and statuses, removal, the status colours and
+  // the ticket fields save at once to the global `[[sources]]`.
   import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
-  import type { Column, SourceHit, TrackerView, Who } from '$lib/gen';
+  import type { Column, SourceField, SourceHit, TrackerView, Who } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { settings, ui } from '$lib/stores';
-  import { Badge, Button, IconButton, Select, Toggle } from '$lib/ui';
+  import { Badge, Button, IconButton, Select, TextInput, Toggle } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
   import ColorPicker from '../onboarding/ColorPicker.svelte';
@@ -101,6 +101,27 @@
       const rest = Object.fromEntries(Object.entries(s.status_colors).filter(([k]) => k !== name));
       return { ...s, status_colors: color ? { ...rest, [name]: color } : rest };
     });
+
+  // Ticket fields (#351): the tracker's own list where it has one (`null`: it has none, an id is typed).
+  let offered = $state<SourceField[] | null>(null);
+  const viewsKey = $derived(JSON.stringify([source?.tracker.account, source?.tracker.views]));
+  $effect(() => {
+    void viewsKey;
+    ipc
+      .trackerFields({ source_id: sourceId })
+      .then((fs) => (offered = fs))
+      .catch(() => (offered = null));
+  });
+  const chosen = $derived(source?.fields ?? []);
+  const addable = $derived((offered ?? []).filter((f) => !chosen.some((c) => c.id === f.id)));
+  let typedId = $state('');
+  const setFields = (f: (fields: SourceField[]) => SourceField[]) =>
+    editSource(sourceId, (s) => ({ ...s, fields: f(s.fields ?? []) }));
+  const addField = (id: string) => {
+    const label = offered?.find((f) => f.id === id)?.label ?? '';
+    if (id.trim() && !chosen.some((c) => c.id === id.trim()))
+      void setFields((fs) => [...fs, { id: id.trim(), label }]);
+  };
 
   const boardOptions = (account: string, v: TrackerView) => {
     const own = (boards[account] ?? []).map((h) => ({ value: String(h.view.board_id), label: h.label }));
@@ -228,6 +249,66 @@
       </ul>
     </SettingsGroup>
   {/if}
+  <SettingsGroup heading={t('Ticket fields')} data-testid="source-fields">
+    <p class="empty">{t('Each field with a value shows on the ticket rows as label: value.')}</p>
+    {#if chosen.length > 0}
+      <ul>
+        {#each chosen as f (f.id)}
+          {@const known = offered?.find((o) => o.id === f.id)}
+          <li data-field-id={f.id}>
+            <span class="label"
+              ><TextInput
+                value={f.label}
+                aria-label={t('Label of {field}', { field: known?.label ?? f.id })}
+                placeholder={t('No label')}
+                onchange={(e) => {
+                  const label = e.currentTarget.value;
+                  void setFields((fs) => fs.map((x) => (x.id === f.id ? { ...x, label } : x)));
+                }}
+              /></span
+            >
+            <span class="account">{known?.label ?? f.id}</span>
+            {#if offered && !known}<Badge
+                tone="warn"
+                title={t('{tracker} has no field {id}', { tracker: b.account, id: f.id })}
+                >{t('Unknown field')}</Badge
+              >{/if}
+            <IconButton
+              icon="trash-2"
+              label={t('Remove {name}', { name: f.label || f.id })}
+              size="sm"
+              onclick={() => void setFields((fs) => fs.filter((x) => x.id !== f.id))}
+            />
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if offered}
+      {#if addable.length > 0}
+        <!-- keyed: the choice goes back to the placeholder once added -->
+        {#key chosen.length}<Select
+            value=""
+            label={t('Add a field')}
+            options={[
+              { value: '', label: t('Choose a field…') },
+              ...addable.map((f) => ({ value: f.id, label: f.label || f.id })),
+            ]}
+            onchange={addField}
+          />{/key}
+      {/if}
+    {:else}
+      <TextInput
+        bind:value={typedId}
+        label={t('Add a field by id')}
+        hint={t('This tracker does not list its fields: type the field id or name.')}
+        onkeydown={(e) => {
+          if (e.key !== 'Enter') return;
+          addField(typedId);
+          typedId = '';
+        }}
+      />
+    {/if}
+  </SettingsGroup>
 {/if}
 
 <style>

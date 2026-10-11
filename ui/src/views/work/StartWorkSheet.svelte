@@ -8,12 +8,20 @@
     ClaudeEffort,
     KeltaError,
     PermissionMode,
+    StartOption,
     StartWorkPlan,
     StatusCategory,
     TransitionTarget,
     WorkItem,
   } from '$lib/gen';
-  import { openExternal, workPlan, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
+  import {
+    openExternal,
+    settingsSet,
+    workPlan,
+    workResume,
+    workRetryStep,
+    workStart,
+  } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { projects, settings, tickets, toasts, work } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
@@ -21,7 +29,17 @@
 
   import { activateProject } from '../../shell/nav';
   import { withCriteria } from '../tickets/refine.svelte';
-  import { planValid, START_STEPS, stepLabel, validatePlan } from './common';
+  import {
+    applyOptions,
+    optionsText,
+    planValid,
+    START_STEPS,
+    stepLabel,
+    unapplyOptions,
+    validatePlan,
+  } from './common';
+  import FinishFirst from './FinishFirst.svelte';
+  import { finishFirst } from './finishFirst';
 
   interface Props extends SheetProps {
     plan: StartWorkPlan;
@@ -45,6 +63,18 @@
   let retrying = $state<string | null>(null);
 
   const resuming = $derived(seed.existing !== null);
+  // Finish before starting (#354): a step before the plan, never for a resume.
+  const unfinished = $derived(finishFirst(seed));
+  let asking = $state(untrack(() => unfinished.length > 0));
+
+  async function stopAsking(): Promise<void> {
+    try {
+      settings.accept(null, await settingsSet({ layer: 'global', path: 'work.finish_first', value: false }));
+      asking = false;
+    } catch (err) {
+      toasts.error(err, t("Don't ask again"));
+    }
+  }
   const projectName = (id: string): string => projects.byId(id)?.name ?? id;
   // The guess hint names the ticket's source, else its account.
   const sourceName = (p: StartWorkPlan, account: string): string =>
@@ -68,6 +98,19 @@
       switching = false;
     }
   }
+  // ---- start options (#357): the prompt keeps its `{options}` form in `plan.options.prompt` ----
+  function editPrompt(v: string): void {
+    plan.claude.prompt = v;
+    const o = plan.options;
+    if (o) o.prompt = unapplyOptions(v, optionsText(o.declared, o.picked));
+  }
+  function pick(opt: StartOption, value: string | null): void {
+    const o = plan.options;
+    if (!o) return;
+    o.picked = [...o.picked.filter((v) => !opt.values.includes(v)), ...(value ? [value] : [])];
+    plan.claude.prompt = applyOptions(o.prompt, o.declared, o.picked);
+  }
+
   const isTicket = $derived(plan.source.kind === 'ticket');
   const subject = $derived(
     plan.source.kind === 'ticket'
@@ -256,7 +299,9 @@
 </script>
 
 <Sheet {title} width={560} {onclose}>
-  {#if phase === 'edit'}
+  {#if asking}
+    <FinishFirst rows={unfinished} ongo={onclose} />
+  {:else if phase === 'edit'}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <form
       id="start-work-form"
@@ -354,11 +399,35 @@
           />
           <TextInput
             label={t('Prompt')}
-            bind:value={plan.claude.prompt}
+            bind:value={() => plan.claude.prompt, editPrompt}
             multiline
             rows={6}
             error={errors.prompt}
           />
+          {#if plan.options}
+            {@const picked = plan.options.picked}
+            <div class="options" data-testid="start-options">
+              {#each plan.options.declared as o, i (i)}
+                {#if o.values.length === 1}
+                  <Toggle
+                    label={o.label}
+                    checked={picked.includes(o.values[0]!)}
+                    onchange={(on) => pick(o, on ? o.values[0]! : null)}
+                  />
+                {:else if o.values.length > 1}
+                  <Select
+                    label={o.label}
+                    value={o.values.find((v) => picked.includes(v)) ?? ''}
+                    options={[
+                      { value: '', label: t('None') },
+                      ...o.values.map((v) => ({ value: v, label: v })),
+                    ]}
+                    onchange={(v) => pick(o, v || null)}
+                  />
+                {/if}
+              {/each}
+            </div>
+          {/if}
         </fieldset>
 
         <fieldset>
@@ -441,7 +510,11 @@
   {/if}
 
   {#snippet actions()}
-    {#if phase === 'failed'}
+    {#if asking}
+      <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
+      <Button variant="ghost" onclick={() => void stopAsking()}>{t("Don't ask again")}</Button>
+      <Button variant="primary" onclick={() => (asking = false)}>{t('Start anyway')}</Button>
+    {:else if phase === 'failed'}
       {#if ticketUrl}<Button variant="ghost" icon="external-link" onclick={browse}
           >{t('Open in browser')}</Button
         >{/if}
@@ -481,6 +554,13 @@
     padding: 0 var(--k-space-1);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--k-space-3);
   }
 
   .project {

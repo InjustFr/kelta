@@ -89,6 +89,7 @@
     "allow-tracker-list",
     "allow-tracker-get",
     "allow-tracker-columns",
+    "allow-tracker-fields",
     "allow-tracker-transitions",
     "allow-tracker-transition",
     "allow-tracker-move",

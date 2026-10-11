@@ -1079,6 +1079,15 @@ export function createMockTransport(options: MockOptions = {}): {
         match_names: c.names,
       }));
     },
+    tracker_fields: ({ source_id }) => {
+      if (!source(source_id).tracker.account.startsWith('jira'))
+        throw err('unsupported', 'this tracker cannot list its fields');
+      return [
+        { id: 'customfield_10050', label: 'Verified' },
+        { id: 'customfield_10051', label: 'Environment' },
+        { id: 'customfield_10052', label: 'Team' },
+      ];
+    },
     tracker_transitions: ({ ticket }) => transitionsFor(ticketItem(ticket).ticket),
     tracker_transition: ({ ticket, transition_id, fields }) => {
       const t = transitionsFor(ticketItem(ticket).ticket).find((x) => x.id === transition_id);

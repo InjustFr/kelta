@@ -178,6 +178,10 @@ worktree, opens Claude and nvim, assigns the ticket to you and moves it to in pr
 again resumes, in whichever project the work item lives. The row then shows the pull request and its CI state once
 one exists.
 
+When other work is still unfinished (work items, or your tickets in progress or in review), starting a new ticket
+first lists it, closest to done first: pick one to go finish it, or **Start anyway** (`Enter`) for the plan.
+**Don't ask again** turns it off (`work.finish_first`).
+
 The session runs in a project you can pick: the sheet's first field is **Project** when several open projects have a
 repository. Kelta picks, first match wins:
 

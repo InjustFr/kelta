@@ -179,6 +179,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 
 ### [work]
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
+| `finish_first` | bool | `true` | starting a new ticket while other work is unfinished lists that work first (Start anyway or go to it); the sheet's "Don't ask again" turns it off |
 | `default_template` | str | `"claude+editor"` | |
 | `review_template` | str | `"review"` | |
 | `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
@@ -245,8 +246,10 @@ A theme is a named, **partial** set of colour overrides on top of a Bezel base: 
 A build without themes rejects a config that has `themes` (`deny_unknown_fields`). First paint shows Bezel until settings load.
 
 ### [[session_templates]]  (by_id; scope global+project+repo; x-kelta-exec)
-`{ id, label, layout: TemplateNode, enabled = true, claude_host = "builtin"|"terminal"|"multiplexer" }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
+`{ id, label, layout: TemplateNode, enabled = true, options = [StartOption], claude_host = "builtin"|"terminal"|"multiplexer" }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
 ```toml
+`StartOption = { label, values = [str] }` (#357): options picked per ticket in the Start sheet, under the prompt. One value is a checkbox, several a single choice (or none). The picked values replace the Claude prompt's `{options}` (`claude.prompt_templates`), else go after it, in the declared order. A ticket's route with `options` replaces the template's (the default template, `work.default_template`). The last picks are remembered per route or template (`ui_state`) and pre-selected next time; a start without the sheet uses them.
+
 [[session_templates]]
 id = "claude+editor"
 label = "Claude + editor"
@@ -289,6 +292,8 @@ projects = ["web", "api"]          # projects this board feeds; may be empty
 blocked = { label = "blocked" }    # how this tracker marks a ticket blocked (below)
 # status name → chip colour, like a project `color`; unmapped statuses keep their category colour
 status_colors = { "In QA" = "theme:magenta", "Ready for release" = "#2f8c86" }
+# tracker fields shown on the tickets (below)
+fields = [{ id = "customfield_10042", label = "Verified" }, { id = "customfield_10051", label = "" }]
 
 [sources.tracker]                  # the §3 tracker binding without repo_rules
 account = "jira-acme"
@@ -300,11 +305,14 @@ status_map = { start = { category = "in_progress" }, done = { category = "done" 
 match = { component = "Web" }
 project = "web"
 repo = "web"
+options = [{ label = "Auto", values = ["--auto"] }, { label = "Mode", values = ["--mode=brainstorm", "--mode=quick", "--mode=skip"] }]
 ```
 
 `blocked` says how the tracker marks a ticket blocked without changing its status: `"status"` (the status name reads blocked, on hold, waiting or impediment), `"flag"` (the Jira flag), `"relation"` (a Linear "blocked by" an open issue) or `{ label = "<name>" }`. Unset, it follows the provider: `flag` on Jira, `relation` on Linear, `status` elsewhere. A blocked ticket shows a Blocked chip, goes to Waiting in Flow and sorts last in its group; **Block / Unblock** (`b` in the detail) sets the flag, adds or removes the label (Jira, GitHub, GitLab, Gitea), or moves a `status` ticket to a blocked status and back to in progress (else to do). A Linear relation, or a label on Linear or Redmine, is set in the tracker: the action is off with that reason. A status name that reads blocked still puts the ticket in Waiting whatever the setting.
 
-Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or `#rrggbb` is a warning: that entry is dropped, the rest applies (IPC writes reject it).
+`fields` shows tracker fields Kelta has no column for (a Jira custom field, a GitHub Projects v2 field) on the source's tickets: each field with a value is a `label: value` chip on the row (the value alone when `label` is empty) and a line of the detail's meta grid. `id` is the Jira field id or the GitHub project field name (any case); Settings → Sources lists the tracker's fields to pick from (Jira, GitHub project views) and takes a typed id elsewhere. The values come with the list call; other trackers show none yet. An id the tracker does not have shows nothing and is flagged *Unknown field* in the settings, never a list error.
+
+Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or `#rrggbb`, or a `fields` entry without an `id`, is a warning: that entry is dropped, the rest applies (IPC writes reject it).
 
 `ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
 

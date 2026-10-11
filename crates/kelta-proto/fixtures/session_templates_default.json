@@ -24,7 +24,8 @@
         0.5
       ],
       "split": "row"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -66,7 +67,8 @@
         0.5
       ],
       "split": "row"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -78,7 +80,8 @@
       "name": null,
       "profile": null,
       "session": "claude"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -90,7 +93,8 @@
       "name": null,
       "profile": null,
       "session": "editor"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -102,6 +106,7 @@
       "name": null,
       "profile": null,
       "session": "shell"
-    }
+    },
+    "options": []
   }
 ]

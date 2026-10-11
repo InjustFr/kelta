@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Source, StartWorkPlan, WorkItem } from '$lib/gen';
@@ -7,7 +7,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, projects, settings, toasts, work } from '$lib/stores';
 
-import { refines } from '../tickets/refine.svelte';
+import { refines, withCriteria } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
 
 let mock: MockControls;
@@ -33,6 +33,8 @@ async function mountSheet(
     setTransport(created.transport);
   }
   const plan = await workPlan({ project_id: 'shop', source: { kind: 'ticket', ticket } });
+  // An earlier test's late start can land here: the sheet lists unfinished work (#354).
+  work.byId = {};
   mutate(plan);
   const onclose = vi.fn();
   render(StartWorkSheet, { props: { plan, onclose } });
@@ -78,6 +80,65 @@ describe('StartWorkSheet plan', () => {
     expect(plan.claude.prompt).toBe('Do the thing');
     expect(plan.side_effects.run_setup).toBe(false);
     expect(work.all.some((w) => w.branch === 'feat/custom-branch')).toBe(true);
+  });
+
+  it('applies the route options to the prompt as they change and sends the picks (#357)', async () => {
+    await mountSheet((p) => {
+      p.claude.prompt = '/pass SHOP-151 --auto';
+      p.options = {
+        key: 'route:product:0',
+        declared: [
+          { label: 'Auto', values: ['--auto'] },
+          { label: 'Mode', values: ['--mode=quick', '--mode=skip'] },
+        ],
+        picked: ['--auto'],
+        prompt: '/pass SHOP-151 {options}',
+      };
+    });
+    const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    const auto = screen.getByRole('switch', { name: 'Auto' }) as HTMLInputElement;
+    expect(auto.checked).toBe(true);
+    await fireEvent.change(screen.getByLabelText('Mode'), { target: { value: '--mode=skip' } });
+    expect(prompt.value).toBe('/pass SHOP-151 --auto --mode=skip');
+    await fireEvent.click(auto);
+    expect(prompt.value).toBe('/pass SHOP-151 --mode=skip');
+    // a hand edit keeps the options in place
+    await fireEvent.input(prompt, { target: { value: 'Now /pass SHOP-151 --mode=skip' } });
+    await fireEvent.change(screen.getByLabelText('Mode'), { target: { value: '--mode=quick' } });
+    expect(prompt.value).toBe('Now /pass SHOP-151 --mode=quick');
+    await fireEvent.click(start());
+    await waitFor(() => expect(sentPlan()).toBeTruthy());
+    expect(sentPlan().claude.prompt).toBe('Now /pass SHOP-151 --mode=quick');
+    expect(sentPlan().options?.picked).toEqual(['--mode=quick']);
+  });
+
+  it('keeps the accepted refine criteria in the prompt when an option is toggled (#357)', async () => {
+    refines[`${ticket.account}:${ticket.key}`] = {
+      running: false,
+      text: '## Acceptance criteria\n- fast',
+      posted: false,
+    };
+    await mountSheet((p) => {
+      p.claude.prompt = '/pass SHOP-151';
+      p.options = {
+        key: 'route:product:0',
+        declared: [{ label: 'Auto', values: ['--auto'] }],
+        picked: [],
+        prompt: '/pass SHOP-151 {options}',
+      };
+      withCriteria(p, ticket);
+    });
+    const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    expect(prompt.value).toContain('- fast');
+    await fireEvent.click(screen.getByRole('switch', { name: 'Auto' }));
+    expect(prompt.value).toContain('- fast');
+    expect(prompt.value).toContain('--auto');
+    delete refines[`${ticket.account}:${ticket.key}`];
+  });
+
+  it('shows no options without any declared', async () => {
+    await mountSheet();
+    expect(screen.queryByTestId('start-options')).toBeNull();
   });
 
   it('submits with Ctrl+Enter', async () => {
@@ -272,5 +333,59 @@ describe('StartWorkSheet project', () => {
     await fireEvent.click(start());
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect([sentPlan().project_id, sentPlan().repo_id]).toEqual(['billing', 'core']);
+  });
+});
+
+describe('StartWorkSheet finish first (#354)', () => {
+  /** Two work items in review (an open PR each) and one in progress, none of them SHOP-151. */
+  function unfinishedWork(): void {
+    const items = mock.state.work as WorkItem[];
+    const byId = (id: string) => structuredClone(items.find((w) => w.id.endsWith(id))!);
+    const pr = (w: WorkItem, n: number): WorkItem => ({
+      ...w,
+      state: { kind: 'pr_open' },
+      pr_url: `https://github.com/acme/shop-api/pull/${n}`,
+    });
+    for (const w of [byId('a001'), pr(byId('a003'), 13), pr(byId('a004'), 14)]) work.upsert(w);
+  }
+  const finish = () => screen.queryByTestId('finish-first');
+
+  it('lists the work in review before the plan; Start anyway goes on with the plan', async () => {
+    await mountSheet(unfinishedWork);
+    const rows = within(finish()!).getAllByRole('button');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^#12.*In review/),
+      expect.stringMatching(/^SHOP-155/), // review_due: To review
+      expect.stringMatching(/^SHOP-142/),
+    ]);
+    expect(screen.queryByLabelText('Branch')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Start anyway' }));
+    expect(finish()).toBeNull();
+    expect(screen.getByLabelText('Branch')).toBeTruthy();
+  });
+
+  it('never shows the list when resuming', async () => {
+    await mountSheet((p) => {
+      unfinishedWork();
+      p.existing = '0199a6b2-0000-7000-8000-00000000a001';
+    });
+    expect(finish()).toBeNull();
+    expect(screen.getByTestId('resume-note')).toBeTruthy();
+  });
+
+  it('work.finish_first = false skips it; Don’t ask again sets it', async () => {
+    await settings.load();
+    await mountSheet(unfinishedWork);
+    await fireEvent.click(screen.getByRole('button', { name: "Don't ask again" }));
+    await waitFor(() => expect(finish()).toBeNull());
+    expect(mock.calls.find((c) => c.cmd === 'settings_set')?.args).toMatchObject({
+      path: 'work.finish_first',
+      value: false,
+    });
+    settings.value()!.work.finish_first = false;
+    cleanup();
+    await mountSheet(unfinishedWork);
+    expect(finish()).toBeNull();
+    expect(screen.getByLabelText('Branch')).toBeTruthy();
   });
 });

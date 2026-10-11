@@ -34,7 +34,11 @@
       },
       "estimate": "5",
       "due": "2026-10-14",
-      "blocked": false
+      "blocked": false,
+      "fields": [
+        { "label": "Verified", "value": "Yes" },
+        { "label": "", "value": "EU" }
+      ]
     },
     "project_ids": ["shop"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",

@@ -517,6 +517,12 @@ export const ticketPage: TicketPage = {
         "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
+        "fields": [
+          {
+            "label": "Verified",
+            "value": "Yes"
+          }
+        ],
         "kind": "Story",
         "labels": [
           "api"
@@ -582,6 +588,12 @@ export const ticket: Ticket = {
   "blocked": false,
   "due": "2026-10-15",
   "estimate": "3",
+  "fields": [
+    {
+      "label": "Verified",
+      "value": "Yes"
+    }
+  ],
   "kind": "Story",
   "labels": [
     "api"
@@ -683,6 +695,12 @@ export const ticketDetail: TicketDetail = {
         "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
+        "fields": [
+          {
+            "label": "Verified",
+            "value": "Yes"
+          }
+        ],
         "kind": "Story",
         "labels": [
           "api"
@@ -748,6 +766,12 @@ export const ticketDetail: TicketDetail = {
     "blocked": false,
     "due": "2026-10-15",
     "estimate": "3",
+    "fields": [
+      {
+        "label": "Verified",
+        "value": "Yes"
+      }
+    ],
     "kind": "Story",
     "labels": [
       "api"
@@ -960,6 +984,7 @@ export const startWorkPlan: StartWorkPlan = {
     "prompt": "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing."
   },
   "existing": null,
+  "options": null,
   "project_choices": [
     "shop"
   ],
@@ -2234,7 +2259,8 @@ export const settingsDefault: Settings = {
           0.5
         ],
         "split": "row"
-      }
+      },
+      "options": []
     },
     {
       "claude_host": "builtin",
@@ -2276,7 +2302,8 @@ export const settingsDefault: Settings = {
           0.5
         ],
         "split": "row"
-      }
+      },
+      "options": []
     },
     {
       "claude_host": "builtin",
@@ -2288,7 +2315,8 @@ export const settingsDefault: Settings = {
         "name": null,
         "profile": null,
         "session": "claude"
-      }
+      },
+      "options": []
     },
     {
       "claude_host": "builtin",
@@ -2300,7 +2328,8 @@ export const settingsDefault: Settings = {
         "name": null,
         "profile": null,
         "session": "editor"
-      }
+      },
+      "options": []
     },
     {
       "claude_host": "builtin",
@@ -2312,7 +2341,8 @@ export const settingsDefault: Settings = {
         "name": null,
         "profile": null,
         "session": "shell"
-      }
+      },
+      "options": []
     }
   ],
   "sources": [],
@@ -2371,6 +2401,7 @@ export const settingsDefault: Settings = {
   },
   "work": {
     "default_template": "claude+editor",
+    "finish_first": true,
     "on_merge": {
       "offer_cleanup": true,
       "transition_to": {
@@ -3132,7 +3163,8 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
         0.5
       ],
       "split": "row"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -3174,7 +3206,8 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
         0.5
       ],
       "split": "row"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -3186,7 +3219,8 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
       "name": null,
       "profile": null,
       "session": "claude"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -3198,7 +3232,8 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
       "name": null,
       "profile": null,
       "session": "editor"
-    }
+    },
+    "options": []
   },
   {
     "claude_host": "builtin",
@@ -3210,7 +3245,8 @@ export const sessionTemplatesDefault: SessionTemplate[] = [
       "name": null,
       "profile": null,
       "session": "shell"
-    }
+    },
+    "options": []
   }
 ];
 

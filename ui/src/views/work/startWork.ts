@@ -16,6 +16,7 @@ import { settings, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 import { withCriteria } from '../tickets/refine.svelte';
+import { finishFirst } from './finishFirst';
 
 /** True when the plan needs a decision from the user (repo, guessed project, existing branch or item). */
 export function needsChoice(plan: StartWorkPlan): boolean {
@@ -45,7 +46,8 @@ export async function beginStartWork(
     const plan = await ipc.workPlan({ project_id: projectId, source, source_id: opts.source ?? null });
     if (source.kind === 'ticket') withCriteria(plan, source.ticket);
     const preview = opts.preview ?? settings.value()?.work.plan_preview ?? true;
-    if (preview || (needsChoice(plan) && plan.existing === null)) {
+    // Unfinished work to list (#354) shows the sheet even with previews off.
+    if (preview || (needsChoice(plan) && plan.existing === null) || finishFirst(plan).length > 0) {
       ui.openSheet('start_work', { plan });
       return null;
     }

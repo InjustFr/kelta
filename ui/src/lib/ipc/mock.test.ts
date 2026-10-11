@@ -236,6 +236,7 @@ describe('mock transport', () => {
       tracker_list: { scope: { kind: 'all' }, refresh: false },
       tracker_get: { ticket },
       tracker_columns: { source_id: 'shop' },
+      tracker_fields: { source_id: 'shop' },
       tracker_transitions: { ticket },
       tracker_transition: { ticket, transition_id: 'to-in_review' },
       tracker_move: { ticket, column_id: 'done' },

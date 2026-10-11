@@ -33,6 +33,11 @@ pub async fn tracker_columns(core: State<'_, Arc<Core>>, source_id: String) -> R
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_fields(core: State<'_, Arc<Core>>, source_id: String) -> Res<Vec<SourceField>> {
+    core.tracker_fields(&source_id).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_transitions(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Res<Vec<Transition>> {
     core.tracker_transitions(&ticket).await
 }
