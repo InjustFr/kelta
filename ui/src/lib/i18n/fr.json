@@ -2254,5 +2254,18 @@
   "Work: Ask Claude to resolve conflicts": "Travail : demander à Claude de résoudre les conflits",
   "Work: Re-request review": "Travail : redemander une revue",
   "Work: Resolve sent threads": "Travail : résoudre les fils envoyés",
-  "Toggle window (kelta-ctl toggle)": "Afficher / masquer la fenêtre (kelta-ctl toggle)"
+  "Toggle window (kelta-ctl toggle)": "Afficher / masquer la fenêtre (kelta-ctl toggle)",
+  "Mark ready for review…": "Marquer prête pour revue…",
+  "Convert to draft": "Repasser en brouillon",
+  "Only on your own pull requests": "Seulement sur vos propres pull requests",
+  "This code host cannot change the draft state": "Cet hébergeur de code ne peut pas changer l'état de brouillon",
+  "{label}: {why}": "{label} : {why}",
+  "Mark #{n} ready for review?": "Marquer #{n} prête pour revue ?",
+  "The code host then asks the required reviewers to review it.": "L'hébergeur demande alors aux relecteurs requis de la relire.",
+  "Mark ready": "Marquer prête",
+  "#{n} is ready for review": "#{n} est prête pour revue",
+  "#{n} is a draft again": "#{n} est de nouveau un brouillon",
+  "Mark ready / draft (my PRs)": "Marquer prête / brouillon (mes PR)",
+  "Mark ready / Convert to draft": "Marquer prête / Repasser en brouillon",
+  "Mark ready…": "Marquer prête…"
 }

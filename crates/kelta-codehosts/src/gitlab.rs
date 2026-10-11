@@ -29,7 +29,8 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::common::{
-    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s,
+    MAX_LOGS, clean_log_line, draft_title, feedback_error, host_matches, linked_tickets, log_tail,
+    parse_remote, s,
 };
 
 /// Merge requests untouched for longer than this are not listed.
@@ -793,6 +794,12 @@ impl CodeHost for GitlabHost {
     async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         self.auth.send_text(HttpRequest::put(url).json(json!({ "title": title }))).await.map(|_| ())
+    }
+
+    /// The update API has no draft flag: GitLab reads it from the title.
+    async fn set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        let mr = self.json(HttpRequest::get(self.mr_url(&r.repo, &format!("/{}", r.number)))).await?.body;
+        self.update_title(r, &draft_title(s(&mr, "title").unwrap_or_default(), draft, "Draft:")).await
     }
 
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {

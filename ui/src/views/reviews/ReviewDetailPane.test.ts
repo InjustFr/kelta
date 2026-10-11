@@ -8,6 +8,7 @@ import { findContent } from '$lib/layout';
 import { layout, plugins, reviews, toasts } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
+import { confirms } from '../../shell/confirm.svelte';
 import ReviewDetailPane from './ReviewDetailPane.svelte';
 
 let mock: MockControls;
@@ -22,13 +23,13 @@ beforeEach(() => {
   toasts.clear();
 });
 
-function mountDetail() {
+function mountDetail(review: ReviewRef = ref) {
   return render(ReviewDetailPane, {
     props: {
       projectId: 'shop',
       tabId: 't',
       paneId: 'p',
-      content: { kind: 'review_detail', review: ref },
+      content: { kind: 'review_detail', review },
       visible: true,
       focused: true,
     },
@@ -38,6 +39,18 @@ function mountDetail() {
 const approveCalls = () => mock.calls.filter((c) => c.cmd === 'review_approve');
 
 describe('ReviewDetailPane', () => {
+  it('marks my draft ready after a confirmation, then offers Convert to draft', async () => {
+    const mine: ReviewRef = { account: 'gitlab-corp', repo: 'fin/billing/core', number: 42 };
+    mountDetail(mine);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Mark ready for review…' }));
+    await waitFor(() => expect(confirms.current?.title).toBe('Mark #42 ready for review?'));
+    confirms.answer('ready');
+    await screen.findByRole('button', { name: 'Convert to draft' });
+    expect(mock.calls.filter((c) => c.cmd === 'review_set_draft').map((c) => c.args)).toEqual([
+      { review: mine, draft: false },
+    ]);
+  });
+
   it('opens a linked ticket from its badge', async () => {
     mock.state.reviews.find((r) => r.review.ref.number === 311)!.review.linked_tickets = ['SHOP-120'];
     mountDetail();

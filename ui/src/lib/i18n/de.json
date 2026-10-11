@@ -2254,5 +2254,18 @@
   "Work: Ask Claude to resolve conflicts": "Arbeit: Claude um Auflösung der Konflikte bitten",
   "Work: Re-request review": "Arbeit: Review erneut anfordern",
   "Work: Resolve sent threads": "Arbeit: Gesendete Threads lösen",
-  "Toggle window (kelta-ctl toggle)": "Fenster ein-/ausblenden (kelta-ctl toggle)"
+  "Toggle window (kelta-ctl toggle)": "Fenster ein-/ausblenden (kelta-ctl toggle)",
+  "Mark ready for review…": "Zur Prüfung freigeben…",
+  "Convert to draft": "In Entwurf umwandeln",
+  "Only on your own pull requests": "Nur bei Ihren eigenen Pull Requests",
+  "This code host cannot change the draft state": "Dieser Code-Host kann den Entwurfsstatus nicht ändern",
+  "{label}: {why}": "{label}: {why}",
+  "Mark #{n} ready for review?": "#{n} zur Prüfung freigeben?",
+  "The code host then asks the required reviewers to review it.": "Der Code-Host bittet dann die erforderlichen Reviewer um eine Prüfung.",
+  "Mark ready": "Freigeben",
+  "#{n} is ready for review": "#{n} ist bereit zur Prüfung",
+  "#{n} is a draft again": "#{n} ist wieder ein Entwurf",
+  "Mark ready / draft (my PRs)": "Freigeben / Entwurf (meine PRs)",
+  "Mark ready / Convert to draft": "Freigeben / In Entwurf umwandeln",
+  "Mark ready…": "Freigeben…"
 }

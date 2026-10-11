@@ -34,6 +34,7 @@ export type WorkActionId =
   | 'open_pr'
   | 'open_review'
   | 'merge'
+  | 'set_draft'
   | 'start_now'
   | 'queue_front'
   | 'park'
@@ -61,6 +62,7 @@ export type PhaseId =
   | 'unpushed'
   | 'ready'
   | 'approved'
+  | 'draft'
   | 'in_review'
   | 'no_changes'
   | 'reviewing'
@@ -367,6 +369,21 @@ function phaseRow(
       t('Ship'),
       'ship',
     );
+  // Pushed (the rows above catch unpushed work) and CI not red: ready to leave draft.
+  if (pr?.draft) {
+    const red = pr.ci === 'failure' || pr.ci === 'error';
+    return red
+      ? p(
+          'draft',
+          t('Draft'),
+          `${prLabel} ${t('checks {state}', { state: pr.ci })}`,
+          'none',
+          'open_pr',
+          t('Open PR'),
+          'in_flight',
+        )
+      : p('draft', t('Draft'), prLabel, 'none', 'set_draft', t('Mark ready…'), 'ship');
+  }
   if (pr?.decision === 'approved' && pr.ci === 'success')
     return p('approved', t('Approved'), prLabel, 'none', 'open_pr', t('Open PR'), 'ship');
   if (hasPr) {

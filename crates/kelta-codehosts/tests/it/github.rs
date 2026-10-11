@@ -979,3 +979,29 @@ async fn bad_repos_are_rejected_before_any_request() {
     }
     assert!(server.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn set_draft_marks_ready_or_converts_on_the_pr_node() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "num": 101 } })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"data":{"repository":{"pullRequest":{"id":"PR_101"}}}}"#),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_partial_json(json!({ "variables": { "id": "PR_101" } })))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":{}}"#))
+        .mount(&server)
+        .await;
+    let (h, r) = (gh(&server), rref("github-work", "acme/shop", 101));
+    h.set_draft(&r, false).await.unwrap();
+    h.set_draft(&r, true).await.unwrap();
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert!(reqs[1]["query"].as_str().unwrap().contains("markPullRequestReadyForReview"));
+    assert!(reqs[3]["query"].as_str().unwrap().contains("convertPullRequestToDraft"));
+}

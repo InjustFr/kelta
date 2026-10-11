@@ -183,6 +183,20 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
       'ship',
       'open_pr',
     );
+    check(
+      '16b draft, pushed and green',
+      phaseOf(item(withPr), null, pr({ draft: true, ci: 'pending' }), git()),
+      'draft',
+      'ship',
+      'set_draft',
+    );
+    check(
+      '16b draft with red CI (local edits hide Checks failed)',
+      phaseOf(item(withPr), null, pr({ draft: true, ci: 'failure' }), git({ dirty: true })),
+      'draft',
+      'in_flight',
+      'open_pr',
+    );
     check('17 in review', phaseOf(item(withPr), null, pr(), git()), 'in_review', 'in_flight', 'open_pr');
     check(
       '17 in review without the PR loaded',
