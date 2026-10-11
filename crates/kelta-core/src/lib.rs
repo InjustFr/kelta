@@ -710,7 +710,12 @@ impl CoreApi for Core {
     }
     fn project_add(&self, path: &Path) -> Result<(ProjectInfo, ProjectDraft), KeltaError> {
         let draft = self.project_detect(path)?;
-        Ok((self.project_create(&draft)?, draft))
+        // Claude adds projects mid-setup: keep the user on the setup tab instead of jumping to each one.
+        let prev = self.active_project();
+        let created = self.project_create(&draft)?;
+        self.project_activate(&prev)?;
+        let info = self.project_info(&created.id).unwrap_or(created);
+        Ok((info, draft))
     }
     fn settings_write(
         &self,
