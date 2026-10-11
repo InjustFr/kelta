@@ -18,4 +18,9 @@ disallowed-methods = [
   { path = "std::thread::sleep", reason = "no sleeping threads; use event-armed one-shots (BUILD_PLAN §1.5)" },
   { path = "std::thread::spawn", reason = "threads only in kelta-term::reader / kelta-core::store (BUILD_PLAN §1.5)" },
   { path = "std::process::exit", reason = "libraries must not exit the process; return errors (binaries return ExitCode)" },
+  # reqwest is built without a TLS provider (#191): these panic until one is installed.
+  { path = "reqwest::Client::new", reason = "use kelta_http::client_builder (installs the TLS provider)" },
+  { path = "reqwest::Client::builder", reason = "use kelta_http::client_builder (installs the TLS provider)" },
+  { path = "reqwest::ClientBuilder::new", reason = "use kelta_http::client_builder (installs the TLS provider)" },
+  { path = "reqwest::get", reason = "use kelta_http::client_builder (installs the TLS provider)" },
 ]

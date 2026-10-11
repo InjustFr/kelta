@@ -30,6 +30,7 @@ pub fn default_user_agent() -> String {
 
 /// Start of every reqwest client: reqwest is built without a TLS provider (no aws-lc C build, #191), so
 /// building a client before one is installed panics. Installs rustls' ring provider for the process.
+#[allow(clippy::disallowed_methods)] // allowlisted: the one place a reqwest client starts
 pub fn client_builder() -> reqwest::ClientBuilder {
     // Err = a provider is already installed (an earlier call, or the updater's ring one).
     let _ = rustls::crypto::ring::default_provider().install_default();
