@@ -676,6 +676,8 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     outside_list: () => clone(state.outside),
+    // No window control in the browser: Peek with a note.
+    outside_jump: () => 'Terminal',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;

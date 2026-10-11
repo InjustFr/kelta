@@ -135,6 +135,8 @@ export interface Commands {
   claude_hooks_remove: { args: NoArgs; result: null };
   /** Claude sessions Kelta did not start (#345); those whose process is gone are dropped. */
   outside_list: { args: NoArgs; result: OutsideSession[] };
+  /** Brings its tmux pane and window forward (#346): `null` when it did, else where it runs (may be ''). */
+  outside_jump: { args: { id: string }; result: string | null };
   app_update_status: { args: NoArgs; result: UpdateStatus };
   /** Checks now and installs what it finds (resolves once done). */
   app_update_check: { args: NoArgs; result: UpdateStatus };
@@ -401,6 +403,7 @@ export const COMMAND_NAMES = [
   'claude_hooks_install',
   'claude_hooks_remove',
   'outside_list',
+  'outside_jump',
   'app_update_status',
   'app_update_check',
   'app_restart',
@@ -591,6 +594,7 @@ export const claudeHooksStatus = wrap('claude_hooks_status');
 export const claudeHooksInstall = wrap('claude_hooks_install');
 export const claudeHooksRemove = wrap('claude_hooks_remove');
 export const outsideList = wrap('outside_list');
+export const outsideJump = wrap('outside_jump');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');

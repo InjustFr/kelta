@@ -32,6 +32,7 @@
     "allow-claude-hooks-install",
     "allow-claude-hooks-remove",
     "allow-outside-list",
+    "allow-outside-jump",
     "allow-app-update-status",
     "allow-app-update-check",
     "allow-app-restart",

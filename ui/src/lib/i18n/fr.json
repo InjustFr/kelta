@@ -2288,5 +2288,8 @@
   "Installed: Claude sessions you start from now on show in Now": "Installé : les sessions Claude que vous lancez désormais apparaissent dans Maintenant",
   "Show the Claude sessions you start outside Kelta in Now?": "Afficher dans Maintenant les sessions Claude que vous lancez hors de Kelta ?",
   "Hooks offer": "Proposition des hooks",
-  "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.": "Au démarrage, proposer d’enregistrer le relais de hooks de Kelta dans les paramètres utilisateur de Claude Code, pour que les sessions\nlancées hors de Kelta apparaissent dans Maintenant (#345) ; false = ne jamais demander."
+  "At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions\nKelta did not start show in Now (#345); false = never ask.": "Au démarrage, proposer d’enregistrer le relais de hooks de Kelta dans les paramètres utilisateur de Claude Code, pour que les sessions\nlancées hors de Kelta apparaissent dans Maintenant (#345) ; false = ne jamais demander.",
+  "Could not reach that Claude session": "Impossible d’atteindre cette session Claude",
+  "Kelta cannot bring its window forward: it runs in {place}.": "Kelta ne peut pas afficher sa fenêtre au premier plan : elle tourne dans {place}.",
+  "Kelta cannot bring its window forward.": "Kelta ne peut pas afficher sa fenêtre au premier plan."
 }

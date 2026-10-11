@@ -24,6 +24,7 @@ pub const COMMANDS: &[&str] = &[
     "claude_hooks_install",
     "claude_hooks_remove",
     "outside_list",
+    "outside_jump",
     "app_update_status",
     "app_update_check",
     "app_restart",

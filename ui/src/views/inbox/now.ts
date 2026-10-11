@@ -3,12 +3,14 @@
 
 import { formatDate, t } from '$lib/i18n/index.svelte';
 import type { KeltaError, TicketRef } from '$lib/gen';
+import { outsideJump } from '$lib/ipc/commands';
 import { projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { hud } from '../../shell/hud.svelte';
 import { flushJump } from '../../shell/jumplist';
 import { revealSession } from '../../shell/nav';
+import { peek } from '../../shell/peek.svelte';
 import { runPrimary } from '../work/actions';
 import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import { phaseNow, unfinishedWork } from '../work/live';
@@ -134,7 +136,7 @@ export async function goToRow(row: NowRow): Promise<void> {
       await revealSession(row.session.id);
       return;
     case 'outside':
-      // shortcut: Kelta cannot reach its window yet (#346); the row and the HUD say where it runs.
+      await jumpOutside(row.session.id);
       return;
     case 'review': {
       const pid = rowProject(row.review.project_ids);
@@ -145,6 +147,16 @@ export async function goToRow(row: NowRow): Promise<void> {
       const pid = rowProject(row.ticket.project_ids);
       if (pid) await openFromNow(pid, { kind: 'ticket_detail', ticket: row.ticket.ticket.ref });
     }
+  }
+}
+
+/** A Claude session Kelta did not start: its pane and window, else Peek with where it runs (#346). */
+export async function jumpOutside(id: string): Promise<void> {
+  try {
+    const place = await outsideJump({ id });
+    if (place !== null) peek.openOutside(id, place);
+  } catch (err) {
+    toasts.error(err, t('Could not reach that Claude session'));
   }
 }
 

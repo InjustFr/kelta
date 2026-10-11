@@ -113,6 +113,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         app::claude_hooks_install,
         app::claude_hooks_remove,
         app::outside_list,
+        app::outside_jump,
         app::app_update_status,
         app::app_update_check,
         app::app_restart,
