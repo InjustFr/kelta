@@ -1,17 +1,22 @@
 //! Which project a start runs in (SPEC §3.1): the default and the choices of the Start sheet.
 
+use std::collections::BTreeMap;
+
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::ToastAction;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::{StartWorkPlan, WorkItem, WorkSource};
-use kelta_proto::settings::Source;
+use kelta_proto::model::{PlanOptions, StartWorkPlan, WorkItem, WorkSource};
+use kelta_proto::settings::{Source, StartOption};
 use kelta_proto::tracker::{Ticket, TicketRef};
-use kelta_work::plan::existing_for;
+use kelta_work::plan::{apply_options, existing_for, picked_options};
 use serde_json::json;
 
 use crate::Core;
 use crate::feeds::uses_account;
 use crate::store::q;
+
+/// `ui_state` key of the last picked start options, a JSON map `PlanOptions.key` → values (#357).
+const OPTIONS_KEY: &str = "start_options";
 
 /// A start's project, the route's repo, and `true` = only a guess.
 type Target = (ProjectId, Option<String>, bool);
@@ -23,6 +28,8 @@ struct SourceHint {
     id: String,
     projects: Vec<ProjectId>,
     route: Option<(ProjectId, Option<String>)>,
+    /// The matched route's options and their `PlanOptions.key`, when it declares some.
+    route_options: Option<(String, Vec<StartOption>)>,
 }
 
 impl Core {
@@ -36,17 +43,67 @@ impl Core {
     ) -> Result<StartWorkPlan, KeltaError> {
         if matches!(source, WorkSource::Branch { .. }) {
             let project = project.unwrap_or_else(|| self.active_project());
-            return self.work.plan(&project, source).await;
+            let mut plan = self.work.plan(&project, source).await?;
+            self.plan_options(&mut plan, None).await?;
+            return Ok(plan);
         }
         let (target, choices, hint) =
             self.plan_target(project.as_ref(), &source, source_id.as_deref()).await?;
         let (project, repo, guessed) = target;
         let mut plan = self.work.plan_with_repo(&project, source, repo).await?;
         plan.project_choices = choices;
+        // The route's options follow its project, like its repo.
+        let route_options = hint
+            .as_ref()
+            .filter(|h| h.route.as_ref().is_some_and(|(p, _)| p == &plan.project_id))
+            .and_then(|h| h.route_options.clone());
         plan.ticket_source = hint.map(|h| h.id);
         // One choice: nothing to confirm (the sheet shows no Project field).
         plan.project_guessed = guessed && plan.existing.is_none() && plan.project_choices.len() > 1;
+        self.plan_options(&mut plan, route_options).await?;
         Ok(plan)
+    }
+
+    /// `work_start`: remembers the plan's picked options for the next start of its route or
+    /// template, then starts.
+    pub async fn work_start(&self, plan: StartWorkPlan) -> Result<WorkItem, KeltaError> {
+        if let Some(o) = &plan.options {
+            let mut all = self.remembered_options().await?;
+            all.insert(o.key.clone(), picked_options(&o.declared, &o.picked));
+            let v = serde_json::to_string(&all).map_err(|e| KeltaError::internal(format!("options: {e}")))?;
+            self.store.call(move |c| q::ui_state_set(c, OPTIONS_KEY, &v)).await?;
+        }
+        self.work.start(plan).await
+    }
+
+    async fn remembered_options(&self) -> Result<BTreeMap<String, Vec<String>>, KeltaError> {
+        let v = self.store.call(|c| q::ui_state_get(c, OPTIONS_KEY)).await?;
+        Ok(v.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
+    }
+
+    /// The route's options, else the default template's, with the last picks applied to the prompt;
+    /// none declared leaves the plan as it was (an `{options}` in the prompt renders empty).
+    async fn plan_options(
+        &self,
+        plan: &mut StartWorkPlan,
+        route: Option<(String, Vec<StartOption>)>,
+    ) -> Result<(), KeltaError> {
+        let template = || {
+            let settings = self.cfg.effective(Some(&plan.project_id));
+            let t = settings.session_templates.iter().find(|t| t.id == plan.template_id)?;
+            Some((format!("template:{}", t.id), t.options.clone()))
+        };
+        let declared = route.or_else(template).filter(|(_, o)| !o.is_empty() && plan.existing.is_none());
+        let Some((key, declared)) = declared else {
+            plan.claude.prompt = apply_options(&plan.claude.prompt, &[], &[]);
+            return Ok(());
+        };
+        let last = self.remembered_options().await?.remove(&key).unwrap_or_default();
+        let picked = picked_options(&declared, &last);
+        let prompt = std::mem::take(&mut plan.claude.prompt);
+        plan.claude.prompt = apply_options(&prompt, &declared, &picked);
+        plan.options = Some(PlanOptions { key, declared, picked, prompt });
+        Ok(())
     }
 
     /// The project a ticket's background run goes to (#233): the start-work rules, no plan built.
@@ -122,7 +179,12 @@ impl Core {
             };
             ticket.and_then(|x| route_for(s, &x))
         };
-        Some(SourceHint { id: s.id.clone(), projects: s.projects.clone(), route })
+        let route_options = route
+            .as_ref()
+            .map(|(i, _)| (format!("route:{}:{i}", s.id), s.routes[*i].options.clone()))
+            .filter(|(_, o)| !o.is_empty());
+        let route = route.map(|(_, r)| r);
+        Some(SourceHint { id: s.id.clone(), projects: s.projects.clone(), route, route_options })
     }
 }
 
@@ -134,10 +196,11 @@ fn source_of<'a>(sources: &'a [Source], account: &AccountId, listed_in: &[String
     Some(using.find(|s| listed_in.contains(&s.id)).unwrap_or(first))
 }
 
-/// The first route of `s` the ticket matches (component, label or type): its project and repo.
-fn route_for(s: &Source, t: &Ticket) -> Option<(ProjectId, Option<String>)> {
-    let r = s.routes.iter().find(|r| r.r#match.matches(t.kind.as_deref(), &t.labels))?;
-    Some((r.project.clone(), Some(r.repo.clone()).filter(|x| !x.is_empty())))
+/// The first route of `s` the ticket matches (component, label or type): its index, project and repo.
+fn route_for(s: &Source, t: &Ticket) -> Option<(usize, (ProjectId, Option<String>))> {
+    let i = s.routes.iter().position(|r| r.r#match.matches(t.kind.as_deref(), &t.labels))?;
+    let r = &s.routes[i];
+    Some((i, (r.project.clone(), Some(r.repo.clone()).filter(|x| !x.is_empty()))))
 }
 
 /// Rules of SPEC §3.1, first match wins: the project, the route's repo when the project is the
@@ -267,6 +330,7 @@ mod tests {
             id: id.into(),
             projects: projects.iter().map(|x| p(x)).collect(),
             route: route.map(|(x, r)| (p(x), Some(r.to_owned()).filter(|r| !r.is_empty()))),
+            route_options: None,
         }
     }
 
@@ -299,6 +363,7 @@ mod tests {
             },
             project: p(project),
             repo: format!("{project}-repo"),
+            options: Vec::new(),
         }
     }
 
@@ -350,7 +415,7 @@ mod tests {
             ],
         );
         let mut t = samples::ticket();
-        let at = |t: &Ticket| route_for(&s, t).map(|(p, r)| (p.as_str().to_owned(), r));
+        let at = |t: &Ticket| route_for(&s, t).map(|(_, (p, r))| (p.as_str().to_owned(), r));
         assert_eq!(at(&t), Some(("api".into(), Some("api-repo".into()))), "label");
         t.labels = vec!["Frontend".into(), "api".into()];
         assert_eq!(at(&t).unwrap().0, "web", "component, and the first match wins");

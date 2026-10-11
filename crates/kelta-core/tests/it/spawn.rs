@@ -291,6 +291,7 @@ async fn resumed_claude_takes_its_mode_from_its_launch_source() {
             command: None,
         },
         enabled: true,
+        options: Vec::new(),
     });
     let mode_arg = |h: &H, id: &kelta_proto::ids::SessionId| {
         let args = h.term.with_session(id, |s| s.spec.args.clone()).unwrap();
@@ -360,6 +361,7 @@ async fn template_shell_command_quotes_placeholders() {
             command: Some("git log --grep {ticket.title} {base|shell}".into()),
         },
         enabled: true,
+        options: Vec::new(),
     });
     let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
     let shop = ProjectId::new("shop");

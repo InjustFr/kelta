@@ -1472,12 +1472,30 @@ pub struct SessionTemplate {
     pub label: String,
     pub layout: TemplateNode,
     pub enabled: bool,
+    /// Picked per ticket in the Start sheet, unless the ticket's route declares its own.
+    pub options: Vec<StartOption>,
 }
 
 impl Default for SessionTemplate {
     fn default() -> Self {
-        Self { id: String::new(), label: String::new(), layout: TemplateNode::default(), enabled: true }
+        Self {
+            id: String::new(),
+            label: String::new(),
+            layout: TemplateNode::default(),
+            enabled: true,
+            options: Vec::new(),
+        }
     }
+}
+
+/// A start option: one value is a checkbox, several a single choice. The picked values go
+/// to the Claude prompt's `{options}`, else after it, in the declared order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct StartOption {
+    pub label: String,
+    /// e.g. `["--auto"]`, or `["--mode=quick", "--mode=skip"]`.
+    pub values: Vec<String>,
 }
 
 /// SETTINGS §2 defaults.
@@ -1487,6 +1505,7 @@ pub fn default_session_templates() -> Vec<SessionTemplate> {
         label: label.to_owned(),
         layout,
         enabled: true,
+        options: Vec::new(),
     };
     vec![
         t(
@@ -1771,6 +1790,8 @@ pub struct SourceRoute {
     /// Must be listed in the source's `projects`.
     pub project: ProjectId,
     pub repo: String,
+    /// Picked per ticket in the Start sheet; replace the template's options.
+    pub options: Vec<StartOption>,
 }
 
 /// `[[sources]]`: a ticket board, global, feeding zero or more projects (SETTINGS §2).
@@ -1925,8 +1946,12 @@ pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) ->
             s.projects.push(p.id.clone());
         }
         for r in &t.repo_rules {
-            let route =
-                SourceRoute { r#match: r.r#match.clone(), project: p.id.clone(), repo: r.repo.clone() };
+            let route = SourceRoute {
+                r#match: r.r#match.clone(),
+                project: p.id.clone(),
+                repo: r.repo.clone(),
+                ..SourceRoute::default()
+            };
             if !s.routes.contains(&route) {
                 s.routes.push(route);
             }

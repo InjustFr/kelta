@@ -2357,5 +2357,11 @@
   "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Champs du tracker affichés sur les tickets de cette source, lignes et détail, quand ils ont une valeur. Une entrée sans identifiant est ignorée avec un avertissement.",
   "A tracker field to show on the tickets.": "Un champ du tracker à afficher sur les tickets.",
   "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Le champ du tracker : un identifiant de champ Jira (`customfield_10042`), un nom de champ de projet GitHub.",
-  "Shown before the value; empty shows the value alone.": "Affiché avant la valeur ; vide, la valeur s’affiche seule."
+  "Shown before the value; empty shows the value alone.": "Affiché avant la valeur ; vide, la valeur s’affiche seule.",
+  "Options": "Options",
+  "Values": "Valeurs",
+  "Picked per ticket in the Start sheet, unless the ticket's route declares its own.": "Choisies par ticket dans la feuille Démarrer, sauf si la route du ticket déclare les siennes.",
+  "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.": "Une option de démarrage : une valeur donne une case à cocher, plusieurs un choix unique. Les valeurs choisies vont\ndans le `{options}` du prompt Claude, sinon à sa fin, dans l’ordre déclaré.",
+  "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.": "p. ex. `[\"--auto\"]`, ou `[\"--mode=quick\", \"--mode=skip\"]`.",
+  "Picked per ticket in the Start sheet; replace the template's options.": "Choisies par ticket dans la feuille Démarrer ; remplacent les options du modèle."
 }

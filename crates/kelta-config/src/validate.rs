@@ -401,7 +401,8 @@ pub fn template_issues(value: &Value) -> Vec<RawIssue> {
     }
     if let Some(Value::Object(m)) = get(value, &s(&["claude", "prompt_templates"])) {
         for (k, v) in m {
-            check_str(&mut out, &s(&["claude", "prompt_templates", k]), Some(v), &[]);
+            // `{options}`: where the start options go (#357), filled by `Core::work_plan`.
+            check_str(&mut out, &s(&["claude", "prompt_templates", k]), Some(v), &["options"]);
         }
     }
     if let Some(Value::Array(presets)) = get(value, &s(&["editor", "presets"])) {

@@ -2357,5 +2357,11 @@
   "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Trackerfelder, die bei den Tickets dieser Quelle in Zeilen und Details angezeigt werden, wenn sie einen Wert haben. Ein Eintrag ohne ID wird mit einer Warnung verworfen.",
   "A tracker field to show on the tickets.": "Ein Trackerfeld, das bei den Tickets angezeigt wird.",
   "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Das Feld des Trackers: eine Jira-Feld-ID (`customfield_10042`), ein GitHub-Projektfeldname.",
-  "Shown before the value; empty shows the value alone.": "Wird vor dem Wert angezeigt; leer zeigt nur den Wert."
+  "Shown before the value; empty shows the value alone.": "Wird vor dem Wert angezeigt; leer zeigt nur den Wert.",
+  "Options": "Optionen",
+  "Values": "Werte",
+  "Picked per ticket in the Start sheet, unless the ticket's route declares its own.": "Pro Ticket im Start-Blatt gewählt, sofern die Route des Tickets keine eigenen festlegt.",
+  "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.": "Eine Startoption: ein Wert ergibt ein Kontrollkästchen, mehrere eine Einfachauswahl. Die gewählten Werte kommen\nin `{options}` des Claude-Prompts, sonst an sein Ende, in der festgelegten Reihenfolge.",
+  "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.": "z. B. `[\"--auto\"]` oder `[\"--mode=quick\", \"--mode=skip\"]`.",
+  "Picked per ticket in the Start sheet; replace the template's options.": "Pro Ticket im Start-Blatt gewählt; ersetzen die Optionen der Vorlage."
 }

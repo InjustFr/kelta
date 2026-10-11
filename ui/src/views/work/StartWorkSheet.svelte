@@ -8,6 +8,7 @@
     ClaudeEffort,
     KeltaError,
     PermissionMode,
+    StartOption,
     StartWorkPlan,
     StatusCategory,
     TransitionTarget,
@@ -28,7 +29,15 @@
 
   import { activateProject } from '../../shell/nav';
   import { withCriteria } from '../tickets/refine.svelte';
-  import { planValid, START_STEPS, stepLabel, validatePlan } from './common';
+  import {
+    applyOptions,
+    optionsText,
+    planValid,
+    START_STEPS,
+    stepLabel,
+    unapplyOptions,
+    validatePlan,
+  } from './common';
   import FinishFirst from './FinishFirst.svelte';
   import { finishFirst } from './finishFirst';
 
@@ -89,6 +98,19 @@
       switching = false;
     }
   }
+  // ---- start options (#357): the prompt keeps its `{options}` form in `plan.options.prompt` ----
+  function editPrompt(v: string): void {
+    plan.claude.prompt = v;
+    const o = plan.options;
+    if (o) o.prompt = unapplyOptions(v, optionsText(o.declared, o.picked));
+  }
+  function pick(opt: StartOption, value: string | null): void {
+    const o = plan.options;
+    if (!o) return;
+    o.picked = [...o.picked.filter((v) => !opt.values.includes(v)), ...(value ? [value] : [])];
+    plan.claude.prompt = applyOptions(o.prompt, o.declared, o.picked);
+  }
+
   const isTicket = $derived(plan.source.kind === 'ticket');
   const subject = $derived(
     plan.source.kind === 'ticket'
@@ -377,11 +399,35 @@
           />
           <TextInput
             label={t('Prompt')}
-            bind:value={plan.claude.prompt}
+            bind:value={() => plan.claude.prompt, editPrompt}
             multiline
             rows={6}
             error={errors.prompt}
           />
+          {#if plan.options}
+            {@const picked = plan.options.picked}
+            <div class="options" data-testid="start-options">
+              {#each plan.options.declared as o, i (i)}
+                {#if o.values.length === 1}
+                  <Toggle
+                    label={o.label}
+                    checked={picked.includes(o.values[0]!)}
+                    onchange={(on) => pick(o, on ? o.values[0]! : null)}
+                  />
+                {:else if o.values.length > 1}
+                  <Select
+                    label={o.label}
+                    value={o.values.find((v) => picked.includes(v)) ?? ''}
+                    options={[
+                      { value: '', label: t('None') },
+                      ...o.values.map((v) => ({ value: v, label: v })),
+                    ]}
+                    onchange={(v) => pick(o, v || null)}
+                  />
+                {/if}
+              {/each}
+            </div>
+          {/if}
         </fieldset>
 
         <fieldset>
@@ -508,6 +554,13 @@
     padding: 0 var(--k-space-1);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--k-space-3);
   }
 
   .project {
