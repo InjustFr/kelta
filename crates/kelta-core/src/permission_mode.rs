@@ -29,6 +29,9 @@ impl Core {
 
     /// Remembers the hook's mode when it differs from the session's previous one (its launch flag at
     /// first): a forced plan mode or an unchanged session repeating itself is not the user's choice.
+    /// `dontAsk` / `bypassPermissions` are never remembered (#304): one session's danger is not every
+    /// later one's. shortcut: a mode Claude fell back to at launch (auto unavailable) is remembered
+    /// like a switch; tell it apart from a key press if that fallback overwrites real choices.
     pub(crate) fn remember_permission_mode(&self, sid: &SessionId, p: &HookPayload) {
         let Some(mode) = p.extra.get("permission_mode").and_then(|v| v.as_str()).and_then(parse) else {
             return;
@@ -40,6 +43,9 @@ impl Core {
                 return;
             }
             e.permission_mode = Some(mode);
+        }
+        if matches!(mode, PermissionMode::DontAsk | PermissionMode::BypassPermissions) {
+            return;
         }
         let mut cur = self.claude_mode.lock();
         if *cur != Some(mode) {

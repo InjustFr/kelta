@@ -170,23 +170,25 @@ const CLAUDE_FILE_FLAGS: &[&str] =
 
 /// Rewrite the original Claude argv for a restore: drop the session selection
 /// (`--session-id/--resume/--continue`) and the positional prompt, drop file flags whose file is
-/// gone, then append `--resume <uuid>` (or `--continue` for the fallback).
+/// gone and the launch-time `--permission-mode` (replaced by `mode`, #304), then append
+/// `--resume <uuid>` (or `--continue` for the fallback).
 pub fn claude_restore_args(
     original: &[String],
     uuid: &str,
     use_continue: bool,
+    mode: Option<&str>,
     exists: &dyn Fn(&Path) -> bool,
 ) -> Vec<String> {
     let mut out = Vec::new();
     let mut it = original.iter();
     while let Some(a) = it.next() {
         let flag = a.split_once('=').map_or(a.as_str(), |(f, _)| f);
-        if matches!(flag, "--continue" | "-c") {
+        if matches!(flag, "--continue" | "-c") || a.starts_with("--permission-mode=") {
             continue;
         }
         if CLAUDE_VALUE_FLAGS.contains(&a.as_str()) {
             let Some(v) = it.next() else { break };
-            if matches!(a.as_str(), "--session-id" | "--resume" | "-r") {
+            if matches!(a.as_str(), "--session-id" | "--resume" | "-r" | "--permission-mode") {
                 continue;
             }
             if CLAUDE_FILE_FLAGS.contains(&a.as_str()) && !exists(Path::new(v)) {
@@ -203,6 +205,9 @@ pub fn claude_restore_args(
             out.push(a.clone());
         }
         // positional (the initial prompt): dropped on restore
+    }
+    if let Some(m) = mode {
+        out.extend(["--permission-mode".into(), m.into()]);
     }
     if use_continue {
         out.push("--continue".into());
@@ -278,6 +283,8 @@ mod tests {
             "SHOP-1 x",
             "--model",
             "opus",
+            "--permission-mode",
+            "acceptEdits",
             "--settings",
             "/gone/s.json",
             "--mcp-config",
@@ -286,7 +293,7 @@ mod tests {
             "Work on it",
         ]);
         let exists = |p: &Path| p.starts_with("/ok");
-        let out = claude_restore_args(&orig, "U1", false, &exists);
+        let out = claude_restore_args(&orig, "U1", false, None, &exists);
         assert_eq!(
             out,
             v(&[
@@ -301,7 +308,10 @@ mod tests {
                 "U1"
             ])
         );
-        let out = claude_restore_args(&orig, "U1", true, &exists);
+        // #304: the launch-time mode gives way to the one passed in
+        let out = claude_restore_args(&orig, "U1", false, Some("auto"), &exists);
+        assert_eq!(out[out.len() - 4..], v(&["--permission-mode", "auto", "--resume", "U1"]));
+        let out = claude_restore_args(&orig, "U1", true, None, &exists);
         assert_eq!(out.last().map(String::as_str), Some("--continue"));
         assert_eq!(claude_uuid_from_args(&orig).as_deref(), Some("U1"));
     }
