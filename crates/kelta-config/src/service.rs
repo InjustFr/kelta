@@ -6,7 +6,7 @@
 //! that fails semantic validation reverts the changed layers. [`ConfigService::commit`] swaps
 //! the candidate in and notifies `watch` callbacks.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
@@ -582,6 +582,7 @@ impl ConfigService {
         project: Option<&Value>,
         repos: &[Value],
         project_default_template: Option<&str>,
+        pending_templates: &HashSet<String>,
     ) -> Result<Computed, Vec<RawIssue>> {
         let by_id = index().by_id_paths();
         let mut base = self.defaults.clone();
@@ -599,7 +600,7 @@ impl ConfigService {
         m.apply(&mut base, &self.runtime, Layer::Runtime);
         let sources = m.finish();
 
-        let mut issues = validate::cross_issues(&base, project_default_template);
+        let mut issues = validate::cross_issues(&base, project_default_template, pending_templates);
         issues.extend(validate::plugin_issues(&base, &self.plugin_schemas.read()));
         if issues.is_empty() {
             match serde_json::from_value::<Settings>(base.clone()) {
@@ -615,9 +616,21 @@ impl ConfigService {
         Err(issues)
     }
 
+    fn repo_trusted(&self, r: &RepoEntry) -> bool {
+        self.trusted.read().get(&r.file.path).is_some_and(|h| *h == r.file.hash)
+    }
+
     fn repo_value(&self, r: &RepoEntry) -> Value {
-        let trusted = self.trusted.read().get(&r.file.path).is_some_and(|h| *h == r.file.hash);
-        if trusted { r.file.value.clone() } else { strip_exec_keys(&r.file.value) }
+        if self.repo_trusted(r) { r.file.value.clone() } else { strip_exec_keys(&r.file.value) }
+    }
+
+    /// Template ids of repo files whose templates are inert until trusted.
+    fn pending_templates(&self, repos: &[RepoEntry]) -> HashSet<String> {
+        repos
+            .iter()
+            .filter(|r| r.file.exists && !self.repo_trusted(r))
+            .flat_map(|r| validate::ids_of(r.file.value.get("session_templates")))
+            .collect()
     }
 
     fn repos_values(&self, repos: &[RepoEntry]) -> Vec<Value> {
@@ -676,7 +689,15 @@ impl ConfigService {
         cfg: &ProjectConfig,
     ) -> Result<Computed, Vec<RawIssue>> {
         let rv = self.repos_values(repos);
-        self.compute(plugin_defaults, global, Some(&file.value), &rv, cfg.default_template.as_deref())
+        let pending = self.pending_templates(repos);
+        self.compute(
+            plugin_defaults,
+            global,
+            Some(&file.value),
+            &rv,
+            cfg.default_template.as_deref(),
+            &pending,
+        )
     }
 
     /// Build a complete candidate state from disk (plus pending `ov` texts).
@@ -693,8 +714,14 @@ impl ConfigService {
         );
 
         // global effective, reverting freshly changed global layers on semantic failure
-        let mut global_eff =
-            self.compute(&plugin_defaults, &Self::global_value(&global, &keybindings), None, &[], None);
+        let mut global_eff = self.compute(
+            &plugin_defaults,
+            &Self::global_value(&global, &keybindings),
+            None,
+            &[],
+            None,
+            &HashSet::new(),
+        );
         if let Err(raw) = &global_eff {
             let mut reverted = false;
             for (fresh, old) in [(&mut global, &prev.global), (&mut keybindings, &prev.keybindings)] {
@@ -716,6 +743,7 @@ impl ConfigService {
                     None,
                     &[],
                     None,
+                    &HashSet::new(),
                 );
             }
         }

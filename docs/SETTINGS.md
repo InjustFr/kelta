@@ -22,7 +22,7 @@ Other files: `<config>/kelta/keybindings.toml` (optional; merged into `[keys]` a
 - Maps (`accounts`, `claude.profiles`, `claude.prompt_templates`, `env` tables): merge by key; higher wins per key.
 - `settings_effective(project_id)` = Default ⊕ Plugin ⊕ Global ⊕ Project ⊕ trusted Repo ⊕ Runtime, with the winning layer recorded per dotted path (`sources`).
 
-**Annotations** (JSON Schema extensions, emitted by schemars attributes): `x-kelta-category` (General, Window, Keys, Terminal, Linux graphics, Projects, Accounts, Claude, Editors, Worktree & work, Reviews, Polling, Notifications, Tools, Triggers, Plugins, Performance), `x-kelta-order` (int), `x-kelta-scope` (`["global","project","repo"]` subset; default `["global","project"]`), `x-kelta-secret` (value is a SecretRef; UI shows "Set token…"), `x-kelta-restart` (requires restart), `x-kelta-exec` (runs commands → trust-gated at Repo layer), `x-kelta-merge` (`by_id`), `enumDescriptions`.
+**Annotations** (JSON Schema extensions, emitted by schemars attributes): `x-kelta-category` (General, Window, Keys, Terminal, Linux graphics, Projects, Accounts, Claude, Editors, Worktree & work, Reviews, Polling, Notifications, Tools, Triggers, Plugins, Performance), `x-kelta-order` (int), `x-kelta-scope` (`["global","project","repo"]` subset; default `["global","project"]`), `x-kelta-secret` (value is a SecretRef; UI shows "Set token…"), `x-kelta-restart` (requires restart), `x-kelta-exec` (runs commands or steers Claude → trust-gated at Repo layer), `x-kelta-merge` (`by_id`), `enumDescriptions`.
 
 ## 2. Global schema (every key, type, default)
 
@@ -115,7 +115,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `only_when_unfocused` | bool | `true` | or pane hidden |
 | `quiet_hours` | str `"HH:MM-HH:MM"` \| "" | `""` | local time |
 
-### [claude]  (scope global+project; `binary`, `extra_args`, `extra_hooks` are x-kelta-exec)
+### [claude]  (scope global+project; `binary`, `extra_args`, `extra_hooks`, `append_system_prompt` are x-kelta-exec)
 | `binary` | str | `"claude"` | resolved in login PATH |
 | `min_version` | str (semver) | `"2.1.200"` | older → warning, hooks still attempted |
 | `hook_transport` | enum(command\|http) | `command` | SessionStart always command |
@@ -123,7 +123,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
 | `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |
-| `append_system_prompt` | str | `""` | appended to generated `context.md` |
+| `append_system_prompt` | str (x-kelta-exec) | `""` | appended to generated `context.md` |
 | `extra_args` | list<str> | `[]` | appended before the prompt |
 | `extra_hooks` | JSON-compatible table | `{}` | merged into generated `--settings` hooks |
 | `profiles` | map<str, ClaudeProfile> | `default = {model="opus", effort="high", permission_mode="acceptEdits"}`, `review = {model="opus", effort="high", permission_mode="plan"}`, `plan = {model="opus", effort="high", permission_mode="plan"}` | ClaudeProfile = {model: str, effort: enum(low\|medium\|high\|xhigh\|max), permission_mode: enum(default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions)} |
@@ -417,7 +417,7 @@ A block still on disk (hand-written, restored from `.trash`, or a failed move) i
 
 ## 4. Repo-local `.kelta/config.toml`
 
-Allowed top-level keys: `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`triggers`, `session_templates`, `commands`, `worktree.setup`, `env`, `editor.review_args`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
+Allowed top-level keys: `triggers`, `session_templates`, `commands`, `worktree.{include, setup, setup_blocking, branch_template}`, `env`, `claude.append_system_prompt`, `editor.review_args`. Anything else → validation error "not allowed in repo config". Keys marked `x-kelta-exec` (`triggers`, `session_templates`, `commands`, `worktree.setup`, `env`, `claude.append_system_prompt`, `editor.review_args`) are loaded but **inert** until `repo_trust(path, sha256)` matches the current content; a banner offers "Review & trust" (shows the file). Trust is per content hash; any edit requires re-trust. `kelta-ctl trust <repo>` does the same from the CLI: it prints the file and its sha256, asks for confirmation, and sends that hash. Both paths trust only the reviewed content: if the file changed in between, the call fails with `conflict`.
 
 ## 5. Secrets
 

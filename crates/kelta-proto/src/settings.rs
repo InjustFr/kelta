@@ -761,7 +761,8 @@ pub struct ClaudeSettings {
     /// Passed via `--allowedTools`.
     pub allowed_tools: Vec<String>,
     /// Appended to the generated `context.md`.
-    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
+    /// Steers the session (which may auto-approve tools): inert from an untrusted repo file.
+    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"], "x-kelta-exec" = true))]
     pub append_system_prompt: String,
     /// Appended before the prompt.
     #[schemars(extend("x-kelta-exec" = true))]
@@ -1874,8 +1875,15 @@ pub const REPO_ALLOWED_KEYS: &[&str] = &[
 ];
 
 /// Repo-local keys that are inert until trusted (`x-kelta-exec`).
-pub const REPO_EXEC_KEYS: &[&str] =
-    &["triggers", "session_templates", "commands", "worktree.setup", "env", "editor.review_args"];
+pub const REPO_EXEC_KEYS: &[&str] = &[
+    "triggers",
+    "session_templates",
+    "commands",
+    "worktree.setup",
+    "env",
+    "claude.append_system_prompt",
+    "editor.review_args",
+];
 
 /// Runtime overrides (env `KELTA__SECTION__KEY=value`, CLI `--set key=value`, `--safe-graphics`, `--config-dir`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

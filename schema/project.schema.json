@@ -1002,8 +1002,9 @@
         },
         "append_system_prompt": {
           "default": "",
-          "description": "Appended to the generated `context.md`.",
+          "description": "Appended to the generated `context.md`.\nSteers the session (which may auto-approve tools): inert from an untrusted repo file.",
           "type": "string",
+          "x-kelta-exec": true,
           "x-kelta-scope": [
             "global",
             "project",

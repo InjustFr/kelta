@@ -87,8 +87,10 @@
         {#if kind !== 'bool'}<label for={id}>{label}</label>{:else}<span class="spacer"></span>{/if}
         <span class="markers">
           <SourceBadge {source} {path} />
-          {#if info?.exec}<Badge tone="warn" title="Runs commands: inert in a repo-local file until trusted"
-              >runs commands</Badge
+          {#if info?.exec}<Badge
+              tone="warn"
+              title="Runs commands or steers Claude: inert in a repo-local file until trusted"
+              >needs trust</Badge
             >{/if}
           {#if restart}<Badge tone="info" title="Takes effect after restarting Kelta">restart</Badge>{/if}
           {#if restartPending}<Badge tone="warn" title="Changed: restart Kelta to apply">restart needed</Badge

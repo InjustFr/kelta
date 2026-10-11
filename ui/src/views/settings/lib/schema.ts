@@ -324,6 +324,7 @@ export const REPO_EXEC_KEYS: readonly string[] = [
   'commands',
   'worktree.setup',
   'env',
+  'claude.append_system_prompt',
   'editor.review_args',
 ];
 

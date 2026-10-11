@@ -39,8 +39,8 @@ expression: out
     "value": "dark"
   },
   "shop:claude.append_system_prompt": {
-    "source": "repo",
-    "value": "repo"
+    "source": "global",
+    "value": "global"
   },
   "shop:terminal.cursor_style": {
     "source": "runtime",
