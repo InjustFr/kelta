@@ -215,6 +215,8 @@ pub struct TerminalLimits {
     /// History lines sent with a snapshot (`terminal.view_scrollback`; 0 = default 1000).
     pub view_scrollback: u32,
     pub keyboard_protocol: KeyboardProtocol,
+    /// `terminal.osc52`: `read-write` makes the models answer OSC 52 queries (write is the default).
+    pub osc52: crate::settings::Osc52,
     /// On-disk history log (`terminal.history_log`; ARCHITECTURE §9.6).
     pub history_log: bool,
     /// Per-session log cap in MiB (`terminal.history_log_mb`; 0 = default 16).
@@ -230,6 +232,7 @@ impl TerminalLimits {
             memory_cap_mb: t.memory_cap_mb,
             view_scrollback: t.view_scrollback,
             keyboard_protocol: t.keyboard_protocol,
+            osc52: t.osc52,
             history_log: t.history_log,
             history_log_mb: t.history_log_mb,
             history_log_total_mb: t.history_log_total_mb,
