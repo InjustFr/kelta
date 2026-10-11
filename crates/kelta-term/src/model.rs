@@ -619,6 +619,7 @@ impl TermModel {
 
     fn drain(&mut self, palette: &Palette, out: &mut Vec<Output>) {
         let events = std::mem::take(&mut *self.events.lock());
+        let start = out.len();
         // A flood of BEL or titles (`cat /dev/urandom`) is one event per chunk.
         let (mut bell, mut title): (bool, Option<String>) = (false, None);
         for ev in events {
@@ -648,6 +649,18 @@ impl TermModel {
             self.title = Some(t.clone());
             out.push(Output::Event(TerminalEvent::Title(t)));
         }
+        // A flood of OSC 52 queries is one per kind per chunk, the last (order vs stores kept).
+        let load = |o: &Output| match o {
+            Output::Event(TerminalEvent::ClipboardLoad { kind }) => Some(*kind),
+            _ => None,
+        };
+        let last = |k| out.iter().rposition(|o| load(o) == Some(k));
+        let keep = [ClipboardKind::Clipboard, ClipboardKind::Primary].map(last);
+        let mut i = 0;
+        out.retain(|o| {
+            i += 1;
+            i <= start || load(o).is_none() || keep.contains(&Some(i - 1))
+        });
     }
 
     /// Resize the model (reflow). Returns false when the size is unchanged.
@@ -1041,6 +1054,14 @@ mod tests {
             vec![
                 TerminalEvent::Notify { title: Some("T".into()), body: "last".into() },
                 TerminalEvent::Cwd("/tmp".into())
+            ]
+        );
+        let q = b"\x1b]52;c;?\x07\x1b]52;p;?\x07".repeat(10_000);
+        assert_eq!(
+            events(&mut m, &q),
+            vec![
+                TerminalEvent::ClipboardLoad { kind: ClipboardKind::Clipboard },
+                TerminalEvent::ClipboardLoad { kind: ClipboardKind::Primary }
             ]
         );
     }
