@@ -289,13 +289,12 @@ pub struct LoginEnv {
 }
 
 impl LoginEnv {
-    /// The inherited process environment (stub / fallback).
+    /// The inherited process environment without the AppImage runtime's variables
+    /// ([`strip_appimage_env`]): what a child process of Kelta should start from.
     pub fn inherited() -> Self {
-        Self {
-            vars: std::env::vars().collect(),
-            source: LoginEnvSource::Inherited,
-            shell: std::env::var_os("SHELL").map(PathBuf::from),
-        }
+        let mut vars = std::env::vars().collect();
+        strip_appimage_env(&mut vars);
+        Self { vars, source: LoginEnvSource::Inherited, shell: std::env::var_os("SHELL").map(PathBuf::from) }
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
@@ -304,6 +303,53 @@ impl LoginEnv {
 
     pub fn path(&self) -> Option<&str> {
         self.get("PATH")
+    }
+}
+
+/// Undo what an AppImage runtime set up for Kelta itself (no-op without `APPDIR`): a saved original
+/// (`APPIMAGE_ORIGINAL_<VAR>`, `<VAR>_ORIG`) is restored, `$APPDIR` entries leave path lists
+/// (`PATH`, `XDG_DATA_DIRS`, `LD_LIBRARY_PATH`), and a variable left pointing only into the mount
+/// (`PYTHONHOME`, `GTK_PATH`, ...) or naming it (`APPDIR`, `APPIMAGE`, `OWD`, `ARGV0`) is removed.
+pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
+    let Some(appdir) =
+        vars.get("APPDIR").map(|d| d.trim_end_matches('/').to_owned()).filter(|d| !d.is_empty())
+    else {
+        return;
+    };
+    for k in ["APPDIR", "APPIMAGE", "OWD", "ARGV0"] {
+        vars.remove(k);
+    }
+    let in_mount = |e: &str| e == appdir || e.starts_with(&format!("{appdir}/"));
+    let keys: Vec<String> = vars.keys().cloned().collect();
+    for k in keys {
+        let Some(v) = vars.get(&k).cloned() else { continue };
+        let saved = format!("{k}_ORIG");
+        let original = if let Some(name) = k.strip_prefix("APPIMAGE_ORIGINAL_") {
+            let v = vars.remove(&k).unwrap_or_default();
+            Some((name.to_owned(), v))
+        } else if v.contains(&appdir) && vars.contains_key(&saved) {
+            vars.remove(&saved).map(|v| (k.clone(), v))
+        } else {
+            None
+        };
+        match original {
+            Some((name, v)) if v.is_empty() => {
+                vars.remove(&name);
+            }
+            Some((name, v)) => {
+                vars.insert(name, v);
+            }
+            None if v.contains(&appdir) => {
+                let kept: Vec<&str> = v.split(':').filter(|e| !e.is_empty() && !in_mount(e)).collect();
+                if kept.is_empty() {
+                    vars.remove(&k);
+                } else {
+                    let kept = kept.join(":");
+                    vars.insert(k, kept);
+                }
+            }
+            None => {}
+        }
     }
 }
 
@@ -359,5 +405,51 @@ mod tests {
         n.sort_unstable();
         n.dedup();
         assert_eq!(n.len(), SWALLOWED_QUERIES.len());
+    }
+
+    #[test]
+    fn appimage_runtime_env_is_stripped() {
+        let m = "/tmp/user/1000/.mount_Kelta_ab12";
+        let env = |pairs: &[(&str, String)]| -> BTreeMap<String, String> {
+            pairs.iter().map(|(k, v)| ((*k).to_owned(), v.clone())).collect()
+        };
+        let mut vars = env(&[
+            ("APPDIR", m.to_owned()),
+            ("APPIMAGE", "/home/u/Kelta.AppImage".to_owned()),
+            ("OWD", "/home/u".to_owned()),
+            ("ARGV0", "Kelta".to_owned()),
+            ("PYTHONHOME", format!("{m}/usr/")),
+            ("PYTHONPATH", format!("{m}/usr/share/pyshared/:")),
+            ("LD_LIBRARY_PATH", format!("{m}/usr/lib/:{m}/usr/lib/x86_64-linux-gnu/:/opt/lib")),
+            ("PATH", format!("/home/u/bin:{m}/usr/bin/:/usr/bin:{m}/usr/sbin/")),
+            ("XDG_DATA_DIRS", format!("{m}/usr/share/:/usr/share")),
+            ("GTK_PATH", format!("{m}/usr/lib/gtk-3.0")),
+            ("GSETTINGS_SCHEMA_DIR", format!("{m}/usr/share/glib-2.0/schemas")),
+            ("GDK_BACKEND", "x11".to_owned()),
+            ("APPIMAGE_ORIGINAL_GDK_BACKEND", "wayland".to_owned()),
+            ("APPIMAGE_ORIGINAL_GTK_THEME", String::new()),
+            ("GTK_THEME", "Adwaita".to_owned()),
+            ("QT_PLUGIN_PATH", format!("{m}/usr/lib/qt5/plugins")),
+            ("QT_PLUGIN_PATH_ORIG", "/usr/lib/qt".to_owned()),
+            ("HOME", "/home/u".to_owned()),
+            ("MOUNTS", format!("{m}x/not-this-mount")),
+        ]);
+        strip_appimage_env(&mut vars);
+        let expected = env(&[
+            ("LD_LIBRARY_PATH", "/opt/lib".to_owned()),
+            ("PATH", "/home/u/bin:/usr/bin".to_owned()),
+            ("XDG_DATA_DIRS", "/usr/share".to_owned()),
+            ("GDK_BACKEND", "wayland".to_owned()),
+            ("QT_PLUGIN_PATH", "/usr/lib/qt".to_owned()),
+            ("HOME", "/home/u".to_owned()),
+            ("MOUNTS", format!("{m}x/not-this-mount")),
+        ]);
+        assert_eq!(vars, expected);
+
+        // Not an AppImage: untouched.
+        let plain = env(&[("PATH", "/usr/bin".to_owned()), ("PYTHONHOME", "/opt/py".to_owned())]);
+        let mut vars = plain.clone();
+        strip_appimage_env(&mut vars);
+        assert_eq!(vars, plain);
     }
 }

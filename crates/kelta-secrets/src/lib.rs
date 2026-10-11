@@ -36,7 +36,7 @@ const FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "/usr/bi
 pub struct SecretsOptions {
     /// Credential store used for `keyring:` refs (default: the platform store, created lazily).
     pub store: Option<Arc<CredentialStore>>,
-    /// Complete environment of child processes and `env:` lookups (default: this process).
+    /// Complete environment of child processes and `env:` lookups (default: this process, minus the AppImage runtime's variables).
     pub env: Option<BTreeMap<String, String>>,
     /// Lookup timeout (default [`RESOLVE_TIMEOUT`]).
     pub timeout: Option<Duration>,
@@ -116,7 +116,7 @@ impl Secrets {
         Arc::new(Self {
             settings,
             store: Mutex::new(opts.store),
-            env: RwLock::new(opts.env),
+            env: RwLock::new(Some(opts.env.unwrap_or_else(|| kelta_proto::term::LoginEnv::inherited().vars))),
             timeout: opts.timeout.unwrap_or(RESOLVE_TIMEOUT),
             cache: Mutex::new(HashMap::new()),
             file: opts.file.map(|p| Arc::new(file::SecretFile::new(p))),
