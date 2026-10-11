@@ -79,6 +79,16 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
             }
             _ => {}
         });
+        // Dock Quit and logout send terminate:: ask like Cmd+Q (#311). Terminating now still
+        // reaches RunEvent::Exit (tao's applicationWillTerminate), hence Core::shutdown.
+        let handle = app.handle().clone();
+        crate::platform::dock::on_should_terminate(move || {
+            let now = !quit_asks(&handle);
+            if now {
+                save_main_geometry(&handle); // no ExitRequested on this path
+            }
+            now
+        });
     }
     create(app.handle())?;
     Ok(())
