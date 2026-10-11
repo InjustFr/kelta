@@ -2,6 +2,7 @@
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
   // Whose tickets, current iteration, a Jira view's board and statuses, and removal save at once to the
   // global `[[sources]]`.
+  import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SourceHit, TrackerView, Who } from '$lib/gen';
@@ -23,17 +24,25 @@
   const source = $derived(all.find((s) => s.id === sourceId) ?? null);
   const kindOf = (id: string) => settings.value()?.accounts[id]?.kind;
 
-  const WHO: { value: Who | ''; label: string }[] = [
-    { value: 'mine', label: 'Mine' },
-    { value: 'unassigned', label: 'Unassigned' },
-    { value: 'anyone', label: 'Team' },
-  ];
+  const WHO: { value: Who | ''; label: string }[] = $derived([
+    { value: 'mine', label: t('Mine') },
+    { value: 'unassigned', label: t('Unassigned') },
+    { value: 'anyone', label: t('Team') },
+  ]);
+  // Whole phrases: the iteration word takes a different gender / case per language.
+  const CURRENT_ONLY: Record<string, string> = {
+    sprint: msg('Current sprint only'),
+    cycle: msg('Current cycle only'),
+    milestone: msg('Current milestone only'),
+    version: msg('Current version only'),
+    iteration: msg('Current iteration only'),
+  };
   // A view without `who` keeps its own query (jql, assigned_to, scope): say so rather than guess,
   // and keep the choice for any view with a query so trying a who can be undone.
   const hasQuery = (v: TrackerView) =>
     !!(v.jql || v.query_id != null || v.assigned_to || v.scope || v.search);
   const whoOptions = (v: TrackerView) =>
-    v.who && !hasQuery(v) ? WHO : [{ value: '' as const, label: 'Set by query' }, ...WHO];
+    v.who && !hasQuery(v) ? WHO : [{ value: '' as const, label: t('Set by query') }, ...WHO];
 
   const save = (f: (views: TrackerView[]) => TrackerView[]) =>
     editSource(sourceId, (s) => ({ ...s, tracker: { ...s.tracker, views: f(s.tracker.views) } }));
@@ -91,8 +100,8 @@
     // Without a jql or project of its own the board is the view's only scope: it cannot be cleared.
     const scoped = !!(v.jql?.trim() || v.project_id?.trim() || v.project?.trim());
     return [
-      ...(scoped || id === '' ? [{ value: '', label: 'Any board' }] : []),
-      ...(known ? [] : [{ value: id, label: `Board ${id}` }]),
+      ...(scoped || id === '' ? [{ value: '', label: t('Any board') }] : []),
+      ...(known ? [] : [{ value: id, label: t('Board {id}', { id }) }]),
       ...own,
     ];
   };
@@ -106,10 +115,12 @@
   /** A view can hold a hand-written query: removal is confirmed (it writes the TOML at once). */
   async function remove(v: TrackerView): Promise<void> {
     const answer = await confirms.ask({
-      title: `Remove ${v.label}?`,
-      body: `${source?.label ?? 'The source'} stops listing tickets from this view. Its query is not kept.`,
+      title: t('Remove {name}?', { name: v.label }),
+      body: t('{source} stops listing tickets from this view. Its query is not kept.', {
+        source: source?.label ?? t('The source'),
+      }),
       tone: 'danger',
-      actions: [{ id: 'remove', label: 'Remove view', variant: 'danger' }],
+      actions: [{ id: 'remove', label: t('Remove view'), variant: 'danger' }],
     });
     if (answer === 'remove') await save((views) => views.filter((x) => x.id !== v.id));
   }
@@ -117,18 +128,18 @@
 
 {#if source}
   {@const b = source.tracker}
-  <SettingsGroup heading="Board" data-testid="tracker-block" data-source-id={source.id}>
+  <SettingsGroup heading={t('Board')} data-testid="tracker-block" data-source-id={source.id}>
     {#snippet meta()}<Badge tone="neutral">{b.account}</Badge>{/snippet}
     {#snippet actions()}
       <Button
         size="sm"
         icon="plus"
         onclick={() => ui.openSheet('tracker.source_picker', { sourceId: source.id })}
-        data-testid="add-source">Add view…</Button
+        data-testid="add-source">{t('Add view…')}</Button
       >
     {/snippet}
     {#if b.views.length === 0}
-      <p class="empty">No view: {source.label} lists no ticket.</p>
+      <p class="empty">{t('No view: {name} lists no ticket.', { name: source.label })}</p>
     {:else}
       <ul>
         {#each b.views as v (v.id)}
@@ -138,7 +149,9 @@
             <span class="label">{v.label}</span>
             <span class="account">{acc}</span>
             <span class="who">
-              <label class="k-visually-hidden" for="who-{source.id}-{v.id}">Whose tickets in {v.label}</label>
+              <label class="k-visually-hidden" for="who-{source.id}-{v.id}"
+                >{t('Whose tickets in {name}', { name: v.label })}</label
+              >
               <Select
                 value={v.who ?? ''}
                 options={whoOptions(v)}
@@ -148,15 +161,22 @@
             </span>
             {#if word}
               <Toggle
-                label="Current {word} only"
+                label={t(CURRENT_ONLY[word] ?? word)}
                 checked={v.current_iteration}
                 onchange={(on) => void patch(v.id, { current_iteration: on })}
               />
             {/if}
-            <IconButton icon="trash-2" label="Remove {v.label}" size="sm" onclick={() => void remove(v)} />
+            <IconButton
+              icon="trash-2"
+              label={t('Remove {name}', { name: v.label })}
+              size="sm"
+              onclick={() => void remove(v)}
+            />
             {#if kindOf(acc) === 'jira'}
               <div class="filters">
-                <label class="k-visually-hidden" for="board-{source.id}-{v.id}">Board of {v.label}</label>
+                <label class="k-visually-hidden" for="board-{source.id}-{v.id}"
+                  >{t('Board of {name}', { name: v.label })}</label
+                >
                 <Select
                   value={v.board_id == null ? '' : String(v.board_id)}
                   options={boardOptions(acc, v)}
@@ -165,7 +185,7 @@
                 />
                 {#if statusOptions(v).length > 0}
                   <fieldset>
-                    <legend>Statuses (none: every open status)</legend>
+                    <legend>{t('Statuses (none: every open status)')}</legend>
                     {#each statusOptions(v) as name (name)}
                       <Toggle
                         label={name}

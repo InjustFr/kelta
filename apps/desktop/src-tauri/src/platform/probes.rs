@@ -242,8 +242,8 @@ pub fn secret_file(list: &[SecretBackendStatus]) -> Option<Check> {
 
 /// Runs `<path> --version` with a 3 s limit.
 async fn run_version(path: &Path) -> Option<String> {
-    let mut cmd = tokio::process::Command::new(path);
-    cmd.arg("--version").env_clear().envs(kelta_proto::term::LoginEnv::inherited().vars);
+    let mut cmd = kelta_proto::term::async_command(path);
+    cmd.arg("--version");
     cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
     // one-shot: a hung tool must not hang the diagnostics pane
     let out = tokio::time::timeout(Duration::from_secs(3), cmd.output()).await.ok()?.ok()?;
@@ -380,7 +380,7 @@ mod tests {
         // until that child execs; wait it out so the probe sees the script, not the race. This first exec
         // also pays macOS's slow first-run scan of a fresh file outside the probe's 3 s limit.
         for _ in 0..50 {
-            match std::process::Command::new(&exe).output() {
+            match kelta_proto::term::command(&exe).output() {
                 Err(e) if e.raw_os_error() == Some(26) => tokio::time::sleep(Duration::from_millis(20)).await,
                 _ => break,
             }

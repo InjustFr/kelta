@@ -108,6 +108,7 @@ pub const COMMANDS: &[&str] = &[
     "review_comment",
     "review_request_changes",
     "review_nudge",
+    "review_set_draft",
     // work
     "work_plan",
     "work_start",

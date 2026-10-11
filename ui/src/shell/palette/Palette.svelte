@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { trackerSearch } from '$lib/ipc/commands';
   import type { TicketItem } from '$lib/gen';
 
@@ -66,8 +67,8 @@
 </script>
 
 <Picker
-  title="Command palette"
-  placeholder="Search actions, projects, sessions, tickets…"
+  title={t('Command palette')}
+  placeholder={t('Search actions, projects, sessions, tickets…')}
   items={results.map((r) => ({
     id: r.id,
     label: r.label,

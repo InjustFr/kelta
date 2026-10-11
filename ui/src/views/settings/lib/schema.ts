@@ -3,6 +3,7 @@
 // key-aware tables here are presentation hints (template placeholders, acronyms).
 
 import type { JsonValue } from '$lib/gen';
+import { msg, t } from '$lib/i18n/index.svelte';
 
 import { getAt, joinPath } from './paths';
 
@@ -185,39 +186,49 @@ export interface EnumOption {
   description?: string;
 }
 
+/** `app.language` values, named in their own language. */
+export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', de: 'Deutsch' };
+
 export function enumOptions(node: SchemaNode): EnumOption[] {
   const r = resolve(node).node;
   const values = (r.enum ?? []).filter((v): v is string => typeof v === 'string');
-  return values.map((value, i) => ({
-    value,
-    label: value[0]!.toUpperCase() + value.slice(1),
-    description: r.enumDescriptions?.[i],
-  }));
+  return values.map((value, i) => {
+    const description = r.enumDescriptions?.[i];
+    return {
+      value,
+      label: LANGUAGE_NAMES[value] ?? t(value[0]!.toUpperCase() + value.slice(1)),
+      description: description && t(description),
+    };
+  });
 }
 
 /** UI wording for settings whose generated title or doc comment speaks implementation. */
 export const COPY: Record<string, { label?: string; help?: string }> = {
-  env: { label: 'Environment variables' },
+  env: { label: msg('Environment variables') },
   'app.restore_mode': {
-    label: 'Reopen sessions on launch',
-    help: 'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
+    label: msg('Reopen sessions on launch'),
+    help: msg(
+      'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
+    ),
   },
-  'app.confirm_quit_with_running': { label: 'Ask before quitting while sessions run' },
+  'app.confirm_quit_with_running': { label: msg('Ask before quitting while sessions run') },
   'app.quit_sessions': {
-    label: 'Sessions on quit',
-    help: 'Ask, keep them running in the background (they are back on the next launch), or stop them all.',
+    label: msg('Sessions on quit'),
+    help: msg(
+      'Ask, keep them running in the background (they are back on the next launch), or stop them all.',
+    ),
   },
   'app.updates': {
-    label: 'Check for updates automatically',
-    help: 'On start and when Kelta gets focus, at most every 6 hours. Check now works either way.',
+    label: msg('Check for updates automatically'),
+    help: msg('On start and when Kelta gets focus, at most every 6 hours. Check now works either way.'),
   },
   'app.dark_theme': {
-    label: 'Dark theme',
-    help: 'Theme id used in dark mode: bezel-dark or a [themes.<id>] with base = "dark".',
+    label: msg('Dark theme'),
+    help: msg('Theme id used in dark mode: bezel-dark or a [themes.<id>] with base = "dark".'),
   },
   'app.light_theme': {
-    label: 'Light theme',
-    help: 'Theme id used in light mode: bezel-light or a [themes.<id>] with base = "light".',
+    label: msg('Light theme'),
+    help: msg('Theme id used in light mode: bezel-light or a [themes.<id>] with base = "light".'),
   },
 };
 
@@ -246,11 +257,12 @@ const ACRONYMS: Record<string, string> = {
 export function titleOf(key: string): string {
   const words = key.split(/[_\-\s]+/).filter(Boolean);
   const out = words.map((w, i) => ACRONYMS[w] ?? (i === 0 ? w[0]!.toUpperCase() + w.slice(1) : w));
-  return out.join(' ');
+  return t(out.join(' '));
 }
 
 export function descriptionOf(node: SchemaNode): string {
-  return (resolve(node).node.description ?? node.description ?? '').trim();
+  const text = (resolve(node).node.description ?? node.description ?? '').trim();
+  return text && t(text);
 }
 
 // ---- annotations ------------------------------------------------------------------------------
@@ -352,10 +364,10 @@ const TEMPLATE_PATTERNS: RegExp[] = [
   /^session_templates\.\d+\.layout/,
 ];
 
-export const TEMPLATE_HELP =
-  'Placeholders: {project.id|name|root} {repo.id|path|name} {worktree} {branch} {base} {key} {slug} {type} ' +
-  '{ticket.key|title|url|file} {pr.url|number|head|base|title} {session.id|name|cwd} {sid8} {run} {port} ' +
-  '{config_dir} {data_dir} {home} {user}. Filters: |slug |shell |json; {a|b} = first non-empty.';
+// One literal: the i18n catalog check reads message keys from the source.
+export const TEMPLATE_HELP = msg(
+  'Placeholders: {project.id|name|root} {repo.id|path|name} {worktree} {branch} {base} {key} {slug} {type} {ticket.key|title|url|file} {pr.url|number|head|base|title} {session.id|name|cwd} {sid8} {run} {port} {config_dir} {data_dir} {home} {user}. Filters: |slug |shell |json; {a|b} = first non-empty.',
+);
 
 export function isTemplatePath(path: string): boolean {
   return TEMPLATE_PATTERNS.some((p) => p.test(path));

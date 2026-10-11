@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { TemplateCtx } from '$lib/gen';
   import { Button, Menu } from '$lib/ui';
 
@@ -54,7 +55,7 @@
       aria-expanded={menu !== null}
       onclick={open}
     >
-      Plugins ▾
+      {t('Plugins')} ▾
     </Button>
   </span>
   {#if menu}
@@ -62,7 +63,7 @@
       items={actions.map((a) => ({ id: a.command_id, label: a.title, detail: a.plugin }))}
       x={menu.x}
       y={menu.y}
-      label="Plugin actions"
+      label={t('Plugin actions')}
       onselect={(id) => void run(id)}
       onclose={() => {
         menu = null;

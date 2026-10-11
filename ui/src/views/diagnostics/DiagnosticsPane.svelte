@@ -1,6 +1,7 @@
 <script lang="ts">
   // Diagnostics: dependency and environment checks (claude, nvim, git, gh, glab, secret backend,
   // notification daemon, hooks) with a fix per failing row. Runs on open and on demand only.
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
   import type { PaneProps } from '$app/registry';
   import type { AppInfo, Diagnostics } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -40,35 +41,39 @@
   async function copy(): Promise<void> {
     try {
       await ipc.clipboardWrite({ kind: 'clipboard', text: reportText(info, diag) });
-      toasts.info('Report copied');
+      toasts.info(t('Report copied'));
     } catch (err) {
-      toasts.error(err, 'Could not copy the report');
+      toasts.error(err, t('Could not copy the report'));
     }
   }
 
+  const STATUS_WORD = { ok: msg('ok'), warn: msg('warn'), fail: msg('fail') } as const;
   const sorted = $derived(diag ? sortChecks(diag.checks) : []);
   const summary = $derived(diag ? counts(diag.checks) : null);
 </script>
 
 <div class="diagnostics" data-pane-kind={content.kind}>
   <header>
-    <h2>Diagnostics</h2>
+    <h2>{t('Diagnostics')}</h2>
     <div class="spacer"></div>
-    <Button size="sm" icon="copy" onclick={copy} disabled={!diag}>Copy report</Button>
-    <Button size="sm" icon="refresh-cw" {loading} onclick={run}>Check again</Button>
+    <Button size="sm" icon="copy" onclick={copy} disabled={!diag}>{t('Copy report')}</Button>
+    <Button size="sm" icon="refresh-cw" {loading} onclick={run}>{t('Check again')}</Button>
   </header>
 
   {#if error}
-    <ErrorState title="Diagnostics failed" {error} onretry={run} />
+    <ErrorState title={t('Diagnostics failed')} {error} onretry={run} />
   {:else if !diag}
-    <div class="loading"><Spinner size={16} /> Checking your environment…</div>
+    <div class="loading"><Spinner size={16} /> {t('Checking your environment…')}</div>
   {:else}
     {#if summary}
       <p class="summary" data-testid="diagnostics-summary">
         {#if summary.fail === 0 && summary.warn === 0}
-          Everything looks good.
+          {t('Everything looks good.')}
         {:else}
-          {summary.fail} failing, {summary.warn} warning{summary.warn === 1 ? '' : 's'}.
+          {t('{fail} failing, {warnings}.', {
+            fail: summary.fail,
+            warnings: tn('{n} warning', '{n} warnings', summary.warn),
+          })}
         {/if}
       </p>
     {/if}
@@ -79,7 +84,7 @@
           <div class="body">
             <div class="row">
               <strong>{c.label}</strong>
-              <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
+              <Badge tone={STATUS_TONE[c.status]}>{t(STATUS_WORD[c.status])}</Badge>
             </div>
             <p class="detail">{c.detail}</p>
             {#if c.fix}<p class="fix"><code>{c.fix}</code></p>{/if}
@@ -90,23 +95,23 @@
 
     {#if info}
       <section class="info" data-testid="app-info">
-        <h3>Environment</h3>
+        <h3>{t('Environment')}</h3>
         <dl>
-          <dt>Version</dt>
+          <dt>{t('Version')}</dt>
           <dd>{info.version}&ensp;<code>{info.platform}/{info.arch}</code></dd>
-          <dt>Config</dt>
+          <dt>{t('Config')}</dt>
           <dd><code>{info.config_dir}</code></dd>
-          <dt>Data</dt>
+          <dt>{t('Data')}</dt>
           <dd><code>{info.data_dir}</code></dd>
-          <dt>Runtime</dt>
+          <dt>{t('Runtime')}</dt>
           <dd><code>{info.runtime_dir}</code></dd>
           {#if info.claude}
             <dt>Claude</dt>
             <dd>{info.claude.version}&ensp;<code>{info.claude.path}</code></dd>
           {/if}
           {#if info.safe_graphics}
-            <dt>Graphics</dt>
-            <dd>Safe mode for this launch</dd>
+            <dt>{t('Graphics')}</dt>
+            <dd>{t('Safe mode for this launch')}</dd>
           {/if}
         </dl>
       </section>

@@ -1,6 +1,7 @@
 // Project colours (DESIGN §2.1): `theme:<slot>` follows the active theme's ANSI colour, a hex stays
 // as typed. Resolution needs the theme, so only the UI resolves; the CLI and plugins get the stored value.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { ResolvedTheme } from './index';
 
 /** Theme colour slot → ANSI index (1–6, then the bright 9–14). */
@@ -36,9 +37,23 @@ export const LEGACY_SWATCHES: Readonly<Record<string, Slot>> = {
 };
 
 /** "bright-blue" → "Bright blue". */
+const SLOT_LABELS: Record<Slot, string> = {
+  red: msg('Red'),
+  green: msg('Green'),
+  yellow: msg('Yellow'),
+  blue: msg('Blue'),
+  magenta: msg('Magenta'),
+  cyan: msg('Cyan'),
+  'bright-red': msg('Bright red'),
+  'bright-green': msg('Bright green'),
+  'bright-yellow': msg('Bright yellow'),
+  'bright-blue': msg('Bright blue'),
+  'bright-magenta': msg('Bright magenta'),
+  'bright-cyan': msg('Bright cyan'),
+};
+
 export function slotLabel(slot: Slot): string {
-  const s = slot.replace('-', ' ');
-  return s[0]!.toUpperCase() + s.slice(1);
+  return t(SLOT_LABELS[slot]);
 }
 
 export function parseProjectColor(

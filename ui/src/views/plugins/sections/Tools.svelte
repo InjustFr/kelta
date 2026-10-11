@@ -2,8 +2,9 @@
   // Settings → Tools: tools are personal, so the Add tool form and the `[[tools]]` editor live at the
   // Global layer only (other layers show a note and Go to Global). Then the merged list (global +
   // plugins) with an install check and key-conflict warnings.
+  import { msg, t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
-  import type { ToolCheck } from '$lib/gen';
+  import type { Layer, ToolCheck } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { projects, tools, ui } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
@@ -32,6 +33,14 @@
 
   const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
   const platform = currentPlatform();
+  const LAYER: Record<Layer, string> = {
+    default: msg('default'),
+    plugin: msg('plugin'),
+    global: msg('global'),
+    project: msg('project'),
+    repo: msg('repo'),
+    runtime: msg('runtime'),
+  };
   const bindings = $derived.by(() => {
     const v = editor.valueOf('keys.bindings');
     return effectiveBindings(isRecord(v) ? (v as Record<string, string[]>) : {}, platform);
@@ -59,21 +68,23 @@
       <AddToolForm {editor} merged={dedupeAgainst} {bindings} bind:open={adding} />
     {:else}
       <p class="personal" data-testid="tools-personal">
-        Tools are personal: they live in your global settings.
+        {t('Tools are personal: they live in your global settings.')}
         <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
-          >Go to Global</Button
+          >{t('Go to Global')}</Button
         >
       </p>
     {/if}
   {/snippet}
   {#snippet after()}
     <SettingsGroup
-      heading="Your tools"
-      description="Every tool from config files or plugins. Check shows whether its program is installed."
+      heading={t('Your tools')}
+      description={t(
+        'Every tool from config files or plugins. Check shows whether its program is installed.',
+      )}
       data-layer={layer}
     >
       {#if !pid}
-        <EmptyState icon="folder" title="No project selected" />
+        <EmptyState icon="folder" title={t('No project selected')} />
       {:else if slot?.error && !slot.data}
         <ErrorState error={slot.error} onretry={() => tools.load(pid)} />
       {:else if !slot?.data}
@@ -81,28 +92,33 @@
       {:else if slot.data.length === 0}
         <EmptyState
           icon="wrench"
-          title="No tools yet"
-          body="Add a terminal program like lazygit, or an app like Fork."
+          title={t('No tools yet')}
+          body={t('Add a terminal program like lazygit, or an app like Fork.')}
         >
           {#snippet actions()}
-            {#if canAdd}<Button size="sm" variant="primary" onclick={() => (adding = true)}>Add tool</Button
+            {#if canAdd}<Button size="sm" variant="primary" onclick={() => (adding = true)}
+                >{t('Add tool')}</Button
               >{/if}
             <Button size="sm" variant="ghost" onclick={() => ui.openSheet('plugin_install', {})}
-              >Install plugin</Button
+              >{t('Install plugin')}</Button
             >
           {/snippet}
         </EmptyState>
       {:else}
-        {#each slot.data as t (t.id)}
-          {@const c = checks[t.id]}
-          {@const clash = t.keybinding
-            ? toolKeyConflict(t.keybinding, t.id, bindings, slot.data, platform)
+        {#each slot.data as tool (tool.id)}
+          {@const c = checks[tool.id]}
+          {@const clash = tool.keybinding
+            ? toolKeyConflict(tool.keybinding, tool.id, bindings, slot.data, platform)
             : null}
-          <SettingsCard heading={t.label} data-tool={t.id}>
+          <SettingsCard heading={tool.label} data-tool={tool.id}>
             {#snippet head()}
-              <span class="muted">{t.id}</span>
-              <Badge tone="info">{t.kind}</Badge>
-              <Badge>{t.source.kind === 'plugin' ? `plugin ${t.source.plugin_id}` : t.source.layer}</Badge>
+              <span class="muted">{tool.id}</span>
+              <Badge tone="info">{tool.kind}</Badge>
+              <Badge
+                >{tool.source.kind === 'plugin'
+                  ? t('plugin {id}', { id: tool.source.plugin_id })
+                  : t(LAYER[tool.source.layer])}</Badge
+              >
               {#if clash}<Badge tone="warn" title={clash}>{clash}</Badge>{/if}
             {/snippet}
             {#snippet actions()}
@@ -110,13 +126,14 @@
                 {#if typeof c === 'string'}
                   <span class="bad">{c}</span>
                 {:else if c}
-                  {#if c.installed}<span class="ok">{c.version ?? 'installed'}</span>
-                  {:else}<span class="bad">missing{c.install_hint ? ` · ${c.install_hint}` : ''}</span>{/if}
-                {:else if t.installed === false}
-                  <span class="bad">missing</span>
+                  {#if c.installed}<span class="ok">{c.version ?? t('installed')}</span>
+                  {:else}<span class="bad">{t('missing')}{c.install_hint ? ` · ${c.install_hint}` : ''}</span
+                    >{/if}
+                {:else if tool.installed === false}
+                  <span class="bad">{t('missing')}</span>
                 {/if}
               </span>
-              <Button size="sm" variant="ghost" onclick={() => check(t.id)}>Check</Button>
+              <Button size="sm" variant="ghost" onclick={() => check(tool.id)}>{t('Check')}</Button>
             {/snippet}
           </SettingsCard>
         {/each}

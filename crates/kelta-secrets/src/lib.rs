@@ -189,7 +189,7 @@ impl Secrets {
     }
 
     async fn run(&self, program: &Path, args: &[String]) -> Result<Captured, RunError> {
-        let mut cmd = tokio::process::Command::new(program);
+        let mut cmd = kelta_proto::term::async_command(program);
         cmd.args(args)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())

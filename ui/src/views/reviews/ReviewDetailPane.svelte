@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -15,6 +16,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
 
@@ -49,6 +51,13 @@
     return () => clearTimeout(t);
   });
 
+  const REVIEWER_STATE: Record<string, string> = {
+    approved: msg('approved'),
+    changes_requested: msg('changes requested'),
+    commented: msg('commented'),
+    pending: msg('pending'),
+    dismissed: msg('dismissed'),
+  };
   function refresh(): void {
     changed = false;
     void reviews.loadDetail(ref);
@@ -60,15 +69,15 @@
     approving = true;
     try {
       await reviewApprove({ review: ref, head_sha: sha });
-      toasts.info(`Approved ${ref.repo}#${ref.number} at ${sha.slice(0, 7)}`);
+      toasts.info(t('Approved {pr} at {sha}', { pr: `${ref.repo}#${ref.number}`, sha: sha.slice(0, 7) }));
       changed = false;
       void reviews.loadDetail(ref);
     } catch (err) {
       if (isIpcError(err, 'conflict')) {
         changed = true;
-        toasts.warn('PR changed, refresh');
+        toasts.warn(t('PR changed, refresh'));
       } else {
-        toasts.error(err, 'Approve');
+        toasts.error(err, t('Approve'));
       }
     } finally {
       approving = false;
@@ -79,16 +88,16 @@
     try {
       if (kind === 'comment') await reviewComment({ review: ref, body: text });
       else await reviewRequestChanges({ review: ref, body: text });
-      toasts.info(kind === 'comment' ? 'Comment posted' : 'Changes requested');
+      toasts.info(kind === 'comment' ? t('Comment posted') : t('Changes requested'));
       void reviews.loadDetail(ref);
     } catch (err) {
-      toasts.error(err, kind === 'comment' ? 'Comment' : 'Request changes');
+      toasts.error(err, kind === 'comment' ? t('Comment') : t('Request changes'));
       throw err;
     }
   }
 
   function browse(): void {
-    if (rv) openExternal({ url: rv.url }).catch((err) => toasts.error(err, 'Open in browser'));
+    if (rv) openExternal({ url: rv.url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 
   /** My own PR: fixed through its work item, never approved here (FLOW §4.2). */
@@ -101,9 +110,10 @@
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (own && (e.key === 'f' || e.key === 'g')) {
+    if (own && (e.key === 'f' || e.key === 'g' || e.key === 'd')) {
       e.preventDefault();
       if (e.key === 'f') fixWithClaude();
+      else if (e.key === 'd') void (rv && toggleDraft(rv));
       else void reviewLocally(ref, projectId);
       return;
     }
@@ -149,25 +159,25 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label={`Review ${ref.repo}#${ref.number}`}
+  aria-label={t('Review {pr}', { pr: `${ref.repo}#${ref.number}` })}
   {onkeydown}
 >
   {#if slot?.loading && !detail}
-    <Loading label="Loading review" />
+    <Loading label={t('Loading review')} />
   {:else if !detail && slot?.error}
     {#if slot.error.code === 'not_found'}
       <EmptyState
         icon="git-pull-request"
-        title="This pull request is gone"
-        body="It may have been merged, closed or deleted."
+        title={t('This pull request is gone')}
+        body={t('It may have been merged, closed or deleted.')}
       >
-        {#snippet actions()}<Button onclick={refresh}>Retry</Button>{/snippet}
+        {#snippet actions()}<Button onclick={refresh}>{t('Retry')}</Button>{/snippet}
       </EmptyState>
     {:else}
-      <ErrorState error={slot.error} title="Could not load the review" onretry={refresh}>
+      <ErrorState error={slot.error} title={t('Could not load the review')} onretry={refresh}>
         {#snippet actions()}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open settings'}
+            {isAuthError(slot.error) ? t('Re-authenticate') : t('Open settings')}
           </Button>
         {/snippet}
       </ErrorState>
@@ -185,80 +195,91 @@
     {#if changed}
       <div class="changed" role="alert" data-testid="pr-changed">
         <Icon name="triangle-alert" size={14} />
-        <span>PR changed, refresh. The head moved since you opened it, nothing was approved.</span>
-        <Button size="sm" onclick={refresh}>Refresh</Button>
+        <span>{t('PR changed, refresh. The head moved since you opened it, nothing was approved.')}</span>
+        <Button size="sm" onclick={refresh}>{t('Refresh')}</Button>
       </div>
     {/if}
     <header class="head">
       <div class="line">
         <span class="key">{ref.repo}#{ref.number}</span>
-        {#if rv.draft}<Badge>draft</Badge>{/if}
+        {#if rv.draft}<Badge>{t('draft')}</Badge>{/if}
         <span class="check"><Lamp level={ci.lamp} title={ci.label} />{ci.label}</span>
         {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
         {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-        {#each rv.linked_tickets as t (t)}<LinkedTicket ticketKey={t} {projectId} repo={rv.ref.repo} />{/each}
+        {#each rv.linked_tickets as key (key)}<LinkedTicket
+            ticketKey={key}
+            {projectId}
+            repo={rv.ref.repo}
+          />{/each}
       </div>
       <h1>{rv.title}</h1>
-      <p class="branches"><code>{rv.source_branch}</code> into <code>{rv.target_branch}</code></p>
+      <p class="branches"><code>{rv.source_branch}</code> {t('into')} <code>{rv.target_branch}</code></p>
       <dl class="k-meta">
-        <dt>Author</dt>
+        <dt>{t('Author')}</dt>
         <dd>{rv.author.name}</dd>
-        <dt>Head</dt>
+        <dt>{t('Head')}</dt>
         <dd><code data-testid="head-sha" title={rv.head_sha}>{rv.head_sha.slice(0, 7)}</code></dd>
-        {#if rv.additions !== null || rv.deletions !== null}<dt>Changes</dt>
+        {#if rv.additions !== null || rv.deletions !== null}<dt>{t('Changes')}</dt>
           <dd class="k-mono k-num">
             <span class="add">+{rv.additions ?? 0}</span> <span class="del">−{rv.deletions ?? 0}</span>
           </dd>{/if}
-        {#if rv.mergeable === false}<dt>Merge</dt>
-          <dd><Badge tone="warn">conflicts</Badge></dd>{/if}
+        {#if rv.mergeable === false}<dt>{t('Merge')}</dt>
+          <dd><Badge tone="warn">{t('conflicts')}</Badge></dd>{/if}
       </dl>
       <div class="line actions">
         {#if own}
-          <Button variant="primary" icon="bot" onclick={fixWithClaude}>Fix with Claude</Button>
-          <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>Go to work item</Button
+          <Button variant="primary" icon="bot" onclick={fixWithClaude}>{t('Fix with Claude')}</Button>
+          <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}
+            >{t('Go to work item')}</Button
           >
-          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          <Button
+            icon={rv.draft ? 'eye' : 'pencil'}
+            disabled={!!draftBlocked(rv)}
+            title={draftBlocked(rv) ?? undefined}
+            onclick={() => void toggleDraft(rv)}>{draftLabel(rv)}</Button
+          >
+          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
         {:else}
           <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
-            >Approve</Button
+            >{t('Approve')}</Button
           >
-          <Button icon="message-square" onclick={() => (dialog = 'comment')}>Comment</Button>
-          <Button variant="danger" onclick={() => (dialog = 'changes')}>Request changes</Button>
+          <Button icon="message-square" onclick={() => (dialog = 'comment')}>{t('Comment')}</Button>
+          <Button variant="danger" onclick={() => (dialog = 'changes')}>{t('Request changes')}</Button>
           {#if detail.pending_comments > 0}
             <span class="pending" data-testid="pending-comments">
-              {detail.pending_comments} pending {detail.pending_comments === 1 ? 'comment' : 'comments'}
+              {tn('{n} pending comment', '{n} pending comments', detail.pending_comments)}
             </span>
           {/if}
-          <Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
           <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
-            Review locally
+            {t('Review locally')}
           </Button>
         {/if}
-        <Button variant="ghost" icon="refresh-cw" onclick={refresh}>Refresh</Button>
+        <Button variant="ghost" icon="refresh-cw" onclick={refresh}>{t('Refresh')}</Button>
         <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       </div>
     </header>
 
     <div class="scroll">
-      <section aria-label="Description">
+      <section aria-label={t('Description')}>
         {#if detail.body_html.trim() === ''}
-          <p class="muted">No description.</p>
+          <p class="muted">{t('No description.')}</p>
         {:else}
-          <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, 'Open link')} />
+          <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, t('Open link'))} />
         {/if}
       </section>
 
-      <section aria-label="Reviewers">
-        <h2 class="k-section-title">Reviewers</h2>
+      <section aria-label={t('Reviewers')}>
+        <h2 class="k-section-title">{t('Reviewers')}</h2>
         {#if detail.reviewers.length === 0}
-          <p class="muted">No reviewers.</p>
+          <p class="muted">{t('No reviewers.')}</p>
         {:else}
           <ul class="plain">
             {#each detail.reviewers as r (r.user.id)}
               <li>
                 {r.user.name}
                 {#if r.state}<Badge tone={myStateInfo(r.state)?.tone ?? 'neutral'}
-                    >{r.state.replace('_', ' ')}</Badge
+                    >{t(REVIEWER_STATE[r.state] ?? r.state)}</Badge
                   >{/if}
               </li>
             {/each}
@@ -266,10 +287,10 @@
         {/if}
       </section>
 
-      <section aria-label="Checks">
-        <h2 class="k-section-title">Checks</h2>
+      <section aria-label={t('Checks')}>
+        <h2 class="k-section-title">{t('Checks')}</h2>
         {#if detail.checks.length === 0}
-          <p class="muted">No checks reported.</p>
+          <p class="muted">{t('No checks reported.')}</p>
         {:else}
           <ul class="plain">
             {#each detail.checks as c (c.name)}
@@ -281,7 +302,7 @@
                   <button
                     type="button"
                     class="link"
-                    onclick={() => openExternal({ url }).catch((err) => toasts.error(err, 'Open check'))}
+                    onclick={() => openExternal({ url }).catch((err) => toasts.error(err, t('Open check')))}
                   >
                     {c.name}
                   </button>
@@ -294,8 +315,8 @@
         {/if}
       </section>
 
-      <section aria-label="Files">
-        <h2 class="k-section-title">Files <span class="muted k-num">{detail.files.length}</span></h2>
+      <section aria-label={t('Files')}>
+        <h2 class="k-section-title">{t('Files')} <span class="muted k-num">{detail.files.length}</span></h2>
         <ul class="plain files">
           {#each detail.files as f (f.path)}
             <li>
@@ -309,17 +330,17 @@
       </section>
     </div>
   {:else}
-    <Loading label="Loading review" />
+    <Loading label={t('Loading review')} />
   {/if}
 </div>
 
 {#if dialog === 'comment'}
   <ReviewTextDialog
-    title="Comment"
-    label="Comment (Markdown)"
-    submitLabel="Comment"
+    title={t('Comment')}
+    label={t('Comment (Markdown)')}
+    submitLabel={t('Comment')}
     required={!pendingCount}
-    onsubmit={(t) => send('comment', t)}
+    onsubmit={(text) => send('comment', text)}
     onclose={() => {
       dialog = null;
       root?.focus();
@@ -327,12 +348,12 @@
   />
 {:else if dialog === 'changes'}
   <ReviewTextDialog
-    title="Request changes"
-    label="What should change? (Markdown)"
-    submitLabel="Request changes"
+    title={t('Request changes')}
+    label={t('What should change? (Markdown)')}
+    submitLabel={t('Request changes')}
     required={!pendingCount}
     danger
-    onsubmit={(t) => send('changes', t)}
+    onsubmit={(text) => send('changes', text)}
     onclose={() => {
       dialog = null;
       root?.focus();

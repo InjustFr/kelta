@@ -3,6 +3,7 @@
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
 // bring that source's card into view in Settings → Sources.
 
+import { t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
 import { findContent, focusPane, replacePaneContent, updateTab } from '$lib/layout';
@@ -72,14 +73,14 @@ registerAction('settings.open', async (args) => {
   } catch (err) {
     tomlRequest = null;
     sourceRequest = null;
-    toasts.error(err, 'Could not open settings');
+    toasts.error(err, t('Could not open settings'));
   }
 });
 
 // The startup offer of Kelta's MCP in Claude Code (toast: Install / Never; dismissing = Not now).
 registerAction('claude.mcp_install', async () => {
   await ipc.claudeMcpInstall();
-  toasts.info("Kelta's ticket tools are installed: new Claude sessions list them");
+  toasts.info(t("Kelta's ticket tools are installed: new Claude sessions list them"));
 });
 registerAction('claude.mcp_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.mcp_offer', value: false });
@@ -87,7 +88,7 @@ registerAction('claude.mcp_never', async () => {
 // The startup offer of Kelta's hook relay (#345): sessions started outside Kelta show in Now.
 registerAction('claude.hooks_install', async () => {
   await ipc.claudeHooksInstall();
-  toasts.info('Installed: Claude sessions you start from now on show in Now');
+  toasts.info(t('Installed: Claude sessions you start from now on show in Now'));
 });
 registerAction('claude.hooks_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.hooks_offer', value: false });
@@ -101,6 +102,6 @@ registerAction('claude.setup', async () => {
     sessions.upsert(info);
     await activateProject(info.project_id);
   } catch (err) {
-    toasts.error(err, 'Could not start the setup with Claude');
+    toasts.error(err, t('Could not start the setup with Claude'));
   }
 });

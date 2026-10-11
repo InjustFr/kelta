@@ -2,6 +2,7 @@
   // Sheet `claude_runs` (#272): a session's Claude `Workflow` runs, live from its hooks. Phases with
   // their agents, the selected agent's transcript tail, totals and result once the run ends, and the
   // work items the session claimed (ticket, branch, PR).
+  import { locale, msg, t, tn } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import type { ClaudeRun, SessionId, TranscriptLine } from '$lib/gen';
   import { claudeRunTail } from '$lib/ipc/commands';
@@ -9,6 +10,7 @@
   import { sessions, work } from '$lib/stores';
   import { EmptyState, Sheet } from '$lib/ui';
 
+  import { runStatusLabel } from '../../shell/labels';
   import { workKey } from '../work/phase';
 
   let { sessionId, onclose }: SheetProps & { sessionId: SessionId } = $props();
@@ -48,13 +50,13 @@
   function totals(r: ClaudeRun): string {
     const parts = [];
     if (r.duration_ms != null) parts.push(duration(r.duration_ms));
-    if (r.total_tokens != null) parts.push(`${r.total_tokens.toLocaleString()} tokens`);
-    if (r.total_tool_calls != null) parts.push(`${r.total_tool_calls} tool calls`);
+    if (r.total_tokens != null) parts.push(t('{n} tokens', { n: r.total_tokens.toLocaleString(locale()) }));
+    if (r.total_tool_calls != null) parts.push(tn('{n} tool call', '{n} tool calls', r.total_tool_calls));
     return parts.join(' · ');
   }
 </script>
 
-<Sheet title={`Workflows · ${session?.name ?? 'session'}`} width={640} {onclose}>
+<Sheet title={`${t('Workflows')} · ${session?.name ?? t('session')}`} width={640} {onclose}>
   <div class="body" data-testid="workflow-runs">
     {#if claimed.length}
       <ul class="claimed">
@@ -71,7 +73,7 @@
       <section class="run" data-testid="workflow-run" data-status={run.status}>
         <h3>
           {run.name ?? run.run_id}
-          <span class="status {run.status}">{run.status}</span>
+          <span class="status {run.status}">{runStatusLabel(run.status)}</span>
           {#if run.status !== 'running'}<span class="muted">{totals(run)}</span>{/if}
         </h3>
         {#each run.phases as phase (phase.title)}
@@ -79,11 +81,15 @@
             <span class="title">{phase.title}</span>
             <span class="agents">
               {#each phase.agents as a (a.id)}
-                {@const state = a.done ? 'done' : run.status === 'running' ? 'running' : 'stopped'}
+                {@const state = a.done
+                  ? msg('done')
+                  : run.status === 'running'
+                    ? msg('running')
+                    : msg('stopped')}
                 <button
                   class="agent {state}"
                   class:selected={selected?.run === run.run_id && selected.agent === a.id}
-                  title={state}
+                  title={t(state)}
                   data-testid="workflow-agent"
                   data-state={state}
                   onclick={() => pick(run.run_id, a.id)}
@@ -97,11 +103,11 @@
         {#if selected?.run === run.run_id}
           <div class="tail" data-testid="workflow-tail" aria-live="polite">
             {#if tail === null}
-              <span class="muted">Reading the transcript…</span>
+              <span class="muted">{t('Reading the transcript…')}</span>
             {:else if typeof tail === 'string'}
               <span class="error">{tail}</span>
             {:else if tail.length === 0}
-              <span class="muted">Nothing yet</span>
+              <span class="muted">{t('Nothing yet')}</span>
             {:else}
               {#each tail as line, i (i)}
                 <div class="line {line.kind}">{line.text}</div>
@@ -114,13 +120,13 @@
         {/each}
         {#if run.result}
           <details>
-            <summary>Result</summary>
+            <summary>{t('Result')}</summary>
             <pre>{run.result}</pre>
           </details>
         {/if}
       </section>
     {:else}
-      <EmptyState title="No workflow run in this session" />
+      <EmptyState title={t('No workflow run in this session')} />
     {/each}
   </div>
 </Sheet>

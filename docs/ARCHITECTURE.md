@@ -560,6 +560,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `review_comment` | `{review, body}` | `()` | |
 | `review_request_changes` | `{review, body}` | `()` | publishes my pending line comments too (as do `review_approve` / `review_comment`) |
 | `review_nudge` | `{review, who, comment?}` | `()` | my PR: re-request `who` (its `waiting_on`; `comment` null, `CodeHost::rerequest_review`; GitHub drops then re-adds a pending request so it notifies again) or post `comment`; `InvalidArgument` within 24 h of the last nudge (`nudges`) |
+| `review_set_draft` | `{review, draft}` | `()` | my PR: mark ready for review (`draft` false) or back to draft (`CodeHost::set_draft`: GitHub GraphQL, GitLab `Draft:` / Gitea `WIP:` title prefix, Bitbucket `draft`); `Unsupported` on a plugin host |
 | **work** | | | `commands/work.rs` (L6) |
 | `work_plan` | `{project_id, source: WorkSource /*Ticket{ticket}|Review{review}|Branch{name, task?, repo?}*/, source_id?}` (`source_id`: the ticket's source from its row; none = guessed from the account) | `StartWorkPlan` (§SPEC 3.1) | Branch with a task (New work item): `Conflict` when the branch exists or has an item |
 | `work_start` | `{plan: StartWorkPlan}` | `WorkItem` (progress via `work.updated`) | |

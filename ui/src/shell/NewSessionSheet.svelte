@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { Placement, ProjectId, TemplateCtx } from '$lib/gen';
@@ -12,12 +13,12 @@
 
   let { onclose }: SheetProps = $props();
 
-  const BUILTIN = [
-    { value: 'claude+editor', label: 'Claude and nvim (recommended)' },
+  const BUILTIN = $derived([
+    { value: 'claude+editor', label: t('Claude and nvim (recommended)') },
     { value: 'claude', label: 'Claude Code' },
     { value: 'editor', label: 'nvim' },
-    { value: 'shell', label: 'Shell' },
-  ];
+    { value: 'shell', label: t('Shell') },
+  ]);
 
   const rail = railProjects();
   const newWorkChord = effectiveChords('work.new', settings.value()?.keys ?? null, currentPlatform())[0];
@@ -66,10 +67,13 @@
     return [
       ...base,
       ...fromPlugins.map((t) => ({ value: t.id, label: `${t.label} (${t.plugin})` })),
-      ...tools.list(projectId).map((t) => ({
-        value: `tool:${t.id}`,
-        label: `Tool: ${t.label}${t.installed === false ? ' (not installed)' : ''}`,
-        disabled: t.installed === false,
+      ...tools.list(projectId).map((tool) => ({
+        value: `tool:${tool.id}`,
+        label:
+          tool.installed === false
+            ? t('Tool: {tool} (not installed)', { tool: tool.label })
+            : t('Tool: {tool}', { tool: tool.label }),
+        disabled: tool.installed === false,
       })),
     ];
   });
@@ -83,7 +87,7 @@
   );
 
   const cwdOptions = $derived.by(() => {
-    const out: { value: string; label: string }[] = [{ value: '', label: 'Project folder' }];
+    const out: { value: string; label: string }[] = [{ value: '', label: t('Project folder') }];
     const push = (value: string, label: string): void => {
       if (!out.some((o) => o.value === value)) out.push({ value, label });
     };
@@ -91,10 +95,13 @@
     for (const r of project?.repos ?? []) push(r.path, `${r.id} (${r.path})`);
     for (const w of work.forProject(projectId)) {
       if (w.state.kind !== 'finished')
-        push(w.worktree, `Branch ${w.branch} (separate folder): ${w.worktree}`);
+        push(
+          w.worktree,
+          t('Branch {branch} (separate folder): {path}', { branch: w.branch, path: w.worktree }),
+        );
     }
-    for (const s of sessions.forProject(projectId)) push(s.cwd, `Recent: ${s.cwd}`);
-    out.push({ value: '__custom', label: 'Other folder…' });
+    for (const s of sessions.forProject(projectId)) push(s.cwd, t('Recent: {path}', { path: s.cwd }));
+    out.push({ value: '__custom', label: t('Other folder…') });
     return out;
   });
 
@@ -140,14 +147,14 @@
       onclose();
       await activateProject(projectId);
     } catch (err) {
-      toasts.error(err, 'Starting the session failed');
+      toasts.error(err, t('Starting the session failed'));
     } finally {
       busy = false;
     }
   }
 </script>
 
-<Sheet title="New session" width={480} {onclose}>
+<Sheet title={t('New session')} width={480} {onclose}>
   <form
     class="form"
     data-testid="new-session"
@@ -157,42 +164,42 @@
     }}
   >
     <Select
-      label="What to start"
+      label={t('What to start')}
       options={templateOptions}
       bind:value={() => template, (v) => (picked = v)}
     />
-    <Select label="Project" options={projectOptions} bind:value={projectId} />
-    <Select label="Folder" options={cwdOptions} bind:value={cwdChoice} />
+    <Select label={t('Project')} options={projectOptions} bind:value={projectId} />
+    <Select label={t('Folder')} options={cwdOptions} bind:value={cwdChoice} />
     {#if cwdChoice === '__custom'}
-      <TextInput label="Folder path" bind:value={custom} placeholder="/path/to/dir" />
+      <TextInput label={t('Folder path')} bind:value={custom} placeholder={t('/path/to/dir')} />
     {/if}
     <Select
-      label="Open in"
+      label={t('Open in')}
       options={[
-        { value: 'new_tab', label: 'New tab' },
-        { value: 'split_right', label: 'Split right' },
-        { value: 'split_down', label: 'Split down' },
+        { value: 'new_tab', label: t('New tab') },
+        { value: 'split_right', label: t('Split right') },
+        { value: 'split_down', label: t('Split down') },
       ]}
       bind:value={placement}
     />
-    <button type="submit" class="k-visually-hidden" tabindex="-1">Start</button>
+    <button type="submit" class="k-visually-hidden" tabindex="-1">{t('Start')}</button>
   </form>
   <p class="hint" data-testid="new-work-hint">
-    Want a branch and a PR?
+    {t('Want a branch and a PR?')}
     <button
       type="button"
       class="k-link"
       onclick={() => {
         onclose();
         void dispatch('work.new');
-      }}>New work item</button
+      }}>{t('New work item')}</button
     >
     {#if newWorkChord}<Kbd chord={newWorkChord} />{/if}
   </p>
   {#snippet actions()}
-    <Button onclick={onclose}>Cancel</Button>
+    <Button onclick={onclose}>{t('Cancel')}</Button>
     <Button variant="primary" icon="play" loading={busy} onclick={start} data-testid="new-session-start"
-      >Start</Button
+      >{t('Start')}</Button
     >
   {/snippet}
 </Sheet>

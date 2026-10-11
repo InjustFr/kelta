@@ -3,6 +3,7 @@
   // row (a drag region), what that row is about, and the `+` menu. Custom decorations: it is also the
   // window's title bar (macOS traffic-light inset, or Kelta's own controls and resize handles).
   // Native decorations: the breadcrumb is the window title.
+  import { t } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
@@ -15,7 +16,7 @@
   import { workTitle } from '../views/work/live';
   import { workKey } from '../views/work/phase';
   import { backTarget, type JumpLoc } from './jumplist';
-  import { chordFor } from './labels';
+  import { chordFor, runStatusLabel } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import {
     activateProject,
@@ -89,26 +90,26 @@
 
   function placeLabel(loc: JumpLoc): string {
     if (loc.project === GLOBAL) return VIEW_NAMES[loc.tab as GlobalView];
-    const t = layout.get(loc.project)?.tabs.find((x) => x.id === loc.tab);
-    return `${projects.byId(loc.project)?.name ?? loc.project} › ${t ? rowLabel(t) : ''}`;
+    const tb = layout.get(loc.project)?.tabs.find((x) => x.id === loc.tab);
+    return `${projects.byId(loc.project)?.name ?? loc.project} › ${tb ? rowLabel(tb) : ''}`;
   }
 
   /** The breadcrumb as text: the window title in native mode. */
   const title = $derived.by(() => {
     if (view) return VIEW_NAMES[view];
     if (!project) return 'Kelta';
-    if (tool) return `Tools › ${tool.label}`;
+    if (tool) return `${t('Tools')} › ${tool.label}`;
     if (item) return `${project.name} › ${workKey(item)} ${workTitle(item)}`;
     return row ? `${project.name} › ${row.text}` : project.name;
   });
 
   $effect(() => {
-    const t = title;
-    document.title = t;
+    const text = title;
+    document.title = text;
     // Outside a Tauri window getCurrentWindow() throws; the catch swallows it.
     if (custom) return;
     import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(t))
+      .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(text))
       .catch(() => {});
   });
 
@@ -122,7 +123,7 @@
   const runChip = $derived.by(() => {
     if (!run) return null;
     const phase = run.phases.findLast((p) => p.agents.some((a) => !a.done)) ?? run.phases.at(-1);
-    return `${run.name ?? 'workflow'} · ${run.status === 'running' ? (phase?.title ?? 'starting') : run.status}`;
+    return `${run.name ?? t('workflow')} · ${run.status === 'running' ? (phase?.title ?? t('starting')) : runStatusLabel(run.status)}`;
   });
   $effect(() => {
     if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
@@ -141,18 +142,18 @@
   function goOwner(): void {
     if (!project) return;
     const tabs = layout.get(project.id)?.tabs ?? [];
-    const t =
+    const tb =
       (ownerItem && tabs.find((x) => x.work_item_id === ownerItem.id)) ??
       tabs.find((x) => !isToolTab(x, lines));
-    if (t) selectRow(project.id, t.id);
+    if (tb) selectRow(project.id, tb.id);
   }
 
   let plusMenu = $state<{ x: number; y: number } | null>(null);
-  const PLUS: MenuItem[] = [
-    { id: 'session', label: 'New session…', icon: 'square-terminal', kbd: chordFor('session.new') },
-    { id: 'tickets', label: 'Tickets', icon: 'ticket', kbd: chordFor('tickets.open') },
-    { id: 'reviews', label: 'Reviews', icon: 'git-pull-request', kbd: chordFor('reviews.open') },
-  ];
+  const PLUS: MenuItem[] = $derived([
+    { id: 'session', label: t('New session…'), icon: 'square-terminal', kbd: chordFor('session.new') },
+    { id: 'tickets', label: t('Tickets'), icon: 'ticket', kbd: chordFor('tickets.open') },
+    { id: 'reviews', label: t('Reviews'), icon: 'git-pull-request', kbd: chordFor('reviews.open') },
+  ]);
 
   async function onPlus(id: string): Promise<void> {
     // The project's own tabs; with no project shown, the bare actions open the rail's cross-project views.
@@ -162,7 +163,7 @@
       else if (id === 'tickets') await dispatch('tickets.open', args);
       else if (id === 'reviews') await dispatch('reviews.open', args);
     } catch (err) {
-      toasts.error(err, 'Could not open the view');
+      toasts.error(err, t('Could not open the view'));
     }
   }
 
@@ -188,7 +189,7 @@
   <IconButton
     icon="chevron-left"
     size="sm"
-    label={back ? `Back to ${placeLabel(back)}` : 'Back'}
+    label={back ? t('Back to {place}', { place: placeLabel(back) }) : t('Back')}
     chord={chordFor('nav.back')}
     data-testid="context-back"
     onclick={() => void dispatch('nav.back')}
@@ -200,7 +201,7 @@
         ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
       >
     {:else if tool}
-      <span class="parent" data-tauri-drag-region>Tools</span>
+      <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
       <span class="sep" aria-hidden="true">›</span>
       <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
     {:else if project}
@@ -226,13 +227,13 @@
   {:else}
     {#if tool && project}
       {#if isHome}
-        <span class="muted" data-tauri-drag-region>for you</span>
+        <span class="muted" data-tauri-drag-region>{t('for you')}</span>
       {:else}
         <Button
           size="sm"
           variant="ghost"
           class="chip owner"
-          title="Go to {project.name}"
+          title={t('Go to {name}', { name: project.name })}
           data-testid="context-owner"
           onclick={goOwner}
           ><span class="project" style:--project-color={projectColor}>{project.name}</span
@@ -248,7 +249,7 @@
         variant="ghost"
         class="chip"
         chord={chordFor('nav.back')}
-        title="Leave {VIEW_NAMES[view]} for what is underneath"
+        title={t('Leave {view} for what is underneath', { view: VIEW_NAMES[view] })}
         data-testid="context-underneath"
         onclick={() => void activateProject(project.id)}
         >‹ {project.name}{tab ? ` › ${rowLabel(tab)}` : ''}</Button
@@ -259,7 +260,7 @@
           size="sm"
           variant="ghost"
           class="chip"
-          title="Back to {placeLabel(back)}"
+          title={t('Back to {place}', { place: placeLabel(back) })}
           data-testid="context-return"
           onclick={() => void dispatch('nav.back')}
           >↩ {placeLabel(back)}{#if tool.keybinding}
@@ -279,7 +280,7 @@
       size="sm"
       variant="ghost"
       class="chip"
-      title="Workflow runs of this session"
+      title={t('Workflow runs of this session')}
       data-testid="context-workflow"
       onclick={() => ui.openSheet('claude_runs', { sessionId: sid })}
       ><span aria-hidden="true">⚙</span> {runChip}</Button
@@ -291,8 +292,8 @@
     size="sm"
     icon="plus"
     class="plus"
-    aria-label="New tab"
-    title="New tab"
+    aria-label={t('New tab')}
+    title={t('New tab')}
     data-testid="tab-plus"
     onclick={(e) => {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -302,9 +303,9 @@
 
   {#if custom && !mac}
     <span class="controls">
-      <IconButton icon="minus" label="Minimize" size="sm" onclick={() => void win('minimize')} />
-      <IconButton icon="square" label="Maximize" size="sm" onclick={() => void win('toggleMaximize')} />
-      <IconButton icon="x" label="Close window" size="sm" onclick={() => void win('close')} />
+      <IconButton icon="minus" label={t('Minimize')} size="sm" onclick={() => void win('minimize')} />
+      <IconButton icon="square" label={t('Maximize')} size="sm" onclick={() => void win('toggleMaximize')} />
+      <IconButton icon="x" label={t('Close window')} size="sm" onclick={() => void win('close')} />
     </span>
   {/if}
 </header>
@@ -320,7 +321,7 @@
     items={PLUS}
     x={plusMenu.x}
     y={plusMenu.y}
-    label="Open"
+    label={t('Open')}
     onselect={(id) => void onPlus(id)}
     onclose={() => (plusMenu = null)}
   />

@@ -1,6 +1,7 @@
 // Now's sections (FLOW §3.1): one row per thing, a work item once (in its phase's section),
 // sections in the order to work in, each with its own order. Pure: the pane and the rail feed it.
 
+import { msg, t, tn } from '$lib/i18n/index.svelte';
 import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
@@ -47,16 +48,16 @@ export interface Section {
 }
 
 export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] = [
-  { id: 'needs_you', label: 'Claude needs you', lamp: 'needs_input' },
-  { id: 'to_review', label: 'Ready for review', lamp: 'done' },
-  { id: 'next_up', label: 'Next up', lamp: 'none' },
-  { id: 'new', label: 'New for you', lamp: 'none' },
-  { id: 'fix', label: 'Fix', lamp: 'error' },
-  { id: 'requests', label: 'Review requests', lamp: 'none' },
-  { id: 'ship', label: 'Ship and clean up', lamp: 'none' },
-  { id: 'in_flight', label: 'In flight', lamp: 'working' },
-  { id: 'elsewhere', label: 'Elsewhere', lamp: 'none' },
-  { id: 'up_next', label: 'Up next', lamp: 'none' },
+  { id: 'needs_you', label: msg('Claude needs you'), lamp: 'needs_input' },
+  { id: 'to_review', label: msg('Ready for review'), lamp: 'done' },
+  { id: 'next_up', label: msg('Next up'), lamp: 'none' },
+  { id: 'new', label: msg('New for you'), lamp: 'none' },
+  { id: 'fix', label: msg('Fix'), lamp: 'error' },
+  { id: 'requests', label: msg('Review requests'), lamp: 'none' },
+  { id: 'ship', label: msg('Ship and clean up'), lamp: 'none' },
+  { id: 'in_flight', label: msg('In flight'), lamp: 'working' },
+  { id: 'elsewhere', label: msg('Elsewhere'), lamp: 'none' },
+  { id: 'up_next', label: msg('Up next'), lamp: 'none' },
 ];
 
 /** The first four sections: what waits on Louis (badge, Next waiting). */
@@ -141,10 +142,10 @@ export function nowSections(input: NowInput): Section[] {
     if (ownedPrs.has(prKey(r)) || rp === 'reviewed') continue;
     // The blocking band first (Louis is the last required reviewer), then the oldest request.
     const reason = r.review.blocking
-      ? "Blocking: you're the last reviewer"
+      ? msg("Blocking: you're the last reviewer")
       : rp === 'updated'
-        ? 'Updated since your review'
-        : 'Review requested';
+        ? msg('Updated since your review')
+        : msg('Review requested');
     add(
       'requests',
       { type: 'review', id: `r:${prKey(r)}`, review: r, mine: false, reason },
@@ -156,9 +157,9 @@ export function nowSections(input: NowInput): Section[] {
     if (ownedPrs.has(prKey(a))) continue;
     const reason =
       a.review.decision === 'changes_requested'
-        ? 'Changes requested'
+        ? msg('Changes requested')
         : a.review.ci === 'failure' || a.review.ci === 'error'
-          ? 'Checks failed'
+          ? msg('Checks failed')
           : null;
     if (reason)
       add(
@@ -170,7 +171,7 @@ export function nowSections(input: NowInput): Section[] {
     else
       add(
         'in_flight',
-        { type: 'review', id: `p:${prKey(a)}`, review: a, mine: true, reason: 'In review' },
+        { type: 'review', id: `p:${prKey(a)}`, review: a, mine: true, reason: msg('In review') },
         1,
         a.review.updated_at,
       );
@@ -235,19 +236,25 @@ export function headerParts(sections: readonly Section[], working: number): stri
   const fix = count(sections, 'fix');
   const next = count(sections, 'up_next');
   return [
-    asks ? `Claude: ${asks} asks` : '',
-    ready ? `${ready} LLM diff${ready === 1 ? '' : 's'}` : '',
-    prs ? `${prs} PR${prs === 1 ? '' : 's'} waiting` : '',
-    fix ? `Fix ${fix}` : '',
-    working ? `${working} working` : '',
-    next ? `${next} up next` : '',
+    asks ? tn('Claude: {n} asks', 'Claude: {n} asks', asks) : '',
+    ready ? tn('{n} LLM diff', '{n} LLM diffs', ready) : '',
+    prs ? tn('{n} PR waiting', '{n} PRs waiting', prs) : '',
+    fix ? t('Fix {n}', { n: fix }) : '',
+    working ? tn('{n} working', '{n} working', working) : '',
+    next ? t('{n} up next', { n: next }) : '',
   ].filter(Boolean);
 }
 
 // ---- Mod+J (ticket #136) ----------------------------------------------------------------------
 
 /** Mod+J's bands, most urgent first. */
-const BANDS = ['needs input', 'error', 'ready for review', 'feedback', 'review request'] as const;
+const BANDS = [
+  msg('needs input'),
+  msg('error'),
+  msg('ready for review'),
+  msg('feedback'),
+  msg('review request'),
+] as const;
 /** Fix rows that are broken work rather than PR feedback. */
 const BROKEN = new Set<PhaseId>(['failed', 'rebase_stopped']);
 
@@ -296,7 +303,7 @@ export function rowKey(row: NowRow): string {
 export function jumpQueue(sections: readonly Section[], sessions: readonly SessionInfo[]): Jump[] {
   const out: (Jump & { blocking: boolean; at: string })[] = [];
   const add = (row: NowRow, band: number, blocking = false): void => {
-    out.push({ row, band, label: BANDS[band]!, blocking, at: waitingSince(row) });
+    out.push({ row, band, label: t(BANDS[band]!), blocking, at: waitingSince(row) });
   };
   for (const s of sections)
     for (const row of s.rows) {

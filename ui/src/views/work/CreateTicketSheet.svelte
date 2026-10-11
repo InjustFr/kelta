@@ -1,6 +1,7 @@
 <script lang="ts">
   // Create ticket (FLOW §4.3 step 5): title and body prefilled from the scratch item, filed in a tracker
   // source of its project, then linked like Link to ticket.
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -51,10 +52,10 @@
       const next = work.upsert(
         await workCreateTicket({ id, view_id: viewId, title, body_md: body, apply_side_effects: apply }),
       );
-      toasts.info(`Created and linked ${next.ticket?.key ?? 'the ticket'}`);
+      toasts.info(t('Created and linked {key}', { key: next.ticket?.key ?? t('the ticket') }));
       onclose();
     } catch (err) {
-      toasts.error(err, 'Create ticket');
+      toasts.error(err, t('Create ticket'));
     } finally {
       busy = false;
     }
@@ -70,31 +71,35 @@
 
 <svelte:window {onkeydown} />
 
-<Dialog title="Create ticket" width={520} {onclose}>
+<Dialog title={t('Create ticket')} width={520} {onclose}>
   <div class="form" data-testid="create-ticket">
     {#if views.length === 0}
-      <p class="muted" role="alert">This project has no tracker. Add one in its settings first.</p>
+      <p class="muted" role="alert">{t('This project has no tracker. Add one in its settings first.')}</p>
     {:else if views.length > 1}
-      <Select label="In" bind:value={viewId} options={views.map((v) => ({ value: v.id, label: v.label }))} />
+      <Select
+        label={t('In')}
+        bind:value={viewId}
+        options={views.map((v) => ({ value: v.id, label: v.label }))}
+      />
     {/if}
-    <TextInput label="Title" bind:value={title} />
-    <TextInput label="Description" bind:value={body} multiline rows={6} />
-    <p class="muted">The branch <code>{item?.branch}</code> stays as it is.</p>
+    <TextInput label={t('Title')} bind:value={title} />
+    <TextInput label={t('Description')} bind:value={body} multiline rows={6} />
+    <p class="muted">{t('The branch {branch} stays as it is.', { branch: item?.branch ?? '' })}</p>
     <Toggle
       label={item?.pr_url
-        ? 'Assign me, move the ticket to In Progress then In Review, and comment the PR link'
-        : 'Assign me and move the ticket to In Progress'}
+        ? t('Assign me, move the ticket to In Progress then In Review, and comment the PR link')
+        : t('Assign me and move the ticket to In Progress')}
       bind:checked={apply}
     />
   </div>
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <Button
       variant="primary"
       loading={busy}
       disabled={loading || !viewId || !title.trim()}
       onclick={() => void create()}
-      data-testid="create-ticket-submit">Create ticket</Button
+      data-testid="create-ticket-submit">{t('Create ticket')}</Button
     >
   {/snippet}
 </Dialog>

@@ -2,6 +2,7 @@
   // Every section's body: blurb, the section's own content, the top-level schema keys of the section
   // with no per-key code, the rarely changed keys in a collapsed Advanced block, and a link to Edit
   // TOML for the keys no form edits.
+  import { t, tn } from '$lib/i18n/index.svelte';
   import type { SettingsSectionId, SettingsSectionProps } from '$app/registry';
   import Button from '$lib/ui/Button.svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -37,7 +38,7 @@
 
   const editor = useEditor(() => ({ layer, projectId, repoId }));
   const roots = $derived((SECTION_ROOTS[sectionId] ?? []).filter((r) => !skip.includes(r)));
-  const blurb = $derived(SECTION_BLURB[sectionId]);
+  const blurb = $derived(t(SECTION_BLURB[sectionId] ?? ''));
   const tomlRoots = $derived(TOML_ROOTS[sectionId] ?? []);
 
   /** What the form renders: the children of a lone root group, else each root. */
@@ -73,9 +74,13 @@
   {#if blurb}<p class="blurb">{blurb}</p>{/if}
   {#if before}{@render before()}{/if}
   {#if editor.loadError && !editor.ready}
-    <ErrorState title="Settings could not be loaded" error={editor.loadError} onretry={() => editor.load()} />
+    <ErrorState
+      title={t('Settings could not be loaded')}
+      error={editor.loadError}
+      onretry={() => editor.load()}
+    />
   {:else if !editor.ready}
-    <div class="loading"><Spinner size={16} /> Loading settings…</div>
+    <div class="loading"><Spinner size={16} /> {t('Loading settings…')}</div>
   {:else}
     {#each basic as [path, node] (path)}
       <Field {path} {node} depth={path.includes('.') ? 1 : 0} />
@@ -84,7 +89,7 @@
   {#if after}{@render after()}{/if}
   {#if advanced.length > 0}
     <SettingsDisclosure
-      label="Advanced settings"
+      label={t('Advanced settings')}
       count={advanced.length}
       class="advanced"
       data-testid="advanced"
@@ -96,8 +101,12 @@
   {/if}
   {#if tomlRoots.length > 0}
     <p class="toml" data-testid="toml-only">
-      <span><code>{tomlRoots.join(', ')}</code> {tomlRoots.length === 1 ? 'is' : 'are'} edited as TOML.</span>
-      <Button size="sm" variant="ghost" icon="file-code" onclick={() => (editor.raw = true)}>Edit TOML</Button
+      <span
+        ><code>{tomlRoots.join(', ')}</code>
+        {tn('is edited as TOML.', 'are edited as TOML.', tomlRoots.length)}</span
+      >
+      <Button size="sm" variant="ghost" icon="file-code" onclick={() => (editor.raw = true)}
+        >{t('Edit TOML')}</Button
       >
     </p>
   {/if}

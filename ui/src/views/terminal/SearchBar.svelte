@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { TerminalView } from '$lib/terminal/view';
   import { IconButton } from '$lib/ui';
 
@@ -40,18 +41,18 @@
     bind:this={input}
     bind:value={query}
     type="text"
-    placeholder="Search"
-    aria-label="Search terminal"
+    placeholder={t('Search')}
+    aria-label={t('Search terminal')}
     spellcheck="false"
     class:miss={found === false}
     oninput={() => void find()}
     {onkeydown}
   />
-  <IconButton icon="chevron-up" label="Previous match" size="sm" onclick={() => void find(true)} />
-  <IconButton icon="chevron-down" label="Next match" size="sm" onclick={() => void find()} />
+  <IconButton icon="chevron-up" label={t('Previous match')} size="sm" onclick={() => void find(true)} />
+  <IconButton icon="chevron-down" label={t('Next match')} size="sm" onclick={() => void find()} />
   <IconButton
     icon="filter"
-    label="Match case"
+    label={t('Match case')}
     size="sm"
     active={caseSensitive}
     onclick={() => {
@@ -59,7 +60,7 @@
       void find();
     }}
   />
-  <IconButton icon="x" label="Close search" size="sm" onclick={onclose} />
+  <IconButton icon="x" label={t('Close search')} size="sm" onclick={onclose} />
 </div>
 
 <style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Install a plugin (PLUGINS §4): plugin_inspect shows the manifest, its permissions in plain
   // words, warnings and the SHA-256; Install grants exactly the listed permissions.
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -44,7 +45,7 @@
         sha256: preview.sha256,
         grant: preview.permissions.map((p) => p.permission),
       });
-      toasts.info(`Installed ${info.name} ${info.version}`);
+      toasts.info(t('Installed {name} {version}', { name: info.name, version: info.version }));
       void plugins.load();
       onclose();
     } catch (err) {
@@ -55,32 +56,32 @@
   }
 </script>
 
-<Sheet title="Install plugin" {onclose}>
+<Sheet title={t('Install plugin')} {onclose}>
   <div class="install">
     <form onsubmit={inspect}>
       <TextInput
         bind:value={source}
-        label="Source"
-        placeholder="~/code/my-plugin, a git URL or a .tgz file"
+        label={t('Source')}
+        placeholder={t('~/code/my-plugin, a git URL or a .tgz file')}
       />
-      <Button type="submit" loading={busy && !preview} disabled={!source.trim()}>Inspect</Button>
+      <Button type="submit" loading={busy && !preview} disabled={!source.trim()}>{t('Inspect')}</Button>
     </form>
-    <p class="hint">A plugin directory, a git URL (optionally #tag) or a .tar.gz</p>
+    <p class="hint">{t('A plugin directory, a git URL (optionally #tag) or a .tar.gz')}</p>
 
     {#if error}
-      <ErrorState {error} title="Cannot install this plugin" />
+      <ErrorState {error} title={t('Cannot install this plugin')} />
     {/if}
 
     {#if preview}
       {@const m = preview.manifest}
-      <section class="preview" aria-label="Plugin details">
+      <section class="preview" aria-label={t('Plugin details')}>
         <h3>{m.name} <span class="muted">{m.version}</span></h3>
         <p>{m.description}</p>
         <p class="muted"><code>{m.id}</code>&ensp;{m.author}&ensp;{m.license}</p>
 
-        <h4>This plugin will be allowed to</h4>
+        <h4>{t('This plugin will be allowed to')}</h4>
         {#if preview.permissions.length === 0}
-          <p class="muted">Nothing beyond showing its own screens.</p>
+          <p class="muted">{t('Nothing beyond showing its own screens.')}</p>
         {:else}
           <ul class="perms" data-testid="plugin-permissions">
             {#each preview.permissions as p (p.permission)}
@@ -101,9 +102,9 @@
   </div>
 
   {#snippet actions()}
-    <Button onclick={onclose}>Cancel</Button>
+    <Button onclick={onclose}>{t('Cancel')}</Button>
     <Button variant="primary" disabled={!preview} loading={busy && !!preview} onclick={install}>
-      Install
+      {t('Install')}
     </Button>
   {/snippet}
 </Sheet>

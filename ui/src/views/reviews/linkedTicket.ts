@@ -1,5 +1,6 @@
 // A review's `linked_tickets` are bare keys: resolve one by exact key and open its detail.
 
+import { t } from '$lib/i18n/index.svelte';
 import { trackerSearch } from '$lib/ipc/commands';
 import type { ProjectId } from '$lib/gen';
 import { projects, tickets, toasts, ui } from '$lib/stores';
@@ -38,7 +39,7 @@ export async function openLinkedTicket(
     );
     const hit = (projectId && hits.find((h) => h.project_ids.includes(projectId))) || hits[0];
     if (!hit) {
-      toasts.info(`${key} is not in any of your trackers`);
+      toasts.info(t('{key} is not in any of your trackers', { key }));
       return;
     }
     // Land in the project on screen when the ticket belongs to it, else switch to its first project
@@ -51,6 +52,6 @@ export async function openLinkedTicket(
     await activateProject(target);
     await openContent(target, { kind: 'ticket_detail', ticket: hit.ticket.ref }, { placement: 'new_tab' });
   } catch (err) {
-    toasts.error(err, `Opening ${key}`);
+    toasts.error(err, t('Opening {key}', { key }));
   }
 }

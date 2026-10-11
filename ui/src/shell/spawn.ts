@@ -1,3 +1,4 @@
+import { t } from '$lib/i18n/index.svelte';
 import type { ProjectId } from '$lib/gen';
 import { sessionSpawnTemplate } from '$lib/ipc/commands';
 import { sessions, toasts } from '$lib/stores';
@@ -21,6 +22,6 @@ export async function spawnTemplate(projectId: ProjectId, templateId: string): P
     });
     for (const s of created) sessions.upsert(s);
   } catch (err) {
-    toasts.error(err, 'Starting the session failed');
+    toasts.error(err, t('Starting the session failed'));
   }
 }

@@ -275,6 +275,7 @@ export interface Commands {
   review_request_changes: { args: { review: ReviewRef; body: string }; result: null };
   /** My PR: re-request `who` (its `waiting_on`; `comment` null) or post `comment`; refused for 24 h after a nudge. */
   review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
+  review_set_draft: { args: { review: ReviewRef; draft: boolean }; result: null };
   // ---- work --------------------------------------------------------------------------------
   /** `project_id` null: the backend picks the default project (SPEC §3.1). */
   work_plan: {
@@ -478,6 +479,7 @@ export const COMMAND_NAMES = [
   'review_comment',
   'review_request_changes',
   'review_nudge',
+  'review_set_draft',
   'work_plan',
   'work_start',
   'work_list',
@@ -716,6 +718,7 @@ export const reviewApprove = wrap('review_approve');
 export const reviewComment = wrap('review_comment');
 export const reviewRequestChanges = wrap('review_request_changes');
 export const reviewNudge = wrap('review_nudge');
+export const reviewSetDraft = wrap('review_set_draft');
 
 // ---- work -----------------------------------------------------------------------------------
 export const workPlan = wrap('work_plan');

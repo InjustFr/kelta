@@ -1,4 +1,5 @@
 // Settings > Tools quick form: command-line splitting, tool ids and tool keybinding conflicts.
+import { t } from '$lib/i18n/index.svelte';
 import { ACTIONS, RESERVED_CHORDS } from '$lib/gen/actions';
 import { findConflicts } from '$lib/keys';
 import { formatChord } from '$lib/ui/format';
@@ -59,9 +60,12 @@ export function toolKeyConflict(
   if (!hit) return null;
   const keys = formatChord(chord, platform).join('');
   const other = hit.actions.find((a) => a !== self);
-  if (!other) return `${keys} is reserved for terminal programs; this tool's key will not work`;
+  if (!other) return t("{keys} is reserved for terminal programs; this tool's key will not work", { keys });
   const label = other.startsWith('tool:')
-    ? tools.find((t) => `tool:${t.id}` === other)?.label
+    ? tools.find((x) => `tool:${x.id}` === other)?.label
     : ACTIONS.find((a) => a.id === other)?.label;
-  return `${keys} is already "${label ?? other}"; this tool's key will not work`;
+  return t('{keys} is already "{action}"; this tool\'s key will not work', {
+    keys,
+    action: label ? t(label) : other,
+  });
 }

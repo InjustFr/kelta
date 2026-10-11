@@ -1,13 +1,14 @@
 // Run a saved Claude workflow on a ticket (#233): `w` in the detail and the list, and the palette
 // verb open the picker; the run claims the ticket and starts Claude in a background tab.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { TicketRef, WorkflowInfo } from '$lib/gen';
 import { workflowRun, workflowsList } from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { toasts, ui } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
-export const NO_WORKFLOWS = 'No workflows in .claude/workflows or ~/.claude/workflows';
+export const NO_WORKFLOWS = msg('No workflows in .claude/workflows or ~/.claude/workflows');
 
 /** Per ticket key: its workflows, or why none can run (no project). Read again by each picker. */
 export const workflows = $state<Record<string, WorkflowInfo[] | string>>({});
@@ -15,7 +16,7 @@ export const workflows = $state<Record<string, WorkflowInfo[] | string>>({});
 /** Why the workflow action is off for a loaded list (null = it can run, or not loaded yet). */
 export function workflowReason(list: WorkflowInfo[] | string | undefined): string | null {
   if (typeof list === 'string') return list;
-  return list?.length === 0 ? NO_WORKFLOWS : null;
+  return list?.length === 0 ? t(NO_WORKFLOWS) : null;
 }
 
 export async function loadWorkflows(ref: TicketRef): Promise<WorkflowInfo[] | string> {
@@ -46,9 +47,9 @@ export async function runWorkflow(ref: TicketRef, workflow: string): Promise<voi
     const args = { session_id: s.id };
     toasts.push({
       level: 'info',
-      text: `${workflow} started on ${ref.key}`,
-      action: { label: 'Open', command: 'session.reveal', args },
-      secondary: { label: 'Peek', command: 'session.peek', args },
+      text: t('{workflow} started on {key}', { workflow, key: ref.key }),
+      action: { label: t('Open'), command: 'session.reveal', args },
+      secondary: { label: t('Peek'), command: 'session.peek', args },
     });
   } catch (err) {
     // Held: the backend names the holder (`KEY is held by session …`).

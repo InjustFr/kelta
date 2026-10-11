@@ -75,6 +75,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
 | 14 | PR exists, `unpushed` | Unpushed (n commits) | none | Push | Ship and clean up |
 | 15 | no PR, `ahead > 0` | Ready to ship (n commits) | none | Ship | Ship and clean up |
+| 15a | PR is a draft (pushed: rows 13-14 come first) | Draft (#n) | none | Mark ready… (`d`, confirms; `review_set_draft`), or Open PR while checks are red | Ship and clean up (In flight when red) |
 | 16 | PR approved, checks pass | Approved (#n) | none | Open PR (merge there) | Ship and clean up |
 | 17 | PR open otherwise | In review (#n, checks, approvals) | none | Open PR | In flight |
 | 18 | no PR, `ahead = 0` | No changes yet | none | Go to Claude | In flight |

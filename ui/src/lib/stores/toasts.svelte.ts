@@ -1,6 +1,7 @@
 // Toast queue (ARCH §12.2). Fed by `toast` UiEvents and by UI code (`toasts.error(err)`).
 // Auto-dismiss uses one one-shot timer per toast, armed when the toast is pushed.
 
+import { t } from '$lib/i18n/index.svelte';
 import { dispatch } from '$lib/actions';
 import type { Toast, UiEvent } from '$lib/gen';
 import { toIpcError } from '$lib/ipc/transport';
@@ -65,7 +66,8 @@ export class ToastsStore {
         ? (action.args as Record<string, unknown>)
         : undefined;
     try {
-      if (!(await dispatch(action.command, args))) this.warn(`No handler for “${action.label}”`);
+      if (!(await dispatch(action.command, args)))
+        this.warn(t('No handler for “{action}”', { action: action.label }));
     } catch (err) {
       this.error(err, action.label);
     }

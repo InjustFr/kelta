@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Snippet } from 'svelte';
 
   import type { KeltaError } from '$lib/gen';
@@ -14,18 +15,18 @@
     actions?: Snippet;
   }
 
-  let { error, title = 'Something went wrong', onretry, actions }: Props = $props();
+  let { error, title, onretry, actions }: Props = $props();
 
   const message = $derived(typeof error === 'string' ? error : error.message);
   const code = $derived(typeof error === 'object' && 'code' in error ? String(error.code) : null);
 </script>
 
 <div class="k-error" role="alert">
-  <p class="title"><span class="mark" aria-hidden="true"></span>{title}</p>
+  <p class="title"><span class="mark" aria-hidden="true"></span>{title ?? t('Something went wrong')}</p>
   <p class="message k-selectable">{message}</p>
   {#if code}<p class="code">{code}</p>{/if}
   <div class="actions">
-    {#if onretry}<Button icon="refresh-cw" onclick={onretry}>Retry</Button>{/if}
+    {#if onretry}<Button icon="refresh-cw" onclick={onretry}>{t('Retry')}</Button>{/if}
     {@render actions?.()}
   </div>
 </div>

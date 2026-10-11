@@ -1343,10 +1343,11 @@ impl Core {
             return;
         }
         let project = self.project_info(&info.project_id).map(|p| p.name).unwrap_or_default();
+        let tr = |en| kelta_proto::i18n::tr(settings.app.language, en).replace("{}", &info.name);
         let (title, urgency) = match kind {
-            NotifyKind::ClaudeNeedsInput => (format!("{} needs input", info.name), Urgency::Critical),
-            NotifyKind::ClaudeDone => (format!("{} finished", info.name), Urgency::Normal),
-            NotifyKind::BellBackground => (format!("Bell in {}", info.name), Urgency::Low),
+            NotifyKind::ClaudeNeedsInput => (tr("{} needs input"), Urgency::Critical),
+            NotifyKind::ClaudeDone => (tr("{} finished"), Urgency::Normal),
+            NotifyKind::BellBackground => (tr("Bell in {}"), Urgency::Low),
             _ => (info.name.clone(), Urgency::Normal),
         };
         let body = body.map(str::to_owned).or_else(|| (!project.is_empty()).then(|| project.clone()));

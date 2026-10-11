@@ -3,6 +3,7 @@
 // rebase, link…) are listed with `run: null` and show disabled with "not available yet".
 // Also owns `work.start`.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import type { TicketRef, WorkItem } from '$lib/gen';
 import {
@@ -32,13 +33,14 @@ import {
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
 import { claudeOf, phaseNow, prOf } from './live';
+import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
 import { startWorkOnTicket } from './startWork';
 import { workUi } from './ui.svelte';
 
-export const NOT_YET = 'not available yet';
+export const NOT_YET = msg('not available yet');
 
 interface Ctx {
   item: WorkItem;
@@ -58,8 +60,8 @@ export interface WorkAction {
 
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
-  c.item.rebase && c.item.rebase.total > 0 ? null : 'Only while a rebase is stopped';
-const queuedOnly = (c: Ctx) => (c.item.state.kind === 'queued' ? null : 'Not queued');
+  c.item.rebase && c.item.rebase.total > 0 ? null : t('Only while a rebase is stopped');
+const queuedOnly = (c: Ctx) => (c.item.state.kind === 'queued' ? null : t('Not queued'));
 const hasPr = (c: Ctx) => c.item.pr_url !== null || prOf(c.item) !== null;
 
 async function step(c: Ctx, step: string): Promise<void> {
@@ -88,10 +90,10 @@ const reviewDelta = (c: Ctx): Promise<void> =>
 
 async function editNote({ item }: Ctx): Promise<void> {
   const note = await prompts.ask({
-    title: 'Next step',
-    label: 'next:',
+    title: t('Next step'),
+    label: t('next:'),
     value: item.next_note ?? '',
-    confirmLabel: 'Save',
+    confirmLabel: t('Save'),
   });
   if (note !== null) work.upsert(await workSetNote({ id: item.id, note }));
 }
@@ -106,26 +108,26 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'review_delta',
     key: 'v',
-    label: () => 'Review changes since last look',
+    label: () => t('Review changes since last look'),
     blocked: (c) =>
       c.phase.id === 'missing'
-        ? 'Worktree missing'
+        ? t('Worktree missing')
         : c.item.kind === 'review' && !prOf(c.item)?.reviewed_head
-          ? 'Not reviewed yet'
+          ? t('Not reviewed yet')
           : null,
     run: reviewDelta,
   },
   {
     id: 'review_diff',
     key: 'V',
-    label: () => 'Review the whole diff in nvim',
-    blocked: (c) => (c.phase.id === 'missing' ? 'Worktree missing' : null),
+    label: () => t('Review the whole diff in nvim'),
+    blocked: (c) => (c.phase.id === 'missing' ? t('Worktree missing') : null),
     run: (c) => reviewDiff(c),
   },
   {
     id: 'ship',
     key: 'p',
-    label: (c) => (c.phase.id === 'rebased' ? 'Force push…' : hasPr(c) ? 'Push' : 'Ship'),
+    label: (c) => (c.phase.id === 'rebased' ? t('Force push…') : hasPr(c) ? t('Push') : t('Ship')),
     blocked: () => null,
     run: async ({ item, phase }) => {
       if (phase.id === 'rebased') return forcePushItem(item);
@@ -137,86 +139,87 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'mark_reviewed',
     key: 'R',
-    label: () => 'Mark reviewed',
-    blocked: (c) => (c.item.review_due ? null : 'Nothing to review'),
+    label: () => t('Mark reviewed'),
+    blocked: (c) => (c.item.review_due ? null : t('Nothing to review')),
     run: async ({ item }) => void work.upsert(await workMarkReviewed({ id: item.id })),
   },
   {
     id: 'fix',
     key: 'f',
-    label: () => 'Fix with Claude',
-    blocked: (c) => (hasPr(c) ? null : 'Needs a PR'),
+    label: () => t('Fix with Claude'),
+    blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
     run: async ({ item }) => fixItem(item),
   },
   {
     id: 'rebase',
     key: 'r',
-    label: (c) => `Rebase onto ${c.item.base}`,
+    label: (c) => t('Rebase onto {base}', { base: c.item.base }),
     blocked: () => null,
     run: async ({ item, phase }) => rebase(item, phase.id === 'remote_new' ? 'remote_branch' : 'base'),
   },
   {
     id: 'rebase_continue',
     key: 'c',
-    label: () => 'Continue rebase',
+    label: () => t('Continue rebase'),
     blocked: stopped,
     run: ({ item }) => rebaseStep(item, 'continue'),
   },
   {
     id: 'rebase_abort',
     key: 'a',
-    label: () => 'Abort rebase',
+    label: () => t('Abort rebase'),
     blocked: stopped,
     run: ({ item }) => rebaseStep(item, 'abort'),
   },
   {
     id: 'conflicts',
     key: 'n',
-    label: () => 'Open conflicts in nvim',
-    blocked: (c) => (c.item.rebase?.conflicts.length ? null : 'No conflicted files'),
+    label: () => t('Open conflicts in nvim'),
+    blocked: (c) => (c.item.rebase?.conflicts.length ? null : t('No conflicted files')),
     run: ({ item }) => openConflicts(item),
   },
   {
     id: 'skip_step',
     key: 's',
-    label: (c) => (c.item.state.kind === 'failed' ? `Skip ${c.item.state.step}` : 'Skip step'),
-    blocked: (c) => (c.item.state.kind === 'failed' ? null : 'Only when a start step failed'),
+    label: (c) =>
+      c.item.state.kind === 'failed' ? t('Skip {step}', { step: c.item.state.step }) : t('Skip step'),
+    blocked: (c) => (c.item.state.kind === 'failed' ? null : t('Only when a start step failed')),
     run: (c) => step(c, `skip:${failedStep(c)}`),
   },
   {
     id: 'edit_note',
     key: 'b',
-    label: (c) => (c.item.next_note ? 'Edit next: note…' : 'Add next: note…'),
+    label: (c) => (c.item.next_note ? t('Edit next: note…') : t('Add next: note…')),
     blocked: () => null,
     run: editNote,
   },
-  { id: 'go_claude', key: 'g', label: () => 'Go to Claude', blocked: () => null, run: goClaude },
+  { id: 'go_claude', key: 'g', label: () => t('Go to Claude'), blocked: () => null, run: goClaude },
   {
     id: 'link',
     key: 'l',
-    label: () => 'Link to ticket…',
-    blocked: (c) => (c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
+    label: () => t('Link to ticket…'),
+    blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
     run: async ({ item }) => ui.openSheet('link_ticket', { id: item.id }),
   },
   {
     id: 'create_ticket',
     key: 'T',
-    label: () => 'Create ticket…',
-    blocked: (c) => (c.item.kind !== 'branch' ? 'Already linked to a ticket' : null),
+    label: () => t('Create ticket…'),
+    blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
     run: async ({ item }) => ui.openSheet('create_ticket', { id: item.id }),
   },
   {
     id: 'open_ticket',
     key: 't',
-    label: () => 'Open ticket',
-    blocked: (c) => (c.item.ticket ? null : 'No ticket'),
+    label: () => t('Open ticket'),
+    blocked: (c) => (c.item.ticket ? null : t('No ticket')),
     run: openTicket,
   },
   {
     id: 'open_pr',
     key: 'o',
-    label: () => 'Open PR',
-    blocked: (c) => (hasPr(c) ? null : 'No PR yet'),
+    label: () => t('Open PR'),
+    blocked: (c) => (hasPr(c) ? null : t('No PR yet')),
     run: async ({ item }) => {
       const url = item.pr_url ?? prOf(item)?.url;
       if (url) await openExternal({ url });
@@ -225,32 +228,48 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'merge',
     key: 'M',
-    label: (c) => (c.item.auto_finish ? 'Disarm merge when ready' : 'Merge when ready…'),
-    blocked: (c) => (c.item.state.kind === 'pr_open' ? null : 'Needs an open PR'),
+    label: (c) => (c.item.auto_finish ? t('Disarm merge when ready') : t('Merge when ready…')),
+    blocked: (c) => (c.item.state.kind === 'pr_open' ? null : t('Needs an open PR')),
     run: async ({ item }) => {
       if (item.auto_finish) work.upsert(await workDisarmMerge({ id: item.id }));
       else ui.openSheet('merge', { item });
     },
   },
   {
+    id: 'set_draft',
+    key: 'd',
+    label: (c) => {
+      const pr = prOf(c.item);
+      return pr ? draftLabel(pr) : t('Mark ready / Convert to draft');
+    },
+    blocked: (c) => {
+      const pr = prOf(c.item);
+      return c.item.state.kind !== 'pr_open' || !pr ? t('Needs an open PR') : draftBlocked(pr);
+    },
+    run: async ({ item }) => {
+      const pr = prOf(item);
+      if (pr) await toggleDraft(pr);
+    },
+  },
+  {
     id: 'park',
     key: 'P',
-    label: () => 'Park',
+    label: () => t('Park'),
     blocked: (c) => {
       const claude = claudeOf(c.item);
-      if (claude?.status === 'working') return 'Claude is working';
+      if (claude?.status === 'working') return t('Claude is working');
       const live = c.item.session_ids.some((id) => {
         const s = sessions.get(id);
         return s?.lifecycle === 'live' && (s.kind.type === 'claude' || s.kind.type === 'editor');
       });
-      return live ? null : 'Nothing running to park';
+      return live ? null : t('Nothing running to park');
     },
     run: async ({ item }) => void work.upsert(await workPark({ id: item.id })),
   },
   {
     id: 'finish',
     key: 'F',
-    label: () => 'Finish…',
+    label: () => t('Finish…'),
     blocked: () => null,
     run: async ({ item }) => {
       await goToWork(item);
@@ -269,27 +288,27 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     id: 'fix_checks',
     key: null,
     label: (c) => c.phase.primaryLabel,
-    blocked: (c) => (hasPr(c) ? null : 'Needs a PR'),
+    blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
     run: async ({ item }) => fixChecks(item),
   },
   {
     id: 'start_now',
     key: null,
-    label: () => 'Start now (over cap)',
+    label: () => t('Start now (over cap)'),
     blocked: queuedOnly,
     run: async ({ item }) => void work.upsert(await workStartNow({ id: item.id })),
   },
   {
     id: 'queue_front',
     key: null,
-    label: () => 'Move to front',
+    label: () => t('Move to front'),
     blocked: queuedOnly,
     run: async ({ item }) => void work.upsert(await workQueueFront({ id: item.id })),
   },
   {
     id: 'recreate',
     key: null,
-    label: () => 'Recreate',
+    label: () => t('Recreate'),
     blocked: () => null,
     run: async (c) => {
       await step(c, 'worktree');
@@ -299,15 +318,15 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'resolve',
     key: null,
-    label: () => 'Ask Claude to resolve',
+    label: () => t('Ask Claude to resolve'),
     blocked: stopped,
     run: ({ item }) => askClaudeToResolve(item),
   },
   {
     id: 'open_review',
     key: null,
-    label: () => 'Open review',
-    blocked: (c) => (c.item.review ? null : 'No PR'),
+    label: () => t('Open review'),
+    blocked: (c) => (c.item.review ? null : t('No PR')),
     run: async ({ item }) => {
       if (item.review) await openReview(item.project_id, { kind: 'review_detail', review: item.review });
     },
@@ -332,7 +351,7 @@ export function blockedReason(
 ): string | null {
   const a = workAction(id);
   // Review items: p/r/f/l are read-only (#131), whatever the action's own check says.
-  return workActionDisabled(item, a.key ?? '') ?? a.blocked({ item, phase }) ?? (a.run ? null : NOT_YET);
+  return workActionDisabled(item, a.key ?? '') ?? a.blocked({ item, phase }) ?? (a.run ? null : t(NOT_YET));
 }
 
 /** Runs a work action; a blocked one flashes its reason instead. */
@@ -341,7 +360,7 @@ export async function runWorkAction(id: WorkActionId, item: WorkItem): Promise<v
   const a = workAction(id);
   const reason = blockedReason(id, item, phase);
   if (reason || !a.run) {
-    toasts.info(`${a.label({ item, phase })}: ${reason ?? NOT_YET}`);
+    toasts.info(`${a.label({ item, phase })}: ${reason ?? t(NOT_YET)}`);
     return;
   }
   try {
@@ -373,7 +392,7 @@ function onFocused(
     const id = args?.id as string | undefined;
     const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
-    else toasts.info('Focus a work item tab first');
+    else toasts.info(t('Focus a work item tab first'));
   };
 }
 
@@ -393,7 +412,7 @@ registerAction('work.finish_merged', () => ui.openSheet('finish_merged'));
 registerAction('work.start', async (args) => {
   const ticket = (args?.ticket as TicketRef | undefined) ?? selection.ticket;
   if (!ticket) {
-    toasts.info('Select a ticket to start work');
+    toasts.info(t('Select a ticket to start work'));
     return;
   }
   // Only an explicit pick (a trigger's project_id): the backend picks the default (SPEC §3.1).

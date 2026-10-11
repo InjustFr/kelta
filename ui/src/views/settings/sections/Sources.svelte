@@ -1,6 +1,7 @@
 <script lang="ts">
   // Settings → Sources: the global `[[sources]]`, one card per board: label, board (account and
   // views), columns, status map, the projects it feeds and the routes of its tickets to a repo.
+  import { t } from '$lib/i18n/index.svelte';
   import { tick } from 'svelte';
 
   import type { SettingsSectionProps } from '$app/registry';
@@ -35,11 +36,11 @@
   });
 
   type MatchKey = keyof RepoMatch;
-  const MATCH: { value: MatchKey; label: string }[] = [
-    { value: 'component', label: 'Component' },
-    { value: 'label', label: 'Label' },
-    { value: 'type', label: 'Type' },
-  ];
+  const MATCH: { value: MatchKey; label: string }[] = $derived([
+    { value: 'component', label: t('Component') },
+    { value: 'label', label: t('Label') },
+    { value: 'type', label: t('Type') },
+  ]);
   const matchOf = (r: SourceRoute): MatchKey =>
     MATCH.find((m) => r.match[m.value] != null)?.value ?? 'component';
 
@@ -96,16 +97,16 @@
 
   async function remove(s: Source): Promise<void> {
     const answer = await confirms.ask({
-      title: `Remove ${s.label}?`,
-      body: 'Kelta stops listing its tickets. Its views and queries are not kept.',
+      title: t('Remove {name}?', { name: s.label }),
+      body: t('Kelta stops listing its tickets. Its views and queries are not kept.'),
       tone: 'danger',
-      actions: [{ id: 'remove', label: 'Remove source', variant: 'danger' }],
+      actions: [{ id: 'remove', label: t('Remove source'), variant: 'danger' }],
     });
     if (answer !== 'remove') return;
     try {
       await saveSources(all.filter((x) => x.id !== s.id));
     } catch (err) {
-      toasts.error(err, 'Could not remove the ticket source');
+      toasts.error(err, t('Could not remove the ticket source'));
     }
   }
 </script>
@@ -115,21 +116,21 @@
     {#if globalOnly}
       <div class="notice" role="status" data-testid="sources-global-only">
         <Icon name="info" size={16} />
-        <span>Ticket sources are global settings.</span>
+        <span>{t('Ticket sources are global settings.')}</span>
         <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
-          >Switch to Global</Button
+          >{t('Switch to Global')}</Button
         >
       </div>
     {/if}
     <fieldset class="layer" disabled={globalOnly}>
       {#if all.length === 0}
-        <p class="muted">No ticket source yet.</p>
+        <p class="muted">{t('No ticket source yet.')}</p>
       {/if}
       {#each all as s (s.id)}
         <SettingsCard data-testid="source-card" data-source-card={s.id}>
           {#snippet head()}
             <TextInput
-              aria-label="Label"
+              aria-label={t('Label')}
               value={s.label}
               onchange={(e) => {
                 const label = (e.currentTarget as HTMLInputElement).value.trim();
@@ -138,14 +139,19 @@
             />
           {/snippet}
           {#snippet actions()}
-            <IconButton icon="trash-2" label="Remove {s.label}" size="sm" onclick={() => void remove(s)} />
+            <IconButton
+              icon="trash-2"
+              label={t('Remove {name}', { name: s.label })}
+              size="sm"
+              onclick={() => void remove(s)}
+            />
           {/snippet}
 
           <TrackerSources sourceId={s.id} />
 
-          <SettingsRow label="Projects">
+          <SettingsRow label={t('Projects')}>
             {#snippet control()}
-              <div class="chips" role="group" aria-label="Projects {s.label} feeds">
+              <div class="chips" role="group" aria-label={t('Projects {name} feeds', { name: s.label })}>
                 {#each editable as p (p.id)}
                   <Button
                     size="sm"
@@ -154,26 +160,30 @@
                     onclick={() => void toggleProject(s, p.id)}>{p.name}</Button
                   >
                 {:else}
-                  <span class="muted">No project yet.</span>
+                  <span class="muted">{t('No project yet.')}</span>
                 {/each}
               </div>
             {/snippet}
-            <p>Its tickets show in these projects.</p>
+            <p>{t('Its tickets show in these projects.')}</p>
           </SettingsRow>
 
           <SettingsGroup
-            heading="Routes"
-            description="The first route that matches a ticket picks the repository its work starts in."
+            heading={t('Routes')}
+            description={t('The first route that matches a ticket picks the repository its work starts in.')}
           >
             {#snippet actions()}
               <Button size="sm" icon="plus" disabled={s.projects.length === 0} onclick={() => addRoute(s)}
-                >Add route</Button
+                >{t('Add route')}</Button
               >
             {/snippet}
             {#if s.routes.length > 0}
               <table class="routes" data-testid="source-routes">
                 <thead>
-                  <tr><th>Match</th><th>Value</th><th>Project</th><th>Repository</th><th></th></tr>
+                  <tr
+                    ><th>{t('Match')}</th><th>{t('Value')}</th><th>{t('Project')}</th><th
+                      >{t('Repository')}</th
+                    ><th></th></tr
+                  >
                 </thead>
                 <tbody>
                   {#each s.routes as r, i (i)}
@@ -181,7 +191,7 @@
                     <tr data-testid="source-route">
                       <td>
                         <Select
-                          label="Match of route {i + 1}"
+                          label={t('Match of route {n}', { n: i + 1 })}
                           value={key}
                           options={MATCH}
                           onchange={(k) => void setMatch(s, i, k, r.match[key] ?? '')}
@@ -189,7 +199,7 @@
                       </td>
                       <td>
                         <TextInput
-                          label="Value of route {i + 1}"
+                          label={t('Value of route {n}', { n: i + 1 })}
                           value={r.match[key] ?? ''}
                           onchange={(e) =>
                             void setMatch(s, i, key, (e.currentTarget as HTMLInputElement).value)}
@@ -197,7 +207,7 @@
                       </td>
                       <td>
                         <Select
-                          label="Project of route {i + 1}"
+                          label={t('Project of route {n}', { n: i + 1 })}
                           value={r.project}
                           options={s.projects.map((p) => ({ value: p, label: projects.byId(p)?.name ?? p }))}
                           onchange={(p) => void patchRoute(s, i, { project: p, repo: firstRepo(p) })}
@@ -205,7 +215,7 @@
                       </td>
                       <td>
                         <Select
-                          label="Repository of route {i + 1}"
+                          label={t('Repository of route {n}', { n: i + 1 })}
                           value={r.repo}
                           options={(projects.byId(r.project)?.repos ?? []).map((x) => ({
                             value: x.id,
@@ -217,21 +227,21 @@
                       <td class="actions">
                         <IconButton
                           icon="arrow-up"
-                          label="Move route {i + 1} up"
+                          label={t('Move route {n} up', { n: i + 1 })}
                           size="sm"
                           disabled={i === 0}
                           onclick={() => moveRoute(s, i, -1)}
                         />
                         <IconButton
                           icon="arrow-down"
-                          label="Move route {i + 1} down"
+                          label={t('Move route {n} down', { n: i + 1 })}
                           size="sm"
                           disabled={i === s.routes.length - 1}
                           onclick={() => moveRoute(s, i, 1)}
                         />
                         <IconButton
                           icon="trash-2"
-                          label="Remove route {i + 1}"
+                          label={t('Remove route {n}', { n: i + 1 })}
                           size="sm"
                           onclick={() =>
                             void setRoutes(
@@ -250,14 +260,14 @@
           {#if tracker}
             {@const columns = nodeAt(tracker, ['columns'])}
             {@const statusMap = nodeAt(tracker, ['status_map'])}
-            <SettingsDisclosure label="Columns and status map">
+            <SettingsDisclosure label={t('Columns and status map')}>
               {#if columns}
-                <SettingsRow label="Columns">
+                <SettingsRow label={t('Columns')}>
                   {#snippet control()}
                     <Control
                       node={columns}
                       value={s.tracker.columns as unknown as JsonValue}
-                      label="Columns of {s.label}"
+                      label={t('Columns of {name}', { name: s.label })}
                       onchange={(v) => void setTracker(s, 'columns', v)}
                     />
                   {/snippet}
@@ -265,12 +275,12 @@
                 </SettingsRow>
               {/if}
               {#if statusMap}
-                <SettingsRow label="Status map">
+                <SettingsRow label={t('Status map')}>
                   {#snippet control()}
                     <Control
                       node={statusMap}
                       value={s.tracker.status_map as unknown as JsonValue}
-                      label="Status map of {s.label}"
+                      label={t('Status map of {name}', { name: s.label })}
                       onchange={(v) => void setTracker(s, 'status_map', v)}
                     />
                   {/snippet}
@@ -283,7 +293,7 @@
       {/each}
       <div class="add">
         <Button variant="primary" icon="plus" onclick={() => ui.openSheet('tracker.source_picker', {})}
-          >Add source</Button
+          >{t('Add source')}</Button
         >
       </div>
     </fieldset>

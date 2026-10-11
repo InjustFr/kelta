@@ -2,6 +2,7 @@
   // `by_id` lists (tools, triggers, session_templates, editor.presets, commands): shows the merged
   // list with the layer each entry comes from, and lets the edited layer override, disable,
   // remove or add entries. Only the edited layer's own list is ever written.
+  import { t } from '$lib/i18n/index.svelte';
   import type { JsonValue } from '$lib/gen';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
@@ -92,9 +93,10 @@
 
 <SettingsGroup heading={label} {description} data-testid="keyed-list" data-path={path}>
   <details class="layering">
-    <summary>How layering works</summary>
-    Entries merge by <code>id</code>: a higher layer replaces the whole entry; a stub with only
-    <code>enabled</code> toggles an inherited one.
+    <summary>{t('How layering works')}</summary>
+    {t(
+      'Entries merge by id: a higher layer replaces the whole entry; a stub with only enabled toggles an inherited one.',
+    )}
   </details>
 
   {#each merged as e (idOf(e))}
@@ -105,32 +107,32 @@
       {#snippet head()}
         {#if typeof e.label === 'string' && e.label !== id}<span class="muted">{e.label}</span>{/if}
         <SourceBadge source={src} path={`${path}.${id}`} />
-        {#if e.enabled === false}<Badge tone="neutral">disabled</Badge>{/if}
+        {#if e.enabled === false}<Badge tone="neutral">{t('disabled')}</Badge>{/if}
       {/snippet}
       {#snippet actions()}
         {#if access.editable}
           {#if src === editor.layer && mine}
             <Button size="sm" onclick={() => (editing = editing === id ? null : id)}
-              >{editing === id ? 'Close' : 'Edit'}</Button
+              >{editing === id ? t('Close') : t('Edit')}</Button
             >
             <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
-              >{e.enabled === false ? 'Enable' : 'Disable'}</Button
+              >{e.enabled === false ? t('Enable') : t('Disable')}</Button
             >
             <IconButton
               icon="trash-2"
               size="sm"
-              label={`Remove ${id} from this layer`}
+              label={t('Remove {name} from this layer', { name: id })}
               onclick={() => removeOwn(id)}
             />
           {:else}
-            <Button size="sm" onclick={() => override(e)}>Override here</Button>
+            <Button size="sm" onclick={() => override(e)}>{t('Override here')}</Button>
             <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
-              >{e.enabled === false ? 'Enable' : 'Disable here'}</Button
+              >{e.enabled === false ? t('Enable') : t('Disable here')}</Button
             >
             {#if mine}<IconButton
                 icon="trash-2"
                 size="sm"
-                label={`Remove ${id} override`}
+                label={t('Remove {name} override', { name: id })}
                 onclick={() => removeOwn(id)}
               />{/if}
           {/if}
@@ -147,7 +149,7 @@
       {/if}
     </SettingsCard>
   {:else}
-    <p class="desc">No entries.</p>
+    <p class="desc">{t('No entries.')}</p>
   {/each}
 
   {#if access.editable}
@@ -158,8 +160,8 @@
         void add();
       }}
     >
-      <input aria-label={`New ${label} id`} placeholder="new-id" bind:value={newId} />
-      <Button size="sm" icon="plus" type="submit" disabled={!newId.trim()}>Add</Button>
+      <input aria-label={t('New {name} id', { name: label })} placeholder="new-id" bind:value={newId} />
+      <Button size="sm" icon="plus" type="submit" disabled={!newId.trim()}>{t('Add')}</Button>
     </form>
   {:else if access.reason}
     <p class="desc">{access.reason}</p>

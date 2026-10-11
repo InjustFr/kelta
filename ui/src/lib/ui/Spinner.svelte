@@ -1,14 +1,20 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   interface Props {
     size?: number;
     label?: string;
   }
 
-  let { size = 16, label = 'Loading' }: Props = $props();
+  let { size = 16, label }: Props = $props();
 </script>
 
 <!-- Only mounted while an operation is in flight. Static: the open `working` ring, nothing loops (DESIGN §8). -->
-<span class="k-spinner" role="status" aria-label={label} style:width="{size}px" style:height="{size}px"
+<span
+  class="k-spinner"
+  role="status"
+  aria-label={label ?? t('Loading')}
+  style:width="{size}px"
+  style:height="{size}px"
 ></span>
 
 <style>

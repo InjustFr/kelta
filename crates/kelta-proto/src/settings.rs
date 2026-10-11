@@ -166,6 +166,17 @@ pub enum Theme {
     Light,
 }
 
+/// Interface language (`app.language`, #344); `system` follows the OS language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Language {
+    #[default]
+    System,
+    En,
+    Fr,
+    De,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RestoreMode {
@@ -200,6 +211,9 @@ pub enum LogLevel {
 #[serde(default, deny_unknown_fields)]
 pub struct AppSettings {
     pub theme: Theme,
+    /// Interface language; System follows the OS language.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub language: Language,
     /// Dormant session respawn policy.
     pub restore_mode: RestoreMode,
     /// Ask before quitting while Claude is working or waiting for you.
@@ -224,6 +238,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: Theme::System,
+            language: Language::System,
             restore_mode: RestoreMode::Lazy,
             confirm_quit_with_running: true,
             quit_sessions: QuitSessions::Ask,

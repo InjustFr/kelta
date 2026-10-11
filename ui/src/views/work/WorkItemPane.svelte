@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
-  import type { ReviewNote, ReviewNotes } from '$lib/gen';
+  import type { Lifecycle, NoteState, ReviewNote, ReviewNotes } from '$lib/gen';
   import {
     editorOpen,
     openExternal,
@@ -15,9 +16,23 @@
   import { sessions, toasts, work } from '$lib/stores';
   import { Badge, Button, EmptyState, Icon } from '$lib/ui';
 
+  import { statusLabel } from '../../shell/labels';
   import { stepLabel } from './common';
 
   let { content }: PaneProps<'work_item'> = $props();
+
+  const LIFECYCLE: Record<Lifecycle, string> = {
+    live: msg('live'),
+    dormant: msg('dormant'),
+    exited: msg('exited'),
+  };
+  const NOTE_STATE: Record<NoteState, string> = {
+    open: msg('open'),
+    sent: msg('sent'),
+    touched: msg('touched'),
+    untouched: msg('untouched'),
+    resolved: msg('resolved'),
+  };
 
   const item = $derived(work.get(content.id));
   const itemSessions = $derived(
@@ -52,7 +67,7 @@
     try {
       notes = await workNotesSend({ id: content.id });
     } catch (err) {
-      toasts.error(err, 'Send review notes');
+      toasts.error(err, t('Send review notes'));
     } finally {
       busy = null;
     }
@@ -62,13 +77,13 @@
     try {
       notes = await workNoteResolve({ id: content.id, note: n.id });
     } catch (err) {
-      toasts.error(err, 'Resolve note');
+      toasts.error(err, t('Resolve note'));
     }
   }
 
   function jumpTo(n: ReviewNote): void {
     editorOpen({ target: { kind: 'work_item', id: content.id }, path: n.path, line: n.line_start }).catch(
-      (err) => toasts.error(err, 'Open in editor'),
+      (err) => toasts.error(err, t('Open in editor')),
     );
   }
 
@@ -90,7 +105,7 @@
     try {
       work.upsert(await workResume({ id: content.id }));
     } catch (err) {
-      toasts.error(err, 'Resume');
+      toasts.error(err, t('Resume'));
     } finally {
       busy = null;
     }
@@ -101,14 +116,14 @@
     try {
       work.upsert(await workRetryStep({ id: content.id, step }));
     } catch (err) {
-      toasts.error(err, 'Retry');
+      toasts.error(err, t('Retry'));
     } finally {
       busy = null;
     }
   }
 
   function browse(url: string): void {
-    openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
+    openExternal({ url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 </script>
 
@@ -116,20 +131,20 @@
   {#if !item}
     <EmptyState
       icon="git-branch"
-      title="Work item not found"
-      body="It was finished and removed, or it belongs to another project."
+      title={t('Work item not found')}
+      body={t('It was finished and removed, or it belongs to another project.')}
     />
   {:else}
     <div class="body">
       <dl class="facts">
-        <dt>Branch</dt>
-        <dd><code>{item.branch}</code> (base <code>{item.base}</code>)</dd>
-        <dt>Worktree</dt>
+        <dt>{t('Branch')}</dt>
+        <dd><code>{item.branch}</code> ({t('base')} <code>{item.base}</code>)</dd>
+        <dt>{t('Worktree')}</dt>
         <dd><code>{item.worktree}</code></dd>
-        <dt>Repository</dt>
+        <dt>{t('Repository')}</dt>
         <dd>{item.repo_id}</dd>
         {#if item.pr_url}
-          <dt>Pull request</dt>
+          <dt>{t('Pull request')}</dt>
           <dd>
             <button type="button" class="k-link" onclick={() => item.pr_url && browse(item.pr_url)}>
               {item.pr_url}
@@ -137,13 +152,13 @@
           </dd>
         {/if}
         {#if item.state.kind === 'failed'}
-          <dt>Failure</dt>
+          <dt>{t('Failure')}</dt>
           <dd class="fail" role="alert">{stepLabel(item.state.step)}: {item.state.message}</dd>
         {/if}
       </dl>
 
-      <h2>Steps</h2>
-      <ol class="steps" aria-label="Steps">
+      <h2>{t('Steps')}</h2>
+      <ol class="steps" aria-label={t('Steps')}>
         {#each item.steps as s (s.step)}
           <li data-status={s.status}>
             {#if s.status === 'done'}
@@ -158,12 +173,14 @@
             <span>{stepLabel(s.step)}</span>
             {#if s.detail}<small>{s.detail}</small>{/if}
             {#if s.status === 'failed'}
-              <Button size="sm" loading={busy === s.step} onclick={() => void retry(s.step)}>Retry</Button>
+              <Button size="sm" loading={busy === s.step} onclick={() => void retry(s.step)}
+                >{t('Retry')}</Button
+              >
               <Button
                 size="sm"
                 variant="ghost"
                 loading={busy === `skip:${s.step}`}
-                onclick={() => void retry(`skip:${s.step}`)}>Skip</Button
+                onclick={() => void retry(`skip:${s.step}`)}>{t('Skip')}</Button
               >
             {/if}
           </li>
@@ -172,61 +189,68 @@
 
       {#if shownNotes.length > 0}
         <h2>
-          Review notes
+          {t('Review notes')}
           {#if notes?.since}
-            <small>+{notes.since.insertions}/−{notes.since.deletions} since feedback</small>
+            <small>+{notes.since.insertions}/−{notes.since.deletions} {t('since feedback')}</small>
           {/if}
         </h2>
-        <ul class="notes" aria-label="Review notes" aria-keyshortcuts="s x e">
+        <ul class="notes" aria-label={t('Review notes')} aria-keyshortcuts="s x e">
           {#each shownNotes as n (n.id)}
             <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
             <li tabindex="0" data-state={n.state} onkeydown={(e) => noteKey(e, n)}>
-              <input type="checkbox" aria-label="Resolve note" onchange={() => void resolveNote(n)} />
-              <button type="button" class="k-link" title="Open in editor (e)" onclick={() => jumpTo(n)}>
+              <input type="checkbox" aria-label={t('Resolve note')} onchange={() => void resolveNote(n)} />
+              <button type="button" class="k-link" title={t('Open in editor (e)')} onclick={() => jumpTo(n)}>
                 <code>{anchor(n)}</code>
               </button>
               <span class="body">{n.body}</span>
               {#if n.state !== 'open'}
                 <Badge tone={n.state === 'untouched' ? 'warn' : n.state === 'touched' ? 'ok' : 'neutral'}
-                  >{n.state}</Badge
+                  >{t(NOTE_STATE[n.state] ?? n.state)}</Badge
                 >
               {/if}
             </li>
           {/each}
         </ul>
         <p class="muted">
-          Touched / untouched is a heuristic: a change within 5 lines of the note after Claude's next stop.
-          Keys: <kbd>s</kbd> send, <kbd>x</kbd> resolve, <kbd>e</kbd> open in editor.
+          {t(
+            "Touched / untouched is a heuristic: a change within 5 lines of the note after Claude's next stop.",
+          )}
+          {t('Keys:')} <kbd>s</kbd>
+          {t('send')}, <kbd>x</kbd>
+          {t('resolve')}, <kbd>e</kbd>
+          {t('open in editor')}.
         </p>
         <Button
           icon="send"
           disabled={openNotes === 0}
           loading={busy === 'notes'}
           onclick={() => void sendNotes()}
-          >Send {openNotes} open {openNotes === 1 ? 'note' : 'notes'} to Claude</Button
+          >{tn('Send {n} open note to Claude', 'Send {n} open notes to Claude', openNotes)}</Button
         >
       {/if}
 
-      <h2>Sessions</h2>
+      <h2>{t('Sessions')}</h2>
       {#if itemSessions.length === 0}
-        <p class="muted">No sessions are attached to this work item.</p>
+        <p class="muted">{t('No sessions are attached to this work item.')}</p>
       {:else}
-        <ul class="sessions" aria-label="Sessions">
+        <ul class="sessions" aria-label={t('Sessions')}>
           {#each itemSessions as s (s.id)}
             <li>
               <span>{s.name}</span>
               <Badge
                 tone={s.status === 'needs_input' ? 'danger' : s.status === 'working' ? 'info' : 'neutral'}
               >
-                {s.status.replace('_', ' ')}
+                {statusLabel(s.status)}
               </Badge>
-              <small>{s.lifecycle}</small>
+              <small>{t(LIFECYCLE[s.lifecycle])}</small>
             </li>
           {/each}
         </ul>
       {/if}
       {#if dormant || (itemSessions.length === 0 && item.state.kind !== 'finished')}
-        <Button icon="play" loading={busy === 'resume'} onclick={() => void resume()}>Resume sessions</Button>
+        <Button icon="play" loading={busy === 'resume'} onclick={() => void resume()}
+          >{t('Resume sessions')}</Button
+        >
       {/if}
     </div>
   {/if}

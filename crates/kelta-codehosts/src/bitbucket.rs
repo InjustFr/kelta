@@ -427,6 +427,11 @@ impl CodeHost for BitbucketHost {
             .ok_or_else(|| KeltaError::upstream("create pull request response without id"))
     }
 
+    async fn set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        let url = self.pr_url(&r.repo, &format!("/{}", r.number))?;
+        self.auth.send_text(HttpRequest::put(url).json(json!({ "draft": draft }))).await.map(|_| ())
+    }
+
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {
         let q = format!("state=\"OPEN\" AND source.branch.name=\"{}\"", q_str(branch));
         let v = self

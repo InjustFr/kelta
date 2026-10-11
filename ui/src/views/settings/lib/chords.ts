@@ -1,6 +1,7 @@
 // Chord strings (`ctrl+shift+k`, `cmd+alt+left`): capture from a KeyboardEvent (physical key, like
 // the key manager) and helpers for the keybinding editor.
 
+import { msg } from '$lib/i18n/index.svelte';
 import { ACTIONS, type ActionMeta } from '$lib/gen/actions';
 
 export type Platform = 'macos' | 'linux';
@@ -157,13 +158,13 @@ export const TOGGLE_SNIPPETS: readonly Snippet[] = [
     id: 'gnome',
     label: 'GNOME',
     lines: [
-      'Settings → Keyboard → Keyboard Shortcuts → Custom Shortcuts → +',
-      'Name: Kelta    Command: kelta-ctl toggle    Shortcut: your choice',
+      msg('Settings → Keyboard → Keyboard Shortcuts → Custom Shortcuts → +'),
+      msg('Name: Kelta    Command: kelta-ctl toggle    Shortcut: your choice'),
     ],
   },
   {
     id: 'macos',
     label: 'macOS',
-    lines: ['Shortcuts / Automator Quick Action / Karabiner: run `kelta-ctl toggle`'],
+    lines: [msg('Shortcuts / Automator Quick Action / Karabiner: run `kelta-ctl toggle`')],
   },
 ];

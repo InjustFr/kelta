@@ -197,6 +197,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         review::review_comment,
         review::review_request_changes,
         review::review_nudge,
+        review::review_set_draft,
         // work
         work::work_plan,
         work::work_start,

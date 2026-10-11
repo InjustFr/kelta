@@ -867,6 +867,7 @@
       "default": {
         "confirm_quit_with_running": true,
         "dark_theme": "bezel-dark",
+        "language": "system",
         "light_theme": "bezel-light",
         "log_level": "info",
         "quit_sessions": "ask",
@@ -883,6 +884,20 @@
         "dark_theme": {
           "default": "bezel-dark",
           "description": "Theme id used in dark mode (`bezel-dark` or a `[themes.<id>]` with `base = \"dark\"`).",
+          "type": "string",
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "language": {
+          "default": "system",
+          "description": "Interface language; System follows the OS language.",
+          "enum": [
+            "system",
+            "en",
+            "fr",
+            "de"
+          ],
           "type": "string",
           "x-kelta-scope": [
             "global"

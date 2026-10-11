@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::common::{host_matches, linked_tickets, parse_remote, repo_path, s, user};
+use crate::common::{draft_title, host_matches, linked_tickets, parse_remote, repo_path, s, user};
 
 /// Pull requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
@@ -387,6 +387,14 @@ impl CodeHost for GiteaHost {
         let v = self.json(HttpRequest::post(self.pulls(&d.repo, "")?).json(body)).await?.body;
         self.review_from(&v, ReviewKind::Authored)
             .ok_or_else(|| KeltaError::upstream("create pull request response without number"))
+    }
+
+    /// A `WIP:` title prefix (Gitea's default `WORK_IN_PROGRESS_PREFIXES`).
+    async fn set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        let url = self.pulls(&r.repo, &format!("/{}", r.number))?;
+        let pr = self.json(HttpRequest::get(url.clone())).await?.body;
+        let title = draft_title(s(&pr, "title").unwrap_or_default(), draft, "WIP:");
+        self.auth.send_text(HttpRequest::patch(url).json(json!({ "title": title }))).await.map(|_| ())
     }
 
     async fn find_for_branch(&self, repo: &str, branch: &str) -> Result<Option<Review>, KeltaError> {

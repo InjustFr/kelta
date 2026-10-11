@@ -1,6 +1,7 @@
 <script lang="ts">
   // First run (SPEC §5): dependency checks (claude, nvim, git, gh, glab, secret backend,
   // notification daemon), then the first steps: set up with Claude (#343), or a project and an account.
+  import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { AppInfo, Diagnostics } from '$lib/gen';
@@ -74,22 +75,23 @@
   }
 </script>
 
-<Sheet title="Welcome to Kelta" onclose={finish} width={560}>
+<Sheet title={t('Welcome to Kelta')} onclose={finish} width={560}>
   <div class="welcome" data-testid="onboarding">
     <p class="lead">
-      Claude Code and your editor side by side, with your tickets and reviews one click away. A quick look at
-      your machine first.
+      {t(
+        'Claude Code and your editor side by side, with your tickets and reviews one click away. A quick look at your machine first.',
+      )}
     </p>
 
     <section>
       <header>
-        <h3>Your environment</h3>
-        <Button size="sm" icon="refresh-cw" {loading} onclick={run}>Check again</Button>
+        <h3>{t('Your environment')}</h3>
+        <Button size="sm" icon="refresh-cw" {loading} onclick={run}>{t('Check again')}</Button>
       </header>
       {#if error}
         <p class="error" role="alert">{error}</p>
       {:else if !diag}
-        <div class="loading"><Spinner size={16} /> Checking…</div>
+        <div class="loading"><Spinner size={16} /> {t('Checking…')}</div>
       {:else}
         <ul>
           {#each checks as c (c.id)}
@@ -105,59 +107,64 @@
         </ul>
         {#if info?.claude && !info.claude.ok}
           <p class="error" data-testid="claude-too-old">
-            Claude Code {info.claude.version} is older than the minimum Kelta supports. Update it to get status
-            hooks and session names.
+            {t(
+              'Claude Code {version} is older than the minimum Kelta supports. Update it to get status hooks and session names.',
+              { version: info.claude.version ?? '' },
+            )}
           </p>
         {/if}
         {#if needsAttention(diag)}
           <p class="muted">
-            Kelta works with what is missing; those features are just unavailable. Open diagnostics for
-            details.
+            {t(
+              'Kelta works with what is missing; those features are just unavailable. Open diagnostics for details.',
+            )}
           </p>
         {/if}
       {/if}
     </section>
 
     <section>
-      <h3>First steps</h3>
+      <h3>{t('First steps')}</h3>
       <div class="steps">
         <div class="step">
           <Icon name="bot" size={18} />
           <div>
-            <strong>Set up with Claude</strong>
-            <p>Claude Code finds your repositories and asks for the rest. Tokens stay in Kelta.</p>
+            <strong>{t('Set up with Claude')}</strong>
+            <p>{t('Claude Code finds your repositories and asks for the rest. Tokens stay in Kelta.')}</p>
           </div>
           <Button
             variant={hasProject ? 'secondary' : 'primary'}
             onclick={setUpWithClaude}
-            data-testid="onboarding-claude-setup">Set up with Claude</Button
+            data-testid="onboarding-claude-setup">{t('Set up with Claude')}</Button
           >
         </div>
         <div class="step" data-done={hasProject}>
           <Icon name={hasProject ? 'circle-check' : 'folder-plus'} size={18} />
           <div>
-            <strong>Create a project from a folder</strong>
-            <p>Kelta detects the repositories, remotes and tracker.</p>
+            <strong>{t('Create a project from a folder')}</strong>
+            <p>{t('Kelta detects the repositories, remotes and tracker.')}</p>
           </div>
           <Button variant={hasProject ? 'secondary' : 'primary'} onclick={createProject}
-            >Create project from folder</Button
+            >{t('Create project from folder')}</Button
           >
         </div>
         <div class="step" data-done={hasAccount}>
           <Icon name={hasAccount ? 'circle-check' : 'key-round'} size={18} />
           <div>
-            <strong>Add an account</strong>
-            <p>Jira, Redmine, GitHub, GitLab or Linear. Tokens go to your system keychain.</p>
+            <strong>{t('Add an account')}</strong>
+            <p>{t('Jira, Redmine, GitHub, GitLab or Linear. Tokens go to your system keychain.')}</p>
           </div>
-          <Button variant={hasAccount ? 'secondary' : 'primary'} onclick={addAccount}>Add account</Button>
+          <Button variant={hasAccount ? 'secondary' : 'primary'} onclick={addAccount}
+            >{t('Add account')}</Button
+          >
         </div>
       </div>
     </section>
   </div>
 
   {#snippet actions()}
-    <Button variant="ghost" onclick={showDiagnostics}>Open diagnostics</Button>
-    <Button variant="primary" onclick={finish} data-testid="onboarding-done">Done</Button>
+    <Button variant="ghost" onclick={showDiagnostics}>{t('Open diagnostics')}</Button>
+    <Button variant="primary" onclick={finish} data-testid="onboarding-done">{t('Done')}</Button>
   {/snippet}
 </Sheet>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import type { PermissionMode } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -43,7 +44,7 @@
     } catch (err) {
       toasts.error(
         err,
-        installed ? 'Removing Kelta from Claude Code failed' : 'Installing Kelta in Claude Code failed',
+        installed ? t('Removing Kelta from Claude Code failed') : t('Installing Kelta in Claude Code failed'),
       );
     } finally {
       busy = false;
@@ -57,7 +58,7 @@
       else await ipc.claudeHooksInstall();
       hooks = !hooks;
     } catch (err) {
-      toasts.error(err, hooks ? "Removing Kelta's hooks failed" : "Installing Kelta's hooks failed");
+      toasts.error(err, hooks ? t("Removing Kelta's hooks failed") : t("Installing Kelta's hooks failed"));
     } finally {
       hooksBusy = false;
     }
@@ -67,50 +68,51 @@
 <SectionForm sectionId="claude" {...props}>
   {#snippet before()}
     {#if installed !== undefined}
-      <SettingsRow label="Kelta's ticket tools in Claude Code" actions data-testid="claude-mcp">
+      <SettingsRow label={t("Kelta's ticket tools in Claude Code")} actions data-testid="claude-mcp">
         {#snippet control()}
           {#if installed !== null}
             <Button size="sm" icon={installed ? 'trash-2' : 'plug'} loading={busy} onclick={toggle}>
-              {installed ? 'Remove' : 'Install'}
+              {installed ? t('Remove') : t('Install')}
             </Button>
           {/if}
         {/snippet}
         <p>
           {#if installed === null}
-            Claude Code was not found in your login PATH.
+            {t('Claude Code was not found in your login PATH.')}
           {:else if installed}
-            Kelta's ticket tools are installed in Claude Code: every Claude session can use them.
+            {t("Kelta's ticket tools are installed in Claude Code: every Claude session can use them.")}
           {:else}
-            Install Kelta's ticket tools in Claude Code to use them from any Claude session.
+            {t("Install Kelta's ticket tools in Claude Code to use them from any Claude session.")}
           {/if}
         </p>
       </SettingsRow>
     {/if}
     {#if hooks !== undefined && hooks !== null}
-      <SettingsRow label="Claude sessions started outside Kelta" actions data-testid="claude-hooks">
+      <SettingsRow label={t('Claude sessions started outside Kelta')} actions data-testid="claude-hooks">
         {#snippet control()}
           <Button size="sm" icon={hooks ? 'trash-2' : 'plug'} loading={hooksBusy} onclick={toggleHooks}>
-            {hooks ? 'Remove' : 'Install'}
+            {hooks ? t('Remove') : t('Install')}
           </Button>
         {/snippet}
         <p>
           {#if hooks}
-            Claude sessions you start in another terminal show in Now, with their state.
+            {t('Claude sessions you start in another terminal show in Now, with their state.')}
           {:else}
-            Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in
-            another terminal in Now.
+            {t(
+              "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in Now.",
+            )}
           {/if}
         </p>
       </SettingsRow>
     {/if}
     {#if mode !== undefined}
       <SettingsRow
-        label="Profiles without a permission mode start in"
+        label={t('Profiles without a permission mode start in')}
         actions
         data-testid="claude-permission-mode"
       >
         {#snippet control()}
-          <span>{mode ? `last used: ${mode}` : 'Claude default'}</span>
+          <span>{mode ? t('last used: {mode}', { mode }) : t('Claude default')}</span>
         {/snippet}
       </SettingsRow>
     {/if}

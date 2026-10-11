@@ -2,8 +2,10 @@
   // Terminal pane: shows the pooled xterm view of one session (ARCHITECTURE §9). The view is created
   // and attached by the pool; this component owns the container, the exit banner, the attach error
   // state, the search bar and the context menu.
+  import { t } from '$lib/i18n/index.svelte';
   import type { PaneProps } from '$app/registry';
   import { confirms } from '../../shell/confirm.svelte';
+  import { runStatusLabel } from '../../shell/labels';
   import { closePaneById, openContent } from '../../shell/nav';
   import { sessions, settings, toasts, ui, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
@@ -112,8 +114,11 @@
         toasts.push(
           {
             level: 'info',
-            text: `WebGL renders ${Math.round(r.webglFps)} fps against ${Math.round(r.domFps)} fps for the DOM renderer here.`,
-            action: { label: 'Use WebGL', command: 'terminal.set_renderer', args: { renderer: 'webgl' } },
+            text: t('WebGL renders {webgl} fps against {dom} fps for the DOM renderer here.', {
+              webgl: Math.round(r.webglFps),
+              dom: Math.round(r.domFps),
+            }),
+            action: { label: t('Use WebGL'), command: 'terminal.set_renderer', args: { renderer: 'webgl' } },
           },
           { timeoutMs: 0 },
         ),
@@ -123,10 +128,13 @@
   async function askPaste(text: string): Promise<boolean> {
     const lines = text.replace(/[\r\n]+$/, '').split(/\r\n|\r|\n/).length;
     const answer = await confirms.ask({
-      title: 'Paste multiple lines?',
-      body: `The text has ${lines} lines and the program is not using bracketed paste, so each newline will run as Enter.`,
+      title: t('Paste multiple lines?'),
+      body: t(
+        'The text has {n} lines and the program is not using bracketed paste, so each newline will run as Enter.',
+        { n: lines },
+      ),
       details: text.split(/\r\n|\r|\n/).slice(0, 5),
-      actions: [{ id: 'paste', label: 'Paste', variant: 'primary' }],
+      actions: [{ id: 'paste', label: t('Paste'), variant: 'primary' }],
     });
     return answer === 'paste';
   }
@@ -140,7 +148,7 @@
       await sessions.restart(sessionId);
       await view?.reattach();
     } catch (err) {
-      toasts.error(err, 'Restarting the session failed');
+      toasts.error(err, t('Restarting the session failed'));
     }
   }
 
@@ -156,10 +164,10 @@
 
   function menuItems(): MenuItem[] {
     return [
-      { id: 'copy', label: 'Copy', icon: 'copy', disabled: !view?.term.hasSelection() },
-      { id: 'paste', label: 'Paste', icon: 'clipboard' },
-      { id: 'search', label: 'Search…', icon: 'search', separator: true },
-      { id: 'clear', label: 'Clear screen', icon: 'trash-2' },
+      { id: 'copy', label: t('Copy'), icon: 'copy', disabled: !view?.term.hasSelection() },
+      { id: 'paste', label: t('Paste'), icon: 'clipboard' },
+      { id: 'search', label: t('Search…'), icon: 'search', separator: true },
+      { id: 'clear', label: t('Clear screen'), icon: 'trash-2' },
     ];
   }
 
@@ -195,10 +203,12 @@
   {/if}
 
   {#if claims.length > 0}
-    <ul class="claims" data-testid="run-claims" aria-label="Tickets held by this session's runs">
+    <ul class="claims" data-testid="run-claims" aria-label={t("Tickets held by this session's runs")}>
       {#each claims as w (w.id)}
         <li title={w.run?.note ?? undefined}>
-          <Lamp level={phaseNow(w).lamp} />{workKey(w)} · {w.run?.phase ?? 'claimed'} · {w.run?.state}
+          <Lamp level={phaseNow(w).lamp} />{workKey(w)} · {w.run?.phase ?? t('claimed')} · {runStatusLabel(
+            w.run?.state ?? '',
+          )}
         </li>
       {/each}
     </ul>
@@ -208,11 +218,11 @@
     <div class="overlay" data-testid="terminal-missing">
       <EmptyState
         icon="square-terminal"
-        title="This session is gone"
-        body="Its process was stopped or removed."
+        title={t('This session is gone')}
+        body={t('Its process was stopped or removed.')}
       >
         {#snippet actions()}
-          <Button icon="x" onclick={close}>Close pane</Button>
+          <Button icon="x" onclick={close}>{t('Close pane')}</Button>
         {/snippet}
       </EmptyState>
     </div>
@@ -220,19 +230,21 @@
     <div class="overlay" data-testid="terminal-error">
       <ErrorState
         error={viewState.error.message}
-        title={viewState.error.code === 'not_found' ? 'Program not found' : 'Could not start this session'}
+        title={viewState.error.code === 'not_found'
+          ? t('Program not found')
+          : t('Could not start this session')}
         onretry={retryAttach}
       >
         {#snippet actions()}
           {#if viewState.error?.code === 'not_found'}
             <Button icon="settings" onclick={() => void dispatch('settings.open', { section: 'editors' })}
-              >Open editor settings</Button
+              >{t('Open editor settings')}</Button
             >
           {/if}
           <Button
             icon="activity"
             onclick={() => openContent(projectId, { content: { kind: 'diagnostics' }, placement: 'new_tab' })}
-            >Open diagnostics</Button
+            >{t('Open diagnostics')}</Button
           >
         {/snippet}
       </ErrorState>
@@ -241,25 +253,29 @@
     <div class="banner" role="status" data-testid="parked-banner">
       <span class="mark parked" aria-hidden="true"></span>
       {#if viewState.attaching}
-        <span class="what">Resuming…</span>
+        <span class="what">{t('Resuming…')}</span>
       {:else}
-        <span class="what">Parked.</span>
-        <Button size="sm" variant="primary" icon="play" onclick={retryAttach}>Resume</Button>
+        <span class="what">{t('Parked.')}</span>
+        <Button size="sm" variant="primary" icon="play" onclick={retryAttach}>{t('Resume')}</Button>
       {/if}
     </div>
   {:else if exited}
     <div class="banner" role="status" data-testid="exit-banner">
       <span class="mark" aria-hidden="true"></span>
       <span class="what"
-        >Exited{exitCode !== null ? (exitCode === -1 ? ' on a signal' : ` with code ${exitCode}`) : ''}.</span
+        >{exitCode === null
+          ? t('Exited.')
+          : exitCode === -1
+            ? t('Exited on a signal.')
+            : t('Exited with code {code}.', { code: exitCode })}</span
       >
       <!-- The buttons carry the actions; the key hints drop out first when the pane is narrow. -->
       <span class="keys" aria-hidden="true">
-        <span class="key"><Kbd chord="enter" /> Restart</span>
-        <span class="key"><Kbd chord="x" /> Close</span>
+        <span class="key"><Kbd chord="enter" /> {t('Restart')}</span>
+        <span class="key"><Kbd chord="x" /> {t('Close')}</span>
       </span>
-      <Button size="sm" variant="primary" icon="refresh-cw" onclick={restart}>Restart</Button>
-      <Button size="sm" icon="x" onclick={close}>Close</Button>
+      <Button size="sm" variant="primary" icon="refresh-cw" onclick={restart}>{t('Restart')}</Button>
+      <Button size="sm" icon="x" onclick={close}>{t('Close')}</Button>
     </div>
   {/if}
 </div>
@@ -269,7 +285,7 @@
     items={menuItems()}
     x={menu.x}
     y={menu.y}
-    label="Terminal"
+    label={t('Terminal')}
     onselect={(id) => void onMenu(id)}
     onclose={() => (menu = null)}
   />

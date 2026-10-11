@@ -83,11 +83,12 @@ impl WorkService {
         // Core leaves the "finished" notification of a work item's Claude to us.
         if event == names::STOP && core.settings(Some(&item.project_id)).notifications.claude_done {
             let key = item_key(&item);
-            let title = match delta {
-                Some(Some(_)) => format!("{key} ready to review"),
-                Some(None) => format!("{key}: Claude replied"),
-                None => format!("{key}: Claude finished"),
+            let en = match delta {
+                Some(Some(_)) => "{} ready to review",
+                Some(None) => "{}: Claude replied",
+                None => "{}: Claude finished",
             };
+            let title = kelta_proto::i18n::tr(core.settings(None).app.language, en).replace("{}", &key);
             let body = message.map(|m| m.chars().take(200).collect());
             // Core drops it when the session's pane is visible in the focused window.
             core.notify(Notification {

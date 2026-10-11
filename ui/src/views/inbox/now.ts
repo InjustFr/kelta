@@ -1,6 +1,7 @@
 // Now, fed from the stores: sections, header, freshness, row actions and Next waiting (FLOW §3).
 // Used by the Now pane, the rail tile (badge + tooltip) and `attention.next`.
 
+import { formatDate, t } from '$lib/i18n/index.svelte';
 import type { KeltaError, TicketRef } from '$lib/gen';
 import { projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
@@ -67,7 +68,7 @@ export function nowSummary(): NowSummary {
   return {
     sections,
     parts,
-    header: parts.join('\u2002\u2002') || 'Nothing waiting',
+    header: parts.join('\u2002\u2002') || t('Nothing waiting'),
     waiting: waitingCount(sections),
   };
 }
@@ -85,8 +86,7 @@ export function asOf(): { at: string; ms: number; error: KeltaError | null } | n
     (t): t is number => t !== null,
   );
   const ms = times.length ? Math.min(...times) : Date.now();
-  const d = new Date(ms);
-  const at = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const at = formatDate(ms, { hour: '2-digit', minute: '2-digit' });
   return { at, ms, error: bad.find((l) => l.error)?.error ?? null };
 }
 
@@ -111,7 +111,7 @@ export function startNextUp(rows: readonly NowRow[]): void {
   const { live, max } = claudeSlots();
   const n = startsNow(rows.length, live, max);
   if (n === 0) {
-    toasts.info(`No free Claude slot (${live}/${max} live)`);
+    toasts.info(t('No free Claude slot ({live}/{max} live)', { live, max }));
     return;
   }
   batch.clear();
@@ -177,11 +177,11 @@ export async function nextWaiting(delta: 1 | -1 = 1): Promise<void> {
     const up = sections.find((s) => s.id === 'next_up') ?? sections.find((s) => s.id === 'up_next');
     const queued = up ? up.rows.length + up.more : 0;
     if (up && queued)
-      hud.show(`nothing waiting · ${queued} ${up.label.toLowerCase()}`, {
+      hud.show(`${t('nothing waiting')} · ${queued} ${t(up.label).toLowerCase()}`, {
         action: 'inbox.open',
-        label: up.label,
+        label: t(up.label),
       });
-    else hud.show('nothing waiting', { action: 'tickets.open', label: 'Tickets' });
+    else hud.show(t('nothing waiting'), { action: 'tickets.open', label: t('Tickets') });
     return;
   }
   const at = queue.findIndex((j) => j.row.id === lastJump);

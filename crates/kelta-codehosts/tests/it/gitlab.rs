@@ -747,3 +747,23 @@ async fn team_waiting_state_is_fetched_only_when_the_mr_moves() {
         assert_eq!(list[0].waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"));
     }
 }
+
+#[tokio::test]
+async fn set_draft_toggles_the_title_prefix() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(MR))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"iid":8,"title":"Draft: Speed up"}"#))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(MR))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+        .mount(&server)
+        .await;
+    let (h, r) = (gl(&server), rref("gitlab-acme", "grp/other", 8));
+    h.set_draft(&r, false).await.unwrap();
+    h.set_draft(&r, true).await.unwrap();
+    let puts = bodies(&server, "PUT", MR).await;
+    assert_eq!(puts, vec![json!({"title": "Speed up"}), json!({"title": "Draft: Speed up"})]);
+}

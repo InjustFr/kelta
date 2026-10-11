@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import { Menu, type MenuItem } from '$lib/ui';
@@ -76,9 +77,11 @@
     {#if error}
       <p class="none">{error}</p>
     {:else if !items}
-      <p class="none">Loading…</p>
+      <p class="none">{t('Loading…')}</p>
     {:else if items.length === 0}
-      <p class="none">No match{query.trim() ? ` for "${query.trim()}"` : ''}.</p>
+      <p class="none">
+        {query.trim() ? t('No match for "{query}".', { query: query.trim() }) : t('No match.')}
+      </p>
     {/if}
   {/snippet}
 </Menu>

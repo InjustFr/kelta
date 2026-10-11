@@ -171,6 +171,7 @@ fn statusline() -> ExitCode {
         return ExitCode::SUCCESS;
     };
     // stdout is inherited: the user's output reaches Claude byte for byte.
+    #[allow(clippy::disallowed_methods)] // allowlisted: runs in Claude's environment (a hook), already clean
     let child =
         std::process::Command::new("/bin/sh").arg("-c").arg(cmd).stdin(std::process::Stdio::piped()).spawn();
     let Ok(mut child) = child else { return ExitCode::FAILURE };

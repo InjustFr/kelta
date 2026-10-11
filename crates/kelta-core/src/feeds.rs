@@ -1618,7 +1618,7 @@ impl Core {
         Ok(())
     }
 
-    fn review_notify(&self, kind: NotifyKind, title: &str, r: &Review, project: Option<ProjectId>) {
+    fn review_notify(&self, kind: NotifyKind, title: &'static str, r: &Review, project: Option<ProjectId>) {
         let settings = self.accounts_settings();
         if !crate::notifier::should_notify(
             kind,
@@ -1630,7 +1630,7 @@ impl Core {
             return;
         }
         self.deliver(Notification {
-            title: title.to_owned(),
+            title: kelta_proto::i18n::tr(settings.app.language, title).to_owned(),
             body: Some(format!("{}#{} {}", r.r#ref.repo, r.r#ref.number, r.title)),
             urgency: Urgency::Normal,
             project_id: project,
@@ -1784,6 +1784,14 @@ impl Core {
     pub async fn review_comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         self.rt.capture();
         self.code_host_of(&r.account)?.comment(r, body).await?;
+        self.after_review_write(r).await;
+        Ok(())
+    }
+
+    /// Mark ready for review (`draft` false) or back to draft.
+    pub async fn review_set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.code_host_of(&r.account)?.set_draft(r, draft).await?;
         self.after_review_write(r).await;
         Ok(())
     }

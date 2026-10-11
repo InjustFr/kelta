@@ -84,6 +84,7 @@ export type * from './KeybindingDef';
 export type * from './KeyboardProtocol';
 export type * from './KeysSettings';
 export type * from './KillSignal';
+export type * from './Language';
 export type * from './Layer';
 export type * from './LayerDoc';
 export type * from './Layout';
