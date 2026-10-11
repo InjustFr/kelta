@@ -1064,15 +1064,16 @@ impl Core {
         let typed = bytes != b"\x1b[I" && bytes != b"\x1b[O";
         if typed {
             self.auto_park_status(&info, false, &timers);
-            // Terminal replies (DA/DSR, mouse, paste markers) start with ESC; text and Enter don't.
-            if bytes.first() != Some(&0x1b) {
-                self.clear_question(id);
-            }
         }
         if info.lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
         }
         self.terminal.write(id, bytes)?;
+        // Only once the answer reached Claude (#367). Terminal replies (DA/DSR, mouse, paste
+        // markers) start with ESC; text and Enter don't.
+        if typed && bytes.first() != Some(&0x1b) {
+            self.clear_question(id);
+        }
         // No hook fires when a permission prompt is answered (#278): the keystroke itself is the signal.
         if answers_prompt(bytes)
             && info.status == SessionStatus::NeedsInput
@@ -1515,7 +1516,7 @@ impl Core {
     /// MCP `ask` (#356): keep the question until the next input (`write_session`) and ask for attention.
     pub(crate) fn ask(&self, id: &SessionId, q: ClaudeQuestion) -> Result<(), KeltaError> {
         let visible = self.is_visible(id);
-        let preview = q.question.clone();
+        let preview = status::truncate_preview(&q.question);
         let (state, source) = {
             let mut s = self.sessions.lock();
             let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
