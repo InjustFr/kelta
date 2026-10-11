@@ -1052,6 +1052,19 @@ async fn ticket_by_key_reads_the_cached_lists_without_enrichment() {
     assert_eq!(e.tracker.calls().len(), calls, "served from the cache: {:?}", e.tracker.calls());
 }
 
+#[tokio::test]
+async fn ticket_by_key_on_an_account_loads_only_that_accounts_lists() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (e, linear) = union_env(tmp.path());
+    let other = Arc::new(FakeTracker::new());
+    e.factory.trackers.lock().insert(linear, other.clone());
+    let jira = AccountId::new("jira-acme");
+    let got = e.h.core.ticket_by_key("SHOP-141", Some(&jira)).await.unwrap().unwrap();
+    assert_eq!(got.ticket.r#ref.account, jira);
+    assert!(e.tracker.calls().iter().any(|c| c.starts_with("list:")), "{:?}", e.tracker.calls());
+    assert!(other.calls().is_empty(), "the other account stays cold: {:?}", other.calls());
+}
+
 /// shop (a source feeds it, bound to acme/shop-api) + lab (no source, bound to acme/lab).
 fn team_env(root: &std::path::Path, reviews: Vec<Review>) -> Env {
     let mut ps = projects(root);

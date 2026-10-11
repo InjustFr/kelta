@@ -659,12 +659,8 @@ impl Core {
     }
 
     async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItem> {
-        let items = self.store.call(|c| q::work_list(c, None)).await.unwrap_or_default();
-        items
-            .into_iter()
-            .filter(|w| w.state != WorkState::Finished)
-            .filter_map(|w| w.ticket.clone().map(|t| (t, w)))
-            .collect()
+        let items = self.store.call(|c| q::work_open(c)).await.unwrap_or_default();
+        items.into_iter().filter_map(|w| w.ticket.clone().map(|t| (t, w))).collect()
     }
 
     /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
@@ -821,7 +817,8 @@ impl Core {
     /// The ticket `key` names in the lists' first pages (cached, fetched when cold), with the
     /// projects and sources of every list holding it; no work, PR or people enrichment.
     pub async fn tracker_find(&self, key: &str, account: Option<&AccountId>) -> Option<TicketItem> {
-        let queries = self.ticket_queries(&Scope::All, None, None);
+        let mut queries = self.ticket_queries(&Scope::All, None, None);
+        queries.retain(|q| account.is_none_or(|a| &q.account == a));
         let results =
             futures::future::join_all(queries.iter().map(|q| self.load_ticket_query(q, None, false))).await;
         let named = |t: &Ticket| t.r#ref.key == key && account.is_none_or(|a| &t.r#ref.account == a);
@@ -1546,7 +1543,7 @@ impl Core {
     /// Branch join (FLOW §3.1): an authored PR whose head is an active item's branch is that
     /// item's PR (Claude ran `gh pr create`, or the web UI): `pr_url` backfill + `on_pr`, once.
     async fn join_work_prs(&self, account: &AccountId, list: &[Review]) {
-        let items = self.store.call(|c| q::work_list(c, None)).await.unwrap_or_default();
+        let items = self.store.call(|c| q::work_open(c)).await.unwrap_or_default();
         for w in items.iter().filter(|w| w.pr_url.is_none() && w.state == WorkState::Active) {
             let Some((acc, repo)) = self.work_binding(w) else { continue };
             let hit = list.iter().find(|r| {
@@ -1582,12 +1579,12 @@ impl Core {
     pub async fn check_work_prs(&self) -> Result<(), KeltaError> {
         self.rt.capture();
         self.work.ensure_listener();
-        let items = self.store.call(|c| q::work_list(c, None)).await?;
+        let items = self.store.call(|c| q::work_open(c)).await?;
         let mut open: HashMap<AccountId, Vec<Review>> = HashMap::new();
         for w in &items {
             self.note_work_pr(w);
         }
-        for w in items.iter().filter(|w| w.state != WorkState::Finished && !w.state.pr_done()) {
+        for w in items.iter().filter(|w| !w.state.pr_done()) {
             let (Some(url), Some((account, repo))) = (&w.pr_url, self.work_binding(w)) else { continue };
             if !open.contains_key(&account) {
                 match self.fetch_reviews(&account, ReviewKind::Authored).await {
