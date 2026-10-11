@@ -332,7 +332,14 @@ impl ConfigService {
         }
         let unchanged = read_optional(&target.path)?.is_some_and(|t| t == new_text);
         if !unchanged {
-            write_atomic(&target.path, &new_text)?;
+            // Follow a dotfiles symlink for user-owned files only; a repo could plant one to redirect writes.
+            let path = match target.kind {
+                FileKind::Global | FileKind::Keybindings => {
+                    std::fs::canonicalize(&target.path).unwrap_or_else(|_| target.path.clone())
+                }
+                FileKind::Project | FileKind::Repo => target.path.clone(),
+            };
+            write_atomic(&path, &new_text)?;
         }
         let _ = self.commit(prev, cand);
         Ok(())

@@ -558,3 +558,36 @@ fn project_create_with_a_tracker_joins_an_equal_source() {
     assert_eq!(s[0].binding_for(&ProjectId::new("shop")).repo_rules, t.repo_rules);
     assert!(s[0].binding_for(&ProjectId::new("blog")).repo_rules.is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+fn symlinked_global_config_is_written_through() {
+    let e = env();
+    let target = e.tmp.path().join("dotfiles/config.toml");
+    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+    std::fs::write(&target, GLOBAL).unwrap();
+    std::fs::create_dir_all(e.dirs.global_config().parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&target, e.dirs.global_config()).unwrap();
+    let svc = e.load();
+    svc.layer_set(Layer::Global, None, None, "terminal.font_size", json!(15)).unwrap();
+    assert!(std::fs::symlink_metadata(e.dirs.global_config()).unwrap().file_type().is_symlink());
+    assert!(read(&target).contains("font_size = 15"));
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_repo_config_is_not_followed() {
+    let e = env();
+    e.project("shop", "");
+    let outside = e.tmp.path().join("outside.toml");
+    std::fs::write(&outside, "[worktree]\ninclude = [\".npmrc\"]\n").unwrap();
+    let link = e.repo.join(".kelta/config.toml");
+    std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&outside, &link).unwrap();
+    let svc = e.load();
+    let p = ProjectId::new("shop");
+    svc.layer_set(Layer::Repo, Some(&p), Some("api"), "worktree.include", json!([".env"])).unwrap();
+    assert!(!std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert!(read(&link).contains(".env"));
+    assert_eq!(read(&outside), "[worktree]\ninclude = [\".npmrc\"]\n");
+}
