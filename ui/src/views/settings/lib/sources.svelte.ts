@@ -6,6 +6,7 @@ import * as ipc from '$lib/ipc/commands';
 import { settings } from '$lib/stores';
 
 import { emptyBinding } from '../../onboarding/draft';
+import { slugify, uniqueId } from './accounts';
 
 /** Account a view reads from (`None` = the binding's). */
 export const viewAccount = (b: TrackerBinding, v: TrackerView): string => v.account ?? b.account;
@@ -22,12 +23,12 @@ export function isAdded(b: TrackerBinding | null, account: string, hit: SourceHi
 /** `b` plus the hit's view (unique id, who = mine); creates the binding on `account` when there is none. */
 export function withSource(b: TrackerBinding | null, account: string, hit: SourceHit): TrackerBinding {
   const base = b ?? emptyBinding(account);
-  const taken = base.views.map((v) => v.id);
-  let id = hit.view.id;
-  for (let n = 2; taken.includes(id); n++) id = `${hit.view.id}-${n}`;
   const view: TrackerView = {
     ...hit.view,
-    id,
+    id: uniqueId(
+      hit.view.id,
+      base.views.map((v) => v.id),
+    ),
     who: 'mine',
     account: account === base.account ? null : account,
   };
@@ -41,13 +42,10 @@ export function newSource(
   hit: SourceHit,
   projectId?: string,
 ): Source {
-  const slug =
-    hit.label
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'source';
-  let id = slug;
-  for (let n = 2; taken.some((s) => s.id === id); n++) id = `${slug}-${n}`;
+  const id = uniqueId(
+    slugify(hit.label) || 'source',
+    taken.map((s) => s.id),
+  );
   const projects = projectId ? [projectId] : [];
   return { id, label: hit.label, projects, tracker: withSource(null, account, hit), routes: [] };
 }
