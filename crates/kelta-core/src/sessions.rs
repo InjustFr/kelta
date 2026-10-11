@@ -248,14 +248,25 @@ fn base64(input: &[u8]) -> String {
     out
 }
 
-/// Input that answers a permission prompt (#303): Enter, `1`-`9`, `y`/`n`, or a lone Esc. Escape
-/// sequences (arrows, Shift+Tab, DA/DSR replies, mouse reports, bracketed paste) only move or report.
+/// Input that answers a permission prompt (#303): Enter, `1`-`9`, `y`/`n`, or a lone Esc, raw or as
+/// a kitty CSI-u press (#306). Other escape sequences (arrows, Shift+Tab, DA/DSR replies, mouse
+/// reports, bracketed paste) only move or report.
 fn answers_prompt(bytes: &[u8]) -> bool {
     match bytes {
         [0x1b] => true,
+        [0x1b, b'[', params @ .., b'u'] => kitty_answer(params),
         [0x1b, ..] => false,
         _ => bytes.iter().any(|b| matches!(b, b'\r' | b'\n' | b'1'..=b'9' | b'y' | b'n')),
     }
+}
+
+/// `code[:alternates][;1[:1]][;text]`: an answer key pressed with no modifiers (Claude Code pushes
+/// DISAMBIGUATE, so Esc arrives as `ESC [ 27 u`). Repeat (`:2`) and release (`:3`) events don't count.
+fn kitty_answer(params: &[u8]) -> bool {
+    let mut fields = std::str::from_utf8(params).unwrap_or_default().split(';');
+    let code = fields.next().and_then(|f| f.split(':').next()?.parse::<u32>().ok());
+    matches!(code, Some(13 | 27 | 49..=57 | 89 | 78 | 121 | 110))
+        && matches!(fields.next(), None | Some("1" | "1:1"))
 }
 
 fn tail_lines(text: &str, max: u32) -> String {

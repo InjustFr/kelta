@@ -252,8 +252,9 @@ async fn answering_a_permission_prompt_clears_needs_input() {
     h.core.session_apply_hook(&s.id, ch(S::Running)).await.unwrap();
     h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
     assert_eq!(h.core.session_get(&s.id).unwrap().attention, A::NeedsInput);
-    // Focus reports, arrows, Shift+Tab, DA/DSR replies, an SGR mouse report, paste markers: not answers (#303).
-    let moves: [&[u8]; 9] = [
+    // Focus reports, arrows, Shift+Tab, DA/DSR replies, SGR and X10 mouse reports, paste markers,
+    // kitty release/repeat/modified keys: not answers (#303, #306).
+    let moves: [&[u8]; 13] = [
         b"\x1b[I",
         b"\x1b[A",
         b"\x1b[B",
@@ -262,7 +263,11 @@ async fn answering_a_permission_prompt_clears_needs_input() {
         b"\x1b[?1;2c",
         b"\x1b[12;40R",
         b"\x1b[<0;10;5M",
+        b"\x1b[M #u",
         b"\x1b[200~",
+        b"\x1b[13;1:3u",
+        b"\x1b[13;1:2u",
+        b"\x1b[121;5u",
     ];
     for bytes in moves {
         h.core.session_write(&s.id, bytes).await.unwrap();
@@ -273,7 +278,19 @@ async fn answering_a_permission_prompt_clears_needs_input() {
     let info = h.core.session_get(&s.id).unwrap();
     assert_eq!((info.status, info.attention, info.status_source), (S::Working, A::None, StatusSource::Hook));
     assert_eq!(h.ui.badge(), 0);
-    for answer in [&b"\r"[..], b"y", b"n", b"\x1b"] {
+    // Raw keys, then their kitty CSI-u presses (#306).
+    for answer in [
+        &b"\r"[..],
+        b"y",
+        b"n",
+        b"\x1b",
+        b"\x1b[13u",
+        b"\x1b[27u",
+        b"\x1b[49u",
+        b"\x1b[121u",
+        b"\x1b[13;1u",
+        b"\x1b[110;1:1u",
+    ] {
         h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
         h.core.session_write(&s.id, answer).await.unwrap();
         assert_eq!(h.core.session_get(&s.id).unwrap().status, S::Working, "{answer:?}");
