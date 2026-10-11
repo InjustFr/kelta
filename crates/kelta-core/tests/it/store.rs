@@ -324,6 +324,15 @@ async fn startup_prunes_old_cache_rows_and_seen_reviews() {
             for r in &seens {
                 q::seen_review_put(c, r)?;
             }
+            // Approved in Kelta long ago: the stamp must outlive the 90-day prune.
+            let rr = kelta_proto::codehost::ReviewRef {
+                account: "gh".into(),
+                repo: "acme/shop".into(),
+                number: 3,
+            };
+            q::seen_review_stamp(c, &rr, "sha")?;
+            c.execute("UPDATE seen_reviews SET first_seen = '2020-01-01T00:00:00Z' WHERE number = 3", [])
+                .map_err(kelta_core::store::db_err)?;
             Ok(())
         })
         .await
@@ -334,5 +343,5 @@ async fn startup_prunes_old_cache_rows_and_seen_reviews() {
     assert!(s.call(|c| q::cache_get(c, "fresh")).await.unwrap().is_some());
     let left: Vec<u64> =
         s.call(|c| q::seen_reviews(c, "gh")).await.unwrap().iter().map(|r| r.number).collect();
-    assert_eq!(left, [2]);
+    assert_eq!(left, [2, 3]);
 }
