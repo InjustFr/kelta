@@ -887,7 +887,7 @@
         {#snippet actions()}<Button onclick={() => setGroup('status')}>By status</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list'}
-      <div class="split">
+      <div class="k-split">
         <div class="list" style:--key-chars={keyChars}>
           <VirtualList
             bind:this={vlist}
@@ -954,11 +954,11 @@
           </VirtualList>
         </div>
         {#if splitShown}
-          <aside class="side" bind:this={side} aria-label="Ticket detail">
+          <aside class="k-split-side" bind:this={side} aria-label="Ticket detail">
             {#if cur}
               <TicketDetail item={cur} projectId={cur.project_ids[0] ?? home} embedded />
             {:else}
-              <p class="side-empty">Select a ticket to see it here.</p>
+              <p class="k-split-empty">Select a ticket to see it here.</p>
             {/if}
           </aside>
         {/if}
@@ -1137,36 +1137,6 @@
     padding: 0 2px;
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
-  }
-
-  /* Split view: list left, the selected ticket's detail right, the 1px splitter gap between. */
-  .split {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    gap: 1px;
-    background: var(--k-border);
-  }
-
-  .split .list {
-    min-width: 0;
-    background: var(--k-well);
-  }
-
-  .side {
-    flex: 0 0 clamp(320px, 44%, 640px);
-    min-width: 0;
-    background: var(--k-well);
-  }
-
-  .side-empty {
-    margin: 0;
-    padding: var(--k-space-5) var(--k-space-4);
-    color: var(--k-fg-subtle);
-  }
-
-  .list {
-    container-type: inline-size;
   }
 
   .head {

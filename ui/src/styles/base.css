@@ -132,6 +132,29 @@ pre,
   font-weight: 400;
   color: var(--k-fg-subtle);
 }
+/* Split view (Tickets, Reviews): list left, the selection's detail right, the 1px splitter gap between. */
+.k-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  background: var(--k-border);
+}
+.k-split > .list {
+  min-width: 0;
+  container-type: inline-size;
+  background: var(--k-well);
+}
+.k-split-side {
+  flex: 0 0 clamp(320px, 44%, 640px);
+  min-width: 0;
+  background: var(--k-well);
+}
+.k-split-empty {
+  margin: 0;
+  padding: var(--k-space-5) var(--k-space-4);
+  color: var(--k-fg-subtle);
+}
 
 .k-toolbar {
   display: flex;
