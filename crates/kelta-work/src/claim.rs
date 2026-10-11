@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{ProjectId, SessionId};
-use kelta_proto::model::{FinishOpts, RunClaim, RunState, WorkItem, WorkKind, WorkState};
+use kelta_proto::model::{FinishOpts, Lifecycle, RunClaim, RunState, WorkItem, WorkKind, WorkState};
 use kelta_proto::tracker::TicketRef;
 
 use crate::{WorkService, git};
@@ -66,6 +66,15 @@ impl WorkService {
         let claimed = {
             let _s = self.start_lock.lock().await;
             let _w = self.write_lock.lock().await;
+            // Liveness is computed, not swept: a holder whose owner is gone is stored orphaned here,
+            // so `claim_over` takes it over in the claim right below.
+            let held = kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &item);
+            if let Some(mut h) = held.filter(|h| h.run.as_ref().is_some_and(|r| self.orphaned(r))) {
+                if let Some(r) = h.run.as_mut() {
+                    r.state = RunState::Orphaned;
+                }
+                self.store.put_item(&h).await?;
+            }
             self.store.claim_item(&item).await?
         };
         match claimed {
@@ -103,6 +112,10 @@ impl WorkService {
         let id = self.claimed(key, caller).await?.id;
         self.update(&id, |w| {
             let Some(r) = w.run.as_mut() else { return false };
+            // An orphaned claim driven by another caller becomes its own, never the dead owner's again.
+            if r.session_id.is_some() && r.session_id.as_ref() != caller {
+                r.session_id = caller.cloned();
+            }
             r.state = state;
             r.phase = phase.or(r.phase.take());
             r.note = note.or(r.note.take());
@@ -132,31 +145,34 @@ impl WorkService {
         self.finish_impl(&id, opts).await
     }
 
-    /// Running claims of `sid` (any exited session for `None`, at startup) turn `orphaned`.
-    pub(crate) async fn orphan_claims(&self, sid: Option<&SessionId>) -> Result<(), KeltaError> {
-        let core = self.api()?;
-        for w in self.store.list_items(None).await? {
-            let Some(owner) =
-                w.run.as_ref().filter(|r| r.state == RunState::Running).and_then(|r| r.session_id.clone())
-            else {
-                continue;
-            };
-            let gone = match sid {
-                Some(s) => *s == owner,
-                // Boot already adopted daemon sessions as Live: a Dormant or Exited owner has no workflow running.
-                None => core
-                    .session_get(&owner)
-                    .is_none_or(|s| s.lifecycle != kelta_proto::model::Lifecycle::Live),
-            };
-            if gone && w.state != WorkState::Finished {
-                self.update(&w.id, |w| {
-                    let Some(r) = w.run.as_mut().filter(|r| r.state == RunState::Running) else {
-                        return false;
-                    };
-                    r.state = RunState::Orphaned;
-                    true
+    /// The claim's owner session is not Live (exited, Dormant after a restart, or gone): computed at
+    /// each use, never swept, so no missed lifecycle path leaves a ticket locked (#271).
+    pub(crate) fn orphaned(&self, r: &RunClaim) -> bool {
+        r.state == RunState::Orphaned
+            || r.state == RunState::Running
+                && r.session_id.as_ref().is_some_and(|sid| {
+                    self.api()
+                        .is_ok_and(|c| c.session_get(sid).is_none_or(|s| s.lifecycle != Lifecycle::Live))
                 })
-                .await?;
+    }
+
+    /// `w` as shown: a running claim whose owner is gone reads `orphaned`.
+    pub(crate) fn shown(&self, w: &mut WorkItem) {
+        if let Some(r) = w.run.as_mut()
+            && r.state == RunState::Running
+            && self.orphaned(r)
+        {
+            r.state = RunState::Orphaned;
+        }
+    }
+
+    /// `sid` exited: republish its claims so they show orphaned.
+    pub(crate) async fn publish_claims_of(&self, sid: &SessionId) -> Result<(), KeltaError> {
+        for w in self.store.list_items(None).await? {
+            if w.state != WorkState::Finished
+                && w.run.as_ref().is_some_and(|r| r.session_id.as_ref() == Some(sid))
+            {
+                self.publish_updated(&w);
             }
         }
         Ok(())
@@ -186,7 +202,7 @@ impl WorkService {
             match &r.session_id {
                 Some(o) if Some(o) == caller => Some(0),
                 None => Some(1),
-                Some(_) if r.state == RunState::Orphaned => Some(2),
+                Some(_) if self.orphaned(r) => Some(2),
                 Some(_) => None,
             }
         };

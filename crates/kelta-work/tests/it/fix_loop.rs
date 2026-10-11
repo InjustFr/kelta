@@ -165,12 +165,10 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
     let held =
         fx.core.toasts().iter().filter(|t| t.text.contains("it gets your message when it stops")).count();
     assert_eq!(held, 2);
-    let file = run_dir(&fx).join("feedback.md");
-    assert_eq!(
-        std::fs::read_to_string(&file).unwrap(),
-        "# Checks failed\n\n---\n\n# Threads\n",
-        "the held brief survives the later send"
-    );
+    // Each held send owns its brief: the later one never touches the file the first prompt names.
+    let (file, file2) = (run_dir(&fx).join("feedback.md"), run_dir(&fx).join("feedback-2.md"));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Checks failed\n", "the held brief survives");
+    assert_eq!(std::fs::read_to_string(&file2).unwrap(), "# Threads\n");
 
     set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
     fx.core.publish(
@@ -183,8 +181,8 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
-    let one = format!("Fix {}", file.display());
-    assert_eq!(fx.core.written_text(&sid), format!("\x1b[200~{one}\n\n{one}\x1b[201~\r"), "both sends, once");
+    let (one, two) = (format!("Fix {}", file.display()), format!("Fix {}", file2.display()));
+    assert_eq!(fx.core.written_text(&sid), format!("\x1b[200~{one}\n\n{two}\x1b[201~\r"), "both sends, once");
 }
 
 #[tokio::test]
@@ -208,7 +206,7 @@ async fn send_moves_the_feedback_watermark_forward_only() {
 }
 
 #[tokio::test]
-async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
+async fn send_writes_a_fresh_brief_while_any_prompt_is_held() {
     need_git!();
     let fx = Fx::new();
     let (w, item) = started(&fx, "SHOP-141").await;
@@ -219,9 +217,23 @@ async fn send_overwrites_a_stale_brief_when_the_held_prompt_does_not_name_it() {
     set_status(&fx, &sid, SessionStatus::Working, StatusSource::Hook);
     w.send(&item.id, "A review note, no file", vec![], None, None).await.unwrap();
     let new = vec![SendFile { name: "feedback.md".into(), content: "# Checks failed\n".into() }];
-    w.send(&item.id, "Fix {file}", new, None, None).await.unwrap();
-    let file = run_dir(&fx).join("feedback.md");
+    w.send(&item.id, "Fix {file}", new.clone(), None, None).await.unwrap();
+    let file = run_dir(&fx).join("feedback-2.md");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "# Checks failed\n", "no stale feedback");
+    // Nothing held any more: the plain name is overwritten.
+    set_status(&fx, &sid, SessionStatus::Done, StatusSource::Hook);
+    fx.core.publish(
+        BusEvent::new(bus::CLAUDE_HOOK, json!({ "event": "Stop", "payload": { "hook_event_name": "Stop" } }))
+            .with_session(sid.clone()),
+    );
+    for _ in 0..500 {
+        if fx.core.written_text(&sid).contains("A review note") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    w.send(&item.id, "Fix {file}", new, None, None).await.unwrap();
+    assert_eq!(std::fs::read_to_string(run_dir(&fx).join("feedback.md")).unwrap(), "# Checks failed\n");
 }
 
 #[tokio::test]
