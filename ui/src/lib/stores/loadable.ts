@@ -23,6 +23,15 @@ export function toKeltaError(err: unknown, command = 'ui'): KeltaError {
   return toIpcError(command, err).toKeltaError();
 }
 
+/** Detail maps only grow with the rows visited: past `max` entries the oldest fetch goes (in-flight ones stay). */
+export function capDetails<T>(map: Record<string, Loadable<T>>, max = 200): Record<string, Loadable<T>> {
+  const keys = Object.keys(map);
+  if (keys.length <= max) return map;
+  const age = (k: string): number => map[k]?.fetchedAt ?? Infinity;
+  const keep = new Set(keys.sort((a, b) => age(b) - age(a)).slice(0, max));
+  return Object.fromEntries(Object.entries(map).filter(([k]) => keep.has(k)));
+}
+
 /** Runs `fetch` and returns the next slot state (keeps previous data on error, marked stale). */
 export async function settle<T>(
   prev: Loadable<T>,

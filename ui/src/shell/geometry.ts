@@ -3,14 +3,7 @@
 // id), so a pane's DOM — and the terminal inside it — survives splits, closes and zoom.
 
 import type { LayoutNode, PaneId, SplitDir } from '$lib/gen';
-import {
-  equalRatios,
-  MIN_RATIO,
-  normalizeRatios,
-  type NodePath,
-  type PaneNode,
-  type Rect,
-} from '$lib/layout';
+import { equalRatios, normalizeRatios, type NodePath, type PaneNode, type Rect } from '$lib/layout';
 
 export interface PlacedPane {
   pane: PaneNode;
@@ -86,9 +79,4 @@ export function applyZoom(geometry: Geometry, zoomed: PaneId | null): Geometry {
 export function dragDelta(deltaPx: number, areaPx: number, split: Rect, dir: SplitDir): number {
   const span = (dir === 'row' ? split.w : split.h) * areaPx;
   return span > 0 ? deltaPx / span : 0;
-}
-
-/** Smallest pixel size a pane may be dragged to, given the ratio floor. */
-export function minPanePx(spanPx: number): number {
-  return spanPx * MIN_RATIO;
 }

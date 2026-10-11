@@ -49,11 +49,6 @@ export async function dispatch(id: ActionId | string, args?: ActionArgs): Promis
   return false;
 }
 
-/** Registered action ids (palette listing). */
-export function registeredActions(): string[] {
-  return [...handlers.keys()];
-}
-
 export function actionMeta(id: string): ActionMeta | null {
   return ACTIONS.find((a) => a.id === id) ?? null;
 }

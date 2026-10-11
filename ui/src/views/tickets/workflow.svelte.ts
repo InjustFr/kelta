@@ -26,6 +26,9 @@ export async function loadWorkflows(ref: TicketRef): Promise<WorkflowInfo[] | st
     list = toIpcError('workflows_list', err).message;
   }
   workflows[ticketKey(ref)] = list;
+  // Only grows with the tickets visited: past 200 the oldest entry goes.
+  const keys = Object.keys(workflows);
+  if (keys.length > 200) delete workflows[keys[0]!];
   return list;
 }
 
