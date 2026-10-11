@@ -2,6 +2,7 @@
 // as typed. Resolution needs the theme, so only the UI resolves; the CLI and plugins get the stored value.
 
 import { msg, t } from '$lib/i18n/index.svelte';
+import { oklab, parseHex } from './hex';
 import type { ResolvedTheme } from './index';
 
 /** Theme colour slot → ANSI index (1–6, then the bright 9–14). */
@@ -82,4 +83,22 @@ export function resolveProjectColor(
   if ('hex' in c) return c.hex;
   const i = SLOTS[c.slot];
   return theme ? (theme.terminal.ansi[i] ?? null) : `var(--k-ansi-${i})`;
+}
+
+/** oklab distance under which two swatches read as one colour (Dracula's red and bright red: 0.045). */
+const SAME = 0.05;
+
+/** The slots the picker offers in this theme, in SLOTS order: one whose colour matches an earlier one
+ *  (Nord and Catppuccin give a bright slot its base's hex) is hidden, unless it is the `selected` one. */
+export function pickerSlots(theme: Pick<ResolvedTheme, 'terminal'>, selected?: Slot | null): Slot[] {
+  const shown: [number, number, number][] = [];
+  return (Object.keys(SLOTS) as Slot[]).filter((s) => {
+    const rgb = parseHex(theme.terminal.ansi[SLOTS[s]]);
+    if (!rgb) return true;
+    const c = oklab(rgb);
+    if (s !== selected && shown.some((o) => Math.hypot(o[0] - c[0], o[1] - c[1], o[2] - c[2]) < SAME))
+      return false;
+    shown.push(c);
+    return true;
+  });
 }

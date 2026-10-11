@@ -5,7 +5,14 @@ import { settingsDefault } from '$lib/gen/fixtures';
 
 import { BUILTIN } from './builtin';
 import { resolveTheme } from './index';
-import { LEGACY_SWATCHES, parseProjectColor, resolveProjectColor, slotLabel, SLOTS } from './projectColor';
+import {
+  LEGACY_SWATCHES,
+  parseProjectColor,
+  pickerSlots,
+  resolveProjectColor,
+  slotLabel,
+  SLOTS,
+} from './projectColor';
 
 const themes = Object.entries(BUILTIN).map(([id, def]) => {
   const slot = def.base === 'dark' ? 'dark_theme' : 'light_theme';
@@ -82,5 +89,41 @@ describe('resolveProjectColor', () => {
   it('labels slots for tooltips', () => {
     expect(slotLabel('green')).toBe('Green');
     expect(slotLabel('bright-blue')).toBe('Bright blue');
+  });
+});
+
+describe('pickerSlots', () => {
+  const ALL = Object.keys(SLOTS);
+  // Nord-like: every bright slot repeats its base hex.
+  const ansi = Array.from(
+    { length: 16 },
+    (_, i) =>
+      ['#000000', '#bf616a', '#a3be8c', '#ebcb8b', '#81a1c1', '#b48ead', '#88c0d0'][i % 8] ?? '#ffffff',
+  );
+  const twin = { terminal: { ...themes[0]!.terminal, ansi } };
+
+  it('hides a bright slot whose colour equals its base', () => {
+    expect(pickerSlots(twin)).toEqual(['red', 'green', 'yellow', 'blue', 'magenta', 'cyan']);
+  });
+
+  it('keeps a hidden slot when it is the selected one', () => {
+    expect(pickerSlots(twin, 'bright-blue')).toEqual([
+      'red',
+      'green',
+      'yellow',
+      'blue',
+      'magenta',
+      'cyan',
+      'bright-blue',
+    ]);
+  });
+
+  it('offers all 12 when the brights differ', () => {
+    expect(pickerSlots(themes.find((t) => t.id === 'bezel-dark')!)).toEqual(ALL);
+  });
+
+  it.each(themes.map((t) => [t.id, t] as const))('%s: no two offered swatches share a hex', (_, theme) => {
+    const hexes = pickerSlots(theme).map((s) => theme.terminal.ansi[SLOTS[s]]);
+    expect(new Set(hexes).size).toBe(hexes.length);
   });
 });

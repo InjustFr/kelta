@@ -1,9 +1,10 @@
 <script lang="ts">
   import { t } from '$lib/i18n/index.svelte';
-  import { parseProjectColor, resolveProjectColor, slotLabel, SLOTS, type Slot } from '$lib/theme';
+  import { settings } from '$lib/stores';
+  import { parseProjectColor, pickerSlots, resolveProjectColor, resolveTheme, slotLabel } from '$lib/theme';
 
-  // The active theme's 12 slot colours, stored as `theme:<slot>` so they follow the theme, plus a
-  // custom hex kept as typed (DESIGN §2.1).
+  // The active theme's slot colours, less the ones it paints alike, stored as `theme:<slot>` so they
+  // follow the theme, plus a custom hex kept as typed (DESIGN §2.1).
   interface Props {
     value: string | null;
     onchange: (color: string | null) => void;
@@ -14,9 +15,9 @@
   let { value, onchange, label }: Props = $props();
 
   const HEX = /^#[0-9a-f]{6}$/i;
-  const slots = Object.keys(SLOTS) as Slot[];
   const parsed = $derived(parseProjectColor(value));
   const slot = $derived(parsed && 'slot' in parsed ? parsed.slot : null);
+  const slots = $derived(pickerSlots(resolveTheme(settings.value(), settings.theme), slot));
   const custom = $derived(parsed && 'hex' in parsed ? parsed.hex : '');
 </script>
 
