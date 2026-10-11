@@ -15,7 +15,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::common::{Factory, MemConfig};
+use crate::common::{Factory, MemConfig, git};
 use kelta_core::clipboard::MemClipboard;
 use kelta_core::{Core, CoreDeps};
 use kelta_proto::api::CoreApi;
@@ -33,16 +33,6 @@ const STEP: Duration = Duration::from_secs(180);
 
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).unwrap().to_path_buf()
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
-        .args(["-c", "commit.gpgsign=false", "-c", "user.name=Kelta Test", "-c", "user.email=test@kelta.dev"])
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
 }
 
 /// `kelta-ctl` of this build, else built into a private target dir.

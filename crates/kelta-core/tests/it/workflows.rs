@@ -2,7 +2,6 @@
 //! and the workflow taking the claim over through `args.run`.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 
 use crate::common::*;
@@ -16,16 +15,6 @@ use kelta_proto::model::{
 use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, Settings};
 use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
-
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
-        .args(["-c", "commit.gpgsign=false", "-c", "user.name=Kelta Test", "-c", "user.email=test@kelta.dev"])
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
-}
 
 fn workflow(dir: &Path, file: &str, meta: &str) {
     std::fs::create_dir_all(dir).unwrap();
