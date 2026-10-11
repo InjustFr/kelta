@@ -641,6 +641,7 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
                 },
             },
         ),
+        ("ui_event_quit_requested", UiEvent::QuitRequested { live: 3, busy: vec!["claude".into()] }),
     ]
 }
 

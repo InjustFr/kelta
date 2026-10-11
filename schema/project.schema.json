@@ -869,6 +869,7 @@
         "dark_theme": "bezel-dark",
         "light_theme": "bezel-light",
         "log_level": "info",
+        "quit_sessions": "ask",
         "restore_mode": "lazy",
         "theme": "system",
         "updates": true
@@ -906,6 +907,19 @@
           ],
           "type": "string",
           "x-kelta-restart": true,
+          "x-kelta-scope": [
+            "global"
+          ]
+        },
+        "quit_sessions": {
+          "default": "ask",
+          "description": "On quit with sessions keltad keeps running: ask, keep them running, or stop them and keltad.",
+          "enum": [
+            "ask",
+            "keep",
+            "stop"
+          ],
+          "type": "string",
           "x-kelta-scope": [
             "global"
           ]

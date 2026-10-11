@@ -175,6 +175,16 @@ pub enum RestoreMode {
     None,
 }
 
+/// What quitting does with the sessions keltad keeps running (`app.quit_sessions`, #305).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QuitSessions {
+    #[default]
+    Ask,
+    Keep,
+    Stop,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
@@ -194,6 +204,9 @@ pub struct AppSettings {
     pub restore_mode: RestoreMode,
     /// Ask before quitting while Claude is working or waiting for you.
     pub confirm_quit_with_running: bool,
+    /// On quit with sessions keltad keeps running: ask, keep them running, or stop them and keltad.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub quit_sessions: QuitSessions,
     #[schemars(extend("x-kelta-restart" = true, "x-kelta-scope" = ["global"]))]
     pub log_level: LogLevel,
     /// Theme id used in dark mode (`bezel-dark` or a `[themes.<id>]` with `base = "dark"`).
@@ -213,6 +226,7 @@ impl Default for AppSettings {
             theme: Theme::System,
             restore_mode: RestoreMode::Lazy,
             confirm_quit_with_running: true,
+            quit_sessions: QuitSessions::Ask,
             log_level: LogLevel::Info,
             dark_theme: "bezel-dark".into(),
             light_theme: "bezel-light".into(),

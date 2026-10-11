@@ -130,6 +130,8 @@ export interface Commands {
   app_update_check: { args: NoArgs; result: UpdateStatus };
   /** Restarts through the normal quit (keltad keeps the kept sessions). */
   app_restart: { args: NoArgs; result: null };
+  /** The quit dialog's answer (#305): `stop` also ends keltad and its sessions. */
+  app_quit: { args: { stop: boolean }; result: null };
   // ---- settings ----------------------------------------------------------------------------
   settings_schema: { args: NoArgs; result: JsonValue };
   settings_effective: { args: { project_id?: ProjectId | null }; result: EffectiveSettings };
@@ -382,6 +384,7 @@ export const COMMAND_NAMES = [
   'app_update_status',
   'app_update_check',
   'app_restart',
+  'app_quit',
   'settings_schema',
   'settings_effective',
   'settings_layer_get',
@@ -563,6 +566,7 @@ export const claudePermissionMode = wrap('claude_permission_mode');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');
+export const appQuit = wrap('app_quit');
 
 /** Subscribes `onEvent` to the UiEvent channel (one subscription per window). */
 export async function eventsSubscribe(onEvent: (event: UiEvent) => void): Promise<SubscribeResult> {

@@ -202,6 +202,10 @@ export const COPY: Record<string, { label?: string; help?: string }> = {
     help: 'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
   },
   'app.confirm_quit_with_running': { label: 'Ask before quitting while sessions run' },
+  'app.quit_sessions': {
+    label: 'Sessions on quit',
+    help: 'Ask, keep them running in the background (they are back on the next launch), or stop them all.',
+  },
   'app.updates': {
     label: 'Check for updates automatically',
     help: 'On start and when Kelta gets focus, at most every 6 hours. Check now works either way.',

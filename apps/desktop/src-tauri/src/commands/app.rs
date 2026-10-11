@@ -59,6 +59,16 @@ pub async fn app_restart(app: AppHandle) -> Res<()> {
     Ok(())
 }
 
+/// The quit dialog's answer (#305): quit, keeping keltad's sessions running or stopping them all.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn app_quit(app: AppHandle, core: State<'_, Arc<Core>>, stop: bool) -> Res<()> {
+    if stop {
+        core.stop_sessions_on_quit();
+    }
+    crate::window::quit(&app);
+    Ok(())
+}
+
 /// kelta-bench metric measured in the UI (no-op unless `KELTA_BENCH_MARKS` is set).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn bench_mark(key: String, value: f64) -> Res<()> {

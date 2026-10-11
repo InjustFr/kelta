@@ -30,6 +30,7 @@
     "allow-app-update-status",
     "allow-app-update-check",
     "allow-app-restart",
+    "allow-app-quit",
     "allow-settings-schema",
     "allow-settings-effective",
     "allow-settings-layer-get",

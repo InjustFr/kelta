@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::common::*;
+use kelta_core::sessions::QuitPlan;
 use kelta_core::{Core, CoreDeps};
 use kelta_proto::api::{CoreApi, TerminalHost};
 use kelta_proto::dirs::{CliArgs, Dirs};
@@ -14,8 +15,7 @@ use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{
     CloseOnExit, Lifecycle, RestorePolicy, SessionKind, SessionStatus, SpawnRequest, StatusChange,
 };
-use kelta_proto::settings::RestoreMode;
-use kelta_proto::settings::Settings;
+use kelta_proto::settings::{QuitSessions, RestoreMode, Settings};
 use kelta_proto::term::TerminalLimits;
 use kelta_proto::testing::{FakeSecrets, FakeUiBridge, RecordingSink};
 use kelta_term::PtyTerminalHost;
@@ -154,6 +154,73 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
     core.shutdown().await.unwrap();
     term.close();
     keltad.join().unwrap();
+}
+
+/// A pid still running (a zombie waiting for init to reap it is not).
+fn running(pid: &str) -> bool {
+    let exists = std::process::Command::new("kill").args(["-0", pid]).status().is_ok_and(|s| s.success());
+    exists
+        && std::fs::read_to_string(format!("/proc/{pid}/stat"))
+            .map_or(true, |s| !s.rsplit(')').next().unwrap_or("").trim_start().starts_with('Z'))
+}
+
+/// #305: quit with "stop all sessions" ends every session process and keltad (socket removed).
+#[tokio::test(flavor = "multi_thread")]
+async fn quit_with_stop_ends_the_sessions_and_keltad() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let sock = Dirs::under(root).keltad_socket();
+    let l = daemon::bind(&sock).unwrap();
+    let host = PtyTerminalHost::new(TerminalLimits::default());
+    // A long grace: only the shutdown ends keltad within the test.
+    let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_secs(60)));
+
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app(root, term.clone());
+    assert_eq!(core.quit_plan(), QuitPlan::Keep, "nothing running: nothing to ask");
+    let shell = core.session_spawn(req(SessionKind::Shell)).await.unwrap();
+    assert_eq!(core.quit_plan(), QuitPlan::Ask { live: 1, busy: vec![] });
+    // The shell's pid, then a child in the foreground, each in a file.
+    let (shell_file, child_file) = (root.join("shell.pid"), root.join("child.pid"));
+    let cmd = format!(
+        "echo $$ > {}; sh -c 'echo $$ > \"$0\"; exec sleep 300' {}\n",
+        shell_file.display(),
+        child_file.display()
+    );
+    core.session_write(&shell.id, cmd.as_bytes()).await.unwrap();
+    let read = |f: &Path| std::fs::read_to_string(f).unwrap_or_default().trim().to_string();
+    assert!(eventually(|| !read(&child_file).is_empty()).await, "the child never started");
+    let (shell_pid, child) = (read(&shell_file), read(&child_file));
+    assert!(running(&child) && running(&shell_pid));
+
+    core.stop_sessions_on_quit();
+    core.shutdown().await.unwrap();
+    assert!(eventually(|| keltad.is_finished()).await, "keltad still running");
+    assert!(!sock.exists(), "keltad left its socket");
+    assert!(eventually(|| !running(&child) && !running(&shell_pid)).await, "a session process survived");
+    term.close();
+}
+
+/// `app.quit_sessions` keep / stop: no dialog.
+#[tokio::test(flavor = "multi_thread")]
+async fn quit_sessions_setting_skips_the_dialog() {
+    for (setting, plan) in [(QuitSessions::Keep, QuitPlan::Keep), (QuitSessions::Stop, QuitPlan::Stop)] {
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = Dirs::under(tmp.path()).keltad_socket();
+        let l = daemon::bind(&sock).unwrap();
+        let host = PtyTerminalHost::new(TerminalLimits::default());
+        let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
+        let mut settings = Settings::defaults();
+        settings.app.quit_sessions = setting;
+        let term = DaemonTerminalHost::connect(&sock).unwrap();
+        let core = app_with(tmp.path(), term.clone(), settings);
+        let shell = core.session_spawn(req(SessionKind::Shell)).await.unwrap();
+        assert_eq!(core.quit_plan(), plan);
+        core.session_kill(&shell.id, false).await.unwrap();
+        core.shutdown().await.unwrap();
+        term.close();
+        keltad.join().unwrap();
+    }
 }
 
 /// Every way a session closes (kill while Live, close_on_exit from the Exited handler, kill

@@ -34,6 +34,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `theme` | enum(system\|dark\|light) | `system` | |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
 | `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
+| `quit_sessions` | enum(ask\|keep\|stop) | `ask` | scope global; quitting (Cmd+Q / menu Quit, a window close that quits) while keltad would keep sessions running: `ask` shows the quit dialog (session count, busy sessions, "Don't ask again" stores the answer here), `keep` leaves them running for the next start, `stop` kills every session (as `session_kill`) and ends keltad; they restore per `restore_mode`, as without keltad. No dialog with `session_host = "inprocess"`, `restore_mode = "none"` (nothing survives), in background mode, or on the updater's restart (always keeps) |
 | `log_level` | enum(error\|warn\|info\|debug\|trace) | `info` | restart |
 | `dark_theme` | str | `bezel-dark` | scope global; theme id used in dark mode (built-in or `[themes.<id>]` with `base = "dark"`); an unknown id or a theme of the other base falls back to `bezel-dark` |
 | `light_theme` | str | `bezel-light` | scope global; same for light mode, fallback `bezel-light` |
