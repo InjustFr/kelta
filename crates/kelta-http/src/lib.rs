@@ -48,7 +48,7 @@ impl HttpClient {
             .pool_idle_timeout(Duration::from_secs(30))
             // reqwest strips only Authorization on cross-host redirects, not PRIVATE-TOKEN etc.
             .redirect(reqwest::redirect::Policy::custom(|a| {
-                if a.previous().last().is_some_and(|p| p.host_str() == a.url().host_str()) {
+                if a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url())) {
                     a.follow()
                 } else {
                     a.stop()
@@ -68,6 +68,11 @@ impl HttpClient {
     pub fn reqwest(&self) -> &reqwest::Client {
         &self.inner
     }
+}
+
+/// A redirect may carry the request's token headers: same host, and never https → http.
+fn redirect_keeps_secrets_safe(from: &reqwest::Url, to: &reqwest::Url) -> bool {
+    from.host_str() == to.host_str() && !(from.scheme() == "https" && to.scheme() != "https")
 }
 
 /// Per-account limits.
@@ -213,4 +218,19 @@ pub struct HttpResponse<T> {
     pub etag: Option<String>,
     /// 304 answered from the ETag cache: `body` is the cached body of the previous 200.
     pub not_modified: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redirect_keeps_secrets_safe as ok;
+
+    #[test]
+    fn redirects_stay_on_the_host_and_never_downgrade_to_http() {
+        let u = |s: &str| reqwest::Url::parse(s).unwrap();
+        assert!(ok(&u("https://git.acme.com/a"), &u("https://git.acme.com/b")));
+        assert!(ok(&u("http://127.0.0.1:8080/a"), &u("http://127.0.0.1:8080/b")));
+        assert!(ok(&u("http://git.acme.com/a"), &u("https://git.acme.com/b")), "upgrade is fine");
+        assert!(!ok(&u("https://git.acme.com/a"), &u("http://git.acme.com/b")));
+        assert!(!ok(&u("https://git.acme.com/a"), &u("https://evil.test/b")));
+    }
 }
