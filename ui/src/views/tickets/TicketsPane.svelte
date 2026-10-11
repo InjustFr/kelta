@@ -256,10 +256,9 @@
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
-  const groupBys = GROUP_BYS;
   const groupBy = $derived.by<GroupBy>(() => {
     const g = groupOverride ?? content.group ?? 'flow';
-    return groupBys.includes(g) ? g : 'flow';
+    return GROUP_BYS.includes(g) ? g : 'flow';
   });
   const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
   const sorted = $derived(sortTickets(shown, sort));
@@ -697,7 +696,7 @@
         if (item) void focusDetail(item);
         break;
       case 'G':
-        setGroup(groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'flow');
+        setGroup(GROUP_BYS[(GROUP_BYS.indexOf(groupBy) + 1) % GROUP_BYS.length] ?? 'flow');
         break;
       case 'R':
         refresh();

@@ -70,8 +70,6 @@
     authored: reviews.list(scope, 'authored'),
   });
   const shown = $derived(lists[tab]);
-  const noData = $derived(!shown.data);
-  const firstError = $derived(shown.error);
   const accountErrors = $derived.by(() => {
     const seen: Record<string, AccountError> = {};
     for (const e of shown.data?.errors ?? []) seen[`${e.account_id}:${e.error.code}`] = e;
@@ -405,13 +403,13 @@
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
   </header>
 
-  {#if shown.loading && noData}
+  {#if shown.loading && !shown.data}
     <Loading label="Loading reviews" />
-  {:else if noData && firstError}
-    <ErrorState error={firstError} title="Could not load reviews" onretry={refresh}>
+  {:else if !shown.data && shown.error}
+    <ErrorState error={shown.error} title="Could not load reviews" onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
+          {isAuthError(shown.error) ? 'Re-authenticate' : 'Open account settings'}
         </Button>
       {/snippet}
     </ErrorState>
@@ -419,7 +417,7 @@
     <StateBanner
       stale={shown.stale}
       fetchedAt={shown.fetchedAt}
-      error={noData ? null : firstError}
+      error={shown.data ? shown.error : null}
       errors={accountErrors}
       onretry={refresh}
     />
