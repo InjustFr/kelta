@@ -39,7 +39,7 @@ use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
-use kelta_proto::settings::{KeyboardProtocol, Osc52};
+use kelta_proto::settings::KeyboardProtocol;
 use kelta_proto::term::{
     HistoryHit, KillSignal, LoginEnv, PtySpawnSpec, SessionTermStats, TerminalLimits, TerminalPalette,
     TerminalStats,
@@ -51,6 +51,16 @@ use crate::model::TermModel;
 use crate::palette::Palette;
 pub use crate::session::{DEFAULT_MEMORY_CAP_MB, SHRINK_FLOOR, VIEW_SCROLLBACK};
 use crate::session::{Session, Shared};
+
+/// `mallopt(M_ARENA_MAX, 2)` on glibc: fewer malloc arenas, smaller RSS with few threads. Called
+/// first thing by the app and keltad; a no-op elsewhere.
+pub fn limit_malloc_arenas() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: mallopt only adjusts allocator tunables.
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
+}
 
 /// The PTY-backed terminal host.
 pub struct PtyTerminalHost {
@@ -183,7 +193,6 @@ impl TerminalHost for PtyTerminalHost {
         {
             let limits = self.shared.limits.lock();
             model.set_kitty_keyboard(limits.keyboard_protocol == KeyboardProtocol::Kitty);
-            model.set_osc52_read(limits.osc52 == Osc52::ReadWrite);
         }
         if let Some(h) = self.shared.history_on() {
             // Same id again (restore, restart): earlier output goes back into the scrollback,
@@ -349,7 +358,6 @@ impl TerminalHost for PtyTerminalHost {
             let mut st = s.state.lock();
             st.model.set_history_limit(lines);
             st.model.set_kitty_keyboard(limits.keyboard_protocol == KeyboardProtocol::Kitty);
-            st.model.set_osc52_read(limits.osc52 == Osc52::ReadWrite);
             st.sync_keyboard(&self.shared);
             st.model.set_logging(log && !s.exited.load(Ordering::SeqCst));
             st.refresh_memory(&self.shared);
