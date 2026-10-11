@@ -1,6 +1,6 @@
 # Kelta flows
 
-Status: accepted flow design for lane `flow-ux` (branch `feat/flow-ux`), revision 2 (review issues resolved in §11.1). It covers flows, structure, interaction and missing features. Visuals come from [DESIGN.md](DESIGN.md) (Bezel: lamps, project hue, row grammar) and are not redecided here.
+Status: built. Designed in lane `flow-ux` (revision 2, review issues resolved in §11.1) and brought in line with the code for 1.0.0 (revision 3). It covers flows, structure, interaction and missing features. Visuals come from [DESIGN.md](DESIGN.md) (Bezel: lamps, project hue, row grammar) and are not redecided here.
 
 Inputs: the flow audit on the mock UI (screenshots in `images/flow-audit/`, `a*` to `d*`) and a read of the backend at `316bc1d`. Mockups for this document are in `images/flow/` (source `mockups.html`, render with `node docs/images/flow/render.mjs`).
 
@@ -59,8 +59,12 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 
 | # | Condition | Label (detail) | Lamp | Primary action | Now section |
 |---|---|---|---|---|---|
+| 0 | an open MCP `ask` question (#356) on the item's Claude, or on its run's session | the question | needs input | Go to Claude | Claude needs you |
+| 0a | a background run holds the item (`WorkItem.run`, #235) and is not done | {workflow} {phase} (the run's note) | working; blocked amber (error); failed red (needs input); orphaned none | none | In flight (blocked and failed: Claude needs you) |
 | 1 | `state = failed` | Failed at {step} ({message}) | error | Retry {step} (Skip step beside it) | Fix |
+| 1a | `state = queued`: past `claude.max_live` live Claudes (#141) | Queued (waiting for a Claude slot) | none | Start now (over cap); Move to front on right-click | In flight |
 | 2 | `state = starting` | Starting (step n of m) | working | none | In flight |
+| 2a | the worktree is gone (`git.missing`) | Worktree missing ({path}) | error | Recreate | In flight |
 | 3 | `rebase.conflicts` non-empty | Rebase stopped (n conflicted files) | error | Ask Claude to resolve | Fix |
 | 4 | Claude `status = NeedsInput` (permission, elicitation, agent needs input) | Claude needs you (Claude's question) | needs input | Go to Claude | Claude needs you |
 | 5 | Claude `status = Working` | Claude working (for 4m) | working | none | In flight |
@@ -69,13 +73,13 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
 | 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
-| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (n threads) / Checks failed (names: the first 3, then `+n`; GitHub only) | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
+| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`) | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
 | 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads) | error | Fix with Claude | Fix |
 | 12 | PR `mergeable = false` | Conflicts with {base} (n behind) | error | Rebase | Fix |
 | 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
 | 14 | PR exists, `unpushed` | Unpushed (n commits) | none | Push | Ship and clean up |
 | 15 | no PR, `ahead > 0` | Ready to ship (n commits) | none | Ship | Ship and clean up |
-| 15a | PR is a draft (pushed: rows 13-14 come first) | Draft (#n) | none | Mark ready… (`d`, confirms; `review_set_draft`), or Open PR while checks are red | Ship and clean up (In flight when red) |
+| 15a | PR is a draft (pushed: rows 13-14 come first; row 16 comes after) | Draft (#n, and `checks failure` when red) | none | Mark ready… (`d`, asks first; `review_set_draft`, #353), or Open PR while checks are red | Ship and clean up (In flight when red) |
 | 16 | PR approved, checks pass | Approved (#n) | none | Open PR (merge there) | Ship and clean up |
 | 17 | PR open otherwise | In review (#n, checks, approvals) | none | Open PR | In flight |
 | 18 | no PR, `ahead = 0` | No changes yet | none | Go to Claude | In flight |
@@ -83,6 +87,8 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 Notes:
 - **Flow 2 ordering** (row 8 above row 11, and row 11's local-HEAD condition): after Claude fixes review feedback and stops, the PR head has not moved yet. The item must read To review, then Unpushed → Push, never "Changes requested" again. `phase.ts` tests cover: `changes_requested` + `review_due` + unpushed → To review; same after Mark reviewed → Unpushed (Push); after push with the decisive review on an older commit → In review.
 - "On the PR head" (row 11): a changes-requested review left on an older commit means Louis already pushed a fix; the item waits for re-review (row 17). Needs `Review.decision_head` (§8).
+- **Parked** (#142, `P` in the work menu, `claude.auto_park_after_mins`): Park stops the item's Claude and nvim and keeps the conversation; showing the item resumes it. A parked item keeps its phase, but a quiet lamp (none, activity, done) turns into a quiet hollow ring. Never offered while Claude works.
+- **Asking** (row 0, #356): Claude's MCP `ask` tool puts a question with one button per option on the item's row, in Now and in Peek. A button pastes the option and Enter into the session. Any typed input clears the question. The buttons are off while the session is `needs_input`, because an Enter would answer a permission prompt.
 - **GitLab** has no "changes requested" decision in today's adapter. Row 11 is derived from unresolved blocking discussions (`blocking_discussions_resolved = false` or `detailed_merge_status = discussions_not_resolved`) or a reviewer in GitLab 17 `requested_changes` state (§8).
 - `↓n` behind base is shown on every row and bar as meta, not as a phase. It only becomes a phase when the PR actually conflicts (row 12). Rebase stays one key away in the work menu.
 - Review-kind items use rows 1-5, then "Reviewing #n" (primary: Open review, the detail pane where Approve lives), then "Reviewed" once `my_state` is not pending (primary: Finish…), then "Updated since your review" when the head moved after my review (primary: Open review). `my_state` and head are refreshed per §3.6.
@@ -99,7 +105,9 @@ Clearing:
 - `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`R`, which also stamps `reviewed`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
 - `claude_replied` is also cleared by Finish.
 
-Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The work bar shows the existing "status hooks inactive · Fix" instead.
+Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The work bar shows the existing "status hooks inactive · Fix" instead. A Claude adopted after Kelta quit with sessions left running keeps its hook status (#360): its hooks still arrive, only its `SessionStart` is past, so adoption sets the flag.
+
+**Stop signals done.** A `Stop` ends in the session's `done` status and, with `notifications.claude_done` on, one desktop notification whose body is Claude's last message (first 200 characters): "SHOP-142 ready to review", "SHOP-142: Claude replied" or "SHOP-142: Claude finished" (a review checkout, which never sets the flags). It is skipped when the session's pane is visible in the focused window. Kelta sends it, not core, for a work item's hook-driven Claude. The relay's `Stop` line reaches the ctl socket even when `kelta-ctl` closes first (#366: macOS refused the peer check on a closed client and dropped the line, so nothing was marked done).
 
 **Return strip.** Leaving a work item's tab stamps `WorkItem.left_at` (`work_left`). Refocusing it after `work.return_brief_after_mins` (default 20) shows a dismissible strip under the work bar: the `next:` note, `+N/−M since you reviewed` and Claude's last message (folded). `v` opens the delta, `x` dismisses. Never while Claude is Working.
 
@@ -116,7 +124,7 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Context bar, the work bar (above the rail and all panes, survives pane zoom; DESIGN §6.3) | key, title, ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`#482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, ports, armed, `+ins −del`, uncommitted changes in its tooltip), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
+| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
 | Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
@@ -144,6 +152,9 @@ No status strip segment and no header row in the tab: the context bar is always 
 | `n` | Open conflicts in nvim | only in Rebase stopped |
 | `s` | Skip step | only in Failed |
 | `g` | Go to Claude | focuses the Claude pane; resumes it if dormant |
+| `d` | Mark ready for review… / Convert to draft | own open PR; asks before Mark ready (#353) |
+| `M` | Merge when ready… / Disarm merge when ready | own open PR (§4.6) |
+| `P` | Park | something must run; not while Claude works |
 | `l` | Link to ticket… | scratch items only |
 | `⇧T` | Create ticket… | scratch items only |
 | `t` / `o` | Open ticket / Open PR on the host | |
@@ -151,7 +162,18 @@ No status strip segment and no header row in the tab: the context bar is always 
 
 **Review-kind items**: `p`, `r`, `f` and `l` are disabled with "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
 
-The same letters are shown on the ghost buttons of the expanded Now row. The same actions exist in the palette as "Work: …" commands for the focused item, so they are rebindable and searchable.
+Plugin work actions (PLUGINS §4) follow the built-ins, with no letter. A queued row has no letter for Start now and Move to front: they are its primary button and its right-click menu. The same letters are shown on the ghost buttons of the expanded Now row. The same actions exist in the palette as "Work: …" commands for the focused item, so they are rebindable and searchable.
+
+### 2.6 Claude in another terminal (#347)
+
+A session template can run its Claude outside Kelta: `claude_host = "terminal"` opens a window of your terminal (`claude.terminal_command`), `"multiplexer"` a window of the tmux session `kelta-<repo>`. Kelta still prepares everything (worktree, `ticket.md`, hooks, `mcp.json`). Its Claude pane is a banner with a Focus button, running a wrapper that lives as long as that Claude. Closing the pane ends the external Claude.
+
+Still works, because it needs only the hooks or the process: status and every phase built on it (Claude working, needs you, To review, Claude replied, `ask` questions), notifications, Go to Claude (focuses the window), Resume in the same host, Park, Mark reviewed, the diff, Ship, Push and Rebase (they wait for the turn to end as usual) and Finish.
+
+Does not work, because Kelta cannot type into that Claude:
+- Typing in the Kelta pane. The wrapper never reads it.
+- Anything Kelta sends to a live external Claude (Fix with Claude, Send failures to Claude, Ask Claude to resolve, Ask Claude to commit, the `fix_checks` trigger): the brief is written and the prompt is **copied** ("This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready."), also while Claude works. A dormant one is resumed with the prompt as usual.
+- Review notes from nvim and Send selection: refused with "Claude runs outside Kelta: it cannot receive prompts from here."
 
 ---
 
@@ -167,15 +189,18 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 
 | Section | Lamp | Rows | Order within | Row `Enter` |
 |---|---|---|---|---|
-| Claude needs you | needs input | sessions with `status = NeedsInput` (work items and plain sessions); work items with `claude_replied` | longest waiting first | Go to Claude |
+| Claude needs you | needs input | sessions with `status = NeedsInput` or an open `ask` question (work items and plain sessions); outside sessions that need input (below); work items with `claude_replied`; blocked or failed background runs | longest waiting first | Go to Claude |
 | Ready for review | done | work items with `review_due` (an empty delta never lands here) | oldest wait first, so nothing rots; the smaller delta first on ties | Review changes |
-| Fix | error | my work items in phase rows 1, 3, 10, 11, 12; my PRs without a work item that have changes requested or failing checks | changes requested, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
+| Next up | none | my Next up list (#145): tickets I ordered myself, not Done, with no unfinished work item | my order | Start work (`S` starts the top ones, `J` / `K` reorder) |
+| New for you | none | tickets assigned to me that I have not looked at yet | tracker order | Start work |
+| Fix | error | my work items in phase rows 1, 3, 10, 11, 11a, 12; my PRs without a work item that have changes requested or failing checks | changes requested and new comments, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
 | Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | blocking first (I am the last required reviewer), then oldest request first | Open review |
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
 | In flight | working ring when Claude works | everything else that is mine and unfinished | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
-| Up next | none | tickets assigned to me, not Done, with no unfinished work item; in-progress first, then tracker order; 10 max, then "Show all on Board" | | Start work |
+| Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
+| Up next | none | tickets assigned to me, not Done, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
 
-The header answers "review LLM work or grab a new feature?" in the order of that decision, with section names as words:
+Sections run in the order of the table above. The header answers "review LLM work or grab a new feature?" in the order of that decision, with section names as words:
 
 `Claude: 1 asks · 3 LLM diffs · 2 PRs waiting · Fix 2 · 1 working · 4 up next`
 
@@ -206,10 +231,13 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `f` | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1) |
 | `r` | Rebase |
 | `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |
-| `s` | Start work (Up next rows) / Review locally (Review requests rows) / Skip step (Failed rows) |
+| `s` | Start work (ticket rows, Next up included) / Review locally (Review requests rows) / Skip step (Failed rows) |
+| `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
 | `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not Now; the same in the rail's Tickets view, where the source chip names the project and the board toggle is hidden): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not Now; the same in the rail's Tickets view, where the source chip names the project and the board toggle is hidden): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+
+A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 | `N` | New work item |
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
@@ -218,7 +246,7 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 ### 3.4 Next waiting, without opening Now
 
-`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
+`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
 
 ### 3.5 Palette
 
@@ -245,9 +273,11 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 ### 4.1 Flow 1: ticket, Claude, review
 
 1. `⌘0`, `j`×N to the ticket in Up next (or Board, or `⌘K` + key). `s`.
-2. Start sheet (existing `StartWorkSheet`) with **Start focused**: `⌘↵`. Its first field is **Project** when several open projects have a repository: the default follows the six ticket rules of SPEC §3.1 (unfinished work item, explicit pick, source route, last pick for the source, the source's projects, the active project); when it is only a guess, the sheet always shows, focus starts on Project and a hint says Kelta will remember the pick. Assign me, move to In Progress and the comment run after the sessions are up (existing saga). The new work tab opens and takes focus (mock must do this too, bug B5).
+2. Start sheet (existing `StartWorkSheet`) with **Start focused**: `⌘↵`.
+   - **Finish first** (#354, `work.finish_first`, default on). A new ticket start (never a Resume) with other work unfinished opens on that list: my unfinished work items, then my tickets in progress or in review that have none, closest to done first (merged, approved, in review, in progress), each with its phase or status and a Blocked chip when the tracker says so. A row goes to that item and closes the sheet. **Start anyway** (`Enter`) shows the plan. **Don't ask again** sets `work.finish_first = false`. It asks, it never forbids, and it shows even when `work.plan_preview` is off or the start was `S`.
+   - Then the plan. Its first field is **Project** when several open projects have a repository: the default follows the six ticket rules of SPEC §3.1 (unfinished work item, explicit pick, source route, last pick for the source, the source's projects, the active project); when it is only a guess, the sheet always shows, focus starts on Project and a hint says Kelta will remember the pick. Under the Claude prompt sit the **start options** (#357): checkboxes (one value) and choices (several) that the ticket's route or the template declares (`options`, SETTINGS §2). The picked values go into the prompt at `{options}`, else after it; the last picks are remembered per route or template and a start without the sheet uses them. Assign me, move to In Progress and the comment run after the sessions are up (existing saga). The new work tab opens and takes focus (mock must do this too, bug B5).
 3. Claude works with the ticket file and the `ticket` prompt. The tab, tile and Now row show the working ring. Louis goes elsewhere.
-4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible. The item moves to **To review** in Now, with Claude's last message on the expanded row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
+4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible (§2.3). The item moves to **To review** in Now, with Claude's last message on the expanded row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
 5. Review, either way:
    - **In nvim**: `Enter` on the row (or `⌘J`, then `⌘.` `Enter`). `work_diff` opens a split in the work tab running `nvim` with `editor.review_args` rendered for this item, zoomed, cwd = worktree. The diff is **merge base to working tree**, so uncommitted work is included: for own work items `{range}` renders as `origin/{base}` (for example `-c "DiffviewOpen origin/{base}"`, no `...HEAD`). Closing it returns to the Claude + nvim layout. With `review_args` empty, it opens a shell pane running `git diff $(git merge-base origin/{base} HEAD)` through the user's pager. `review_args` now applies to own work items too, not only review items: one setting, one diff command. The row and bar show `dirty` next to `+ins −del` when part of the diff is uncommitted.
    - **On GitHub**: `p` (Ship, §4.5) with Draft on. The PR opens in the browser with `⇧⌘O` (last toast action) or `o` in Now. There is no "compare page without a PR": reviewing on GitHub means a (draft) PR.
@@ -282,6 +312,8 @@ New comments: the authored poll reports per PR its unresolved threads and `last_
 4. Claude fixes and stops: `review_due` → To review (row 8 wins over row 11, §2.2). Review, then `⌘.` `Enter` = Push (row 14, no confirmation for a plain push). The push toast offers **Re-request review from {reviewers}** (one CodeHost call) and **Resolve sent threads** (the ids remembered in step 3); `⇧⌘O` runs the first. The item moves to In flight ("In review") until the reviewer reacts.
 
 "Previous conversation" must really be the previous one. Today `WorkItem.claude_uuid` goes stale after `/clear` or an in-Claude `/resume` (bug B3). kelta-work now updates it from the hook-learned `session_id` of the item's Claude session (`SessionStart`, and any hook carrying a new id).
+
+With no key at all: a trigger with the `fix_checks` action (PLUGINS §3.1) sends a red CI run to the owning Claude by itself, once per head SHA and failed-check set, never over the item's `claude.budget_usd` (#252). Nothing is sent unless a trigger asks for it.
 
 Claude can also pull feedback itself: MCP tool `get_review_feedback` returns the same content as markdown, so "check the review comments" works from inside Claude without the sheet.
 
@@ -358,7 +390,7 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 
 ### 4.6 Merge, finish and clean up
 
-- Merging happens on the host (Kelta has no merge button; the Approved phase's action is Open PR).
+- Merging happens on the host. The Approved phase's action is Open PR. To skip the wait, **Merge when ready…** (`M` in the work menu, own open PR) arms the host's own auto-merge: pick the method (default `work.pr.merge_method`), and the host merges once approvals and checks pass. A host that refuses (auto-merge off for the repo, missing permission) shows its message and nothing is armed. The row reads `armed` and `⎇` carries a dot (`M` again disarms). When the PR merges, Kelta runs Finish by itself: stops the sessions, removes the worktree if it is clean and pushed, deletes the branch and moves the ticket as below. A closed PR, a Done status to choose or a dirty or unpushed worktree disarms it and leaves the item for the Finish dialog, with the reason in the phase detail.
 - When an authored PR leaves the open list, or the startup/Now-open check finds it closed (§3.6), Kelta publishes `pr.merged` or `pr.closed`. On `pr.merged`, kelta-work sets `state = merged` and applies `on_merge.transition_to` automatically, with a stricter pick than an interactive move: only transitions with `needs_fields = false`, and only for a Name target or a **single** category match. Otherwise (several Done candidates such as Done / Won't Do / Rejected, or fields required) the status is left as is, the phase detail says "choose Done status", and the Finish dialog shows the choice. A failed transition shows in the phase detail; it does not block Finish.
 - The item lands in **Ship and clean up** as "Merged". `Enter` opens the existing Finish dialog prefilled (stop sessions, remove worktree, delete local branch), `⌘↵` confirms. Dirty or unpushed worktrees keep today's "Force remove" danger path.
 - "Finish all merged" (palette) shows one dialog listing the merged items with clean worktrees and finishes them on one confirmation. Dirty ones are listed as skipped. This is the only bulk destructive action, and it touches only work whose PR is merged.
@@ -374,12 +406,21 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 - **Review requests** in Now, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
 - `Enter`: the review detail opens in the project's Reviews tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
 - In the Reviews view the detail sits in a column beside the list (SPEC §3.3): `Enter` focuses it and the same keys act there, `Esc` goes back to the list, `Shift+Enter` opens it in the project. Nothing leaves the view.
-- `o` in Now: open on the host.
+- `o` in Now: open on the host. In the Reviews view `w` runs a workflow on the PR (§4.8) and `t` puts a local tag on it (SPEC §3.4c).
 - **My PRs** (Reviews pane): `waiting on Anna · 26h` (names merged from tracker and code host, SPEC §3.4a), amber past `reviews.sla_hours`, for the reviewers still asked (since their latest request) or who requested changes before my last push (since the head commit; GitLab: `/reviewers` not reviewed yet). `n`: Re-request review from those it waits on (`CodeHost::rerequest_review` with `waiting_on`) or Comment ping (`reviews.nudge_template`); one nudge per PR per 24 h (`nudges` table), the picker greys both out meanwhile. No extra poll: the authored list query carries it.
 - **Team** (Reviews pane, `2`): what the team ships on the repos of my sources' projects, mine included, with who each PR waits on; `G` groups the PRs by ticket so the api and web PRs of SHOP-142 sit together. A row opens in the split column like any other; `s` reviews it locally with the PR rules of the project binding its repo.
 - `s` (Now or detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.
 - Line comments without leaving Kelta: MCP tool `add_review_comment{path, line, body}` adds to a **pending (draft) review** on the host. Claude adds its findings, Louis asks it to add his own notes; the detail pane shows "n pending comments" and `a` / `c` / `m` submit them with the decision. No thread UI in Kelta.
 - When `my_state` stops being pending (submitted in Kelta or on github.com, seen by the `get` refresh), the row moves to Ship and clean up as "Reviewed", `Enter` = Finish (removes the review worktree).
+
+### 4.8 Workflows
+
+A workflow is a prompt Claude runs in a background tab. Two kinds: saved `*.js` workflows (`.claude/workflows/` of the repo or home, #233) and `[[workflows]]` entries in the config (#355), which are a prompt or a slash command (SETTINGS §2). `on` says where an entry is offered:
+- `ticket` (default): Run workflow (`w`) on a ticket row, in its detail, or the palette's "Run workflow on KEY…". The run **claims** the ticket as a background run (`WorkItem.run`, #235): the ticket shows the run's name, phase and state (phase row 0a), and a second `w` on a ticket whose run is live opens that session. A ticket held by a real work item cannot be claimed.
+- `pr`: `w` on a Reviews row or in the review detail. It runs in the worktree of the PR's unfinished work item, else the repo bound to the PR's code host, in a tab named `<label> · <repo>#<n>`. It claims nothing; one run per PR is kept, and a second `w` opens the live one.
+- `global`: "Run <label>" in the palette, with no ticket and no PR.
+
+A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question with buttons on the ticket row, in Now and in Peek.
 
 ---
 
@@ -392,11 +433,12 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 | Update `claude_uuid` from hooks | automatic | state |
 | Move ticket on start, on PR | automatic, per existing `work.on_*` settings | reversible, user-configured |
 | Move ticket on merge | automatic only when the target is unambiguous and needs no fields; else chosen at Finish | reversible, but a wrong "Won't Do" misreports work |
-| Start work, new work item | confirmed by the sheet (`⌘↵`); `work.plan_preview = false` skips it for tickets | creates branch and worktree |
+| Start work, new work item | confirmed by the sheet (`⌘↵`); `work.plan_preview = false` skips it for tickets, but not the finish-first list | creates branch and worktree |
 | Send feedback / conflicts to Claude | confirmed by the sheet or button | Louis sees exactly what Claude receives |
 | Plain push, Ship | one key, Ship has a dialog for title and draft; refused while Claude works | non-destructive |
 | Re-request review, resolve sent threads | one key on the push toast | visible to others, so never automatic |
 | Rebase | one key, refused when unsafe | local, `git rebase --abort` undoes it |
+| Merge when ready, then Finish | a dialog to arm; the Finish after the merge is automatic | the host only merges once approvals and checks pass; Finish keeps its dirty and unpushed refusal and disarms instead of forcing |
 | Force push | always a dialog, never bulk, only over own commits | rewrites shared history |
 | Finish | always a dialog; bulk only for merged + clean | deletes a worktree |
 
@@ -412,6 +454,8 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Status hooks inactive | work bar | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard |
 | Claude busy when sending feedback or conflicts | toast | "Claude is working: it gets your message when it stops." (held until its `Stop`) |
 | Claude busy on Ship / Push / Rebase | toast | "Claude is working in this worktree. {Action} when it stops." |
+| No free Claude slot (`claude.max_live`, #141) | Queued row, status strip "Claude 4/4 · 1 queued" | the item waits with its worktree ready and starts, oldest first, when a Claude exits. [Start now (over cap)] [Move to front] |
+| Prompt for a Claude that runs outside Kelta (#347) | toast | "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." Review notes and Send selection: "Claude runs outside Kelta: it cannot receive prompts from here." |
 | Claude's MCP ship in progress | toast | "Claude is shipping this item." |
 | Previous conversation gone (`--resume` exits fast) | toast | existing fallback to `--continue`, now with the same prompt, then: "Previous conversation not found; Claude continued the latest one in this worktree with your prompt." |
 | Feedback fetch failed (token scope, offline) | Fix sheet | "GitHub refused the review threads (403: token lacks `pull_requests:read`)." [Open account settings] [Send without feedback] |
@@ -452,6 +496,8 @@ Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to
 ---
 
 ## 8. Backend gaps (minimal list)
+
+The list as designed; all of it is built. Later commands and events are in ARCHITECTURE §6.
 
 Model (`kelta-proto`):
 - `WorkItem`: `title: Option<String>`, `review_due: bool`, `claude_replied: bool`, `sent_threads: Vec<String>`, `rebase: Option<RebaseState{onto, pre_head, remote_sha: Option<String>, conflicts: Vec<PathBuf>, step: u32, total: u32}>`.
@@ -519,7 +565,7 @@ Settings: `claude.prompt_templates.feedback`, `claude.prompt_templates.conflicts
 
 ## 10. Tickets, in build order
 
-Each ticket ships with mock support for its states and an E2E path on the mock; `bash scripts/ci-local.sh` is the gate.
+All nine are built. Each ticket shipped with mock support for its states and an E2E path on the mock; `bash scripts/ci-local.sh` is the gate.
 
 1. **Navigation fixes**: B1, B5, palette Work items group and `KEY claude` session names. Small, unblocks the rest.
 2. **Phase model and work bar**: `phase.ts` + tests (including the Flow 2 ordering cases of §2.2), work bar (primary action, `⌘.` menu with all letters and review-item gating, phase → WorkItemPane), tab lamp. `work_status_all`, B4, `GitStatus` additions.
@@ -593,7 +639,7 @@ All 28 issues were checked against the code at `316bc1d` (`github.rs:377` draft 
 
 - Promoting a running plain session into a work item: a live Claude cannot move to a new worktree, and `⇧⌘N` is as fast.
 - Review threads in the PR detail pane: the Fix sheet is where they are acted on; reading them on the host remains one key (`o`).
-- A merge button in Kelta, snoozing rows, per-project dashboards, priority drag-and-drop: nobody asked, and Now's order already encodes priority.
+- A merge button in Kelta that merges now, snoozing rows, per-project dashboards, priority drag-and-drop: nobody asked, and Now's order already encodes priority. Merge when ready (§4.6) only arms the host's own auto-merge.
 - **Sapling**: work items are git worktrees only and `sl push --force` has no lease. Revisit once there is a Sapling work-item backend with a lease-equivalent check.
 - **`work.update_strategy = merge`**: Louis's repos rebase. Add if a project forbids force push.
 - **Bulk "Update all work items from base"**: it would mean N force-push confirmations and N CI runs on PRs in review. Revisit if Louis asks after a week of single-item rebase.
