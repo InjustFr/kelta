@@ -17,7 +17,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     EditorTarget, Lifecycle, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
 };
-use kelta_proto::tracker::{Ticket, TicketDetail, TicketRef, Transition};
+use kelta_proto::tracker::{Ticket, TicketRef, Transition};
 use serde_json::{Value, json};
 
 /// Protocol revisions we speak, newest first.
@@ -104,7 +104,8 @@ async fn handle_message(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, msg: V
             let Some(name) = params.get("name").and_then(Value::as_str) else {
                 return Some(error(id, INVALID_PARAMS, "missing tool name"));
             };
-            if !TOOL_NAMES.contains(&name) || !listed(core, sid, name) {
+            let known = tool_defs().as_array().is_some_and(|d| d.iter().any(|d| d["name"] == name));
+            if !known || !listed(core, sid, name) {
                 return Some(error(id, INVALID_PARAMS, &format!("unknown tool: {name}")));
             }
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
@@ -162,27 +163,6 @@ fn listed(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str) -> bool 
     }
     true
 }
-
-const TOOL_NAMES: &[&str] = &[
-    "get_ticket",
-    "transition_ticket",
-    "add_ticket_comment",
-    "open_in_editor",
-    "create_pr",
-    "list_review_requests",
-    "get_review_feedback",
-    "add_review_comment",
-    "notify",
-    "list_tickets",
-    "get_ticket_by_key",
-    "transition_ticket_by_key",
-    "comment_ticket_by_key",
-    "update_ticket_body",
-    "close_ticket",
-    "claim_ticket",
-    "report_progress",
-    "release_ticket",
-];
 
 pub(crate) fn tool_defs() -> Value {
     let empty = json!({ "type": "object", "properties": {}, "additionalProperties": false });
@@ -396,7 +376,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             let d = tracker.get(&t).await.map_err(|e| e.message)?;
             Ok(format!(
                 "{}\nAccount: {}\nRevision: {}\n",
-                ticket_markdown(&d),
+                kelta_work::files::ticket_markdown(&d),
                 t.account,
                 revision(&d.body_md)
             ))
@@ -497,63 +477,11 @@ async fn linked(core: &Arc<dyn CoreApi>, sid: &SessionId) -> Result<(Arc<dyn Tra
     Ok((tracker, t))
 }
 
-/// Minimal HTML → text for comment bodies (tags dropped, common entities decoded).
-fn html_text(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let mut in_tag = false;
-    for c in html.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-}
-
 async fn get_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId) -> ToolResult {
     // Not `linked`: a refine's sid reads its ticket but has no work item to write through.
     let t = core.ticket_for_session(sid).await.ok_or_else(|| NO_TICKET.to_owned())?;
     let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
-    Ok(ticket_markdown(&tracker.get(&t).await.map_err(|e| e.message)?))
-}
-
-fn ticket_markdown(d: &TicketDetail) -> String {
-    let tk = &d.ticket;
-    let mut s = format!("# {}: {}\n\nStatus: {}\nURL: {}\n", tk.r#ref.key, tk.title, tk.status.name, tk.url);
-    if let Some(a) = &tk.assignee {
-        s.push_str(&format!("Assignee: {}\n", a.name));
-    }
-    if !tk.labels.is_empty() {
-        s.push_str(&format!("Labels: {}\n", tk.labels.join(", ")));
-    }
-    if let Some(p) = &d.parent {
-        s.push_str(&format!("Parent: {}\n", p.key));
-    }
-    if !d.children.is_empty() {
-        let keys: Vec<&str> = d.children.iter().map(|c| c.ticket.r#ref.key.as_str()).collect();
-        s.push_str(&format!("Sub-tasks: {}\n", keys.join(", ")));
-    }
-    s.push_str("\n## Description\n\n");
-    s.push_str(if d.body_md.trim().is_empty() { "(empty)" } else { d.body_md.trim() });
-    s.push('\n');
-    if !d.comments.is_empty() {
-        s.push_str("\n## Comments\n");
-        for c in &d.comments {
-            s.push_str(&format!(
-                "\n### {} ({})\n\n{}\n",
-                c.author.name,
-                c.created_at,
-                html_text(&c.body_html).trim()
-            ));
-        }
-    }
-    s
+    Ok(kelta_work::files::ticket_markdown(&tracker.get(&t).await.map_err(|e| e.message)?))
 }
 
 fn pick_transition<'a>(ts: &'a [Transition], to: &str) -> Option<&'a Transition> {
@@ -849,17 +777,5 @@ mod tests {
             initialize(&json!({"protocolVersion": "1999-01-01"}))["protocolVersion"],
             PROTOCOL_VERSIONS[0]
         );
-    }
-
-    #[test]
-    fn html_to_text() {
-        assert_eq!(html_text("<p>a &amp; <b>b</b></p>"), "a & b");
-    }
-
-    #[test]
-    fn tool_defs_match_names() {
-        let defs = tool_defs();
-        let names: Vec<&str> = defs.as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap()).collect();
-        assert_eq!(names, TOOL_NAMES);
     }
 }
