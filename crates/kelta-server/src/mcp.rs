@@ -11,12 +11,13 @@ use std::sync::Arc;
 
 use kelta_proto::api::{CoreApi, Tracker};
 use kelta_proto::codehost::{PrDraft, ReviewKind};
-use kelta_proto::events::Notification;
+use kelta_proto::events::{Notification, Toast, ToastAction};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
-    EditorTarget, Lifecycle, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
+    EditorTarget, Lifecycle, ProjectInfo, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
 };
+use kelta_proto::settings::{AccountKind, Layer, Settings};
 use kelta_proto::tracker::{Ticket, TicketRef, Transition};
 use serde_json::{Value, json};
 
@@ -133,7 +134,9 @@ fn initialize(params: &Value) -> Value {
     edit or close any ticket by key; in a session Kelta started, also read and move the linked ticket, open \
     files in the tab's editor, create the pull request, list review requests, add line comments to the \
     pending review of a pull request under review and notify the user. Background runs claim a ticket \
-    (claim_ticket), report each phase (report_progress) and release it (release_ticket)."
+    (claim_ticket), report each phase (report_progress) and release it (release_ticket). Setup tools \
+    (get_setup, add_project, set_setting, test_account, request_token) configure Kelta itself with the \
+    validation of its Settings; token values never go through them."
     })
 }
 
@@ -356,6 +359,52 @@ pub(crate) fn tool_defs() -> Value {
                 "required": ["key", "outcome"], "additionalProperties": false
             },
         },
+        {
+            "name": "get_setup",
+            "description": "Kelta's configuration for setting it up: projects (repos, remotes, code host bindings), accounts (secrets are references, never values), ticket sources and their views, editor and terminal preferences, and `missing`: what still needs configuring.",
+            "inputSchema": empty,
+        },
+        {
+            "name": "add_project",
+            "description": "Create a Kelta project from a local folder (a git repo or a folder of repos), as the New project sheet does with its suggestions: repos, remotes, code host account matching each remote. Returns the project and the detected code host / tracker hints.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "path": { "type": "string", "description": "Absolute path, or ~/…" } },
+                "required": ["path"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "set_setting",
+            "description": "Write one settings key with the validation of Kelta's Settings, which shows the change at once; `null` resets it. Dotted paths, e.g. `accounts.jira` = {kind: \"jira\", base_url, email, secret}, `sources` = the whole list of ticket sources [{id, label, projects, tracker: {account, views: [{id, label, jql, board_id, statuses}]}}], `editor.default`, `terminal.font_family`. `layer`: `global` (default, ~/.config/kelta/config.toml) or `project` (that project's file; `project.*` keys and project-scoped settings). An account's `secret` is a reference (`env:VAR`, `keyring:<name>`, `file:<name>`, `command:<argv>`, `gh-cli`, `glab-cli`): a token value is refused.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" },
+                    "value": {},
+                    "layer": { "type": "string", "enum": ["global", "project"] },
+                    "project": { "type": "string", "description": "Kelta project id, for the project layer" }
+                },
+                "required": ["path", "value"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "test_account",
+            "description": "Check an account's connection: who it signs in as, or the error.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "account": { "type": "string", "description": "Account id" } },
+                "required": ["account"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "request_token",
+            "description": "Ask the user to enter an account's token in Kelta (Settings → Accounts, stored in the system keychain), for an account whose `secret` is a `keyring:` reference. The token never comes back through MCP: ask the user to tell you when it is done, then test_account.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "account": { "type": "string", "description": "Account id" } },
+                "required": ["account"], "additionalProperties": false
+            },
+        },
     ])
 }
 
@@ -424,6 +473,37 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             Ok(format!("{key} released ({outcome})."))
         }
         "list_review_requests" => list_review_requests(core).await,
+        "get_setup" => Ok(setup_summary(&core.project_list(), &core.settings(None)).to_string()),
+        "add_project" => {
+            // `project_detect` expands `~`.
+            let (p, d) = core.project_add(Path::new(str_arg(args, "path")?)).map_err(coded)?;
+            Ok(json!({ "project": p, "code_host_hints": d.code_host_hints, "tracker_hints": d.tracker_hints })
+                .to_string())
+        }
+        "set_setting" => set_setting(core, args),
+        "test_account" => {
+            let account = AccountId::new(str_arg(args, "account")?);
+            let r = core.account_test(&account).await.map_err(coded)?;
+            Ok(match (r.user, r.error) {
+                (Some(u), _) if r.ok => format!("{account}: signed in as {}.", u.login.unwrap_or(u.name)),
+                (_, Some(e)) => format!("{account}: failed: {}", e.message),
+                _ => format!("{account}: failed."),
+            })
+        }
+        "request_token" => {
+            let account = str_arg(args, "account")?;
+            if !core.settings(None).accounts.contains_key(&AccountId::new(account)) {
+                return Err(format!("NotFound: unknown account `{account}`; add it with set_setting first"));
+            }
+            let mut t = Toast::info(format!("Claude asks for the token of account {account}."));
+            t.action = Some(ToastAction {
+                label: "Enter token".into(),
+                command: "settings.open".into(),
+                args: Some(json!({ "section": "accounts" })),
+            });
+            core.toast(t);
+            Ok(format!("Kelta asked the user to enter the token of {account} in Settings → Accounts."))
+        }
         "close_ticket" => {
             let (_, t) = by_key(core, args).await?;
             if let Some(md) = args.get("comment").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
@@ -747,6 +827,71 @@ async fn add_review_comment(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Val
         "Pending comment added on {path}:{line} of {}#{}. The user submits the review.",
         r.repo, r.number
     ))
+}
+
+fn set_setting(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
+    let path = str_arg(args, "path")?;
+    let value = args.get("value").cloned().ok_or("missing argument `value`")?;
+    let project = opt_arg(args, "project").map(ProjectId::new);
+    let layer = match args.get("layer").and_then(Value::as_str).unwrap_or("global") {
+        "global" => Layer::Global,
+        "project" if project.is_some() => Layer::Project,
+        "project" => return Err("InvalidArgument: the project layer needs `project`".to_owned()),
+        other => return Err(format!("InvalidArgument: unknown layer {other:?}")),
+    };
+    // Validation messages name the key, never the refused value.
+    core.settings_write(layer, project.as_ref(), path, value).map_err(coded)?;
+    Ok(format!("{path} saved."))
+}
+
+/// `get_setup`: what is configured, and `missing`, what the setup still has to do.
+fn setup_summary(projects: &[ProjectInfo], s: &Settings) -> Value {
+    let projects: Vec<&ProjectInfo> = projects.iter().filter(|p| !p.builtin).collect();
+    let fed = |p: &ProjectId| s.sources.iter().any(|src| src.projects.contains(p));
+    let used = |a: &AccountId| {
+        s.sources.iter().any(|src| {
+            &src.tracker.account == a || src.tracker.views.iter().any(|v| v.account.as_ref() == Some(a))
+        })
+    };
+    let mut missing = Vec::new();
+    if projects.is_empty() {
+        missing.push("No project: add_project with a repository path.".to_owned());
+    }
+    if s.accounts.is_empty() {
+        missing.push("No account: add the code host and tracker accounts.".to_owned());
+    }
+    for p in &projects {
+        if p.tracker.is_none() && !fed(&p.id) {
+            missing.push(format!("Project {} has no ticket source.", p.id));
+        }
+        for r in p.repos.iter().filter(|r| r.code_host.is_none()) {
+            missing.push(format!("Repo {} of project {} has no code host account.", r.id, p.id));
+        }
+    }
+    for (id, a) in &s.accounts {
+        let plugin = matches!(a.kind, AccountKind::PluginTracker | AccountKind::PluginCodehost);
+        if !plugin && a.effective_secret().is_none() {
+            missing.push(format!("Account {id} has no secret reference."));
+        }
+        if !a.kind.is_code_host() && a.kind.is_tracker() && !used(id) {
+            missing.push(format!("Account {id} feeds no ticket source."));
+        }
+    }
+    let presets: Vec<&str> = s.editor.presets.iter().filter(|p| p.enabled).map(|p| p.id.as_str()).collect();
+    json!({
+        "projects": projects.iter().map(|p| json!({
+            "id": p.id, "name": p.name,
+            "repos": p.repos.iter().map(|r| json!({
+                "id": r.id, "path": r.path, "remote": r.remote, "base": r.base, "code_host": r.code_host,
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "accounts": s.accounts,
+        "sources": s.sources,
+        "editor": { "default": s.editor.default, "presets": presets },
+        "terminal": { "font_family": s.terminal.font_family, "font_size": s.terminal.font_size },
+        "claude": { "mcp": s.claude.mcp, "binary": s.claude.binary },
+        "missing": missing,
+    })
 }
 
 async fn list_review_requests(core: &Arc<dyn CoreApi>) -> ToolResult {

@@ -21,15 +21,15 @@ use crate::error::KeltaError;
 use crate::events::{BusEvent, Notification, Toast, UiEvent};
 use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use crate::ids::{AccountId, PluginId, ProjectId, SessionId, ToolId, WorkItemId};
-use crate::ipc::WindowState;
+use crate::ipc::{AccountTestResult, WindowState};
 use crate::model::{
-    AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectInfo, ReviewNote,
-    RunClaim, RunState, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus, TemplateCtx,
-    WorkItem, WorkStepStatus,
+    AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo,
+    ReviewNote, RunClaim, RunState, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus,
+    TemplateCtx, WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
-use crate::settings::{ProjectConfig, Settings, TrackerBinding};
+use crate::settings::{Layer, ProjectConfig, Settings, TrackerBinding};
 use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
@@ -292,6 +292,31 @@ pub trait CoreApi: Send + Sync {
     // projects & settings
     fn project(&self, id: &ProjectId) -> Option<ProjectInfo>;
     fn settings(&self, project: Option<&ProjectId>) -> Arc<Settings>;
+    /// Every project, Home included (MCP setup tools, #343).
+    fn project_list(&self) -> Vec<ProjectInfo> {
+        Vec::new()
+    }
+    /// MCP `add_project`: `project_detect` + `project_create`, as the New project sheet with its
+    /// suggestions; the draft carries the detected code host / tracker hints.
+    fn project_add(&self, _path: &Path) -> Result<(ProjectInfo, ProjectDraft), KeltaError> {
+        Err(KeltaError::unsupported("project_add"))
+    }
+    /// MCP `set_setting`: `settings_set` at `layer` (Global or Project), the same validated write as
+    /// Settings; `null` resets the key.
+    fn settings_write(
+        &self,
+        _layer: Layer,
+        _project: Option<&ProjectId>,
+        _path: &str,
+        _value: Value,
+    ) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("settings_write"))
+    }
+    /// Settings → Accounts "Test" and MCP `test_account`: the account's provider `me()`; provider
+    /// failures are data, not errors.
+    async fn account_test(&self, _account: &AccountId) -> Result<AccountTestResult, KeltaError> {
+        Err(KeltaError::unsupported("account_test"))
+    }
     // providers
     async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError>;
     async fn code_host_for(&self, account: &AccountId) -> Result<Arc<dyn CodeHost>, KeltaError>;

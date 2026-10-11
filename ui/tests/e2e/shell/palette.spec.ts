@@ -133,3 +133,16 @@ test.describe('palette', () => {
     await backToNvim();
   });
 });
+
+test('Set up with Claude runs from the palette and opens the setup session in Home (#343)', async ({
+  page,
+}) => {
+  await boot(page);
+  await page.keyboard.press('Control+Shift+K');
+  await page.getByTestId('palette-input').fill('set up with claude');
+  await expect(page.getByTestId('palette-item').first()).toContainText('Set up with Claude');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await callsOf(page, 'claude_setup')).length).toBe(1);
+  await expect.poll(() => activeProject(page)).toBe('home');
+  await expect(page.getByTestId('contextbar').getByTestId('context-crumb')).toContainText('Set up Kelta');
+});
