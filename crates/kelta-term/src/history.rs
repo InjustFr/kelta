@@ -85,7 +85,8 @@ impl HistoryLog {
 
     /// Append and wait until the writer wrote it (reader exit: the process may quit right after).
     pub fn append_sync(&self, id: &SessionId, text: String) {
-        let _ = self.tx.send(Msg::Append(id.clone(), text));
+        // Never blocks on a stalled writer: exit must finish (deliver, close, quit) within SYNC_WAIT.
+        self.send_later(Msg::Append(id.clone(), text));
         self.request(Msg::Sync);
     }
 
@@ -117,9 +118,10 @@ impl HistoryLog {
         search(&self.dir, ids, &query.to_lowercase(), limit)
     }
 
+    /// `None` when the queue is full (stalled writer: nothing to wait for) or the wait timed out.
     fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg) -> Option<T> {
         let (tx, rx) = mpsc::channel();
-        self.tx.send(msg(tx)).ok()?;
+        self.tx.try_send(msg(tx)).ok()?;
         rx.recv_timeout(SYNC_WAIT).ok()
     }
 
@@ -417,6 +419,21 @@ mod tests {
             log.search(std::slice::from_ref(&id), "QUEUED", 5),
             [HistoryHit { session_id: id, line: "Queued line".into() }]
         );
+    }
+
+    #[test]
+    fn stalled_writer_never_blocks_exit_or_reads() {
+        let d = tempfile::tempdir().unwrap();
+        // A writer that never drains: the queue stays full.
+        let (tx, _rx) = mpsc::sync_channel(QUEUE);
+        let log = HistoryLog { tx, dir: d.path().to_owned() };
+        let id = SessionId::new("s");
+        while log.tx.try_send(Msg::Caps(1, 1)).is_ok() {}
+        let t = std::time::Instant::now();
+        log.append_sync(&id, "last words\n".into());
+        assert_eq!(log.tail(&id, 5), "");
+        assert!(log.search(std::slice::from_ref(&id), "x", 5).is_empty());
+        assert!(t.elapsed() < SYNC_WAIT, "{:?}", t.elapsed());
     }
 
     #[test]
