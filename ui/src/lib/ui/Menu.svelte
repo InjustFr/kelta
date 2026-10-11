@@ -101,7 +101,11 @@
         if (i >= 0) choose(i);
         else if (e.key === 'j' || e.key === 'k')
           move(e.key === 'j' ? 1 : -1); // unless an item claims them
-        else return;
+        else {
+          // Not ours, but not the pane's either: a letter typed in an open menu must not reach its shortcuts.
+          e.stopPropagation();
+          return;
+        }
       }
     }
     e.preventDefault();

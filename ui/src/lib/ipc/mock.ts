@@ -86,6 +86,8 @@ export interface MockControls {
   /** Makes every call of `cmd` reject until `clearFailures()`. */
   failAlways(cmd: CommandName, error: Partial<KeltaError> & { code: KeltaError['code'] }): void;
   clearFailures(): void;
+  /** Parks the next call of `cmd` until the returned function runs (with an error: it rejects). */
+  holdNext(cmd: CommandName): (error?: Partial<KeltaError> & { code: KeltaError['code'] }) => void;
   /** Pushes a UiEvent to every `events_subscribe` channel. */
   emit(event: UiEvent): void;
   /** Sends raw output to an attached session (Data frame). */
@@ -393,6 +395,7 @@ export function createMockTransport(options: MockOptions = {}): {
   let state = freshState();
   const calls: MockCall[] = [];
   const failOnce = new Map<string, KeltaError>();
+  const held = new Map<string, Promise<KeltaError | null>>();
   const failAlways = new Map<string, KeltaError>();
   const eventChannels = new Set<IpcChannel<UiEvent>>();
   const attached = new Map<string, { generation: number; channel: IpcChannel<Uint8Array> }>();
@@ -1836,6 +1839,12 @@ export function createMockTransport(options: MockOptions = {}): {
       } else {
         await Promise.resolve();
       }
+      const hold = held.get(cmd);
+      if (hold) {
+        held.delete(cmd);
+        const parked = await hold;
+        if (parked) throw clone(parked);
+      }
       const failure = failOnce.get(cmd) ?? failAlways.get(cmd);
       if (failure) {
         failOnce.delete(cmd);
@@ -1863,6 +1872,11 @@ export function createMockTransport(options: MockOptions = {}): {
     calls,
     failNext: (cmd, e) => void failOnce.set(cmd, toError(e)),
     failAlways: (cmd, e) => void failAlways.set(cmd, toError(e)),
+    holdNext: (cmd) => {
+      let release!: (e: KeltaError | null) => void;
+      held.set(cmd, new Promise((resolve) => (release = resolve)));
+      return (e) => release(e ? toError(e) : null);
+    },
     clearFailures: () => {
       failOnce.clear();
       failAlways.clear();
