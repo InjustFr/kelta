@@ -12,7 +12,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ext::{WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
-    OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, WorkflowSource,
+    OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, StartWorkPlan,
+    WorkSource, WorkflowSource,
 };
 use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, CodeHostBinding, Settings};
@@ -46,6 +47,7 @@ fn env(root: &Path) -> (H, PathBuf) {
             WorkflowOn::Pr,
             "/describe-pr {pr.number} {pr.url} {pr.head}..{pr.base} {pr.repo} {ticket.key}",
         ),
+        WorkflowDef { cwd: Some("~/x".into()), ..def("describe-at", WorkflowOn::Pr, "x") },
         def("daily", WorkflowOn::Global, "Write the daily report"),
         WorkflowDef { enabled: false, ..def("off", WorkflowOn::Ticket, "x") },
     ];
@@ -271,4 +273,31 @@ async fn a_global_workflow_runs_with_no_ticket() {
     assert!(h.core.work_list(None).await.unwrap().is_empty());
     let err = h.core.workflow_run_on(ProjectId::new("shop"), "describe", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound, "a PR workflow needs its PR");
+}
+
+#[tokio::test]
+async fn a_pr_workflow_runs_in_its_work_items_worktree_unless_the_def_sets_a_cwd() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let r = samples::review_ref();
+    let plan =
+        h.core.work_plan(Some(shop.clone()), WorkSource::Review { review: r.clone() }, None).await.unwrap();
+    let plan = StartWorkPlan { worktree_path: tmp.path().join("wt/review-87"), ..plan };
+    // The saga fetches the PR head from `origin`: the repo is its own remote.
+    git(&repo, &["remote", "add", "origin", repo.to_str().unwrap()]);
+    git(&repo, &["update-ref", "refs/pull/87/head", "HEAD"]);
+    let item = h.core.work_start(plan).await.unwrap();
+    assert_eq!(item.review, Some(r.clone()));
+    assert_ne!(item.worktree, repo);
+
+    std::fs::create_dir_all(tmp.path().join("home/x")).unwrap();
+    // `cwd` in the def beats the work item's worktree; `~` expands to the home dir.
+    let at = h.core.workflow_run_on(shop.clone(), "describe-at", Some(r.clone())).await.unwrap();
+    assert_eq!(spawned(&h, &at.session).1, tmp.path().join("home/x"));
+    h.core.session_kill(&at.session.id, true).await.unwrap();
+
+    let start = h.core.workflow_run_on(shop, "describe", Some(r)).await.unwrap();
+    assert!(!start.running);
+    assert_eq!(spawned(&h, &start.session).1, item.worktree, "the PR's work item wins over the bound repo");
 }
