@@ -649,8 +649,7 @@ impl Core {
             .collect();
         let mut todo = Vec::new();
         for (id, a) in &accounts {
-            let tracker = !matches!(a.kind, AccountKind::Bitbucket | AccountKind::PluginCodehost);
-            for (side, on) in [(false, tracker), (true, a.kind.is_code_host())] {
+            for (side, on) in [(false, a.kind.is_tracker()), (true, a.kind.is_code_host())] {
                 if on && !self.feeds.mes.lock().contains_key(&(id.clone(), side)) {
                     todo.push((id.clone(), side));
                 }

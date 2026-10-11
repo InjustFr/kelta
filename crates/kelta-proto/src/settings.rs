@@ -1292,6 +1292,10 @@ impl AccountKind {
     pub fn is_code_host(self) -> bool {
         matches!(self, Self::Github | Self::Gitlab | Self::Bitbucket | Self::Gitea | Self::PluginCodehost)
     }
+
+    pub fn is_tracker(self) -> bool {
+        !matches!(self, Self::Bitbucket | Self::PluginCodehost)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
