@@ -301,7 +301,8 @@
           0.5
         ],
         "split": "row"
-      }
+      },
+      "options": []
     },
     {
       "enabled": true,
@@ -342,7 +343,8 @@
           0.5
         ],
         "split": "row"
-      }
+      },
+      "options": []
     },
     {
       "enabled": true,
@@ -353,7 +355,8 @@
         "name": null,
         "profile": null,
         "session": "claude"
-      }
+      },
+      "options": []
     },
     {
       "enabled": true,
@@ -364,7 +367,8 @@
         "name": null,
         "profile": null,
         "session": "editor"
-      }
+      },
+      "options": []
     },
     {
       "enabled": true,
@@ -375,7 +379,8 @@
         "name": null,
         "profile": null,
         "session": "shell"
-      }
+      },
+      "options": []
     }
   ],
   "sources": [],

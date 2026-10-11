@@ -385,6 +385,7 @@ pub fn start_work_plan() -> StartWorkPlan {
         },
         existing: None,
         adopt_pr: None,
+        options: None,
     }
 }
 

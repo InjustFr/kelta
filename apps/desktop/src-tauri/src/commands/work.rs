@@ -23,7 +23,7 @@ pub async fn work_plan(
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_start(core: State<'_, Arc<Core>>, plan: StartWorkPlan) -> Res<WorkItem> {
-    core.work().start(plan).await
+    core.work_start(plan).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

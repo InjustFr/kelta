@@ -2334,5 +2334,11 @@
   "Filter by tag": "Nach Tag filtern",
   "Only items tagged {name}": "Nur Elemente mit dem Tag {name}",
   "Create tags in Settings": "Tags in den Einstellungen anlegen",
-  "Tags…": "Tags…"
+  "Tags…": "Tags…",
+  "Options": "Optionen",
+  "Values": "Werte",
+  "Picked per ticket in the Start sheet, unless the ticket's route declares its own.": "Pro Ticket im Start-Blatt gewählt, sofern die Route des Tickets keine eigenen festlegt.",
+  "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.": "Eine Startoption: ein Wert ergibt ein Kontrollkästchen, mehrere eine Einfachauswahl. Die gewählten Werte kommen\nin `{options}` des Claude-Prompts, sonst an sein Ende, in der festgelegten Reihenfolge.",
+  "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.": "z. B. `[\"--auto\"]` oder `[\"--mode=quick\", \"--mode=skip\"]`.",
+  "Picked per ticket in the Start sheet; replace the template's options.": "Pro Ticket im Start-Blatt gewählt; ersetzen die Optionen der Vorlage."
 }
