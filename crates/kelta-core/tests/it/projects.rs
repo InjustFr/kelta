@@ -102,6 +102,21 @@ async fn open_set_order_and_active_persist() {
 }
 
 #[tokio::test]
+async fn create_refuses_the_reserved_ids() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    for id in [ProjectId::HOME, ProjectId::INBOX, ProjectId::GLOBAL] {
+        let draft =
+            kelta_proto::model::ProjectDraft { suggested_id: ProjectId::new(id), ..Default::default() };
+        assert_eq!(
+            h.core.project_create(&draft).unwrap_err().code,
+            kelta_proto::ErrorCode::InvalidArgument,
+            "{id}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn create_opens_and_activates() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![]);

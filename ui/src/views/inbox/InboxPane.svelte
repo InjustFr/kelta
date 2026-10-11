@@ -7,7 +7,18 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
-  import { GLOBAL, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import {
+    GLOBAL,
+    layout,
+    projects,
+    reviews,
+    sessions,
+    settings,
+    tickets,
+    toasts,
+    ui,
+    work,
+  } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import {
     Button,
@@ -28,7 +39,7 @@
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
   import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
-  import { persistPaneContent } from '../work/nav';
+  import { loadGlobalLayout, persistPaneContent } from '../work/nav';
   import { deltaParts, testsMissing, workKey, type Lamp as LampKind, type WorkActionId } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -368,7 +379,9 @@
   const nextUpRows = (): NowRow[] => summary.sections.find((s) => s.id === 'next_up')?.rows ?? [];
 
   /** Up next's "Show all": the rail's Tickets view, on Mine. */
-  function showAll(): void {
+  async function showAll(): Promise<void> {
+    // The layout may have failed to load at startup: without it the patch would be dropped.
+    if (!layout.get(GLOBAL)) await loadGlobalLayout().catch(() => null);
     persistPaneContent(GLOBAL, 'tickets', { who: 'mine', person: null });
     openView('tickets');
   }
@@ -549,7 +562,7 @@
             {:else if l.type === 'msg'}
               <div class="row msgline" data-testid="now-message">{l.text}</div>
             {:else if l.type === 'more'}
-              <button type="button" tabindex="-1" class="row moreline" onclick={showAll}>
+              <button type="button" tabindex="-1" class="row moreline" onclick={() => void showAll()}>
                 {l.count} more, show all
               </button>
             {:else}

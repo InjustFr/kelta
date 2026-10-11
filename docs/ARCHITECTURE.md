@@ -368,7 +368,7 @@ pub trait UiBridge: Send + Sync {
 ## 5. Domain model (kelta-proto, all `Serialize + Deserialize + TS`)
 
 ```rust
-pub struct ProjectId(String);   // slug [a-z0-9-]{1,40}; "home" reserved; "inbox" reserved pseudo id
+pub struct ProjectId(String);   // slug [a-z0-9-]{1,40}; reserved: "home" (built-in Home), "inbox" (pseudo id), "global" (the global views' layout; a pre-#270 project `global` is refused, its tabs moved to `global-project`)
 pub struct SessionId(String);   // uuid v7
 pub struct WorkItemId(String);  // uuid v7
 pub struct AccountId(String);   // settings key, e.g. "jira-acme"

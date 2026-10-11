@@ -480,9 +480,9 @@ impl ConfigService {
     /// Writes `projects/<id>.toml`.
     pub fn project_create(&self, draft: &ProjectDraft) -> Result<Arc<ProjectConfig>, KeltaError> {
         let id = draft.suggested_id.as_str().to_owned();
-        if !validate::valid_slug(&id) || id == "home" || id == "inbox" {
+        if !validate::valid_slug(&id) || ["home", "inbox", "global"].contains(&id.as_str()) {
             return Err(KeltaError::invalid(format!(
-                "`{id}` is not a valid project id (use [a-z0-9-], 1-40 chars; `home` and `inbox` are reserved)"
+                "`{id}` is not a valid project id (use [a-z0-9-], 1-40 chars; `home`, `inbox` and `global` are reserved)"
             )));
         }
         let path = self.dirs.projects_dir().join(format!("{id}.toml"));

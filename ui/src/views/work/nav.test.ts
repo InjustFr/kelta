@@ -39,6 +39,17 @@ describe('seedGlobalLayout (#270)', () => {
     expect(seedGlobalLayout(l)).toBe(l);
   });
 
+  it('a view tab missing from a saved layout is seeded without the pre-#270 storage', () => {
+    localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone' }));
+    localStorage.setItem('kelta.view.reviews', JSON.stringify({ tab: 'team' }));
+    const l = seedGlobalLayout(empty(3));
+    expect(l.tabs.map((t) => t.root.type === 'pane' && t.root.content)).toEqual([
+      { kind: 'tickets', scope: { kind: 'all' }, view_id: null, who: 'mine', mode: 'list' },
+      { kind: 'inbox' },
+      { kind: 'reviews', scope: { kind: 'all' }, tab: null },
+    ]);
+  });
+
   it('a saved layout keeps its place; an unknown stored place is none', () => {
     localStorage.setItem('kelta.place', 'reviews');
     expect(seedGlobalLayout(empty(3)).active_tab).toBeNull();
