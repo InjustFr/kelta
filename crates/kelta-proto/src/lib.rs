@@ -17,6 +17,7 @@ pub mod error;
 pub mod events;
 pub mod ext;
 pub mod hooks;
+pub mod i18n;
 pub mod ids;
 pub mod ipc;
 pub mod model;

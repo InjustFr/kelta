@@ -2,7 +2,8 @@
   import { msg } from '$lib/i18n/index.svelte';
 
   // shortcut: the core's toasts carry English text; the static ones below are translated by their exact
-  // text, dynamic ones show as sent. Upgrade by sending message ids from the core.
+  // text, dynamic ones and `KeltaError.message` show as sent (OS notifications and the macOS menu are
+  // translated in kelta-proto's i18n.rs). Upgrade by sending message ids from the core.
   export const CORE_TEXTS = [
     msg("Claude Code detected. Let your Claude sessions use Kelta's ticket tools?"),
     msg('Tools moved to your global settings'),

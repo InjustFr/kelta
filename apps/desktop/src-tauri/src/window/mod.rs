@@ -66,11 +66,12 @@ fn background_mode(app: &AppHandle) -> bool {
 
 /// Called from the Tauri `setup` hook after `Core::start`.
 pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = core;
+    let _ = &core;
     bench::started();
+    kelta_proto::i18n::set_os_language(os_language());
     #[cfg(target_os = "macos")]
     {
-        app.set_menu(app_menu(app.handle())?)?;
+        app.set_menu(app_menu(app.handle(), core.config().effective(None).app.language)?)?;
         // The predefined Quit item calls NSApp terminate:, which exits without RunEvent::Exit
         // (no Core::shutdown). Route our own item through app.exit instead.
         app.on_menu_event(|app, ev| match ev.id().as_ref() {
@@ -467,11 +468,37 @@ pub fn on_second_instance(app: &AppHandle, argv: Vec<String>, cwd: String) {
     });
 }
 
+/// The OS language tag for `Language::System`: AppKit's first preferred language on macOS (a Finder launch
+/// has no `LANG`), else `LC_ALL` / `LANG`.
+fn os_language() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::{class, msg_send, rc::Retained};
+        use objc2_foundation::{NSArray, NSString};
+        // SAFETY: plain Foundation class methods; `preferredLanguages` is a non-nil NSArray of NSString.
+        let first = unsafe {
+            let langs: Retained<NSArray<NSString>> = msg_send![class!(NSLocale), preferredLanguages];
+            langs.firstObject().map(|s| s.to_string())
+        };
+        if let Some(tag) = first {
+            return tag;
+        }
+    }
+    ["LC_ALL", "LANG"]
+        .iter()
+        .find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+        .unwrap_or_default()
+}
+
 /// macOS app menu replacing Tauri's default (Cmd+H/M/Q are intentional). AppKit gives menu key
 /// equivalents before the webview sees the keydown, so a menu key shadows the keymap: Cmd+W is
 /// left to `pane.close` (#324) and Close Window takes Cmd+Shift+W (see `MENU_KEYS`).
 #[cfg(target_os = "macos")]
-fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+fn app_menu(
+    app: &AppHandle,
+    lang: kelta_proto::settings::Language,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use kelta_proto::i18n::tr;
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem as P, Submenu};
     let kelta = Submenu::with_items(
         app,
@@ -484,12 +511,12 @@ fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
             &P::hide_others(app, None)?,
             &P::show_all(app, None)?,
             &P::separator(app)?,
-            &MenuItem::with_id(app, "quit", "Quit Kelta", true, Some("CmdOrCtrl+Q"))?,
+            &MenuItem::with_id(app, "quit", tr(lang, "Quit Kelta"), true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     let edit = Submenu::with_items(
         app,
-        "Edit",
+        tr(lang, "Edit"),
         true,
         &[
             &P::undo(app, None)?,
@@ -503,12 +530,18 @@ fn app_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     )?;
     let window = Submenu::with_items(
         app,
-        "Window",
+        tr(lang, "Window"),
         true,
         &[
             &P::minimize(app, None)?,
             &P::maximize(app, None)?,
-            &MenuItem::with_id(app, "close_window", "Close Window", true, Some("CmdOrCtrl+Shift+W"))?,
+            &MenuItem::with_id(
+                app,
+                "close_window",
+                tr(lang, "Close Window"),
+                true,
+                Some("CmdOrCtrl+Shift+W"),
+            )?,
         ],
     )?;
     Menu::with_items(app, &[&kelta, &edit, &window])
