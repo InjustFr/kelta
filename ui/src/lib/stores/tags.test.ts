@@ -53,4 +53,13 @@ describe('TagsStore', () => {
     expect(failed).not.toBeNull();
     expect(tags.value.tags).toHaveLength(2);
   });
+
+  it("a stale window does not overwrite another window's tags", async () => {
+    const other = new TagsStore();
+    await other.load();
+    await tags.put(null, { name: 'x', color: null });
+    await other.toggle('tickets', 'jira:A-1', 'ping');
+    expect(other.value.tags.map((t) => t.name)).toEqual(['retest', 'ping', 'x']);
+    expect(other.has('tickets', 'jira:A-1', 'ping')).toBe(true);
+  });
 });

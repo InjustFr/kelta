@@ -125,7 +125,7 @@ The project belongs to the work item (where the session runs), not to the ticket
 ### 3.4c Local tags (#349)
 - Personal reminders ("retest on staging", "ping the PO") on tickets and pull requests, never sent to a tracker or code host: one `ui_state` value in Kelta's store (`tags_get` / `tags_set`, `LocalTags`), so they survive a restart and follow an item across views and projects (keyed `account:key` and `account:repo#number`).
 - Settings → Tags defines them (name, theme colour or hex). A rename keeps the tag on its items; Delete asks first, then takes it off everything.
-- `t` on a Tickets or Reviews row, a ticket row's tag button, the ticket detail's More menu (`t`) and the review detail's Tags button (`t`) put a tag on or take it off. Rows, board cards and both details show the tags as chips. The Tickets and Reviews toolbars show one chip per tag the list carries, with its count; picking one narrows the list (per pane, not saved).
+- `t` on a Tickets or Reviews row, a ticket row's tag button, the ticket detail's More menu (`t`) and the review detail's Tags button (`t`) put a tag on or take it off. Rows (Tickets, Reviews and Now), board cards and both details show the tags as chips. Each change is applied to the freshly stored set, so another window's tags are never overwritten. The Tickets and Reviews toolbars show one chip per tag the list carries, with its count; picking one narrows the list (per pane, not saved).
 - MCP `list_tickets` takes a `tag` filter (read-only).
 
 ### 3.5 Open a tool

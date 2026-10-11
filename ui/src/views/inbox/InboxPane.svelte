@@ -20,6 +20,9 @@
     ui,
     work,
   } from '$lib/stores';
+  import { reviewKey } from '$lib/stores/reducers';
+  import { ticketKey } from '$lib/stores/tickets.svelte';
+  import type { TagKind } from '$lib/stores/tags.svelte';
   import { resolveProjectColor } from '$lib/theme';
   import {
     Button,
@@ -49,6 +52,7 @@
   import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
   import { nextUp } from './nextUp.svelte';
   import { waitChip } from '../people/waiting';
+  import TagChips from '../tags/TagChips.svelte';
   import { waitingChip } from '../reviews/nudge';
 
   let { focused }: PaneProps<'inbox'> = $props();
@@ -97,6 +101,8 @@
     color: string | null;
     reason: string;
     meta: string[];
+    /** Ticket and review rows: where their local tags live (#349). */
+    tagged?: { kind: TagKind; key: string };
     /** Work rows: Claude context use and spend. */
     ctx?: { text: string; hot: boolean } | null;
     cost?: { text: string; over: boolean } | null;
@@ -234,6 +240,7 @@
           color: p.color,
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
           reason: !row.mine && row.reason === 'Review requested' ? r.author.name : t(row.reason),
+          tagged: { kind: 'prs', key: reviewKey(r.ref) },
           meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
           age: age((!row.mine && r.requested_at) || r.updated_at),
           more: `${r.source_branch} ${t('into')} ${r.target_branch}${
@@ -260,6 +267,7 @@
           project: p.name,
           color: p.color,
           reason: tk.status.name,
+          tagged: { kind: 'tickets', key: ticketKey(tk.ref) },
           meta: [
             ...(nextUp.isNew(tk.ref) ? [t('New')] : []),
             ...(batch.has(tk.ref) ? [t('marked')] : []),
@@ -600,6 +608,7 @@
                   <span class="slot"><Lamp level={v.lamp} /></span>
                   <span class="id">{v.id}</span>
                   <span class="ttl">{v.title}</span>
+                  {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
                   {#if v.project}<span class="proj">{v.project}</span>{/if}
                   <span class="reason">{v.reason}</span>
                   {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}

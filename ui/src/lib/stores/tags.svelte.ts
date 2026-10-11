@@ -7,8 +7,9 @@ import * as ipc from '$lib/ipc/commands';
 
 export type TagKind = 'tickets' | 'prs';
 
-// shortcut: each window loads the set once at start; a detached window (#342) sees another window's
-// changes after a restart. Add a UiEvent if that bites.
+// shortcut: a window reads the set at start and again before each change (so a save never overwrites
+// another window's, #342), but it only shows another window's change after its own next change or a
+// restart; the read-then-write window is not atomic. Add a UiEvent if that bites.
 export class TagsStore {
   value = $state<LocalTags>({ tags: [], tickets: {}, prs: {} });
   /** A failed save (the set is rolled back); index.ts toasts it. */
@@ -47,34 +48,45 @@ export class TagsStore {
   }
 
   toggle(kind: TagKind, key: string, name: string): Promise<void> {
-    const cur = this.value[kind][key] ?? [];
-    const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
-    return this.#save({ ...this.value, [kind]: { ...this.value[kind], [key]: next } });
+    return this.#save((v) => {
+      const cur = v[kind][key] ?? [];
+      const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+      return { ...v, [kind]: { ...v[kind], [key]: next } };
+    });
   }
 
   /** Adds a tag (`at` null) or replaces the one at `at`; a rename keeps it on its items. */
   put(at: number | null, tag: LocalTag): Promise<void> {
-    const old = at === null ? null : (this.value.tags[at] ?? null);
-    const tags =
-      at === null ? [...this.value.tags, tag] : this.value.tags.map((t, i) => (i === at ? tag : t));
-    const rename = (m: Record<string, string[]>): Record<string, string[]> =>
-      old && old.name !== tag.name
-        ? Object.fromEntries(
-            Object.entries(m).map(([k, v]) => [k, v.map((n) => (n === old.name ? tag.name : n))]),
-          )
-        : m;
-    return this.#save({ tags, tickets: rename(this.value.tickets), prs: rename(this.value.prs) });
+    return this.#save((v) => {
+      const old = at === null ? null : (v.tags[at] ?? null);
+      const tags = at === null ? [...v.tags, tag] : v.tags.map((t, i) => (i === at ? tag : t));
+      const rename = (m: Record<string, string[]>): Record<string, string[]> =>
+        old && old.name !== tag.name
+          ? Object.fromEntries(
+              Object.entries(m).map(([k, x]) => [k, x.map((n) => (n === old.name ? tag.name : n))]),
+            )
+          : m;
+      return { tags, tickets: rename(v.tickets), prs: rename(v.prs) };
+    });
   }
 
   /** Deletes a tag everywhere (the core drops it from the items). */
   remove(name: string): Promise<void> {
-    return this.#save({ ...this.value, tags: this.value.tags.filter((t) => t.name !== name) });
+    return this.#save((v) => ({ ...v, tags: v.tags.filter((t) => t.name !== name) }));
   }
 
-  async #save(next: LocalTags): Promise<void> {
+  #queue: Promise<void> = Promise.resolve();
+
+  /** Applies `change` to the freshly stored set, one save at a time. */
+  #save(change: (v: LocalTags) => LocalTags): Promise<void> {
+    return (this.#queue = this.#queue.then(() => this.#run(change)));
+  }
+
+  async #run(change: (v: LocalTags) => LocalTags): Promise<void> {
     const prev = this.value;
-    this.value = next;
     try {
+      const next = change(await ipc.tagsGet({}));
+      this.value = next;
       this.value = await ipc.tagsSet({ tags: $state.snapshot(next) });
     } catch (err) {
       this.value = prev;
