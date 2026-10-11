@@ -133,12 +133,6 @@ pub async fn tracker_sources(
     core.tracker_sources(&account_id, &query).await
 }
 
-/// The scope's team: people in its cached tickets and PRs, identities merged (cache only, #240).
-#[tauri::command(rename_all = "snake_case")]
-pub async fn team_people(core: State<'_, Arc<Core>>, scope: Scope) -> Res<Vec<Person>> {
-    core.team_people(scope).await
-}
-
 /// My Next up list, snoozes and seen tickets (#145): Kelta-local, never a tracker call.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn next_up_list(core: State<'_, Arc<Core>>) -> Res<NextUp> {

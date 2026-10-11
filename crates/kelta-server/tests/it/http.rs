@@ -472,6 +472,20 @@ async fn global_mcp_serves_the_board_tools() {
         global_call(port, "get_ticket_by_key", json!({"key":"SHOP-141","account":account})).await;
     assert!(!err, "{text}");
     let rev = text.lines().find_map(|l| l.strip_prefix("Revision: ")).unwrap().to_owned();
+    // A key without its account: found in Kelta's lists by key, never through the enriched list.
+    let r141 = kelta_proto::tracker::TicketRef {
+        account: samples::ticket_ref().account,
+        key: "SHOP-141".into(),
+        id: "SHOP-141".into(),
+    };
+    let item = kelta_proto::tracker::TicketItem {
+        ticket: kelta_proto::tracker::Ticket { r#ref: r141, ..samples::ticket() },
+        ..Default::default()
+    };
+    e.fake.respond("ticket_by_key", serde_json::to_value(Some(item)).unwrap());
+    let (text, err) = global_call(port, "get_ticket_by_key", json!({"key":"SHOP-141"})).await;
+    assert!(!err && text.contains(&format!("Revision: {rev}")), "{text}");
+    assert!(!e.fake.call_names().contains(&"ticket_list"), "{:?}", e.fake.call_names());
     let (text, err) = global_call(
         port,
         "update_ticket_body",
