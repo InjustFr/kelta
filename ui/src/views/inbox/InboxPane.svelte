@@ -471,7 +471,7 @@
         if (cur?.type === 'work' && cur.item.claude_message) expanded = expanded === cur.id ? null : cur.id;
         break;
       case 'N':
-        toasts.info(t('New work item: not available yet'));
+        void dispatch('work.new');
         break;
       case 'S':
         if (cur && isNextUp(cur)) startNextUp(nextUpRows());
@@ -486,7 +486,7 @@
           );
         break;
       default:
-        if (!cur || !'vVbpfrcanso'.includes(e.key) || e.key.length !== 1) return;
+        if (!cur || !'vVbpfrcansoP'.includes(e.key) || e.key.length !== 1) return;
         letter(cur, e.key);
     }
     e.preventDefault();

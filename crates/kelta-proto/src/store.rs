@@ -186,16 +186,10 @@ pub struct TriggerLogRow {
     pub depth: u8,
 }
 
-/// `ui_state(key PK, value)` — webgl probe result, onboarding done, window geometry.
+/// `ui_state(key PK, value)` — the tag catalog (`tags`), the last start options (`start_options`) and
+/// the Claude permission mode (`claude.permission_mode`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UiStateRow {
     pub key: String,
     pub value: String,
-}
-
-/// Well-known `ui_state` keys.
-pub mod ui_state_keys {
-    pub const WEBGL_PROBE: &str = "webgl_probe";
-    pub const ONBOARDING_DONE: &str = "onboarding_done";
-    pub const WINDOW_GEOMETRY: &str = "window_geometry";
 }

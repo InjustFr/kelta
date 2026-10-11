@@ -189,7 +189,7 @@
           {/if}
           {#if list}
             <Select
-              label={t('Group (g)')}
+              label={t('Group (Shift+G)')}
               value={groupBy}
               options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
               onchange={ongroup}

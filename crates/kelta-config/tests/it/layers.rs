@@ -623,3 +623,34 @@ tracker = { account = "gh", views = [{ id = "v", label = "V", repo = "o/r" }] }
         [(&"sources".to_owned(), &Layer::Global), (&"sources.mine".to_owned(), &Layer::Global)]
     );
 }
+
+#[test]
+fn project_default_template_is_the_projects_work_default() {
+    let e = env();
+    let text = "[project]\nid = \"shop\"\nname = \"shop\"\ndefault_template = \"claude\"\n\n[work]\ndefault_template = \"shell\"\n";
+    std::fs::write(e.dirs.projects_dir().join("shop.toml"), text).unwrap();
+    std::fs::write(e.dirs.projects_dir().join("other.toml"), "[project]\nid = \"other\"\nname = \"other\"\n")
+        .unwrap();
+    let svc = e.load();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    assert_eq!(svc.effective(Some(&pid("shop"))).work.default_template, "claude");
+    assert_eq!(svc.effective(Some(&pid("other"))).work.default_template, "claude+editor");
+    assert_eq!(svc.effective(None).work.default_template, "claude+editor");
+}
+
+#[test]
+fn prompt_template_overrides_accept_the_shipped_placeholders() {
+    let defaults = kelta_proto::settings::ClaudeSettings::default().prompt_templates;
+    let mut text = String::from("[claude.prompt_templates]\n");
+    for (k, v) in &defaults {
+        text.push_str(&format!("{k} = {}\n", serde_json::to_string(&format!("{v} {{options}}")).unwrap()));
+    }
+    let e = env();
+    e.global(&text);
+    let svc = e.load();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    assert!(svc.effective(None).claude.prompt_templates["conflicts"].ends_with("{options}"));
+    let e = env();
+    e.global("[claude.prompt_templates]\nticket = \"{nope}\"\n");
+    assert!(e.load().issues().iter().any(|i| i.issue.message.contains("{nope}")));
+}
