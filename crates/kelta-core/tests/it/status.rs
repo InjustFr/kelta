@@ -351,6 +351,26 @@ async fn osc52_policy() {
     assert_eq!(h.core.clipboard_read(ClipboardKind::Clipboard).await.unwrap(), "copied");
 }
 
+/// Ticket #257: a log full of OSC 9/777 notifies once per 5 s; a repeated title is not a change.
+#[tokio::test]
+async fn program_notifications_are_rate_limited() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut settings = Settings::defaults();
+    settings.notifications.quiet_hours = String::new();
+    settings.notifications.only_when_unfocused = false;
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    let s = h
+        .core
+        .session_spawn(SpawnRequest { kind: SessionKind::Shell, program: None, ..claude_req() })
+        .await
+        .unwrap();
+    for i in 0..50 {
+        h.term.emit(&s.id, TerminalEvent::Notify { title: None, body: format!("n{i}") });
+    }
+    settle().await;
+    assert_eq!(h.ui.notifications().len(), 1);
+}
+
 /// Ticket #135: statusline spend lands on the work item at SessionEnd and quit, summed across
 /// sessions, `/clear` resets and restarts; a resumed process's restored cost is not counted twice.
 #[tokio::test]

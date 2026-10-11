@@ -105,20 +105,22 @@
   }
 
   async function assign(assignee: Assignee, done: string): Promise<void> {
+    const r = ref;
     try {
-      tickets.patch(await trackerAssign({ ticket: ref, assignee }));
+      tickets.patch(await trackerAssign({ ticket: r, assignee }));
       toasts.info(done);
     } catch (err) {
-      toasts.error(err, `Assigning ${ref.key}`);
+      toasts.error(err, `Assigning ${r.key}`);
     }
   }
 
   async function setPriority(priority: string): Promise<void> {
+    const r = ref;
     try {
-      tickets.patch(await trackerSetPriority({ ticket: ref, priority }));
-      toasts.info(`${ref.key} priority set to ${priority}`);
+      tickets.patch(await trackerSetPriority({ ticket: r, priority }));
+      toasts.info(`${r.key} priority set to ${priority}`);
     } catch (err) {
-      toasts.error(err, `Changing the priority of ${ref.key}`);
+      toasts.error(err, `Changing the priority of ${r.key}`);
     }
   }
 
@@ -164,14 +166,17 @@
 
   async function postComment(): Promise<void> {
     if (comment.trim() === '' || posting) return;
+    // The selection can move while the request is out: act on the ticket it was posted to.
+    const r = ref;
+    const k = key;
     posting = true;
     try {
-      await trackerComment({ ticket: ref, markdown: comment });
-      comment = '';
-      toasts.info(`Comment added to ${ref.key}`);
-      void tickets.loadDetail(ref);
+      await trackerComment({ ticket: r, markdown: comment });
+      if (key === k) comment = '';
+      toasts.info(`Comment added to ${r.key}`);
+      void tickets.loadDetail(r);
     } catch (err) {
-      toasts.error(err, `Commenting on ${ref.key}`);
+      toasts.error(err, `Commenting on ${r.key}`);
     } finally {
       posting = false;
     }
@@ -180,14 +185,16 @@
   async function postProposal(): Promise<void> {
     const text = proposal?.text;
     if (!text || posting) return;
+    const r = ref;
+    const k = key;
     posting = true;
     try {
-      await trackerComment({ ticket: ref, markdown: text });
-      if (refines[key]) refines[key].posted = true;
-      toasts.info(`Refinement posted on ${ref.key}`);
-      void tickets.loadDetail(ref);
+      await trackerComment({ ticket: r, markdown: text });
+      if (refines[k]) refines[k].posted = true;
+      toasts.info(`Refinement posted on ${r.key}`);
+      void tickets.loadDetail(r);
     } catch (err) {
-      toasts.error(err, `Commenting on ${ref.key}`);
+      toasts.error(err, `Commenting on ${r.key}`);
     } finally {
       posting = false;
     }

@@ -271,10 +271,6 @@ export const settingsSections: readonly SettingsSection[] = [
   },
 ];
 
-export function settingsSection(id: string): SettingsSection | null {
-  return settingsSections.find((s) => s.id === id) ?? null;
-}
-
 /** Props every sheet component receives (`ui.openSheet(key, props)` props are spread in). */
 export interface SheetProps {
   onclose: () => void;
