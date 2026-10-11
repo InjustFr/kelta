@@ -138,6 +138,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 |---|---|---|---|
 | `palette.open` | Cmd+K | Ctrl+Shift+K | `:` |
 | `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
+| `project.open` ("Open project": the switcher listing only closed projects; picking one opens and activates it; also the rail's "Open project…" entry while a project is closed) | unbound | unbound | |
 | `project.goto.1..9` (label "Go to rail row N": row N of the rail across projects, tool tabs and background rows excluded; the id is kept so overrides still apply) | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
 | `tool.goto.1..9` (tool N of the rail's Tools section: open or focus; pressed again while in front, a tool with no project argument goes back with `nav.back`, one that takes a project asks for another project) | Cmd+Alt+1..9 | (unbound) | |
 | `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
