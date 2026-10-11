@@ -1,5 +1,5 @@
 // Local tags (#349) on the IPC mock: created in Settings, put on a ticket and a PR from their rows,
-// shown as chips, filtered by from the toolbar; tagging only calls `tags_set`.
+// shown as chips, filtered by from the toolbar; tagging only reads and writes the tag set (`tags_get`, `tags_set`).
 import { expect, test } from '@playwright/test';
 
 import { boot, callLog, dispatch } from '../shell/helpers';
@@ -22,7 +22,7 @@ test('a tag made in Settings goes on a ticket and a PR and filters the list', as
   await page.keyboard.press('t');
   await page.getByRole('menu', { name: 'Tags' }).getByRole('menuitem', { name: 'retest' }).click();
   await expect(row.locator('[data-tag="retest"]')).toBeVisible();
-  expect((await callLog(page)).slice(before).map((c) => c.cmd)).toEqual(['tags_set']);
+  expect((await callLog(page)).slice(before).map((c) => c.cmd)).toEqual(['tags_get', 'tags_set']);
 
   const tickets = page.getByTestId('tickets-pane');
   await expect(tickets.locator('.k-row.tk')).not.toHaveCount(1);
