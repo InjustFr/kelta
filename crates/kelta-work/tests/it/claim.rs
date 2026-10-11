@@ -197,6 +197,7 @@ async fn exited_session_orphans_its_running_claims_and_a_new_claim_takes_over() 
 
     fx.core.exit_session(&SessionId::new("orch-a"), 0);
     assert_eq!(shown(&w, &item.id).await.state, RunState::Orphaned, "computed, nothing stored");
+    assert_eq!(w.get(&item.id).await.unwrap().run.unwrap().state, RunState::Orphaned, "work_get too");
     assert_eq!(run_state(&fx, &item.id).await, RunState::Running);
 
     let again = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-b")).await.unwrap();

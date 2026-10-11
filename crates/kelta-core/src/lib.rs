@@ -202,8 +202,8 @@ pub struct Core {
     pub(crate) claude_mcp_recheck: rt::OneShot,
     /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
     pub(crate) claude_mode: Mutex<Option<kelta_proto::settings::PermissionMode>>,
-    /// Startup toast held until `app_ready`: the bridge drops events while no window listens.
-    boot_toast: Mutex<Option<Toast>>,
+    /// Startup toasts held until `app_ready`: the bridge drops events while no window listens.
+    boot_toast: Mutex<Vec<Toast>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -362,16 +362,15 @@ impl Core {
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),
-                boot_toast: Mutex::new(None),
+                boot_toast: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
             }
         });
         core.boot()?;
-        // After boot so the migration toast cannot replace it: losing the session's work is worse.
         if let Some(e) = store_error {
-            *core.boot_toast.lock() = Some(Toast::error(format!(
+            core.boot_toast.lock().push(Toast::error(format!(
                 "State database could not be opened ({e}); changes this session will not be saved."
             )));
         }
@@ -387,6 +386,14 @@ impl Core {
         self.load_sessions()?;
         self.load_permission_mode()?;
         self.adopt_live_sessions();
+        match self.store.call_blocking(|c| crate::store::q::work_unreadable(c)) {
+            Ok(0) => {}
+            Ok(n) => self.boot_toast.lock().push(Toast::warn(format!(
+                "{n} work item{} could not be read",
+                if n == 1 { "" } else { "s" }
+            ))),
+            Err(e) => tracing::warn!(error = %e, "cannot count unreadable work items"),
+        }
         let weak = self.me.clone();
         self.cfg.watch(Box::new(move |diff| {
             if let Some(core) = weak.upgrade() {
@@ -446,7 +453,7 @@ impl Core {
                 Toast::error(format!("Ticket sources not moved out of your projects: {}", e.message))
             }
         };
-        *self.boot_toast.lock() = Some(toast);
+        self.boot_toast.lock().push(toast);
     }
 
     /// Async startup (runs once the runtime is reachable).
@@ -584,8 +591,8 @@ impl Core {
     pub async fn app_ready(&self, t_ms: f64) -> Result<(), KeltaError> {
         self.rt.capture();
         tracing::info!(t_ms, "app ready");
-        let toast = self.boot_toast.lock().take();
-        if let Some(toast) = toast {
+        let toasts = std::mem::take(&mut *self.boot_toast.lock());
+        for toast in toasts {
             self.emit(UiEvent::Toast { toast });
         }
         self.on_window_changed();
@@ -764,7 +771,7 @@ impl CoreApi for Core {
         }
     }
     async fn work_get(&self, id: &WorkItemId) -> Option<WorkItem> {
-        Core::work_get(self, id).await
+        self.work.get(id).await
     }
     async fn work_list(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
         self.work.list(project).await
