@@ -126,6 +126,15 @@ codegen-units = 1
 strip = "debuginfo"
 panic = "unwind"
 
+# CI rebuilds the workspace crates on every run (rust-cache keeps only dependencies), and on one codegen unit these
+# two were the macOS nightly's critical path (#273: kelta-proto 160 s -> 32 s, kelta-core 82 s -> 24 s) for ~5 % of
+# app binary. kelta-desktop stays on one: split, it saves ~150 s more but grows the binary ~16 %.
+[profile.release.package.kelta-proto]
+codegen-units = 16
+
+[profile.release.package.kelta-core]
+codegen-units = 16
+
 [profile.release-ctl]
 inherits = "release"
 opt-level = "z"
