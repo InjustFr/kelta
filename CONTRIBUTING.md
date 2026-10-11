@@ -128,7 +128,8 @@ before building when either is missing or the pubkey is still the placeholder. `
 ## Packaging and benchmarks
 
 - `bash packaging/build.sh` builds the installers with `packaging/tauri.release.json`. It needs the
-  `kelta-ctl` sidecar, which the script builds.
+  `kelta-ctl` sidecar, which the script builds. It logs each phase's wall time (`[build.sh] ...`) and cargo's
+  `--timings` report lands in `target/cargo-timings/` (the `nightly` run uploads the macOS one).
 - `cargo run -p kelta-bench -- --scenario idle-3p10s --dry-run` checks the harness against fixtures. Real runs
   need a release build embedding the UI (`pnpm --filter @kelta/ui run build`, then
   `cargo build --release -p kelta-desktop --features tauri/custom-protocol` and
