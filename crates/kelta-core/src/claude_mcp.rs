@@ -1,7 +1,9 @@
 //! Kelta's MCP for every Claude Code session (ticket #234): the global `/mcp` registered at user
 //! scope in Claude Code's config (`mcpServers.kelta`), offered at startup when Claude Code is found, like an IDE's MCP.
 
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use kelta_proto::api::CoreApi;
 use kelta_proto::error::KeltaError;
@@ -34,7 +36,7 @@ fn registered_port(url: &str) -> Option<u16> {
 }
 
 /// A user-scope registration as Claude Code keeps it: `(url, Authorization header value)`.
-type Registration = (String, String);
+pub(crate) type Registration = (String, String);
 
 /// The `kelta` entry of a Claude Code config file (`mcpServers.kelta`), read without running
 /// `claude` (a ~100 MB Node process).
@@ -50,7 +52,16 @@ fn registration_in(config: &[u8]) -> Option<Registration> {
 /// workspace-wide `preserve_order` feature (it changes other crates' output) it re-sorts every key of the
 /// user's config (#310).
 #[derive(Default)]
-struct Ordered(Vec<(String, Box<RawValue>)>);
+struct Ordered(Vec<(String, Json)>);
+
+/// A value of an [`Ordered`] object: as read, or rebuilt by Kelta and so indented at its depth (#322).
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+enum Json {
+    Raw(Box<RawValue>),
+    Object(Ordered),
+    Value(serde_json::Value),
+}
 
 impl<'de> serde::Deserialize<'de> for Ordered {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
@@ -62,8 +73,8 @@ impl<'de> serde::Deserialize<'de> for Ordered {
             }
             fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Ordered, A::Error> {
                 let mut v = Vec::new();
-                while let Some(e) = m.next_entry()? {
-                    v.push(e);
+                while let Some((k, raw)) = m.next_entry()? {
+                    v.push((k, Json::Raw(raw)));
                 }
                 Ok(Ordered(v))
             }
@@ -79,12 +90,16 @@ impl serde::Serialize for Ordered {
 }
 
 impl Ordered {
+    /// `key` as read from the file.
     fn get(&self, key: &str) -> Option<&RawValue> {
-        self.0.iter().find(|(k, _)| k == key).map(|(_, v)| &**v)
+        self.0.iter().find_map(|(k, v)| match v {
+            Json::Raw(raw) if k == key => Some(&**raw),
+            _ => None,
+        })
     }
 
     /// Replaces `key` in place, else appends it.
-    fn set(&mut self, key: &str, value: Box<RawValue>) {
+    fn set(&mut self, key: &str, value: Json) {
         match self.0.iter_mut().find(|(k, _)| k == key) {
             Some((_, v)) => *v = value,
             None => self.0.push((key.to_owned(), value)),
@@ -119,13 +134,12 @@ fn write_registration(path: &Path, reg: Option<&Registration>) -> Result<(), Kel
     match reg {
         Some((url, auth)) => {
             let entry = serde_json::json!({"type": "http", "url": url, "headers": {"Authorization": auth}});
-            servers.set(NAME, serde_json::value::to_raw_value(&entry)?);
+            servers.set(NAME, Json::Value(entry));
         }
         None if !servers.remove(NAME) => return Ok(()),
         None => {}
     }
-    // shortcut: mcpServers is indented as if at the top level (cosmetic), fine while Claude Code reformats on its next write.
-    v.set("mcpServers", RawValue::from_string(serde_json::to_string_pretty(&servers)?)?);
+    v.set("mcpServers", Json::Object(servers));
     let mut tmp = path.clone().into_os_string();
     tmp.push(format!(".kelta-{}", std::process::id()));
     let tmp = PathBuf::from(tmp);
@@ -135,6 +149,60 @@ fn write_registration(path: &Path, reg: Option<&Registration>) -> Result<(), Kel
     })?;
     Ok(())
 }
+
+/// Claude Code's lock on its config (proper-lockfile): a `<config>.lock` directory, refreshed while
+/// held, stale after 10 s. Kelta holds it across its read-modify-write so a concurrent Claude Code save
+/// re-reads Kelta's change instead of overwriting it (#322). Removed on drop.
+struct ConfigLock(PathBuf);
+
+impl ConfigLock {
+    /// `None` when the config's directory does not exist yet: no Claude Code to race with.
+    async fn acquire(config: &Path) -> Result<Option<Self>, KeltaError> {
+        const STALE: Duration = Duration::from_secs(10);
+        let mut dir = config.as_os_str().to_owned();
+        dir.push(".lock");
+        let dir = PathBuf::from(dir);
+        let deadline = Instant::now() + STALE;
+        loop {
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return Ok(Some(Self(dir))),
+                Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+                Err(e) if e.kind() != ErrorKind::AlreadyExists => return Err(e.into()),
+                Err(_) => {}
+            }
+            let age = std::fs::metadata(&dir).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+            if age.is_some_and(|a| a > STALE) {
+                // Left by a crashed Claude Code: proper-lockfile takes it over the same way.
+                let _ = std::fs::remove_dir(&dir);
+            } else if Instant::now() > deadline {
+                return Err(KeltaError::conflict(format!("{} is held by another process", dir.display())));
+            } else {
+                // Bounded wait for a lock Claude Code holds for milliseconds, not a polling loop.
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+    }
+}
+
+impl Drop for ConfigLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir(&self.0);
+    }
+}
+
+/// Write `reg` under Claude Code's lock unless the config already holds it; true when it wrote. Also the
+/// check after a registration: a concurrent save that dropped it gets it back (#322).
+async fn ensure_registration(path: &Path, reg: &Registration) -> Result<bool, KeltaError> {
+    let _lock = ConfigLock::acquire(path).await?;
+    if std::fs::read(path).ok().and_then(|b| registration_in(&b)).as_ref() == Some(reg) {
+        return Ok(false);
+    }
+    write_registration(path, Some(reg))?;
+    Ok(true)
+}
+
+/// Delay of the check after a registration write.
+const RECHECK: Duration = Duration::from_secs(5);
 
 impl Core {
     fn claude_bin(&self) -> Option<PathBuf> {
@@ -188,20 +256,29 @@ impl Core {
         let mut held = self.claude_mcp_ref.lock().await;
         let token = install_token(current);
         self.server.set_install_token(Some(&token));
-        let port = match self.server.http_port().filter(|_| *held) {
+        let port = match self.server.http_port().filter(|_| held.is_some()) {
             Some(p) => p,
-            None => {
-                let p = self.server.ensure_http_at(current.and_then(|(url, _)| registered_port(url))).await?;
-                *held = true;
-                p
-            }
+            None => self.server.ensure_http_at(current.and_then(|(url, _)| registered_port(url))).await?,
         };
         let reg = (format!("http://127.0.0.1:{port}/mcp"), format!("Bearer {token}"));
-        if current == Some(&reg) {
+        *held = Some(reg.clone());
+        if current == Some(&reg) || !ensure_registration(&self.claude_config(), &reg).await? {
             return Ok(());
         }
-        write_registration(&self.claude_config(), Some(&reg))?;
         tracing::info!(port, "kelta MCP registered in Claude Code (user scope)");
+        let me = self.me.clone();
+        // one-shot: armed by a registration write, re-armed only by the next one.
+        self.claude_mcp_recheck.arm(&self.rt, RECHECK, async move {
+            let Some(core) = me.upgrade() else { return };
+            let held = core.claude_mcp_ref.lock().await;
+            // Removed since: nothing to restore.
+            let Some(reg) = held.as_ref() else { return };
+            match ensure_registration(&core.claude_config(), reg).await {
+                Ok(true) => tracing::info!("kelta MCP registration dropped by a concurrent save, restored"),
+                Ok(false) => {}
+                Err(e) => tracing::warn!(error = %e.message, "kelta MCP registration not checked"),
+            }
+        });
         Ok(())
     }
 
@@ -222,9 +299,13 @@ impl Core {
     /// touching it would prompt.
     pub async fn claude_mcp_remove(&self) -> Result<(), KeltaError> {
         let mut held = self.claude_mcp_ref.lock().await;
-        write_registration(&self.claude_config(), None)?;
+        let config = self.claude_config();
+        let lock = ConfigLock::acquire(&config).await?;
+        write_registration(&config, None)?;
+        drop(lock);
+        self.claude_mcp_recheck.cancel();
         self.server.set_install_token(None);
-        if std::mem::take(&mut *held) {
+        if held.take().is_some() {
             self.server.release_http();
         }
         Ok(())
@@ -316,5 +397,65 @@ mod tests {
         assert_eq!((top, &servers[..2]), (before.0.clone(), &before.1[..]));
         write_registration(&path, None).unwrap();
         assert_eq!(keys(&path), before);
+    }
+
+    #[test]
+    fn registration_keeps_the_config_indentation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".claude.json");
+        // As Claude Code writes it (`JSON.stringify(c, null, 2)`); keys sorted so `to_string_pretty` agrees.
+        let doc = |servers: serde_json::Value| {
+            serde_json::to_string_pretty(&serde_json::json!({
+                "a": 1, "mcpServers": servers, "projects": {"/x": {"allowedTools": ["Read"]}}
+            }))
+            .unwrap()
+        };
+        let other = serde_json::json!({"command": "x", "type": "stdio"});
+        let before = doc(serde_json::json!({"a-other": other}));
+        std::fs::write(&path, &before).unwrap();
+        let entry = serde_json::json!({"headers": {"Authorization": "Bearer t"}, "type": "http", "url": "u"});
+
+        write_registration(&path, Some(&("u".into(), "Bearer t".into()))).unwrap();
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(after, doc(serde_json::json!({"a-other": other, "kelta": entry})), "{after}");
+        write_registration(&path, None).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn registration_dropped_by_a_concurrent_save_is_restored() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".claude.json");
+        let lock = tmp.path().join(".claude.json.lock");
+        let reg = ("http://127.0.0.1:45678/mcp".to_owned(), "Bearer t".to_owned());
+        std::fs::write(&path, r#"{"numStartups":3}"#).unwrap();
+        assert!(ensure_registration(&path, &reg).await.unwrap());
+        assert!(!ensure_registration(&path, &reg).await.unwrap(), "up to date: not rewritten");
+
+        // Claude Code saves the copy it read before Kelta's write: the next check puts the entry back.
+        std::fs::write(&path, r#"{"numStartups":4,"mcpServers":{}}"#).unwrap();
+        // ... once Claude Code's lock (proper-lockfile's `<config>.lock` directory) is released.
+        std::fs::create_dir(&lock).unwrap();
+        let release = {
+            let lock = lock.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                std::fs::remove_dir(lock).unwrap();
+            })
+        };
+        assert!(ensure_registration(&path, &reg).await.unwrap());
+        release.await.unwrap();
+        assert_eq!(registration_in(&std::fs::read(&path).unwrap()), Some(reg.clone()));
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(v["numStartups"], 4, "Claude Code's save kept");
+        assert!(!lock.exists(), "Kelta's lock released");
+
+        // A lock left by a crashed Claude Code (older than 10 s) is taken over.
+        std::fs::write(&path, "{}").unwrap();
+        std::fs::create_dir(&lock).unwrap();
+        let old = std::time::SystemTime::now() - Duration::from_secs(60);
+        std::fs::File::open(&lock).unwrap().set_modified(old).unwrap();
+        assert!(ensure_registration(&path, &reg).await.unwrap());
+        assert!(!lock.exists());
     }
 }
