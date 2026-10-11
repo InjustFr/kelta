@@ -127,7 +127,7 @@
       else void reviewLocally(ref, projectId);
       return;
     }
-    if (own && ['A', 'c', 'x'].includes(e.key)) return;
+    if (own && ['a', 'c', 'm'].includes(e.key)) return;
     switch (e.key) {
       case 'a':
         void approve();

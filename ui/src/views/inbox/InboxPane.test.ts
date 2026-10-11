@@ -141,6 +141,23 @@ describe('Now', () => {
     await waitFor(() => expect(sectionIds(container)).not.toContain('to_review'));
   });
 
+  it('N opens New work item, P parks the selected work row', async () => {
+    ui.sheets = [];
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'N' });
+    expect(ui.sheets.map((s) => s.key)).toEqual(['work_new']);
+    // The invoice item: Claude waits on me, its editor is live, so it can be parked.
+    const id = '0199a6b2-0000-7000-8000-00000000a002';
+    const current = () =>
+      container.querySelector('.row[aria-current="true"]')?.getAttribute('data-row') ?? '';
+    for (let i = 0; i < 10 && !current().includes(id); i++) await fireEvent.keyDown(pane, { key: 'j' });
+    expect(current()).toContain(id);
+    await fireEvent.keyDown(pane, { key: 'P' });
+    await waitFor(() => expect(mock.calls.find((c) => c.cmd === 'work_park')?.args).toEqual({ id }));
+  });
+
   it('v opens the delta since the last look, V the whole diff, b edits the next: note', async () => {
     mountNow();
     await screen.findByText('Flaky test in cart service');

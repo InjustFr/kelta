@@ -159,6 +159,15 @@ describe('ReviewDetailPane', () => {
     await waitFor(() => expect(screen.queryByTestId('pending-comments')).toBeNull());
   });
 
+  it('ignores the approve, comment and request-changes keys on my own PR', async () => {
+    mountDetail({ account: 'gitlab-corp', repo: 'fin/billing/core', number: 42 });
+    await screen.findByRole('button', { name: 'Fix with Claude' });
+    const pane = screen.getByTestId('review-detail');
+    for (const key of ['a', 'c', 'm']) await fireEvent.keyDown(pane, { key });
+    expect(approveCalls()).toEqual([]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('opens the review-locally flow from the keyboard', async () => {
     mountDetail();
     await screen.findByTestId('head-sha');
