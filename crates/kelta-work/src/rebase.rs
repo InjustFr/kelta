@@ -266,9 +266,10 @@ impl WorkService {
                 format!("--force-with-lease={branch}:{sha}"),
                 "--force-if-includes".into(),
                 remote.clone(),
+                "--".into(),
                 branch.clone(),
             ],
-            None => vec!["push".into(), "-u".into(), remote.clone(), branch.clone()],
+            None => vec!["push".into(), "-u".into(), remote.clone(), "--".into(), branch.clone()],
         };
         let code = self.push_pane(&env, &mut item, &j, args).await?;
         if code != 0 {

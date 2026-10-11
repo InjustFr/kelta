@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows Keep a Changelog, versio
 
 ## [Unreleased]
 
+### Changed
+
+- Plugin `exec:` grants match the command exactly: a command with a `/` needs a grant naming that path
+  (`exec:./bin/deploy.sh`), so `exec:<basename>` no longer covers path commands. Paths resolve inside the
+  plugin directory; names run from the login shell's `PATH`, which a plugin's `env` cannot override.
+
 ### Added
 
 - Platform shell: graphics workarounds applied before the webview starts (NVIDIA detection, `--safe-graphics`,

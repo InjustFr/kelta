@@ -55,12 +55,13 @@ impl Core {
             ..RunClaim::default()
         };
         self.work.claim(&project, ticket.clone(), None, None, run).await?;
+        let owner = sid.clone();
         let title = format!("{} · {}", wf.name, ticket.key);
         let info = match self.launch(&project, &ticket, &wf.name, &run_id, sid, &title).await {
             Ok(i) => i,
             Err(e) => {
                 // Adopted worktrees are never removed: this only ends the claim.
-                let _ = self.work.release(&ticket.key, None).await;
+                let _ = self.work.release(&ticket.key, None, Some(&owner)).await;
                 return Err(e);
             }
         };

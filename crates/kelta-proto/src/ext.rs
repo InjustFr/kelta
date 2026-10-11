@@ -707,7 +707,7 @@ pub enum Permission {
     ClipboardWrite,
     /// Own key-value store (`kv.*`).
     Storage,
-    /// `exec:<command>` (argv[0] basename)
+    /// `exec:<command>`: argv[0] exactly (a name on the login PATH, or a path inside the plugin)
     Exec(String),
     /// `net:<host>` (exact or `*.domain`)
     Net(String),

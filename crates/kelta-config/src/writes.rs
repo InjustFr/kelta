@@ -279,17 +279,18 @@ impl ConfigService {
                 v
             };
             drop(inner);
+            let none = std::collections::HashSet::new();
             let res = match layer {
-                Layer::Global => self.compute(&pd, &value, None, &[], None),
+                Layer::Global => self.compute(&pd, &value, None, &[], None, &none),
                 Layer::Project => {
                     let dt = parsed
                         .value
                         .pointer("/project/default_template")
                         .and_then(Value::as_str)
                         .map(str::to_owned);
-                    self.compute(&pd, &gv, Some(&value), &[], dt.as_deref())
+                    self.compute(&pd, &gv, Some(&value), &[], dt.as_deref(), &none)
                 }
-                _ => self.compute(&pd, &gv, None, std::slice::from_ref(&value), None),
+                _ => self.compute(&pd, &gv, None, std::slice::from_ref(&value), None, &none),
             };
             if let Err(e) = res {
                 raw.extend(e);

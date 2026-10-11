@@ -223,7 +223,7 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let e = env();
     e.project("shop", "");
     let path = e.repo_file(
-        "[worktree]\nsetup = [\"pnpm install\"]\ninclude = [\".npmrc\"]\n\n[env]\nTOKEN_URL = \"x\"\n\n[[tools]]\nid = \"repo-tool\"\nlabel = \"R\"\nkind = \"pty\"\ncommand = \"make\"\n",
+        "[worktree]\nsetup = [\"pnpm install\"]\ninclude = [\".npmrc\"]\n\n[env]\nTOKEN_URL = \"x\"\n\n[claude]\nappend_system_prompt = \"be bold\"\n\n[editor]\nreview_args = [\"-c\", \"DiffviewOpen\"]\n\n[[session_templates]]\nid = \"repo-tpl\"\nlabel = \"T\"\nlayout = { session = \"shell\", command = \"make\" }\n\n[[tools]]\nid = \"repo-tool\"\nlabel = \"R\"\nkind = \"pty\"\ncommand = \"make\"\n",
     );
     let svc = e.load();
     let p = pid("shop");
@@ -234,6 +234,9 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let s = svc.effective(Some(&p));
     assert!(s.worktree.setup.is_empty());
     assert!(s.env.is_empty());
+    assert!(s.editor.review_args.is_empty());
+    assert!(s.claude.append_system_prompt.is_empty());
+    assert!(!s.session_templates.iter().any(|t| t.id == "repo-tpl"));
     assert!(s.tools.is_empty());
     assert_eq!(s.worktree.include, vec![".npmrc".to_owned()]);
     let doc = svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap();
@@ -253,6 +256,9 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let s = svc.effective(Some(&p));
     assert_eq!(s.worktree.setup, vec!["pnpm install".to_owned()]);
     assert_eq!(s.env["TOKEN_URL"], "x");
+    assert_eq!(s.editor.review_args, vec!["-c".to_owned(), "DiffviewOpen".to_owned()]);
+    assert_eq!(s.claude.append_system_prompt, "be bold");
+    assert!(s.session_templates.iter().any(|t| t.id == "repo-tpl"));
     assert!(s.tools.is_empty(), "repo tools are personal: ignored even when trusted");
     assert!(svc.issues().iter().any(|i| i.file == path && i.issue.message.contains("`tools` is personal")));
     assert_eq!(svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap().trusted, Some(true));
@@ -505,4 +511,21 @@ fn a_bad_project_colour_is_a_warning() {
     assert_eq!(issues[0].issue.line, Some(4));
     assert!(issues[0].issue.message.contains("theme colour or #rrggbb"), "{issues:?}");
     assert_eq!(issues[0].issue.severity, Severity::Warning);
+}
+
+#[test]
+fn a_default_template_from_an_untrusted_repo_is_not_an_error() {
+    let e = env();
+    e.project("shop", "[work]\ndefault_template = \"repo-tpl\"\n");
+    let text = "[[session_templates]]\nid = \"repo-tpl\"\nlabel = \"T\"\nlayout = { session = \"claude\" }\n";
+    e.repo_file(text);
+    let svc = e.load();
+    let p = pid("shop");
+    block_on(svc.set_trust_store(Arc::new(MemTrustStore::new())));
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    let s = svc.effective(Some(&p));
+    assert_eq!(s.work.default_template, "repo-tpl", "the project layer still applies");
+    assert!(!s.session_templates.iter().any(|t| t.id == "repo-tpl"));
+    block_on(svc.repo_trust(&p, "api", true, Some(&sha(text)))).unwrap();
+    assert!(svc.effective(Some(&p)).session_templates.iter().any(|t| t.id == "repo-tpl"));
 }

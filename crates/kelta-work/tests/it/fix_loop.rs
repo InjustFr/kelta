@@ -503,6 +503,7 @@ async fn own_rewrite_force_pushes_with_a_lease_on_the_recorded_tip() {
             &format!("--force-with-lease={}:{tip}", item.branch),
             "--force-if-includes",
             "origin",
+            "--",
             &item.branch
         ]
     );
@@ -595,7 +596,7 @@ async fn non_fast_forward_push_says_the_remote_has_commits() {
     git(&mate, &["push", "-q", "origin", &item.branch]);
     commit(&item.worktree, "more.txt", "more\n", "more work");
     let (args, res) = push(&fx, &w, &item, false).await;
-    assert_eq!(args, ["push", "-u", "origin", &item.branch]);
+    assert_eq!(args, ["push", "-u", "origin", "--", &item.branch]);
     let e = res.unwrap_err();
     assert_eq!((reason(&e), e.message.as_str()), ("non_fast_forward", "origin has commits you do not have."));
 }

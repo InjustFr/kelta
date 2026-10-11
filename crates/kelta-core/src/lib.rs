@@ -786,11 +786,17 @@ impl CoreApi for Core {
         state: kelta_proto::model::RunState,
         note: Option<String>,
         sha: Option<String>,
+        caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
-        self.work.report(key, phase, state, note, sha).await
+        self.work.report(key, phase, state, note, sha, caller).await
     }
-    async fn work_release(&self, key: &str, sha: Option<String>) -> Result<WorkItem, KeltaError> {
-        self.work.release(key, sha).await
+    async fn work_release(
+        &self,
+        key: &str,
+        sha: Option<String>,
+        caller: Option<&SessionId>,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.release(key, sha, caller).await
     }
     async fn editor_open(
         &self,

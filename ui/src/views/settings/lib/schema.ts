@@ -318,7 +318,15 @@ export const REPO_ALLOWED_KEYS: readonly string[] = [
 ];
 
 /** Repo-local keys that stay inert until trusted (`REPO_EXEC_KEYS`). */
-export const REPO_EXEC_KEYS: readonly string[] = ['triggers', 'commands', 'worktree.setup', 'env'];
+export const REPO_EXEC_KEYS: readonly string[] = [
+  'triggers',
+  'session_templates',
+  'commands',
+  'worktree.setup',
+  'env',
+  'claude.append_system_prompt',
+  'editor.review_args',
+];
 
 export function repoAllows(path: string): boolean {
   return REPO_ALLOWED_KEYS.some((k) => path === k || path.startsWith(`${k}.`));

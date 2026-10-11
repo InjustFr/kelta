@@ -324,7 +324,8 @@ impl WorkService {
             .with_work_item(item.id.clone());
         self.blocking(&env.core, ev).await?;
 
-        let args = vec!["push".into(), "-u".into(), env.repo.remote.clone(), item.branch.clone()];
+        let args =
+            vec!["push".into(), "-u".into(), env.repo.remote.clone(), "--".into(), item.branch.clone()];
         let code = self.push_pane(&env, &mut item, &j, args).await?;
         if code != 0 {
             return Err(KeltaError::upstream(format!("git push failed (exit {code})")));

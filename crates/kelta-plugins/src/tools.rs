@@ -73,7 +73,7 @@ pub(crate) struct WebInstance {
     pub plugin: Option<PluginId>,
     pub proc_: Option<ServerProc>,
     pub stop: StopSpec,
-    pub stop_argv: Option<(Vec<String>, PathBuf)>,
+    pub stop_argv: Option<web::StopArgv>,
     pub closing: AtomicBool,
 }
 
@@ -280,9 +280,11 @@ impl PluginHost {
 
     /// Env of a non-PTY child: project env, the tool's own env on top, and the login shell's PATH
     /// when neither sets one (a Dock-launched Kelta has a bare PATH, so `sl`/`node` are not found).
+    /// A plugin tool always gets the login PATH and no loader variables (`plugin_env`).
     fn launch_env(
         &self,
         project: &ProjectId,
+        r: &Resolved,
         vars: &Vars,
         tool_env: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>, KeltaError> {
@@ -291,10 +293,21 @@ impl PluginHost {
         if let Some(Value::Object(w)) = vars.get("work.env") {
             env.extend(w.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_owned()))));
         }
-        if let Some(p) = self.core().and_then(|c| c.login_path()) {
+        let login = self.core().and_then(|c| c.login_path());
+        if r.plugin.is_some() {
+            crate::util::plugin_env(&mut env, login);
+        } else if let Some(p) = login {
             env.entry("PATH".to_owned()).or_insert(p);
         }
         Ok(env)
+    }
+
+    /// `command` as the tool runs it: a plugin's relative path is its file (see `plugin_command`).
+    fn tool_command(r: &Resolved, command: String) -> Result<String, KeltaError> {
+        match &r.plugin {
+            Some(e) => crate::util::plugin_command(&e.dir, &command),
+            None => Ok(command),
+        }
     }
 
     async fn open_pty(
@@ -311,6 +324,11 @@ impl PluginHost {
             return Err(KeltaError::invalid(format!("tool `{}` has no command", r.id)));
         }
         self.check_tool_permission(r, Some(&command)).await?;
+        let command = Self::tool_command(r, command)?;
+        let mut env = Self::expand_env(vars, &def.env)?;
+        if r.plugin.is_some() {
+            crate::util::plugin_env(&mut env, self.core().and_then(|c| c.login_path()));
+        }
         let core = self.core_or_err()?;
         let req = SpawnRequest {
             id: None,
@@ -320,7 +338,7 @@ impl PluginHost {
             program: Some(command),
             args: vars.expand_all(&def.args)?,
             cwd: Some(self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?),
-            env: Self::expand_env(vars, &def.env)?,
+            env,
             cols: 80,
             rows: 24,
             work_item_id: ctx.work_item_id.clone(),
@@ -366,7 +384,8 @@ impl PluginHost {
             return Err(KeltaError::invalid(format!("tool `{}` has no command", r.id)));
         }
         self.check_tool_permission(r, Some(&command)).await?;
-        let env = self.launch_env(project, vars, &def.env)?;
+        let command = Self::tool_command(r, command)?;
+        let env = self.launch_env(project, r, vars, &def.env)?;
         let cwd = self.expand_cwd(def.cwd.as_deref(), vars, project, ctx)?;
         let child = external_command(&command, &vars.expand_all(&def.args)?, &cwd, &env).spawn().map_err(
             |e| match e.kind() {
@@ -460,18 +479,24 @@ impl PluginHost {
                 let cwd = self.expand_cwd(start.cwd.as_deref(), &vars, project, ctx)?;
                 // Expanded and checked before the spawn: nothing below may fail with a live server.
                 let url_tpl = def.url.as_deref().map(|u| vars.expand(u)).transpose()?;
-                let stop_argv = match &start.stop {
-                    StopSpec::Command { command } => Some((vars.expand_all(command)?, cwd.clone())),
+                let env = self.launch_env(project, r, &vars, &start.env)?;
+                let mut stop_argv = match &start.stop {
+                    StopSpec::Command { command } => {
+                        Some((vars.expand_all(command)?, cwd.clone(), env.clone()))
+                    }
                     StopSpec::Signal { .. } => None,
                 };
-                if let Some((argv, _)) = &stop_argv {
+                if let Some((argv, _, _)) = &mut stop_argv {
                     self.check_tool_permission(r, argv.first().map(String::as_str)).await?;
+                    if let Some(p) = argv.first_mut() {
+                        *p = Self::tool_command(r, std::mem::take(p))?;
+                    }
                 }
                 let launch = Launch {
-                    program,
+                    program: Self::tool_command(r, program)?,
                     args: vars.expand_all(&start.args)?,
                     cwd: cwd.clone(),
-                    env: self.launch_env(project, &vars, &start.env)?,
+                    env,
                     ready: start.ready.clone(),
                     ready_timeout: Duration::from_millis(start.ready_timeout_ms.max(100)),
                     port,

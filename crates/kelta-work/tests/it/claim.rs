@@ -22,6 +22,10 @@ fn run(sid: &str) -> RunClaim {
     }
 }
 
+fn orch_a() -> SessionId {
+    SessionId::new("orch-a")
+}
+
 fn session(fx: &Fx, sid: &str, name: &str) {
     fx.core.insert_session(SessionInfo {
         id: SessionId::new(sid),
@@ -95,7 +99,7 @@ async fn lanes_of_one_session_conflict_but_a_lane_re_claims_its_own() {
     assert_eq!(again.id, a.id);
     assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
     // A blocked lane has ended: a later lane (resumed board run) takes the claim over.
-    w.report("SHOP-142", None, RunState::Blocked, None, None).await.unwrap();
+    w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&orch_a())).await.unwrap();
     let t = samples::ticket_ref();
     let taken = w.claim(&p, t, None, None, lane("lane-3")).await.unwrap();
     assert_eq!(taken.id, a.id);
@@ -133,6 +137,7 @@ async fn progress_then_release_leaves_the_worktree_alone() {
         RunState::Blocked,
         Some("2 unresolved review findings".into()),
         None,
+        Some(&orch_a()),
     )
     .await
     .unwrap();
@@ -142,7 +147,9 @@ async fn progress_then_release_leaves_the_worktree_alone() {
         (Some("Review"), RunState::Blocked, Some("2 unresolved review findings"))
     );
     // `None` keeps the last phase and note.
-    w.report("SHOP-142", None, RunState::Running, None, Some("abc123".into())).await.unwrap();
+    w.report("SHOP-142", None, RunState::Running, None, Some("abc123".into()), Some(&orch_a()))
+        .await
+        .unwrap();
     let r = fx.store.get_item(&item.id).await.unwrap().unwrap().run.unwrap();
     assert_eq!(
         (r.phase.as_deref(), r.note.is_some(), r.sha.as_deref()),
@@ -150,18 +157,21 @@ async fn progress_then_release_leaves_the_worktree_alone() {
     );
 
     // Abandoned: finished, worktree and branch kept.
-    let done = w.release("SHOP-142", None).await.unwrap();
+    let done = w.release("SHOP-142", None, Some(&orch_a())).await.unwrap();
     assert_eq!(done.state, WorkState::Finished);
     assert!(wt.join("README.md").exists());
     assert_eq!(fx.worktree_count(), 2);
     assert!(git(&fx.repo, &["branch", "--list", "feat/ticket-142"]).contains("feat/ticket-142"));
-    assert!(w.report("SHOP-142", None, RunState::Running, None, None).await.is_err(), "no claim left");
+    assert!(
+        w.report("SHOP-142", None, RunState::Running, None, None, Some(&orch_a())).await.is_err(),
+        "no claim left"
+    );
 
     // Merged: the run removed its worktree first; Finish does not trip over it.
     let item =
         w.claim(&project(), samples::ticket_ref(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
     git(&fx.repo, &["worktree", "remove", wt.to_str().unwrap()]);
-    let done = w.release("SHOP-142", Some("def456".into())).await.unwrap();
+    let done = w.release("SHOP-142", Some("def456".into()), Some(&orch_a())).await.unwrap();
     assert_eq!((done.id, done.state), (item.id, WorkState::Finished));
     assert_eq!(done.run.unwrap().sha.as_deref(), Some("def456"));
 }
@@ -216,4 +226,83 @@ async fn startup_orphans_claims_of_dormant_or_missing_sessions_but_not_live_ones
     });
     w.startup().await.unwrap();
     assert_eq!(run_state(&fx, &item.id).await, RunState::Orphaned);
+}
+
+#[tokio::test]
+async fn only_the_owner_session_reports_or_releases_its_claim() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
+
+    let other = SessionId::new("orch-b");
+    let e = w.report("SHOP-142", None, RunState::Failed, None, None, Some(&other)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    let e = w.release("SHOP-142", None, None).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict, "the global endpoint is not the owner");
+    assert_eq!(run_state(&fx, &item.id).await, RunState::Running);
+
+    w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&orch_a())).await.unwrap();
+    assert_eq!(w.release("SHOP-142", None, Some(&orch_a())).await.unwrap().state, WorkState::Finished);
+}
+
+#[tokio::test]
+async fn claim_refuses_a_branch_git_would_not_accept() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    for bad in ["--upload-pack=x", "a..b", "a b"] {
+        let e = w
+            .claim(&project(), samples::ticket_ref(), Some(wt.clone()), Some(bad.into()), run("orch-a"))
+            .await
+            .unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidArgument, "{bad}");
+    }
+    assert!(fx.store.list_items(None).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_callers_claim_wins_over_an_unowned_one_and_orphans_are_open_to_all() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let (wt1, wt2) = (run_worktree(&fx, "feat/a"), run_worktree(&fx, "feat/b"));
+    // Same key on two accounts: one claimed from the global endpoint, one by orch-a.
+    let other = kelta_proto::tracker::TicketRef {
+        account: kelta_proto::ids::AccountId::new("gh"),
+        ..samples::ticket_ref()
+    };
+    let unowned = RunClaim { session_id: None, ..run("x") };
+    let free = w.claim(&project(), samples::ticket_ref(), Some(wt1), None, unowned).await.unwrap();
+    let mine = w.claim(&project(), other, Some(wt2), None, run("orch-a")).await.unwrap();
+    let r = w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&orch_a())).await.unwrap();
+    assert_eq!(r.id, mine.id, "exact owner match first");
+    assert_eq!(run_state(&fx, &free.id).await, RunState::Running);
+
+    // orch-a exits: its claim is orphaned, and anyone may release it.
+    w.report("SHOP-142", None, RunState::Running, None, None, Some(&orch_a())).await.unwrap();
+    fx.core.exit_session(&orch_a(), 0);
+    assert!(common_wait(&fx, &mine.id, RunState::Orphaned).await);
+    w.release("SHOP-142", None, None).await.unwrap(); // the unowned one
+    let done = w.release("SHOP-142", None, Some(&SessionId::new("orch-b"))).await.unwrap();
+    assert_eq!((done.id, done.state), (mine.id, WorkState::Finished));
+}
+
+async fn common_wait(fx: &Fx, id: &WorkItemId, want: RunState) -> bool {
+    for _ in 0..500 {
+        if run_state(fx, id).await == want {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
 }

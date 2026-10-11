@@ -10,7 +10,7 @@ use kelta_proto::model::{PaneContent, TemplateCtx, WorkItem};
 use serde_json::{Value, json};
 
 const PERMS: [&str; 6] =
-    ["work.read", "exec:run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"];
+    ["work.read", "exec:./run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"];
 
 #[tokio::test]
 async fn branch_script_installs_opens_for_the_work_item_and_runs_its_script() {

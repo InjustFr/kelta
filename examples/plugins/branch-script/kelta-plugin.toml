@@ -9,7 +9,7 @@ description = "Runs a script of your choice on a work item's branch and worktree
 author = "Kelta contributors"
 license = "MIT"
 platforms = ["macos", "linux"]
-permissions = ["work.read", "exec:run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"]
+permissions = ["work.read", "exec:./run.sh", "storage", "events:work.updated", "events:pr.merged", "ui.open"]
 
 [[contributes.screens]]
 id = "run"

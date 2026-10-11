@@ -98,7 +98,8 @@ pub struct Settings {
         "x-kelta-category" = "Worktree & work",
         "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"],
-        "x-kelta-merge" = "by_id"
+        "x-kelta-merge" = "by_id",
+        "x-kelta-exec" = true
     ))]
     pub session_templates: Vec<SessionTemplate>,
     /// Ticket boards, each feeding zero or more projects (SETTINGS §2).
@@ -760,7 +761,8 @@ pub struct ClaudeSettings {
     /// Passed via `--allowedTools`.
     pub allowed_tools: Vec<String>,
     /// Appended to the generated `context.md`.
-    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
+    /// Steers the session (which may auto-approve tools): inert from an untrusted repo file.
+    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"], "x-kelta-exec" = true))]
     pub append_system_prompt: String,
     /// Appended before the prompt.
     #[schemars(extend("x-kelta-exec" = true))]
@@ -989,7 +991,7 @@ pub struct EditorSettings {
     /// The diff editor's arguments: appended for review sessions and used by Review diff on own work
     /// items, e.g. `["-c","DiffviewOpen {range}"]` (`{range}` = `<remote>/<base>` for own items, merge
     /// base to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.
-    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"]))]
+    #[schemars(extend("x-kelta-scope" = ["global", "project", "repo"], "x-kelta-exec" = true))]
     pub review_args: Vec<String>,
     #[schemars(extend("x-kelta-merge" = "by_id", "x-kelta-exec" = true))]
     pub presets: Vec<EditorPreset>,
@@ -1884,7 +1886,15 @@ pub const REPO_ALLOWED_KEYS: &[&str] = &[
 ];
 
 /// Repo-local keys that are inert until trusted (`x-kelta-exec`).
-pub const REPO_EXEC_KEYS: &[&str] = &["triggers", "commands", "worktree.setup", "env"];
+pub const REPO_EXEC_KEYS: &[&str] = &[
+    "triggers",
+    "session_templates",
+    "commands",
+    "worktree.setup",
+    "env",
+    "claude.append_system_prompt",
+    "editor.review_args",
+];
 
 /// Runtime overrides (env `KELTA__SECTION__KEY=value`, CLI `--set key=value`, `--safe-graphics`, `--config-dir`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

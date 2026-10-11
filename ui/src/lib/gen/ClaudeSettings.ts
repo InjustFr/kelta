@@ -34,6 +34,7 @@ mcp_offer: boolean,
 allowed_tools: Array<string>, 
 /**
  * Appended to the generated `context.md`.
+ * Steers the session (which may auto-approve tools): inert from an untrusted repo file.
  */
 append_system_prompt: string, 
 /**

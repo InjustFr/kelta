@@ -1002,8 +1002,9 @@
         },
         "append_system_prompt": {
           "default": "",
-          "description": "Appended to the generated `context.md`.",
+          "description": "Appended to the generated `context.md`.\nSteers the session (which may auto-approve tools): inert from an untrusted repo file.",
           "type": "string",
+          "x-kelta-exec": true,
           "x-kelta-scope": [
             "global",
             "project",
@@ -2157,6 +2158,7 @@
             "type": "string"
           },
           "type": "array",
+          "x-kelta-exec": true,
           "x-kelta-scope": [
             "global",
             "project",
@@ -3387,6 +3389,7 @@
       },
       "type": "array",
       "x-kelta-category": "Worktree & work",
+      "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
       "x-kelta-order": 9,
       "x-kelta-scope": [

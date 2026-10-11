@@ -366,3 +366,16 @@ async fn cross_host_redirect_is_not_followed() {
     assert!(r.is_err());
     assert!(b.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn same_host_redirects_stop_after_ten_hops() {
+    let server = MockServer::start().await;
+    Mock::given(path("/loop"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", "/loop"))
+        .mount(&server)
+        .await;
+    let client = HttpClient::with_timeout("kelta-test", None);
+    let r = client.reqwest().get(format!("{}/loop", server.uri())).send().await.unwrap();
+    assert_eq!(r.status(), 302, "the last redirect is returned, not followed");
+    assert_eq!(server.received_requests().await.unwrap().len(), 11, "first request + ten hops");
+}

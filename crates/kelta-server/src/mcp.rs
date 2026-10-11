@@ -402,9 +402,16 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
                 other => return Err(format!("InvalidArgument: unknown state {other:?}")),
             };
             let (key, phase) = (str_arg(args, "key")?, str_arg(args, "phase")?);
-            core.work_report(key, Some(phase.to_owned()), state, opt_arg(args, "note"), opt_arg(args, "sha"))
-                .await
-                .map_err(coded)?;
+            core.work_report(
+                key,
+                Some(phase.to_owned()),
+                state,
+                opt_arg(args, "note"),
+                opt_arg(args, "sha"),
+                sid,
+            )
+            .await
+            .map_err(coded)?;
             Ok(format!("{key}: {phase} ({}).", str_arg(args, "state")?))
         }
         "release_ticket" => {
@@ -413,7 +420,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             if !matches!(outcome, "merged" | "abandoned") {
                 return Err(format!("InvalidArgument: outcome must be merged or abandoned, not {outcome:?}"));
             }
-            core.work_release(key, opt_arg(args, "sha")).await.map_err(coded)?;
+            core.work_release(key, opt_arg(args, "sha"), sid).await.map_err(coded)?;
             Ok(format!("{key} released ({outcome})."))
         }
         "list_review_requests" => list_review_requests(core).await,

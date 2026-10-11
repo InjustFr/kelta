@@ -556,7 +556,7 @@ pub fn source_issues(value: &Value) -> Vec<RawIssue> {
 // Cross references of the merged document
 // ---------------------------------------------------------------------------------------------
 
-fn ids_of(v: Option<&Value>) -> HashSet<String> {
+pub(crate) fn ids_of(v: Option<&Value>) -> HashSet<String> {
     v.and_then(Value::as_array)
         .map(|a| a.iter().filter_map(|e| e.get("id").and_then(Value::as_str).map(str::to_owned)).collect())
         .unwrap_or_default()
@@ -579,8 +579,13 @@ fn collect_profiles(node: &Value, path: &mut Vec<String>, out: &mut Vec<(Vec<Str
     }
 }
 
-/// Unknown preset / template / profile ids in the merged document.
-pub fn cross_issues(merged: &Value, project_default_template: Option<&str>) -> Vec<RawIssue> {
+/// Unknown preset / template / profile ids in the merged document. A template in `pending` (defined
+/// only by a repo file that is not trusted yet) is not unknown: it appears once the file is trusted.
+pub fn cross_issues(
+    merged: &Value,
+    project_default_template: Option<&str>,
+    pending: &HashSet<String>,
+) -> Vec<RawIssue> {
     let mut out = Vec::new();
     let presets = ids_of(get(merged, &["editor".to_owned(), "presets".to_owned()]));
     if let Some(d) = get(merged, &["editor".to_owned(), "default".to_owned()]).and_then(Value::as_str)
@@ -588,7 +593,8 @@ pub fn cross_issues(merged: &Value, project_default_template: Option<&str>) -> V
     {
         out.push(RawIssue::new(&["editor".into(), "default".into()], format!("unknown editor preset `{d}`")));
     }
-    let templates = ids_of(merged.get("session_templates"));
+    let mut templates = ids_of(merged.get("session_templates"));
+    templates.extend(pending.iter().cloned());
     for key in ["default_template", "review_template"] {
         let p = vec!["work".to_owned(), key.to_owned()];
         if let Some(t) = get(merged, &p).and_then(Value::as_str)
@@ -844,9 +850,12 @@ mod tests {
     #[test]
     fn cross_refs() {
         let mut d = serde_json::to_value(kelta_proto::settings::Settings::defaults()).unwrap();
-        assert!(cross_issues(&d, Some("claude")).is_empty());
+        let none = HashSet::new();
+        assert!(cross_issues(&d, Some("claude"), &none).is_empty());
         d["editor"]["default"] = json!("ghost");
         d["work"]["review_template"] = json!("ghost");
-        assert_eq!(cross_issues(&d, Some("ghost")).len(), 3);
+        assert_eq!(cross_issues(&d, Some("ghost"), &none).len(), 3);
+        // Defined by an untrusted repo file: not an error until it is trusted.
+        assert_eq!(cross_issues(&d, Some("ghost"), &HashSet::from(["ghost".to_owned()])).len(), 1);
     }
 }

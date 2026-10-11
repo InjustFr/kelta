@@ -217,7 +217,10 @@ pub async fn start(launch: &Launch) -> Result<(ServerProc, Option<String>), Kelt
 }
 
 /// Stop per spec, then SIGKILL the group if it is still alive.
-pub async fn stop(proc_: &ServerProc, spec: &StopSpec, stop_argv: Option<(Vec<String>, PathBuf)>) {
+/// A `stop = { command }` ready to run: argv, cwd and the server's own launch env.
+pub type StopArgv = (Vec<String>, PathBuf, BTreeMap<String, String>);
+
+pub async fn stop(proc_: &ServerProc, spec: &StopSpec, stop_argv: Option<StopArgv>) {
     if proc_.exited().is_some() {
         return;
     }
@@ -227,11 +230,12 @@ pub async fn stop(proc_: &ServerProc, spec: &StopSpec, stop_argv: Option<(Vec<St
             Duration::from_millis(*grace_ms)
         }
         StopSpec::Command { .. } => {
-            if let Some((argv, cwd)) = stop_argv
+            if let Some((argv, cwd, env)) = stop_argv
                 && let Some((program, args)) = argv.split_first()
             {
                 let mut cmd = tokio::process::Command::new(program);
                 cmd.args(args)
+                    .envs(env)
                     .current_dir(cwd)
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
