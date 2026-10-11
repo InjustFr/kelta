@@ -545,6 +545,7 @@ impl PluginHost {
                 // Marked before the write: `secret_ref` refuses a value the plugin chose (#331).
                 let mark = serde_json::to_string(&q.value)?;
                 let mark_key = format!("{PLUGIN_SET_KEY}/{}", q.key);
+                let _serialized = self.settings_set.lock().await;
                 self.grant_store().kv_set(&screen.plugin, &mark_key, mark, KV_QUOTA).await?;
                 writer(&screen.plugin, &q.key, q.value)?;
                 Ok(Value::Null)
