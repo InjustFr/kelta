@@ -181,7 +181,7 @@
     Want a branch and a PR?
     <button
       type="button"
-      class="link"
+      class="k-link"
       onclick={() => {
         onclose();
         void dispatch('work.new');
@@ -205,15 +205,6 @@
     margin: var(--k-space-5) 0 0;
     color: var(--k-fg-subtle);
     font-size: var(--k-font-size-sm);
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--k-accent);
-    font: inherit;
-    cursor: pointer;
   }
 
   .form {

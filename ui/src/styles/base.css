@@ -64,6 +64,16 @@ pre,
   font-variant-numeric: tabular-nums;
 }
 
+/* A button that reads as an inline link. */
+.k-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--k-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
 :focus {
   outline: none;
 }
