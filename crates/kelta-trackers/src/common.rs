@@ -56,31 +56,35 @@ pub fn last_n<T>(mut v: Vec<T>, n: usize) -> Vec<T> {
 
 /// Status category from a status/column name (used where the provider gives no category).
 /// Matches word starts, never inside a word: "Incomplete" / "Unresolved" are not Done, and a
-/// "not" / "non" drops the rest of the name ("Not yet done" is Todo, not Done). Todo wins over InProgress:
+/// "not" / "non" / "n't" (but not "won't") drops the rest of the name ("Not yet done" is Todo, not Done). Todo wins over InProgress:
 /// "Ready for development" is not started.
 pub fn category_from_name(name: &str) -> StatusCategory {
-    // Words split on non-alphanumerics and camelCase ("InProgress"); apostrophes dropped ("won't" -> "wont").
+    // Words split on non-alphanumerics and camelCase ("InProgress"); apostrophes kept until negation is read.
     let mut split = String::new();
     let mut prev_lower = false;
-    for c in name.chars().filter(|c| !matches!(c, '\'' | '’')) {
-        if !c.is_alphanumeric() || (c.is_uppercase() && prev_lower) {
+    for c in name.chars().map(|c| if c == '’' { '\'' } else { c }) {
+        let word = c.is_alphanumeric() || c == '\'';
+        if !word || (c.is_uppercase() && prev_lower) {
             split.push(' ');
         }
-        if c.is_alphanumeric() {
+        if word {
             split.extend(c.to_lowercase());
         }
-        prev_lower = c.is_lowercase();
+        if c != '\'' {
+            prev_lower = c.is_lowercase();
+        }
     }
     let (mut n, mut negated) = (String::new(), false);
     for w in split.split_whitespace() {
-        if w == "not" || w == "non" {
+        // "n't" contractions negate like "not", except "won't" ("Won't fix" is Done).
+        if w == "not" || w == "non" || (w.ends_with("n't") && w != "won't") {
             negated = true;
         }
         if negated {
             continue;
         }
         n.push(' ');
-        n.push_str(w);
+        n.push_str(&w.replace('\'', ""));
     }
     let has = |w: &[&str]| w.iter().any(|x| n.contains(&format!(" {x}")));
     if has(&["done", "closed", "resolved", "complete", "finished", "rejected", "cancel", "wont"]) {
@@ -244,6 +248,14 @@ mod tests {
         assert_eq!(category_from_name("Unresolved"), StatusCategory::Unknown);
         assert_eq!(category_from_name("Inactive"), StatusCategory::Unknown);
         assert_eq!(category_from_name("Ready for development"), StatusCategory::Todo);
+        // "n't" contractions negate too, except "won't" (#316)
+        assert_eq!(category_from_name("Isn't done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Hasn’t started"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Don't merge"), StatusCategory::Todo);
+        assert_eq!(category_from_name("ISN'T DONE"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Won't fix"), StatusCategory::Done);
+        assert_eq!(category_from_name("Won’t do"), StatusCategory::Done);
+        assert_eq!(category_from_name("Deployment done"), StatusCategory::Done);
     }
 
     #[test]
