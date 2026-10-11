@@ -7,7 +7,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, projects, settings, toasts, work } from '$lib/stores';
 
-import { refines } from '../tickets/refine.svelte';
+import { refines, withCriteria } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
 
 let mock: MockControls;
@@ -108,6 +108,30 @@ describe('StartWorkSheet plan', () => {
     await waitFor(() => expect(sentPlan()).toBeTruthy());
     expect(sentPlan().claude.prompt).toBe('Now /pass SHOP-151 --mode=quick');
     expect(sentPlan().options?.picked).toEqual(['--mode=quick']);
+  });
+
+  it('keeps the accepted refine criteria in the prompt when an option is toggled (#357)', async () => {
+    refines[`${ticket.account}:${ticket.key}`] = {
+      running: false,
+      text: '## Acceptance criteria\n- fast',
+      posted: false,
+    };
+    await mountSheet((p) => {
+      p.claude.prompt = '/pass SHOP-151';
+      p.options = {
+        key: 'route:product:0',
+        declared: [{ label: 'Auto', values: ['--auto'] }],
+        picked: [],
+        prompt: '/pass SHOP-151 {options}',
+      };
+      withCriteria(p, ticket);
+    });
+    const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    expect(prompt.value).toContain('- fast');
+    await fireEvent.click(screen.getByRole('switch', { name: 'Auto' }));
+    expect(prompt.value).toContain('- fast');
+    expect(prompt.value).toContain('--auto');
+    delete refines[`${ticket.account}:${ticket.key}`];
   });
 
   it('shows no options without any declared', async () => {
