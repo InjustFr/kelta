@@ -210,6 +210,21 @@ async fn done_labels_close_and_other_labels_reopen_a_closed_issue() {
 }
 
 #[tokio::test]
+async fn negated_done_labels_do_not_close() {
+    let server = MockServer::start().await;
+    issue_with(&server, "gitlab/issue.json").await;
+    Mock::given(method("PUT"))
+        .and(path(ISSUE))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issue_moved.json")))
+        .mount(&server)
+        .await;
+    gl(&server).transition(&r(), "label:workflow::not-done", None).await.unwrap();
+    let put = &bodies(&server, "PUT", ISSUE).await[0];
+    assert_eq!(put["add_labels"], "workflow::not-done");
+    assert!(put.get("state_event").is_none(), "{put}");
+}
+
+#[tokio::test]
 async fn plain_close_and_reopen() {
     let server = MockServer::start().await;
     Mock::given(method("PUT"))

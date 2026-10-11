@@ -55,19 +55,46 @@ pub fn last_n<T>(mut v: Vec<T>, n: usize) -> Vec<T> {
 }
 
 /// Status category from a status/column name (used where the provider gives no category).
+/// Matches word starts, never inside a word: "Incomplete" / "Unresolved" are not Done, and a
+/// word after "not" / "non" is skipped ("Not done" is Todo, not Done). Todo wins over InProgress:
+/// "Ready for development" is not started.
 pub fn category_from_name(name: &str) -> StatusCategory {
-    let n = name.to_ascii_lowercase();
-    let has = |w: &[&str]| w.iter().any(|x| n.contains(x));
-    if has(&["done", "closed", "resolved", "complete", "finished", "rejected", "cancel", "won't", "wont"]) {
+    // Words split on non-alphanumerics and camelCase ("InProgress"); apostrophes dropped ("won't" -> "wont").
+    let mut split = String::new();
+    let mut prev_lower = false;
+    for c in name.chars().filter(|c| !matches!(c, '\'' | '’')) {
+        if !c.is_alphanumeric() || (c.is_uppercase() && prev_lower) {
+            split.push(' ');
+        }
+        if c.is_alphanumeric() {
+            split.extend(c.to_lowercase());
+        }
+        prev_lower = c.is_lowercase();
+    }
+    let (mut n, mut negated, mut skip) = (String::new(), false, false);
+    for w in split.split_whitespace() {
+        if std::mem::take(&mut skip) {
+            negated = true;
+        } else if w == "not" || w == "non" {
+            skip = true;
+        } else {
+            n.push(' ');
+            n.push_str(w);
+        }
+    }
+    let has = |w: &[&str]| w.iter().any(|x| n.contains(&format!(" {x}")));
+    if has(&["done", "closed", "resolved", "complete", "finished", "rejected", "cancel", "wont"]) {
         StatusCategory::Done
     } else if has(&["review", "qa", "testing", "to test", "feedback", "validation"]) {
         StatusCategory::InReview
+    } else if negated
+        || has(&[
+            "new", "open", "reopen", "todo", "to do", "backlog", "ready", "planned", "triage", "selected",
+        ])
+    {
+        StatusCategory::Todo
     } else if has(&["progress", "doing", "develop", "wip", "started", "active", "implement", "ongoing"]) {
         StatusCategory::InProgress
-    } else if has(&[
-        "new", "open", "todo", "to do", "to-do", "backlog", "ready", "planned", "triage", "selected",
-    ]) {
-        StatusCategory::Todo
     } else {
         StatusCategory::Unknown
     }
@@ -201,6 +228,18 @@ mod tests {
         assert_eq!(category_from_name("Closed"), StatusCategory::Done);
         assert_eq!(category_from_name("Backlog"), StatusCategory::Todo);
         assert_eq!(category_from_name("Zorp"), StatusCategory::Unknown);
+        assert_eq!(category_from_name("InProgress"), StatusCategory::InProgress);
+        assert_eq!(category_from_name("won't fix"), StatusCategory::Done);
+        assert_eq!(category_from_name("workflow::to-do"), StatusCategory::Todo);
+        // negated or embedded words are not matched (#289)
+        assert_eq!(category_from_name("Not started"), StatusCategory::Todo);
+        assert_eq!(category_from_name("workflow::not-started"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Not done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("workflow::not-done"), StatusCategory::Todo);
+        assert_eq!(category_from_name("Incomplete"), StatusCategory::Unknown);
+        assert_eq!(category_from_name("Unresolved"), StatusCategory::Unknown);
+        assert_eq!(category_from_name("Inactive"), StatusCategory::Unknown);
+        assert_eq!(category_from_name("Ready for development"), StatusCategory::Todo);
     }
 
     #[test]
