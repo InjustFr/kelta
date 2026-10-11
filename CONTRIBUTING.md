@@ -103,12 +103,13 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds are local: `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
    macOS dmg and signed updater bundle here (and, with `--linux`, the deb + AppImage for arm64 in Docker;
-   `--amd64` adds amd64, built under QEMU and the slowest step), moves the `nightly` tag to HEAD and uploads to the prerelease, `latest.json` after the
-   other assets. It runs `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key
-   (see Nightly builds). Tags `v*` build
-   the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A manual run of
-   `release` builds without publishing (universal dmg); `nightly` only builds and uploads artifacts (Apple silicon
-   dmg, deb, AppImage), it never publishes.
+   `--amd64` adds amd64, built under QEMU and the slowest step), moves the `nightly` tag to HEAD and uploads
+   to the prerelease, `latest.json` after the other assets. A nightly without `--amd64` drops the amd64
+   assets and the `linux-x86_64` entry of `latest.json`, so installed amd64 AppImages stop updating. It runs
+   `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key (see Nightly builds).
+   Tags `v*` build the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A
+   manual run of `release` builds without publishing (universal dmg); `nightly` only builds and uploads
+   artifacts (Apple silicon dmg, deb, AppImage), it never publishes.
 
 ## Nightly builds
 

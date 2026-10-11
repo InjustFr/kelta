@@ -78,10 +78,13 @@ maintainer's Mac). Expect rough edges; if no build is listed yet, [build from so
 | Platform | File |
 |---|---|
 | macOS 13+ (Apple silicon) | `Kelta_*_aarch64.dmg` |
-| Linux, any distro | `kelta_*_amd64.AppImage`, `kelta_*_aarch64.AppImage` (arm64) |
-| Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb`, `kelta_*_arm64.deb` |
+| Linux, any distro (arm64) | `kelta_*_aarch64.AppImage` |
+| Debian, Ubuntu 24.04+ (arm64) | `kelta_*_arm64.deb` |
 
-The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached.
+The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached. A
+nightly has amd64 Linux files (`kelta_*_amd64.AppImage`, `kelta_*_amd64.deb`) only when it was built with
+`--amd64`; otherwise an installed amd64 AppImage does not update itself, so
+[build from source](#build-from-source).
 
 Kelta updates itself: it installs each new nightly in the background and a banner offers **Restart** (sessions
 kept by keltad keep running). See Settings → General → Updates. A `.deb` install never updates itself: apt owns
