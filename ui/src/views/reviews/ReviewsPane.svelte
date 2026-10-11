@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg, t } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -41,11 +42,11 @@
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const scope = $derived(content.scope);
-  const TABS: { kind: ReviewKind; label: string }[] = [
-    { kind: 'review_requested', label: 'For me' },
-    { kind: 'team', label: 'Team' },
-    { kind: 'authored', label: 'Mine' },
-  ];
+  const TABS: { kind: ReviewKind; label: string }[] = $derived([
+    { kind: 'review_requested', label: t('For me') },
+    { kind: 'team', label: t('Team') },
+    { kind: 'authored', label: t('Mine') },
+  ]);
   /** Team spans the repos of the projects a ticket source feeds: in a project's pane, only when one feeds it. */
   const sourceList = $derived(settings.value()?.sources ?? []);
   const teamOffered = $derived(
@@ -141,7 +142,7 @@
       {
         type: 'header',
         id: `h:${g.key ?? ''}`,
-        label: g.key === null ? 'No ticket' : g.title ? `${g.key} ${g.title}` : g.key,
+        label: g.key === null ? t('No ticket') : g.title ? `${g.key} ${g.title}` : g.key,
         count: g.items.length,
       },
       ...g.items.map(row),
@@ -220,11 +221,11 @@
   function mergeWhenReady(item: ReviewItem): void {
     const w = item.review.kind === 'authored' ? workOf(item) : null;
     if (w) void runWorkAction('merge', w);
-    else toasts.info('Merge when ready: only for my PRs with a work item');
+    else toasts.info(t('Merge when ready: only for my PRs with a work item'));
   }
 
   function browse(item: ReviewItem): void {
-    openExternal({ url: item.review.url }).catch((err) => toasts.error(err, 'Open in browser'));
+    openExternal({ url: item.review.url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 
   // ---- nudge (my PRs) -------------------------------------------------------------------------
@@ -241,18 +242,18 @@
     const rv = nudgeMenu?.item.review;
     const why =
       rv?.nudged_at && nudgedRecently(rv)
-        ? `Nudged ${relativeTime(Date.parse(rv.nudged_at))}; again 24 h after`
+        ? t('Nudged {ago}; again 24 h after', { ago: relativeTime(Date.parse(rv.nudged_at)) })
         : undefined;
     return [
       {
         id: 'rerequest',
-        label: 'Re-request review',
+        label: t('Re-request review'),
         key: 'r',
         kbd: 'r',
         disabled: !!why || !rv?.waiting_on.length,
         title: why,
       },
-      { id: 'ping', label: 'Comment ping', key: 'c', kbd: 'c', disabled: !!why, title: why },
+      { id: 'ping', label: t('Comment ping'), key: 'c', kbd: 'c', disabled: !!why, title: why },
     ];
   });
 
@@ -263,9 +264,9 @@
     const comment = id === 'ping' ? pingBody(template, item.review) : null;
     try {
       await reviewNudge({ review: item.review.ref, who: item.review.waiting_on, comment });
-      toasts.info(id === 'ping' ? 'Ping posted' : 'Review re-requested');
+      toasts.info(id === 'ping' ? t('Ping posted') : t('Review re-requested'));
     } catch (err) {
-      toasts.error(err, 'Nudge');
+      toasts.error(err, t('Nudge'));
     }
   }
 
@@ -353,7 +354,7 @@
 
   function chip(item: ReviewItem): string {
     const id = item.project_ids[0];
-    return id ? (projects.byId(id)?.name ?? id) : 'Other';
+    return id ? (projects.byId(id)?.name ?? id) : t('Other');
   }
 </script>
 
@@ -368,7 +369,7 @@
   bind:clientWidth={paneWidth}
   tabindex="0"
   role="group"
-  aria-label="Reviews"
+  aria-label={t('Reviews')}
   {onkeydown}
 >
   <header class="k-toolbar">
@@ -376,40 +377,42 @@
       class="k-filter"
       bind:this={filterInput}
       bind:value={filter}
-      placeholder="Filter (/)"
-      aria-label="Filter reviews"
+      placeholder={t('Filter (/)')}
+      aria-label={t('Filter reviews')}
       onkeydown={filterKeys}
     />
     <Tabs
-      label="Reviews"
-      items={tabs.map((t) => {
-        const n = lists[t.kind].data?.items.length;
-        return { id: t.kind, label: n === undefined ? t.label : `${t.label} ${n}` };
+      label={t('Reviews')}
+      items={tabs.map((x) => {
+        const n = lists[x.kind].data?.items.length;
+        return { id: x.kind, label: n === undefined ? x.label : `${x.label} ${n}` };
       })}
       value={tab}
       onchange={setTab}
     />
     <!-- The tab and pane header already say "Reviews"; only the cross-project scope is news. -->
-    {#if scope.kind === 'all'}<span class="title">All projects</span>{/if}
+    {#if scope.kind === 'all'}<span class="title">{t('All projects')}</span>{/if}
     <span class="spacer"></span>
     {#if repos.length > 1}
       <Select
-        label="Repository"
+        label={t('Repository')}
         bind:value={repo}
-        options={[{ value: '', label: 'All repos' }, ...repos.map((r) => ({ value: r, label: r }))]}
+        options={[{ value: '', label: t('All repos') }, ...repos.map((r) => ({ value: r, label: r }))]}
       />
     {/if}
-    <Toggle label="Drafts" bind:checked={includeDrafts} />
-    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
+    <Toggle label={t('Drafts')} bind:checked={includeDrafts} />
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
+      >{t('Refresh')}</Button
+    >
   </header>
 
   {#if shown.loading && !shown.data}
-    <Loading label="Loading reviews" />
+    <Loading label={t('Loading reviews')} />
   {:else if !shown.data && shown.error}
-    <ErrorState error={shown.error} title="Could not load reviews" onretry={refresh}>
+    <ErrorState error={shown.error} title={t('Could not load reviews')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(shown.error) ? 'Re-authenticate' : 'Open account settings'}
+          {isAuthError(shown.error) ? t('Re-authenticate') : t('Open account settings')}
         </Button>
       {/snippet}
     </ErrorState>
@@ -422,28 +425,28 @@
       onretry={refresh}
     />
     {#if totalItems === 0 && tab === 'team' && noTeamReach}
-      <EmptyState icon="git-pull-request" title="No ticket source feeds a project with a repository yet">
+      <EmptyState icon="git-pull-request" title={t('No ticket source feeds a project with a repository yet')}>
         {#snippet actions()}<Button
             variant="primary"
             onclick={() =>
               ui.openSheet('tracker.source_picker', {
                 projectId: scope.kind === 'project' ? scope.id : undefined,
-              })}>Add a ticket source</Button
+              })}>{t('Add a ticket source')}</Button
           >{/snippet}
       </EmptyState>
     {:else if totalItems === 0}
       <EmptyState
         icon="git-pull-request"
         title={tab === 'team'
-          ? "No open PRs on your sources' repos"
+          ? t("No open PRs on your sources' repos")
           : tab === 'authored'
-            ? 'No open PRs of yours.'
-            : 'No review requests.'}
+            ? t('No open PRs of yours.')
+            : t('No review requests.')}
         body={tab === 'review_requested'
-          ? 'Pull requests where you are a requested reviewer show up here.'
+          ? t('Pull requests where you are a requested reviewer show up here.')
           : undefined}
       >
-        {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
+        {#snippet actions()}<Button onclick={refresh}>{t('Refresh')}</Button>{/snippet}
       </EmptyState>
     {:else}
       <div class="k-split">
@@ -453,7 +456,7 @@
             items={rows}
             itemHeight={ROW_HEIGHT}
             key={(r) => r.id}
-            label="Pull requests"
+            label={t('Pull requests')}
           >
             {#snippet row(r)}
               {#if r.type === 'header'}
@@ -481,17 +484,18 @@
                   <span class="k-row-key">#{rv.ref.number}</span>
                   <span class="k-row-title">{rv.title}</span>
                   <span class="k-row-tail">
-                    {#if reviews.isNew(rv.ref)}<Badge tone="accent">new</Badge>{/if}
-                    {#if rv.draft}<Badge>draft</Badge>{/if}
-                    {#if workOf(r.item)?.auto_finish}<Badge tone="accent">armed</Badge>{/if}
-                    {#each rv.linked_tickets.slice(0, 2) as t (t)}<LinkedTicket
-                        ticketKey={t}
+                    {#if reviews.isNew(rv.ref)}<Badge tone="accent">{t('new')}</Badge>{/if}
+                    {#if rv.draft}<Badge>{t('draft')}</Badge>{/if}
+                    {#if workOf(r.item)?.auto_finish}<Badge tone="accent">{t('armed')}</Badge>{/if}
+                    {#each rv.linked_tickets.slice(0, 2) as key (key)}<LinkedTicket
+                        ticketKey={key}
                         projectId={home}
                         repo={rv.ref.repo}
                         tabindex={-1}
                       />{/each}
                     {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-                    {#if reviewPhase(rv) === 'updated'}<Badge tone="warn">Updated since your review</Badge
+                    {#if reviewPhase(rv) === 'updated'}<Badge tone="warn"
+                        >{t('Updated since your review')}</Badge
                       >{/if}
                     {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
                     {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'} title={wait.title}
@@ -502,7 +506,7 @@
                       >{rv.kind !== 'team'
                         ? rv.author.name
                         : mineKeys.has(reviewKey(rv.ref))
-                          ? 'you'
+                          ? t('you')
                           : `@${rv.author.login ?? rv.author.name}`}</span
                     >
                     {#if rv.additions !== null || rv.deletions !== null}
@@ -519,7 +523,7 @@
           </VirtualList>
         </div>
         {#if splitShown}
-          <aside class="k-split-side" bind:this={side} aria-label="Review detail">
+          <aside class="k-split-side" bind:this={side} aria-label={t('Review detail')}>
             {#if cur}
               <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
               {@const pid = home ?? cur.item.project_ids[0] ?? projects.activeId}
@@ -536,7 +540,7 @@
                   />{/key}
               {/if}
             {:else}
-              <p class="k-split-empty">Select a pull request to see it here.</p>
+              <p class="k-split-empty">{t('Select a pull request to see it here.')}</p>
             {/if}
           </aside>
         {/if}
@@ -546,18 +550,18 @@
 
   <KeyHints
     hints={[
-      ['j k', 'Move'],
-      ['1 2 3', 'Tab'],
-      ...(tab === 'team' ? [['shift+g', 'Group by ticket'] as [string, string]] : []),
-      ['space', 'Split'],
-      ['enter', 'Open'],
-      ['shift+enter', 'Own pane'],
-      ['/', 'Filter'],
-      ['s', 'Review locally'],
-      ['n', 'Nudge (my PRs)'],
-      ['o', 'Open in browser'],
-      ['shift+m', 'Merge when ready'],
-      ['shift+r', 'Refresh'],
+      ['j k', msg('Move')],
+      ['1 2 3', msg('Tab')],
+      ...(tab === 'team' ? [['shift+g', msg('Group by ticket')] as [string, string]] : []),
+      ['space', msg('Split')],
+      ['enter', msg('Open')],
+      ['shift+enter', msg('Own pane')],
+      ['/', msg('Filter')],
+      ['s', msg('Review locally')],
+      ['n', msg('Nudge (my PRs)')],
+      ['o', msg('Open in browser')],
+      ['shift+m', msg('Merge when ready')],
+      ['shift+r', msg('Refresh')],
     ]}
   />
 </div>
@@ -567,7 +571,7 @@
     items={nudgeItems}
     x={nudgeMenu.x}
     y={nudgeMenu.y}
-    label="Nudge reviewers"
+    label={t('Nudge reviewers')}
     onselect={(id) => void nudge(id)}
     onclose={() => {
       nudgeMenu = null;

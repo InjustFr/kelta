@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -25,7 +26,7 @@
   // '' = each ticket in its usual project (SPEC §3.1); a guessed one is skipped.
   let forced = $state('');
   const projectOptions = [
-    { value: '', label: 'Usual project for each ticket' },
+    { value: '', label: t('Usual project for each ticket') },
     ...railProjects()
       // Home is never a work_plan choice: forcing it would fall back to the usual project
       .filter((p) => !p.builtin && p.repos.length > 0)
@@ -35,12 +36,20 @@
   const slots = $derived(claudeSlots());
   const now = $derived(startsNow(marked.length, slots.live, slots.max));
   const title = $derived(
-    `Start ${marked.length} ticket${marked.length === 1 ? '' : 's'}: ${now} now, ${marked.length - now} queued`,
+    tn(
+      'Start {n} ticket: {now} now, {queued} queued',
+      'Start {n} tickets: {now} now, {queued} queued',
+      marked.length,
+      {
+        now,
+        queued: marked.length - now,
+      },
+    ),
   );
 
   const efforts: { value: ClaudeEffort; label: string }[] = (
     ['low', 'medium', 'high', 'xhigh', 'max'] as const
-  ).map((v) => ({ value: v, label: v }));
+  ).map((v) => ({ value: v, label: t(v) }));
 
   // In order: the queue keeps the order the tickets were marked in.
   async function startAll(): Promise<void> {
@@ -56,11 +65,11 @@
           source: { kind: 'ticket', ticket: { ...m.ref } },
         });
         if (!forced && plan.project_guessed) {
-          toasts.warn(`${m.ref.key} has no usual project: start it with s`);
+          toasts.warn(t('{key} has no usual project: start it with s', { key: m.ref.key }));
           continue;
         }
         if (plan.existing) {
-          toasts.info(`${m.ref.key} already has a work item`);
+          toasts.info(t('{key} already has a work item', { key: m.ref.key }));
           continue;
         }
         withCriteria(plan, m.ref);
@@ -70,10 +79,10 @@
         if (item.state.kind === 'queued') queued++;
         else started++;
       } catch (err) {
-        toasts.error(err, `Start ${m.ref.key}`);
+        toasts.error(err, t('Start {key}', { key: m.ref.key }));
       }
     }
-    toasts.info(`Started ${started}, queued ${queued}`);
+    toasts.info(t('Started {started}, queued {queued}', { started, queued }));
   }
 </script>
 
@@ -94,24 +103,28 @@
     }}
   >
     <p class="keys">{marked.map((m) => m.ref.key).join(', ')}</p>
-    <Select label="Project" bind:value={forced} options={projectOptions} />
+    <Select label={t('Project')} bind:value={forced} options={projectOptions} />
     <Select
-      label="Template"
+      label={t('Template')}
       bind:value={template}
       options={templates.map((t) => ({ value: t.id, label: t.label }))}
     />
     <div class="two">
-      <TextInput label="Model" bind:value={model} />
-      <Select label="Effort" bind:value={effort} options={efforts} />
+      <TextInput label={t('Model')} bind:value={model} />
+      <Select label={t('Effort')} bind:value={effort} options={efforts} />
     </div>
     <p class="hint">
-      Claude {slots.live}/{slots.max || '∞'} live. Queued tickets get their worktree now and start, oldest first,
-      when a Claude exits.
+      {t(
+        'Claude {live}/{max} live. Queued tickets get their worktree now and start, oldest first, when a Claude exits.',
+        { live: slots.live, max: slots.max || '∞' },
+      )}
     </p>
   </form>
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
-    <Button variant="primary" chord="mod+enter" onclick={() => void startAll()}>Start {marked.length}</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
+    <Button variant="primary" chord="mod+enter" onclick={() => void startAll()}
+      >{t('Start {n}', { n: marked.length })}</Button
+    >
   {/snippet}
 </Sheet>
 

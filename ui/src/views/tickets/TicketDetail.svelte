@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { Assignee, CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
@@ -110,7 +111,7 @@
       tickets.patch(await trackerAssign({ ticket: r, assignee }));
       toasts.info(done);
     } catch (err) {
-      toasts.error(err, `Assigning ${r.key}`);
+      toasts.error(err, t('Assigning {key}', { key: r.key }));
     }
   }
 
@@ -118,9 +119,9 @@
     const r = ref;
     try {
       tickets.patch(await trackerSetPriority({ ticket: r, priority }));
-      toasts.info(`${r.key} priority set to ${priority}`);
+      toasts.info(t('{key} priority set to {priority}', { key: r.key, priority }));
     } catch (err) {
-      toasts.error(err, `Changing the priority of ${r.key}`);
+      toasts.error(err, t('Changing the priority of {key}', { key: r.key }));
     }
   }
 
@@ -156,12 +157,16 @@
     const q = query.toLowerCase();
     return (await priorities)
       .filter((p) => p.toLowerCase().includes(q))
-      .map((p) => ({ id: p, label: p, detail: p === ticket.priority ? 'current' : '' }));
+      .map((p) => ({ id: p, label: p, detail: p === ticket.priority ? t('current') : '' }));
   }
 
   function pickField(id: string): void {
     if (field?.kind === 'priority') void setPriority(id);
-    else void assign({ kind: 'user', id }, `${ref.key} assigned to ${names[id] ?? id}`);
+    else
+      void assign(
+        { kind: 'user', id },
+        t('{key} assigned to {name}', { key: ref.key, name: names[id] ?? id }),
+      );
   }
 
   async function postComment(): Promise<void> {
@@ -173,10 +178,10 @@
     try {
       await trackerComment({ ticket: r, markdown: comment });
       if (key === k) comment = '';
-      toasts.info(`Comment added to ${r.key}`);
+      toasts.info(t('Comment added to {key}', { key: r.key }));
       void tickets.loadDetail(r);
     } catch (err) {
-      toasts.error(err, `Commenting on ${r.key}`);
+      toasts.error(err, t('Commenting on {key}', { key: r.key }));
     } finally {
       posting = false;
     }
@@ -191,10 +196,10 @@
     try {
       await trackerComment({ ticket: r, markdown: text });
       if (refines[k]) refines[k].posted = true;
-      toasts.info(`Refinement posted on ${r.key}`);
+      toasts.info(t('Refinement posted on {key}', { key: r.key }));
       void tickets.loadDetail(r);
     } catch (err) {
-      toasts.error(err, `Commenting on ${r.key}`);
+      toasts.error(err, t('Commenting on {key}', { key: r.key }));
     } finally {
       posting = false;
     }
@@ -204,9 +209,9 @@
     if (!proposal?.text) return;
     try {
       await clipboardWrite({ kind: 'clipboard', text: proposal.text });
-      toasts.info('Copied the refinement');
+      toasts.info(t('Copied the refinement'));
     } catch (err) {
-      toasts.error(err, 'Copy');
+      toasts.error(err, t('Copy'));
     }
   }
 
@@ -214,9 +219,9 @@
     if (!branch) return;
     try {
       await clipboardWrite({ kind: 'clipboard', text: branch });
-      toasts.info(`Copied ${branch}`);
+      toasts.info(t('Copied {branch}', { branch }));
     } catch (err) {
-      toasts.error(err, 'Copy branch');
+      toasts.error(err, t('Copy branch'));
     }
   }
 
@@ -246,10 +251,10 @@
         openPrFrom(browser);
         break;
       case 'assign':
-        void assign({ kind: 'me' }, `${ref.key} assigned to you`);
+        void assign({ kind: 'me' }, t('{key} assigned to you', { key: ref.key }));
         break;
       case 'unassign':
-        void assign({ kind: 'none' }, `${ref.key} unassigned`);
+        void assign({ kind: 'none' }, t('{key} unassigned', { key: ref.key }));
         break;
       case 'comment':
         commentBox?.querySelector('textarea')?.focus();
@@ -264,7 +269,7 @@
         void copyBranch();
         break;
       case 'browser':
-        openExternal({ url: ticket.url }).catch((err) => toasts.error(err, 'Open in browser'));
+        openExternal({ url: ticket.url }).catch((err) => toasts.error(err, t('Open in browser')));
         break;
     }
   }
@@ -319,15 +324,15 @@
     return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
   }
 
-  const CI_WORDS: Record<CiState, string> = {
-    success: 'CI passed',
-    failure: 'CI failed',
-    error: 'CI error',
-    pending: 'CI running',
+  const CI_WORDS: Record<CiState, string> = $derived({
+    success: t('CI passed'),
+    failure: t('CI failed'),
+    error: t('CI error'),
+    pending: t('CI running'),
     none: '',
-  };
+  });
 
-  const dateFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  const dateFmt = $derived(new Intl.DateTimeFormat(locale(), { month: 'short', day: 'numeric' }));
   /** Before today's midnight (read once per ticket: no clock ticking in the pane). */
   const overdue = $derived(
     ticket.due !== null &&
@@ -344,7 +349,7 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label={`Ticket ${ref.key}`}
+  aria-label={t('Ticket {key}', { key: ref.key })}
   {onkeydown}
 >
   <StateBanner
@@ -359,20 +364,20 @@
       {#if detail?.parent}
         {@const parent = detail.parent}
         <button type="button" class="link" onclick={() => openTicket(parent)}>
-          parent {parent.key}
+          {t('parent {key}', { key: parent.key })}
         </button>
       {/if}
       {#if runPhase?.id === 'run'}<span class="run" data-run title={runPhase.detail}
           ><Lamp level={runPhase.lamp} />{runPhase.label}</span
-        >{:else if workItem}<Badge tone="accent">local work</Badge>{/if}
+        >{:else if workItem}<Badge tone="accent">{t('local work')}</Badge>{/if}
     </div>
     <h1>{ticket.title}</h1>
     <div class="line">
       <span class="status" bind:this={statusBtn}>
         <Button
           aria-haspopup="menu"
-          aria-label={`Status ${ticket.status.name}, move (m)`}
-          title="Move (m)"
+          aria-label={t('Status {status}, move (m)', { status: ticket.status.name })}
+          title={t('Move (m)')}
           onclick={() => (picker = statusBtn ?? null)}
         >
           <StatusChip status={ticket.status} />
@@ -385,7 +390,7 @@
 
   <div class="scroll">
     <dl class="k-meta">
-      <dt>Assignee</dt>
+      <dt>{t('Assignee')}</dt>
       <dd>
         <button
           type="button"
@@ -393,11 +398,11 @@
           data-field="assignee"
           aria-haspopup="menu"
           aria-keyshortcuts="u"
-          title="Assign to… (u)"
-          onclick={() => openField('assignee')}>{ticket.assignee?.name ?? 'Unassigned'}</button
+          title={t('Assign to… (u)')}
+          onclick={() => openField('assignee')}>{ticket.assignee?.name ?? t('Unassigned')}</button
         >
       </dd>
-      <dt>Priority</dt>
+      <dt>{t('Priority')}</dt>
       <dd>
         <button
           type="button"
@@ -405,78 +410,81 @@
           data-field="priority"
           aria-haspopup="menu"
           aria-keyshortcuts="Shift+1"
-          title="Change priority (!)"
-          onclick={() => openField('priority')}>{ticket.priority ?? 'None'}</button
+          title={t('Change priority (!)')}
+          onclick={() => openField('priority')}>{ticket.priority ?? t('None')}</button
         >
       </dd>
-      <dt>Sprint</dt>
+      <dt>{t('Sprint')}</dt>
       <dd>
         {#if ticket.sprint}
           {ticket.sprint.name}
           {#if ticket.sprint.ends_at}<span class="muted"
-              >ends {dateFmt.format(day(ticket.sprint.ends_at))}</span
+              >{t('ends {date}', { date: dateFmt.format(day(ticket.sprint.ends_at)) })}</span
             >{/if}
-        {:else}<span class="muted">None</span>{/if}
+        {:else}<span class="muted">{t('None')}</span>{/if}
       </dd>
-      <dt>Estimate</dt>
+      <dt>{t('Estimate')}</dt>
       <dd>
-        {#if ticket.estimate}{ticket.estimate}{:else}<span class="muted">None</span>{/if}
+        {#if ticket.estimate}{ticket.estimate}{:else}<span class="muted">{t('None')}</span>{/if}
       </dd>
-      <dt>Due</dt>
+      <dt>{t('Due')}</dt>
       <dd class="k-num">
         {#if ticket.due}
-          <span class:late={overdue} title={overdue ? 'Overdue' : undefined}
+          <span class:late={overdue} title={overdue ? t('Overdue') : undefined}
             >{dateFmt.format(day(ticket.due))}</span
           >
-          {#if overdue}<span class="late">overdue</span>{/if}
-        {:else}<span class="muted">None</span>{/if}
+          {#if overdue}<span class="late">{t('overdue')}</span>{/if}
+        {:else}<span class="muted">{t('None')}</span>{/if}
       </dd>
-      <dt>Updated</dt>
+      <dt>{t('Updated')}</dt>
       <dd class="k-num">{relativeTime(Date.parse(ticket.updated_at))}</dd>
-      {#if ticket.kind}<dt>Type</dt>
+      {#if ticket.kind}<dt>{t('Type')}</dt>
         <dd>{ticket.kind}</dd>{/if}
-      {#if ticket.labels.length > 0}<dt>Labels</dt>
+      {#if ticket.labels.length > 0}<dt>{t('Labels')}</dt>
         <dd>
           {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}
         </dd>{/if}
     </dl>
 
-    <section aria-label="Pull requests" data-testid="ticket-pr">
+    <section aria-label={t('Pull requests')} data-testid="ticket-pr">
       <h2 class="k-section-title">
-        Pull requests {#if item.prs.length > 1}<span class="muted k-num">{item.prs.length}</span>{/if}
+        {t('Pull requests')}
+        {#if item.prs.length > 1}<span class="muted k-num">{item.prs.length}</span>{/if}
       </h2>
       {#each item.prs as pr (pr.url)}
         <div class="pr">
           <button
             type="button"
             class="link k-mono"
-            title={pr.account ? 'Open in Kelta' : 'Open in browser'}
+            title={pr.account ? t('Open in Kelta') : t('Open in browser')}
             onclick={() => openPr(pr, project ?? '', !project)}>{prLabel(pr)}</button
           >
           <span class="pr-title">{pr.title || pr.repo}</span>
           <span class="pr-meta">
             <span>{reviewWord(pr)}</span>
             {#if pr.ci !== 'none'}<span class="ci"
-                ><Lamp level={ciLamp(pr.ci)} title={`CI ${pr.ci}`} />{CI_WORDS[pr.ci]}</span
+                ><Lamp level={ciLamp(pr.ci)} title={CI_WORDS[pr.ci]} />{CI_WORDS[pr.ci]}</span
               >{/if}
             {#if pr.branch}<code class="k-mono">{pr.branch}</code>{/if}
           </span>
         </div>
       {:else}
-        <p class="muted">No pull request yet.</p>
+        <p class="muted">{t('No pull request yet.')}</p>
       {/each}
     </section>
 
     {#if detail && detail.children.length > 0}
-      <section aria-label="Sub-tasks">
-        <h2 class="k-section-title">Sub-tasks <span class="muted k-num">{detail.children.length}</span></h2>
+      <section aria-label={t('Sub-tasks')}>
+        <h2 class="k-section-title">
+          {t('Sub-tasks')} <span class="muted k-num">{detail.children.length}</span>
+        </h2>
         {#each detail.children as c (c.ticket.ref.key)}
           <button
             type="button"
             class="child"
             data-child
             aria-keyshortcuts="s"
-            title="Open (Enter), start work (s)"
+            title={t('Open (Enter), start work (s)')}
             onclick={() => openTicket(c.ticket.ref)}
             onkeydown={(e) => childKeys(e, c)}
           >
@@ -489,9 +497,10 @@
     {/if}
 
     {#if proposal}
-      <section aria-label="Refinement" data-testid="ticket-refine">
+      <section aria-label={t('Refinement')} data-testid="ticket-refine">
         <h2 class="k-section-title">
-          Refinement {#if proposal.running}<span class="muted">Claude is working…</span>{/if}
+          {t('Refinement')}
+          {#if proposal.running}<span class="muted">{t('Claude is working…')}</span>{/if}
         </h2>
         {#if proposal.text !== null}
           <pre class="proposal">{proposal.text}</pre>
@@ -501,33 +510,37 @@
               variant="primary"
               disabled={proposal.posted || !item.caps.comment}
               loading={posting}
-              title={item.caps.comment ? undefined : 'This tracker does not let Kelta add comments.'}
-              onclick={() => void postProposal()}>{proposal.posted ? 'Posted' : 'Post as comment'}</Button
+              title={item.caps.comment ? undefined : t('This tracker does not let Kelta add comments.')}
+              onclick={() => void postProposal()}
+              >{proposal.posted ? t('Posted') : t('Post as comment')}</Button
             >
-            <Button size="sm" onclick={() => void copyProposal()}>Copy</Button>
-            <Button size="sm" variant="ghost" onclick={() => discard(ref)}>Discard</Button>
+            <Button size="sm" onclick={() => void copyProposal()}>{t('Copy')}</Button>
+            <Button size="sm" variant="ghost" onclick={() => discard(ref)}>{t('Discard')}</Button>
           </div>
-          <p class="muted">Start work adds these acceptance criteria to Claude's first prompt.</p>
+          <p class="muted">{t("Start work adds these acceptance criteria to Claude's first prompt.")}</p>
         {/if}
       </section>
     {/if}
 
-    <section aria-label="Description">
-      <h2 class="k-section-title">Description</h2>
+    <section aria-label={t('Description')}>
+      <h2 class="k-section-title">{t('Description')}</h2>
       {#if !detail}
         <p class="muted">
-          {slot?.error ? `Could not load the description: ${slot.error.message}` : 'Loading…'}
+          {slot?.error
+            ? t('Could not load the description: {message}', { message: slot.error.message })
+            : t('Loading…')}
         </p>
       {:else if detail.body_html.trim() === ''}
-        <p class="muted">No description.</p>
+        <p class="muted">{t('No description.')}</p>
       {:else}
-        <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, 'Open link')} class="body" />
+        <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, t('Open link'))} class="body" />
       {/if}
     </section>
 
-    <section aria-label="Comments">
+    <section aria-label={t('Comments')}>
       <h2 class="k-section-title">
-        Comments {#if detail}<span class="muted k-num">{detail.comments.length}</span>{/if}
+        {t('Comments')}
+        {#if detail}<span class="muted k-num">{detail.comments.length}</span>{/if}
       </h2>
       {#each (detail?.comments ?? []).slice(-20) as c, i (i)}
         <article class="comment">
@@ -535,16 +548,16 @@
             <strong>{c.author.name}</strong>
             <span class="muted">{relativeTime(Date.parse(c.created_at))}</span>
           </header>
-          <HtmlContent html={c.body_html} onerror={(e) => toasts.error(e, 'Open link')} />
+          <HtmlContent html={c.body_html} onerror={(e) => toasts.error(e, t('Open link'))} />
         </article>
       {:else}
-        {#if detail}<p class="muted">No comments yet.</p>{/if}
+        {#if detail}<p class="muted">{t('No comments yet.')}</p>{/if}
       {/each}
       {#if item.caps.comment}
         <div bind:this={commentBox} class="compose">
           <TextInput
             bind:value={comment}
-            label="Add a comment (Markdown, Ctrl/Cmd+Enter to send)"
+            label={t('Add a comment (Markdown, Ctrl/Cmd+Enter to send)')}
             multiline
             rows={embedded ? 3 : 4}
             onkeydown={commentKeys}
@@ -555,7 +568,7 @@
             disabled={comment.trim() === ''}
             onclick={() => void postComment()}
           >
-            Comment
+            {t('Comment')}
           </Button>
         </div>
       {/if}
@@ -576,8 +589,10 @@
 {/if}
 {#if field}
   <PickMenu
-    label={field.kind === 'assignee' ? `Assign ${ref.key}` : `Priority of ${ref.key}`}
-    placeholder={field.kind === 'assignee' ? 'Find a person' : 'Filter priorities'}
+    label={field.kind === 'assignee'
+      ? t('Assign {key}', { key: ref.key })
+      : t('Priority of {key}', { key: ref.key })}
+    placeholder={field.kind === 'assignee' ? t('Find a person') : t('Filter priorities')}
     x={field.x}
     y={field.y}
     load={field.kind === 'assignee' ? loadUsers : loadPriorities}
@@ -594,7 +609,7 @@
     items={prMenuItems(item.prs)}
     x={prMenu.x}
     y={prMenu.y}
-    label={`Pull requests of ${ref.key}`}
+    label={t('Pull requests of {key}', { key: ref.key })}
     onselect={(url) => {
       const pr = item.prs.find((p) => p.url === url);
       if (pr) openPr(pr, project ?? '', browser || !project);

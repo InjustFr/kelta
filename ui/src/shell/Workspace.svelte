@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { ProjectId, TabId } from '$lib/gen';
@@ -90,7 +91,7 @@
   {#if failure && !current}
     <ErrorState
       error={failure}
-      title="Could not load the layout"
+      title={t('Could not load the layout')}
       onretry={() => layout.load(projectId).catch(() => {})}
     />
   {:else if !current}
@@ -101,33 +102,35 @@
     {:else if projectId === projects.home?.id}
       <EmptyState
         icon="square-terminal"
-        title="Nothing open in Home"
-        body="Home runs terminals in your home folder, outside any project."
+        title={t('Nothing open in Home')}
+        body={t('Home runs terminals in your home folder, outside any project.')}
       >
         {#snippet actions()}
           <Button variant="primary" icon="square-terminal" onclick={() => spawnTemplate(projectId, 'shell')}
-            >Open a terminal</Button
+            >{t('Open a terminal')}</Button
           >
           <Button icon="plus" chord={chordFor('session.new')} onclick={() => dispatch('session.new')}
-            >New session…</Button
+            >{t('New session…')}</Button
           >
         {/snippet}
       </EmptyState>
     {:else}
       <EmptyState
         icon="square-terminal"
-        title={`Nothing open in ${projects.byId(projectId)?.name ?? 'this project'} yet`}
-        body="A session is a terminal running Claude Code, nvim or a shell in this project's folder."
+        title={t('Nothing open in {project} yet', {
+          project: projects.byId(projectId)?.name ?? t('this project'),
+        })}
+        body={t("A session is a terminal running Claude Code, nvim or a shell in this project's folder.")}
       >
         {#snippet actions()}
           <Button variant="primary" icon="play" onclick={() => spawnTemplate(projectId, 'claude+editor')}
-            >Start Claude and nvim</Button
+            >{t('Start Claude and nvim')}</Button
           >
           <Button icon="plus" chord={chordFor('session.new')} onclick={() => dispatch('session.new')}
-            >New session…</Button
+            >{t('New session…')}</Button
           >
           <Button icon="ticket" chord={chordFor('tickets.open')} onclick={() => dispatch('tickets.open')}
-            >Tickets</Button
+            >{t('Tickets')}</Button
           >
         {/snippet}
       </EmptyState>
@@ -135,14 +138,14 @@
   {:else if tab.detached && !tabId}
     <EmptyState
       icon="app-window"
-      title="This tab is in its own window"
-      body="Its sessions keep running there. Closing that window brings the tab back here."
+      title={t('This tab is in its own window')}
+      body={t('Its sessions keep running there. Closing that window brings the tab back here.')}
     >
       {#snippet actions()}
         <Button variant="primary" icon="app-window" onclick={() => detachTab(projectId, tab.id)}
-          >Show window</Button
+          >{t('Show window')}</Button
         >
-        <Button onclick={() => attachTab(projectId, tab.id)}>Move back here</Button>
+        <Button onclick={() => attachTab(projectId, tab.id)}>{t('Move back here')}</Button>
       {/snippet}
     </EmptyState>
   {:else}

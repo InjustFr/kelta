@@ -1,6 +1,7 @@
 <script lang="ts">
   // `map<name, object>` (claude.profiles, accounts…): one group per entry whose properties are
   // ordinary path-bound fields, so every leaf keeps its own source badge and reset.
+  import { t } from '$lib/i18n/index.svelte';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
 
@@ -51,7 +52,7 @@
           <IconButton
             icon="trash-2"
             size="sm"
-            label={`Remove ${key} from this layer`}
+            label={t('Remove {name} from this layer', { name: key })}
             onclick={() => editor.reset(entryPath)}
           />
         {/if}
@@ -71,8 +72,12 @@
         void add();
       }}
     >
-      <input aria-label={`New ${label} entry name`} placeholder="New entry name" bind:value={name} />
-      <Button size="sm" icon="plus" type="submit" disabled={!name.trim()}>Add</Button>
+      <input
+        aria-label={t('New {name} entry name', { name: label })}
+        placeholder={t('New entry name')}
+        bind:value={name}
+      />
+      <Button size="sm" icon="plus" type="submit" disabled={!name.trim()}>{t('Add')}</Button>
     </form>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}

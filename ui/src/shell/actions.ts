@@ -2,6 +2,7 @@
 // session.new, pane.*, attention.*, nav.*, terminal.*, editor.send_selection, editor.quickfix_claude, and the
 // terminal file links, app.restart. Loaded eagerly by main.ts.
 
+import { t, tn } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import type { SessionId, SessionInfo, Tab } from '$lib/gen';
 import { editorOpen, editorQuickfix, editorSendSelection, settingsSet } from '$lib/ipc/commands';
@@ -41,18 +42,18 @@ async function sendSelection(): Promise<void> {
   const editor = focusedSession();
   const tab = currentTab();
   if (!editor || editor.kind.type !== 'editor' || !tab) {
-    toasts.info('Focus an editor pane to send its selection to Claude');
+    toasts.info(t('Focus an editor pane to send its selection to Claude'));
     return;
   }
   const claude = claudeOf(tab);
   if (!claude) {
-    toasts.info('No Claude session in this tab');
+    toasts.info(t('No Claude session in this tab'));
     return;
   }
   try {
     await editorSendSelection({ editor_session: editor.id, claude_session: claude.id });
   } catch (err) {
-    toasts.error(err, 'Sending the selection failed');
+    toasts.error(err, t('Sending the selection failed'));
   }
 }
 
@@ -99,14 +100,14 @@ export async function openFileLink(
   const s = sessions.get(id);
   const editor = s ? editorFor(s) : null;
   if (!editor) {
-    toasts.info('No nvim in this tab to open the file');
+    toasts.info(t('No nvim in this tab to open the file'));
     return;
   }
   try {
     await editorOpen({ target: { kind: 'session', id: editor.id }, path, line });
     if (focusEditor) await revealSession(editor.id);
   } catch (err) {
-    toasts.error(err, 'Opening the file in nvim failed');
+    toasts.error(err, t('Opening the file in nvim failed'));
   }
 }
 
@@ -116,21 +117,25 @@ async function quickfixClaude(): Promise<void> {
   const claude = tab ? claudeOf(tab) : null;
   const editor = claude ? editorFor(claude) : null;
   if (!claude || !editor) {
-    toasts.info('Focus a tab with Claude and nvim first');
+    toasts.info(t('Focus a tab with Claude and nvim first'));
     return;
   }
   const files = claude.claude?.files_touched ?? [];
   if (files.length === 0) {
-    toasts.info('Claude has not touched any file yet');
+    toasts.info(t('Claude has not touched any file yet'));
     return;
   }
   try {
     await editorQuickfix({ target: { kind: 'session', id: editor.id }, files });
     toasts.info(
-      `Quickfix list: ${files.length} file${files.length === 1 ? '' : 's'} Claude touched (]q / [q)`,
+      tn(
+        'Quickfix list: {n} file Claude touched (]q / [q)',
+        'Quickfix list: {n} files Claude touched (]q / [q)',
+        files.length,
+      ),
     );
   } catch (err) {
-    toasts.error(err, 'Filling the quickfix list failed');
+    toasts.error(err, t('Filling the quickfix list failed'));
   }
 }
 
@@ -191,7 +196,7 @@ registerAction('app.restart', async () => {
   try {
     await restartApp();
   } catch (err) {
-    toasts.error(err, 'Restarting failed');
+    toasts.error(err, t('Restarting failed'));
   }
 });
 
@@ -200,8 +205,8 @@ registerAction('terminal.set_renderer', async (args) => {
   const renderer = typeof args?.renderer === 'string' ? args.renderer : 'webgl';
   try {
     await settingsSet({ layer: 'global', path: 'terminal.renderer', value: renderer });
-    toasts.info(`Terminal renderer set to ${renderer}`);
+    toasts.info(t('Terminal renderer set to {renderer}', { renderer }));
   } catch (err) {
-    toasts.error(err, 'Changing the renderer failed');
+    toasts.error(err, t('Changing the renderer failed'));
   }
 });

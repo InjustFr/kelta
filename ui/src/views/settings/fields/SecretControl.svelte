@@ -1,6 +1,7 @@
 <script lang="ts">
   // SecretRef editor: source picker + "Set token…" + "Test". The token value is only ever held in
   // a local password input, sent through `secret_set`, and cleared; it is never rendered back.
+  import { t } from '$lib/i18n/index.svelte';
   import type { AccountTestResult } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
@@ -63,17 +64,17 @@
   });
 
   const options = $derived([
-    { value: 'keyring', label: 'OS keychain (keyring)' },
-    { value: 'file', label: 'Encrypted file (passphrase)' },
+    { value: 'keyring', label: t('OS keychain (keyring)') },
+    { value: 'file', label: t('Encrypted file (passphrase)') },
     ...(accountKind === 'github' || accountKind === null
       ? [{ value: 'gh-cli', label: 'GitHub CLI (gh)' }]
       : []),
     ...(accountKind === 'gitlab' || accountKind === null
       ? [{ value: 'glab-cli', label: 'GitLab CLI (glab)' }]
       : []),
-    { value: 'command', label: 'Command (pass, op, secret-tool…)' },
-    { value: 'env', label: 'Environment variable' },
-    { value: 'none', label: kind === 'none' ? 'Not set' : 'Clear' },
+    { value: 'command', label: t('Command (pass, op, secret-tool…)') },
+    { value: 'env', label: t('Environment variable') },
+    { value: 'none', label: kind === 'none' ? t('Not set') : t('Clear') },
   ] as { value: Kind; label: string }[]);
 
   function build(k: Kind, a: string): string | null {
@@ -106,7 +107,9 @@
       token = '';
       tokenOpen = false;
       if (value !== ref) onchange(ref);
-      toasts.info(kind === 'file' ? 'Token stored in the encrypted file' : 'Token stored in the keychain');
+      toasts.info(
+        kind === 'file' ? t('Token stored in the encrypted file') : t('Token stored in the keychain'),
+      );
     } catch (err) {
       error = toIpcError('secret_set', err).message;
     } finally {
@@ -144,16 +147,16 @@
       <TextInput
         bind:value={arg}
         disabled={readonly}
-        aria-label="Secret reference argument"
-        placeholder={stored(kind) ? 'name' : kind === 'env' ? 'VARIABLE' : 'pass show jira/acme'}
+        aria-label={t('Secret reference argument')}
+        placeholder={stored(kind) ? t('name') : kind === 'env' ? 'VARIABLE' : 'pass show jira/acme'}
         onchange={commitArg}
       />
     {/if}
     {#if stored(kind) && !readonly}
-      <Button size="sm" onclick={() => (tokenOpen = !tokenOpen)}>Set token…</Button>
+      <Button size="sm" onclick={() => (tokenOpen = !tokenOpen)}>{t('Set token…')}</Button>
     {/if}
     {#if accountId}
-      <Button size="sm" loading={busy && !tokenOpen} onclick={test} disabled={!value}>Test</Button>
+      <Button size="sm" loading={busy && !tokenOpen} onclick={test} disabled={!value}>{t('Test')}</Button>
     {/if}
   </div>
   {#if tokenOpen}
@@ -168,22 +171,22 @@
         bind:value={token}
         type="password"
         autocomplete="off"
-        aria-label="Token"
+        aria-label={t('Token')}
         placeholder={kind === 'file'
-          ? 'Paste the token (stored in the encrypted file, never in config.toml)'
-          : 'Paste the token (stored in the OS keychain, never in config.toml)'}
+          ? t('Paste the token (stored in the encrypted file, never in config.toml)')
+          : t('Paste the token (stored in the OS keychain, never in config.toml)')}
       />
       <Button size="sm" variant="primary" type="submit" loading={busy} disabled={!token || !arg.trim()}
-        >Save</Button
+        >{t('Save')}</Button
       >
     </form>
   {/if}
   {#if testResult}
     <p class="result" class:ok={testResult.ok} role="status" data-testid="account-test-result">
       {#if testResult.ok}
-        Connected{testResult.user ? ` as ${testResult.user.name}` : ''}.
+        {testResult.user ? t('Connected as {name}.', { name: testResult.user.name }) : t('Connected.')}
       {:else}
-        {testResult.error?.message ?? 'Connection failed'}
+        {testResult.error?.message ?? t('Connection failed')}
       {/if}
     </p>
   {/if}

@@ -1,8 +1,9 @@
 <script lang="ts">
   // Accounts: wizard (kind → connection → token → test), per-account Test, backend status with
   // fixes, and the full per-account field list. Accounts are global-only settings.
+  import { msg, t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
-  import type { AccountKind, AccountTestResult, SecretBackendStatus } from '$lib/gen';
+  import type { AccountKind, AccountStatus, AccountTestResult, SecretBackendStatus } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { settings as settingsStore, toasts } from '$lib/stores';
@@ -82,7 +83,7 @@
 
   async function unlock(): Promise<void> {
     if (creating && passphrase !== passphraseAgain) {
-      unlockError = 'The two passphrases differ';
+      unlockError = t('The two passphrases differ');
       return;
     }
     unlocking = true;
@@ -182,10 +183,10 @@
     try {
       const ok = await editor.set(joinPath(['accounts', draft.id]), buildAccount(draft));
       if (!ok) {
-        wizardError = editor.errors[joinPath(['accounts', draft.id])] ?? 'Could not save the account';
+        wizardError = editor.errors[joinPath(['accounts', draft.id])] ?? t('Could not save the account');
         return;
       }
-      toasts.info(`Account ${draft.id} saved`);
+      toasts.info(t('Account {id} saved', { id: draft.id }));
       if (andTest) {
         step = 3;
         wizardResult = await ipc.accountTest({ account_id: draft.id });
@@ -223,12 +224,19 @@
     for (const r of [ref, `${ref}.oauth`]) {
       await ipc
         .secretDelete({ secret_ref: r })
-        .catch((err: unknown) => toasts.error(err, 'Could not delete the stored token'));
+        .catch((err: unknown) => toasts.error(err, t('Could not delete the stored token')));
     }
   }
 
   const accountsNode = $derived(editor.schema ? nodeAt(editor.schema, ['accounts']) : null);
   const itemSchema = $derived(accountsNode ? entrySchema(accountsNode) : null);
+  const STATUS: Record<AccountStatus, string> = {
+    ok: msg('ok'),
+    needs_auth: msg('needs auth'),
+    rate_limited: msg('rate limited'),
+    offline: msg('offline'),
+    error: msg('error'),
+  };
   const statusTone = (s: string): 'ok' | 'warn' | 'danger' | 'neutral' =>
     s === 'ok'
       ? 'ok'
@@ -245,14 +253,14 @@
       {#if globalOnly}
         <div class="notice" role="status" data-testid="accounts-global-only">
           <Icon name="info" size={16} />
-          <span>Accounts are global settings.</span>
+          <span>{t('Accounts are global settings.')}</span>
           <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
-            >Switch to Global</Button
+            >{t('Switch to Global')}</Button
           >
         </div>
       {/if}
 
-      <SettingsGroup heading="Secret storage">
+      <SettingsGroup heading={t('Secret storage')}>
         {#if backendError}<p class="error" role="alert">{backendError}</p>{/if}
         <ul class="backends" data-testid="backend-status">
           {#each backends as b (b.backend)}
@@ -260,7 +268,7 @@
             <li data-backend={b.backend} data-available={b.available}>
               <Icon name={b.available ? 'circle-check' : 'triangle-alert'} size={14} />
               <strong>{b.backend}</strong>
-              <span class="muted">{b.detail ?? (b.available ? 'available' : 'unavailable')}</span>
+              <span class="muted">{b.detail ?? (b.available ? t('available') : t('unavailable'))}</span>
               {#if b.backend === 'encrypted-file' && !b.available}
                 <form
                   class="advice unlock"
@@ -274,18 +282,18 @@
                     bind:value={passphrase}
                     type="password"
                     autocomplete="off"
-                    label={creating ? 'New passphrase' : 'Passphrase'}
+                    label={creating ? t('New passphrase') : t('Passphrase')}
                   />
                   {#if creating}
                     <TextInput
                       bind:value={passphraseAgain}
                       type="password"
                       autocomplete="off"
-                      label="Repeat the passphrase"
+                      label={t('Repeat the passphrase')}
                     />
                   {/if}
                   <Button size="sm" variant="primary" type="submit" loading={unlocking} disabled={!passphrase}
-                    >{creating ? 'Create' : 'Unlock'}</Button
+                    >{creating ? t('Create') : t('Unlock')}</Button
                   >
                   {#if unlockError}<p class="error" role="alert">{unlockError}</p>{/if}
                 </form>
@@ -304,13 +312,14 @@
         </ul>
         {#if keyringBackend && !keyringBackend.available}
           <p class="hint" data-testid="keyring-fallback">
-            The keyring is unavailable: choose the encrypted file, <code>command:</code> or <code>env:</code> when
-            you add an account.
+            {t(
+              'The keyring is unavailable: choose the encrypted file, command: or env: when you add an account.',
+            )}
           </p>
         {/if}
       </SettingsGroup>
 
-      <SettingsGroup heading="Connected accounts">
+      <SettingsGroup heading={t('Connected accounts')}>
         {#snippet actions()}
           <!-- While the list is empty its empty state carries the one Add account button. -->
           {#if !globalOnly && accounts.length > 0}<Button
@@ -318,16 +327,16 @@
               icon="plus"
               variant="primary"
               onclick={openWizard}
-              data-testid="add-account">Add account</Button
+              data-testid="add-account">{t('Add account')}</Button
             >{/if}
         {/snippet}
 
         {#if wizardOpen}
-          <SettingsCard heading="Add an account" data-testid="account-wizard" data-step={step}>
+          <SettingsCard heading={t('Add an account')} data-testid="account-wizard" data-step={step}>
             <div class="wizard">
               <ol class="steps">
-                {#each ['Service', 'Connection', 'Token', 'Test'] as label, i (label)}
-                  <li class:current={step === i} class:done={step > i}>{label}</li>
+                {#each [msg('Service'), msg('Connection'), msg('Token'), msg('Test')] as label, i (label)}
+                  <li class:current={step === i} class:done={step > i}>{t(label)}</li>
                 {/each}
               </ol>
 
@@ -336,7 +345,7 @@
                   {#each KINDS as k (k.kind)}
                     <button type="button" class="kind" data-kind={k.kind} onclick={() => pickKind(k.kind)}>
                       <strong>{k.label}</strong>
-                      <span>{k.blurb}</span>
+                      <span>{t(k.blurb)}</span>
                     </button>
                   {/each}
                 </div>
@@ -344,7 +353,7 @@
                 {@const info = kindInfo(draft.kind)}
                 <div class="form">
                   <TextInput
-                    label="Server URL{info.baseUrlRequired ? '' : ' (optional)'}"
+                    label={info.baseUrlRequired ? t('Server URL') : t('Server URL (optional)')}
                     bind:value={draft.base_url}
                     placeholder={info.baseUrlPlaceholder}
                     error={errors.base_url}
@@ -352,19 +361,19 @@
                   />
                   {#if draft.kind === 'jira'}
                     <Select
-                      label="Flavor"
+                      label={t('Flavor')}
                       value={draft.flavor}
                       options={[
-                        { value: 'auto', label: 'Detect from the URL' },
+                        { value: 'auto', label: t('Detect from the URL') },
                         { value: 'cloud', label: 'Jira Cloud' },
-                        { value: 'dc', label: 'Data Center / Server' },
+                        { value: 'dc', label: t('Data Center / Server') },
                       ]}
                       onchange={(v) => (draft.flavor = v as AccountDraft['flavor'])}
                     />
                   {/if}
                   {#if needsEmail(draft)}
                     <TextInput
-                      label="Account e-mail"
+                      label={t('Account e-mail')}
                       bind:value={draft.email}
                       error={errors.email}
                       placeholder="me@acme.com"
@@ -372,10 +381,10 @@
                   {/if}
                   {#if info.authOptions.length > 1}
                     <Select
-                      label="Authentication"
+                      label={t('Authentication')}
                       value={draft.auth}
                       options={[
-                        { value: '', label: 'Default for this service' },
+                        { value: '', label: t('Default for this service') },
                         ...info.authOptions.map((a) => ({ value: a, label: a })),
                       ]}
                       onchange={(v) => (draft.auth = v as AccountDraft['auth'])}
@@ -383,7 +392,7 @@
                   {/if}
                   {#if draft.kind === 'redmine'}
                     <Select
-                      label="Text format"
+                      label={t('Text format')}
                       value={draft.text_format}
                       options={[
                         { value: 'textile', label: 'Textile' },
@@ -393,16 +402,16 @@
                     />
                   {/if}
                   <TextInput
-                    label="Account id"
+                    label={t('Account id')}
                     bind:value={draft.id}
                     error={errors.id}
-                    hint="Used in project files and secret names: lowercase letters, digits, dashes."
+                    hint={t('Used in project files and secret names: lowercase letters, digits, dashes.')}
                     oninput={() => (idTouched = true)}
                   />
                 </div>
                 <div class="nav">
-                  <Button onclick={() => (step = 0)}>Back</Button>
-                  <Button variant="primary" onclick={toSecret}>Next</Button>
+                  <Button onclick={() => (step = 0)}>{t('Back')}</Button>
+                  <Button variant="primary" onclick={toSecret}>{t('Next')}</Button>
                 </div>
               {:else if step === 2}
                 {@const host = oauthHost(draft.kind, draft.base_url)}
@@ -419,13 +428,16 @@
                     />
                   {:else if host}
                     <p class="hint" data-testid="oauth-unset">
-                      To sign in with the browser instead of a token, register an OAuth app on {host} and add its
-                      client id under <code>oauth.client_ids</code> (see docs/user/oauth.md).
+                      {t(
+                        'To sign in with the browser instead of a token, register an OAuth app on {host} and add its client id under oauth.client_ids (see docs/user/oauth.md).',
+                        { host },
+                      )}
                     </p>
                   {/if}
                   <p class="muted">
-                    {signInReady ? 'Or choose' : 'Choose'} where Kelta gets the token for
-                    <strong>{draft.id}</strong>.
+                    {signInReady
+                      ? t('Or choose where Kelta gets the token for {id}.', { id: draft.id })
+                      : t('Choose where Kelta gets the token for {id}.', { id: draft.id })}
                   </p>
                   <SecretControl
                     value={draft.secret}
@@ -439,37 +451,38 @@
                     </p>{/if}
                 </div>
                 <div class="nav">
-                  <Button onclick={() => (step = 1)}>Back</Button>
-                  <Button onclick={() => save(false)} loading={saving}>Save</Button>
+                  <Button onclick={() => (step = 1)}>{t('Back')}</Button>
+                  <Button onclick={() => save(false)} loading={saving}>{t('Save')}</Button>
                   <Button
                     variant="primary"
                     onclick={() => save(true)}
                     loading={saving}
-                    data-testid="save-and-test">Save &amp; test</Button
+                    data-testid="save-and-test">{t('Save & test')}</Button
                   >
                 </div>
               {:else}
                 <div class="form" data-testid="wizard-result">
                   {#if wizardResult?.ok}
                     <p class="ok">
-                      <Icon name="circle-check" size={16} /> Connected{wizardResult.user
-                        ? ` as ${wizardResult.user.name}`
-                        : ''}.
+                      <Icon name="circle-check" size={16} />
+                      {wizardResult.user
+                        ? t('Connected as {name}.', { name: wizardResult.user.name })
+                        : t('Connected.')}
                     </p>
                   {:else if wizardResult}
                     <p class="error" role="alert">
                       <Icon name="circle-x" size={16} />
-                      {wizardResult.error?.message ?? 'Connection failed'}
+                      {wizardResult.error?.message ?? t('Connection failed')}
                     </p>
                     <p class="muted">
-                      The account is saved. Fix the token or URL and test again from the list.
+                      {t('The account is saved. Fix the token or URL and test again from the list.')}
                     </p>
                   {:else}
-                    <p class="muted">Testing…</p>
+                    <p class="muted">{t('Testing…')}</p>
                   {/if}
                 </div>
                 <div class="nav">
-                  <Button variant="primary" onclick={() => (wizardOpen = false)}>Done</Button>
+                  <Button variant="primary" onclick={() => (wizardOpen = false)}>{t('Done')}</Button>
                 </div>
               {/if}
             </div>
@@ -478,16 +491,16 @@
 
         {#if accounts.length === 0 && !wizardOpen}
           <EmptyState
-            title="No accounts yet"
+            title={t('No accounts yet')}
             icon="key-round"
-            body="Add a tracker or code-host account to see tickets and reviews."
+            body={t('Add a tracker or code-host account to see tickets and reviews.')}
           >
             {#snippet actions()}
               {#if !globalOnly}<Button
                   variant="primary"
                   icon="plus"
                   onclick={openWizard}
-                  data-testid="add-account">Add account</Button
+                  data-testid="add-account">{t('Add account')}</Button
                 >{/if}
             {/snippet}
           </EmptyState>
@@ -500,28 +513,30 @@
             {#snippet head()}
               <Badge>{kindInfo(a.kind).label}</Badge>
               {#if st}<Badge tone={statusTone(st.status)} title={st.detail ?? undefined}
-                  >{st.status.replace('_', ' ')}</Badge
+                  >{t(STATUS[st.status])}</Badge
                 >{/if}
               <span class="muted">{a.base_url ?? ''}</span>
             {/snippet}
             {#snippet actions()}
-              <Button size="sm" loading={r === 'running'} onclick={() => test(a.id)}>Test</Button>
+              <Button size="sm" loading={r === 'running'} onclick={() => test(a.id)}>{t('Test')}</Button>
               {#if !globalOnly}<IconButton
                   icon="trash-2"
                   size="sm"
-                  label={`Remove ${a.id}`}
+                  label={t('Remove {name}', { name: a.id })}
                   onclick={() => remove(a.id)}
                 />{/if}
             {/snippet}
             {#if r && r !== 'running'}
               <p class:ok={r.ok} class:error={!r.ok} role="status" data-testid="test-result">
                 {r.ok
-                  ? `Connected${r.user ? ` as ${r.user.name}` : ''}.`
-                  : (r.error?.message ?? 'Connection failed')}
+                  ? r.user
+                    ? t('Connected as {name}.', { name: r.user.name })
+                    : t('Connected.')
+                  : (r.error?.message ?? t('Connection failed'))}
               </p>
             {/if}
             {#if itemSchema}
-              <SettingsDisclosure label="Settings">
+              <SettingsDisclosure label={t('Settings')}>
                 {#each childEntries(itemSchema) as [prop, child] (prop)}
                   <Field path={joinPath(['accounts', a.id, prop])} node={child} depth={2} />
                 {/each}

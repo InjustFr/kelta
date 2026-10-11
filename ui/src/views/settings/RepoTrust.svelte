@@ -1,6 +1,7 @@
 <script lang="ts">
   // Repo-local `.kelta/config.toml`: untrusted until the user reviewed it (trust is per content
   // hash; any edit makes it untrusted again).
+  import { t } from '$lib/i18n/index.svelte';
   import * as ipc from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
   import { toasts } from '$lib/stores';
@@ -35,7 +36,7 @@
       await ipc.repoTrust({ project_id: editor.projectId, repo_id: editor.repoId, trust, sha256: hash });
       reviewing = false;
       await editor.load();
-      toasts.info(trust ? 'Repo config trusted' : 'Trust revoked');
+      toasts.info(trust ? t('Repo config trusted') : t('Trust revoked'));
     } catch (err) {
       toasts.error(toIpcError('repo_trust', err).message);
     } finally {
@@ -49,38 +50,39 @@
     <div class="banner info" data-testid="repo-no-file">
       <Icon name="info" size={16} />
       <span>
-        This repo has no <code>.kelta/config.toml</code>. Allowed keys: tools, triggers, commands, session
-        templates,
-        <code>env</code>, worktree include / setup / branch template, Claude system prompt, editor review
-        args.
+        {t(
+          'This repo has no .kelta/config.toml. Allowed keys: tools, triggers, commands, session templates, env, worktree include / setup / branch template, Claude system prompt, editor review args.',
+        )}
       </span>
     </div>
   {:else if doc.trusted === false}
     <div class="banner warn" data-testid="repo-untrusted">
       <Icon name="triangle-alert" size={16} />
       <span>
-        This repo's <code>.kelta/config.toml</code> wants to run commands. Its executable keys (tools,
-        triggers, commands, <code>worktree.setup</code>, <code>env</code>) are inert until you review and
-        trust it.
+        {t(
+          "This repo's .kelta/config.toml wants to run commands. Its executable keys (tools, triggers, commands, worktree.setup, env) are inert until you review and trust it.",
+        )}
       </span>
-      <Button size="sm" variant="primary" onclick={() => (reviewing = true)}>Review &amp; trust</Button>
+      <Button size="sm" variant="primary" onclick={() => (reviewing = true)}>{t('Review & trust')}</Button>
     </div>
   {:else}
     <div class="banner ok" data-testid="repo-trusted">
       <Icon name="shield-check" size={16} />
-      <span>This exact content is trusted. Editing it makes it untrusted again.</span>
-      <Button size="sm" onclick={() => setTrust(false)} loading={busy}>Revoke trust</Button>
+      <span>{t('This exact content is trusted. Editing it makes it untrusted again.')}</span>
+      <Button size="sm" onclick={() => setTrust(false)} loading={busy}>{t('Revoke trust')}</Button>
     </div>
   {/if}
 {/if}
 
 {#if reviewing && doc}
-  <Dialog title="Review repo config" width={640} onclose={() => (reviewing = false)}>
+  <Dialog title={t('Review repo config')} width={640} onclose={() => (reviewing = false)}>
     <p class="path">{doc.path}</p>
     <pre class="file" data-testid="repo-config-text">{doc.text}</pre>
     {#snippet actions()}
-      <Button onclick={() => (reviewing = false)}>Cancel</Button>
-      <Button variant="primary" loading={busy} onclick={() => setTrust(true)}>Trust this content</Button>
+      <Button onclick={() => (reviewing = false)}>{t('Cancel')}</Button>
+      <Button variant="primary" loading={busy} onclick={() => setTrust(true)}
+        >{t('Trust this content')}</Button
+      >
     {/snippet}
   </Dialog>
 {/if}

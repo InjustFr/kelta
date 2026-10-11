@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Ticket, Transition } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import { toasts } from '$lib/stores';
@@ -33,21 +34,23 @@
 
   const all = $derived(selection && selection.length > 0 ? selection : [ticket]);
   const lit = $derived(all.map((t) => t.status.name));
-  const label = $derived(all.length > 1 ? `Move ${all.length} tickets` : `Move ${ticket.ref.key}`);
+  const label = $derived(
+    all.length > 1 ? t('Move {n} tickets', { n: all.length }) : t('Move {key}', { key: ticket.ref.key }),
+  );
   const moves = $derived(
     (transitions ?? []).filter((t) => !lit.every((n) => n.toLowerCase() === t.to.name.toLowerCase())),
   );
   const shown = $derived(rank(moves, query, (t) => `${t.to.name} ${t.name}`));
   const flow = $derived(flowOrder([...all.map((t) => t.status), ...(transitions ?? []).map((t) => t.to)]));
   const items = $derived<MenuItem[]>(
-    shown.map((t, i) => ({
-      id: t.id,
-      label: t.to.name,
-      detail: [t.name !== t.to.name ? t.name : '', t.needs_fields ? 'asks for fields' : '']
+    shown.map((tr, i) => ({
+      id: tr.id,
+      label: tr.to.name,
+      detail: [tr.name !== tr.to.name ? tr.name : '', tr.needs_fields ? t('asks for fields') : '']
         .filter(Boolean)
         .join(', '),
-      bar: categoryBar(t.to.category),
-      title: `Move to ${t.to.name}`,
+      bar: categoryBar(tr.to.category),
+      title: t('Move to {status}', { status: tr.to.name }),
       key: i < 9 ? String(i + 1) : undefined,
       kbd: i < 9 ? String(i + 1) : undefined,
     })),
@@ -81,7 +84,7 @@
   }
 
   function browse(): void {
-    openExternal({ url: ticket.url }).catch((err) => toasts.error(err, 'Open in browser'));
+    openExternal({ url: ticket.url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 </script>
 
@@ -113,8 +116,8 @@
         bind:this={input}
         bind:value={query}
         class="filter"
-        placeholder="Filter statuses"
-        aria-label="Filter statuses"
+        placeholder={t('Filter statuses')}
+        aria-label={t('Filter statuses')}
         spellcheck="false"
         autocomplete="off"
         onkeydown={filterKey}
@@ -122,21 +125,25 @@
       {#if error}
         <div class="none">
           <p>{error}</p>
-          <Button size="sm" variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+          <Button size="sm" variant="ghost" icon="external-link" onclick={browse}
+            >{t('Open in browser')}</Button
+          >
         </div>
       {:else if shown.length === 0}
         <div class="none">
           {#if !transitions}
-            <p>Loading…</p>
+            <p>{t('Loading…')}</p>
           {:else if moves.length > 0}
-            <p>No status matches "{query}".</p>
+            <p>{t('No status matches "{query}".', { query })}</p>
           {:else}
             <p>
               {all.length > 1
-                ? 'These tickets have no status in common to move to.'
-                : `No move available from ${ticket.status.name}.`}
+                ? t('These tickets have no status in common to move to.')
+                : t('No move available from {status}.', { status: ticket.status.name })}
             </p>
-            <Button size="sm" variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button>
+            <Button size="sm" variant="ghost" icon="external-link" onclick={browse}
+              >{t('Open in browser')}</Button
+            >
           {/if}
         </div>
       {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Value-based editor for one schema node. `onchange` fires when the user commits an edit
   // (change/blur/Enter, toggle, select); a `null` result means "unset".
+  import { t } from '$lib/i18n/index.svelte';
   import type { JsonValue } from '$lib/gen';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
@@ -68,19 +69,19 @@
     }
     const num = Number(raw);
     if (!Number.isFinite(num)) {
-      localError = 'Enter a number';
+      localError = t('Enter a number');
       return;
     }
     if (kind === 'int' && !Number.isInteger(num)) {
-      localError = 'Enter a whole number';
+      localError = t('Enter a whole number');
       return;
     }
     if (n.minimum !== undefined && num < n.minimum) {
-      localError = `Must be at least ${n.minimum}`;
+      localError = t('Must be at least {n}', { n: n.minimum });
       return;
     }
     if (n.maximum !== undefined && num > n.maximum) {
-      localError = `Must be at most ${n.maximum}`;
+      localError = t('Must be at most {n}', { n: n.maximum });
       return;
     }
     localError = null;
@@ -98,7 +99,7 @@
       localError = null;
       if (!equal(parsed, value)) onchange(parsed);
     } catch (err) {
-      localError = `Invalid JSON: ${(err as Error).message}`;
+      localError = t('Invalid JSON: {message}', { message: (err as Error).message });
     }
   }
 
@@ -186,7 +187,7 @@
       value={typeof value === 'string' ? value : undefined}
       options={[
         ...(resolved.nullable || value === undefined || value === null
-          ? [{ value: '', label: '(unset)' }]
+          ? [{ value: '', label: t('(unset)') }]
           : []),
         ...enumOpts,
       ]}
@@ -231,7 +232,7 @@
           <span class="chip-text">{item}</span>
           {#if !readonly}<IconButton
               icon="x"
-              label={`Remove ${item}`}
+              label={t('Remove {name}', { name: item })}
               size="sm"
               onclick={() => removeChip(i)}
             />{/if}
@@ -240,8 +241,8 @@
       {#if !readonly}
         <input
           class="chip-input"
-          aria-label={`Add to ${label}`}
-          placeholder="Add…"
+          aria-label={t('Add to {name}', { name: label })}
+          placeholder={t('Add…')}
           bind:value={chip}
           onkeydown={(e) => {
             if (e.key === 'Enter' || e.key === ',') {
@@ -259,7 +260,7 @@
         <div class="row">
           <input
             class="key"
-            aria-label="Key"
+            aria-label={t('Key')}
             value={k}
             disabled={readonly}
             onchange={(e) => renameMapEntry(k, e.currentTarget.value)}
@@ -267,7 +268,7 @@
           {#if kind === 'string-map'}
             <input
               class="val"
-              aria-label={`Value of ${k}`}
+              aria-label={t('Value of {name}', { name: k })}
               value={String(v)}
               disabled={readonly}
               onchange={(e) => setMapEntry(k, e.currentTarget.value)}
@@ -282,10 +283,10 @@
           {:else}
             <input
               class="val"
-              aria-label={`Values of ${k}`}
+              aria-label={t('Values of {name}', { name: k })}
               value={Array.isArray(v) ? v.join(', ') : ''}
               disabled={readonly}
-              placeholder="comma separated"
+              placeholder={t('comma separated')}
               onchange={(e) =>
                 setMapEntry(
                   k,
@@ -298,7 +299,7 @@
           {/if}
           {#if !readonly}<IconButton
               icon="trash-2"
-              label={`Remove ${k}`}
+              label={t('Remove {name}', { name: k })}
               size="sm"
               onclick={() => removeMapEntry(k)}
             />{/if}
@@ -308,8 +309,8 @@
         <div class="row">
           <input
             class="key"
-            aria-label="New key"
-            placeholder="New key"
+            aria-label={t('New key')}
+            placeholder={t('New key')}
             bind:value={newKey}
             onkeydown={(e) => {
               if (e.key === 'Enter') {
@@ -318,7 +319,7 @@
               }
             }}
           />
-          <Button size="sm" icon="plus" onclick={addMapEntry} disabled={!newKey.trim()}>Add</Button>
+          <Button size="sm" icon="plus" onclick={addMapEntry} disabled={!newKey.trim()}>{t('Add')}</Button>
         </div>
       {/if}
     </div>
@@ -343,7 +344,7 @@
       <Select
         value={activeVariant ?? ''}
         options={[
-          { value: '', label: '(unset)' },
+          { value: '', label: t('(unset)') },
           ...variants.map(([k]) => ({ value: k, label: titleOf(k) })),
         ]}
         disabled={readonly}

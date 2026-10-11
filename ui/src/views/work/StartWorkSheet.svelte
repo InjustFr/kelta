@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -8,6 +9,7 @@
     KeltaError,
     PermissionMode,
     StartWorkPlan,
+    StatusCategory,
     TransitionTarget,
     WorkItem,
   } from '$lib/gen';
@@ -61,7 +63,7 @@
       commentOn = next.side_effects.comment !== null;
       commentText = next.side_effects.comment ?? '';
     } catch (err) {
-      toasts.error(err, 'Switch project');
+      toasts.error(err, t('Switch project'));
     } finally {
       switching = false;
     }
@@ -76,12 +78,12 @@
   );
   const title = $derived(
     resuming
-      ? `Resume ${subject}`
+      ? t('Resume {subject}', { subject })
       : plan.source.kind === 'review'
-        ? `Review locally ${subject}`
+        ? t('Review locally {subject}', { subject })
         : plan.source.kind === 'branch'
-          ? `New branch workspace`
-          : `Start work on ${subject}`,
+          ? t('New branch workspace')
+          : t('Start work on {subject}', { subject }),
   );
 
   const built = $derived<StartWorkPlan>({
@@ -95,9 +97,16 @@
   const errors = $derived(validatePlan(built));
   const valid = $derived(planValid(errors));
 
-  function describe(t: TransitionTarget | null): string {
-    if (!t) return 'next status';
-    return 'category' in t ? t.category.replace('_', ' ') : t.name;
+  const CATEGORY: Record<StatusCategory, string> = {
+    todo: msg('to do'),
+    in_progress: msg('in progress'),
+    in_review: msg('in review'),
+    done: msg('done'),
+    unknown: msg('unknown'),
+  };
+  function describe(to: TransitionTarget | null): string {
+    if (!to) return t('next status');
+    return 'category' in to ? t(CATEGORY[to.category]) : to.name;
   }
 
   // ---- progress (driven by work.updated) ----------------------------------------------------
@@ -155,7 +164,7 @@
       try {
         const item = await workResume({ id: seed.existing });
         work.upsert(item);
-        toasts.info(`Resumed ${item.branch}`);
+        toasts.info(t('Resumed {branch}', { branch: item.branch }));
         void activateProject(item.project_id);
         onclose();
       } catch (err) {
@@ -175,7 +184,11 @@
         phase = 'failed';
         return;
       }
-      toasts.info(`${item.state.kind === 'queued' ? 'Queued' : 'Started'} ${item.branch}`);
+      toasts.info(
+        item.state.kind === 'queued'
+          ? t('Queued {branch}', { branch: item.branch })
+          : t('Started {branch}', { branch: item.branch }),
+      );
       // The work tab is the project's active tab: bring it to the front (leaves Now).
       void activateProject(item.project_id);
       onclose();
@@ -197,7 +210,7 @@
       if (next.state.kind === 'failed') {
         phase = 'failed';
       } else {
-        toasts.info(`Started ${next.branch}`);
+        toasts.info(t('Started {branch}', { branch: next.branch }));
         onclose();
       }
     } catch (err) {
@@ -209,7 +222,7 @@
   }
 
   function browse(): void {
-    if (ticketUrl) openExternal({ url: ticketUrl }).catch((err) => toasts.error(err, 'Open in browser'));
+    if (ticketUrl) openExternal({ url: ticketUrl }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 
   function onkeydown(e: KeyboardEvent): void {
@@ -219,27 +232,27 @@
     }
   }
 
-  const efforts: { value: ClaudeEffort; label: string }[] = [
-    { value: 'low', label: 'low' },
-    { value: 'medium', label: 'medium' },
-    { value: 'high', label: 'high' },
-    { value: 'xhigh', label: 'xhigh' },
-    { value: 'max', label: 'max' },
-  ];
+  const efforts: { value: ClaudeEffort; label: string }[] = $derived([
+    { value: 'low', label: t('low') },
+    { value: 'medium', label: t('medium') },
+    { value: 'high', label: t('high') },
+    { value: 'xhigh', label: t('xhigh') },
+    { value: 'max', label: t('max') },
+  ]);
   // '' = no forced mode: the last one used, else Claude's own default.
-  const modes: { value: PermissionMode | ''; label: string }[] = [
-    { value: '', label: 'last used' },
-    { value: 'default', label: 'default' },
-    { value: 'acceptEdits', label: 'accept edits' },
-    { value: 'plan', label: 'plan' },
-    { value: 'auto', label: 'auto' },
-    { value: 'dontAsk', label: "don't ask" },
-    { value: 'bypassPermissions', label: 'bypass permissions' },
-  ];
-  const choices: { value: BranchChoice; label: string }[] = [
-    { value: 'reuse', label: 'Reuse the existing branch' },
-    { value: 'suffix', label: 'Create a new branch with a suffix' },
-  ];
+  const modes: { value: PermissionMode | ''; label: string }[] = $derived([
+    { value: '', label: t('last used') },
+    { value: 'default', label: t('default') },
+    { value: 'acceptEdits', label: t('accept edits') },
+    { value: 'plan', label: t('plan') },
+    { value: 'auto', label: t('auto') },
+    { value: 'dontAsk', label: t("don't ask") },
+    { value: 'bypassPermissions', label: t('bypass permissions') },
+  ]);
+  const choices: { value: BranchChoice; label: string }[] = $derived([
+    { value: 'reuse', label: t('Reuse the existing branch') },
+    { value: 'suffix', label: t('Create a new branch with a suffix') },
+  ]);
 </script>
 
 <Sheet {title} width={560} {onclose}>
@@ -257,13 +270,15 @@
     >
       {#if resuming}
         <p class="note" data-testid="resume-note">
-          A work item already exists for {subject} in {projectName(plan.project_id)} on branch
-          <code>{plan.branch}</code>. Resume it: its tab and sessions are focused or recreated.
+          {t(
+            'A work item already exists for {subject} in {project} on branch {branch}. Resume it: its tab and sessions are focused or recreated.',
+            { subject, project: projectName(plan.project_id), branch: plan.branch },
+          )}
         </p>
         <dl class="facts">
-          <dt>Branch</dt>
+          <dt>{t('Branch')}</dt>
           <dd><code>{plan.branch}</code></dd>
-          <dt>Worktree</dt>
+          <dt>{t('Worktree')}</dt>
           <dd><code>{plan.worktree_path}</code></dd>
         </dl>
       {:else}
@@ -273,7 +288,7 @@
             style:--bar={resolveProjectColor(projects.byId(plan.project_id)?.color) ?? 'transparent'}
           >
             <Select
-              label="Project"
+              label={t('Project')}
               value={plan.project_id}
               disabled={switching}
               options={plan.project_choices.map((id) => ({ value: id, label: projectName(id) }))}
@@ -281,23 +296,24 @@
             />
             {#if plan.project_guessed && plan.source.kind === 'ticket'}
               <p class="hint" data-testid="project-guess">
-                No usual project for {sourceName(plan, plan.source.ticket.account)} tickets yet. Kelta will remember
-                this one.
+                {t('No usual project for {source} tickets yet. Kelta will remember this one.', {
+                  source: sourceName(plan, plan.source.ticket.account),
+                })}
               </p>
             {/if}
           </div>
         {/if}
         {#if plan.repo_choices.length > 1}
           <Select
-            label="Repository"
+            label={t('Repository')}
             bind:value={plan.repo_id}
             options={plan.repo_choices.map((r) => ({ value: r, label: r }))}
           />
         {/if}
         <div class="two">
-          <TextInput label="Base branch" bind:value={plan.base} error={touched ? errors.base : null} />
+          <TextInput label={t('Base branch')} bind:value={plan.base} error={touched ? errors.base : null} />
           <TextInput
-            label="Branch"
+            label={t('Branch')}
             bind:value={plan.branch}
             error={errors.branch ?? (touched ? errors.repo : null)}
             autofocus={!seed.project_guessed}
@@ -307,13 +323,13 @@
           <div class="warn" role="note">
             <Icon name="triangle-alert" size={14} />
             <span>
-              Branch <code>{plan.branch}</code> already exists{plan.branch_exists.has_worktree
-                ? ' and has a worktree'
-                : ''}.
+              {plan.branch_exists.has_worktree
+                ? t('Branch {branch} already exists and has a worktree.', { branch: plan.branch })
+                : t('Branch {branch} already exists.', { branch: plan.branch })}
             </span>
           </div>
           <Select
-            label="When the branch exists"
+            label={t('When the branch exists')}
             value={plan.branch_exists.choice}
             options={choices}
             onchange={(v) => {
@@ -321,23 +337,23 @@
             }}
           />
         {/if}
-        <TextInput label="Worktree path" value={plan.worktree_path} readonly />
+        <TextInput label={t('Worktree path')} value={plan.worktree_path} readonly />
 
         <fieldset>
           <legend>Claude ({plan.claude.profile})</legend>
           <div class="two">
-            <TextInput label="Model" bind:value={plan.claude.model} />
-            <Select label="Effort" bind:value={plan.claude.effort} options={efforts} />
+            <TextInput label={t('Model')} bind:value={plan.claude.model} />
+            <Select label={t('Effort')} bind:value={plan.claude.effort} options={efforts} />
           </div>
           <Select
-            label="Permission mode"
+            label={t('Permission mode')}
             bind:value={
               () => plan.claude.permission_mode ?? '', (v) => (plan.claude.permission_mode = v || null)
             }
             options={modes}
           />
           <TextInput
-            label="Prompt"
+            label={t('Prompt')}
             bind:value={plan.claude.prompt}
             multiline
             rows={6}
@@ -346,28 +362,40 @@
         </fieldset>
 
         <fieldset>
-          <legend>Side effects</legend>
+          <legend>{t('Side effects')}</legend>
           {#if isTicket}
-            <Toggle label="Assign the ticket to me" bind:checked={plan.side_effects.assign_me} />
+            <Toggle label={t('Assign the ticket to me')} bind:checked={plan.side_effects.assign_me} />
             {#if origTransition}
-              <Toggle label={`Move the ticket to ${describe(origTransition)}`} bind:checked={transitionOn} />
+              <Toggle
+                label={t('Move the ticket to {status}', { status: describe(origTransition) })}
+                bind:checked={transitionOn}
+              />
             {/if}
-            <Toggle label="Comment on the ticket" bind:checked={commentOn} />
+            <Toggle label={t('Comment on the ticket')} bind:checked={commentOn} />
             {#if commentOn}
-              <TextInput label="Comment" bind:value={commentText} multiline rows={2} error={errors.comment} />
+              <TextInput
+                label={t('Comment')}
+                bind:value={commentText}
+                multiline
+                rows={2}
+                error={errors.comment}
+              />
             {/if}
           {/if}
-          <Toggle label="Run setup commands" bind:checked={plan.side_effects.run_setup} />
+          <Toggle label={t('Run setup commands')} bind:checked={plan.side_effects.run_setup} />
         </fieldset>
       {/if}
     </form>
   {:else}
     <div class="progress" data-testid="start-progress">
       {#if phase === 'running'}
-        <p class="note"><Spinner size={14} /> {resuming ? 'Resuming' : 'Starting'} {subject}…</p>
+        <p class="note">
+          <Spinner size={14} />
+          {resuming ? t('Resuming {subject}…', { subject }) : t('Starting {subject}…', { subject })}
+        </p>
       {/if}
       {#if !resuming}
-        <ol class="steps" aria-label="Progress">
+        <ol class="steps" aria-label={t('Progress')}>
           {#each steps as s (s.name)}
             <li class={s.status} data-step={s.name} data-status={s.status}>
               {#if s.status === 'done'}
@@ -386,13 +414,13 @@
               {#if s.status === 'failed' || failedStep?.step === s.name}
                 <span class="step-actions">
                   <Button size="sm" loading={retrying === s.name} onclick={() => void retry(s.name)}
-                    >Retry</Button
+                    >{t('Retry')}</Button
                   >
                   <Button
                     size="sm"
                     variant="ghost"
                     loading={retrying === `skip:${s.name}`}
-                    onclick={() => void retry(`skip:${s.name}`)}>Skip</Button
+                    onclick={() => void retry(`skip:${s.name}`)}>{t('Skip')}</Button
                   >
                 </span>
               {/if}
@@ -403,10 +431,10 @@
       {#if phase === 'failed'}
         <div class="fail" role="alert" data-testid="start-failed">
           <Icon name="circle-alert" size={14} />
-          <span>{failedStep?.message || failure?.message || 'Starting the work item failed'}</span>
+          <span>{failedStep?.message || failure?.message || t('Starting the work item failed')}</span>
         </div>
         {#if resuming}
-          <Button onclick={() => void start()}>Retry</Button>
+          <Button onclick={() => void start()}>{t('Retry')}</Button>
         {/if}
       {/if}
     </div>
@@ -414,19 +442,20 @@
 
   {#snippet actions()}
     {#if phase === 'failed'}
-      {#if ticketUrl}<Button variant="ghost" icon="external-link" onclick={browse}>Open in browser</Button
+      {#if ticketUrl}<Button variant="ghost" icon="external-link" onclick={browse}
+          >{t('Open in browser')}</Button
         >{/if}
-      <Button variant="ghost" onclick={() => (phase = 'edit')} disabled={live !== null}>Back</Button>
-      <Button variant="ghost" onclick={onclose}>Close</Button>
+      <Button variant="ghost" onclick={() => (phase = 'edit')} disabled={live !== null}>{t('Back')}</Button>
+      <Button variant="ghost" onclick={onclose}>{t('Close')}</Button>
     {:else if phase === 'edit'}
-      <Button variant="ghost" onclick={onclose}>Cancel</Button>
+      <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
       <Button
         variant="primary"
         type="submit"
         form="start-work-form"
         disabled={switching || (!valid && touched)}
       >
-        {resuming ? 'Resume' : 'Start'}
+        {resuming ? t('Resume') : t('Start')}
       </Button>
     {/if}
   {/snippet}

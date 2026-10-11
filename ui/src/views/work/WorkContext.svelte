@@ -1,6 +1,7 @@
 <script lang="ts">
   // The context bar's work item segment (#248): ticket status, phase, PR, git, cost, ⎇ details, the
   // primary action and the ⌘. work menu. The breadcrumb (key, title) and the return strip live elsewhere.
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
@@ -39,12 +40,13 @@
   // ⎇: what the bar has no room for, in its tooltip.
   const branchInfo = $derived.by(() => {
     if (!item) return '';
-    const lines = [`${item.branch} (vs ${item.base})`, item.worktree];
-    if (item.port_base != null) lines.push(`ports ${item.port_base}–${item.port_base + 9}`);
-    if (item.auto_finish) lines.push('armed: merges when ready, then finishes (M to disarm)');
+    const lines = [t('{branch} (vs {base})', { branch: item.branch, base: item.base }), item.worktree];
+    if (item.port_base != null)
+      lines.push(t('ports {from}–{to}', { from: item.port_base, to: item.port_base + 9 }));
+    if (item.auto_finish) lines.push(t('armed: merges when ready, then finishes (M to disarm)'));
     if (git && !git.missing && (git.insertions || git.deletions))
       lines.push(`+${git.insertions} −${git.deletions}`);
-    if (git?.dirty) lines.push('Uncommitted changes');
+    if (git?.dirty) lines.push(t('Uncommitted changes'));
     return lines.join('\n');
   });
 
@@ -76,7 +78,7 @@
     const out: MenuItem[] = [
       {
         id: 'primary',
-        label: phase.primaryLabel || 'No next action',
+        label: phase.primaryLabel || t('No next action'),
         kbd: 'enter',
         disabled: !phase.primary || primaryBlocked !== null,
         title: primaryBlocked ?? undefined,
@@ -124,14 +126,20 @@
 </script>
 
 {#if item && phase}
-  <span class="work" role="group" aria-label="Work item" data-testid="context-work" data-phase={phase.id}>
+  <span
+    class="work"
+    role="group"
+    aria-label={t('Work item')}
+    data-testid="context-work"
+    data-phase={phase.id}
+  >
     {#if ticketRef}
       <Button
         size="sm"
         variant="secondary"
         class="ticket"
         aria-haspopup="menu"
-        title="Move to…"
+        title={t('Move to…')}
         data-testid="work-status"
         disabled={!detail}
         onclick={(e: MouseEvent) => (picking = e.currentTarget as HTMLElement)}
@@ -144,7 +152,9 @@
       size="sm"
       variant="secondary"
       class="phase"
-      title="{phase.label}{phase.detail ? `: ${phase.detail}` : ''} (steps and sessions)"
+      title={t('{phase} (steps and sessions)', {
+        phase: `${phase.label}${phase.detail ? `: ${phase.detail}` : ''}`,
+      })}
       data-testid="work-phase"
       onclick={() =>
         void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
@@ -159,28 +169,35 @@
         size="sm"
         variant="ghost"
         class="pr"
-        title="{pr.title} ({ci.label}): open in the browser"
+        title={t('{title} ({ci}): open in the browser', { title: pr.title, ci: ci.label })}
         data-testid="work-pr"
         onclick={() => void runWorkAction('open_pr', item)}
       >
-        <span class="pr-word">PR</span><span class="num">#{pr.ref.number}</span><Lamp
+        <span class="pr-word">{t('PR')}</span><span class="num">#{pr.ref.number}</span><Lamp
           level={ci.lamp}
           title={ci.label}
         />
       </Button>
     {/if}
     {#if git && !git.missing}
-      <span class="git num" title="{git.ahead} commits to push, {git.behind} behind {item.base}">
+      <span
+        class="git num"
+        title={t('{ahead} commits to push, {behind} behind {base}', {
+          ahead: git.ahead,
+          behind: git.behind,
+          base: item.base,
+        })}
+      >
         <span data-testid="ahead">↑{git.ahead}</span>
         <span data-testid="behind">↓{git.behind}</span>
       </span>
     {:else if work.gitError}
       <button type="button" class="k-link" onclick={() => void work.refreshStatus()}
-        >status unavailable, retry</button
+        >{t('status unavailable, retry')}</button
       >
     {/if}
     {#if spent > 0}
-      <span class="cost num" class:over title={over ? 'Over budget' : 'Claude spend on this item'}
+      <span class="cost num" class:over title={over ? t('Over budget') : t('Claude spend on this item')}
         >{usd(spent)}</span
       >
     {/if}
@@ -209,24 +226,31 @@
         variant="ghost"
         icon="ellipsis"
         aria-haspopup="menu"
-        aria-label="Work"
-        title="Work menu"
+        aria-label={t('Work')}
+        title={t('Work menu')}
         data-testid="work-menu-button"
         chord={menuChord}
         loading={pluginRunning}
-        onclick={() => (workUi.menu = item.id)}>Work</Button
+        onclick={() => (workUi.menu = item.id)}>{t('Work')}</Button
       >
     </span>
   </span>
 {:else}
-  <span class="work muted" data-testid="context-work">Work item not found</span>
+  <span class="work muted" data-testid="context-work">{t('Work item not found')}</span>
 {/if}
 
 {#if picking && detail}
   <StatusPicker tickets={[detail.ticket]} {projectId} anchor={picking} onclose={() => (picking = null)} />
 {/if}
 {#if menuPos}
-  <Menu items={menuItems} x={menuPos.x} y={menuPos.y} label="Work" onselect={onMenu} onclose={closeMenu} />
+  <Menu
+    items={menuItems}
+    x={menuPos.x}
+    y={menuPos.y}
+    label={t('Work')}
+    onselect={onMenu}
+    onclose={closeMenu}
+  />
 {/if}
 
 <style>

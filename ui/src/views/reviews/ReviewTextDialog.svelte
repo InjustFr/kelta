@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { Button, Dialog, TextInput } from '$lib/ui';
 
   interface Props {
@@ -41,7 +42,7 @@
 <Dialog {title} {onclose}>
   <TextInput bind:value={text} {label} multiline rows={6} {onkeydown} />
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <Button
       variant={danger ? 'danger' : 'primary'}
       loading={busy}

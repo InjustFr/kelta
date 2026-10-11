@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { projects, toasts } from '$lib/stores';
 
   import { activateProject } from '../nav';
@@ -23,7 +24,7 @@
         .map((p) => ({
           id: p.id,
           label: p.name,
-          detail: p.builtin ? 'Home' : p.open ? (p.active ? 'active' : 'open') : 'not open',
+          detail: p.builtin ? t('Home') : p.open ? (p.active ? t('active') : t('open')) : t('not open'),
           icon: p.builtin ? 'house' : 'folder',
         })),
       query,
@@ -39,19 +40,19 @@
       if (p && !p.open) await projects.open(id);
       await activateProject(id);
     } catch (err) {
-      toasts.error(err, 'Opening the project failed');
+      toasts.error(err, t('Opening the project failed'));
     }
   }
 </script>
 
 <Picker
-  title={onpick ? 'Choose a project' : 'Switch project'}
-  placeholder={placeholder ?? 'Project name…'}
+  title={onpick ? t('Choose a project') : t('Switch project')}
+  placeholder={placeholder ?? t('Project name…')}
   items={results}
   {query}
   onquery={(q) => (query = q)}
   onpick={(id) => void pick(id)}
   {onclose}
   testid="switcher"
-  empty="No matching project"
+  empty={t('No matching project')}
 />

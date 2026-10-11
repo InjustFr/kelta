@@ -1,6 +1,7 @@
 <script lang="ts">
   // "Sign in with GitHub / GitLab" (OAuth device flow). The backend keeps the device code and
   // writes the token to `secretRef`; this component only ever sees the user code and the URL.
+  import { t } from '$lib/i18n/index.svelte';
   import type { AccountKind, OAuthDevicePrompt } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
@@ -62,30 +63,32 @@
 
 <div class="device" data-testid="device-sign-in">
   {#if prompt}
-    <p>Enter this code at <strong>{bare(prompt.verification_uri)}</strong> and approve Kelta.</p>
+    <p>{t('Enter this code at {url} and approve Kelta.', { url: bare(prompt.verification_uri) })}</p>
     <div class="code-row">
-      <output class="code" data-testid="user-code" aria-label="Sign-in code">{prompt.user_code}</output>
+      <output class="code" data-testid="user-code" aria-label={t('Sign-in code')}>{prompt.user_code}</output>
       <IconButton
         icon={copied ? 'check' : 'copy'}
-        label={copied ? 'Code copied' : 'Copy code'}
+        label={copied ? t('Code copied') : t('Copy code')}
         onclick={() => copy(prompt!.user_code)}
       />
       <Button
         size="sm"
         icon="external-link"
         onclick={() => ipc.openExternal({ url: prompt!.verification_uri }).catch(() => {})}
-        >Open {service}</Button
+        >{t('Open {name}', { name: service })}</Button
       >
     </div>
     <p class="muted" role="status">
-      Waiting for approval. The code works for {Math.max(1, Math.round(prompt.expires_in / 60))} minutes.
+      {t('Waiting for approval. The code works for {n} minutes.', {
+        n: Math.max(1, Math.round(prompt.expires_in / 60)),
+      })}
     </p>
   {:else}
     <div class="code-row">
       <Button variant="primary" loading={busy} onclick={signIn} data-testid="device-sign-in-start"
-        >Sign in with {service}</Button
+        >{t('Sign in with {name}', { name: service })}</Button
       >
-      <span class="muted">Kelta gets its own token and keeps it in <code>{secretRef}</code>.</span>
+      <span class="muted">{t('Kelta gets its own token and keeps it in {ref}.', { ref: secretRef })}</span>
     </div>
   {/if}
   {#if error}<p class="error" role="alert" data-testid="device-sign-in-error">{error}</p>{/if}

@@ -1,5 +1,6 @@
 // Store singletons, the UiEvent dispatcher and startup loading.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { UiEvent } from '$lib/gen';
 import { connectUiEvents, onAnyUiEvent } from '$lib/ipc/events';
 
@@ -35,7 +36,7 @@ export const ui = new UiStore();
 export const tools = new ToolsStore();
 export const plugins = new PluginsStore();
 
-layout.onSaveError = (err) => toasts.error(err, 'Saving layout failed');
+layout.onSaveError = (err) => toasts.error(err, t('Saving layout failed'));
 
 const ALL = [
   projects,
@@ -99,7 +100,11 @@ export function bootstrap(): Promise<BootstrapResult> {
       await layout.load(active.id).catch(() => failed.push('layout_get'));
     }
     if (failed.length > 0) {
-      toasts.push({ level: 'warn', text: `Backend not ready: ${failed.join(', ')} failed`, action: null });
+      toasts.push({
+        level: 'warn',
+        text: t('Backend not ready: {what} failed', { what: failed.join(', ') }),
+        action: null,
+      });
     }
     return { failed };
   })();

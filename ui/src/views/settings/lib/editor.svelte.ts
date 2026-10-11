@@ -1,6 +1,7 @@
 // State of the Settings pane: which layer is edited, the layer document, per-path errors, and the
 // write operations. One instance per pane, shared with the sections through Svelte context.
 
+import { t } from '$lib/i18n/index.svelte';
 import { getContext, setContext } from 'svelte';
 
 import type { EffectiveSettings, JsonValue, Layer, LayerDoc } from '$lib/gen';
@@ -87,17 +88,17 @@ export class SettingsEditor {
 
   access(path: string): Access {
     if (this.layer === 'global') return { editable: true, reason: null };
-    if (!this.projectId) return { editable: false, reason: 'Select a project first' };
+    if (!this.projectId) return { editable: false, reason: t('Select a project first') };
     if (this.layer === 'project') {
       const info = this.info(path);
       if (info && info.known && !info.scope.includes('project')) {
-        return { editable: false, reason: 'Global only: this key cannot be set per project' };
+        return { editable: false, reason: t('Global only: this key cannot be set per project') };
       }
       return { editable: true, reason: null };
     }
-    if (!repoAllows(path)) return { editable: false, reason: 'Not allowed in a repo-local config' };
+    if (!repoAllows(path)) return { editable: false, reason: t('Not allowed in a repo-local config') };
     if (this.doc?.trusted === false) {
-      return { editable: false, reason: 'Read-only until this repo config is trusted' };
+      return { editable: false, reason: t('Read-only until this repo config is trusted') };
     }
     return { editable: true, reason: null };
   }

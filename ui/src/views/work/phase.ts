@@ -1,6 +1,7 @@
 // The one derived state of a work item (FLOW §2.2): label, lamp, next action and Now section.
 // Pure; used by Now, the work bar, the tab lamp, the rail tile and the palette.
 
+import { msg, t, tn } from '$lib/i18n/index.svelte';
 import type { GitStatus, Review, ReviewDelta, RunState, SessionInfo, WorkItem } from '$lib/gen';
 
 /** Lamp shapes (DESIGN §6.1). `working` and `parked` are derived, not Attention levels. */
@@ -99,18 +100,16 @@ function p(
   return { id, label, detail, lamp, primary, primaryLabel, section };
 }
 
-const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
-
 /** `1.8k` for big counts. */
 const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${n}`);
 
 /** The delta chip parts: `212 lines`, `9 files`, `tests: none`, `+1.8k generated`. */
 export function deltaParts(d: ReviewDelta): string[] {
   return [
-    plural(d.lines, 'line').replace(/^\d+/, short(d.lines)),
-    plural(d.files, 'file'),
-    `tests: ${d.tests ? d.tests : 'none'}`,
-    ...(d.generated ? [`+${short(d.generated)} generated`] : []),
+    tn('{n} line', '{n} lines', d.lines, { n: short(d.lines) }),
+    tn('{n} file', '{n} files', d.files),
+    d.tests ? t('tests: {n}', { n: d.tests }) : t('tests: none'),
+    ...(d.generated ? [t('+{n} generated', { n: short(d.generated) })] : []),
   ];
 }
 
@@ -122,20 +121,20 @@ export const deltaChip = (d: ReviewDelta): string => deltaParts(d).join(' · ');
 /** A failed start step as a gerund for "Failed …" / "Retry …" (common.ts holds the checklist
  *  wording); unknown ids read as words. */
 const STEP_DOING: Record<string, string> = {
-  before_start: 'running the before-start hook',
-  fetch_ticket: 'fetching the ticket',
-  fetch_base: 'fetching the base branch',
-  worktree: 'creating the branch folder',
-  include_files: 'copying included files',
-  claude_files: 'preparing Claude files',
-  layout: 'opening the panes',
-  setup: 'running setup',
-  editor: 'starting the editor',
-  claude: 'starting Claude',
-  tracker_side_effects: 'updating the ticket',
-  persist: 'saving the work item',
+  before_start: msg('running the before-start hook'),
+  fetch_ticket: msg('fetching the ticket'),
+  fetch_base: msg('fetching the base branch'),
+  worktree: msg('creating the branch folder'),
+  include_files: msg('copying included files'),
+  claude_files: msg('preparing Claude files'),
+  layout: msg('opening the panes'),
+  setup: msg('running setup'),
+  editor: msg('starting the editor'),
+  claude: msg('starting Claude'),
+  tracker_side_effects: msg('updating the ticket'),
+  persist: msg('saving the work item'),
 };
-const doing = (step: string): string => STEP_DOING[step] ?? step.replace(/_/g, ' ');
+const doing = (step: string): string => (STEP_DOING[step] ? t(STEP_DOING[step]) : step.replace(/_/g, ' '));
 
 /** The first matching row of FLOW §2.2 wins. `claude` is the item's Claude session (its `status`).
  *  A parked item (#142) keeps its phase; its quiet lamp (none, activity, done) turns `parked`. */
@@ -159,12 +158,12 @@ function phaseRow(
   const run = item.run;
   // A background run's claim (#235): its own phase and state, `note` as the detail.
   if (run && run.state !== 'done') {
-    const name = [run.name, run.phase].filter(Boolean).join(' · ') || 'Background run';
+    const name = [run.name, run.phase].filter(Boolean).join(' · ') || t('Background run');
     const stuck = run.state === 'blocked' || run.state === 'failed';
     return p(
       'run',
-      run.state === 'orphaned' ? `${name} (orphaned)` : name,
-      run.note ?? run.state,
+      run.state === 'orphaned' ? t('{name} (orphaned)', { name }) : name,
+      run.note ?? t(RUN_STATE[run.state]),
       RUN_LAMP[run.state],
       null,
       '',
@@ -177,81 +176,89 @@ function phaseRow(
   if (st.kind === 'failed')
     return p(
       'failed',
-      `Failed ${doing(st.step)}`,
+      t('Failed {step}', { step: doing(st.step) }),
       st.message,
       'error',
       'retry',
-      `Retry ${doing(st.step)}`,
+      t('Retry {step}', { step: doing(st.step) }),
       'fix',
     );
   if (st.kind === 'queued')
     return p(
       'queued',
-      'Queued',
-      'waiting for a Claude slot',
+      t('Queued'),
+      t('waiting for a Claude slot'),
       'none',
       'start_now',
-      'Start now (over cap)',
+      t('Start now (over cap)'),
       'in_flight',
     );
   if (st.kind === 'starting' || st.kind === 'planned') {
     const done = item.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
     const detail = item.steps.length
-      ? `step ${Math.min(done + 1, item.steps.length)} of ${item.steps.length}`
+      ? t('step {n} of {total}', { n: Math.min(done + 1, item.steps.length), total: item.steps.length })
       : '';
-    return p('starting', 'Starting', detail, 'working', null, '', 'in_flight');
+    return p('starting', t('Starting'), detail, 'working', null, '', 'in_flight');
   }
   if (git?.missing)
-    return p('missing', 'Worktree missing', item.worktree, 'error', 'recreate', 'Recreate', 'in_flight');
+    return p(
+      'missing',
+      t('Worktree missing'),
+      item.worktree,
+      'error',
+      'recreate',
+      t('Recreate'),
+      'in_flight',
+    );
   const conflicts = item.rebase?.conflicts.length ?? 0;
   if (conflicts > 0)
     return p(
       'rebase_stopped',
-      'Rebase stopped',
-      plural(conflicts, 'conflicted file'),
+      t('Rebase stopped'),
+      tn('{n} conflicted file', '{n} conflicted files', conflicts),
       'error',
       'resolve',
-      'Ask Claude to resolve',
+      t('Ask Claude to resolve'),
       'fix',
     );
   if (claude?.status === 'needs_input')
     return p(
       'needs_you',
-      'Claude needs you',
+      t('Claude needs you'),
       claude.claude?.preview ?? '',
       'needs_input',
       'go_claude',
-      'Go to Claude',
+      t('Go to Claude'),
       'needs_you',
     );
   if (claude?.status === 'working')
-    return p('working', 'Claude working', '', 'working', null, '', 'in_flight');
+    return p('working', t('Claude working'), '', 'working', null, '', 'in_flight');
   if (st.kind === 'merged')
-    return p('merged', 'Merged', st.detail ?? prLabel, 'none', 'finish', 'Finish…', 'ship');
+    return p('merged', t('Merged'), st.detail ?? prLabel, 'none', 'finish', t('Finish…'), 'ship');
   if (st.kind === 'pr_closed' || pr?.state === 'closed')
-    return p('closed', 'PR closed', prLabel, 'none', 'finish', 'Finish…', 'ship');
+    return p('closed', t('PR closed'), prLabel, 'none', 'finish', t('Finish…'), 'ship');
 
   if (item.kind === 'review') {
     if (pr && pr.my_state && pr.my_state !== 'pending') {
       if (pr.reviewed_head && pr.reviewed_head !== pr.head_sha)
         return p(
           'updated',
-          'Updated since your review',
+          t('Updated since your review'),
           prLabel,
           'none',
           'open_review',
-          'Open review',
+          t('Open review'),
           'requests',
         );
-      return p('reviewed', 'Reviewed', prLabel, 'none', 'finish', 'Finish…', 'ship');
+      return p('reviewed', t('Reviewed'), prLabel, 'none', 'finish', t('Finish…'), 'ship');
     }
     return p(
       'reviewing',
-      `Reviewing ${prLabel}`.trim(),
+      t('Reviewing {pr}', { pr: prLabel }).trim(),
       '',
       'none',
       'open_review',
-      'Open review',
+      t('Open review'),
       'requests',
     );
   }
@@ -259,21 +266,21 @@ function phaseRow(
   if (item.review_due)
     return p(
       'to_review',
-      'To review',
-      item.delta ? deltaChip(item.delta) : 'Claude finished',
+      t('To review'),
+      item.delta ? deltaChip(item.delta) : t('Claude finished'),
       'done',
       'review_delta',
-      'Review changes',
+      t('Review changes'),
       'to_review',
     );
   if (item.claude_replied)
     return p(
       'replied',
-      'Claude replied',
+      t('Claude replied'),
       claude?.claude?.preview ?? '',
       'needs_input',
       'go_claude',
-      'Go to Claude',
+      t('Go to Claude'),
       'needs_you',
     );
   const hasPr = pr !== null || item.pr_url !== null;
@@ -281,11 +288,11 @@ function phaseRow(
   if (hasPr && remoteNew > 0)
     return p(
       'remote_new',
-      'Remote has new commits',
-      plural(remoteNew, 'commit'),
+      t('Remote has new commits'),
+      tn('{n} commit', '{n} commits', remoteNew),
       'error',
       'rebase',
-      `Rebase onto origin/${item.branch}`,
+      t('Rebase onto origin/{branch}', { branch: item.branch }),
       'fix',
     );
   // Local work beats remote verdicts: only when the local HEAD is the PR head.
@@ -293,18 +300,26 @@ function phaseRow(
   if (pr && atPrHead) {
     const onHead = !pr.decision_head || pr.decision_head === pr.head_sha;
     if (pr.decision === 'changes_requested' && onHead)
-      return p('changes_requested', 'Changes requested', prLabel, 'error', 'fix', 'Fix with Claude', 'fix');
+      return p(
+        'changes_requested',
+        t('Changes requested'),
+        prLabel,
+        'error',
+        'fix',
+        t('Fix with Claude'),
+        'fix',
+      );
     if (pr.ci === 'failure' || pr.ci === 'error') {
       const names = pr.failed_check_names;
       const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
       const detail = shown ? `${prLabel} · ${shown}` : prLabel;
       return p(
         'checks_failed',
-        'Checks failed',
+        t('Checks failed'),
         detail,
         'error',
         'fix_checks',
-        'Send failures to Claude',
+        t('Send failures to Claude'),
         'fix',
       );
     }
@@ -314,36 +329,68 @@ function phaseRow(
   if (pr?.last_comment_at && Date.parse(pr.last_comment_at) > seen)
     return p(
       'new_comments',
-      'New comments',
-      plural(pr.unresolved_threads ?? 0, 'unresolved thread'),
+      t('New comments'),
+      tn('{n} unresolved thread', '{n} unresolved threads', pr.unresolved_threads ?? 0),
       'error',
       'fix',
-      'Fix with Claude',
+      t('Fix with Claude'),
       'fix',
     );
   if (pr?.mergeable === false)
     return p(
       'conflicts',
-      `Conflicts with ${item.base}`,
-      git ? `${git.behind} behind` : '',
+      t('Conflicts with {base}', { base: item.base }),
+      git ? t('{n} behind', { n: git.behind }) : '',
       'error',
       'rebase',
-      'Rebase',
+      t('Rebase'),
       'fix',
     );
   if (hasPr && git?.diverged)
-    return p('rebased', 'Rebased', `push rewrites ${prLabel}`, 'none', 'ship', 'Force push…', 'ship');
-  if (hasPr && git?.unpushed) return p('unpushed', 'Unpushed', prLabel, 'none', 'ship', 'Push', 'ship');
+    return p(
+      'rebased',
+      t('Rebased'),
+      t('push rewrites {pr}', { pr: prLabel }),
+      'none',
+      'ship',
+      t('Force push…'),
+      'ship',
+    );
+  if (hasPr && git?.unpushed) return p('unpushed', t('Unpushed'), prLabel, 'none', 'ship', t('Push'), 'ship');
   if (!hasPr && (git?.ahead ?? 0) > 0)
-    return p('ready', 'Ready to ship', plural(git?.ahead ?? 0, 'commit'), 'none', 'ship', 'Ship', 'ship');
+    return p(
+      'ready',
+      t('Ready to ship'),
+      tn('{n} commit', '{n} commits', git?.ahead ?? 0),
+      'none',
+      'ship',
+      t('Ship'),
+      'ship',
+    );
   if (pr?.decision === 'approved' && pr.ci === 'success')
-    return p('approved', 'Approved', prLabel, 'none', 'open_pr', 'Open PR', 'ship');
+    return p('approved', t('Approved'), prLabel, 'none', 'open_pr', t('Open PR'), 'ship');
   if (hasPr) {
-    const ci = pr ? ` checks ${pr.ci}` : '';
-    return p('in_review', 'In review', `${prLabel}${ci}`.trim(), 'none', 'open_pr', 'Open PR', 'in_flight');
+    const ci = pr ? ` ${t('checks {state}', { state: pr.ci })}` : '';
+    return p(
+      'in_review',
+      t('In review'),
+      `${prLabel}${ci}`.trim(),
+      'none',
+      'open_pr',
+      t('Open PR'),
+      'in_flight',
+    );
   }
-  return p('no_changes', 'No changes yet', '', 'none', 'go_claude', 'Go to Claude', 'in_flight');
+  return p('no_changes', t('No changes yet'), '', 'none', 'go_claude', t('Go to Claude'), 'in_flight');
 }
+
+const RUN_STATE: Record<RunState, string> = {
+  running: msg('running'),
+  blocked: msg('blocked'),
+  failed: msg('failed'),
+  done: msg('done'),
+  orphaned: msg('orphaned'),
+};
 
 // Blocked is amber (the `error` lamp), failed red.
 const RUN_LAMP: Record<RunState, Lamp> = {

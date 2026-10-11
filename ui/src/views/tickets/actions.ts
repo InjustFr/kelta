@@ -1,5 +1,6 @@
 // Action handlers owned by L9 (tickets): `tickets.open`, `tickets.board` (+ the toast helper
 // `tickets.open_in_browser`).
+import { t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import type { ProjectId, TicketsMode } from '$lib/gen';
 import { openExternal } from '$lib/ipc/commands';
@@ -32,7 +33,7 @@ registerAction('tickets.open', async (args) => {
 registerAction('tickets.board', async () => {
   const projectId = projects.activeId;
   if (!projectId) {
-    toasts.info('Open a project first');
+    toasts.info(t('Open a project first'));
     return;
   }
   await openProjectTickets(projectId, 'board');
@@ -46,6 +47,6 @@ registerAction('tickets.open_in_browser', async (args) => {
   try {
     await openExternal({ url });
   } catch (err) {
-    toasts.error(err, 'Open in browser');
+    toasts.error(err, t('Open in browser'));
   }
 });

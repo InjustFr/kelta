@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { parseProjectColor, resolveProjectColor, slotLabel, SLOTS, type Slot } from '$lib/theme';
 
   // The active theme's 12 slot colours, stored as `theme:<slot>` so they follow the theme, plus a
@@ -17,7 +18,7 @@
   const custom = $derived(parsed && 'hex' in parsed ? parsed.hex : '');
 </script>
 
-<div class="colors" role="group" aria-label="Colour">
+<div class="colors" role="group" aria-label={t('Colour')}>
   {#each slots as s (s)}
     <button
       type="button"
@@ -32,13 +33,13 @@
     ></button>
   {/each}
   {#if custom}
-    <span class="custom" title="Custom {custom}" data-testid="custom-color">
-      <span class="swatch on" style:background={custom}></span>Custom
+    <span class="custom" title={t('Custom {color}', { color: custom })} data-testid="custom-color">
+      <span class="swatch on" style:background={custom}></span>{t('Custom')}
     </span>
   {/if}
   <input
     class="hex k-mono"
-    aria-label="Custom colour (hex)"
+    aria-label={t('Custom colour (hex)')}
     placeholder="#rrggbb"
     maxlength="7"
     value={custom}

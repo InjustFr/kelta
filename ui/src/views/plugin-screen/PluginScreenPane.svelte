@@ -2,6 +2,7 @@
   // Plugin screen host (SPEC §3.6, ARCHITECTURE §11.3): a sandboxed iframe created when the pane is
   // shown and destroyed when hidden (unless the screen is keep_alive). Each iframe gets a fresh
   // screen instance from plugin_screen_open, closed again with the iframe.
+  import { t } from '$lib/i18n/index.svelte';
   import { onMount, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -109,10 +110,10 @@
   async function disable(): Promise<void> {
     try {
       await ipc.pluginEnable({ id: pluginId, enabled: false });
-      toasts.info(`Plugin ${pluginId} disabled`);
+      toasts.info(t('Plugin {id} disabled', { id: pluginId }));
       void plugins.load();
     } catch (e) {
-      toasts.error(e, 'Disable plugin');
+      toasts.error(e, t('Disable plugin'));
     }
   }
 </script>
@@ -121,11 +122,11 @@
   {#if error}
     <ErrorState
       error={{ ...error, message: `${pluginId}/${screenId}: ${error.message}` }}
-      title={`${pluginName} screen failed`}
+      title={t('{name} screen failed', { name: pluginName })}
     >
       {#snippet actions()}
-        <Button icon="refresh-cw" onclick={() => reloads++}>Reload screen</Button>
-        <Button variant="danger" onclick={disable}>Disable plugin</Button>
+        <Button icon="refresh-cw" onclick={() => reloads++}>{t('Reload screen')}</Button>
+        <Button variant="danger" onclick={disable}>{t('Disable plugin')}</Button>
       {/snippet}
     </ErrorState>
   {:else if live && opened}
@@ -139,7 +140,7 @@
       class:hidden={!visible}
     ></iframe>
   {:else if live}
-    <div class="loading"><Spinner label="Opening screen" /></div>
+    <div class="loading"><Spinner label={t('Opening screen')} /></div>
   {/if}
 </div>
 

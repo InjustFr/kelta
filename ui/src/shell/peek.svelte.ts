@@ -2,6 +2,7 @@
 // or by `attention.peek`. It reads `session_text_tail` and writes through `session_write`: no terminal
 // view is attached, so a hidden pane stays unmounted.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { SessionId, SessionInfo } from '$lib/gen';
 import { sessionWrite } from '$lib/ipc/commands';
 import { sessions } from '$lib/stores';
@@ -93,7 +94,7 @@ export function peekWaiting(): void {
     null,
   );
   if (s) peek.open(s.id, null, true);
-  else hud.show('nothing waiting');
+  else hud.show(t('nothing waiting'));
 }
 
 /** The session a lamp stands for: the most urgent one that lights it (working counts). */

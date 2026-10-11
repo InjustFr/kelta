@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { TicketItem } from '$lib/gen';
   import { Icon, Lamp, relativeTime } from '$lib/ui';
 
@@ -52,11 +53,11 @@
     onstart,
   }: Props = $props();
 
-  const t = $derived(item.ticket);
+  const tk = $derived(item.ticket);
   const pr = $derived(mainPr(item.prs));
   const prWords = $derived(pr ? `${ciGlyph(pr.ci).label}, ${reviewWord(pr).toLowerCase()}` : '');
   const wait = $derived(waitChip(item.waiting.filter((w) => w.why !== 'assigned')));
-  const age = $derived(ageLevel(t, Date.now()));
+  const age = $derived(ageLevel(tk, Date.now()));
   const phaseText = $derived(phase ? (phase.id === 'run' && phase.detail ? phase.detail : phase.label) : '');
   /** The signals in words: the lamp's tooltip once the signals column drops (narrow lists). */
   const signals = $derived(
@@ -64,17 +65,19 @@
       phaseText,
       pr ? `${prLabel(pr)}: ${prWords}` : '',
       wait?.label ?? '',
-      marked ? 'Marked: Mod+Enter starts the marked tickets' : '',
+      marked ? t('Marked: Mod+Enter starts the marked tickets') : '',
     ].filter(Boolean),
   );
   const tooltip = $derived(
     [
-      t.title,
-      t.sprint && groupBy !== 'sprint'
-        ? `Sprint: ${t.sprint.name}${t.sprint.active ? ' (current)' : ''}`
+      tk.title,
+      tk.sprint && groupBy !== 'sprint'
+        ? tk.sprint.active
+          ? t('Sprint: {name} (current)', { name: tk.sprint.name })
+          : t('Sprint: {name}', { name: tk.sprint.name })
         : '',
       ...signals,
-      `Updated ${relativeTime(Date.parse(t.updated_at))}`,
+      t('Updated {ago}', { ago: relativeTime(Date.parse(tk.updated_at)) }),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -102,17 +105,21 @@
         title={signals.join('\n') || undefined}
       />{/if}</span
   >
-  <span class="k-row-key c-key">{t.ref.key}</span>
+  <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
-    ><span class="text">{t.title}</span><span class="acts" data-acts>
-      <RowButton icon="arrow-right" label="Move (m)" onclick={onmove} />
+    ><span class="text">{tk.title}</span><span class="acts" data-acts>
+      <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
         icon="git-pull-request"
-        label={item.prs.length > 0 ? 'Open pull request (p)' : 'No pull request linked'}
+        label={item.prs.length > 0 ? t('Open pull request (p)') : t('No pull request linked')}
         disabled={item.prs.length === 0}
         onclick={onpr}
       />
-      <RowButton icon="play" label={hasWork ? 'Resume work (s)' : 'Start work (s)'} onclick={onstart} /></span
+      <RowButton
+        icon="play"
+        label={hasWork ? t('Resume work (s)') : t('Start work (s)')}
+        onclick={onstart}
+      /></span
     ></span
   >
   <!-- Fixed slots: work, pull request, waiting, marked. Icons with the words for tooltips and readers. -->
@@ -131,7 +138,7 @@
     </span>
     <span class="sig sig-pr">
       {#if pr}<span class="pr" data-pr
-          ><RowButton label={`Open ${prLabel(pr)} (p)`} onclick={onpr}
+          ><RowButton label={t('Open {name} (p)', { name: prLabel(pr) })} onclick={onpr}
             ><Icon name="git-pull-request" size={14} /><span class="k-visually-hidden">{prLabel(pr)}</span
             ><Lamp level={prLamp(pr)} title={prWords} /></RowButton
           ></span
@@ -143,27 +150,29 @@
         >{/if}
     </span>
     <span class="sig">
-      {#if marked}<span class="sig-icon marked" title="Marked: Mod+Enter starts the marked tickets"
-          ><Icon name="layers" size={14} /><span class="k-visually-hidden">marked</span></span
+      {#if marked}<span class="sig-icon marked" title={t('Marked: Mod+Enter starts the marked tickets')}
+          ><Icon name="layers" size={14} /><span class="k-visually-hidden">{t('marked')}</span></span
         >{/if}
     </span>
   </span>
   <span class="c-status" data-status
-    ><RowButton label={`${t.status.name}: move ${t.ref.key} (m)`} onclick={onmove}
-      ><StatusChip status={t.status} /></RowButton
+    ><RowButton
+      label={t('{status}: move {key} (m)', { status: tk.status.name, key: tk.ref.key })}
+      onclick={onmove}><StatusChip status={tk.status} /></RowButton
     ></span
   >
   <span class="c-age"
     >{#if age}<span
         class="aged {age}"
         data-age={age}
-        title={`${ageDays(t, Date.now())} days in ${t.status.name}`}>{ageDays(t, Date.now())}d</span
+        title={t('{n} days in {status}', { n: ageDays(tk, Date.now()), status: tk.status.name })}
+        >{t('{n}d', { n: ageDays(tk, Date.now()) })}</span
       >{/if}</span
   >
   {#if source !== null}<span class="c-source">{source}</span>{/if}
   {#if showAssignee}<span class="c-who"
-      ><span class="k-avatar" title={t.assignee?.name ?? 'Unassigned'}
-        >{t.assignee ? initials(t.assignee.name) : '–'}</span
+      ><span class="k-avatar" title={tk.assignee?.name ?? t('Unassigned')}
+        >{tk.assignee ? initials(tk.assignee.name) : '–'}</span
       ></span
     >{/if}
 </button>

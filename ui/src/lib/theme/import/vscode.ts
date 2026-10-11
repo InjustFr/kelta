@@ -1,6 +1,7 @@
 // VS Code colour theme (JSON / JSONC) -> Kelta theme (#231). Only `colors` is read: Kelta has no
 // editor, so `tokenColors` / `semanticTokenColors` are ignored. Loaded on demand by the picker.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { ThemeBase, ThemeDef, ThemeTerminal, ThemeUi } from '$lib/gen';
 
 import { BUILTIN } from '../builtin';
@@ -61,7 +62,7 @@ export function fromVscodeColors(
   const terminal: PartialTheme['terminal'] = pick(TERMINAL);
   terminal.ansi = ANSI.map((k) => (parseHex(colors[k]) ? (colors[k] as string) : undefined));
   found += terminal.ansi.filter(Boolean).length;
-  if (!found) return new Error('No usable colours in this theme');
+  if (!found) return new Error(t('No usable colours in this theme'));
   const base = typeof type === 'string' && Object.hasOwn(BASES, type) ? BASES[type] : undefined;
   return complete({ name, ui, terminal, ...(base && { base }) });
 }
@@ -72,7 +73,7 @@ export function fromVscode(text: string, fileName: string): ThemeDef | Error {
   try {
     json = JSON.parse(stripJsonc(text));
   } catch {
-    return new Error('This file is not valid JSON');
+    return new Error(t('This file is not valid JSON'));
   }
   const theme = (json && typeof json === 'object' && !Array.isArray(json) ? json : {}) as Record<
     string,
@@ -80,12 +81,15 @@ export function fromVscode(text: string, fileName: string): ThemeDef | Error {
   >;
   if (theme.include !== undefined) {
     return new Error(
-      `This theme extends ${String(theme.include)}. In VS Code run 'Developer: Generate Color Theme From Current Settings' and import that file.`,
+      t(
+        "This theme extends {theme}. In VS Code run 'Developer: Generate Color Theme From Current Settings' and import that file.",
+        { theme: String(theme.include) },
+      ),
     );
   }
   const colors = theme.colors;
   if (!colors || typeof colors !== 'object' || Array.isArray(colors)) {
-    return new Error('No "colors" object in this theme');
+    return new Error(t('No "colors" object in this theme'));
   }
   const name =
     typeof theme.name === 'string' && theme.name.trim() ? theme.name.trim() : titleCase(stem(fileName));

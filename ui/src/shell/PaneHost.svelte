@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { paneComponent, type AnyComponent } from '$app/registry';
   import type { PaneNode, Rect } from '$lib/layout';
   import type { ProjectId, TabId } from '$lib/gen';
@@ -72,30 +73,36 @@
 
   function menuItems(): MenuItem[] {
     const items: MenuItem[] = [
-      { id: 'right', label: 'Split right', icon: 'columns-2', kbd: chordFor('pane.split_right') },
-      { id: 'down', label: 'Split down', icon: 'rows-2', kbd: chordFor('pane.split_down') },
+      { id: 'right', label: t('Split right'), icon: 'columns-2', kbd: chordFor('pane.split_right') },
+      { id: 'down', label: t('Split down'), icon: 'rows-2', kbd: chordFor('pane.split_down') },
       {
         id: 'zoom',
-        label: zoomed ? 'Unzoom' : 'Zoom',
+        label: zoomed ? t('Unzoom') : t('Zoom'),
         icon: zoomed ? 'minimize-2' : 'maximize-2',
         kbd: chordFor('pane.zoom'),
       },
       detached
-        ? { id: 'window', label: 'Move back to main window', icon: 'app-window', separator: true }
+        ? { id: 'window', label: t('Move back to main window'), icon: 'app-window', separator: true }
         : {
             id: 'window',
-            label: 'Move to new window',
+            label: t('Move to new window'),
             icon: 'app-window',
             separator: true,
             kbd: chordFor('pane.detach'),
           },
     ];
     if (session) {
-      items.push({ id: 'rename', label: 'Rename session…', icon: 'pencil', separator: true });
+      items.push({ id: 'rename', label: t('Rename session…'), icon: 'pencil', separator: true });
     }
-    items.push({ id: 'close', label: 'Close pane', icon: 'x', separator: true, kbd: chordFor('pane.close') });
+    items.push({
+      id: 'close',
+      label: t('Close pane'),
+      icon: 'x',
+      separator: true,
+      kbd: chordFor('pane.close'),
+    });
     if (session) {
-      items.push({ id: 'stop', label: 'Stop session and close', icon: 'square', danger: true });
+      items.push({ id: 'stop', label: t('Stop session and close'), icon: 'square', danger: true });
     }
     return items;
   }
@@ -117,11 +124,11 @@
         break;
       case 'rename': {
         if (!session) break;
-        const name = await prompts.ask({ title: 'Rename session', label: 'Name', value: session.name });
+        const name = await prompts.ask({ title: t('Rename session'), label: t('Name'), value: session.name });
         if (name && name.trim() && name !== session.name) {
           await sessions
             .rename(session.id, name.trim())
-            .catch((err: unknown) => toasts.error(err, 'Rename failed'));
+            .catch((err: unknown) => toasts.error(err, t('Rename failed')));
         }
         break;
       }
@@ -146,7 +153,7 @@
       await plugins.load();
       close();
     } catch (err) {
-      toasts.error(err, 'Disabling the plugin failed');
+      toasts.error(err, t('Disabling the plugin failed'));
     }
   }
 </script>
@@ -199,12 +206,12 @@
         <span class="usage" data-testid="pane-usage"
           >{#if usage.context_pct !== null}<span
               class:hot={ctxHot(usage)}
-              title={ctxHot(usage) ? 'Compacts soon' : 'Context window used'}
-              >ctx {Math.round(usage.context_pct)}%</span
+              title={ctxHot(usage) ? t('Compacts soon') : t('Context window used')}
+              >{t('ctx')} {Math.round(usage.context_pct)}%</span
             > ·
           {/if}<span
             class:over={overBudgetNow}
-            title={overBudgetNow ? 'Over budget' : 'Spent by this session'}>{usd(usage.cost_usd)}</span
+            title={overBudgetNow ? t('Over budget') : t('Spent by this session')}>{usd(usage.cost_usd)}</span
           >
           · +{usage.lines_added}/−{usage.lines_removed}</span
         >
@@ -213,14 +220,15 @@
         <span class="hooks" data-testid="hooks-badge"
           ><Badge
             tone="warn"
-            title="Kelta can't tell when Claude is working or waiting. Fix installs the Claude Code status hooks."
-            >Live status off</Badge
+            title={t(
+              "Kelta can't tell when Claude is working or waiting. Fix installs the Claude Code status hooks.",
+            )}>{t('Live status off')}</Badge
           >
           <Button
             size="sm"
             variant="secondary"
             onclick={() => openContent(projectId, { content: { kind: 'diagnostics' }, placement: 'new_tab' })}
-            >Fix</Button
+            >{t('Fix')}</Button
           ></span
         >
       {/if}
@@ -228,7 +236,7 @@
       <span class="controls">
         <IconButton
           icon={zoomed ? 'minimize-2' : 'maximize-2'}
-          label={zoomed ? 'Unzoom pane' : 'Zoom pane'}
+          label={zoomed ? t('Unzoom pane') : t('Zoom pane')}
           chord={chordFor('pane.zoom')}
           size="sm"
           onclick={() => {
@@ -238,7 +246,7 @@
         />
         <IconButton
           icon="ellipsis"
-          label="Pane menu"
+          label={t('Pane menu')}
           size="sm"
           onclick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -249,7 +257,7 @@
         <span class="divider" aria-hidden="true"></span>
         <IconButton
           icon="x"
-          label="Close pane"
+          label={t('Close pane')}
           chord={chordFor('pane.close')}
           size="sm"
           onclick={close}
@@ -267,7 +275,7 @@
           {:else if entry.error}
             <ErrorState
               error={entry.error}
-              title="Could not load this view"
+              title={t('Could not load this view')}
               onretry={() => {
                 lazyComponents.reset(`pane:${content.kind}`);
                 if (loader) lazyComponents.ensure(`pane:${content.kind}`, loader);
@@ -279,15 +287,17 @@
           {#snippet failed(error)}
             <ErrorState
               error={error instanceof Error ? error : String(error)}
-              title={pluginId() ? `Plugin ${pluginId()} stopped working` : 'This pane crashed'}
+              title={pluginId()
+                ? t('Plugin {id} stopped working', { id: pluginId() ?? '' })
+                : t('This pane crashed')}
               onretry={pluginId() ? undefined : () => boundaryKey++}
             >
               {#snippet actions()}
                 {#if pluginId()}
-                  <Button icon="refresh-cw" onclick={() => boundaryKey++}>Reload screen</Button>
-                  <Button variant="danger" onclick={disablePlugin}>Disable plugin</Button>
+                  <Button icon="refresh-cw" onclick={() => boundaryKey++}>{t('Reload screen')}</Button>
+                  <Button variant="danger" onclick={disablePlugin}>{t('Disable plugin')}</Button>
                 {/if}
-                <Button onclick={close}>Close pane</Button>
+                <Button onclick={close}>{t('Close pane')}</Button>
               {/snippet}
             </ErrorState>
           {/snippet}
@@ -302,7 +312,7 @@
     items={menuItems()}
     x={menu.x}
     y={menu.y}
-    label="Pane actions"
+    label={t('Pane actions')}
     onselect={(id) => void onMenu(id)}
     onclose={() => (menu = null)}
   />

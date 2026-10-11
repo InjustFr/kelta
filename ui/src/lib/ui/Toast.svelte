@@ -1,4 +1,25 @@
+<script module lang="ts">
+  import { msg } from '$lib/i18n/index.svelte';
+
+  // shortcut: the core's toasts carry English text; the static ones below are translated by their exact
+  // text, dynamic ones and `KeltaError.message` show as sent (OS notifications and the macOS menu are
+  // translated in kelta-proto's i18n.rs). Upgrade by sending message ids from the core.
+  export const CORE_TEXTS = [
+    msg("Claude Code detected. Let your Claude sessions use Kelta's ticket tools?"),
+    msg('Tools moved to your global settings'),
+    msg('Ticket sources moved out of your projects'),
+    msg('A plugin screen stopped responding and was closed'),
+    msg('Claude is working: it gets your message when it stops.'),
+    msg('Install'),
+    msg('Never'),
+    msg('Review'),
+    msg('Enter token'),
+    msg('Yes'),
+  ];
+</script>
+
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Toast } from '$lib/gen';
 
   import IconButton from './IconButton.svelte';
@@ -20,17 +41,17 @@
 
 <div class="k-toast {toast.level}" role={toast.level === 'error' ? 'alert' : 'status'}>
   <span class="mark" aria-hidden="true"></span>
-  <p class="text k-selectable">{toast.text}</p>
+  <p class="text k-selectable">{t(toast.text)}</p>
   {#if toast.action && onaction}
     <button type="button" class="action" onclick={() => toast.action && onaction?.(toast.action)}>
-      {toast.action.label}
+      {t(toast.action.label)}
       {#if kbd}<Kbd chord={kbd} />{/if}
     </button>
   {/if}
   {#if toast.secondary && onsecondary}
-    <button type="button" class="action" onclick={onsecondary}>{toast.secondary.label}</button>
+    <button type="button" class="action" onclick={onsecondary}>{t(toast.secondary.label)}</button>
   {/if}
-  <IconButton icon="x" label="Dismiss" size="sm" onclick={ondismiss} />
+  <IconButton icon="x" label={t('Dismiss')} size="sm" onclick={ondismiss} />
 </div>
 
 <style>

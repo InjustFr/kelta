@@ -5,6 +5,7 @@
 
   import type { AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
+  import { setLocale, t } from '$lib/i18n/index.svelte';
   import { onUiEvent } from '$lib/ipc/events';
   import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
@@ -58,6 +59,11 @@
   const resolvedTheme = $derived(settings.theme);
   const resolved = $derived(resolveTheme(settings.value(), resolvedTheme));
   const terminalConfig = $derived(configFromSettings(settings.value()?.terminal, resolved.terminal));
+
+  // Interface language (#344): `t()` reads it, so the switch applies without a restart.
+  $effect(() => {
+    void setLocale(settings.value()?.app.language);
+  });
 
   $effect(() => {
     const root = document.documentElement;
@@ -216,7 +222,7 @@
     const offPrefix = keyManager.onPrefixChange((armed) => (prefixArmed = armed));
     const offRemoved = onUiEvent('session.removed', (ev) => terminalPool.release(ev.id));
     const offQuit = onUiEvent('app.quit_requested', (ev) => {
-      askQuit(ev).catch((err: unknown) => toasts.error(err, 'Quitting failed'));
+      askQuit(ev).catch((err: unknown) => toasts.error(err, t('Quitting failed')));
     });
     const offOpen = onUiEvent('ui.open', (ev) => {
       // The backend asks for a pane: the layout store applies it to a loaded layout; an unloaded
@@ -226,7 +232,7 @@
         layout
           .ensure(id)
           .then(() => layout.open(id, ev.request))
-          .catch((err: unknown) => toasts.error(err, 'Opening the pane failed'));
+          .catch((err: unknown) => toasts.error(err, t('Opening the pane failed')));
       }
       if (ev.request.focus) void activateProject(id);
     });
@@ -237,7 +243,7 @@
       else if (cmd.cmd === 'emit' && cmd.name === 'custom.bench.run')
         import('./bench')
           .then((b) => b.runScenario(cmd.payload))
-          .catch((err: unknown) => toasts.error(err, 'Bench scenario failed'));
+          .catch((err: unknown) => toasts.error(err, t('Bench scenario failed')));
       else if (cmd.cmd === 'start') {
         // The backend asked for the Start sheet (guessed project or plan preview).
         if (cmd.resolved) void startWorkOnTicket(cmd.resolved, cmd.project, { preview: true });
@@ -262,7 +268,7 @@
             for (const s of created) sessions.upsert(s);
             void activateProject(project);
           })
-          .catch((err: unknown) => toasts.error(err, 'Starting the session failed'));
+          .catch((err: unknown) => toasts.error(err, t('Starting the session failed')));
       }
     });
 
@@ -315,15 +321,15 @@
       {:else if projects.loaded}
         <EmptyState
           icon="folder"
-          title="No project open"
-          body="Pick a project in the sidebar, or create one from a code folder."
+          title={t('No project open')}
+          body={t('Pick a project in the sidebar, or create one from a code folder.')}
         >
           {#snippet actions()}
             <Button variant="primary" onclick={() => ui.openSheet('project_new')}
-              >Create project from folder</Button
+              >{t('Create project from folder')}</Button
             >
             <Button chord={chordFor('project.switcher')} onclick={() => ui.openOverlay('switcher')}
-              >Switch project</Button
+              >{t('Switch project')}</Button
             >
           {/snippet}
         </EmptyState>

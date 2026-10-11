@@ -2,6 +2,7 @@
 // fromVscodeColors() (#232). Detected by content: Ghostty theme files have no extension.
 // shortcut: Alacritty dotted keys and inline tables are not read, only `[section]` headers.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { ThemeDef } from '$lib/gen';
 
 import { ANSI, fromVscode, fromVscodeColors, HUES, stem, titleCase } from './vscode';
@@ -10,8 +11,9 @@ export { themeId } from './vscode';
 
 export type Format = 'vscode' | 'iterm' | 'alacritty' | 'base16' | 'ghostty' | 'kitty';
 
-export const UNRECOGNISED =
-  'Kelta could not recognise this theme file. Supported: VS Code, iTerm2, Ghostty, Kitty, Alacritty, base16.';
+export const UNRECOGNISED = msg(
+  'Kelta could not recognise this theme file. Supported: VS Code, iTerm2, Ghostty, Kitty, Alacritty, base16.',
+);
 
 /** First match wins, so the `background` lines shared by several formats are never ambiguous. */
 export function detect(text: string): Format | null {
@@ -67,7 +69,7 @@ const KEYS: Record<Exclude<Format, 'vscode'>, Record<string, string>> = {
 export function fromThemeFile(text: string, fileName: string): ThemeDef | Error {
   const format = detect(text);
   if (format === 'vscode') return fromVscode(text, fileName);
-  if (!format) return new Error(UNRECOGNISED);
+  if (!format) return new Error(t(UNRECOGNISED));
   const vals = format === 'iterm' ? readPlist(text) : readLines(text);
   const colors: Record<string, string> = {};
   for (const [key, own] of Object.entries(KEYS[format])) {

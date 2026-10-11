@@ -2,6 +2,7 @@
   // "Add a ticket source" (SPEC Design): search what an account offers (`tracker_sources`). With
   // `sourceId` the picked view joins that source's board; without, the pick creates a source labelled
   // after the board, feeding `projectId` when given. Opened as sheet `tracker.source_picker`.
+  import { msg, t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import type { SourceHit } from '$lib/gen';
   import { dispatch } from '$lib/actions';
@@ -104,16 +105,16 @@
         created = s.id;
         toasts.push({
           level: 'info',
-          text: `${s.label} added · Choose its projects`,
+          text: t('{name} added · Choose its projects', { name: s.label }),
           action: {
-            label: 'Choose projects',
+            label: t('Choose projects'),
             command: 'settings.open',
             args: { section: 'sources', source_id: s.id },
           },
         });
       }
     } catch (err) {
-      toasts.error(err, `Could not add ${hit.label}`);
+      toasts.error(err, t('Could not add {name}', { name: hit.label }));
     } finally {
       adding = false;
     }
@@ -138,28 +139,42 @@
     }
   }
 
+  const KINDS: Record<string, string> = {
+    board: msg('board'),
+    project: msg('project'),
+    filter: msg('filter'),
+    query: msg('query'),
+    repo: msg('repo'),
+    team: msg('team'),
+    sprint: msg('sprint'),
+  };
   const provider = $derived.by(() => {
     const kind = kindOf(account);
     return kind ? kindInfo(kind).label : account;
   });
 </script>
 
-<Sheet title="Add a ticket source" {onclose} width={480}>
+<Sheet title={t('Add a ticket source')} {onclose} width={480}>
   <div class="picker" data-testid="source-picker">
     {#if accountIds.length === 0}
-      <p class="state">No tracker account yet. Add one in Settings, Accounts.</p>
+      <p class="state">{t('No tracker account yet. Add one in Settings, Accounts.')}</p>
       <div>
         <Button size="sm" onclick={() => (onclose(), void dispatch('settings.open', { section: 'accounts' }))}
-          >Open accounts</Button
+          >{t('Open accounts')}</Button
         >
       </div>
     {:else}
       <div class="controls">
-        <Select label="Account" value={account} options={accountOptions} onchange={(v) => (picked = v)} />
+        <Select
+          label={t('Account')}
+          value={account}
+          options={accountOptions}
+          onchange={(v) => (picked = v)}
+        />
         <TextInput
-          label="Search"
+          label={t('Search')}
           bind:value={query}
-          placeholder="Board, project, filter or repository"
+          placeholder={t('Board, project, filter or repository')}
           autocomplete="off"
           autofocus
           spellcheck={false}
@@ -171,18 +186,23 @@
       </div>
 
       {#if failure?.unsupported}
-        <p class="state" data-testid="source-unsupported">{provider} can't list sources here.</p>
-        <div><Button size="sm" icon="file-code" onclick={editToml}>Edit TOML</Button></div>
+        <p class="state" data-testid="source-unsupported">
+          {t("{provider} can't list sources here.", { provider })}
+        </p>
+        <div><Button size="sm" icon="file-code" onclick={editToml}>{t('Edit TOML')}</Button></div>
       {:else if failure}
-        <p class="state" role="alert">Could not list sources: {failure.message}</p>
-        <div><Button size="sm" onclick={() => retry++}>Try again</Button></div>
+        <p class="state" role="alert">
+          {t('Could not list sources: {message}', { message: failure.message })}
+        </p>
+        <div><Button size="sm" onclick={() => retry++}>{t('Try again')}</Button></div>
       {:else if hits.length === 0}
         <p class="state">
-          {#if busy}<Spinner size={12} />{:else if query.trim()}No source matches “{query.trim()}”.{:else}This
-            account offers no source.{/if}
+          {#if busy}<Spinner size={12} />{:else if query.trim()}{t('No source matches “{query}”.', {
+              query: query.trim(),
+            })}{:else}{t('This account offers no source.')}{/if}
         </p>
       {:else}
-        <div class="list" id="src-hits" role="listbox" aria-label="Sources" aria-busy={busy}>
+        <div class="list" id="src-hits" role="listbox" aria-label={t('Sources')} aria-busy={busy}>
           {#each hits as hit, i (hit.view.id)}
             {@const added = isAdded(binding, hitsAccount, hit)}
             <!-- svelte-ignore a11y_click_events_have_key_events (the search field drives the keyboard) -->
@@ -200,10 +220,12 @@
               onmousedown={(e) => e.preventDefault()}
               onclick={() => void add(hit)}
             >
-              <span class="kind">{hit.kind}</span>
+              <span class="kind">{t(KINDS[hit.kind] ?? hit.kind)}</span>
               <span class="label">{hit.label}</span>
               {#if hit.detail}<span class="detail">{hit.detail}</span>{/if}
-              {#if added}<span class="done">Added</span>{:else if i === selected}<Kbd chord="enter" />{/if}
+              {#if added}<span class="done">{t('Added')}</span>{:else if i === selected}<Kbd
+                  chord="enter"
+                />{/if}
             </div>
           {/each}
         </div>

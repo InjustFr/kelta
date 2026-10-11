@@ -1,6 +1,7 @@
 // Pure layout tree operations (ARCHITECTURE §5.1). No Svelte, no IPC: every function returns a
 // new value and never mutates its input. Used by the layout store, the shell and the IPC mock.
 
+import { msg } from '$lib/i18n/index.svelte';
 import type {
   Layout,
   LayoutNode,
@@ -467,31 +468,31 @@ export function layoutSessions(layout: Layout): SessionId[] {
 export function defaultTitle(content: PaneContent): string {
   switch (content.kind) {
     case 'terminal':
-      return 'Terminal';
+      return msg('Terminal');
     case 'web':
-      return 'Web';
+      return msg('Web');
     case 'plugin_screen':
       return content.screen_id;
     case 'tickets':
-      return 'Tickets'; // list or board is a mode inside the pane, not a different feature
+      return msg('Tickets'); // list or board is a mode inside the pane, not a different feature
     case 'ticket_detail':
       return content.ticket.key;
     case 'reviews':
-      return 'Reviews';
+      return msg('Reviews');
     case 'review_detail':
       return `${content.review.repo}#${content.review.number}`;
     case 'inbox':
-      return 'Now';
+      return msg('Now');
     case 'work_item':
-      return 'Work item';
+      return msg('Work item');
     case 'settings':
-      return 'Settings';
+      return msg('Settings');
     case 'diagnostics':
-      return 'Diagnostics';
+      return msg('Diagnostics');
     case 'welcome':
-      return 'Welcome';
+      return msg('Welcome');
     case 'empty':
-      return 'Empty';
+      return msg('Empty');
   }
 }
 

@@ -1,5 +1,6 @@
 // Entry points of the start-work flow (SPEC §3.1): plan → (sheet | direct start | resume).
 
+import { t } from '$lib/i18n/index.svelte';
 import type {
   ProjectId,
   ReviewRef,
@@ -50,15 +51,21 @@ export async function beginStartWork(
     }
     const item = plan.existing ? await ipc.workResume({ id: plan.existing }) : await ipc.workStart({ plan });
     work.upsert(item);
-    const verb = plan.existing ? 'Resumed' : item.state.kind === 'queued' ? 'Queued' : 'Started';
-    toasts.info(`${verb} ${item.branch}`);
+    const branch = item.branch;
+    toasts.info(
+      plan.existing
+        ? t('Resumed {branch}', { branch })
+        : item.state.kind === 'queued'
+          ? t('Queued {branch}', { branch })
+          : t('Started {branch}', { branch }),
+    );
     void activateProject(item.project_id);
     return item;
   } catch (err) {
     const e = toIpcError('work_plan', err);
     const action = (e.detail as { action?: ToastAction } | null)?.action ?? null;
     if (action) toasts.push({ level: 'error', text: e.message, action });
-    else toasts.error(err, 'Start work');
+    else toasts.error(err, t('Start work'));
     return null;
   }
 }

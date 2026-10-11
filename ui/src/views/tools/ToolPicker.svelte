@@ -1,6 +1,7 @@
 <script lang="ts">
   // Tool picker sheet (SPEC §3.5): filter, Enter/click opens. An open that fails on a missing
   // binary shows its install hint and "Check again" (tool_check).
+  import { t } from '$lib/i18n/index.svelte';
   import { dispatch } from '$lib/actions';
   import type { SheetProps } from '$app/registry';
   import type { ToolCheck, ToolInfo } from '$lib/gen';
@@ -75,11 +76,16 @@
   }
 </script>
 
-<Sheet title="Open tool" {onclose}>
+<Sheet title={t('Open tool')} {onclose}>
   <div class="picker">
-    <TextInput bind:value={query} placeholder="Filter tools" aria-label="Filter tools" {onkeydown} />
+    <TextInput
+      bind:value={query}
+      placeholder={t('Filter tools')}
+      aria-label={t('Filter tools')}
+      {onkeydown}
+    />
     {#if !projectId}
-      <EmptyState icon="folder" title="No project selected" />
+      <EmptyState icon="folder" title={t('No project selected')} />
     {:else if slot?.error && !slot.data}
       <ErrorState error={slot.error} onretry={() => tools.load(projectId)} />
     {:else if !slot?.data}
@@ -87,32 +93,32 @@
     {:else if shown.length === 0}
       <EmptyState
         icon="wrench"
-        title="No tools yet"
-        body="Install a plugin that adds tools, or add one in Settings under Tools."
+        title={t('No tools yet')}
+        body={t('Install a plugin that adds tools, or add one in Settings under Tools.')}
       >
         {#snippet actions()}
           <Button
             onclick={() => {
               onclose();
               void dispatch('settings.open', { section: 'tools' });
-            }}>Open tool settings</Button
+            }}>{t('Open tool settings')}</Button
           >
         {/snippet}
       </EmptyState>
     {:else}
       <ul>
-        {#each shown as t (t.id)}
+        {#each shown as tool (tool.id)}
           <li>
-            <button class="row" onclick={() => open(t)}>
-              <Icon name={t.icon ?? 'wrench'} />
-              <span class="label">{t.label}</span>
-              {#if t.description}<span class="desc">{t.description}</span>{/if}
-              {#if t.source.kind === 'plugin'}<Badge>{t.source.plugin_id}</Badge>{/if}
+            <button class="row" onclick={() => open(tool)}>
+              <Icon name={tool.icon ?? 'wrench'} />
+              <span class="label">{tool.label}</span>
+              {#if tool.description}<span class="desc">{tool.description}</span>{/if}
+              {#if tool.source.kind === 'plugin'}<Badge>{tool.source.plugin_id}</Badge>{/if}
             </button>
-            {#if !installed(t)}
+            {#if !installed(tool)}
               <div class="missing" role="status">
-                <span>Not installed. {checks[t.id]?.install_hint ?? ''}</span>
-                <Button size="sm" onclick={() => check(t)}>Check again</Button>
+                <span>{t('Not installed.')} {checks[tool.id]?.install_hint ?? ''}</span>
+                <Button size="sm" onclick={() => check(tool)}>{t('Check again')}</Button>
               </div>
             {/if}
           </li>

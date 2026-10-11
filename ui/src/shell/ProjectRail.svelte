@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
@@ -92,14 +93,14 @@
 
   function menuItems(p: ProjectInfo): MenuItem[] {
     const index = reorderable.findIndex((x) => x.id === p.id);
-    const items: MenuItem[] = [{ id: 'settings', label: 'Project settings…', icon: 'settings' }];
+    const items: MenuItem[] = [{ id: 'settings', label: t('Project settings…'), icon: 'settings' }];
     if (!p.builtin) {
       items.push(
-        { id: 'up', label: 'Move up', icon: 'arrow-up', disabled: index <= 0, separator: true },
-        { id: 'down', label: 'Move down', icon: 'arrow-down', disabled: index >= reorderable.length - 1 },
-        { id: 'close', label: 'Close project', icon: 'x', separator: true },
-        { id: 'close_kill', label: 'Close and stop sessions', icon: 'square', danger: true },
-        { id: 'remove', label: 'Remove project…', icon: 'trash-2', danger: true },
+        { id: 'up', label: t('Move up'), icon: 'arrow-up', disabled: index <= 0, separator: true },
+        { id: 'down', label: t('Move down'), icon: 'arrow-down', disabled: index >= reorderable.length - 1 },
+        { id: 'close', label: t('Close project'), icon: 'x', separator: true },
+        { id: 'close_kill', label: t('Close and stop sessions'), icon: 'square', danger: true },
+        { id: 'remove', label: t('Remove project…'), icon: 'trash-2', danger: true },
       );
     }
     return items;
@@ -121,20 +122,24 @@
         case 'close_kill': {
           const n = sessions.forProject(p.id).filter((s) => s.lifecycle === 'live').length;
           const answer = await confirms.ask({
-            title: `Close ${p.name} and stop its sessions?`,
-            body: `${n} running session${n === 1 ? '' : 's'} will be terminated.`,
+            title: t('Close {name} and stop its sessions?', { name: p.name }),
+            body: tn(
+              '{n} running session will be terminated.',
+              '{n} running sessions will be terminated.',
+              n,
+            ),
             tone: 'danger',
-            actions: [{ id: 'stop', label: 'Close and stop sessions', variant: 'danger' }],
+            actions: [{ id: 'stop', label: t('Close and stop sessions'), variant: 'danger' }],
           });
           if (answer === 'stop') await closeProject(p, true);
           break;
         }
         case 'remove': {
           const answer = await confirms.ask({
-            title: `Remove ${p.name}?`,
-            body: 'The project configuration is moved to projects/.trash. Running sessions keep running.',
+            title: t('Remove {name}?', { name: p.name }),
+            body: t('The project configuration is moved to projects/.trash. Running sessions keep running.'),
             tone: 'danger',
-            actions: [{ id: 'remove', label: 'Remove project', variant: 'danger' }],
+            actions: [{ id: 'remove', label: t('Remove project'), variant: 'danger' }],
           });
           if (answer === 'remove') {
             const wasActive = p.active;
@@ -145,7 +150,7 @@
         }
       }
     } catch (err) {
-      toasts.error(err, 'Project action failed');
+      toasts.error(err, t('Project action failed'));
     }
   }
 
@@ -187,7 +192,7 @@
     try {
       await reorder(from, indexOf(targetId));
     } catch (err) {
-      toasts.error(err, 'Reordering projects failed');
+      toasts.error(err, t('Reordering projects failed'));
     }
   }
 
@@ -198,7 +203,7 @@
 
   /** The band's rows: the project's non-tool tabs, in tab order. */
   function rowsOf(id: ProjectId): Tab[] {
-    return (layout.get(id)?.tabs ?? []).filter((t) => !isToolTab(t, lines));
+    return (layout.get(id)?.tabs ?? []).filter((x) => !isToolTab(x, lines));
   }
 
   /** Moves a row to `target`'s place; rows move only inside their band. */
@@ -209,14 +214,14 @@
 
   function rowMenuItems(project: ProjectId, tab: Tab): MenuItem[] {
     const rows = rowsOf(project);
-    const index = rows.findIndex((t) => t.id === tab.id);
+    const index = rows.findIndex((x) => x.id === tab.id);
     return [
-      { id: 'close', label: 'Close', icon: 'x' },
+      { id: 'close', label: t('Close'), icon: 'x' },
       tab.detached
-        ? { id: 'attach', label: 'Move back to main window', icon: 'app-window' }
-        : { id: 'detach', label: 'Move to new window', icon: 'app-window' },
-      { id: 'up', label: 'Move up', icon: 'arrow-up', disabled: index <= 0, separator: true },
-      { id: 'down', label: 'Move down', icon: 'arrow-down', disabled: index >= rows.length - 1 },
+        ? { id: 'attach', label: t('Move back to main window'), icon: 'app-window' }
+        : { id: 'detach', label: t('Move to new window'), icon: 'app-window' },
+      { id: 'up', label: t('Move up'), icon: 'arrow-up', disabled: index <= 0, separator: true },
+      { id: 'down', label: t('Move down'), icon: 'arrow-down', disabled: index >= rows.length - 1 },
     ];
   }
 
@@ -261,9 +266,9 @@
     focusPaneById(x.project, x.tab.id, x.pane.id);
   }
 
-  function toolHint(t: ToolInfo): string {
-    if (t.installed === false) return `${t.label}: not installed`;
-    return t.description ? `${t.label}: ${t.description}` : t.label;
+  function toolHint(tool: ToolInfo): string {
+    if (tool.installed === false) return t('{tool}: not installed', { tool: tool.label });
+    return tool.description ? `${tool.label}: ${tool.description}` : tool.label;
   }
 </script>
 
@@ -308,38 +313,45 @@
     class="more"
     size="sm"
     icon="ellipsis"
-    label={`Menu for ${p.name}`}
+    label={t('Menu for {name}', { name: p.name })}
     onclick={(e) => openMenu(e, p)}
   />
 {/snippet}
 
-<nav class="rail" aria-label="Projects" data-testid="rail">
+<nav class="rail" aria-label={t('Projects')} data-testid="rail">
   <button
     type="button"
     class="search"
-    title="Search or run a command"
+    title={t('Search or run a command')}
     onclick={() => void dispatch('palette.open')}
     data-testid="rail-search"
   >
     <Icon name="search" size={16} />
-    <span class="search-text">Search or run…</span>
+    <span class="search-text">{t('Search or run…')}</span>
     {@render chord('palette.open')}
   </button>
 
-  {@render place('tickets', 'ticket', 'tickets', `${mine} mine`, mine, true)}
-  {@render place('now', 'inbox', 'inbox', now.header || 'Nothing waiting', now.waiting, false)}
-  {@render place('reviews', 'git-pull-request', 'reviews', `${toReview} to review`, toReview, true)}
+  {@render place('tickets', 'ticket', 'tickets', t('{n} mine', { n: mine }), mine, true)}
+  {@render place('now', 'inbox', 'inbox', now.header || t('Nothing waiting'), now.waiting, false)}
+  {@render place(
+    'reviews',
+    'git-pull-request',
+    'reviews',
+    t('{n} to review', { n: toReview }),
+    toReview,
+    true,
+  )}
 
   <div class="group">
     <div class="heading">
-      <h2>Open</h2>
+      <h2>{t('Open')}</h2>
       <Button
         variant="ghost"
         size="sm"
         icon="plus"
-        title="Open or create a project"
+        title={t('Open or create a project')}
         onclick={() => ui.openSheet('project_new')}
-        data-testid="rail-add">Add project</Button
+        data-testid="rail-add">{t('Add project')}</Button
       >
     </div>
 
@@ -467,7 +479,7 @@
                   class="close"
                   size="sm"
                   icon="x"
-                  label={`Close ${label}`}
+                  label={t('Close {name}', { name: label })}
                   onclick={() => void requestCloseTab(p.id, tab.id)}
                 />
               </li>
@@ -477,7 +489,7 @@
                 <button
                   type="button"
                   class="item tab-row background"
-                  title={`${p.name} › ${s.name}: running in the background, click to show it`}
+                  title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
                   data-testid="rail-background"
                   data-session-id={s.id}
                   onclick={() => void revealSession(s.id)}
@@ -486,45 +498,45 @@
                   <span class="kind" aria-hidden="true"
                     ><Icon name={s.kind.type === 'claude' ? 'bot' : 'terminal'} size={14} /></span
                   >
-                  <span class="text"><span class="name">{s.name} · background</span></span>
+                  <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
                 </button>
               </li>
             {/each}
           </ul>
         </section>
       {:else}
-        <p class="none">No projects yet</p>
+        <p class="none">{t('No projects yet')}</p>
       {/each}
 
       {#if toolList.length > 0}
-        <section class="band tools" aria-label="Tools" data-testid="rail-tools">
-          <h2 class="tools-heading">Tools</h2>
+        <section class="band tools" aria-label={t('Tools')} data-testid="rail-tools">
+          <h2 class="tools-heading">{t('Tools')}</h2>
           <ul class="rows">
-            {#each toolList as t, i (t.id)}
-              {@const launchOnly = t.kind !== 'pty'}
-              {@const lvl = launchOnly ? 'none' : toolLamp(t.id)}
+            {#each toolList as tool, i (tool.id)}
+              {@const launchOnly = tool.kind !== 'pty'}
+              {@const lvl = launchOnly ? 'none' : toolLamp(tool.id)}
               <!-- A `user` tool has one instance: its row is the way to it. -->
               {@const instances =
-                t.scope === 'user' ? [] : [...lines.values()].filter((x) => x.tool === t.id)}
+                tool.scope === 'user' ? [] : [...lines.values()].filter((x) => x.tool === tool.id)}
               <li class="row">
                 <button
                   type="button"
                   class="item tool-row"
-                  class:active={frontTool === t.id && !!frontTab && isToolTab(frontTab, lines)}
-                  class:missing={t.installed === false}
-                  title={toolHint(t)}
+                  class:active={frontTool === tool.id && !!frontTab && isToolTab(frontTab, lines)}
+                  class:missing={tool.installed === false}
+                  title={toolHint(tool)}
                   data-testid="rail-tool"
-                  data-tool-id={t.id}
+                  data-tool-id={tool.id}
                   data-attention={lvl}
-                  onclick={() => void dispatch('tools.open', { tool_id: t.id, focus_only: true })}
+                  onclick={() => void dispatch('tools.open', { tool_id: tool.id, focus_only: true })}
                 >
                   <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
                   <span class="kind" aria-hidden="true">
-                    {#if t.icon && isIconName(t.icon)}<Icon name={t.icon} size={14} />{:else}<span
-                        class="abbr">{t.label.slice(0, 2)}</span
+                    {#if tool.icon && isIconName(tool.icon)}<Icon name={tool.icon} size={14} />{:else}<span
+                        class="abbr">{tool.label.slice(0, 2)}</span
                       >{/if}
                   </span>
-                  <span class="text"><span class="name">{t.label}</span></span>
+                  <span class="text"><span class="name">{tool.label}</span></span>
                   {@render digit(`tool.goto.${i + 1}`, `⌥${i + 1}`)}
                   {#if launchOnly}<span class="launch" aria-hidden="true"
                       ><Icon name="external-link" size={12} /></span
@@ -537,9 +549,12 @@
                     type="button"
                     class="item instance"
                     class:active={front?.id === x.pane.id && isFront(x.project, x.tab.id)}
-                    title={`${t.label} in ${projects.byId(x.project)?.name ?? x.project} › ${x.tab.title}`}
+                    title={t('{tool} in {place}', {
+                      tool: tool.label,
+                      place: `${projects.byId(x.project)?.name ?? x.project} › ${t(x.tab.title)}`,
+                    })}
                     data-testid="rail-tool-instance"
-                    data-tool-id={t.id}
+                    data-tool-id={tool.id}
                     data-pane-id={x.pane.id}
                     onclick={() => focusInstance(x)}
                   >
@@ -558,12 +573,12 @@
     <button
       type="button"
       class="item settings"
-      title="Settings"
+      title={t('Settings')}
       onclick={() => void dispatch('settings.open')}
       data-testid="rail-settings"
     >
       <span class="tile plain"><Icon name="settings" size={18} /></span>
-      <span class="text"><span class="name">Settings</span></span>
+      <span class="text"><span class="name">{t('Settings')}</span></span>
       {@render chord('settings.open')}
     </button>
   </div>
@@ -575,7 +590,7 @@
     items={rowMenuItems(target.project, target.tab)}
     x={rowMenu.x}
     y={rowMenu.y}
-    label="Row actions"
+    label={t('Row actions')}
     onselect={(id) => onRowMenu(target.project, target.tab, id)}
     onclose={() => (rowMenu = null)}
   />
@@ -587,7 +602,7 @@
     items={menuItems(target)}
     x={menu.x}
     y={menu.y}
-    label="Project actions"
+    label={t('Project actions')}
     onselect={(id) => void onMenu(target, id)}
     onclose={() => (menu = null)}
   />

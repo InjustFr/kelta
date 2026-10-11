@@ -2,6 +2,7 @@
 // their refusal / confirmation dialogs and toasts, and the `feedback.md` / `conflicts.md` briefs.
 // Every handler takes `{ id }` and falls back to the focused tab's work item (palette).
 
+import { t, tn } from '$lib/i18n/index.svelte';
 import { registerAction, type ActionArgs } from '$lib/actions';
 import type { Feedback, ProjectId, ReviewRef, SessionInfo, Toast, WorkItem, WorkItemId } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
@@ -56,7 +57,7 @@ export function focusedWorkItem(): WorkItemId | null {
 function target(args: ActionArgs): WorkItem | null {
   const id = (args?.id as WorkItemId | undefined) ?? focusedWorkItem();
   const w = id ? work.get(id) : null;
-  if (!w) toasts.info('Focus a work item first');
+  if (!w) toasts.info(t('Focus a work item first'));
   return w;
 }
 
@@ -66,7 +67,7 @@ export function remoteOf(w: WorkItem): string {
 
 export function prLabel(w: WorkItem): string {
   const n = w.pr_url?.match(/(\d+)\/?$/)?.[1];
-  return n ? `#${n}` : 'the PR';
+  return n ? `#${n}` : t('the PR');
 }
 
 export function reasonOf(err: unknown): string {
@@ -123,20 +124,27 @@ export function newestAt(entries: FeedbackEntry[]): string | null {
 
 export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
   return [
-    ...fb.threads.map((t) => ({
-      key: `t:${t.id}`,
+    ...fb.threads.map((th) => ({
+      key: `t:${th.id}`,
       kind: 'thread' as const,
-      threadId: t.id,
-      title: `${t.author}${t.path ? ` on ${t.path}${t.line ? `:${t.line}` : ''}` : ''}`,
-      text: t.body_md.trim(),
-      md: `${t.body_md.trim()}\n\n<${t.url}>`,
-      at: t.last_comment_at ?? null,
+      threadId: th.id,
+      title: th.path
+        ? t('{author} on {path}', { author: th.author, path: `${th.path}${th.line ? `:${th.line}` : ''}` })
+        : th.author,
+      text: th.body_md.trim(),
+      md: `${th.body_md.trim()}\n\n<${th.url}>`,
+      at: th.last_comment_at ?? null,
     })),
     ...fb.reviews.map((r, i) => ({
       key: `r:${i}`,
       kind: 'review' as const,
       threadId: null,
-      title: `${r.author}${r.state === 'changes_requested' ? ' (changes requested)' : r.state === 'approved' ? ' (approved)' : ''}`,
+      title:
+        r.state === 'changes_requested'
+          ? t('{author} (changes requested)', { author: r.author })
+          : r.state === 'approved'
+            ? t('{author} (approved)', { author: r.author })
+            : r.author,
       text: r.body_md.trim(),
       md: r.body_md.trim(),
       at: r.submitted_at ?? null,
@@ -146,7 +154,7 @@ export function feedbackEntries(fb: Feedback): FeedbackEntry[] {
       kind: 'check' as const,
       threadId: null,
       title: c.name,
-      text: c.log_tail?.trimEnd() ?? 'No log available.',
+      text: c.log_tail?.trimEnd() ?? t('No log available.'),
       md: [c.url ? `<${c.url}>` : '', c.log_tail ? `\`\`\`text\n${c.log_tail.trimEnd()}\n\`\`\`` : '']
         .filter(Boolean)
         .join('\n\n'),
@@ -192,14 +200,14 @@ export async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetc
     const r = out.rebase;
     if (r && r.total > 0) {
       const n = r.conflicts.length;
-      toast('warn', `Rebase stopped: ${n} conflicted file${n === 1 ? '' : 's'}.`, {
-        label: 'Ask Claude to resolve',
+      toast('warn', tn('Rebase stopped: {n} conflicted file.', 'Rebase stopped: {n} conflicted files.', n), {
+        label: t('Ask Claude to resolve'),
         command: 'work.rebase_ask_claude',
         args: { id: w.id },
       });
     } else if (r) {
-      toast('info', `Rebased onto ${r.onto}. Force push to update ${prLabel(w)}.`, {
-        label: 'Force push…',
+      toast('info', t('Rebased onto {onto}. Force push to update {pr}.', { onto: r.onto, pr: prLabel(w) }), {
+        label: t('Force push…'),
         command: 'work.force_push',
         args: { id: w.id },
       });
@@ -208,19 +216,19 @@ export async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetc
       // shortcut: a remote rebase stopped on conflicts does not chain after Continue; the item then shows Behind.
       await rebase(w, 'base', noFetch);
     } else {
-      toast('info', `Rebased ${w.branch}.`);
+      toast('info', t('Rebased {branch}.', { branch: w.branch }));
     }
   } catch (err) {
     const reason = reasonOf(err);
     if (isIpcError(err, 'dirty')) {
       openWorkDialog({
-        title: 'Rebase refused',
+        title: t('Rebase refused'),
         text: err.message,
         actions: [
-          { label: 'Cancel', variant: 'ghost' },
-          { label: 'Open shell', command: 'pane.split_down' },
+          { label: t('Cancel'), variant: 'ghost' },
+          { label: t('Open shell'), command: 'pane.split_down' },
           {
-            label: 'Ask Claude to commit',
+            label: t('Ask Claude to commit'),
             command: 'work.ask_commit',
             args: { id: w.id },
             variant: 'primary',
@@ -230,12 +238,12 @@ export async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetc
     } else if (reason === 'fetch_failed' && isIpcError(err)) {
       const detail = err.detail as { error?: string } | null;
       openWorkDialog({
-        title: 'Fetch failed',
+        title: t('Fetch failed'),
         text: `${err.message}${detail?.error ? ` ${detail.error}` : ''}`,
         actions: [
-          { label: 'Cancel', variant: 'ghost' },
+          { label: t('Cancel'), variant: 'ghost' },
           {
-            label: `Rebase onto last fetched ${w.base}`,
+            label: t('Rebase onto last fetched {base}', { base: w.base }),
             command: 'work.rebase_onto',
             args: { id: w.id, onto, no_fetch: true },
             variant: 'primary',
@@ -243,7 +251,7 @@ export async function rebase(w: WorkItem, onto: 'base' | 'remote_branch', noFetc
         ],
       });
     } else {
-      refused(err, 'Rebase');
+      refused(err, t('Rebase'));
     }
   }
 }
@@ -254,10 +262,12 @@ async function push(w: WorkItem, force: boolean): Promise<void> {
     const who = reviewersOf.get(w.id) ?? [];
     toast(
       'info',
-      `${force ? 'Force pushed' : 'Pushed'} ${w.branch}.`,
+      force ? t('Force pushed {branch}.', { branch: w.branch }) : t('Pushed {branch}.', { branch: w.branch }),
       w.pr_url
         ? {
-            label: who.length ? `Re-request review from ${who.join(', ')}` : 'Re-request review',
+            label: who.length
+              ? t('Re-request review from {who}', { who: who.join(', ') })
+              : t('Re-request review'),
             command: 'work.rerequest_review',
             args: { id: w.id },
           }
@@ -267,14 +277,14 @@ async function push(w: WorkItem, force: boolean): Promise<void> {
     const reason = reasonOf(err);
     if (reason === 'non_fast_forward' && isIpcError(err)) {
       toast('warn', err.message, {
-        label: 'Rebase',
+        label: t('Rebase'),
         command: 'work.rebase_onto',
         args: { id: w.id, onto: 'remote_branch' },
       });
     } else if (reason === 'lease_rejected' && isIpcError(err)) {
-      toast('error', err.message, { label: 'Fetch and show', command: 'work.show', args: { id: w.id } });
+      toast('error', err.message, { label: t('Fetch and show'), command: 'work.show', args: { id: w.id } });
     } else {
-      refused(err, force ? 'Force push' : 'Push');
+      refused(err, force ? t('Force push') : t('Push'));
     }
   }
 }
@@ -303,7 +313,7 @@ export async function sendToClaude(
   w: WorkItem,
   prompt: string,
   files: { name: string; content: string }[] = [],
-  sent = 'Sent to Claude.',
+  sent = t('Sent to Claude.'),
 ): Promise<boolean> {
   const deferred = sendDeferred(w.id);
   try {
@@ -311,7 +321,7 @@ export async function sendToClaude(
     if (!deferred) toast('info', sent);
     return true;
   } catch (err) {
-    refused(err, 'Send to Claude');
+    refused(err, t('Send to Claude'));
     return false;
   }
 }
@@ -323,12 +333,12 @@ async function itemForReview(review: ReviewRef, projectId: ProjectId): Promise<W
     if (plan.existing)
       return work.get(plan.existing) ?? work.upsert(await ipc.workResume({ id: plan.existing }));
     if (!plan.adopt_pr) {
-      toasts.warn('Fix with Claude needs your own pull request.');
+      toasts.warn(t('Fix with Claude needs your own pull request.'));
       return null;
     }
     return work.upsert(await ipc.workStart({ plan }));
   } catch (err) {
-    toasts.error(err, 'Fix with Claude');
+    toasts.error(err, t('Fix with Claude'));
     return null;
   }
 }
@@ -339,11 +349,11 @@ export async function fixChecks(w: WorkItem): Promise<void> {
   try {
     checks = feedbackEntries(await ipc.workFeedback({ id: w.id })).filter((e) => e.kind === 'check');
   } catch (err) {
-    toasts.error(err, 'Send failures to Claude');
+    toasts.error(err, t('Send failures to Claude'));
     return;
   }
   if (checks.length === 0) {
-    toast('info', `No failed check on ${prLabel(w)} any more.`);
+    toast('info', t('No failed check on {pr} any more.', { pr: prLabel(w) }));
     return;
   }
   const n = checks.length;
@@ -351,14 +361,14 @@ export async function fixChecks(w: WorkItem): Promise<void> {
     w,
     promptTemplate('checks'),
     [{ name: 'feedback.md', content: feedbackMarkdown(checks) }],
-    `Sent ${n} failed check${n === 1 ? '' : 's'} to Claude.`,
+    tn('Sent {n} failed check to Claude.', 'Sent {n} failed checks to Claude.', n),
   );
 }
 
 // ---- registry --------------------------------------------------------------------------------
 
 export function fixItem(w: WorkItem): void {
-  if (!w.pr_url) toasts.info('Fix with Claude needs a pull request. Ship first.');
+  if (!w.pr_url) toasts.info(t('Fix with Claude needs a pull request. Ship first.'));
   else ui.openSheet('fix', { id: w.id });
 }
 
@@ -374,17 +384,22 @@ export const pushItem = (w: WorkItem): Promise<void> => push(w, false);
 export function forcePushItem(w: WorkItem): void {
   const sha = w.rebase?.remote_sha;
   if (!sha) {
-    toast('warn', 'Force push is only offered to rewrite your own rebased commits.');
+    toast('warn', t('Force push is only offered to rewrite your own rebased commits.'));
     return;
   }
   const remote = remoteOf(w);
   openWorkDialog({
-    title: 'Force push',
+    title: t('Force push'),
     tone: 'danger',
-    text: `Rewrites ${w.branch} on ${remote} (${prLabel(w)}). The lease checks ${remote} is still at ${sha.slice(0, 7)}.`,
+    text: t('Rewrites {branch} on {remote} ({pr}). The lease checks {remote} is still at {sha}.', {
+      branch: w.branch,
+      remote,
+      pr: prLabel(w),
+      sha: sha.slice(0, 7),
+    }),
     actions: [
-      { label: 'Cancel', variant: 'ghost' },
-      { label: 'Force push', command: 'work.force_push.confirmed', args: { id: w.id }, variant: 'danger' },
+      { label: t('Cancel'), variant: 'ghost' },
+      { label: t('Force push'), command: 'work.force_push.confirmed', args: { id: w.id }, variant: 'danger' },
     ],
   });
 }
@@ -408,12 +423,12 @@ registerAction('work.rebase_onto', async (args) => {
 export async function rebaseStep(w: WorkItem, kind: 'continue' | 'abort'): Promise<void> {
   try {
     const out = done(await ipc.workRebase({ id: w.id, op: { kind } }));
-    if (kind === 'abort') toast('info', 'Rebase aborted.');
+    if (kind === 'abort') toast('info', t('Rebase aborted.'));
     else if (out.rebase && out.rebase.total > 0)
-      toast('warn', 'Rebase still stopped: resolve the conflicts first.');
-    else toast('info', out.rebase ? 'Rebase done. Force push to update the PR.' : 'Rebase done.');
+      toast('warn', t('Rebase still stopped: resolve the conflicts first.'));
+    else toast('info', out.rebase ? t('Rebase done. Force push to update the PR.') : t('Rebase done.'));
   } catch (err) {
-    refused(err, kind === 'abort' ? 'Abort rebase' : 'Continue rebase');
+    refused(err, kind === 'abort' ? t('Abort rebase') : t('Continue rebase'));
   }
 }
 
@@ -427,7 +442,7 @@ export async function openConflicts(w: WorkItem): Promise<void> {
       await ipc.editorOpen({ target: { kind: 'work_item', id: w.id }, path: f, line: null });
     }
   } catch (err) {
-    toasts.error(err, 'Open conflicts in nvim');
+    toasts.error(err, t('Open conflicts in nvim'));
   }
 }
 
@@ -456,13 +471,13 @@ registerAction('work.rerequest_review', async (args) => {
     const fresh = work.get(w.id) ?? w;
     toast(
       'info',
-      `Asked ${who.join(', ')} to review again.`,
+      t('Asked {who} to review again.', { who: who.join(', ') }),
       fresh.sent_threads?.length
-        ? { label: 'Resolve sent threads', command: 'work.resolve_threads', args: { id: w.id } }
+        ? { label: t('Resolve sent threads'), command: 'work.resolve_threads', args: { id: w.id } }
         : null,
     );
   } catch (err) {
-    toasts.error(err, 'Re-request review');
+    toasts.error(err, t('Re-request review'));
   }
 });
 
@@ -472,9 +487,9 @@ registerAction('work.resolve_threads', async (args) => {
   const n = w.sent_threads?.length ?? 0;
   try {
     done(await ipc.workResolveSentThreads({ id: w.id }));
-    toast('info', `Resolved ${n} thread${n === 1 ? '' : 's'}.`);
+    toast('info', tn('Resolved {n} thread.', 'Resolved {n} threads.', n));
   } catch (err) {
-    toasts.error(err, 'Resolve sent threads');
+    toasts.error(err, t('Resolve sent threads'));
   }
 });
 
@@ -485,6 +500,6 @@ registerAction('work.show', async (args) => {
   try {
     done(await ipc.workResume({ id: w.id }));
   } catch (err) {
-    toasts.error(err, 'Show work item');
+    toasts.error(err, t('Show work item'));
   }
 });

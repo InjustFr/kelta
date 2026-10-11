@@ -1907,6 +1907,7 @@ export const settingsDefault: Settings = {
   "app": {
     "confirm_quit_with_running": true,
     "dark_theme": "bezel-dark",
+    "language": "system",
     "light_theme": "bezel-light",
     "log_level": "info",
     "quit_sessions": "ask",

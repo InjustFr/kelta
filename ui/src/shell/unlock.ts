@@ -1,4 +1,5 @@
 // Startup prompt for the encrypted secrets file (SPEC: secret backends).
+import { t } from '$lib/i18n/index.svelte';
 import type { Settings } from '$lib/gen';
 import { secretBackendsStatus, secretUnlock } from '$lib/ipc/commands';
 import { toasts } from '$lib/stores';
@@ -22,13 +23,13 @@ async function askUnlock(): Promise<void> {
   // A missing file ("not set up") is created from Settings → Accounts, not unlocked here.
   if (!file?.detail?.startsWith('locked')) return;
   const passphrase = await prompts.ask({
-    title: 'Unlock secrets',
-    label: 'Passphrase of the encrypted secrets file',
+    title: t('Unlock secrets'),
+    label: t('Passphrase of the encrypted secrets file'),
     type: 'password',
-    confirmLabel: 'Unlock',
+    confirmLabel: t('Unlock'),
   });
   if (!passphrase) return;
   await secretUnlock({ passphrase, create: false }).catch((err: unknown) =>
-    toasts.error(err, 'Unlocking the secrets file failed'),
+    toasts.error(err, t('Unlocking the secrets file failed')),
   );
 }
