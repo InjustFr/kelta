@@ -1390,7 +1390,7 @@ impl WorkService {
             cols: COLS,
             rows: ROWS,
             work_item_id: Some(item.id.clone()),
-            restore: RestorePolicy::ClaudeResume { uuid },
+            restore: RestorePolicy::ClaudeResume { uuid, profile: None },
             close_on_exit: CloseOnExit::Never,
             template_id: Some(j.template_id()),
         }

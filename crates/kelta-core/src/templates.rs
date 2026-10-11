@@ -74,7 +74,7 @@ pub fn claude_args(
             a.extend(["--effort".to_owned(), e]);
         }
     }
-    if let Some(m) = p.and_then(|p| p.permission_mode).or(remembered) {
+    if let Some(m) = launch_mode(claude, profile, remembered) {
         a.extend(["--permission-mode".to_owned(), kelta_work::claude::enum_str(&m)]);
     }
     a.extend(["--settings".to_owned(), settings_file.to_string_lossy().into_owned()]);
@@ -86,6 +86,17 @@ pub fn claude_args(
         a.push(p.to_owned());
     }
     a
+}
+
+/// The `--permission-mode` a Claude from `profile` starts in: the profile's forced mode (a missing
+/// profile is the default one), else `remembered`.
+pub(crate) fn launch_mode(
+    claude: &ClaudeSettings,
+    profile: Option<&str>,
+    remembered: Option<PermissionMode>,
+) -> Option<PermissionMode> {
+    let p = profile.and_then(|p| claude.profiles.get(p)).or_else(|| claude.profiles.get("default"));
+    p.and_then(|p| p.permission_mode).or(remembered)
 }
 
 pub(crate) fn write_private(path: &Path, text: &str) -> Result<(), KeltaError> {
@@ -160,7 +171,10 @@ impl Core {
             kind: SessionKind::Claude,
             program: Some(s.claude.binary.clone()),
             args: claude_args(&s.claude, profile, *self.claude_mode.lock(), &uuid, &file, prompt),
-            restore: RestorePolicy::ClaudeResume { uuid },
+            restore: RestorePolicy::ClaudeResume {
+                uuid,
+                profile: Some(profile.unwrap_or("default").to_owned()),
+            },
             ..base
         };
         self.spawn_session_with_id(id, req).await

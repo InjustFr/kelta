@@ -3,4 +3,9 @@
 /**
  * Serialized `{"kind":"claude_resume","uuid":"..."}` etc.
  */
-export type RestorePolicy = { "kind": "none" } | { "kind": "relaunch" } | { "kind": "shell_in_cwd" } | { "kind": "claude_resume", uuid: string, } | { "kind": "editor", session_file: string | null, };
+export type RestorePolicy = { "kind": "none" } | { "kind": "relaunch" } | { "kind": "shell_in_cwd" } | { "kind": "claude_resume", uuid: string, 
+/**
+ * The Claude profile it was launched from (#318): a resume re-reads its forced mode, else
+ * takes the remembered one. `None` = unknown (a raw spawn or an older session).
+ */
+profile?: string | null, } | { "kind": "editor", session_file: string | null, };

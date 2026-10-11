@@ -228,6 +228,11 @@ pub enum RestorePolicy {
     ShellInCwd,
     ClaudeResume {
         uuid: String,
+        /// The Claude profile it was launched from (#318): a resume re-reads its forced mode, else
+        /// takes the remembered one. `None` = unknown (a raw spawn or an older session).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        profile: Option<String>,
     },
     Editor {
         session_file: Option<PathBuf>,
