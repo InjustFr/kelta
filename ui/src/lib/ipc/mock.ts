@@ -41,7 +41,9 @@ import type {
   ToolInfo,
   Transition,
   UiEvent,
+  WorkflowDef,
   WorkflowInfo,
+  WorkflowOn,
   UpdateStatus,
   WorkItem,
   WorkStepStatus,
@@ -129,6 +131,8 @@ export interface MockState {
   workflows: WorkflowInfo[];
   /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
   claudeRuns: ClaudeRun[];
+  /** Config workflow runs on a PR (#355): `repo#number` → session id. */
+  prRuns: Record<string, string>;
   /** Claude sessions Kelta did not start (`outside_list`, #345). */
   outside: OutsideSession[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
@@ -162,15 +166,50 @@ const MOCK_PRIORITIES = ['Highest', 'High', 'Medium', 'Low', 'Lowest'];
 const MOCK_WORKFLOWS: WorkflowInfo[] = [
   {
     name: 'kelta-ticket-pass',
+    label: 'kelta-ticket-pass',
     description: 'Implement, review and merge one ticket',
     path: '/Users/ada/.claude/workflows/kelta-ticket-pass.js',
     source: 'home',
   },
   {
     name: 'triage',
+    label: 'triage',
     description: 'Reproduce and label a bug',
     path: '/Users/ada/code/shop/.claude/workflows/triage.js',
     source: 'repo',
+  },
+  // The `on = "ticket"` entry of MOCK_CONFIG_WORKFLOWS.
+  { name: 'brief', label: 'Brief me', description: 'Summarize the ticket', path: null, source: 'config' },
+];
+
+/** `[[workflows]]` of the mock config (#355): one per `on`. */
+const MOCK_CONFIG_WORKFLOWS: WorkflowDef[] = [
+  {
+    id: 'brief',
+    label: 'Brief me',
+    description: 'Summarize the ticket',
+    prompt: '/brief {ticket.key}',
+    cwd: null,
+    on: 'ticket',
+    enabled: true,
+  },
+  {
+    id: 'describe-pr',
+    label: 'Describe PR',
+    description: 'Write the PR description',
+    prompt: '/describe-pr {pr.url}',
+    cwd: null,
+    on: 'pr',
+    enabled: true,
+  },
+  {
+    id: 'daily',
+    label: 'Daily report',
+    description: null,
+    prompt: 'Write the daily report',
+    cwd: null,
+    on: 'global',
+    enabled: true,
   },
 ];
 
@@ -240,7 +279,8 @@ function settingsWithSources(projects: ProjectInfo[]): JsonValue {
     const tracker = { ...clone(base), account: 'gitlab-corp', views: [view], columns: [] };
     sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [], status_colors: {} });
   }
-  return { ...clone(samples.settingsDefault), sources } as unknown as JsonValue;
+  const workflows = clone(MOCK_CONFIG_WORKFLOWS);
+  return { ...clone(samples.settingsDefault), sources, workflows } as unknown as JsonValue;
 }
 
 function freshState(): MockState {
@@ -265,6 +305,7 @@ function freshState(): MockState {
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
     claudeRuns: [],
+    prRuns: {},
     outside: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
@@ -601,6 +642,10 @@ export function createMockTransport(options: MockOptions = {}): {
     for (const scope of [...scopes, { kind: 'all' as const }]) emit({ type: 'tickets.changed', scope });
     return clone(item.ticket);
   };
+  const configDefs = (on: WorkflowOn): WorkflowDef[] =>
+    (state.settings.value as unknown as Settings).workflows.filter((d) => d.enabled && d.on === on);
+  const liveSession = (id: string): SessionInfo | null =>
+    state.sessions.find((x) => x.id === id && x.lifecycle === 'live') ?? null;
   const spawn = (
     projectId: string,
     kind: SessionKind,
@@ -1187,6 +1232,8 @@ export function createMockTransport(options: MockOptions = {}): {
       const held = state.work.find(
         (w) => w.ticket && sameRef(w.ticket, ticket) && w.state.kind !== 'finished',
       );
+      const running = held?.run?.session_id ? liveSession(held.run.session_id) : null;
+      if (running) return { session: clone(running), running: true };
       if (held) throw err('conflict', `${ticket.key} is held by work item ${held.id} (started in Kelta)`);
       const projectId = t.project_ids[0] ?? state.projects.find((p) => p.active)?.id ?? 'shop';
       const title = `${workflow} · ${ticket.key}`;
@@ -1252,7 +1299,27 @@ export function createMockTransport(options: MockOptions = {}): {
         work_item_id: null,
       };
       backendLayoutChange(projectId, openPane(layoutOf(projectId), req).layout);
-      return s;
+      return { session: s, running: false };
+    },
+    // Like `Core::workflow_run_on`: a `pr` or `global` config workflow in a background tab, no claim.
+    workflow_run_on: ({ project_id, workflow, review }) => {
+      const def = configDefs(review ? 'pr' : 'global').find((d) => d.id === workflow);
+      if (!def) throw err('not_found', `workflow ${workflow}`);
+      const key = review ? prKey(review) : null;
+      const running = key && state.prRuns[key] ? liveSession(state.prRuns[key]) : null;
+      if (running) return { session: clone(running), running: true };
+      const title = review ? `${def.label} · ${review.repo}#${review.number}` : def.label;
+      const s = spawn(project_id, { type: 'claude' }, title, null);
+      if (key) state.prRuns[key] = s.id;
+      const req = {
+        content: { kind: 'terminal' as const, session_id: s.id },
+        placement: 'new_tab' as const,
+        focus: false,
+        tab_title: title,
+        work_item_id: null,
+      };
+      backendLayoutChange(project_id, openPane(layoutOf(project_id), req).layout);
+      return { session: s, running: false };
     },
     tracker_search: ({ scope, text }) => {
       const q = text.toLowerCase();

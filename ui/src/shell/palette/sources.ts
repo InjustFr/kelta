@@ -15,7 +15,7 @@ import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
-import { pickWorkflow } from '../../views/tickets/workflow.svelte';
+import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
@@ -239,6 +239,20 @@ export function commandItems(): PaletteItem[] {
   return out;
 }
 
+/** `[[workflows]]` with `on = "global"` (#355): a run with no ticket, in the active project. */
+export function workflowItems(): PaletteItem[] {
+  const project = projects.activeId;
+  if (!project) return [];
+  return configWorkflows('global').map((w) => ({
+    id: `workflow:${w.name}`,
+    group: 'Commands' as const,
+    label: t('Run {workflow}', { workflow: w.label }),
+    detail: w.description || undefined,
+    icon: 'play',
+    run: () => void runWorkflowOn(project, w, null),
+  }));
+}
+
 export function settingsItems(): PaletteItem[] {
   const linux = currentPlatform() === 'linux';
   return settingsSections
@@ -358,6 +372,7 @@ export function buildItems(): PaletteItem[] {
     ...actionItems(),
     ...toolItems(),
     ...commandItems(),
+    ...workflowItems(),
     ...reviewItems(),
     ...settingsItems(),
   ];

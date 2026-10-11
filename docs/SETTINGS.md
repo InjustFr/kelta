@@ -355,6 +355,31 @@ args = ["-a", "Fork", "."]
 check = ["test", "-d", "/Applications/Fork.app"]   # dims the button when the app is absent
 ```
 
+### [[workflows]]  (by_id; scope global only; x-kelta-exec; category Tools)
+Prompt or slash command workflows Claude runs in a background tab (#355), next to the saved `*.js` ones of
+`.claude/workflows/`. `on` says where they are offered: `ticket` (default) in Run workflow (`w`) on a ticket, which
+the run claims; `pr` in Run workflow (`w`) on a Reviews row or the review detail; `global` as "Run <label>" in the
+palette, with no ticket. A second run on the same ticket or PR opens the running one. `cwd` defaults to the PR's
+worktree or repo for `pr`, else the project's primary repo (`~` expanded).
+
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `id` | string | | what a run names it; a `*.js` workflow with the same name wins |
+| `label` | string | `id` | picker, tab and palette text |
+| `description` | string? | | picker detail |
+| `prompt` | string | | `{workflow}`; ticket: `{ticket.key}`, `{ticket.title}`, `{ticket.url}`, `{file}` (ticket Markdown); pr: `{pr.number}`, `{pr.url}`, `{pr.head}`, `{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (linked ticket, else empty) |
+| `cwd` | string? | see above | |
+| `on` | `ticket` \| `pr` \| `global` | `ticket` | |
+| `enabled` | bool | `true` | |
+
+```toml
+[[workflows]]
+id = "describe-pr"
+label = "Describe PR"
+prompt = "/describe-pr {pr.url}"
+on = "pr"
+```
+
 ### [plugins]
 | `dev_paths` | list<path> | `[]` | unpacked plugin dirs loaded in dev mode (global only; still require grants) |
 | `disabled` | list<PluginId> | `[]` | |

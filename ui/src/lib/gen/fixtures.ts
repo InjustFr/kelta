@@ -2434,6 +2434,7 @@ export const settingsDefault: Settings = {
     "review_template": "review",
     "scratch_branch_template": "wip/{slug}"
   },
+  "workflows": [],
   "worktree": {
     "branch_template": "{type}/{key}-{slug}",
     "cleanup": "ask",

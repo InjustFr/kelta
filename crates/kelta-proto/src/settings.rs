@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::codehost::MergeMethod;
-use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
+use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef, WorkflowDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
 use crate::secret::SecretRef;
@@ -134,6 +134,15 @@ pub struct Settings {
         "x-kelta-exec" = true
     ))]
     pub commands: Vec<CommandDef>,
+    /// Prompt or slash command workflows run on a ticket, a PR or with no ticket.
+    #[schemars(extend(
+        "x-kelta-category" = "Tools",
+        "x-kelta-order" = 13,
+        "x-kelta-scope" = ["global"],
+        "x-kelta-merge" = "by_id",
+        "x-kelta-exec" = true
+    ))]
+    pub workflows: Vec<WorkflowDef>,
     #[schemars(extend("x-kelta-category" = "Plugins", "x-kelta-order" = 15))]
     pub plugins: PluginsSettings,
     /// Environment added to every session of the project (project/repo files).
@@ -1619,6 +1628,7 @@ impl Default for Settings {
             tools: Vec::new(),
             triggers: Vec::new(),
             commands: Vec::new(),
+            workflows: Vec::new(),
             plugins: PluginsSettings::default(),
             env: BTreeMap::new(),
             themes: BTreeMap::new(),

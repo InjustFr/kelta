@@ -34,6 +34,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import { pickPrWorkflow } from '../tickets/workflow.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagFilter from '../tags/TagFilter.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
@@ -357,6 +358,9 @@
       case 't':
         if (item) openTags(item);
         break;
+      case 'w':
+        if (item) pickPrWorkflow(item.review.ref, home ?? item.project_ids[0] ?? null);
+        break;
       default:
         return;
     }
@@ -590,6 +594,7 @@
       ['n', msg('Nudge (my PRs)')],
       ['d', msg('Mark ready / draft (my PRs)')],
       ['t', msg('Tags')],
+      ['w', msg('Run workflow')],
       ['o', msg('Open in browser')],
       ['shift+m', msg('Merge when ready')],
       ['shift+r', msg('Refresh')],

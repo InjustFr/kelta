@@ -478,6 +478,50 @@ impl Default for CommandDef {
     }
 }
 
+/// Where a config workflow is offered (`[[workflows]] on`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowOn {
+    /// Run workflow (`w`) on a ticket, which the run claims.
+    #[default]
+    Ticket,
+    /// Run workflow (`w`) on a pull request row or detail.
+    Pr,
+    /// The palette: a run with no ticket.
+    Global,
+}
+
+/// A workflow declared in config (`[[workflows]]`): a prompt or slash command Claude runs in a background tab.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct WorkflowDef {
+    pub id: String,
+    pub label: String,
+    pub description: Option<String>,
+    /// Any prompt or slash command. Placeholders: `{workflow}`; on a ticket `{ticket.key}`, `{ticket.title}`,
+    /// `{ticket.url}`, `{file}` (the ticket as Markdown); on a PR `{pr.number}`, `{pr.url}`, `{pr.head}`,
+    /// `{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (its linked ticket, else empty).
+    pub prompt: String,
+    /// Default: the PR's worktree or repo for `pr`, else the project's primary repo.
+    pub cwd: Option<String>,
+    pub on: WorkflowOn,
+    pub enabled: bool,
+}
+
+impl Default for WorkflowDef {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            description: None,
+            prompt: String::new(),
+            cwd: None,
+            on: WorkflowOn::Ticket,
+            enabled: true,
+        }
+    }
+}
+
 /// Origin of a trigger (`trigger_list`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]

@@ -26,7 +26,7 @@ export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>
 /** Top-level keys no form edits (or only through a custom picker): the section links to Edit TOML. */
 export const TOML_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>> = {
   general: ['themes'],
-  triggers: ['triggers', 'commands'],
+  triggers: ['triggers', 'commands', 'workflows'],
   plugins: ['plugins'],
 };
 

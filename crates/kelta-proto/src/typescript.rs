@@ -76,7 +76,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, PlanOptions, FinishOpts,
         GitStatus, EditorTarget, TemplateCtx, RebaseState, RunClaim, RunState, RebaseOnto, RebaseOp, SendFile,
         FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta, NoteState, ReviewNote, ReviewNotes,
-        NextUpItem, NextUp, LocalTags, LocalTag, WorkflowInfo, WorkflowSource, ClaudeRun, ClaudeRunPhase, ClaudeRunAgent, OutsideSession,
+        NextUpItem, NextUp, LocalTags, LocalTag, WorkflowInfo, WorkflowSource, WorkflowStart, ClaudeRun, ClaudeRunPhase, ClaudeRunAgent, OutsideSession,
         TranscriptLine,
         // tracker / codehost
         TrackerKind, TrackerCaps, User, TicketRef, StatusCategory, Status, Ticket, BodyFormat,
@@ -87,7 +87,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         // ext
         ToolKind, EmbedMode, WebLifecycle, Ready, StopSpec, WebStart, ToolDef, ToolSource,
         ToolInfo, ToolCheck, ToolHandle, Matcher, TriggerDef, Urgency, RunStdin, RunShow,
-        ActionDef, SecretHeader, CommandWhen, CommandDef, TriggerOrigin, TriggerInfo, TriggerRun,
+        ActionDef, SecretHeader, CommandWhen, CommandDef, WorkflowOn, WorkflowDef, TriggerOrigin, TriggerInfo, TriggerRun,
         BlockingOutcome, PlatformName, ScreenScope, ScreenPlacement, ScreenDef, KeybindingDef,
         ActionButtonDef, SettingsContribution, Contributes, PluginManifest, Permission,
         PluginMethod, PluginInfo, PermissionInfo, PluginInstallPreview, ScreenOpenResult,

@@ -850,21 +850,36 @@ pub struct NextUpItem {
     pub snoozed_until: Option<String>,
 }
 
-/// A saved Claude Code workflow (#233): a `*.js` file whose `export const meta` names it.
+/// A workflow a run can use: a saved Claude Code workflow (#233), a `*.js` file whose
+/// `export const meta` names it, or a `[[workflows]]` entry of the config (#355).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WorkflowInfo {
+    /// What `workflow_run` takes: the meta `name`, or the config `id`.
     pub name: String,
+    /// The config `label`; the `name` for a `*.js` workflow.
+    pub label: String,
     pub description: String,
-    pub path: PathBuf,
+    /// The `*.js` file; `None` for a config workflow.
+    pub path: Option<PathBuf>,
     pub source: WorkflowSource,
 }
 
-/// Where a workflow lives: the project's primary repo (`.claude/workflows/`) or `~/.claude/workflows/`.
+/// Where a workflow lives: the project's primary repo (`.claude/workflows/`), `~/.claude/workflows/`
+/// or the config (`[[workflows]]`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowSource {
     Repo,
     Home,
+    Config,
+}
+
+/// A workflow run started, or the one already running on the same ticket or PR (`running`), which
+/// the UI opens instead (#355).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct WorkflowStart {
+    pub session: SessionInfo,
+    pub running: bool,
 }
 
 /// A Claude Code session Kelta did not start (another terminal, a multiplexer, a script), seen
