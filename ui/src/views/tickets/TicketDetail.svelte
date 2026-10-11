@@ -34,7 +34,7 @@
   import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
-  import { loadWorkflows, pickWorkflow, workflows } from './workflow.svelte';
+  import { pickWorkflow, workflows } from './workflow.svelte';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -85,7 +85,7 @@
       field = null;
       loadCurrent();
       ensureReviews();
-      if (!workflows[key]) void loadWorkflows(ref);
+      // No `workflows_list` here: walking the split view with j/k would scan them per ticket; `w` loads.
     });
   });
 

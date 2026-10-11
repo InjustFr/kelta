@@ -22,7 +22,7 @@ use crate::model::{
     SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
 };
 use crate::settings::Settings;
-use crate::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketPage, TicketRef};
+use crate::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef};
 
 /// A recorded `CoreApi` call: method name + JSON-ish argument summary.
 #[derive(Debug, Clone, PartialEq)]
@@ -475,6 +475,16 @@ impl CoreApi for FakeCore {
             serde_json::json!({ "scope": Self::arg(&scope), "view_id": view_id, "cursor": Self::arg(&cursor), "refresh": refresh }),
         );
         self.overridden("ticket_list").unwrap_or_else(|| Ok(TicketPage::default()))
+    }
+
+    /// Set with `respond("ticket_by_key", item)`; not found otherwise.
+    async fn ticket_by_key(
+        &self,
+        key: &str,
+        account: Option<&AccountId>,
+    ) -> Result<Option<TicketItem>, KeltaError> {
+        self.record("ticket_by_key", serde_json::json!({ "key": key, "account": account }));
+        self.overridden("ticket_by_key").unwrap_or(Ok(None))
     }
 
     async fn ticket_get(&self, ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {

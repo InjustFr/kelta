@@ -210,14 +210,28 @@ fn assigned_wait(t: &Ticket, people: &[Person]) -> Option<Waiting> {
 
 /// A PR row's waits, then Assigned from its linked `tickets`. A review wait on me is dropped on
 /// someone else's PR: the tab says it.
-pub fn review_row_waiting(r: &Review, tickets: &[Ticket], people: &[Person]) -> Vec<Waiting> {
+/// Tickets by key (a key can repeat across accounts): review rows look up their linked keys.
+pub fn by_key(tickets: &[Ticket]) -> HashMap<&str, Vec<&Ticket>> {
+    let mut out: HashMap<&str, Vec<&Ticket>> = HashMap::new();
+    for t in tickets {
+        out.entry(t.r#ref.key.as_str()).or_default().push(t);
+    }
+    out
+}
+
+pub fn review_row_waiting(
+    r: &Review,
+    tickets: &HashMap<&str, Vec<&Ticket>>,
+    people: &[Person],
+) -> Vec<Waiting> {
     let mut w = review_waiting(r, people);
     if r.kind == ReviewKind::ReviewRequested {
         w.retain(|w| !(w.person == "me" && w.why == WaitWhy::Review));
     }
-    let assigned = tickets
+    let assigned = r
+        .linked_tickets
         .iter()
-        .filter(|t| r.linked_tickets.contains(&t.r#ref.key))
+        .flat_map(|k| tickets.get(k.as_str()).into_iter().flatten())
         .find_map(|t| assigned_wait(t, people));
     if let Some(a) = assigned
         && !w.iter().any(|x| x.person == a.person)
@@ -390,7 +404,7 @@ mod tests {
             r.author_to_act = true;
             r.author_since = Some("2026-09-29T09:00:00Z".into());
             r.author = User { id: "bob".into(), login: Some("bob".into()), ..User::default() };
-            let w = review_row_waiting(&r, &[], &people);
+            let w = review_row_waiting(&r, &HashMap::new(), &people);
             let got: Vec<_> = w.iter().map(|w| (w.name.as_str(), w.why, w.since.as_deref())).collect();
             let mut want = vec![("bob", WaitWhy::Review, Some("2026-09-28T10:00:00Z"))];
             // a wait on me is shown on my PRs only
@@ -410,12 +424,12 @@ mod tests {
         let mut t = samples::ticket();
         t.assignee = Some(User { id: "j2".into(), name: "Anna".into(), ..User::default() });
         r.linked_tickets = vec![t.r#ref.key.clone()];
-        let w = review_row_waiting(&r, std::slice::from_ref(&t), &people);
+        let w = review_row_waiting(&r, &by_key(std::slice::from_ref(&t)), &people);
         assert_eq!(
             w.iter().map(|w| (w.name.as_str(), w.why, w.since.clone())).collect::<Vec<_>>(),
             [("Anna", WaitWhy::Assigned, None)]
         );
-        assert!(review_row_waiting(&r, &[], &people).is_empty(), "no cached ticket, no wait");
+        assert!(review_row_waiting(&r, &HashMap::new(), &people).is_empty(), "no cached ticket, no wait");
     }
 
     #[test]

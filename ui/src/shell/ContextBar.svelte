@@ -66,7 +66,7 @@
   /** A work tab is shown: the bar carries its work segment. */
   const workTab = $derived(!view && !tool && !!item);
   const ownerItem = $derived(session?.work_item_id ? work.get(session.work_item_id) : null);
-  const projectColor = $derived(resolveProjectColor(project?.color, ui.theme) ?? 'var(--k-border-strong)');
+  const projectColor = $derived(resolveProjectColor(project?.color) ?? 'var(--k-border-strong)');
 
   /** The row part of the breadcrumb for a plain tab: the focused session, else the tab title. */
   const row = $derived.by((): { glyph: string; text: string } | null => {

@@ -48,6 +48,14 @@ describe('resolveProjectColor', () => {
     for (const hex of ['#5f6b7a', '#ff8800', '#FF8800']) expect(resolveProjectColor(hex, theme)).toBe(hex);
   });
 
+  it('paints slots through --k-ansi-N without a theme, so a theme switch recolours with no JS', () => {
+    for (const [slot, i] of Object.entries(SLOTS)) {
+      expect(resolveProjectColor(`theme:${slot}`)).toBe(`var(--k-ansi-${i})`);
+    }
+    expect(resolveProjectColor('#3e7cb1')).toBe(`var(--k-ansi-${SLOTS.blue})`);
+    expect(resolveProjectColor('#ff8800')).toBe('#ff8800');
+  });
+
   it('reads #rgb as #rrggbb', () => {
     expect(resolveProjectColor('#abc', themes[0]!)).toBe('#aabbcc');
     expect(parseProjectColor('#F80')).toEqual({ hex: '#FF8800' });

@@ -562,7 +562,7 @@
                   class:selected={cur === l.row}
                   aria-current={cur === l.row ? 'true' : undefined}
                   data-row={l.row.id}
-                  style:--hue={resolveProjectColor(v.color, ui.theme) ?? 'transparent'}
+                  style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
                   oncontextmenu={(e) => rowMenu(e, l.row)}
@@ -589,7 +589,7 @@
               {:else}
                 <div
                   class="row detail"
-                  style:--hue={resolveProjectColor(v.color, ui.theme) ?? 'transparent'}
+                  style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
                   data-testid="now-detail"
                 >
                   <span class="msg" title={v.more}>{v.more}</span>

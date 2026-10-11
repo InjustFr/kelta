@@ -1,0 +1,16 @@
+{
+  "data": {
+    "nodes": [
+      {
+        "reviewThreads": {
+          "nodes": [
+            { "isResolved": false, "comments": { "nodes": [ { "createdAt": "2026-10-01T09:00:00Z", "author": { "login": "erin" } } ] } },
+            { "isResolved": false, "comments": { "nodes": [ { "createdAt": "2026-10-02T09:00:00Z", "author": { "login": "louis" } } ] } },
+            { "isResolved": true, "comments": { "nodes": [ { "createdAt": "2026-10-03T09:00:00Z", "author": { "login": "zed" } } ] } },
+            { "isResolved": false, "comments": { "nodes": [ { "createdAt": "2026-10-01T10:30:00+02:00", "author": { "login": "zed" } } ] } }
+          ]
+        }
+      }
+    ]
+  }
+}

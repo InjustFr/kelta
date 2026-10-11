@@ -415,6 +415,18 @@ impl Core {
         Some((v, age_of(&row.fetched_at)))
     }
 
+    /// Several cache rows in one store round trip; a missing or unreadable row is skipped.
+    async fn cache_get_many<T: serde::de::DeserializeOwned>(&self, keys: Vec<String>) -> Vec<T> {
+        let rows = self
+            .store
+            .call(move |c| {
+                Ok(keys.iter().filter_map(|k| q::cache_get(c, k).ok().flatten()).collect::<Vec<_>>())
+            })
+            .await
+            .unwrap_or_default();
+        rows.into_iter().filter_map(|r| serde_json::from_str(&r.body_json).ok()).collect()
+    }
+
     fn cache_put<T: serde::Serialize>(&self, key: &str, v: &T) {
         let Ok(body) = serde_json::to_string(v) else { return };
         let row = ProviderCacheRow {
@@ -634,15 +646,12 @@ impl Core {
 
     /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
     async fn cached_reviews(&self) -> Vec<Review> {
-        let mut out = Vec::new();
-        for a in self.review_accounts(&Scope::All) {
-            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
-                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
-                    out.extend(list);
-                }
-            }
-        }
-        out
+        let keys = self
+            .review_accounts(&Scope::All)
+            .iter()
+            .flat_map(|a| [ReviewKind::Authored, ReviewKind::ReviewRequested].map(|k| reviews_key(a, k)))
+            .collect();
+        self.cache_get_many::<Vec<Review>>(keys).await.into_iter().flatten().collect()
     }
 
     /// Core-filled ticket fields: linked PRs and the tracker's caps.
@@ -707,30 +716,9 @@ impl Core {
 
     /// The scope's cached Team ticket lists; no list is fetched.
     async fn cached_tickets(&self, scope: &Scope) -> Vec<Ticket> {
-        let mut tickets = Vec::new();
-        for q in self.ticket_queries(scope, None, Some(Who::Anyone)) {
-            if let Some((p, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
-                tickets.extend(p.items);
-            }
-        }
-        tickets
-    }
-
-    /// `team_people`: who the scope's cached tickets (the Team list) and review lists mention. Reads
-    /// the provider cache only: no list is fetched.
-    pub async fn team_people(&self, scope: Scope) -> Result<Vec<Person>, KeltaError> {
-        self.rt.capture();
-        self.check_scope(&scope)?;
-        let tickets = self.cached_tickets(&scope).await;
-        let mut reviews = Vec::new();
-        for a in self.review_accounts(&scope) {
-            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
-                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
-                    reviews.extend(list);
-                }
-            }
-        }
-        Ok(self.people_of(&tickets, &reviews).await)
+        let keys =
+            self.ticket_queries(scope, None, Some(Who::Anyone)).into_iter().map(|q| q.cache_key).collect();
+        self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
     }
 
     /// `tracker_list`.
@@ -796,11 +784,28 @@ impl Core {
         let work = self.work_by_ticket().await;
         let reviews = self.cached_reviews().await;
         let mut items = merge_tickets(pages, &work);
-        let people = self.people_of(items.iter().map(|i| &i.ticket), &reviews).await;
+        // The scope's Team list joins in: the page's people feed the pane's person filter too.
+        let team = self.cached_tickets(&scope).await;
+        let people = self.people_of(items.iter().map(|i| &i.ticket).chain(&team), &reviews).await;
         for i in &mut items {
             self.enrich(i, &work, &reviews, &people);
         }
-        Ok(TicketPage { items, next, stale, errors })
+        Ok(TicketPage { items, next, stale, errors, people })
+    }
+
+    /// The ticket `key` names in the lists' first pages (cached, fetched when cold), with the
+    /// projects and sources of every list holding it; no work, PR or people enrichment.
+    pub async fn tracker_find(&self, key: &str, account: Option<&AccountId>) -> Option<TicketItem> {
+        let queries = self.ticket_queries(&Scope::All, None, None);
+        let results =
+            futures::future::join_all(queries.iter().map(|q| self.load_ticket_query(q, None, false))).await;
+        let named = |t: &Ticket| t.r#ref.key == key && account.is_none_or(|a| &t.r#ref.account == a);
+        let pages = queries
+            .iter()
+            .zip(results)
+            .filter_map(|(q, (page, _, _))| Some((page?.items.into_iter().filter(named).collect(), q)))
+            .collect();
+        merge_tickets(pages, &HashMap::new()).into_iter().next()
     }
 
     /// `tracker_search`: each list query of a scope searched by its tracker, plus its cached first page
@@ -1700,8 +1705,9 @@ impl Core {
         let tickets = self.cached_tickets(&scope).await;
         let people = self.people_of(&tickets, &all).await;
         let mut items = merge_reviews(all, &bindings);
+        let by_key = team::by_key(&tickets);
         for i in &mut items {
-            i.waiting = team::review_row_waiting(&i.review, &tickets, &people);
+            i.waiting = team::review_row_waiting(&i.review, &by_key, &people);
         }
         Ok(ReviewPage { items, stale, errors })
     }

@@ -34,8 +34,8 @@ use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
 use crate::tracker::{
-    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketPage, TicketRef, TrackerCaps,
-    TrackerKind, Transition, User,
+    Assignee, Column, Cursor, Page, SourceHit, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef,
+    TrackerCaps, TrackerKind, Transition, User,
 };
 
 // ---- terminal (impl: kelta-term) ---------------------------------------------------------------
@@ -311,6 +311,19 @@ pub trait CoreApi: Send + Sync {
         _refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         Ok(TicketPage::default())
+    }
+    /// The listed ticket `key` names (on `account` when given) with its projects, without the
+    /// list's enrichment (MCP by-key tools).
+    async fn ticket_by_key(
+        &self,
+        key: &str,
+        account: Option<&AccountId>,
+    ) -> Result<Option<TicketItem>, KeltaError> {
+        let page = self.ticket_list(Scope::All, None, None, false).await?;
+        Ok(page
+            .items
+            .into_iter()
+            .find(|i| i.ticket.r#ref.key == key && account.is_none_or(|a| &i.ticket.r#ref.account == a)))
     }
     async fn ticket_set_body(&self, ticket: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
         self.tracker_for(&ticket.account).await?.set_body(ticket, body_md).await
