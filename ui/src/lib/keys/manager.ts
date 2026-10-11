@@ -124,6 +124,14 @@ export function contextFromEvent(event: KeyboardEvent): KeyContext {
   };
 }
 
+/** A plain printable key outside text fields, terminals, menus and dialogs: a list/board shortcut. */
+export function isListKey(event: KeyboardEvent, ctx: KeyContext): boolean {
+  if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (ctx.terminal || ctx.textInput || ctx.overlay) return false;
+  const target = event.target instanceof Element ? event.target : null;
+  return !target?.closest('[role="menu"], [role="dialog"], [role="listbox"]');
+}
+
 function contextAllows(context: ActionContext, ctx: KeyContext): boolean {
   switch (context) {
     case 'global':
@@ -179,7 +187,10 @@ export class KeyManager {
       const event = e as KeyboardEvent;
       // Terminal views route their own events through attachCustomKeyEventHandler.
       if (event.target instanceof Element && event.target.closest('[data-terminal]')) return;
-      this.handleKeyDown(event);
+      if (this.handleKeyDown(event) === 'pass' && this.#opts.keys?.()?.list_keys === false) {
+        // `keys.list_keys = false`: the letter shortcuts of lists and boards never reach their pane.
+        if (isListKey(event, this.#context(event))) event.stopPropagation();
+      }
     };
     const onWheel = (e: Event): void => {
       // Webview zoom (Ctrl/Cmd + wheel) is disabled.

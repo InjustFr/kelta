@@ -394,3 +394,36 @@ describe('prefix state machine', () => {
     expect(calls).toEqual(['palette.open']);
   });
 });
+
+describe('keys.list_keys', () => {
+  function reached(
+    listKeys: boolean,
+    init: KeyboardEventInit & { code: string; key: string },
+    role?: string,
+  ) {
+    const { manager } = setup({ keys: keys({ list_keys: listKeys }) });
+    const host = document.createElement('div');
+    if (role) host.setAttribute('role', role);
+    const row = host.appendChild(document.createElement('div'));
+    document.body.appendChild(host);
+    const seen: string[] = [];
+    row.addEventListener('keydown', (e) => seen.push(e.key));
+    const stop = manager.start(window);
+    row.dispatchEvent(press(init));
+    stop();
+    host.remove();
+    return seen;
+  }
+
+  it('off: letters never reach a list, navigation keys and menus still do', () => {
+    expect(reached(false, { code: 'KeyA', key: 'a' })).toEqual([]);
+    expect(reached(false, { code: 'KeyP', key: 'P', shiftKey: true })).toEqual([]);
+    expect(reached(false, { code: 'ArrowDown', key: 'ArrowDown' })).toEqual(['ArrowDown']);
+    expect(reached(false, { code: 'Enter', key: 'Enter' })).toEqual(['Enter']);
+    expect(reached(false, { code: 'KeyA', key: 'a' }, 'menu')).toEqual(['a']);
+  });
+
+  it('on (default): letters reach the list', () => {
+    expect(reached(true, { code: 'KeyA', key: 'a' })).toEqual(['a']);
+  });
+});
