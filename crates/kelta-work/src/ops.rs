@@ -134,8 +134,9 @@ impl WorkService {
                 .await?;
             }
         }
-        // A message held (not under the item lock) while this ran is newer than our copy.
-        j.pending_prompt = self.load_journal(&item.id).pending_prompt;
+        // A message held / checks sent (not under the item lock) while this ran are newer than our copy.
+        let cur = self.load_journal(&item.id);
+        (j.pending_prompt, j.checks_sent) = (cur.pending_prompt, cur.checks_sent);
         self.save_journal(&item.id, &j)?;
         self.save(item).await
     }
@@ -451,10 +452,10 @@ impl WorkService {
             };
             // Finish will not run (closed, or a Done status to choose): disarm so no chip lies.
             let skipped = item.auto_finish && item.state != (WorkState::Merged { detail: None });
-            if skipped {
-                item.auto_finish = false;
-            }
             self.save(&mut item).await?;
+            if skipped {
+                item = self.update(&item.id, |w| std::mem::take(&mut w.auto_finish)).await?;
+            }
             if skipped
                 && let WorkState::Merged { detail: Some(why) } = &item.state
                 && let Ok(env) = self.env(&item.project_id, &item.repo_id)
