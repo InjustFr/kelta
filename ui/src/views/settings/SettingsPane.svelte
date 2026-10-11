@@ -22,7 +22,7 @@
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
-  import { leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
+  import { COPY, leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
   import { SECTION_GROUPS, SECTION_ROOTS, sectionLabel } from './lib/sections';
   import RepoTrust from './RepoTrust.svelte';
 
@@ -125,6 +125,8 @@
     const hay = [
       f.path,
       titleOf(f.segs[f.segs.length - 1] ?? ''),
+      COPY[f.path]?.label,
+      COPY[f.path]?.help,
       descriptionOf(f.node),
       ...enumOptions(f.node).map((o) => o.value),
     ]

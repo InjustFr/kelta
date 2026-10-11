@@ -87,6 +87,10 @@ test.describe('settings pane', () => {
     await expect(
       page.locator('[data-testid="search-results"] [data-testid="field"][data-path="terminal.font_size"]'),
     ).toBeVisible();
+    await search.fill('reopen sessions');
+    await expect(
+      page.locator('[data-testid="search-results"] [data-testid="field"][data-path="app.restore_mode"]'),
+    ).toBeVisible();
     await search.fill('polling.focused_secs');
     await expect(page.locator('[data-testid="search-results"] [data-testid="field"]')).toHaveCount(1);
 
