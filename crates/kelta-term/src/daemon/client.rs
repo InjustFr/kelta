@@ -379,8 +379,10 @@ impl TerminalHost for DaemonTerminalHost {
         let r = c.call_seq(seq, &req, &[]);
         if let Err(e) = &r
             && e.code == ErrorCode::Timeout
+            && prev.is_none()
         {
             // keltad may still finish the spawn: queued behind it, the kill leaves no session without a handler.
+            // With a handler already there, that id runs: keltad refuses the spawn, the kill would end it.
             let _ = c.send(0, &Req::Kill { id: id.clone(), signal: KillSignal::Kill }, &[]);
         }
         if r.is_err() {
@@ -588,6 +590,16 @@ mod tests {
     /// the kill queued behind it leaves no running session behind.
     #[test]
     fn a_timed_out_spawn_is_killed_and_rolled_back() {
+        timed_out_spawn(false);
+    }
+
+    /// #313: a timed-out spawn of an id that already runs leaves that session running.
+    #[test]
+    fn a_timed_out_spawn_spares_the_running_session() {
+        timed_out_spawn(true);
+    }
+
+    fn timed_out_spawn(running: bool) {
         let tmp = tempfile::tempdir().unwrap();
         let real = tmp.path().join("run/keltad.sock");
         let l = bind(&real).unwrap();
@@ -623,16 +635,30 @@ mod tests {
                 }
             }
         });
+        let d = DaemonTerminalHost::connect(&tmp.path().join("run/keltad.sock")).unwrap();
         let c = DaemonTerminalHost::connect(&fake).unwrap();
         let id = SessionId::new("hung");
-        let prev: Arc<dyn TerminalEvents> = Arc::new(NoEvents);
-        c.conn().unwrap().events.lock().insert(id.clone(), prev.clone());
-        let e = c.spawn(cat(&id, Arc::new(NoEvents))).unwrap_err();
-        assert_eq!(e.code, ErrorCode::Timeout);
-        assert!(Arc::ptr_eq(&c.conn().unwrap().events.lock()[&id], &prev), "handler not rolled back");
+        if running {
+            // The session this client already runs under that id.
+            let prev: Arc<dyn TerminalEvents> = Arc::new(NoEvents);
+            d.spawn(cat(&id, Arc::new(NoEvents))).unwrap();
+            c.conn().unwrap().events.lock().insert(id.clone(), prev.clone());
+            assert_eq!(c.spawn(cat(&id, Arc::new(NoEvents))).unwrap_err().code, ErrorCode::Timeout);
+            assert!(Arc::ptr_eq(&c.conn().unwrap().events.lock()[&id], &prev), "handler not rolled back");
+            let _b = peer.join().unwrap();
+            // A kill would end it within moments (the poll below): it must stay.
+            for _ in 0..10 {
+                std::thread::sleep(Duration::from_millis(50));
+                let e = d.spawn(cat(&id, Arc::new(NoEvents))).unwrap_err();
+                assert_eq!(e.code, ErrorCode::Conflict, "the running session was killed: {e:?}");
+            }
+            d.kill(&id, KillSignal::Kill).unwrap();
+            return;
+        }
+        assert_eq!(c.spawn(cat(&id, Arc::new(NoEvents))).unwrap_err().code, ErrorCode::Timeout);
+        assert!(!c.conn().unwrap().events.lock().contains_key(&id), "handler not rolled back");
         let _b = peer.join().unwrap();
         // The kill is only a signal: the exit is noticed later, so poll until a new spawn is accepted.
-        let d = DaemonTerminalHost::connect(&tmp.path().join("run/keltad.sock")).unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
         loop {
             match d.spawn(cat(&id, Arc::new(NoEvents))) {
