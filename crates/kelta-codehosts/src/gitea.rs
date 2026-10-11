@@ -240,11 +240,11 @@ impl CodeHost for GiteaHost {
         let me = self.me().await?;
         let (pull, reviews, files) = tokio::join!(
             self.json(HttpRequest::get(self.pulls(&r.repo, &format!("/{}", r.number))?)),
-            self.json(
+            self.paged(
                 HttpRequest::get(self.pulls(&r.repo, &format!("/{}/reviews", r.number))?)
                     .query("limit", LIMIT)
             ),
-            self.json(
+            self.paged(
                 HttpRequest::get(self.pulls(&r.repo, &format!("/{}/files", r.number))?).query("limit", "100")
             ),
         );
@@ -258,8 +258,8 @@ impl CodeHost for GiteaHost {
 
         // Latest meaningful state per reviewer; a plain COMMENT never overrides an approval or a veto.
         let mut states: Vec<(User, MyReviewState)> = Vec::new();
-        let reviews = reviews?.body;
-        let reviews = reviews.as_array().map(Vec::as_slice).unwrap_or(&[]);
+        let reviews = reviews?;
+        let reviews = reviews.as_slice();
         // My PENDING review holds my draft line comments.
         let pending_comments = reviews
             .iter()
@@ -334,19 +334,14 @@ impl CodeHost for GiteaHost {
             }
         }
         let files: Vec<FileChange> = files
-            .map(|f| f.body)
-            .unwrap_or(Value::Null)
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .map(|f| FileChange {
-                        path: s(f, "filename").unwrap_or("").to_owned(),
-                        additions: f.get("additions").and_then(Value::as_u64).unwrap_or(0) as u32,
-                        deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
-                    })
-                    .collect()
+            .unwrap_or_default()
+            .iter()
+            .map(|f| FileChange {
+                path: s(f, "filename").unwrap_or("").to_owned(),
+                additions: f.get("additions").and_then(Value::as_u64).unwrap_or(0) as u32,
+                deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
             })
-            .unwrap_or_default();
+            .collect();
         let state = match (pull.get("merged").and_then(Value::as_bool), s(&pull, "state")) {
             (Some(true), _) => PrState::Merged,
             (_, Some("closed")) => PrState::Closed,

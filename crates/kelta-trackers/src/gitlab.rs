@@ -26,6 +26,8 @@ use crate::common::{
 };
 
 const PER_PAGE: u32 = 50;
+/// shortcut: at most this many note pages per issue, upgrade if label churn buries comments deeper.
+const NOTE_PAGES: u32 = 5;
 
 /// The current milestone among active ones: the earliest `due_date >= today`, else an undated one.
 /// ISO dates compare as strings.
@@ -460,19 +462,21 @@ impl Tracker for GitlabIssues {
         let ticket = self
             .ticket_from(&raw)
             .ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))?;
-        let notes = self
-            .json(
-                HttpRequest::get(self.issue_url(&project, iid, "/notes"))
-                    .query("sort", "desc")
-                    .query("order_by", "created_at")
-                    .query("per_page", COMMENT_LIMIT.to_string()),
-            )
-            .await?
-            .body;
-        let mut comments: Vec<_> = notes
-            .as_array()
-            .map(|a| {
-                a.iter()
+        let req = HttpRequest::get(self.issue_url(&project, iid, "/notes"))
+            .query("sort", "desc")
+            .query("order_by", "created_at")
+            .query("per_page", COMMENT_LIMIT.to_string());
+        let mut comments = Vec::new();
+        let mut next = Some(req.clone());
+        // System notes (label moves...) share the list: page on until COMMENT_LIMIT real comments.
+        for _ in 0..NOTE_PAGES {
+            let Some(r) = next.take() else { break };
+            let resp = self.json(r).await?;
+            comments.extend(
+                resp.body
+                    .as_array()
+                    .into_iter()
+                    .flatten()
                     .filter(|n| n.get("system").and_then(Value::as_bool) != Some(true))
                     .map(|n| {
                         common::comment(
@@ -480,10 +484,19 @@ impl Tracker for GitlabIssues {
                             s(n, "created_at").unwrap_or("").to_owned(),
                             markdown::to_html(s(n, "body").unwrap_or("")),
                         )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+                    }),
+            );
+            if comments.len() >= COMMENT_LIMIT {
+                break;
+            }
+            next = resp
+                .headers
+                .get("x-next-page")
+                .map(|p| p.trim())
+                .filter(|p| p.parse::<u32>().is_ok())
+                .map(|p| req.clone().query("page", p));
+        }
+        comments.truncate(COMMENT_LIMIT);
         comments.reverse(); // newest first on the wire, oldest first in the contract
         let children = self.children(&project, iid).await.into_iter().map(common::child).collect();
         let body = s(&raw, "description").unwrap_or("").to_owned();

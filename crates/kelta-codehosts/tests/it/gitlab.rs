@@ -170,6 +170,36 @@ async fn authored_threads_are_fetched_only_when_the_stamp_moves() {
     }
 }
 
+#[tokio::test]
+async fn authored_threads_follow_x_next_page() {
+    let server = MockServer::start().await;
+    common(&server, "gitlab/version_16.json").await;
+    mount(&server, "GET", "/api/v4/merge_requests", 200, "gitlab/mrs_authored.json").await;
+    let discussions = "/api/v4/projects/grp%2Fsub%2Fproj/merge_requests/21/discussions";
+    // Mounted first so it wins for page 2; the newest thread lives there.
+    Mock::given(path(discussions))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{ "id": "d-late", "notes": [
+            { "id": 401, "system": false, "resolvable": true, "resolved": false, "body": "One more.",
+              "author": { "username": "anna" }, "created_at": "2026-10-05T09:00:00.000Z" }
+        ]}])))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(path(discussions))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-next-page", "2")
+                .set_body_string(fixture_text("gitlab/discussions.json")),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let r = gl(&server).list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap().remove(0);
+    assert_eq!(r.unresolved_threads, Some(3), "d-open, d-new and page 2's d-late");
+    assert_eq!(r.last_comment_at.as_deref(), Some("2026-10-05T09:00:00.000Z"));
+}
+
 const MR: &str = "/api/v4/projects/grp%2Fother/merge_requests/8";
 
 async fn mount_detail(server: &MockServer, mr: &str, approvals: &str) {

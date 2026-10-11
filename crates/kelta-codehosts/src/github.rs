@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use kelta_http::graphql::graphql;
-use kelta_http::util::{trim_url, url_host};
+use kelta_http::util::{link_rel, trim_url, url_host};
 use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{CodeHost, SecretResolver};
 use kelta_proto::codehost::{
@@ -33,6 +33,8 @@ use crate::common::{
     repo_path, s, user,
 };
 
+/// shortcut: at most this many REST pages per list, upgrade when PRs carry more reviews or files.
+const MAX_PAGES: u32 = 5;
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
 const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
@@ -130,6 +132,22 @@ impl GithubHost {
 
     async fn rest(&self, req: HttpRequest) -> Result<kelta_http::HttpResponse<Value>, KeltaError> {
         self.auth.send_json::<Value>(req).await
+    }
+
+    /// Rows of a paged REST list, following `Link: rel="next"` up to [`MAX_PAGES`].
+    async fn paged(&self, req: HttpRequest) -> Result<Vec<Value>, KeltaError> {
+        let mut out = Vec::new();
+        let mut next = Some(req);
+        for _ in 0..MAX_PAGES {
+            let Some(req) = next.take() else { break };
+            let resp = self.rest(req).await?;
+            out.extend(resp.body.as_array().cloned().unwrap_or_default());
+            // The token rides on every page: never follow a `next` that leaves the API origin.
+            next = link_rel(&resp.headers, "next")
+                .filter(|u| u.starts_with(&format!("{}/", self.api)))
+                .map(HttpRequest::get);
+        }
+        Ok(out)
     }
 
     fn repo_url(&self, repo: &str, tail: &str) -> Result<String, KeltaError> {
@@ -763,12 +781,11 @@ impl CodeHost for GithubHost {
         let me = self.me().await?;
         let (pull, reviews, files) = tokio::join!(
             self.rest(HttpRequest::get(&pull_url)),
-            self.rest(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")),
-            self.rest(HttpRequest::get(format!("{pull_url}/files")).query("per_page", "100")),
+            self.paged(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")),
+            self.paged(HttpRequest::get(format!("{pull_url}/files")).query("per_page", "100")),
         );
         let pull = pull?.body;
-        let reviews = reviews?.body.as_array().cloned().unwrap_or_default();
-        let files = files?.body.as_array().cloned().unwrap_or_default();
+        let (reviews, files) = (reviews?, files?);
         let kind = if pull.pointer("/user/login").and_then(Value::as_str) == me.login.as_deref() {
             ReviewKind::Authored
         } else {
@@ -1125,13 +1142,12 @@ impl CodeHost for GithubHost {
         }
         let me = self.me().await?;
         let reviews =
-            self.rest(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")).await?;
-        let logins: Vec<String> =
-            latest_by_reviewer(reviews.body.as_array().map(Vec::as_slice).unwrap_or(&[]))
-                .into_iter()
-                .map(|(l, _)| l)
-                .filter(|l| Some(l.as_str()) != me.login.as_deref())
-                .collect();
+            self.paged(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")).await?;
+        let logins: Vec<String> = latest_by_reviewer(&reviews)
+            .into_iter()
+            .map(|(l, _)| l)
+            .filter(|l| Some(l.as_str()) != me.login.as_deref())
+            .collect();
         if logins.is_empty() {
             return Err(KeltaError::invalid("nobody has reviewed this pull request yet"));
         }
@@ -1194,8 +1210,8 @@ impl GithubHost {
 
     async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
         let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number))?;
-        let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
-        Ok(v.as_array().and_then(|a| pending_of(a)))
+        let v = self.paged(HttpRequest::get(url).query("per_page", "100")).await?;
+        Ok(pending_of(&v))
     }
 
     async fn publish(&self, r: &ReviewRef, p: &Pending, event: &str, body: &str) -> Result<(), KeltaError> {

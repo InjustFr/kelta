@@ -133,6 +133,34 @@ async fn detail_lists_user_notes_oldest_first() {
 }
 
 #[tokio::test]
+async fn detail_pages_past_system_notes_to_find_comments() {
+    let server = MockServer::start().await;
+    issue_with(&server, "gitlab/issue.json").await;
+    let system = |i: u32| json!({ "id": 100 + i, "system": true, "body": "added ~bug label", "author": { "username": "zed" } });
+    // 25 label moves after the one comment, newest first: the comment lands on page 2.
+    Mock::given(method("GET"))
+        .and(path(format!("{ISSUE}/notes")))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!((20..25).map(system).chain([json!({
+            "id": 1, "system": false, "body": "the comment", "author": { "username": "anna" }, "created_at": "2026-10-01T08:00:00Z"
+        })]).collect::<Vec<_>>())))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("{ISSUE}/notes")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-next-page", "2")
+                .set_body_json(json!((0..20).map(system).collect::<Vec<_>>())),
+        )
+        .mount(&server)
+        .await;
+    let d = gl(&server).get(&r()).await.unwrap();
+    assert_eq!(d.comments.len(), 1);
+    assert!(d.comments[0].body_html.contains("the comment"));
+}
+
+#[tokio::test]
 async fn transitions_come_from_the_projects_scoped_labels() {
     let server = MockServer::start().await;
     issue_with(&server, "gitlab/issue.json").await;
