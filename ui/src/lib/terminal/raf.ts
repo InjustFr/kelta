@@ -3,7 +3,7 @@
 // requested only when the queue goes from empty to non-empty, so an idle UI owns no frame callbacks.
 //
 // Used for: ack batching (one `session_ack` per frame and session), fit/resize coalescing, the
-// project switch mark and gutter drags.
+// project switch mark, gutter and sidebar drags.
 
 export type FrameTask = () => void;
 
