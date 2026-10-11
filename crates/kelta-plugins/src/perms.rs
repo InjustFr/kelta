@@ -78,6 +78,8 @@ impl Granted {
             .trim_start_matches('[')
             .trim_end_matches(']')
             .to_ascii_lowercase();
+        // `evil.com.` is the absolute form of `evil.com` for DNS and TLS: match it as `evil.com`.
+        let host = host.strip_suffix('.').map(str::to_owned).unwrap_or(host);
         let wanted = Permission::Net(host.clone());
         match uri.scheme_str() {
             Some("https") => {
@@ -85,7 +87,7 @@ impl Granted {
                     Permission::Net(h) => {
                         let h = h.to_ascii_lowercase();
                         match h.strip_prefix("*.") {
-                            Some(domain) => host.ends_with(&format!(".{domain}")),
+                            Some(domain) => !domain.is_empty() && host.ends_with(&format!(".{domain}")),
                             None => h == host,
                         }
                     }
@@ -186,6 +188,11 @@ mod tests {
         assert!(g.require_net("https://other.example.com/x").is_err());
         assert!(g.require_net("https://ci.acme.com/").is_ok());
         assert!(g.require_net("https://acme.com/").is_err());
+        assert!(g.require_net("https://evilacme.com/").is_err());
+        assert!(g.require_net("https://acme.com.evil/").is_err());
+        assert!(g.require_net("https://evil.com./").is_err());
+        assert!(g.require_net("https://ci.acme.com./").is_ok());
+        assert!(g.require_net("https://api.example.com./x").is_ok());
         assert!(g.require_net("http://api.example.com/").is_err());
         assert!(g.require_net("http://127.0.0.1:8080/").is_ok());
         assert!(g.require_net("http://localhost:8080/").is_err());

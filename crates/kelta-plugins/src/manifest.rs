@@ -14,6 +14,7 @@ use kelta_proto::ids::PluginId;
 use serde_json::Value;
 
 use crate::matcher;
+use crate::perms::Granted;
 use crate::template::unknown_placeholders;
 use crate::util::sha256_hex;
 
@@ -225,6 +226,9 @@ pub fn validate(m: &PluginManifest) -> Vec<String> {
     }
     for p in &m.permissions {
         match Permission::parse(p) {
+            None if p.starts_with("net:") => {
+                errors.push(format!("permission `{p}`: expected a host or `*.domain`"))
+            }
             None => errors.push(format!("unknown permission `{p}`")),
             Some(Permission::Net(host)) => {
                 let h = host.strip_prefix("*.").unwrap_or(&host);
@@ -266,9 +270,16 @@ pub fn validate(m: &PluginManifest) -> Vec<String> {
             errors.push(format!("contributes.tools: duplicate id `{}`", t.id));
         }
     }
+    let declared = Granted::from_permissions(m.permissions.iter().filter_map(|p| Permission::parse(p)));
     let mut seen = HashSet::new();
     for t in &c.triggers {
         validate_trigger(t, "contributes.triggers", &mut errors);
+        if !declared.covers_events(&t.on) {
+            errors.push(format!(
+                "contributes.triggers: trigger `{}` needs permission `events:{}` (or a glob covering it)",
+                t.id, t.on
+            ));
+        }
         if !seen.insert(t.id.clone()) {
             errors.push(format!("contributes.triggers: duplicate id `{}`", t.id));
         }
@@ -380,6 +391,14 @@ license = "MIT"
         assert!(e.iter().any(|x| x.contains("bogus")), "{e:?}");
         let e = parse(MINIMAL.replace("\"hello\"", "\"kelta-x\"").as_bytes(), false).unwrap_err();
         assert!(e.iter().any(|x| x.contains("not starting with")), "{e:?}");
+    }
+
+    #[test]
+    fn rejects_wildcard_only_net_permission() {
+        for bad in ["net:*.", "net:*"] {
+            let e = parse(format!("{MINIMAL}permissions = [\"{bad}\"]").as_bytes(), false).unwrap_err();
+            assert!(e.iter().any(|x| x.contains("expected a host")), "{e:?}");
+        }
     }
 
     #[test]
