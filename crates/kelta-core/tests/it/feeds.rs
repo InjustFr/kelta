@@ -197,6 +197,54 @@ async fn cache_serves_first_then_revalidates_when_stale() {
     )));
 }
 
+/// Backdate a cache row so it reads `secs` old.
+async fn age_cache(e: &Env, key: &str, secs: i64) {
+    let key = key.to_owned();
+    let row = e.h.core.store().call(move |c| q::cache_get(c, &key)).await.unwrap().unwrap();
+    let at = time::OffsetDateTime::now_utc() - time::Duration::seconds(secs);
+    let fetched_at = at.format(&time::format_description::well_known::Rfc3339).unwrap();
+    e.h.core.store().call(move |c| q::cache_put(c, &ProviderCacheRow { fetched_at, ..row })).await.unwrap();
+}
+
+#[tokio::test]
+async fn revalidation_follows_the_polling_policy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let shop = Scope::Project { id: "shop".into() };
+    let lists = || e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count();
+    let key = e.h.core.ticket_queries(&shop, None, None)[0].cache_key.clone();
+    let load = || e.h.core.tracker_list(shop.clone(), None, None, None, None, false);
+    load().await.unwrap();
+    let n = lists();
+
+    // background (600 s): a tickets.changed reload of a 5 min old list stays on the cache
+    e.h.ui.set_window_state(WindowState { exists: true, visible: true, focused: false });
+    age_cache(&e, &key, 300).await;
+    assert!(!load().await.unwrap().stale);
+    settle().await;
+    assert_eq!(lists(), n, "no provider fetch for a list younger than the background interval");
+    age_cache(&e, &key, 700).await;
+    assert!(load().await.unwrap().stale, "older than the background interval: revalidates");
+
+    // focused (120 s), `poll_secs` 600 wins
+    e.h.ui.set_window_state(WindowState { exists: true, visible: true, focused: true });
+    e.h.cfg.update(|s| s.accounts.get_mut("jira-acme").unwrap().poll_secs = Some(600));
+    age_cache(&e, &key, 300).await;
+    assert!(!load().await.unwrap().stale, "poll_secs respected");
+
+    // focused 30 s, the Redmine floor (60 s) wins
+    e.h.cfg.update(|s| {
+        s.polling.focused_secs = 30;
+        let a = s.accounts.get_mut("jira-acme").unwrap();
+        a.poll_secs = None;
+        a.kind = AccountKind::Redmine;
+    });
+    age_cache(&e, &key, 45).await;
+    assert!(!load().await.unwrap().stale, "Redmine floor respected");
+    age_cache(&e, &key, 90).await;
+    assert!(load().await.unwrap().stale);
+}
+
 #[tokio::test]
 async fn first_review_poll_is_silent() {
     let tmp = tempfile::tempdir().unwrap();

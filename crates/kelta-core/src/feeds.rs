@@ -449,6 +449,14 @@ impl Core {
         Duration::from_secs(u64::from(p.focused_secs.max(p.min_secs).max(30)))
     }
 
+    /// How long `account`'s cached lists stay fresh: its scheduled poll interval for the current
+    /// window (+10 % for the scheduler's jitter), so revalidation never polls more often than it.
+    fn fresh_for(&self, account: &AccountId) -> Duration {
+        let p = self.policy_for(account, &self.accounts_settings());
+        // polling off (background 0, window closed): a list someone still loads goes stale at the focused cadence
+        p.interval(self.bridge.window_state()).unwrap_or_else(|| p.focused_interval()).mul_f64(1.1)
+    }
+
     // =========================================================================================
     // Tickets
     // =========================================================================================
@@ -633,7 +641,7 @@ impl Core {
         let seen = gate.done.load(Ordering::Acquire);
         let cached: Option<(Page<Ticket>, Duration)> = self.cache_get(&q.cache_key).await;
         if !refresh && let Some((page, age)) = &cached {
-            let stale = *age > self.focused_interval();
+            let stale = *age > self.fresh_for(&q.account);
             if stale {
                 self.revalidate_tickets(q.clone());
             }
@@ -1658,7 +1666,7 @@ impl Core {
     ) -> (Option<Vec<Review>>, bool, Option<AccountError>) {
         let cached: Option<(Vec<Review>, Duration)> = self.cache_get(&reviews_key(account, kind)).await;
         if !refresh && let Some((list, age)) = &cached {
-            let stale = *age > self.focused_interval();
+            let stale = *age > self.fresh_for(account);
             if stale {
                 self.revalidate_reviews(account.clone(), kind);
             }
