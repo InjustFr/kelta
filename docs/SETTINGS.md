@@ -136,6 +136,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `max_live` | int | `4` | live Claude processes start work runs at once; past it new items wait `Queued` with their worktree ready and start, oldest first, when a Claude exits (0 = no cap). Global |
 | `queue_hold_pct` | float? | none | hold the queue while the 5h rate-limit usage is at or above this percentage. Global |
 | `auto_park_after_mins` | int | `45` | park a work item's Claude (and its nvim, unless it has unsaved buffers) once it has been done and seen with no input for this many minutes; showing the item resumes the same conversation. Never a working or waiting Claude (0 = off) |
+| `terminal_command` | list<str> | `[]` | opens a template's Claude when its `claude_host` is `terminal`; placeholders `{command}` (the script Kelta writes: it exports the session's hook and MCP variables and runs `claude`), `{cwd}`, `{shell}`. Empty = `open -na Terminal {command}` on macOS, `x-terminal-emulator -e {command}` on Linux. Example: `["ghostty", "--working-directory={cwd}", "-e", "{shell}", "-ic", "{command}"]` |
 
 ### [editor]
 | `default` | str (preset id) | `"nvim"` | |
@@ -245,7 +246,7 @@ A theme is a named, **partial** set of colour overrides on top of a Bezel base: 
 A build without themes rejects a config that has `themes` (`deny_unknown_fields`). First paint shows Bezel until settings load.
 
 ### [[session_templates]]  (by_id; scope global+project+repo; x-kelta-exec)
-`{ id, label, layout: TemplateNode, enabled = true, options = [StartOption] }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
+`{ id, label, layout: TemplateNode, enabled = true, options = [StartOption], claude_host = "builtin"|"terminal"|"multiplexer" }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
 ```toml
 `StartOption = { label, values = [str] }` (#357): options picked per ticket in the Start sheet, under the prompt. One value is a checkbox, several a single choice (or none). The picked values replace the Claude prompt's `{options}` (`claude.prompt_templates`), else go after it, in the declared order. A ticket's route with `options` replaces the template's (the default template, `work.default_template`). The last picks are remembered per route or template (`ui_state`) and pre-selected next time; a start without the sheet uses them.
 
@@ -277,6 +278,8 @@ id = "shell"
 label = "Shell"
 layout = { session = "shell" }
 ```
+
+`claude_host` (#347): `builtin` runs Claude in its Kelta pane. `terminal` opens it in a window of your terminal (`claude.terminal_command`), `multiplexer` in a new window of the tmux session `kelta-<repo>` (created detached when missing). Kelta still writes the worktree, `ticket.md`, the `--settings` hooks and `mcp.json`, and the Claude pane shows a banner with a Focus button: it runs a wrapper that lives as long as that Claude, so status, Resume (same host), park and Finish behave as with `builtin`; closing the pane ends the external Claude. Sending a prompt from Kelta (notes, queued prompts) needs the built-in pane.
 
 ### [[sources]]  (by_id; scope global only; category Projects)
 Ticket boards. A source belongs to no project: it feeds zero or more of them, and the Tickets pane's `All` scope lists every source, also those feeding no project or only closed ones.

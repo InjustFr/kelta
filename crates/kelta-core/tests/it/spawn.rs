@@ -290,8 +290,8 @@ async fn resumed_claude_takes_its_mode_from_its_launch_source() {
             profile: Some("review".into()),
             command: None,
         },
-        enabled: true,
         options: Vec::new(),
+        ..Default::default()
     });
     let mode_arg = |h: &H, id: &kelta_proto::ids::SessionId| {
         let args = h.term.with_session(id, |s| s.spec.args.clone()).unwrap();
@@ -360,8 +360,8 @@ async fn template_shell_command_quotes_placeholders() {
             profile: None,
             command: Some("git log --grep {ticket.title} {base|shell}".into()),
         },
-        enabled: true,
         options: Vec::new(),
+        ..Default::default()
     });
     let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
     let shop = ProjectId::new("shop");
@@ -433,4 +433,44 @@ async fn claude_ide_bridge_follows_the_setting() {
 
     h.core.session_kill(&on.id, false).await.unwrap();
     assert!(!lock.exists(), "lock file removed when the session ends");
+}
+
+#[tokio::test]
+async fn template_claude_host_wraps_claude_and_keeps_the_host_on_restart() {
+    use kelta_proto::settings::{ClaudeHost, SessionTemplate, TemplateNode};
+    let tmp = tempfile::tempdir().unwrap();
+    let shop = ProjectId::new("shop");
+    let mut settings = Settings::defaults();
+    settings.session_templates.push(SessionTemplate {
+        id: "outside".into(),
+        label: "Outside".into(),
+        layout: TemplateNode::session("claude"),
+        claude_host: ClaudeHost::Terminal,
+        ..Default::default()
+    });
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    let wrapped = |id: &kelta_proto::ids::SessionId| {
+        h.term.with_session(id, |s| {
+            s.spec.program.ends_with("sh")
+                && s.spec.args.get(1).is_some_and(|a| a.contains("external terminal"))
+        })
+    };
+    let spawned =
+        h.core.session_spawn_template(&shop, "outside", TemplateCtx::default(), Placement::NewTab).await;
+    let info = spawned.unwrap()[0].clone();
+    assert_eq!(info.claude.as_ref().and_then(|c| c.host), Some(ClaudeHost::Terminal));
+    assert_eq!(wrapped(&info.id), Some(true));
+    let script = h.core.dirs().session_runtime(&info.id.sid8()).join("claude.command");
+    let text = std::fs::read_to_string(script).unwrap();
+    assert!(text.contains(&format!("export KELTA_SESSION_ID='{}'", info.id)), "{text}");
+    h.term.emit(&info.id, kelta_proto::term::TerminalEvent::Exited { code: Some(0), signal: None });
+    settle().await;
+    h.core.session_restart(&info.id).await.unwrap();
+    assert_eq!(wrapped(&info.id), Some(true), "restarted in the same host");
+
+    let plain =
+        h.core.session_spawn_template(&shop, "claude", TemplateCtx::default(), Placement::NewTab).await;
+    let plain = plain.unwrap()[0].clone();
+    assert_eq!(plain.claude.as_ref().and_then(|c| c.host), None);
+    assert_eq!(wrapped(&plain.id), Some(false), "builtin stays a plain claude");
 }

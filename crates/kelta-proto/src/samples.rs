@@ -239,6 +239,7 @@ pub fn session_info() -> SessionInfo {
             hooks_active: true,
             usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
             question: None,
+            host: None,
         }),
         editor: None,
         cols: 120,

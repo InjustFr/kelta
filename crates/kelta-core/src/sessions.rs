@@ -18,7 +18,9 @@ use kelta_proto::model::{
     RestorePolicy, SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
     WorkItem,
 };
-use kelta_proto::settings::{BellMode, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost};
+use kelta_proto::settings::{
+    BellMode, ClaudeHost, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost,
+};
 use kelta_proto::store::SessionRow;
 use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
@@ -311,6 +313,11 @@ impl Core {
                     _ => String::new(),
                 },
                 model: spawn_env::arg_value(&spec.args, "--model"),
+                host: Some(crate::claude_host::host_of(
+                    &self.cfg.effective(Some(&row.project_id)).session_templates,
+                    spec.template_id.as_deref(),
+                ))
+                .filter(|h| *h != ClaudeHost::Builtin),
                 ..ClaudeMeta::default()
             });
             let editor = match &kind {
@@ -744,13 +751,18 @@ impl Core {
             Some(p) => spawn_env::resolve_program(p, env.get("PATH").map(String::as_str), &cwd)
                 .map(|path| (path, launch.args.clone())),
         };
-        let (program, args) = match resolved {
+        let (mut program, mut args) = match resolved {
             Ok(x) => x,
             Err(e) => {
                 self.release_http_ref(http_ref);
                 self.server.ide_close(&id);
                 return Err(e);
             }
+        };
+        let host = if is_claude {
+            crate::claude_host::host_of(&settings.session_templates, spec.template_id.as_deref())
+        } else {
+            ClaudeHost::Builtin
         };
 
         let info = SessionInfo {
@@ -776,6 +788,7 @@ impl Core {
             claude: is_claude.then(|| ClaudeMeta {
                 session_uuid: claude_uuid.clone().unwrap_or_default(),
                 model: spawn_env::arg_value(&args, "--model"),
+                host: (host != ClaudeHost::Builtin).then_some(host),
                 ..ClaudeMeta::default()
             }),
             editor: match &spec.kind {
@@ -792,6 +805,33 @@ impl Core {
                 _ => kelta_proto::now_rfc3339(),
             },
         };
+        // #347: the pane runs a wrapper that opens the host and lives as long as Claude there.
+        if host != ClaudeHost::Builtin {
+            let dir = self.dirs.session_runtime(&id.sid8());
+            let name = work.as_ref().map_or(spec.project_id.as_str(), |w| w.repo_id.as_str());
+            let wrapper = kelta_work::files::private_dir(&dir).and_then(|()| {
+                crate::claude_host::prepare(&crate::claude_host::HostLaunch {
+                    host,
+                    terminal_command: &settings.claude.terminal_command,
+                    name,
+                    dir: &dir,
+                    cwd: &cwd,
+                    shell: &shell,
+                    program: &program,
+                    args: &args,
+                    env: &env,
+                    login: &self.login_env.vars,
+                })
+            });
+            match wrapper {
+                Ok(w) => (program, args) = (PathBuf::from("/bin/sh"), vec!["-c".to_owned(), w]),
+                Err(e) => {
+                    self.release_http_ref(http_ref);
+                    self.server.ide_close(&id);
+                    return Err(e);
+                }
+            }
+        }
         let scrollback = settings.terminal.scrollback.for_kind(spec.kind.name());
         let pty = PtySpawnSpec {
             id: id.clone(),

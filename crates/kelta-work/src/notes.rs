@@ -93,6 +93,10 @@ impl WorkService {
         }
         let env = self.env(&item.project_id, &item.repo_id)?;
         let mut j = self.load_journal(id);
+        // Held, it would be dropped at the next Stop: a hosted Claude cannot take a prompt.
+        if let Some(s) = claude_of(&env.core, &item, &j).filter(|s| s.lifecycle == Lifecycle::Live) {
+            s.refuse_hosted()?;
+        }
         let held = j.pending_prompt.take();
         let text = match &held {
             Some(p) => format!("{p}\n\n{text}"),
