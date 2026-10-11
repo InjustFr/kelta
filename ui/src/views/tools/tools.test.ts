@@ -5,12 +5,21 @@ import { dispatch } from '$lib/actions';
 import type { ToolScope } from '$lib/gen';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { activeTab } from '$lib/layout';
+import { activeTab, allPanes } from '$lib/layout';
 import { layout, projects, sessions, tools, ui } from '$lib/stores';
 
 import { jumplist, noteFocus } from '../../shell/jumplist';
 import NewSessionSheet from '../../shell/NewSessionSheet.svelte';
-import { activateProject, currentTab, focusedPane, isToolTab, paneTool, selectTab } from '../../shell/nav';
+import {
+  activateProject,
+  currentTab,
+  focusedPane,
+  focusPaneById,
+  isToolTab,
+  railRows,
+  selectTab,
+  toolSubLines,
+} from '../../shell/nav';
 import './actions';
 import ToolPicker from './ToolPicker.svelte';
 
@@ -207,7 +216,7 @@ describe('tools.open', () => {
     await Promise.all([sessions.load(), layout.load('home')]);
     expect([ui.view, projects.activeId]).toEqual([null, 'home']);
     const pane = focusedPane()!;
-    expect(paneTool(pane)).toBe(id);
+    expect(toolSubLines().get(pane.id)?.tool).toBe(id);
     noteFocus({ project: 'home', tab: currentTab()!.id, pane: pane.id });
     await dispatch('tools.open', { tool_id: id });
     expect(opens()).toHaveLength(1);
@@ -238,7 +247,7 @@ describe('tools.open', () => {
   it('pressed again in front, a tool that takes a project asks for another project', async () => {
     const { open, id, opens } = await needsProject();
     await open();
-    expect(paneTool(focusedPane()!)).toBe(id);
+    expect(toolSubLines().get(focusedPane()!.id)?.tool).toBe(id);
     const done = dispatch('tools.open', { tool_id: id });
     await vi.waitFor(() => expect(ui.pick).not.toBeNull());
     ui.resolvePick('billing');
@@ -355,5 +364,56 @@ describe('tool scope', () => {
     ui.resolvePick('billing');
     await done;
     expect(opens()[0].args).toMatchObject({ project_id: 'billing', placement: 'new_tab' });
+  });
+
+  /** Where the rail shows a tab: under Tools (a sub-line or a `user` tool's row) and/or in its band. */
+  function places(tabId: string): string[] {
+    const lines = toolSubLines();
+    return [
+      ...([...lines.values()].some((x) => x.tab.id === tabId) ? ['tools'] : []),
+      ...(railRows(lines).some((r) => r.tab.id === tabId) ? ['band'] : []),
+    ];
+  }
+
+  it('a user tool in Home, a dead session, an unknown tool and a web instance each show in one place', async () => {
+    const { c, id, open } = await scoped('user');
+    await open();
+    const userTab = currentTab()!.id;
+    expect(places(userTab)).toEqual(['tools']);
+
+    // A project-scoped web tool opens as its own tab: a Tools sub-line, no band row.
+    c.state.tools.find((t) => t.id === 'sl-web')!.scope = 'project';
+    await tools.load('shop');
+    await activateProject('shop');
+    await dispatch('tools.open', { tool_id: 'sl-web' });
+    await layout.load('shop');
+    const webPane = focusedPane()!;
+    const webTab = currentTab()!.id;
+    expect(webPane.content.kind).toBe('web');
+    expect(toolSubLines().get(webPane.id)?.tool).toBe('sl-web');
+    expect(places(webTab)).toEqual(['tools']);
+
+    // Dead session: the Home tab falls back to a band row.
+    c.state.sessions.find((s) => s.kind.type === 'tool' && s.kind.tool_id === id)!.lifecycle = 'exited';
+    await sessions.load();
+    expect(places(userTab)).toEqual(['band']);
+
+    // Unknown tool: the web tab falls back to a band row.
+    c.state.tools = c.state.tools.filter((t) => t.id !== 'sl-web');
+    await tools.load('shop');
+    expect(places(webTab)).toEqual(['band']);
+  });
+
+  it('a web tool instance gets focus from the tool key, no second open', async () => {
+    const { opens } = await scoped('work');
+    await dispatch('tools.open', { tool_id: 'sl-web' });
+    await layout.load('shop');
+    const tab = currentTab()!;
+    const web = focusedPane()!;
+    const other = allPanes(tab.root).find((p) => p.id !== web.id)!;
+    focusPaneById('shop', tab.id, other.id);
+    await dispatch('tools.open', { tool_id: 'sl-web' });
+    expect(opens()).toHaveLength(1);
+    expect(focusedPane()?.id).toBe(web.id);
   });
 });

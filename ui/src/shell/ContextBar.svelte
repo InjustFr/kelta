@@ -23,9 +23,9 @@
     focusedPane,
     focusedSession,
     isToolTab,
-    paneTool,
     rowLabel,
     selectRow,
+    toolSubLines,
     VIEW_NAMES,
   } from './nav';
 
@@ -59,7 +59,8 @@
   const pane = $derived(project && tab ? focusedPane(project.id) : null);
   const session = $derived(project && tab ? focusedSession(project.id) : null);
   const isHome = $derived(!!project && project.id === projects.home?.id);
-  const toolId = $derived(tab && pane && isToolTab(tab) ? paneTool(pane) : null);
+  const lines = $derived(toolSubLines());
+  const toolId = $derived(tab && pane && isToolTab(tab, lines) ? (lines.get(pane.id)?.tool ?? null) : null);
   const tool = $derived(toolId ? tools.find(toolId) : null);
   const item = $derived(tab?.work_item_id ? work.get(tab.work_item_id) : null);
   /** A work tab is shown: the bar carries its work segment. */
@@ -125,7 +126,8 @@
     if (!project) return;
     const tabs = layout.get(project.id)?.tabs ?? [];
     const t =
-      (ownerItem && tabs.find((x) => x.work_item_id === ownerItem.id)) ?? tabs.find((x) => !isToolTab(x));
+      (ownerItem && tabs.find((x) => x.work_item_id === ownerItem.id)) ??
+      tabs.find((x) => !isToolTab(x, lines));
     if (t) selectRow(project.id, t.id);
   }
 
