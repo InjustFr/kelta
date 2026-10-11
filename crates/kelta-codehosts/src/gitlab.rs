@@ -445,7 +445,7 @@ fn ci_from(status: Option<&str>) -> CiState {
     match status {
         Some("success") => CiState::Success,
         Some("failed") => CiState::Failure,
-        Some("canceled" | "canceling" | "skipped") => CiState::Error,
+        Some("canceled" | "canceling") => CiState::Error,
         Some(
             "running"
             | "pending"
@@ -999,6 +999,12 @@ fn changes_requested(body: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skipped_pipeline_is_not_a_failure() {
+        assert_eq!(ci_from(Some("skipped")), CiState::None);
+        assert_eq!(ci_from(Some("canceled")), CiState::Error);
+    }
 
     #[test]
     fn traces_lose_sections_ansi_and_progress() {

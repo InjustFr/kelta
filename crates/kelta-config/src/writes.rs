@@ -822,11 +822,6 @@ impl ConfigService {
         Ok(TrustInfo { path: file.to_path_buf(), hash, trusted: sha256.is_some() })
     }
 
-    /// `ProjectConfig` repo config path helper for callers (diagnostics, banners).
-    pub fn repo_config_path(&self, project: &ProjectId, repo_id: &str) -> Result<PathBuf, KeltaError> {
-        Ok(self.resolve_target(Layer::Repo, Some(project), Some(repo_id))?.path)
-    }
-
     /// Expanded path of a configured repo (`~` resolved).
     pub fn repo_path(&self, project: &ProjectId, repo_id: &str) -> Option<PathBuf> {
         let inner = self.inner.read();

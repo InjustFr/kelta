@@ -897,8 +897,3 @@ impl WorkHost for CoreWorkHost {
         core.plugins.run_blocking(ev).await
     }
 }
-
-/// Convenience: `Arc<Core>` as the `CoreApi` trait object.
-pub fn as_api(core: &Arc<Core>) -> Arc<dyn CoreApi> {
-    core.clone()
-}
