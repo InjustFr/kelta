@@ -15,7 +15,9 @@ const paneIds = (page: Page) =>
 /** Pane ids of the saved layout's tabs (what a restart loads). */
 async function savedTabs(page: Page): Promise<string[][]> {
   const saves = await callsOf(page, 'layout_save');
-  const layout = (saves.at(-1)?.args as { layout: { tabs: { root: unknown }[] } }).layout;
+  // The save is debounced: before the first one there are no tabs yet, so polls retry.
+  const layout = (saves.at(-1)?.args as { layout: { tabs: { root: unknown }[] } } | undefined)?.layout;
+  if (!layout) return [];
   const ids = (n: unknown): string[] => {
     const node = n as { type: string; id: string; children?: unknown[] };
     return node.type === 'pane' ? [node.id] : (node.children ?? []).flatMap(ids);
