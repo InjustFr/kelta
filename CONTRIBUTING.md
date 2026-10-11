@@ -106,7 +106,7 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    other assets. It runs `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key
    (see Nightly builds). Tags `v*` build
    the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A manual run of
-   `release` (or of `nightly` off `main`) builds without publishing.
+   `release` builds without publishing; `nightly` only builds and uploads artifacts, it never publishes.
 
 ## Nightly builds
 

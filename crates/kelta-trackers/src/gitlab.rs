@@ -41,11 +41,6 @@ fn current_milestone(milestones: &Value, today: &str) -> Option<String> {
 }
 const DEFAULT_SCOPE: &str = "workflow";
 
-fn today() -> String {
-    let d = time::OffsetDateTime::now_utc().date();
-    format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day())
-}
-
 /// Priority rank from `priority::<0-3|critical|urgent|high|medium|low|p0-p3>` or a bare `P0`-`P3` label.
 fn priority_rank(labels: &[String]) -> Option<u8> {
     const RANKS: [&[&str]; 4] = [
@@ -237,7 +232,7 @@ impl GitlabIssues {
             project_hint: Some(project),
             // shortcut: no status-change date without a resource_label_events request per issue; closed_at, else updated_at. Fetch events if age badges prove wrong.
             status_since: s(v, "closed_at").or_else(|| s(v, "updated_at")).map(str::to_owned),
-            sprint: sprint(v, &today()),
+            sprint: sprint(v, &common::today()),
             estimate: estimate(v),
             due: s(v, "due_date").map(str::to_owned),
         })
@@ -394,7 +389,7 @@ impl GitlabIssues {
                 Some(p) => {
                     let url = format!("{}/projects/{}/milestones", self.api, percent_encode(p));
                     let ms = self.json(HttpRequest::get(url).query("state", "active")).await?.body;
-                    match current_milestone(&ms, &today()) {
+                    match current_milestone(&ms, &common::today()) {
                         Some(title) => req = req.query("milestone", title),
                         None => return Ok(Page { items: vec![], next: None }),
                     }

@@ -110,8 +110,6 @@ async fn notes_survive_a_restart_and_go_with_their_item() {
         (got[0].state, got[0].sent_at.as_deref(), got[0].line_end),
         (NoteState::Untouched, Some("t"), 12)
     );
-    s.delete_item(&w.id).await.unwrap();
-    assert!(s.notes(&w.id).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -202,9 +200,6 @@ async fn work_store_round_trip() {
     );
     assert_eq!(s.list_items(Some(&w.project_id)).await.unwrap().len(), 1);
     assert_eq!(s.list_items(Some(&"other".into())).await.unwrap().len(), 0);
-    s.delete_item(&w.id).await.unwrap();
-    assert!(s.get_item(&w.id).await.unwrap().is_none());
-    assert!(s.steps(&w.id).await.unwrap().is_empty());
     assert!(s.get_item(&WorkItemId::new("nope")).await.unwrap().is_none());
 }
 
@@ -292,4 +287,56 @@ async fn trigger_log_is_capped() {
     let all = s.call(|c| q::trigger_log(c, 5000)).await.unwrap();
     assert_eq!(all.len(), 1000);
     assert_eq!(all[0].trigger_id, "t1004");
+}
+
+#[tokio::test]
+async fn startup_prunes_old_cache_rows_and_seen_reviews() {
+    use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let now = kelta_proto::now_rfc3339();
+    let cache = |key: &str, at: &str| ProviderCacheRow {
+        key: key.into(),
+        etag: None,
+        body_json: "[]".into(),
+        fetched_at: at.into(),
+    };
+    let seen = |number: u64, at: &str| SeenReviewRow {
+        account: "gh".into(),
+        repo: "acme/shop".into(),
+        number,
+        head_sha: "sha".into(),
+        first_seen: at.into(),
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        let rows = [cache("old", "2020-01-01T00:00:00Z"), cache("fresh", &now)];
+        let seens = [seen(1, "2020-01-01T00:00:00Z"), seen(2, &now)];
+        s.call(move |c| {
+            for r in &rows {
+                q::cache_put(c, r)?;
+            }
+            for r in &seens {
+                q::seen_review_put(c, r)?;
+            }
+            // Approved in Kelta long ago: the stamp must outlive the 90-day prune.
+            let rr = kelta_proto::codehost::ReviewRef {
+                account: "gh".into(),
+                repo: "acme/shop".into(),
+                number: 3,
+            };
+            q::seen_review_stamp(c, &rr, "sha")?;
+            c.execute("UPDATE seen_reviews SET first_seen = '2020-01-01T00:00:00Z' WHERE number = 3", [])
+                .map_err(kelta_core::store::db_err)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
+    let s = Store::open(&db).unwrap();
+    assert!(s.call(|c| q::cache_get(c, "old")).await.unwrap().is_none());
+    assert!(s.call(|c| q::cache_get(c, "fresh")).await.unwrap().is_some());
+    let left: Vec<u64> =
+        s.call(|c| q::seen_reviews(c, "gh")).await.unwrap().iter().map(|r| r.number).collect();
+    assert_eq!(left, [2, 3]);
 }

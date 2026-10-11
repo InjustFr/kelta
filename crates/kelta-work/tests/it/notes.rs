@@ -206,3 +206,65 @@ async fn a_held_message_goes_when_claude_idles_without_a_stop() {
     wait_notes(&fx, &item, |n| n.iter().all(|n| n.state != NoteState::Sent)).await;
     assert_eq!(fx.core.written_text(&claude).matches("Review notes:").count(), 1);
 }
+
+#[tokio::test]
+async fn a_prompt_held_while_the_stop_delivery_runs_is_not_lost() {
+    if !has_git() {
+        eprintln!("skipping: git not found");
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w
+        .start(w.plan(&project(), WorkSource::Ticket { ticket: samples::ticket_ref() }).await.unwrap())
+        .await
+        .unwrap();
+    let live = |k: fn(&SessionKind) -> bool| {
+        fx.spawned_of(k).into_iter().find(|s| s.lifecycle == Lifecycle::Live).unwrap().id
+    };
+    let claude = live(|k| *k == SessionKind::Claude);
+    let editor = live(|k| matches!(k, SessionKind::Editor { .. }));
+    let working = |on: bool| {
+        let mut s = fx.core.session_get(&claude).unwrap();
+        (s.status, s.status_source) =
+            (if on { SessionStatus::Working } else { SessionStatus::Done }, StatusSource::Hook);
+        fx.core.insert_session(s);
+    };
+    std::fs::write(item.worktree.join("a.rs"), "x\ny\n").unwrap();
+    w.note_add(&editor, &item.worktree.join("a.rs"), (1, 1), "first").await.unwrap();
+    working(true);
+    w.notes_send(&item.id).await.unwrap();
+
+    // The Stop starts delivering the first message and blocks on the terminal write...
+    let gate = fx.core.hold_writes();
+    let writes = || fx.core.calls().iter().filter(|c| c.method == "session_write").count();
+    stop(&fx, &claude);
+    for _ in 0..500 {
+        if writes() > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(writes(), 1);
+    // ...Claude starts another turn and the user sends a second message: held.
+    working(true);
+    w.note_add(&editor, &item.worktree.join("a.rs"), (2, 2), "second").await.unwrap();
+    w.notes_send(&item.id).await.unwrap();
+    gate.add_permits(1000);
+    for _ in 0..500 {
+        if fx.core.written_text(&claude).contains("first") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    // The next Stop still delivers it.
+    stop(&fx, &claude);
+    for _ in 0..500 {
+        if fx.core.written_text(&claude).contains("second") {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the second message was dropped: {}", fx.core.written_text(&claude));
+}

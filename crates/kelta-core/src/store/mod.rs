@@ -64,6 +64,9 @@ impl Store {
                 let opened = open().and_then(|mut c| {
                     configure(&c)?;
                     migrations::migrate(&mut c)?;
+                    if let Err(e) = q::prune(&c) {
+                        tracing::warn!(error = %e, "cannot prune the provider cache and seen reviews");
+                    }
                     Ok(c)
                 });
                 let mut conn = match opened {
@@ -454,6 +457,17 @@ pub mod q {
 
     // ---- provider_cache ------------------------------------------------------------------------
 
+    /// Startup cleanup of rows nothing reads any more: cache entries not refreshed for 30 days (gone
+    /// views and tickets) and unstamped seen reviews first seen 90 days ago (a `reviewed_sha` stamp is kept). A pruned PR still open is re-seen
+    /// silently: the first poll of a process never notifies.
+    pub fn prune(c: &Connection) -> R<()> {
+        c.execute_batch(
+            "DELETE FROM provider_cache WHERE julianday(fetched_at) < julianday('now', '-30 days');
+             DELETE FROM seen_reviews WHERE reviewed_sha IS NULL AND julianday(first_seen) < julianday('now', '-90 days');",
+        )
+        .map_err(db_err)
+    }
+
     pub fn cache_get(c: &Connection, key: &str) -> R<Option<ProviderCacheRow>> {
         c.query_row(
             "SELECT key, etag, body_json, fetched_at FROM provider_cache WHERE key = ?1",
@@ -771,13 +785,6 @@ pub mod q {
         Ok(r)
     }
 
-    pub fn work_delete(c: &Connection, id: &WorkItemId) -> R<()> {
-        c.execute("DELETE FROM work_steps WHERE work_item_id = ?1", [id.as_str()]).map_err(db_err)?;
-        c.execute("DELETE FROM notes WHERE work_item = ?1", [id.as_str()]).map_err(db_err)?;
-        c.execute("DELETE FROM work_items WHERE id = ?1", [id.as_str()]).map_err(db_err)?;
-        Ok(())
-    }
-
     pub fn step_set(
         c: &Connection,
         id: &WorkItemId,
@@ -999,11 +1006,6 @@ impl WorkStore for Store {
     async fn list_items(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
         let project = project.cloned();
         self.call(move |c| q::work_list(c, project.as_ref())).await
-    }
-
-    async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError> {
-        let id = id.clone();
-        self.call(move |c| q::work_delete(c, &id)).await
     }
 
     async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError> {

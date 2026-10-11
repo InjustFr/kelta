@@ -134,6 +134,8 @@ impl WorkService {
                 .await?;
             }
         }
+        // A message held (not under the item lock) while this ran is newer than our copy.
+        j.pending_prompt = self.load_journal(&item.id).pending_prompt;
         self.save_journal(&item.id, &j)?;
         self.save(item).await
     }
@@ -238,9 +240,17 @@ impl WorkService {
                             true,
                         )
                         .await;
-                    item.session_ids.retain(|s| s != &sid);
-                    let _ = svc.save_journal(&id, &j);
-                    let _ = svc.save(&mut item).await;
+                    // `spawn_claude` saved the journal and item; the awaits since may have let
+                    // others change them, so touch only the fields this fallback owns.
+                    let tab = item.tab_id.clone();
+                    let _ = svc
+                        .update(&id, |it| {
+                            let before = (it.session_ids.len(), it.tab_id.is_some());
+                            it.session_ids.retain(|s| s != &sid);
+                            it.tab_id = it.tab_id.take().or(tab);
+                            before != (it.session_ids.len(), it.tab_id.is_some())
+                        })
+                        .await;
                 }
                 Err(e) => core.toast(Toast::error(format!("Could not restart Claude: {}", e.message))),
             }
@@ -809,7 +819,6 @@ impl WorkService {
         let is_worktree = item.worktree.is_dir()
             && !git::same_path(&item.worktree, &repo)
             && git::worktree_at(&repo, &item.worktree).await?.is_some();
-        let mut copies: Vec<String> = Vec::new();
         // Clean and nothing unpushed (or merged upstream): a merged branch may be force-deleted.
         let mut verified_clean = false;
         let merged = matches!(item.state, WorkState::Merged { .. });
@@ -821,24 +830,7 @@ impl WorkService {
                     tracing::warn!(error = %e.message, "fetch before finish failed");
                 }
             }
-            let report = self.dirty_report(&env, &item, &j).await?;
-            copies = report.copies;
-            if !opts.force && (!report.files.is_empty() || report.unpushed > 0) {
-                let msg = match (report.files.is_empty(), report.unpushed) {
-                    (false, 0) => format!("{} has uncommitted changes", item.worktree.display()),
-                    (true, n) => format!("{} has {n} unpushed commit(s)", item.branch),
-                    (false, n) => format!(
-                        "{} has uncommitted changes and {n} unpushed commit(s)",
-                        item.worktree.display()
-                    ),
-                };
-                return Err(KeltaError::new(ErrorCode::Dirty, msg).with_detail(serde_json::json!({
-                    "files": report.files,
-                    "unpushed": report.unpushed > 0,
-                    "unpushed_commits": report.unpushed,
-                })));
-            }
-            verified_clean = report.files.is_empty() && report.unpushed == 0;
+            self.finish_dirty_check(&env, &item, &j, opts.force).await?;
         }
 
         if !adopted
@@ -866,9 +858,13 @@ impl WorkService {
         }
 
         if opts.remove_worktree && is_worktree {
+            // Teardown and the kills may have let Claude commit or edit: only this answer is current.
+            let report = self.finish_dirty_check(&env, &item, &j, opts.force).await?;
+            verified_clean =
+                report.files.is_empty() && report.ignored_edited.is_empty() && report.unpushed == 0;
             // Delete our include copies so git's own clean check (no --force) still guards files
             // written after the dirty report (e.g. by Claude before it was killed).
-            for f in &copies {
+            for f in &report.copies {
                 let _ = std::fs::remove_file(item.worktree.join(f));
             }
             git::worktree_remove(&repo, &item.worktree, opts.force).await?;
@@ -1004,6 +1000,34 @@ impl WorkService {
         Ok(report)
     }
 
+    /// Dirty report that refuses with `Dirty` unless `force`.
+    async fn finish_dirty_check(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        j: &Journal,
+        force: bool,
+    ) -> Result<DirtyReport, KeltaError> {
+        let report = self.dirty_report(env, item, j).await?;
+        // An ignored copy the user edited blocks Finish (the edit would be lost), but not rebase/status.
+        let files: Vec<&String> = report.files.iter().chain(&report.ignored_edited).collect();
+        if !force && (!files.is_empty() || report.unpushed > 0) {
+            let msg = match (files.is_empty(), report.unpushed) {
+                (false, 0) => format!("{} has uncommitted changes", item.worktree.display()),
+                (true, n) => format!("{} has {n} unpushed commit(s)", item.branch),
+                (false, n) => {
+                    format!("{} has uncommitted changes and {n} unpushed commit(s)", item.worktree.display())
+                }
+            };
+            return Err(KeltaError::new(ErrorCode::Dirty, msg).with_detail(serde_json::json!({
+                "files": files,
+                "unpushed": report.unpushed > 0,
+                "unpushed_commits": report.unpushed,
+            })));
+        }
+        Ok(report)
+    }
+
     pub(crate) async fn dirty_report(
         &self,
         env: &Env,
@@ -1013,12 +1037,20 @@ impl WorkService {
         let entries = git::dirty_files(&item.worktree).await?;
         // Only files Kelta copied (journal) and the user left byte-identical are ours to delete.
         let (mut files, mut copies) = (Vec::new(), Vec::new());
+        let same_as_source = |f: &String| {
+            std::fs::read(item.worktree.join(f))
+                .ok()
+                .is_some_and(|b| std::fs::read(env.repo.path.join(f)).is_ok_and(|src| src == b))
+        };
+        // Ignored copies are absent from `status`: report the edited ones too.
+        let ignored_edited: Vec<String> = j
+            .include_copies
+            .iter()
+            .filter(|f| !entries.contains(f) && item.worktree.join(f).is_file() && !same_as_source(f))
+            .cloned()
+            .collect();
         for f in entries {
-            let ours = j.include_copies.contains(&f)
-                && std::fs::read(item.worktree.join(&f))
-                    .ok()
-                    .is_some_and(|b| std::fs::read(env.repo.path.join(&f)).is_ok_and(|src| src == b));
-            if ours { copies.push(f) } else { files.push(f) }
+            if j.include_copies.contains(&f) && same_as_source(&f) { copies.push(f) } else { files.push(f) }
         }
         let mut unpushed = git::unpushed_count(&item.worktree, &item.base).await?;
         // Squash/rebase-merged PR whose remote branch was pruned: the work is in the remote base.
@@ -1029,7 +1061,7 @@ impl WorkService {
         {
             unpushed = 0;
         }
-        Ok(DirtyReport { files, copies, unpushed })
+        Ok(DirtyReport { files, ignored_edited, copies, unpushed })
     }
 
     // ---- status ------------------------------------------------------------------------------
@@ -1377,6 +1409,8 @@ impl WorkService {
 
 pub(crate) struct DirtyReport {
     pub files: Vec<String>,
+    /// Edited copies of git-ignored `worktree.include` files: block Finish only (not committable, not rebased).
+    pub ignored_edited: Vec<String>,
     /// Untracked `worktree.include` copies (ours, removed with the worktree).
     pub copies: Vec<String>,
     pub unpushed: u32,

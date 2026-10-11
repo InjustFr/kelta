@@ -446,6 +446,13 @@ async fn tickets_carry_rank_status_date_estimate_due_and_resolved_sprint() {
             json!({"fixed_version": {"id": ver, "name": format!("v{ver}")}, "priority": {"id": 1, "name": "Low"}}),
         )
     };
+    let closed_on = json!({"closed_on": "2026-09-01T10:00:00Z"});
+    let closed = |id| {
+        let mut i = issue(id, closed_on.clone());
+        i["status"] = json!({"id": 5, "name": "Closed", "is_closed": true});
+        i
+    };
+    let reopened = |id| issue(id, closed_on.clone());
     let first = issue(
         10,
         json!({"fixed_version": {"id": 1, "name": "v1"}, "estimated_hours": 2.5, "due_date": "2026-10-14"}),
@@ -453,11 +460,13 @@ async fn tickets_carry_rank_status_date_estimate_due_and_resolved_sprint() {
     mount_json(
         &server,
         "/issues.json",
-        json!({"issues": [first, with(11, 1), with(12, 2), with(13, 3), with(14, 4), issue(15, json!({}))],
-               "total_count": 6}),
+        json!({"issues": [first, with(11, 1), with(12, 2), with(13, 3), with(14, 4), issue(15, json!({})), closed(16), reopened(17)],
+               "total_count": 8}),
     )
     .await;
     let items = rm(&server, json!({})).list(&view("v"), None).await.unwrap().items;
+    assert_eq!(items[6].status_since.as_deref(), Some("2026-09-01T10:00:00Z"), "closed: closed_on");
+    assert_eq!(items[7].status_since.as_deref(), Some("2026-09-30T08:30:00Z"), "reopened: updated_on");
     let t = &items[0];
     assert_eq!(t.priority_rank, Some(0), "Urgent is the last position: highest");
     assert_eq!(items[1].priority_rank, Some(3), "Low is the first position: lowest");
