@@ -3,6 +3,31 @@
 Design documents live in `docs/`: `SPEC.md` (product), `ARCHITECTURE.md` (crates, contracts, performance
 budgets), `SETTINGS.md`, `PLUGINS.md`, `BUILD_PLAN.md` (how the work is split).
 
+## Reporting bugs and requesting features
+
+Look first: search the [existing issues](https://github.com/InjustFr/kelta/issues?q=is%3Aissue) (open and closed),
+the [README](README.md) and the user docs in `docs/user/`. Settings > Diagnostics checks the usual suspects
+(graphics, WebKitGTK, keyring, notification daemon). If an issue already covers it, add your details there.
+
+Then open a [new issue](https://github.com/InjustFr/kelta/issues/new/choose) and pick **Bug report** or **Feature
+request**. Security problems never go in a public issue: see [SECURITY.md](SECURITY.md).
+
+A good bug report has:
+
+- the version: Settings > Diagnostics > Version (also in Settings > General > Updates); nightlies end in
+  `-nightly.<timestamp>`;
+- the OS and its version, the desktop or compositor on Linux, and the install type (dmg, AppImage, deb, source);
+- the providers involved (Jira, GitHub, Claude Code, ...);
+- numbered steps that reproduce it, what you expected and what happened;
+- the relevant log lines. `kelta.log` and `keltad.log` live in `~/Library/Logs/Kelta/` on macOS and in
+  `~/.local/state/kelta/logs/` (`$XDG_STATE_HOME/kelta/logs/`) on Linux. `KELTA_LOG=debug` gives more detail.
+  Settings > Diagnostics > Copy report adds the environment. Remove tokens, secrets and private ticket content first.
+
+A good feature request says what you are trying to do and what gets in the way, before the proposal.
+
+After filing: the issue gets the `bug` or `enhancement` label, is triaged (questions, more labels, or closed as a
+duplicate or out of scope) and, once accepted, goes on the project board, where it moves from Todo to Done.
+
 ## Setup
 
 ```sh
