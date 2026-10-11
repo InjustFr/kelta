@@ -134,10 +134,7 @@ impl WorkService {
                 .await?;
             }
         }
-        // A message held / checks sent (not under the item lock) while this ran are newer than our copy.
-        let cur = self.load_journal(&item.id);
-        (j.pending_prompt, j.checks_sent) = (cur.pending_prompt, cur.checks_sent);
-        self.save_journal(&item.id, &j)?;
+        self.save_journal_fresh(&item.id, &mut j)?;
         self.save(item).await
     }
 
