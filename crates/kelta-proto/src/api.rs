@@ -448,7 +448,6 @@ pub trait WorkStore: Send + Sync {
     async fn put_item(&self, item: &WorkItem) -> Result<(), KeltaError>;
     async fn get_item(&self, id: &WorkItemId) -> Result<Option<WorkItem>, KeltaError>;
     async fn list_items(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError>;
-    async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError>;
     async fn set_step(
         &self,
         id: &WorkItemId,
@@ -457,7 +456,7 @@ pub trait WorkStore: Send + Sync {
         detail: Option<String>,
     ) -> Result<(), KeltaError>;
     async fn steps(&self, id: &WorkItemId) -> Result<Vec<WorkStepStatus>, KeltaError>;
-    /// Review notes of an item, by path then line (`delete_item` drops them).
+    /// Review notes of an item, by path then line.
     async fn notes(&self, id: &WorkItemId) -> Result<Vec<ReviewNote>, KeltaError>;
     /// Insert (`id` 0) or update a note; returns its id.
     async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError>;

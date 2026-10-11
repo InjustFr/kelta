@@ -55,13 +55,6 @@ impl WorkStore for MemWorkStore {
         Ok(r)
     }
 
-    async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError> {
-        self.items.lock().remove(id);
-        self.steps.lock().remove(id);
-        self.notes.lock().retain(|n| &n.work_item_id != id);
-        Ok(())
-    }
-
     async fn set_step(
         &self,
         id: &WorkItemId,

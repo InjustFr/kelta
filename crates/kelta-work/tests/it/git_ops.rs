@@ -384,6 +384,52 @@ async fn ports_env_template_and_teardown() {
 }
 
 #[tokio::test]
+async fn finish_rechecks_dirty_state_after_teardown() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| s.worktree.teardown = "docker compose down".into());
+    let (w, item) = started(&fx, "SHOP-141").await;
+    let (w2, id) = (w.clone(), item.id.clone());
+    let task = tokio::spawn(async move { w2.finish(&id, opts(false)).await });
+    let teardown = async {
+        for _ in 0..500 {
+            if let Some(t) = fx.spawned_of(|k| *k == SessionKind::Setup).first() {
+                return t.id.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("no teardown");
+    }
+    .await;
+    // Claude commits while the teardown runs: the clean answer from before it is stale.
+    commit(&item, "late.txt");
+    fx.core.exit_session(&teardown, 0);
+    let e = task.await.unwrap().unwrap_err();
+    assert_eq!(e.code, ErrorCode::Dirty);
+    assert!(item.worktree.exists());
+    assert!(!git(&fx.repo, &["branch", "--list", &item.branch]).is_empty(), "branch kept");
+}
+
+#[tokio::test]
+async fn finish_reports_an_edited_ignored_include_copy() {
+    need_git!();
+    let fx = Fx::new();
+    std::fs::write(fx.repo.join(".gitignore"), "local.cfg\n").unwrap();
+    git(&fx.repo, &["add", ".gitignore"]);
+    git(&fx.repo, &["commit", "-q", "-m", "ignore"]);
+    std::fs::write(fx.repo.join("local.cfg"), "x=1\n").unwrap();
+    std::fs::write(fx.repo.join(".worktreeinclude"), "local.cfg\n").unwrap();
+    let (w, item) = started(&fx, "SHOP-141").await;
+    assert!(item.worktree.join("local.cfg").exists());
+    assert!(!w.status(&item.id).await.unwrap().dirty, "an untouched copy is not the user's work");
+    std::fs::write(item.worktree.join("local.cfg"), "x=2\n").unwrap();
+    let e = w.finish(&item.id, opts(false)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Dirty);
+    assert_eq!(e.detail.unwrap()["files"], serde_json::json!(["local.cfg"]));
+    assert!(item.worktree.join("local.cfg").exists());
+}
+
+#[tokio::test]
 async fn snapshot_takes_untracked_files_and_leaves_head_index_and_stash() {
     need_git!();
     let fx = Fx::new();

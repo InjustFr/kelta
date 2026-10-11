@@ -110,8 +110,6 @@ async fn notes_survive_a_restart_and_go_with_their_item() {
         (got[0].state, got[0].sent_at.as_deref(), got[0].line_end),
         (NoteState::Untouched, Some("t"), 12)
     );
-    s.delete_item(&w.id).await.unwrap();
-    assert!(s.notes(&w.id).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -202,9 +200,6 @@ async fn work_store_round_trip() {
     );
     assert_eq!(s.list_items(Some(&w.project_id)).await.unwrap().len(), 1);
     assert_eq!(s.list_items(Some(&"other".into())).await.unwrap().len(), 0);
-    s.delete_item(&w.id).await.unwrap();
-    assert!(s.get_item(&w.id).await.unwrap().is_none());
-    assert!(s.steps(&w.id).await.unwrap().is_empty());
     assert!(s.get_item(&WorkItemId::new("nope")).await.unwrap().is_none());
 }
 
