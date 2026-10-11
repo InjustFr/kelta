@@ -517,6 +517,12 @@ export const ticketPage: TicketPage = {
         "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
+        "fields": [
+          {
+            "label": "Verified",
+            "value": "Yes"
+          }
+        ],
         "kind": "Story",
         "labels": [
           "api"
@@ -582,6 +588,12 @@ export const ticket: Ticket = {
   "blocked": false,
   "due": "2026-10-15",
   "estimate": "3",
+  "fields": [
+    {
+      "label": "Verified",
+      "value": "Yes"
+    }
+  ],
   "kind": "Story",
   "labels": [
     "api"
@@ -683,6 +695,12 @@ export const ticketDetail: TicketDetail = {
         "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
+        "fields": [
+          {
+            "label": "Verified",
+            "value": "Yes"
+          }
+        ],
         "kind": "Story",
         "labels": [
           "api"
@@ -748,6 +766,12 @@ export const ticketDetail: TicketDetail = {
     "blocked": false,
     "due": "2026-10-15",
     "estimate": "3",
+    "fields": [
+      {
+        "label": "Verified",
+        "value": "Yes"
+      }
+    ],
     "kind": "Story",
     "labels": [
       "api"

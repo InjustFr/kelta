@@ -6,6 +6,7 @@
   import { ciGlyph, initials } from '../work/common';
   import type { Phase } from '../work/phase';
   import { waitChip } from '../people/waiting';
+  import { fieldText } from './fields';
   import { ageDays, ageLevel, type GroupBy } from './group';
   import { mainPr, prLabel, prLamp, reviewWord } from './prs';
   import RowButton from './RowButton.svelte';
@@ -117,7 +118,9 @@
       >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span
         >{/if}{#if tk.parent && groupBy !== 'parent'}<span class="parent" data-parent>{tk.parent.key}</span
         >{/if}{tk.title}</span
-    ><TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts>
+    >{#each tk.fields ?? [] as f, i (i)}<span class="field" data-field title={fieldText(f)}
+        >{fieldText(f)}</span
+      >{/each}<TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts>
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
         icon="git-pull-request"
@@ -272,6 +275,22 @@
     font-size: var(--k-font-size-sm);
     text-overflow: ellipsis;
     vertical-align: bottom;
+    white-space: nowrap;
+  }
+
+  /* The source's chosen tracker fields (#351), after the title: they give way with it, ellipsised. */
+  .field {
+    flex: 0 1 auto;
+    min-width: 4ch;
+    max-width: 20ch;
+    overflow: hidden;
+    margin-left: var(--k-space-1);
+    padding: 0 var(--k-space-1);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg-hover);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

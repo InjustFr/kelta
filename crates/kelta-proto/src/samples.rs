@@ -105,6 +105,7 @@ pub fn ticket() -> Ticket {
             title: "Login hardening".into(),
             url: "https://acme.atlassian.net/browse/SHOP-100".into(),
         }),
+        fields: vec![TicketField { label: "Verified".into(), value: "Yes".into() }],
     }
 }
 

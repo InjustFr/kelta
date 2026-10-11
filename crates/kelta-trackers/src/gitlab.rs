@@ -219,6 +219,7 @@ impl GitlabIssues {
                 key: format!("{project}#{iid}"),
                 id: v.get("id").and_then(idstr).unwrap_or_else(|| iid.to_string()),
             },
+            fields: Vec::new(),
             title: s(v, "title").unwrap_or("").to_owned(),
             url: s(v, "web_url")
                 .map(str::to_owned)

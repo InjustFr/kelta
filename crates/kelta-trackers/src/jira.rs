@@ -12,10 +12,12 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, BlockedMarker, JiraFlavor, TrackerBinding, TrackerView};
+use kelta_proto::settings::{
+    AccountConfig, BlockedMarker, JiraFlavor, SourceField, TrackerBinding, TrackerView,
+};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketField, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -53,6 +55,8 @@ struct Lookups {
     points: Vec<String>,
     flagged: Option<String>,
     priorities: Vec<String>,
+    /// Every field (id, name), for `Source.fields` (#351).
+    all: Vec<SourceField>,
 }
 
 impl Lookups {
@@ -63,6 +67,34 @@ impl Lookups {
         f.extend(self.flagged.as_deref());
         f
     }
+
+    /// [`Self::fields`] plus the chosen ones this Jira has: an unknown id is left out, not a list error.
+    fn with_chosen<'a>(&'a self, chosen: &'a [SourceField]) -> Vec<&'a str> {
+        let mut f = self.fields();
+        f.extend(chosen.iter().filter(|c| self.all.iter().any(|a| a.id == c.id)).map(|c| c.id.as_str()));
+        f
+    }
+}
+
+/// A field value as shown: an option's `value`, a user's `displayName`, a `name`, a list joined by `, `.
+fn field_text(v: &Value) -> Option<String> {
+    let t = match v {
+        Value::String(x) => x.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Array(a) => a.iter().filter_map(field_text).collect::<Vec<_>>().join(", "),
+        Value::Object(_) => ["value", "displayName", "name", "key"].iter().find_map(|k| s(v, k))?.to_owned(),
+        Value::Null => return None,
+    };
+    Some(t).filter(|t| !t.trim().is_empty())
+}
+
+/// The chosen fields of an issue's `fields` that have a value, in the source's order.
+fn chosen_fields(f: &Value, chosen: &[SourceField]) -> Vec<TicketField> {
+    chosen
+        .iter()
+        .filter_map(|c| Some(TicketField { label: c.label.clone(), value: field_text(f.get(&c.id)?)? }))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,6 +278,12 @@ impl JiraTracker {
                         .as_array()
                         .map(|a| a.iter().filter_map(|p| p.get("id").and_then(idstr)).collect())
                         .unwrap_or_default(),
+                    all: (fields.as_array().into_iter().flatten())
+                        .filter_map(|f| {
+                            let label = s(f, "name").unwrap_or_default().to_owned();
+                            Some(SourceField { id: s(f, "id")?.to_owned(), label })
+                        })
+                        .collect(),
                 })
             })
             .await
@@ -260,6 +298,7 @@ impl JiraTracker {
                 key: key.to_owned(),
                 id: v.get("id").and_then(idstr).unwrap_or_else(|| key.to_owned()),
             },
+            fields: Vec::new(),
             title: s(f, "summary").unwrap_or("").to_owned(),
             url: format!("{}/browse/{key}", self.web),
             status: f.get("status").map(Self::status_from).unwrap_or_default(),
@@ -516,12 +555,13 @@ impl Tracker for JiraTracker {
             Flavor::Cloud => {
                 let (done, token) = Self::decode_cloud_cursor(cursor)?;
                 // The first request never carries `nextPageToken` (not even null).
-                let mut body = json!({"jql": jql, "fields": lk.fields(), "maxResults": PAGE_SIZE});
+                let mut body =
+                    json!({"jql": jql, "fields": lk.with_chosen(&view.fields), "maxResults": PAGE_SIZE});
                 if let Some(t) = &token {
                     body["nextPageToken"] = json!(t);
                 }
                 let v = api.json(HttpRequest::post(api.url("/search/jql")).json(body).idempotent()).await?;
-                let items = self.tickets_from(&v, lk)?;
+                let items = self.tickets_from(&v, lk, &view.fields)?;
                 let pages = done + 1;
                 let next = s(&v, "nextPageToken")
                     .filter(|t| !t.is_empty())
@@ -539,10 +579,9 @@ impl Tracker for JiraTracker {
                     Some(Cursor::Offset(o)) => o,
                     Some(_) => return Err(KeltaError::invalid("jira dc expects an offset cursor")),
                 };
-                let body =
-                    json!({"jql": jql, "fields": lk.fields(), "startAt": start, "maxResults": PAGE_SIZE});
+                let body = json!({"jql": jql, "fields": lk.with_chosen(&view.fields), "startAt": start, "maxResults": PAGE_SIZE});
                 let v = api.json(HttpRequest::post(api.url("/search")).json(body).idempotent()).await?;
-                let items = self.tickets_from(&v, lk)?;
+                let items = self.tickets_from(&v, lk, &view.fields)?;
                 let total = v.get("total").and_then(Value::as_u64).unwrap_or(0);
                 let end = start as u64 + items.len() as u64;
                 let next = (!items.is_empty() && end < total).then_some(Cursor::Offset(end as u32));
@@ -795,6 +834,13 @@ impl Tracker for JiraTracker {
         self.fetch_ticket(&api, &t.key).await
     }
 
+    async fn fields(&self, _view: &TrackerView) -> Result<Vec<SourceField>, KeltaError> {
+        let api = self.api().await?;
+        let mut all = self.lookups(&api).await?.all.clone();
+        all.sort_by_cached_key(|f| f.label.to_lowercase());
+        Ok(all)
+    }
+
     async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
         let jql = compose_jql(&self.base_jql(view).await?, view.who, view.current_iteration);
         let (cond, order) = split_order_by(&jql);
@@ -991,10 +1037,20 @@ impl JiraTracker {
         Ok(and_jql(&base, &extra))
     }
 
-    fn tickets_from(&self, v: &Value, lk: &Lookups) -> Result<Vec<Ticket>, KeltaError> {
+    fn tickets_from(
+        &self,
+        v: &Value,
+        lk: &Lookups,
+        chosen: &[SourceField],
+    ) -> Result<Vec<Ticket>, KeltaError> {
+        let ticket = |i: &Value| {
+            let mut t = self.ticket_from(self.account(), i, lk).ok()?;
+            t.fields = chosen_fields(i.get("fields").unwrap_or(&Value::Null), chosen);
+            Some(t)
+        };
         Ok(v.get("issues")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|i| self.ticket_from(self.account(), i, lk).ok()).collect())
+            .map(|a| a.iter().filter_map(ticket).collect())
             .unwrap_or_default())
     }
 

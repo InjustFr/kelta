@@ -2330,5 +2330,21 @@
   "Filter by tag": "Nach Tag filtern",
   "Only items tagged {name}": "Nur Elemente mit dem Tag {name}",
   "Create tags in Settings": "Tags in den Einstellungen anlegen",
-  "Tags…": "Tags…"
+  "Tags…": "Tags…",
+  "Ticket fields": "Ticketfelder",
+  "Each field with a value shows on the ticket rows as label: value.": "Jedes Feld mit Wert erscheint in den Ticketzeilen als Bezeichnung: Wert.",
+  "Label of {field}": "Bezeichnung von {field}",
+  "No label": "Ohne Bezeichnung",
+  "{tracker} has no field {id}": "{tracker} hat kein Feld {id}",
+  "Unknown field": "Unbekanntes Feld",
+  "Add a field": "Feld hinzufügen",
+  "Choose a field…": "Feld auswählen…",
+  "Add a field by id": "Feld per ID hinzufügen",
+  "This tracker does not list its fields: type the field id or name.": "Dieser Tracker listet seine Felder nicht auf: Gib die ID oder den Namen des Felds ein.",
+  "Field": "Feld",
+  "Fields": "Felder",
+  "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Trackerfelder, die bei den Tickets dieser Quelle in Zeilen und Details angezeigt werden, wenn sie einen Wert haben. Ein Eintrag ohne ID wird mit einer Warnung verworfen.",
+  "A tracker field to show on the tickets.": "Ein Trackerfeld, das bei den Tickets angezeigt wird.",
+  "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Das Feld des Trackers: eine Jira-Feld-ID (`customfield_10042`), ein GitHub-Projektfeldname.",
+  "Shown before the value; empty shows the value alone.": "Wird vor dem Wert angezeigt; leer zeigt nur den Wert."
 }

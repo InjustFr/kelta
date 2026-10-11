@@ -16,10 +16,12 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, BlockedMarker, ProjectV2Ref, TrackerBinding, TrackerView};
+use kelta_proto::settings::{
+    AccountConfig, BlockedMarker, ProjectV2Ref, SourceField, TrackerBinding, TrackerView,
+};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketField, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -50,7 +52,7 @@ impl FieldMeta {
 /// Field-value selections shared by the list and per-issue project queries.
 macro_rules! field_value_fragments {
     () => {
-        "... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name options{ name } } } } ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration } ... on ProjectV2ItemFieldNumberValue { number field{ ... on ProjectV2Field{ name } } }"
+        "... on ProjectV2ItemFieldSingleSelectValue { name field{ ... on ProjectV2SingleSelectField{ name options{ name } } } } ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration field{ ... on ProjectV2IterationField{ name } } } ... on ProjectV2ItemFieldNumberValue { number field{ ... on ProjectV2Field{ name } } } ... on ProjectV2ItemFieldTextValue { text field{ ... on ProjectV2Field{ name } } } ... on ProjectV2ItemFieldDateValue { date field{ ... on ProjectV2Field{ name } } }"
     };
 }
 
@@ -185,6 +187,26 @@ fn apply_project_fields(t: &mut Ticket, vals: &[Value], today: &str) {
             }
         }
     }
+}
+
+/// The chosen Projects v2 fields (by name, any case) that have a value, in the source's order (#351).
+fn project_fields(vals: &[Value], chosen: &[SourceField]) -> Vec<TicketField> {
+    let value = |fv: &Value| {
+        let v = ["name", "text", "title", "date"].iter().find_map(|k| s(fv, k).map(str::to_owned));
+        v.or_else(|| fv.get("number").and_then(Value::as_f64).map(|n| n.to_string()))
+    };
+    chosen
+        .iter()
+        .filter_map(|c| {
+            let named = |fv: &&Value| {
+                fv.pointer("/field/name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|n| n.eq_ignore_ascii_case(c.id.trim()))
+            };
+            let v = value(vals.iter().find(named)?).filter(|v| !v.trim().is_empty())?;
+            Some(TicketField { label: c.label.clone(), value: v })
+        })
+        .collect()
 }
 
 /// `https://api.github.com` → `https://github.com`; GHE `https://h/api/v3` → `https://h`.
@@ -350,6 +372,7 @@ impl GithubIssues {
         p: &ProjectV2Ref,
         after: Option<String>,
         filter: Option<String>,
+        chosen: &[SourceField],
     ) -> Result<Page<Ticket>, KeltaError> {
         const Q: &str = concat!(
             "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ",
@@ -415,6 +438,7 @@ impl GithubIssues {
                 ..Default::default()
             };
             apply_project_fields(&mut t, vals, &today);
+            t.fields = project_fields(vals, chosen);
             out.push(t);
         }
         let has_next =
@@ -500,7 +524,7 @@ impl GithubIssues {
     /// issues' node ids (they may span repos). Runs on every poll, a 304 included: a board move does not
     /// change the REST ETag. No project scope or a failed call: the plain Open/Closed tickets.
     /// `closed_only`: query the parents alone, a closed issue is "Closed" whatever its board says.
-    async fn with_boards(&self, issues: &[Value], closed_only: bool) -> Vec<Ticket> {
+    async fn with_boards(&self, issues: &[Value], closed_only: bool, chosen: &[SourceField]) -> Vec<Ticket> {
         // 5 items per issue keeps a 50-issue page at ~3 rate-limit points (20 would be ~11).
         const Q: &str = concat!(
             "query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id parent{ number title url repository{ nameWithOwner } } ",
@@ -538,6 +562,7 @@ impl GithubIssues {
                 let board = item.map(|x| (x.owner.clone(), x.number));
                 if let Some(x) = item {
                     apply_project_fields(&mut t, &x.vals, &today);
+                    t.fields = project_fields(&x.vals, chosen);
                 }
                 if let Some(b) = board {
                     boards.insert(t.project_hint.clone().unwrap_or_default().to_ascii_lowercase(), b);
@@ -773,7 +798,9 @@ impl Tracker for GithubIssues {
                 Some(_) => return Err(KeltaError::invalid("github projects expect an `after` cursor")),
             };
             let filter = project_filter(view);
-            return self.list_project_items(p, after, Some(filter).filter(|f| !f.is_empty())).await;
+            return self
+                .list_project_items(p, after, Some(filter).filter(|f| !f.is_empty()), &view.fields)
+                .await;
         }
         let page = Self::page_cursor(cursor)?;
         let state = state_param(view);
@@ -827,16 +854,37 @@ impl Tracker for GithubIssues {
         } else {
             resp.body.get("items").cloned().unwrap_or(Value::Null)
         };
-        let items = self.with_boards(list.as_array().map_or(&[][..], Vec::as_slice), state == "closed").await;
+        let issues = list.as_array().map_or(&[][..], Vec::as_slice);
+        let items = self.with_boards(issues, state == "closed", &view.fields).await;
         let has_next = link_rel(&resp.headers, "next").is_some();
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
+    }
+
+    /// A Projects v2 view's fields, by name; other views have no fields of their own.
+    async fn fields(&self, view: &TrackerView) -> Result<Vec<SourceField>, KeltaError> {
+        const Q: &str = "query($owner:String!,$number:Int!){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ fields(first:50){ nodes{ ... on ProjectV2FieldCommon { name } } } } } } }";
+        let p = view
+            .project_v2
+            .as_ref()
+            .ok_or_else(|| KeltaError::unsupported("only a project lists its fields"))?;
+        let data = self.gql(Q, json!({"owner": p.owner, "number": p.number})).await?;
+        let nodes = data.pointer("/repositoryOwner/projectV2/fields/nodes").and_then(Value::as_array);
+        Ok(nodes
+            .into_iter()
+            .flatten()
+            .filter_map(|f| s(f, "name"))
+            .map(|n| SourceField { id: n.to_owned(), label: n.to_owned() })
+            .collect())
     }
 
     async fn search(&self, view: &TrackerView, text: &str) -> Result<Vec<Ticket>, KeltaError> {
         if let Some(p) = &view.project_v2 {
             self.remember_view(view);
             let filter = format!("{} {text}", project_filter(view));
-            return Ok(self.list_project_items(p, None, Some(filter.trim().to_owned())).await?.items);
+            return Ok(self
+                .list_project_items(p, None, Some(filter.trim().to_owned()), &view.fields)
+                .await?
+                .items);
         }
         // The view as an issue search (`list` adds `is:issue` and `who`), plus the text.
         let state = match state_param(view) {

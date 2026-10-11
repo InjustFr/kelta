@@ -204,6 +204,7 @@ impl RedmineTracker {
         let closed_on = (status.category == StatusCategory::Done).then(|| s(issue, "closed_on")).flatten();
         Ok(Ticket {
             r#ref: TicketRef { account: self.account().clone(), key: id.clone(), id: id.clone() },
+            fields: Vec::new(),
             title: s(issue, "subject").unwrap_or("").to_owned(),
             url: format!("{}/issues/{id}", self.web),
             status,

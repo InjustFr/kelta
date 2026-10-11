@@ -20,7 +20,8 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{
-    AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, TrackerBinding, TrackerView,
+    AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, SourceField, TrackerBinding,
+    TrackerView,
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
@@ -535,6 +536,7 @@ impl Core {
                 if who.is_some() {
                     view.who = who;
                 }
+                view.fields.clone_from(&s.fields);
                 let account = view.account.clone().unwrap_or_else(|| b.account.clone());
                 let key = tickets_key(&account, &view);
                 match out.iter_mut().find(|q| q.cache_key == key) {
@@ -949,7 +951,10 @@ impl Core {
         let reviews = self.cached_reviews().await;
         d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &reviews, &repos);
         d.caps = self.tracker_of(&t.account)?.caps();
-        let sources = self.cached_ticket(t, true).await.map(|(_, s)| s).unwrap_or_default();
+        let (listed, sources) = self.cached_ticket(t, true).await.unzip();
+        let sources = sources.unwrap_or_default();
+        // `get` has no view: the chosen fields come from the list (#351)
+        d.ticket.fields = listed.map(|x| x.fields).unwrap_or_default();
         self.fill_blocked(&mut d.ticket, &mut d.caps, &sources);
         // Sub-tasks: the provider gives each ticket, the rest is ours (like a list row).
         let people = self.people_of(d.children.iter().map(|c| &c.ticket), &reviews).await;
@@ -987,6 +992,31 @@ impl Core {
     pub async fn tracker_columns(&self, source: &str) -> Result<Vec<Column>, KeltaError> {
         self.rt.capture();
         self.columns_of(&self.source(source)?.tracker).await
+    }
+
+    /// `tracker_fields` (#351): the fields the source's views can show, each id once; `Unsupported`
+    /// when no view's tracker lists them (the settings then take a typed id).
+    pub async fn tracker_fields(&self, source: &str) -> Result<Vec<SourceField>, KeltaError> {
+        self.rt.capture();
+        let b = self.source(source)?.tracker;
+        let mut out: Vec<SourceField> = Vec::new();
+        let mut listed = false;
+        for v in &b.views {
+            let account = v.account.as_ref().unwrap_or(&b.account);
+            match self.tracker_of(account)?.fields(v).await {
+                Ok(fs) => {
+                    listed = true;
+                    for f in fs {
+                        if !out.iter().any(|o| o.id == f.id) {
+                            out.push(f);
+                        }
+                    }
+                }
+                Err(e) if e.code == ErrorCode::Unsupported => {}
+                Err(e) => return Err(e),
+            }
+        }
+        if listed { Ok(out) } else { Err(KeltaError::unsupported("this tracker cannot list its fields")) }
     }
 
     async fn columns_of(&self, b: &TrackerBinding) -> Result<Vec<Column>, KeltaError> {
@@ -1259,7 +1289,12 @@ impl Core {
     /// [`Core::on_ticket_written`] refreshes the account; patching first keeps that fetch last).
     async fn after_ticket_write(&self, ticket: &mut Ticket) {
         // the provider's raw `blocked` is not the source's marker (#348)
-        let sources = self.cached_ticket(&ticket.r#ref, true).await.map(|(_, s)| s).unwrap_or_default();
+        let (listed, sources) = self.cached_ticket(&ticket.r#ref, true).await.unzip();
+        let sources = sources.unwrap_or_default();
+        // a write answers without the chosen fields (no view): keep the listed ones until the refresh (#351)
+        if let Some(x) = listed.filter(|_| ticket.fields.is_empty()) {
+            ticket.fields = x.fields;
+        }
         if let Ok(tracker) = self.tracker_of(&ticket.r#ref.account) {
             ticket.blocked =
                 self.blocked_marker(&ticket.r#ref.account, tracker.as_ref(), &sources).on(ticket);

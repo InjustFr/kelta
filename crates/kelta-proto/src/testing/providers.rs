@@ -17,7 +17,7 @@ use crate::samples;
 use crate::settings::{BlockedMarker, TrackerBinding, TrackerView};
 use crate::tracker::{
     Assignee, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
-    TicketItem, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketField, TicketItem, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 
 /// The four statuses of the fake workflow.
@@ -197,7 +197,15 @@ impl Tracker for FakeTracker {
             Some(other) => return Err(KeltaError::invalid(format!("unexpected cursor {other:?}"))),
         };
         let all = self.of_view(view);
-        let items: Vec<Ticket> = all.iter().skip(start).take(self.page_size).cloned().collect();
+        let mut items: Vec<Ticket> = all.iter().skip(start).take(self.page_size).cloned().collect();
+        // a chosen field's value is its id (#351)
+        for t in items.iter_mut().filter(|_| !view.fields.is_empty()) {
+            t.fields = view
+                .fields
+                .iter()
+                .map(|f| TicketField { label: f.label.clone(), value: f.id.clone() })
+                .collect();
+        }
         let end = start + items.len();
         let next = (end < all.len()).then_some(Cursor::Offset(end as u32));
         Ok(Page { items, next })

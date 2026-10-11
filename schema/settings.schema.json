@@ -2969,6 +2969,28 @@
             "default": null,
             "description": "How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on\nLinear, status elsewhere."
           },
+          "fields": {
+            "description": "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A tracker field to show on the tickets.",
+              "properties": {
+                "id": {
+                  "default": "",
+                  "description": "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "default": "",
+                  "description": "Shown before the value; empty shows the value alone.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "id": {
             "default": "",
             "type": "string"

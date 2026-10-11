@@ -158,6 +158,8 @@ pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
 
 pub const STATUS_COLOR: &str = "a status colour must be a theme colour or #rrggbb";
 
+pub const SOURCE_FIELD: &str = "a source field needs the tracker's field id";
+
 /// Keys a hand-written file may get wrong without losing the rest of it: on load and in the settings
 /// editor the key is dropped and its issue becomes this warning (`*` matches any one segment). IPC
 /// writes stay strict ([`layer_issues`]).
@@ -166,6 +168,7 @@ const SOFT_KEYS: &[(Layer, &[&str], &str)] = &[
     (Layer::Project, &["tools"], PROJECT_TOOLS_GLOBAL),
     (Layer::Project, &["project", "color"], PROJECT_COLOR),
     (Layer::Global, &["sources", "*", "status_colors", "*"], STATUS_COLOR),
+    (Layer::Global, &["sources", "*", "fields", "*"], SOURCE_FIELD),
 ];
 
 /// Load-time reading of a global, project or repo document: an issue under a [`SOFT_KEYS`] path drops
@@ -185,7 +188,8 @@ pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (V
         let raw = layer_issues(layer, value, stem);
         let mut again = false;
         for (k, (_, pattern, message)) in SOFT_KEYS.iter().enumerate().filter(|(_, (l, ..))| *l == layer) {
-            for r in &raw {
+            // last first: dropping an array item leaves the earlier indices valid
+            for r in raw.iter().rev() {
                 let hit = r.path.len() >= pattern.len()
                     && pattern.iter().zip(&r.path).all(|(p, s)| *p == "*" || p == s);
                 let path = &r.path[..pattern.len().min(r.path.len())];
@@ -824,6 +828,22 @@ mod tests {
         // IPC writes stay strict
         let bad = json!({"sources": [source(json!({"Ready": "orange"}))]});
         assert_eq!(layer_issues(Layer::Global, &bad, None).len(), 1);
+    }
+
+    #[test]
+    fn a_source_field_without_id_is_dropped_as_a_warning() {
+        let field = |id: &str| json!({"id": id, "label": "Verified"});
+        let source =
+            json!({"id": "a", "tracker": {"account": "j"}, "fields": [field(""), field("cf_1"), field("")]});
+        let mut v = json!({"sources": [source]});
+        let (errors, warnings) = lenient_issues(Layer::Global, &mut v, None);
+        assert!(errors.is_empty(), "{errors:?}");
+        let path = |i: &str| -> Vec<String> { ["sources", "0", "fields", i].map(str::to_owned).into() };
+        assert_eq!(
+            warnings,
+            [RawIssue::new(&path("2"), SOURCE_FIELD), RawIssue::new(&path("0"), SOURCE_FIELD)]
+        );
+        assert_eq!(v["sources"][0]["fields"], json!([field("cf_1")]));
     }
 
     #[test]
