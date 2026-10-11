@@ -59,7 +59,7 @@ impl Core {
         args.extend(["--".to_owned(), PROMPT.to_owned()]);
 
         let env = self.login_env.vars.iter().chain(&settings.env).chain(&mcp_env);
-        let input = kelta_work::files::ticket_markdown(&detail);
+        let input = kelta_work::files::ticket_markdown(&detail, kelta_work::files::BRIEF_COMMENTS);
         let out = crate::ctl::claude_oneshot(&binary, args, env, &cwd, Some(input.as_bytes()), TIMEOUT).await;
         if port.is_some() {
             self.refines.lock().remove(&sid);

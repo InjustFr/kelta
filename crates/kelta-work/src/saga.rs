@@ -737,7 +737,10 @@ impl WorkService {
                 let tracker = env.core.tracker_for(&t.account).await?;
                 let d = tracker.get(t).await?;
                 let run = self.ensure_claude_run(item, j)?;
-                files::write_private(&run.join(claude::TICKET_FILE), files::ticket_markdown(&d).as_bytes())?;
+                files::write_private(
+                    &run.join(claude::TICKET_FILE),
+                    files::ticket_markdown(&d, files::BRIEF_COMMENTS).as_bytes(),
+                )?;
                 j.ticket = Some(TicketSnap::from_ticket(&d.ticket, tracker.branch_key(t), tracker.kind()));
                 Ok(Some(format!("{} — {}", d.ticket.r#ref.key, d.ticket.title)))
             }

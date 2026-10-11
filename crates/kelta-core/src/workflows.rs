@@ -90,7 +90,10 @@ impl Core {
         let detail = self.tracker_get(ticket).await?;
         let dir = self.dirs.session_runtime(&sid.sid8());
         let (file, args) = (dir.join("ticket.md"), dir.join("args.json"));
-        write_private(&file, &kelta_work::files::ticket_markdown(&detail))?;
+        write_private(
+            &file,
+            &kelta_work::files::ticket_markdown(&detail, kelta_work::files::BRIEF_COMMENTS),
+        )?;
         let t = &detail.ticket;
         let json = serde_json::json!({
             "ticket": { "key": ticket.key, "title": t.title, "url": t.url, "file": file },

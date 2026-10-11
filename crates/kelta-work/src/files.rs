@@ -256,9 +256,12 @@ pub fn html_to_text(html: &str) -> String {
     out.trim().to_owned()
 }
 
+/// Comments a brief file keeps: the newest ones are what a run needs.
+pub const BRIEF_COMMENTS: usize = 10;
+
 /// `ticket.md` (and MCP `get_ticket`): key, title, URL, status, labels, parent, sub-tasks, Markdown body,
-/// last 10 comments.
-pub fn ticket_markdown(d: &TicketDetail) -> String {
+/// the last `comments` comments.
+pub fn ticket_markdown(d: &TicketDetail, comments: usize) -> String {
     let t = &d.ticket;
     let mut s = format!("# {}: {}\n\n", t.r#ref.key, t.title);
     s.push_str(&format!("- URL: {}\n- Status: {}\n", t.url, t.status.name));
@@ -284,7 +287,7 @@ pub fn ticket_markdown(d: &TicketDetail) -> String {
     s.push_str("\n## Description\n\n");
     s.push_str(if d.body_md.trim().is_empty() { "_(empty)_" } else { d.body_md.trim() });
     s.push('\n');
-    let start = d.comments.len().saturating_sub(10);
+    let start = d.comments.len().saturating_sub(comments);
     if start < d.comments.len() {
         s.push_str("\n## Comments\n");
         for c in &d.comments[start..] {
@@ -343,7 +346,7 @@ mod tests {
             prs: Vec::new(),
             caps: Default::default(),
         };
-        let md = ticket_markdown(&d);
+        let md = ticket_markdown(&d, BRIEF_COMMENTS);
         assert!(md.contains("- Parent: SHOP-1\n- Sub-tasks: SHOP-2, SHOP-3\n"), "{md}");
         assert!(md.contains("\n\na & b\n"), "{md}");
     }

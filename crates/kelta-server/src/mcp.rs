@@ -376,7 +376,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             let d = tracker.get(&t).await.map_err(|e| e.message)?;
             Ok(format!(
                 "{}\nAccount: {}\nRevision: {}\n",
-                kelta_work::files::ticket_markdown(&d),
+                kelta_work::files::ticket_markdown(&d, usize::MAX),
                 t.account,
                 revision(&d.body_md)
             ))
@@ -481,7 +481,7 @@ async fn get_ticket(core: &Arc<dyn CoreApi>, sid: &SessionId) -> ToolResult {
     // Not `linked`: a refine's sid reads its ticket but has no work item to write through.
     let t = core.ticket_for_session(sid).await.ok_or_else(|| NO_TICKET.to_owned())?;
     let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
-    Ok(kelta_work::files::ticket_markdown(&tracker.get(&t).await.map_err(|e| e.message)?))
+    Ok(kelta_work::files::ticket_markdown(&tracker.get(&t).await.map_err(|e| e.message)?, usize::MAX))
 }
 
 fn pick_transition<'a>(ts: &'a [Transition], to: &str) -> Option<&'a Transition> {
