@@ -1511,8 +1511,10 @@ impl Core {
             name,
             serde_json::json!({ "review": d.review, "linked_tickets": d.review.linked_tickets }),
         );
-        if let Some((_, _, p)) =
-            self.review_bindings().into_iter().find(|(a, repo, _)| a == &r.account && repo == &r.repo)
+        if let Some((_, _, p)) = self
+            .review_bindings()
+            .into_iter()
+            .find(|(a, repo, _)| a == &r.account && repo.eq_ignore_ascii_case(&r.repo))
         {
             ev = ev.with_project(p);
         }

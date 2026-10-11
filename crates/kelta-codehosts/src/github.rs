@@ -136,12 +136,17 @@ impl GithubHost {
 
     /// Rows of a paged REST list, following `Link: rel="next"` up to [`MAX_PAGES`].
     async fn paged(&self, req: HttpRequest) -> Result<Vec<Value>, KeltaError> {
+        self.paged_at(req, "").await
+    }
+
+    /// [`Self::paged`] for a list wrapped in an object: the rows sit at JSON `pointer` of each page.
+    async fn paged_at(&self, req: HttpRequest, pointer: &str) -> Result<Vec<Value>, KeltaError> {
         let mut out = Vec::new();
         let mut next = Some(req);
         for _ in 0..MAX_PAGES {
             let Some(req) = next.take() else { break };
             let resp = self.rest(req).await?;
-            out.extend(resp.body.as_array().cloned().unwrap_or_default());
+            out.extend(resp.body.pointer(pointer).and_then(Value::as_array).cloned().unwrap_or_default());
             // The token rides on every page: never follow a `next` that leaves the API origin.
             next = link_rel(&resp.headers, "next")
                 .filter(|u| u.starts_with(&format!("{}/", self.api)))
@@ -354,8 +359,7 @@ impl GithubHost {
     /// Check runs of `sha` (REST), shared by `get` and `feedback`.
     async fn check_runs(&self, repo: &str, sha: &str) -> Result<Vec<Value>, KeltaError> {
         let url = self.repo_url(repo, &format!("/commits/{sha}/check-runs"))?;
-        let body = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
-        Ok(body.get("check_runs").and_then(Value::as_array).cloned().unwrap_or_default())
+        self.paged_at(HttpRequest::get(url).query("per_page", "100"), "/check_runs").await
     }
 
     /// Last lines of a GitHub Actions job log (`None` for other apps or when unreadable).
@@ -851,14 +855,12 @@ impl CodeHost for GithubHost {
         }
         let pending_comments = match pending_of(&reviews) {
             Some(p) => self
-                .rest(
+                .paged(
                     HttpRequest::get(format!("{pull_url}/reviews/{}/comments", p.id))
                         .query("per_page", "100"),
                 )
                 .await?
-                .body
-                .as_array()
-                .map_or(0, Vec::len) as u32,
+                .len() as u32,
             None => 0,
         };
         review.my_state = match kind {
