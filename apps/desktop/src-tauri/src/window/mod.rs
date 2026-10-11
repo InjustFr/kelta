@@ -367,9 +367,23 @@ pub(crate) fn reload_url(current: Option<Url>, safe: bool) -> Option<Url> {
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     let app = window.app_handle();
     if window.label() != MAIN_WINDOW {
-        // A detached window: its page reattached its tab before closing.
-        if let (WindowEvent::Destroyed, Some(b)) = (event, app.try_state::<Arc<TauriBridge>>()) {
-            b.clear_subscribers(window.label());
+        match event {
+            // A detached window: its page reattached its tab before closing.
+            WindowEvent::Destroyed => {
+                if let Some(b) = app.try_state::<Arc<TauriBridge>>() {
+                    b.clear_subscribers(window.label());
+                }
+            }
+            // Focus is any-of over the windows (`window_state`).
+            WindowEvent::Focused(focused) => {
+                if let Some(c) = core(app) {
+                    c.publish(BusEvent::new(
+                        bus::APP_FOCUS_CHANGED,
+                        serde_json::json!({ "focused": focused }),
+                    ));
+                }
+            }
+            _ => {}
         }
         return;
     }

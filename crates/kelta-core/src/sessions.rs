@@ -476,17 +476,17 @@ impl Core {
             .ok_or_else(|| KeltaError::not_found(format!("session {id}")))
     }
 
-    /// Sessions on screen: active project's active tab and every detached tab, window visible.
+    /// Sessions on screen: active project's active tab (main window visible) and every detached tab.
     pub fn visible_sessions(&self) -> HashSet<SessionId> {
-        let w = self.bridge.window_state();
-        if !(w.exists && w.visible) {
+        if !self.bridge.window_state().exists {
             return HashSet::new();
         }
         let active = self.active_project();
+        let main = self.bridge.main_window_visible();
         self.layouts
             .lock()
             .iter()
-            .flat_map(|(p, l)| crate::layout::visible_sessions(l, *p == active))
+            .flat_map(|(p, l)| crate::layout::visible_sessions(l, main && *p == active))
             .collect()
     }
 

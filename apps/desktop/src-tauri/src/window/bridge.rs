@@ -199,15 +199,17 @@ impl UiBridge for TauriBridge {
         b.show().map_err(|e| KeltaError::unsupported(format!("notification failed: {e}")))
     }
 
+    /// Any Kelta window (main or detached): a session in a detached window is on screen too.
     fn window_state(&self) -> WindowState {
-        match self.handle.get_webview_window(MAIN_WINDOW) {
-            Some(w) => WindowState {
-                exists: true,
-                visible: w.is_visible().unwrap_or(false),
-                focused: w.is_focused().unwrap_or(false),
-            },
-            None => WindowState::default(),
-        }
+        self.handle.webview_windows().values().fold(WindowState::default(), |a, w| WindowState {
+            exists: true,
+            visible: a.visible || w.is_visible().unwrap_or(false),
+            focused: a.focused || w.is_focused().unwrap_or(false),
+        })
+    }
+
+    fn main_window_visible(&self) -> bool {
+        self.handle.get_webview_window(MAIN_WINDOW).is_some_and(|w| w.is_visible().unwrap_or(false))
     }
 
     fn reload_webview(&self, safe: bool) {

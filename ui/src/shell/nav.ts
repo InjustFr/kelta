@@ -285,9 +285,16 @@ export async function revealSession(sessionId: SessionId): Promise<boolean> {
     toasts.error(err, 'Loading the layout failed');
     return false;
   }
-  void activateProject(projectId);
   const l = layout.get(projectId);
   const loc = l ? findSession(l, sessionId) : null;
+  if (loc && l && findTab(l, loc.tabId)?.detached) {
+    // Its window shows it: raise that one (an existing window is unminimized and focused).
+    await windowDetach({ project_id: projectId, tab_id: loc.tabId }).catch((err: unknown) =>
+      toasts.error(err, 'Opening the window failed'),
+    );
+    return true;
+  }
+  void activateProject(projectId);
   if (loc) {
     layout.update(projectId, (cur) => focusPane(cur, loc.tabId, loc.paneId));
   } else {

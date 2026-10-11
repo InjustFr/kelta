@@ -142,6 +142,17 @@ describe('sessions', () => {
     expect(focusedSessionId()).toBe(shell);
   });
 
+  it('raises the window of a detached tab instead of activating the project', async () => {
+    const shell = '0199a6b2-0000-7000-8000-000000000003';
+    layout.update('shop', (l) => ({
+      ...l,
+      tabs: l.tabs.map((t) => (t.id === 'shop-t2' ? { ...t, detached: true } : t)),
+    }));
+    await revealSession(shell);
+    expect(calls('window_detach')).toHaveLength(1);
+    expect(currentTab()!.id).not.toBe('shop-t2');
+  });
+
   it('opens a background session in a new tab', async () => {
     const closing = closeFocusedPane(); // shop-p1 (Claude) leaves the layout but keeps running
     await Promise.resolve();
