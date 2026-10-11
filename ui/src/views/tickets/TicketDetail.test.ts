@@ -129,6 +129,25 @@ describe('TicketDetail', () => {
     await waitFor(() => expect(box().value).toBe(''));
   });
 
+  it('a comment posted on A neither wipes the draft of B nor says it was added to B', async () => {
+    const { rerender } = render(TicketDetail, {
+      props: { item: itemOf('SHOP-142'), projectId: 'shop', embedded: true },
+    });
+    const box = () => screen.getByLabelText(/Add a comment/) as HTMLTextAreaElement;
+    await fireEvent.input(box(), { target: { value: 'for 142' } });
+    const release = mock.holdNext('tracker_comment');
+    await fireEvent.click(document.querySelector('.compose button')!);
+    await rerender({ item: itemOf('SHOP-120'), projectId: 'shop', embedded: true });
+    await fireEvent.input(box(), { target: { value: 'draft for 120' } });
+    const loads = () => mock.calls.filter((c) => c.cmd === 'tracker_get').map((c) => c.args);
+    release();
+    await waitFor(() =>
+      expect(toasts.list.some((t) => t.toast.text === 'Comment added to SHOP-142')).toBe(true),
+    );
+    expect(box().value).toBe('draft for 120');
+    expect(loads().at(-1)).toMatchObject({ ticket: { key: 'SHOP-142' } });
+  });
+
   it('marks a past due date as overdue', () => {
     mount('SHOP-120'); // due 2026-10-09, in review
     expect(screen.getByText('overdue')).toBeTruthy();

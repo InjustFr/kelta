@@ -131,6 +131,19 @@ describe('ReviewsPane split view', () => {
     expect(JSON.stringify(layout.get('shop') ?? null)).not.toContain('"review_detail"');
   });
 
+  it('holding j through the list loads the detail of the row it stops on, not every row passed', async () => {
+    mountReviews();
+    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    const first = selectedKey();
+    const gets = () => mock.calls.filter((c) => c.cmd === 'review_get').length;
+    const before = gets();
+    for (let i = 0; i < 10; i++) await fireEvent.keyDown(pane(), { key: 'j' });
+    expect(selectedKey()).not.toBe(first);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(gets() - before).toBeLessThanOrEqual(2);
+    await screen.findByTestId('head-sha');
+  });
+
   it('Shift+Enter opens the standalone pane; a narrow pane has no column', async () => {
     const wide = mountReviews();
     await screen.findAllByRole('button', { name: /^Open SHOP-/ });

@@ -4,7 +4,7 @@
 import type { ReviewDetail, ReviewItem, ReviewKind, ReviewPage, ReviewRef, Scope, UiEvent } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
-import { idle, settle, type Loadable } from './loadable';
+import { capDetails, idle, settle, type Loadable } from './loadable';
 import { reviewKey, scopeAffects, scopeKey } from './reducers';
 
 export interface ReviewList extends Loadable<ReviewPage> {
@@ -42,13 +42,15 @@ export class ReviewsStore {
   async load(scope: Scope, kind: ReviewKind, refresh = false): Promise<ReviewList> {
     const key = reviewListKey(scope, kind);
     const prev = this.list(scope, kind);
-    this.lists = { ...this.lists, [key]: { ...prev, loading: true } };
+    this.lists = { ...this.lists, [key]: { ...prev, loading: true, invalidated: false } };
     const next = await settle(prev, () => ipc.reviewList({ scope, kind, refresh }), {
       stale: (p) => p.stale,
     });
-    const entry: ReviewList = { ...next, scope, kind };
+    // `apply` flags a list that is loading and `refreshInvalidated` skips it: reload here.
+    const again = this.lists[key]?.invalidated ?? false;
+    const entry: ReviewList = { ...next, scope, kind, invalidated: again };
     this.lists = { ...this.lists, [key]: entry };
-    return entry;
+    return again ? this.load(scope, kind) : entry;
   }
 
   async loadDetail(ref: ReviewRef): Promise<Loadable<ReviewDetail>> {
@@ -56,7 +58,7 @@ export class ReviewsStore {
     const prev = this.details[key] ?? idle<ReviewDetail>();
     this.details = { ...this.details, [key]: { ...prev, loading: true } };
     const next = await settle(prev, () => ipc.reviewGet({ review: ref }));
-    this.details = { ...this.details, [key]: next };
+    this.details = capDetails({ ...this.details, [key]: next });
     return next;
   }
 

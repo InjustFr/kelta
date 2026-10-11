@@ -42,10 +42,11 @@
 
   $effect(() => {
     const r = ref;
-    untrack(() => {
-      void reviews.loadDetail(r);
-      reviews.markSeen(r);
-    });
+    untrack(() => reviews.markSeen(r));
+    if (!embedded) return void untrack(() => reviews.loadDetail(r));
+    // Walking the list with j/k: only the row that stays 150 ms loads (the `{#key}` teardown cancels).
+    const t = setTimeout(() => void reviews.loadDetail(r), 150);
+    return () => clearTimeout(t);
   });
 
   function refresh(): void {
