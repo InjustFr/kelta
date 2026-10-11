@@ -379,6 +379,12 @@ impl PluginHost {
                     bracketed: Option<bool>,
                 }
                 let q: Q = p(method, params)?;
+                if core.session_get(&q.session_id).is_some_and(|s| s.claude.is_some_and(|c| c.host.is_some()))
+                {
+                    return Err(KeltaError::conflict(
+                        "Claude runs outside Kelta: it cannot receive prompts from here.",
+                    ));
+                }
                 core.session_write(&q.session_id, &keys_bytes(&q.text, q.bracketed.unwrap_or(true))).await?;
                 Ok(Value::Null)
             }

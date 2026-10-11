@@ -56,6 +56,10 @@ pub(crate) fn refuse_if_busy(
 /// Typing into Claude is only safe when hooks say it is idle at its prompt: a paste into a
 /// permission prompt would answer it (FLOW §11).
 fn check_idle(s: &SessionInfo) -> Result<(), KeltaError> {
+    // A hosted Claude's pane runs a wrapper that never reads stdin: a write would be dropped silently.
+    if s.claude.as_ref().is_some_and(|c| c.host.is_some()) {
+        return Err(KeltaError::conflict("Claude runs outside Kelta: it cannot receive prompts from here."));
+    }
     let reason = if busy(s) {
         "claude_busy"
     } else if s.status_source != StatusSource::Hook {
@@ -367,5 +371,9 @@ mod tests {
         s.status_source = StatusSource::Heuristic;
         let e = check_idle(&s).unwrap_err();
         assert_eq!(e.detail.unwrap()["reason"], "hooks_inactive");
+        s.status_source = StatusSource::Hook;
+        s.claude.get_or_insert_with(Default::default).host =
+            Some(kelta_proto::settings::ClaudeHost::Terminal);
+        assert!(check_idle(&s).is_err() && copies(&s));
     }
 }
