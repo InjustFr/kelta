@@ -334,14 +334,15 @@ impl Secrets {
 
     // ---- keyring ---------------------------------------------------------------------------
 
-    fn credential_store(&self) -> Result<Arc<CredentialStore>, KeltaError> {
-        let mut g = self.store.lock();
-        if let Some(s) = &*g {
+    async fn credential_store(&self) -> Result<Arc<CredentialStore>, KeltaError> {
+        if let Some(s) = &*self.store.lock() {
             return Ok(s.clone());
         }
-        let s = platform_store()?;
-        *g = Some(s.clone());
-        Ok(s)
+        // the Secret Service store connects through zbus' `block_on`, which panics on a runtime worker
+        let s = tokio::task::spawn_blocking(platform_store)
+            .await
+            .map_err(|_| KeltaError::internal("secret storage task failed"))??;
+        Ok(self.store.lock().get_or_insert(s).clone())
     }
 
     /// Run a blocking keyring operation off-thread under the lookup timeout.
@@ -350,19 +351,23 @@ impl Secrets {
         T: Send + 'static,
         F: FnOnce(keyring_core::Entry) -> keyring_core::Result<T> + Send + 'static,
     {
-        let store = self.credential_store()?;
         let user = name.to_owned();
         let label = name.to_owned();
-        let job = tokio::task::spawn_blocking(move || {
-            let entry = store.build(KEYRING_SERVICE, &user, None)?;
-            op(entry)
-        });
+        let job = async {
+            let store = self.credential_store().await?;
+            tokio::task::spawn_blocking(move || {
+                let entry = store.build(KEYRING_SERVICE, &user, None)?;
+                op(entry)
+            })
+            .await
+            .map_err(|_| KeltaError::internal("secret storage task failed"))
+        };
         // one-shot: the Secret Service can block on a locked collection prompt
         match tokio::time::timeout(self.timeout, job).await {
             Err(_) => Err(KeltaError::timeout(
                 "secret storage did not answer within 5 s (waiting for Keychain access, or locked?)",
             )),
-            Ok(Err(_)) => Err(KeltaError::internal("secret storage task failed")),
+            Ok(Err(e)) => Err(e),
             Ok(Ok(Err(e))) => Err(map_keyring(&e, &label)),
             Ok(Ok(Ok(v))) => Ok(v),
         }
@@ -532,7 +537,7 @@ impl SecretResolver for Secrets {
         let mut out = Vec::new();
         #[cfg(target_os = "macos")]
         {
-            let available = self.credential_store().is_ok();
+            let available = self.credential_store().await.is_ok();
             out.push(SecretBackendStatus {
                 backend: "keychain".into(),
                 available,
