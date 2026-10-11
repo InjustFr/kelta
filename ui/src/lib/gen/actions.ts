@@ -5,6 +5,7 @@
 export const ACTION_IDS = [
   "palette.open",
   "project.switcher",
+  "project.open",
   "project.goto.1",
   "project.goto.2",
   "project.goto.3",
@@ -105,6 +106,7 @@ export interface ActionMeta {
 export const ACTIONS: readonly ActionMeta[] = [
   { id: "palette.open", label: "Command palette", mac: ["cmd+k"], linux: ["ctrl+shift+k"], prefix: ":", context: "global" },
   { id: "project.switcher", label: "Switch project", mac: ["cmd+p"], linux: ["ctrl+shift+p"], prefix: "p", context: "global" },
+  { id: "project.open", label: "Open project", mac: [], linux: [], prefix: null, context: "global" },
   { id: "project.goto.1", label: "Go to rail row 1", mac: ["cmd+1"], linux: ["ctrl+shift+1"], prefix: "1", context: "global" },
   { id: "project.goto.2", label: "Go to rail row 2", mac: ["cmd+2"], linux: ["ctrl+shift+2"], prefix: "2", context: "global" },
   { id: "project.goto.3", label: "Go to rail row 3", mac: ["cmd+3"], linux: ["ctrl+shift+3"], prefix: "3", context: "global" },

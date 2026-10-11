@@ -2224,6 +2224,10 @@
   "Focus pane right": "Bereich rechts fokussieren",
   "Move pane to new window": "Bereich in neues Fenster verschieben",
   "Open tickets": "Tickets öffnen",
+  "Open project": "Projekt öffnen",
+  "Open project…": "Projekt öffnen…",
+  "Reopen a closed project": "Ein geschlossenes Projekt wieder öffnen",
+  "No closed project": "Kein geschlossenes Projekt",
   "Open project board": "Projekt-Board öffnen",
   "Open reviews": "Reviews öffnen",
   "Previous waiting": "Vorheriges Wartendes",
@@ -2310,5 +2314,28 @@
   "Kelta cannot bring its window forward.": "Kelta kann ihr Fenster nicht in den Vordergrund holen.",
   "Browse…": "Durchsuchen…",
   "Archive…": "Archiv…",
-  "Cannot open the system picker": "Die Systemauswahl lässt sich nicht öffnen"
+  "Cannot open the system picker": "Die Systemauswahl lässt sich nicht öffnen",
+  "Tags": "Tags",
+  "Saving tags failed": "Tags konnten nicht gespeichert werden",
+  "Tags (t)": "Tags (t)",
+  "Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.": "Lokale Tags: Erinnerungen an Tickets und Pull Requests. Sie bleiben in Kelta und werden nie an einen Tracker oder Code-Host gesendet.",
+  "Your tags": "Deine Tags",
+  "New tag": "Neuer Tag",
+  "No tags yet": "Noch keine Tags",
+  "Tags are reminders only you see, on tickets and pull requests.": "Tags sind Erinnerungen an Tickets und Pull Requests, die nur du siehst.",
+  "Delete {name}": "{name} löschen",
+  "Delete tag": "Tag löschen",
+  "{n} items": {
+    "one": "{n} Element",
+    "other": "{n} Elemente"
+  },
+  "Delete {name}? It comes off the {n} items that carry it.": {
+    "one": "{name} löschen? Der Tag wird von dem {n} Element entfernt, das ihn trägt.",
+    "other": "{name} löschen? Der Tag wird von den {n} Elementen entfernt, die ihn tragen."
+  },
+  "Local tag {name}": "Lokaler Tag {name}",
+  "Filter by tag": "Nach Tag filtern",
+  "Only items tagged {name}": "Nur Elemente mit dem Tag {name}",
+  "Create tags in Settings": "Tags in den Einstellungen anlegen",
+  "Tags…": "Tags…"
 }

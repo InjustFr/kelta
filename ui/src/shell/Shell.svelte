@@ -195,7 +195,7 @@
   $effect(() => {
     if (ui.overlay === 'palette')
       lazyComponents.ensure('overlay:palette', () => import('./palette/Palette.svelte'));
-    if (ui.overlay === 'switcher')
+    if (ui.overlay === 'switcher' || ui.overlay === 'reopen')
       lazyComponents.ensure('overlay:switcher', () => import('./palette/Switcher.svelte'));
   });
 
@@ -342,8 +342,9 @@
 
   {#if ui.overlay === 'palette' && Palette}
     <Palette initialQuery={ui.paletteQuery} onclose={() => ui.closeOverlay()} />
-  {:else if ui.overlay === 'switcher' && Switcher}
+  {:else if (ui.overlay === 'switcher' || ui.overlay === 'reopen') && Switcher}
     <Switcher
+      closedOnly={ui.overlay === 'reopen'}
       onclose={() => ui.closeOverlay()}
       placeholder={ui.pick?.placeholder}
       onpick={ui.pick ? (id: string) => ui.resolvePick(id) : undefined}

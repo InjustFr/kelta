@@ -39,6 +39,8 @@
   import { pickWorkflow, workflows } from './workflow.svelte';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
+  import TagChips from '../tags/TagChips.svelte';
+  import TagMenu from '../tags/TagMenu.svelte';
   import StatusPicker from './StatusPicker.svelte';
 
   // Ticket detail body (TICKETS.md T3): the standalone pane wraps it, the tickets list embeds it as
@@ -71,6 +73,7 @@
   let commentBox = $state<HTMLDivElement>();
   let picker = $state<HTMLElement | null>(null);
   let prMenu = $state<{ x: number; y: number; browser: boolean } | null>(null);
+  let tagMenu = $state<{ x: number; y: number } | null>(null);
   /** The assignee (`u`) or priority (`!`) picker, under its meta row (TICKETS.md T8). */
   let field = $state<{ kind: 'assignee' | 'priority'; x: number; y: number } | null>(null);
   let comment = $state('');
@@ -288,6 +291,11 @@
       case 'browser':
         openExternal({ url: ticket.url }).catch((err) => toasts.error(err, t('Open in browser')));
         break;
+      case 'tag': {
+        const r = (root?.querySelector('[role="toolbar"]') ?? root)?.getBoundingClientRect();
+        tagMenu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+        break;
+      }
     }
   }
 
@@ -420,6 +428,7 @@
           <Icon name="chevron-down" size={14} />
         </Button>
       </span>
+      <TagChips kind="tickets" itemKey={key} />
     </div>
     <ActionBar bind:this={bar} {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
   </header>
@@ -652,6 +661,18 @@
     }}
     onclose={() => {
       prMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if tagMenu}
+  <TagMenu
+    kind="tickets"
+    itemKey={key}
+    x={tagMenu.x}
+    y={tagMenu.y}
+    onclose={() => {
+      tagMenu = null;
       root?.focus();
     }}
   />

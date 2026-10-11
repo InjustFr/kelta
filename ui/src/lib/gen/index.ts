@@ -94,6 +94,8 @@ export type * from './LayoutSaveResult';
 export type * from './Lifecycle';
 export type * from './LinuxGraphics';
 export type * from './LinuxSettings';
+export type * from './LocalTag';
+export type * from './LocalTags';
 export type * from './LogLevel';
 export type * from './LoginEnv';
 export type * from './LoginEnvSource';

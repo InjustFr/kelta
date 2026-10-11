@@ -2224,6 +2224,10 @@
   "Focus pane right": "Panneau de droite",
   "Move pane to new window": "Déplacer le panneau vers une nouvelle fenêtre",
   "Open tickets": "Ouvrir les tickets",
+  "Open project": "Ouvrir un projet",
+  "Open project…": "Ouvrir un projet…",
+  "Reopen a closed project": "Rouvrir un projet fermé",
+  "No closed project": "Aucun projet fermé",
   "Open project board": "Ouvrir le tableau du projet",
   "Open reviews": "Ouvrir les revues",
   "Previous waiting": "En attente précédent",
@@ -2310,5 +2314,28 @@
   "Kelta cannot bring its window forward.": "Kelta ne peut pas afficher sa fenêtre au premier plan.",
   "Browse…": "Parcourir…",
   "Archive…": "Archive…",
-  "Cannot open the system picker": "Impossible d’ouvrir le sélecteur du système"
+  "Cannot open the system picker": "Impossible d’ouvrir le sélecteur du système",
+  "Tags": "Étiquettes",
+  "Saving tags failed": "Échec de l’enregistrement des étiquettes",
+  "Tags (t)": "Étiquettes (t)",
+  "Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.": "Étiquettes locales : des rappels que vous posez sur les tickets et les pull requests. Gardées dans Kelta, jamais envoyées à un tracker ni à un hébergeur de code.",
+  "Your tags": "Vos étiquettes",
+  "New tag": "Nouvelle étiquette",
+  "No tags yet": "Aucune étiquette pour l’instant",
+  "Tags are reminders only you see, on tickets and pull requests.": "Les étiquettes sont des rappels que vous seul voyez, sur les tickets et les pull requests.",
+  "Delete {name}": "Supprimer {name}",
+  "Delete tag": "Supprimer l’étiquette",
+  "{n} items": {
+    "one": "{n} élément",
+    "other": "{n} éléments"
+  },
+  "Delete {name}? It comes off the {n} items that carry it.": {
+    "one": "Supprimer {name} ? Elle est retirée de l’élément qui la porte ({n}).",
+    "other": "Supprimer {name} ? Elle est retirée des {n} éléments qui la portent."
+  },
+  "Local tag {name}": "Étiquette locale {name}",
+  "Filter by tag": "Filtrer par étiquette",
+  "Only items tagged {name}": "Seulement les éléments étiquetés {name}",
+  "Create tags in Settings": "Créer des étiquettes dans les Paramètres",
+  "Tags…": "Étiquettes…"
 }
