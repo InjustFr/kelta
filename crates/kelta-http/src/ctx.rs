@@ -30,8 +30,13 @@ const ERROR_BODY_MAX: usize = 4096;
 struct EtagEntry {
     etag: String,
     body: String,
+    /// Pagination headers of the 200: a 304 may omit them, and list readers build `next` from them.
+    paging: Vec<(String, String)>,
     tick: u64,
 }
+
+/// Headers a 304 inherits from the cached 200 when it lacks them.
+const PAGING_HEADERS: [&str; 3] = ["link", "x-next-page", "x-total"];
 
 /// Total cached body bytes per account; bigger bodies are not cached.
 const ETAG_BYTES_MAX: usize = 2 * 1024 * 1024;
@@ -60,8 +65,8 @@ impl EtagCache {
         })
     }
 
-    fn body(&self, key: &str) -> Option<String> {
-        self.map.get(key).map(|e| e.body.clone())
+    fn body(&self, key: &str) -> Option<(String, Vec<(String, String)>)> {
+        self.map.get(key).map(|e| (e.body.clone(), e.paging.clone()))
     }
 
     fn evict_oldest(&mut self) {
@@ -72,7 +77,7 @@ impl EtagCache {
         }
     }
 
-    fn put(&mut self, key: String, etag: String, body: String) {
+    fn put(&mut self, key: String, etag: String, body: String, paging: Vec<(String, String)>) {
         self.tick += 1;
         if let Some(old) = self.map.remove(&key) {
             self.bytes -= old.body.len();
@@ -86,7 +91,7 @@ impl EtagCache {
             self.evict_oldest();
         }
         self.bytes += body.len();
-        self.map.insert(key, EtagEntry { etag, body, tick: self.tick });
+        self.map.insert(key, EtagEntry { etag, body, paging, tick: self.tick });
     }
 }
 
@@ -286,7 +291,7 @@ impl HttpCtx {
             Err(e) => return Attempt::Transport(map_reqwest_error(e)),
         };
         let status = resp.status().as_u16();
-        let headers: BTreeMap<String, String> = resp
+        let mut headers: BTreeMap<String, String> = resp
             .headers()
             .iter()
             .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_ascii_lowercase(), v.to_owned())))
@@ -298,8 +303,11 @@ impl HttpCtx {
         // shortcut: a concurrent eviction between request and 304 falls to the empty-body branch, next call refetches.
         if status == 304
             && let Some(etag) = cached
-            && let Some(cached_body) = cache_key.and_then(|k| self.shared.etags.lock().body(k))
+            && let Some((cached_body, paging)) = cache_key.and_then(|k| self.shared.etags.lock().body(k))
         {
+            for (k, v) in paging {
+                headers.entry(k).or_insert(v);
+            }
             return Attempt::Done(HttpResponse {
                 status,
                 headers,
@@ -325,7 +333,11 @@ impl HttpCtx {
         self.note_rate_limit(&headers);
         let etag = headers.get("etag").cloned();
         if let (Some(key), Some(tag)) = (cache_key, &etag) {
-            self.shared.etags.lock().put(key.to_owned(), tag.clone(), body.clone());
+            let paging = PAGING_HEADERS
+                .iter()
+                .filter_map(|&h| headers.get(h).map(|v| (h.to_owned(), v.clone())))
+                .collect();
+            self.shared.etags.lock().put(key.to_owned(), tag.clone(), body.clone(), paging);
         }
         Attempt::Done(HttpResponse { status, headers, body, etag, not_modified: false })
     }
@@ -505,10 +517,10 @@ mod tests {
     #[test]
     fn etag_cache_evicts_least_recently_used() {
         let mut c = EtagCache::new(2);
-        c.put("a".into(), "1".into(), "A".into());
-        c.put("b".into(), "2".into(), "B".into());
+        c.put("a".into(), "1".into(), "A".into(), vec![]);
+        c.put("b".into(), "2".into(), "B".into(), vec![]);
         assert!(c.get("a").is_some()); // a is now fresher than b
-        c.put("c".into(), "3".into(), "C".into());
+        c.put("c".into(), "3".into(), "C".into(), vec![]);
         assert!(c.get("b").is_none());
         assert!(c.get("a").is_some());
         assert!(c.get("c").is_some());
