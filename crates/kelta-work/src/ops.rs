@@ -1440,5 +1440,7 @@ pub(crate) fn rel_to(file: &Path, cwd: &Path) -> Option<PathBuf> {
 pub fn selection_ref(file: &Path, cwd: &Path, l1: u32, l2: u32) -> String {
     let rel = rel_to(file, cwd).unwrap_or_else(|| file.to_path_buf());
     let lines = if l1 >= l2 { format!("L{l1}") } else { format!("L{l1}-{l2}") };
-    format!("@{}#{lines} ", rel.to_string_lossy())
+    // A file name is untrusted: control chars could end Claude's bracketed paste or submit (#288).
+    let rel: String = rel.to_string_lossy().chars().filter(|c| !c.is_control()).collect();
+    format!("@{rel}#{lines} ")
 }
