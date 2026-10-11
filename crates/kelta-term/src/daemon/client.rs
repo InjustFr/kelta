@@ -149,10 +149,30 @@ fn hello(s: &UnixStream) -> Result<(), KeltaError> {
 fn keltad_pid(sock: &Path) -> Option<i32> {
     let from_file = std::fs::read_to_string(pidfile(sock)).ok().and_then(|t| t.trim().parse().ok());
     let from_lsof = || {
-        let out = Command::new("lsof").arg("-t").arg("--").arg(sock).output().ok()?;
-        String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.trim().parse().ok()).find(is_keltad)
+        let out = Command::new("lsof").args(["-F", "pn", "--"]).arg(sock).output().ok()?;
+        lsof_holders(&String::from_utf8_lossy(&out.stdout), sock).into_iter().find(is_keltad)
     };
     from_file.filter(is_keltad).or_else(from_lsof)
+}
+
+/// Pids in `lsof -F pn -- <sock>` output whose socket is bound to `sock`. Linux lsof selects unix
+/// sockets by the inode bound at bind time, and the filesystem reuses the inode of a deleted
+/// socket file: sockets of other keltads whose files are gone match too (#309). The name tells.
+fn lsof_holders(out: &str, sock: &Path) -> Vec<i32> {
+    let sock = sock.to_string_lossy();
+    let mut pid = None;
+    let mut pids = Vec::new();
+    for l in out.lines() {
+        if let Some(p) = l.strip_prefix('p') {
+            pid = p.parse().ok();
+        } else if let Some(n) = l.strip_prefix('n')
+            // Linux appends " type=STREAM".
+            && n.strip_prefix(&*sock).is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+        {
+            pids.extend(pid.filter(|p| !pids.contains(p)));
+        }
+    }
+    pids
 }
 
 fn is_keltad(pid: &i32) -> bool {
@@ -535,6 +555,16 @@ mod tests {
         drop(peer);
         stop_peer(&sock, &s).unwrap();
         old.wait().unwrap();
+    }
+
+    /// #309: lsof also lists sockets of other keltads whose deleted files had the same inode.
+    #[test]
+    fn lsof_holders_keeps_only_sockets_bound_to_the_path() {
+        let linux = "p10\nn/tmp/a/run/keltad.sock type=STREAM\np20\nf3\nn/tmp/b/run/keltad.sock type=STREAM\n\
+                     n/tmp/b/run/keltad.sock type=STREAM\np30\nn/tmp/b/run/keltad.sock.old type=STREAM\n";
+        assert_eq!(lsof_holders(linux, Path::new("/tmp/b/run/keltad.sock")), [20]);
+        let macos = "p7\nf3\nn/tmp/b/keltad.sock\nf5\nn/tmp/b/keltad.sock\n";
+        assert_eq!(lsof_holders(macos, Path::new("/tmp/b/keltad.sock")), [7]);
     }
 
     /// #299: a spawn keltad does not answer in time fails with Timeout, rolls its handler back, and
