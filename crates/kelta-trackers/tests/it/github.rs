@@ -114,7 +114,10 @@ async fn repo_views_filter_by_state_and_assignee() {
     let page = gh(&server).list(&v, None).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.next.is_none());
-    assert!(bodies(&server, "POST", "/graphql").await.is_empty(), "closed lists skip the board lookup");
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(b.len(), 1, "closed lists still look the parents up");
+    let q = b[0]["query"].as_str().unwrap();
+    assert!(q.contains("parent{") && !q.contains("projectItems"), "parents only, no board lookup");
 }
 
 #[tokio::test]
@@ -270,6 +273,11 @@ async fn project_moves_resolve_field_and_option_ids_by_name_and_cache_them() {
     assert_eq!(moved.status.category, StatusCategory::InReview);
     assert_eq!(moved.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
     assert_eq!(moved.priority_rank, Some(1));
+    assert_eq!(
+        moved.parent.as_ref().map(|p| p.key.as_str()),
+        Some("acme/shop#10"),
+        "a move keeps the parent"
+    );
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     let field_queries =
         gql_bodies.iter().filter(|b| b["query"].as_str().unwrap_or("").contains("node(id")).count();
@@ -690,6 +698,9 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
         ]
     );
     assert_eq!(page.items[0].priority.as_deref(), Some("P1"));
+    let parent = page.items[0].parent.as_ref().unwrap();
+    assert_eq!((parent.key.as_str(), parent.title.as_str()), ("acme/shop#10", "Checkout epic"));
+    assert!(page.items[1].parent.is_none());
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     assert_eq!(gql_bodies.len(), 1, "one enrichment request per page, not one per issue");
     assert_eq!(gql_bodies[0]["variables"]["ids"], json!(["I_12", "I_14", "I_15"]));
@@ -703,6 +714,8 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
     let d = t.get(&r()).await.unwrap();
     assert_eq!(d.ticket.status, page.items[0].status);
     assert_eq!(d.ticket.priority, page.items[0].priority);
+    assert_eq!(d.ticket.parent, page.items[0].parent);
+    assert_eq!(d.parent.map(|p| p.key), Some("acme/shop#10".to_owned()));
 }
 
 #[tokio::test]

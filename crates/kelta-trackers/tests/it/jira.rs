@@ -198,6 +198,9 @@ async fn cloud_detail_converts_adf_and_keeps_the_last_twenty_comments() {
     assert!(d.comments[19].body_html.contains("Comment 25"));
     assert_eq!(d.comments[0].author.name, "Alice");
     assert_eq!(d.parent.as_ref().map(|p| p.key.as_str()), Some("SHOP-100"));
+    let parent = d.ticket.parent.unwrap();
+    assert_eq!((parent.key.as_str(), parent.title.as_str()), ("SHOP-100", "Login hardening"));
+    assert!(parent.url.ends_with("/browse/SHOP-100"));
     let kids: Vec<_> =
         d.children.iter().map(|c| (c.ticket.r#ref.key.as_str(), c.ticket.status.category)).collect();
     assert_eq!(kids, vec![("SHOP-143", StatusCategory::Todo)]);

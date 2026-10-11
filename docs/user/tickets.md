@@ -111,6 +111,7 @@ person or the sprint is narrowing the list. `?` lists every key of the pane.
 | Priority | the provider's priorities, highest first, then no priority |
 | Sprint | active sprints, other sprints, then no sprint |
 | Assignee, Source, None | as named |
+| Parent | one group per epic or parent issue (Jira parent, GitHub parent issue, GitLab epic or parent work item, Linear parent issue else project, Redmine parent issue), its key and title as header; tickets without a parent last. Outside this grouping a row shows its parent's key, and the detail shows the parent above the title (`Enter` on it opens it). |
 
 Within a group the sort is Priority (then most recently updated), Updated, Age in status (longest first) or Key.
 Each ticket carries the provider's priority, how long it has been in its status, its sprint, estimate and due date.

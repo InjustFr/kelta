@@ -5,6 +5,8 @@
         {
           "id": "iss-uuid-12",
           "identifier": "ENG-12",
+          "parent": { "id": "iss-uuid-10", "identifier": "ENG-10", "title": "Auth epic", "url": "https://linear.app/acme/issue/ENG-10" },
+          "project": { "name": "Q4 auth", "url": "https://linear.app/acme/project/q4" },
           "title": "Fix login redirect",
           "url": "https://linear.app/acme/issue/ENG-12/fix-login-redirect",
           "updatedAt": "2026-10-01T08:30:00.000Z",
@@ -39,6 +41,8 @@
         {
           "id": "iss-uuid-13",
           "identifier": "ENG-13",
+          "parent": null,
+          "project": { "name": "Q4 auth", "url": "https://linear.app/acme/project/q4" },
           "title": "Write docs",
           "url": "https://linear.app/acme/issue/ENG-13/write-docs",
           "updatedAt": "2026-10-01T08:30:00.000Z",

@@ -3,6 +3,7 @@
     "nodes": [
       {
         "id": "I_12",
+        "parent": { "number": 10, "title": "Checkout epic", "url": "https://github.com/acme/shop/issues/10", "repository": { "nameWithOwner": "acme/shop" } },
         "projectItems": {
           "nodes": [
             {

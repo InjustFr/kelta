@@ -16,7 +16,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -237,6 +237,15 @@ impl GitlabIssues {
             sprint: sprint(v, &common::today()),
             estimate: estimate(v),
             due: s(v, "due_date").map(str::to_owned),
+            // The epic (Premium); a parent work item is filled by `work_item_parents`.
+            parent: v.get("epic").filter(|e| !e.is_null()).and_then(|e| {
+                let url = s(e, "url").unwrap_or("");
+                Some(TicketParent {
+                    key: format!("&{}", e.get("iid")?.as_u64()?),
+                    title: s(e, "title").unwrap_or("").to_owned(),
+                    url: if url.starts_with('/') { format!("{}{url}", self.web) } else { url.to_owned() },
+                })
+            }),
         })
     }
 
@@ -283,6 +292,50 @@ impl GitlabIssues {
         out
     }
 
+    /// Parent work items (the hierarchy widget) of the tickets without an epic, one GraphQL query per
+    /// project. A server without work items or a failed call leaves them without a parent.
+    async fn work_item_parents(&self, tickets: &mut [Ticket]) {
+        const Q: &str = "query($p:ID!,$iids:[String!]){ project(fullPath:$p){ workItems(iids:$iids){ nodes{ iid \
+            widgets{ ... on WorkItemWidgetHierarchy { parent{ title webUrl reference(full:true) } } } } } } }";
+        let url = format!("{}/graphql", self.api.strip_suffix("/v4").unwrap_or(&self.api));
+        let mut projects: Vec<String> =
+            tickets.iter().filter(|t| t.parent.is_none()).filter_map(|t| t.project_hint.clone()).collect();
+        projects.sort();
+        projects.dedup();
+        for p in projects {
+            let iids: Vec<&str> = tickets
+                .iter()
+                .filter(|t| t.parent.is_none() && t.project_hint.as_deref() == Some(p.as_str()))
+                .filter_map(|t| t.r#ref.key.rsplit_once('#').map(|(_, i)| i))
+                .collect();
+            let body = json!({"query": Q, "variables": {"p": p, "iids": iids}});
+            let Ok(r) = self.json(HttpRequest::post(&url).json(body)).await else { continue };
+            for n in r
+                .body
+                .pointer("/data/project/workItems/nodes")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let parent = n
+                    .get("widgets")
+                    .and_then(Value::as_array)
+                    .and_then(|ws| ws.iter().find_map(|w| w.get("parent").filter(|p| !p.is_null())));
+                let (Some(parent), Some(iid)) = (parent, s(n, "iid")) else { continue };
+                let key = format!("{p}#{iid}");
+                if let (Some(t), Some(pk)) =
+                    (tickets.iter_mut().find(|t| t.r#ref.key == key), s(parent, "reference"))
+                {
+                    t.parent = Some(TicketParent {
+                        key: pk.to_owned(),
+                        title: s(parent, "title").unwrap_or("").to_owned(),
+                        url: s(parent, "webUrl").unwrap_or("").to_owned(),
+                    });
+                }
+            }
+        }
+    }
+
     /// Labels `<scope>::*` of a project (and its ancestor groups), in server order.
     async fn scoped_labels(&self, project: &str, scope: &str) -> Result<Vec<String>, KeltaError> {
         let resp = self
@@ -327,7 +380,13 @@ impl GitlabIssues {
 
     async fn put(&self, project: &str, iid: u64, body: Value) -> Result<Ticket, KeltaError> {
         let v = self.json(HttpRequest::put(self.issue_url(project, iid, "")).json(body)).await?.body;
-        self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))
+        let mut ticket = [self
+            .ticket_from(&v)
+            .ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))?];
+        // The store replaces the ticket wholesale: keep its work-item parent.
+        self.work_item_parents(&mut ticket).await;
+        let [ticket] = ticket;
+        Ok(ticket)
     }
 
     /// The project's `priority::<name>` labels (project and group ones) as names, highest first.
@@ -404,11 +463,12 @@ impl GitlabIssues {
             req = req.query("labels", l.join(","));
         }
         let resp = self.json(req.with_etag()).await?;
-        let items: Vec<Ticket> = resp
+        let mut items: Vec<Ticket> = resp
             .body
             .as_array()
             .map(|a| a.iter().filter_map(|i| self.ticket_from(i)).collect())
             .unwrap_or_default();
+        self.work_item_parents(&mut items).await;
         let has_next = resp.headers.get("x-next-page").is_some_and(|v| !v.trim().is_empty());
         Ok(Page { items, next: has_next.then_some(Cursor::Page(page + 1)) })
     }
@@ -459,9 +519,11 @@ impl Tracker for GitlabIssues {
     async fn get(&self, t: &TicketRef) -> Result<TicketDetail, KeltaError> {
         let (project, iid) = Self::split(t)?;
         let raw = self.fetch_raw(&project, iid).await?;
-        let ticket = self
+        let mut ticket = [self
             .ticket_from(&raw)
-            .ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))?;
+            .ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))?];
+        self.work_item_parents(&mut ticket).await;
+        let [ticket] = ticket;
         let req = HttpRequest::get(self.issue_url(&project, iid, "/notes"))
             .query("sort", "desc")
             .query("order_by", "created_at")
@@ -500,13 +562,19 @@ impl Tracker for GitlabIssues {
         comments.reverse(); // newest first on the wire, oldest first in the contract
         let children = self.children(&project, iid).await.into_iter().map(common::child).collect();
         let body = s(&raw, "description").unwrap_or("").to_owned();
+        // An issue parent opens in Kelta; an epic (`group&5`) does not.
+        let parent = ticket.parent.as_ref().filter(|p| p.key.contains('#')).map(|p| TicketRef {
+            account: ticket.r#ref.account.clone(),
+            key: p.key.clone(),
+            id: p.key.clone(),
+        });
         Ok(TicketDetail {
             ticket,
             body_html: markdown::to_html(&body),
             body_md: body,
             body_format: BodyFormat::Markdown,
+            parent,
             comments,
-            parent: None,
             children,
             prs: Vec::new(),
             caps: Default::default(),

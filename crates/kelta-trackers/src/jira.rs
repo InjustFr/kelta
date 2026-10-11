@@ -15,7 +15,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, JiraFlavor, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -285,6 +285,15 @@ impl JiraTracker {
                 .or_else(|| f.get("timeoriginalestimate")?.as_u64().map(duration)),
             due: s(f, "duedate").map(str::to_owned),
             project_hint: f.get("project").and_then(|p| s(p, "key")).map(str::to_owned),
+            // Cloud returns the epic as `parent` in team- and company-managed projects alike.
+            parent: f.get("parent").and_then(|p| {
+                let key = s(p, "key")?;
+                Some(TicketParent {
+                    key: key.to_owned(),
+                    title: p.pointer("/fields/summary").and_then(Value::as_str).unwrap_or("").to_owned(),
+                    url: format!("{}/browse/{key}", self.web),
+                })
+            }),
         })
     }
 
