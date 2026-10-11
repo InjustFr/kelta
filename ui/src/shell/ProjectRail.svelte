@@ -18,7 +18,8 @@
   } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
-  import { formatChord } from '$lib/ui/format';
+  import { currentPlatform, formatChord } from '$lib/ui/format';
+  import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
   import { outsidePhase } from '../views/work/phase';
@@ -52,6 +53,7 @@
   } from './nav';
   import { droppedOutside, paneDrag } from './paneDrag.svelte';
   import { peekHover, peekTarget } from './peek.svelte';
+  import { SIDEBAR_MAX, SIDEBAR_MIN, sidebar } from './sidebar.svelte';
 
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
@@ -267,6 +269,53 @@
     focusPaneById(x.project, x.tab.id, x.pane.id);
   }
 
+  /** `label (Ctrl+Shift+K)`: the tooltip keeps the chord when its badge has no room (#362). */
+  function tip(label: string, id: string): string {
+    const c = chordFor(id);
+    return c ? `${label} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})` : label;
+  }
+
+  // ---- width: drag or arrow keys on the right edge (#362) ----
+
+  let nav = $state<HTMLElement>();
+  let dragging = $state(false);
+  let dragX = 0;
+  const dragKey = {};
+
+  function onEdgeDown(e: PointerEvent): void {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragX = sidebar.width; // a click without movement must not reuse a stale drag position
+    dragging = true;
+  }
+
+  function onEdgeMove(e: PointerEvent): void {
+    if (!dragging || !nav) return;
+    dragX = e.clientX - nav.getBoundingClientRect().left;
+    // One resize per frame: the terminals refit on every width change.
+    frames.schedule(dragKey, () => sidebar.resize(dragX, false));
+  }
+
+  function onEdgeUp(e: PointerEvent): void {
+    if (!dragging) return;
+    dragging = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    frames.cancel(dragKey);
+    sidebar.resize(dragX);
+  }
+
+  function onEdgeKey(e: KeyboardEvent): void {
+    const step = e.shiftKey ? 64 : 16;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      sidebar.resize(sidebar.width + (e.key === 'ArrowLeft' ? -step : step));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      sidebar.toggle();
+    }
+  }
+
   function toolHint(tool: ToolInfo): string {
     if (tool.installed === false) return t('{tool}: not installed', { tool: tool.label });
     return tool.description ? `${tool.label}: ${tool.description}` : tool.label;
@@ -319,16 +368,24 @@
   />
 {/snippet}
 
-<nav class="rail" aria-label={t('Projects')} data-testid="rail">
+<nav
+  class="rail"
+  class:compact={sidebar.compact}
+  aria-label={t('Projects')}
+  data-testid="rail"
+  style:--k-rail-width="{sidebar.width}px"
+  bind:this={nav}
+>
   <button
     type="button"
     class="search"
-    title={t('Search or run a command')}
+    title={tip(t('Search or run a command'), 'palette.open')}
     onclick={() => void dispatch('palette.open')}
     data-testid="rail-search"
   >
-    <Icon name="search" size={16} />
-    <span class="search-text">{t('Search or run…')}</span>
+    <span class="lead"
+      ><Icon name="search" size={16} /><span class="search-text">{t('Search or run…')}</span></span
+    >
     {@render chord('palette.open')}
   </button>
 
@@ -615,15 +672,47 @@
     <button
       type="button"
       class="item settings"
-      title={t('Settings')}
+      title={tip(t('Settings'), 'settings.open')}
       onclick={() => void dispatch('settings.open')}
       data-testid="rail-settings"
     >
-      <span class="tile plain"><Icon name="settings" size={18} /></span>
-      <span class="text"><span class="name">{t('Settings')}</span></span>
+      <span class="lead">
+        <span class="tile plain"><Icon name="settings" size={18} /></span>
+        <span class="text"><span class="name">{t('Settings')}</span></span>
+      </span>
       {@render chord('settings.open')}
     </button>
+    <IconButton
+      icon="panel-left"
+      size="sm"
+      label={sidebar.compact ? t('Expand sidebar') : t('Collapse sidebar')}
+      chord={chordFor('rail.toggle')}
+      aria-expanded={!sidebar.compact}
+      onclick={() => sidebar.toggle()}
+      data-testid="rail-toggle"
+    />
   </div>
+
+  {#if !sidebar.compact}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="edge"
+      class:dragging
+      role="separator"
+      aria-label={t('Sidebar width')}
+      aria-orientation="vertical"
+      aria-valuenow={sidebar.width}
+      aria-valuemin={SIDEBAR_MIN}
+      aria-valuemax={SIDEBAR_MAX}
+      tabindex="0"
+      data-testid="rail-edge"
+      onpointerdown={onEdgeDown}
+      onpointermove={onEdgeMove}
+      onpointerup={onEdgeUp}
+      onpointercancel={onEdgeUp}
+      onkeydown={onEdgeKey}
+    ></div>
+  {/if}
 </nav>
 
 {#if rowMenu}
@@ -652,6 +741,7 @@
 
 <style>
   .rail {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--k-space-3);
@@ -666,6 +756,23 @@
   button {
     font: inherit;
     color: inherit;
+  }
+
+  /* The label never gives way to its chord badge: the badge wraps onto a hidden second line (#362). */
+  .search,
+  .settings {
+    flex-wrap: wrap;
+    align-content: flex-start;
+    overflow: hidden;
+  }
+
+  .lead {
+    display: flex;
+    align-items: center;
+    gap: inherit;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
   }
 
   .search {
@@ -699,7 +806,9 @@
 
   .kbd {
     display: inline-flex;
+    align-items: center;
     flex: none;
+    height: 100%;
   }
 
   /* Global views (44px, name over status word); session and tool rows are 32px, one line. */
@@ -1008,7 +1117,7 @@
 
   .footer {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: var(--k-space-1);
     flex: none;
     padding-top: var(--k-space-3);
@@ -1016,6 +1125,8 @@
   }
 
   .settings {
+    flex: 1;
+    min-width: 0;
     height: 36px;
     color: var(--k-fg-chrome);
   }
@@ -1024,93 +1135,135 @@
     color: var(--k-fg);
   }
 
-  /* Compact sidebar: a coloured rule per project, one tile per row. Labels stay in the accessibility
-     tree and the tooltips. */
-  @media (max-width: 1099px) {
-    .rail {
-      width: var(--k-rail-width-compact);
-    }
+  /* The right edge: drag it, or ←/→ (Shift: bigger steps), Enter collapses. */
+  .edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--k-gutter-hit) / -2);
+    z-index: 3;
+    width: var(--k-gutter-hit);
+    cursor: col-resize;
+    touch-action: none;
+  }
 
-    .search {
-      align-self: center;
-      justify-content: center;
-      width: 40px;
-      padding: 0;
-    }
+  .edge::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    transition: background var(--k-duration) ease-out;
+  }
 
-    .item {
-      justify-content: center;
-      padding: 0;
-    }
+  .edge:hover::after,
+  .edge.dragging::after,
+  .edge:focus-visible::after {
+    background: var(--k-accent);
+  }
 
-    .tab-row,
-    .tool-row {
-      gap: 2px;
-      height: 28px;
-      padding: 0 2px 0 4px;
-    }
+  .edge:focus-visible {
+    outline: none;
+  }
 
-    .heading {
-      justify-content: center;
-      padding-left: 0;
-    }
+  /* Compact sidebar (collapsed, or a window below 1100px): a coloured rule per project, one tile per
+     row. Labels stay in the accessibility tree and the tooltips. */
+  .rail.compact {
+    width: var(--k-rail-width-compact);
+  }
 
-    .text,
-    .search-text,
-    .kbd,
-    h2,
-    .caption .name,
-    .launch,
-    .index,
-    .heading :global(.label),
-    .none {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-    }
+  .compact .search {
+    align-self: center;
+    justify-content: center;
+    width: 40px;
+    padding: 0;
+  }
 
-    .caption {
-      position: relative;
-      height: 9px;
-      padding: 0;
-    }
+  .compact .item {
+    justify-content: center;
+    padding: 0;
+  }
 
-    .caption::before {
-      content: '';
-      position: absolute;
-      inset: 4px var(--k-space-2) auto;
-      height: 1px;
-      background: var(--project-color);
-    }
+  .compact .tab-row,
+  .compact .tool-row {
+    gap: 2px;
+    height: 28px;
+    padding: 0 2px 0 4px;
+  }
 
-    .tools {
-      padding-top: var(--k-space-2);
-      border-top: 1px solid var(--k-border);
-    }
+  .compact .lead {
+    flex: none;
+  }
 
-    .instance,
-    .row :global(.close),
-    .caption-row :global(.more) {
-      display: none;
-    }
+  .compact .footer {
+    flex-direction: column;
+  }
 
-    .heading :global(.k-button) {
-      width: var(--k-control-height-sm);
-      padding: 0;
-      border-color: var(--k-border-strong);
-    }
+  .compact .settings {
+    flex: none;
+    width: 100%;
+  }
 
-    .badge {
-      position: absolute;
-      top: 2px;
-      left: calc(50% + 4px);
-    }
+  .compact .heading {
+    justify-content: center;
+    padding-left: 0;
+  }
 
-    .badge.muted {
-      display: block;
-    }
+  .compact .text,
+  .compact .search-text,
+  .compact .kbd,
+  .compact h2,
+  .compact .caption .name,
+  .compact .launch,
+  .compact .index,
+  .compact .heading :global(.label),
+  .compact .none {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .compact .caption {
+    position: relative;
+    height: 9px;
+    padding: 0;
+  }
+
+  .compact .caption::before {
+    content: '';
+    position: absolute;
+    inset: 4px var(--k-space-2) auto;
+    height: 1px;
+    background: var(--project-color);
+  }
+
+  .compact .tools {
+    padding-top: var(--k-space-2);
+    border-top: 1px solid var(--k-border);
+  }
+
+  .compact .instance,
+  .compact .row :global(.close),
+  .compact .caption-row :global(.more) {
+    display: none;
+  }
+
+  .compact .heading :global(.k-button) {
+    width: var(--k-control-height-sm);
+    padding: 0;
+    border-color: var(--k-border-strong);
+  }
+
+  .compact .badge {
+    position: absolute;
+    top: 2px;
+    left: calc(50% + 4px);
+  }
+
+  .compact .badge.muted {
+    display: block;
   }
 </style>

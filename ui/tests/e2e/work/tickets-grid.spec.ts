@@ -82,10 +82,10 @@ test('the title takes the free width: its cell keeps a fixed share of the row wi
   await expect(row).not.toHaveAttribute('aria-current', 'true');
   await expect(row.locator('.c-title .text')).toHaveText(LONG);
   // Layout, not glyphs: the tracks are sized in px around one 1fr title, so the share holds whatever the
-  // runner's system-ui font. At #251's 1440px the share is 0.44: the ~295px cell that showed 45 of the 60
+  // runner's system-ui font. At #251's 1440px the share is 0.44 with the 240px sidebar, 0.416 with #362's 288px default: the ~295px cell that showed 45 of the 60
   // characters with macOS's font (42 with the ubuntu runner's, #256).
   const share = await row.evaluate((r) => r.querySelector('.c-title .text')!.clientWidth / r.clientWidth);
-  expect(share).toBeGreaterThanOrEqual(0.43);
+  expect(share).toBeGreaterThanOrEqual(0.41);
 });
 
 for (const scheme of ['light', 'dark'] as const) {
