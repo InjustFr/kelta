@@ -11,16 +11,18 @@
     /** Picker mode (`ui.pickProject`): Home is left out and the pick is handed over, not activated. */
     placeholder?: string;
     onpick?: (id: string) => void;
+    /** "Open project": only the closed projects. */
+    closedOnly?: boolean;
   }
 
-  let { onclose, placeholder, onpick }: Props = $props();
+  let { onclose, placeholder, onpick, closedOnly = false }: Props = $props();
 
   let query = $state('');
 
   const results = $derived(
     rank(
       projects.list
-        .filter((p) => !onpick || !p.builtin)
+        .filter((p) => (!onpick || !p.builtin) && (!closedOnly || !p.open))
         .map((p) => ({
           id: p.id,
           label: p.name,
@@ -46,7 +48,7 @@
 </script>
 
 <Picker
-  title={onpick ? t('Choose a project') : t('Switch project')}
+  title={onpick ? t('Choose a project') : closedOnly ? t('Open project') : t('Switch project')}
   placeholder={placeholder ?? t('Project name…')}
   items={results}
   {query}
@@ -54,5 +56,5 @@
   onpick={(id) => void pick(id)}
   {onclose}
   testid="switcher"
-  empty={t('No matching project')}
+  empty={closedOnly && !query ? t('No closed project') : t('No matching project')}
 />
