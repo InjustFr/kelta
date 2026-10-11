@@ -170,7 +170,8 @@ impl Core {
             .filter(|w| w.state != WorkState::Finished)
             .filter(|w| w.ticket.as_ref().is_some_and(|t| t.account == ticket.account && t.key == ticket.key))
             .find_map(|w| {
-                let r = w.run.as_ref().filter(|r| r.state == RunState::Running)?;
+                let r =
+                    w.run.as_ref().filter(|r| matches!(r.state, RunState::Running | RunState::Blocked))?;
                 self.live_session(r.session_id.as_ref()?)
             }))
     }

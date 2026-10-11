@@ -173,6 +173,13 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert!(again.running);
     assert_eq!(again.session.id, info.id);
     assert_eq!(h.term.spawned_ids().len(), spawned);
+    // A blocked run keeps its session and its claim: it still opens.
+    core.work_report("SHOP-142", None, RunState::Blocked, Some("question".into()), None, Some(&info.id))
+        .await
+        .unwrap();
+    let blocked = h.core.workflow_run(t.clone(), "shared").await.unwrap();
+    assert!(blocked.running);
+    assert_eq!(blocked.session.id, info.id);
     let err = h.core.workflow_run(t.clone(), "nope").await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
 
