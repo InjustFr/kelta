@@ -134,6 +134,10 @@ pub fn worktree_path(settings: &Settings, ctx: &Ctx) -> Result<PathBuf, KeltaErr
     if !p.is_absolute() {
         return Err(KeltaError::invalid(format!("worktree.root must be absolute: {}", p.display())));
     }
+    // A placeholder value (ticket key from a tracker) must not climb out of the root.
+    if p.components().any(|c| c == std::path::Component::ParentDir) {
+        return Err(KeltaError::invalid(format!("worktree.root must not contain `..`: {}", p.display())));
+    }
     Ok(p)
 }
 
@@ -358,6 +362,16 @@ mod tests {
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
         item.state = WorkState::Finished;
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+    }
+
+    #[test]
+    fn worktree_path_refuses_parent_dir_from_a_key() {
+        let mut s = Settings::default();
+        s.worktree.root = "/wt/{key}".into();
+        let ok = Ctx::new().with("key", "SHOP-1");
+        assert_eq!(worktree_path(&s, &ok).unwrap(), PathBuf::from("/wt/SHOP-1"));
+        let evil = Ctx::new().with("key", "../x");
+        assert!(worktree_path(&s, &evil).is_err());
     }
 
     #[test]
