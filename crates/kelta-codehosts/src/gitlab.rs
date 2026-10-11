@@ -6,7 +6,7 @@
 //! (count + max id).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use kelta_http::util::{percent_encode, trim_url, url_host};
@@ -22,11 +22,14 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind};
 use kelta_proto::tracker::User;
 use parking_lot::Mutex;
+use regex::Regex;
 use serde_json::{Value, json};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::common::{MAX_LOGS, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s};
+use crate::common::{
+    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s,
+};
 
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
@@ -375,6 +378,18 @@ fn open_discussions(discussions: &Value) -> Vec<(&Value, Vec<&Value>)> {
             (!notes.is_empty() && !resolvable.is_empty() && !resolved).then_some((d, notes))
         })
         .collect()
+}
+
+/// Tail of a GitLab job trace: no section markers (`section_start:<ts>:<name>[opts]`), ANSI or
+/// `\r` progress overwrites.
+fn gitlab_log_tail(text: &str) -> String {
+    static SECTION: OnceLock<Option<Regex>> = OnceLock::new();
+    let section = SECTION
+        .get_or_init(|| Regex::new(r"section_(?:start|end):\d+:[^\s\[]*(?:\[[^\]]*\])?").ok())
+        .as_ref();
+    let lines: Vec<String> =
+        text.lines().map(|l| clean_log_line(&section.map_or(l.into(), |re| re.replace_all(l, "")))).collect();
+    log_tail(&lines)
 }
 
 fn ci_from(status: Option<&str>) -> CiState {
@@ -809,7 +824,7 @@ impl CodeHost for GitlabHost {
             let log_tail = match j.get("id").and_then(Value::as_u64) {
                 Some(id) if i < MAX_LOGS => {
                     let req = HttpRequest::get(self.project_url(&r.repo, &format!("/jobs/{id}/trace")));
-                    self.auth.send_text(req).await.ok().map(|t| log_tail(&t.body, false))
+                    self.auth.send_text(req).await.ok().map(|t| gitlab_log_tail(&t.body))
                 }
                 _ => None,
             };
@@ -933,4 +948,19 @@ fn pending_reviewers(body: &Value) -> (Vec<String>, Option<String>) {
 // author act, even after a newer push; compare with the push time if it misleads.
 fn changes_requested(body: &Value) -> bool {
     body.as_array().into_iter().flatten().any(|x| s(x, "state") == Some("requested_changes"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn traces_lose_sections_ansi_and_progress() {
+        let trace = "\x1b[0Ksection_start:1560896352:build_script[collapsed=true]\r\x1b[0K\x1b[32;1mRunning\x1b[0;m\n\
+                     \x1b]8;;https://x.test\x07link\x1b]8;;\x07\n\
+                     10%\r50%\r100%\n\
+                     \x1b[0Ksection_end:1560896353:build_script\r\x1b[0K\n\
+                     ##[error] stays: not GitHub\nlast";
+        assert_eq!(gitlab_log_tail(trace), "Running\nlink\n100%\n\n##[error] stays: not GitHub\nlast");
+    }
 }

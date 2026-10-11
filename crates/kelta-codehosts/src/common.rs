@@ -84,28 +84,16 @@ pub const LOG_TAIL_LINES: usize = 80;
 /// Failed checks whose logs are fetched (each is one request).
 pub const MAX_LOGS: usize = 5;
 
-/// Last `LOG_TAIL_LINES` lines of a job log, cleaned: no ANSI sequences, GitLab section markers,
-/// `\r` progress overwrites or GitHub timestamps. A GitHub log is cut after its last `##[error]`
-/// line, which drops the "Post job cleanup" steps.
-pub fn log_tail(text: &str, github: bool) -> String {
-    static RES: OnceLock<Option<(Regex, Regex)>> = OnceLock::new();
-    // ANSI CSI / OSC sequences and GitLab section markers; then GitHub's line timestamp.
-    let res = RES.get_or_init(|| {
-        let noise = r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|section_(?:start|end):\d+:[^\s\[]*(?:\[[^\]]*\])?";
-        Some((Regex::new(noise).ok()?, Regex::new(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ").ok()?))
-    });
-    let Some((noise, stamp)) = res else { return String::new() };
-    let mut lines: Vec<String> = text
-        .lines()
-        .map(|l| {
-            let l = noise.replace_all(l, "");
-            let l = l.trim_end_matches('\r').rsplit('\r').next().unwrap_or("");
-            stamp.replace(l, "").into_owned()
-        })
-        .collect();
-    if github && let Some(last) = lines.iter().rposition(|l| l.contains("##[error]")) {
-        lines.truncate(last + 1);
-    }
+/// A job-log line without ANSI CSI / OSC sequences and `\r` progress overwrites.
+pub fn clean_log_line(line: &str) -> String {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)").ok());
+    let l = re.as_ref().map_or(line.into(), |re| re.replace_all(line, ""));
+    l.trim_end_matches('\r').rsplit('\r').next().unwrap_or("").to_owned()
+}
+
+/// The last `LOG_TAIL_LINES` of `lines`, joined.
+pub fn log_tail(lines: &[String]) -> String {
     lines[lines.len().saturating_sub(LOG_TAIL_LINES)..].join("\n")
 }
 
@@ -175,34 +163,18 @@ mod tests {
 
     #[test]
     fn tail_keeps_the_last_lines() {
-        let text: String = (1..=100).map(|i| format!("l{i}\n")).collect();
-        let t = log_tail(&text, false);
+        let lines: Vec<String> = (1..=100).map(|i| format!("l{i}")).collect();
+        let t = log_tail(&lines);
         assert!(t.starts_with("l21\n") && t.ends_with("l100"));
         assert_eq!(t.lines().count(), LOG_TAIL_LINES);
-        assert_eq!(log_tail("a\nb", false), "a\nb");
+        assert_eq!(log_tail(&["a".into(), "b".into()]), "a\nb");
     }
 
     #[test]
-    fn tail_cleans_gitlab_traces() {
-        let trace = "\x1b[0Ksection_start:1560896352:build_script[collapsed=true]\r\x1b[0K\x1b[32;1mRunning\x1b[0;m\n\
-                     \x1b]8;;https://x.test\x07link\x1b]8;;\x07\n\
-                     10%\r50%\r100%\n\
-                     \x1b[0Ksection_end:1560896353:build_script\r\x1b[0K\n\
-                     ##[error] stays: not GitHub\nlast";
-        assert_eq!(log_tail(trace, false), "Running\nlink\n100%\n\n##[error] stays: not GitHub\nlast");
-    }
-
-    #[test]
-    fn tail_cleans_github_logs() {
-        let log = "2024-05-01T10:00:00.1234567Z ##[group]Run cargo test\n\
-                   2024-05-01T10:00:01.0000000Z test a ... FAILED\n\
-                   2024-05-01T10:00:02.0000000Z ##[error]Process completed with exit code 101.\n\
-                   2024-05-01T10:00:03.0000000Z Post job cleanup.\n\
-                   2024-05-01T10:00:04.0000000Z Cleaning up orphan processes";
-        assert_eq!(
-            log_tail(log, true),
-            "##[group]Run cargo test\ntest a ... FAILED\n##[error]Process completed with exit code 101."
-        );
+    fn log_lines_lose_ansi_and_progress_overwrites() {
+        assert_eq!(clean_log_line("\x1b[32;1mRunning\x1b[0;m"), "Running");
+        assert_eq!(clean_log_line("\x1b]8;;https://x.test\x07link\x1b]8;;\x07"), "link");
+        assert_eq!(clean_log_line("10%\r50%\r100%\r"), "100%");
     }
 
     #[test]
