@@ -1339,7 +1339,9 @@ impl WorkService {
             name: Self::tab_title(item, j),
             model: plan.map(|p| p.claude.model.clone()).unwrap_or(profile.model),
             effort: plan.map(|p| p.claude.effort).unwrap_or(profile.effort),
-            permission_mode: plan.map(|p| p.claude.permission_mode).unwrap_or(profile.permission_mode),
+            permission_mode: plan
+                .map_or(profile.permission_mode, |p| p.claude.permission_mode)
+                .or_else(|| env.core.claude_permission_mode()),
             settings_file: run.join(claude::SETTINGS_FILE),
             mcp_file: port.filter(|_| env.settings.claude.mcp).map(|_| run.join(claude::MCP_FILE)),
             allowed_tools: env.settings.claude.allowed_tools.clone(),

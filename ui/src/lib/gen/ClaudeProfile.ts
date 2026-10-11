@@ -2,4 +2,9 @@
 import type { ClaudeEffort } from "./ClaudeEffort";
 import type { PermissionMode } from "./PermissionMode";
 
-export type ClaudeProfile = { model: string, effort: ClaudeEffort, permission_mode: PermissionMode, };
+export type ClaudeProfile = { model: string, effort: ClaudeEffort, 
+/**
+ * Forced with `--permission-mode`; unset = the last mode a Claude session reported, else Claude's
+ * own `permissions.defaultMode`.
+ */
+permission_mode: PermissionMode | null, };

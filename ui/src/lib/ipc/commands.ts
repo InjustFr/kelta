@@ -33,6 +33,7 @@ import type {
   LayoutSaveResult,
   MergeMethod,
   PerfSnapshot,
+  PermissionMode,
   Placement,
   PluginId,
   PluginInfo,
@@ -122,6 +123,8 @@ export interface Commands {
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
   claude_mcp_remove: { args: NoArgs; result: null };
+  /** The last mode a Claude session switched to (#277); `null` = Claude's own default. */
+  claude_permission_mode: { args: NoArgs; result: PermissionMode | null };
   app_update_status: { args: NoArgs; result: UpdateStatus };
   /** Checks now and installs what it finds (resolves once done). */
   app_update_check: { args: NoArgs; result: UpdateStatus };
@@ -375,6 +378,7 @@ export const COMMAND_NAMES = [
   'claude_mcp_status',
   'claude_mcp_install',
   'claude_mcp_remove',
+  'claude_permission_mode',
   'app_update_status',
   'app_update_check',
   'app_restart',
@@ -555,6 +559,7 @@ export const notifyTest = wrap('notify_test');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
+export const claudePermissionMode = wrap('claude_permission_mode');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');

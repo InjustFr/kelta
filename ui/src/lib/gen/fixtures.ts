@@ -924,7 +924,7 @@ export const startWorkPlan: StartWorkPlan = {
   "claude": {
     "effort": "high",
     "model": "opus",
-    "permission_mode": "acceptEdits",
+    "permission_mode": null,
     "profile": "default",
     "prompt": "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing."
   },
@@ -1930,7 +1930,7 @@ export const settingsDefault: Settings = {
       "default": {
         "effort": "high",
         "model": "opus",
-        "permission_mode": "acceptEdits"
+        "permission_mode": null
       },
       "plan": {
         "effort": "high",
