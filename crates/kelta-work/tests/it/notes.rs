@@ -268,3 +268,45 @@ async fn a_prompt_held_while_the_stop_delivery_runs_is_not_lost() {
     }
     panic!("the second message was dropped: {}", fx.core.written_text(&claude));
 }
+
+#[tokio::test]
+async fn a_message_held_while_a_saga_step_runs_survives_the_step_save() {
+    if !has_git() {
+        eprintln!("skipping: git not found");
+        return;
+    }
+    let fx = Fx::new();
+    fx.settings(|s| s.worktree.setup = vec!["true".into()]);
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: samples::ticket_ref() }).await.unwrap();
+    let start = tokio::spawn({
+        let w = w.clone();
+        async move { w.start(plan).await }
+    });
+    let first = fx.wait_session(|s| s.kind == SessionKind::Setup).await;
+    fx.core.exit_session(&first, 0);
+    let item = start.await.unwrap().unwrap();
+    let claude = fx.spawned_of(|k| *k == SessionKind::Claude).into_iter().next().unwrap().id;
+
+    // Setup re-runs and blocks the saga; meanwhile Claude works and a message is held.
+    let retry = tokio::spawn({
+        let (w, id) = (w.clone(), item.id.clone());
+        async move { w.retry_step(&id, "setup").await }
+    });
+    let setup = fx.wait_session(|s| s.kind == SessionKind::Setup && s.id != first).await;
+    let mut s = fx.core.session_get(&claude).unwrap();
+    (s.status, s.status_source) = (SessionStatus::Working, StatusSource::Hook);
+    fx.core.insert_session(s);
+    assert!(w.deliver_prompt(&item.id, "held mid-step").await.unwrap());
+    fx.core.exit_session(&setup, 0);
+    retry.await.unwrap().unwrap();
+
+    stop(&fx, &claude);
+    for _ in 0..500 {
+        if !fx.core.written_text(&claude).is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(fx.core.written_text(&claude), "\x1b[200~held mid-step\x1b[201~\r");
+}
