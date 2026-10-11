@@ -63,4 +63,37 @@ test.describe('peek', () => {
     await page.locator(`[data-row="w:0199a6b2-0000-7000-8000-00000000a002"]`).hover();
     await expect(peek(page)).toHaveAttribute('data-session-id', SESSIONS.billingClaude);
   });
+
+  test('the reply is one control-height line; a long last message wraps at 480px', async ({ page }) => {
+    await boot(page);
+    const long = `Done.\n\n${'Refactored the payment retry wrapper and its tests. '.repeat(8)}\n${'x'.repeat(300)}`;
+    await page.evaluate(
+      ([id, preview]) => {
+        const { sessions } = window.__kelta!.stores;
+        const s = sessions.get(id)!;
+        sessions.upsert({ ...s, status: 'done', attention: 'done', claude: { ...s.claude!, preview } });
+      },
+      [SESSIONS.shopClaude, long] as const,
+    );
+    await page
+      .locator('[data-testid="rail-row"][data-tab-id="shop-t1"]')
+      .hover({ position: { x: 20, y: 10 } });
+    await expect(page.getByTestId('peek-message')).toContainText('Refactored the payment');
+
+    const control = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--k-control-height-sm')),
+    );
+    const reply = (await page.getByTestId('peek-reply').boundingBox())!;
+    expect(reply.height).toBeLessThanOrEqual(control + 2);
+    const box = (await peek(page).boundingBox())!;
+    expect(reply.width).toBeGreaterThan(box.width - 40); // full width, not the toolbar's 240px
+
+    const overflows = await page.evaluate(() =>
+      ['peek', 'peek-message'].map((t) => {
+        const el = document.querySelector<HTMLElement>(`[data-testid="${t}"]`)!;
+        return el.scrollWidth > el.clientWidth;
+      }),
+    );
+    expect(overflows).toEqual([false, false]);
+  });
 });
