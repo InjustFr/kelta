@@ -766,8 +766,11 @@ pub mod q {
 
     /// The items of `project` (all when `None`), their steps read in one query.
     fn work_select(c: &Connection, project: Option<&ProjectId>, open_only: bool) -> R<Vec<WorkItem>> {
+        // CASE, not AND: json_extract errors on malformed JSON and would abort the query; an invalid row
+        // passes the filter and is skipped by finish_work below.
         let filter = if open_only {
-            "(?1 IS NULL OR project_id = ?1) AND json_extract(state_json, '$.kind') <> 'finished'"
+            "(?1 IS NULL OR project_id = ?1) AND \
+             (CASE WHEN json_valid(state_json) THEN json_extract(state_json, '$.kind') END) IS NOT 'finished'"
         } else {
             "(?1 IS NULL OR project_id = ?1)"
         };
