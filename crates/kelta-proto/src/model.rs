@@ -11,8 +11,7 @@ use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
 use crate::settings::{
-    ClaudeEffort, ClaudeHost, CodeHostBinding, PermissionMode, StartOption, TrackerBinding,
-    TransitionTarget,
+    ClaudeEffort, ClaudeHost, CodeHostBinding, PermissionMode, StartOption, TrackerBinding, TransitionTarget,
 };
 use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 
