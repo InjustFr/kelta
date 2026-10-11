@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SettingsSectionProps } from '$app/registry';
+  import type { PermissionMode } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { toasts } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
@@ -11,12 +12,18 @@
   // Kelta's MCP in Claude Code (user scope): undefined = loading, null = Claude Code not found.
   let installed = $state<boolean | null | undefined>(undefined);
   let busy = $state(false);
+  // Mode of sessions whose profile sets none (#277): undefined = loading, null = Claude's default.
+  let mode = $state<PermissionMode | null | undefined>(undefined);
 
   $effect(() => {
     void ipc
       .claudeMcpStatus()
       .then((s) => (installed = s))
       .catch(() => (installed = null));
+    void ipc
+      .claudePermissionMode()
+      .then((m) => (mode = m))
+      .catch(() => (mode = null));
   });
 
   async function toggle(): Promise<void> {
@@ -56,6 +63,11 @@
         {/if}
       </div>
     {/if}
+    {#if mode !== undefined}
+      <p class="mode" data-testid="claude-permission-mode">
+        Profiles without a permission mode start in: {mode ? `last used: ${mode}` : 'Claude default'}
+      </p>
+    {/if}
   {/snippet}
 </SectionForm>
 
@@ -70,6 +82,11 @@
   .mcp p {
     flex: 1;
     margin: 0;
+    color: var(--k-fg-muted);
+  }
+
+  .mode {
+    margin: 0 0 var(--k-space-3);
     color: var(--k-fg-muted);
   }
 </style>

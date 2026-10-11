@@ -26,6 +26,7 @@
     "allow-claude-mcp-status",
     "allow-claude-mcp-install",
     "allow-claude-mcp-remove",
+    "allow-claude-permission-mode",
     "allow-app-update-status",
     "allow-app-update-check",
     "allow-app-restart",

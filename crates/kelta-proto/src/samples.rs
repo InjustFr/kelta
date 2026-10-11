@@ -366,7 +366,7 @@ pub fn start_work_plan() -> StartWorkPlan {
             profile: "default".into(),
             model: "opus".into(),
             effort: ClaudeEffort::High,
-            permission_mode: PermissionMode::AcceptEdits,
+            permission_mode: None,
             prompt: "Work on SHOP-142: Rate-limit login. The full ticket is in /tmp/kelta-1000/s/01928f6e/ticket.md. Read it, then propose a short plan before editing.".into(),
         },
         side_effects: SideEffects {

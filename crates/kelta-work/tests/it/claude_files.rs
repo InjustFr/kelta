@@ -102,7 +102,7 @@ fn argv_with_spaces() {
         name: "SHOP-142 Rate-limit login".into(),
         model: "opus".into(),
         effort: ClaudeEffort::High,
-        permission_mode: PermissionMode::AcceptEdits,
+        permission_mode: Some(PermissionMode::AcceptEdits),
         settings_file: run.join("claude-settings.json"),
         mcp_file: Some(run.join("mcp.json")),
         allowed_tools: vec!["mcp__kelta__*".into()],

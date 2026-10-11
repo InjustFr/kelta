@@ -385,6 +385,23 @@ function setPath(root: JsonValue, path: string, value: JsonValue | undefined): J
   return out;
 }
 
+/** Core's effective value carries serde defaults for the keys a `[[sources]]` entry omits (#281). */
+const withSourceDefaults = (s: Partial<Source>): Source => ({
+  id: '',
+  label: '',
+  projects: [],
+  routes: [],
+  ...s,
+  tracker: {
+    account: '',
+    views: [],
+    columns: [],
+    status_map: { start: null, review: null, done: null },
+    repo_rules: [],
+    ...s.tracker,
+  },
+});
+
 function getPath(root: JsonValue, path: string): JsonValue | undefined {
   let node: JsonValue | undefined = root;
   for (const part of path.split('.').filter(Boolean)) {
@@ -588,10 +605,9 @@ export function createMockTransport(options: MockOptions = {}): {
     return clone(s);
   };
   const settingsWith = (layer: Layer, path: string, value: JsonValue | undefined): EffectiveSettings => {
-    state.settings = {
-      value: setPath(state.settings.value, path, value),
-      sources: { ...state.settings.sources },
-    };
+    const next = setPath(state.settings.value, path, value) as unknown as Settings;
+    if (path.split('.')[0] === 'sources') next.sources = (next.sources ?? []).map(withSourceDefaults);
+    state.settings = { value: next as unknown as JsonValue, sources: { ...state.settings.sources } };
     if (value === undefined) delete state.settings.sources[path];
     else state.settings.sources[path] = layer;
     if (path.split('.')[0] === 'sources') syncProjectTrackers();
@@ -621,6 +637,7 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     claude_mcp_status: () => claudeMcp,
+    claude_permission_mode: () => 'auto',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;

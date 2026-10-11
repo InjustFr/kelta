@@ -3,6 +3,7 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sheetRegistry } from '$app/registry';
+import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import type { PaneContent, Settings } from '$lib/gen';
@@ -287,6 +288,25 @@ describe('TicketsPane states', () => {
     const Sheet = (await sheetRegistry['tracker.source_picker']()).default;
     render(Sheet, { props: { ...ui.sheet!.props, onclose: () => ui.closeSheet() } });
     expect(await screen.findByText('Add a ticket source')).toBeTruthy();
+  });
+
+  it('the source menu takes sources that omit routes, columns or views (#281)', async () => {
+    const view = { id: 'sp', label: 'Sparse', jql: 'x' };
+    const value = [
+      ...mockSources(),
+      {
+        id: 'sparse',
+        label: 'Sparse board',
+        projects: ['shop'],
+        tracker: { account: 'jira-acme', views: [view] },
+      },
+      { id: 'bare', label: 'Bare board', projects: ['shop'], tracker: { account: 'jira-acme' } },
+    ];
+    settings.accept(null, await ipc.settingsSet({ layer: 'global', path: 'sources', value: value as never }));
+    mountBoard('list');
+    await fireEvent.click(await screen.findByRole('button', { name: /All sources/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Sparse board' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Bare board' })).toBeNull();
   });
 
   it('says why an empty Unassigned list is empty and offers Team', async () => {

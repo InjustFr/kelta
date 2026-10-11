@@ -18,6 +18,7 @@ pub const COMMANDS: &[&str] = &[
     "claude_mcp_status",
     "claude_mcp_install",
     "claude_mcp_remove",
+    "claude_permission_mode",
     "app_update_status",
     "app_update_check",
     "app_restart",
