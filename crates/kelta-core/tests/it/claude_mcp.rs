@@ -131,17 +131,24 @@ async fn concurrent_installs_then_remove_close_the_endpoint() {
     let root = tmp.path();
     let h = start(root, Settings::defaults(), vec![]);
     fake_claude(root);
-    // Toast Install and the Settings button at once: one server reference, one token.
-    let (a, b) = (h.core.clone(), h.core.clone());
-    let (ra, rb) = tokio::join!(
-        tokio::spawn(async move { a.claude_mcp_install().await }),
-        tokio::spawn(async move { b.claude_mcp_install().await })
-    );
-    ra.unwrap().unwrap();
-    rb.unwrap().unwrap();
-    assert!(h.core.server().http_port().is_some());
-    h.core.claude_mcp_remove().await.unwrap();
-    assert_eq!(h.core.server().http_port(), None);
+    // Toast Install and the Settings button at once: one server reference, one token. The unguarded
+    // check-then-take window has no await, so only two threads released together hit it; rounds make
+    // a regression show on every run (#321).
+    let rt = tokio::runtime::Handle::current();
+    for round in 0..20 {
+        let gate = std::sync::Barrier::new(2);
+        std::thread::scope(|s| {
+            for _ in 0..2 {
+                s.spawn(|| {
+                    gate.wait();
+                    rt.block_on(h.core.claude_mcp_install()).unwrap();
+                });
+            }
+        });
+        assert!(h.core.server().http_port().is_some());
+        h.core.claude_mcp_remove().await.unwrap();
+        assert_eq!(h.core.server().http_port(), None, "round {round}: a server reference leaked");
+    }
     assert_eq!(h.core.claude_mcp_status().await, Some(false));
 }
 

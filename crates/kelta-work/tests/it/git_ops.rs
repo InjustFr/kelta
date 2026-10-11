@@ -3,6 +3,7 @@
 use std::time::{Duration, Instant};
 
 use crate::common::{Fx, git, has_git, project};
+use kelta_proto::api::WorkStore;
 use kelta_proto::codehost::PrDraft;
 use kelta_proto::error::ErrorCode;
 use kelta_proto::model::{FinishOpts, SessionKind, ShipOrigin, WorkItem, WorkSource, WorkState};
@@ -317,9 +318,14 @@ async fn finish_after_squash_merge_with_pruned_branch() {
     git(&fx.repo, &["push", "-q", "origin", "main"]);
     git(&fx.repo, &["reset", "-q", "--hard", "HEAD~1"]);
     assert!(!w.status(&item.id).await.unwrap().unpushed);
+    // Merged: `git branch -d` refuses a squash-merged branch, so only the verified force delete removes it.
+    let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
+    it.state = WorkState::Merged { detail: None };
+    fx.store.put_item(&it).await.unwrap();
     let done = w.finish(&item.id, opts(false)).await.unwrap();
     assert_eq!(done.state, WorkState::Finished);
     assert!(!item.worktree.exists());
+    assert!(git(&fx.repo, &["branch", "--list", &item.branch]).is_empty(), "squash-merged branch deleted");
 }
 
 #[tokio::test]

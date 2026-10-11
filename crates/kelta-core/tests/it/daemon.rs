@@ -156,12 +156,17 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
     keltad.join().unwrap();
 }
 
-/// A pid still running (a zombie waiting for init to reap it is not).
+/// A pid still running (a zombie waiting to be reaped is not): its state from `/proc`, else `ps`
+/// (macOS, where `kill -0` succeeds on a zombie).
 fn running(pid: &str) -> bool {
-    let exists = std::process::Command::new("kill").args(["-0", pid]).status().is_ok_and(|s| s.success());
-    exists
-        && std::fs::read_to_string(format!("/proc/{pid}/stat"))
-            .map_or(true, |s| !s.rsplit(')').next().unwrap_or("").trim_start().starts_with('Z'))
+    let state = std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .map(|s| s.rsplit(')').next().unwrap_or("").trim_start().to_owned())
+        .or_else(|_| {
+            let out = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output()?;
+            Ok::<_, std::io::Error>(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+        })
+        .unwrap_or_default();
+    !state.is_empty() && !state.starts_with('Z')
 }
 
 /// #305: quit with "stop all sessions" ends every session process and keltad (socket removed).
