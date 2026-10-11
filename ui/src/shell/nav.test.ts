@@ -143,7 +143,10 @@ describe('sessions', () => {
   });
 
   it('opens a background session in a new tab', async () => {
-    closeFocusedPane(); // shop-p1 (Claude) leaves the layout but keeps running
+    const closing = closeFocusedPane(); // shop-p1 (Claude) leaves the layout but keeps running
+    await Promise.resolve();
+    confirms.answer('background');
+    await closing;
     expect(layout.get('shop')!.tabs[0]!.root.type).toBe('pane');
     const tabs = layout.get('shop')!.tabs.length;
     await revealSession(SHOP_CLAUDE);
@@ -205,12 +208,39 @@ describe('panes and tabs', () => {
     expect(currentTab()!.zoomed_pane).toBeNull();
   });
 
-  it('closing the last pane of a tab closes the tab, never a process', () => {
+  it('closing the last pane of a tab closes the tab, never a process', async () => {
     const tabs = layout.get('shop')!.tabs.length;
-    closeFocusedPane();
-    closeFocusedPane();
+    for (let i = 0; i < 2; i++) {
+      const closing = closeFocusedPane();
+      await Promise.resolve();
+      confirms.answer('background');
+      await closing;
+    }
     expect(layout.get('shop')!.tabs).toHaveLength(tabs - 1);
     expect(calls('session_kill')).toEqual([]);
+  });
+
+  it('closing a pane with a live session asks: kill, background or cancel', async () => {
+    const pane = currentTab()!.focused_pane;
+    const cancel = closeFocusedPane();
+    await Promise.resolve();
+    expect(confirms.current?.actions.map((a) => a.id)).toEqual(['background', 'kill']);
+    confirms.answer(null);
+    await cancel;
+    expect(currentTab()!.focused_pane).toBe(pane);
+
+    const kill = closeFocusedPane();
+    await Promise.resolve();
+    confirms.answer('kill');
+    await kill;
+    expect(calls('session_kill').map((c) => (c.args as { id: string }).id)).toEqual([SHOP_CLAUDE]);
+  });
+
+  it('closing a pane whose session exited does not ask', async () => {
+    sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, lifecycle: 'exited' });
+    await closeFocusedPane();
+    expect(confirms.current).toBeNull();
+    expect(layout.get('shop')!.tabs[0]!.root.type).toBe('pane');
   });
 
   it('cycles tabs with wrap-around', () => {

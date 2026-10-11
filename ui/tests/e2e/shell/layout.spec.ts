@@ -103,7 +103,9 @@ test.describe('layout', () => {
     await dispatch(page, 'pane.zoom');
     await expect(page.locator('[data-testid="pane"]:visible')).toHaveCount(2);
 
-    await dispatch(page, 'pane.close');
+    const closing = dispatch(page, 'pane.close');
+    await page.getByTestId('confirm-background').click();
+    await closing;
     await expect(panes(page)).toHaveCount(1);
     expect((await callLog(page)).filter((c) => c.cmd === 'session_kill')).toEqual([]);
     // The closed pane's session is still a background session of the project.
@@ -112,13 +114,16 @@ test.describe('layout', () => {
     );
     expect(alive).toBe(4);
     // The last pane of the tab closes the tab.
-    await dispatch(page, 'pane.close');
+    const last = dispatch(page, 'pane.close');
+    await page.getByTestId('confirm-background').click();
+    await last;
     await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(2);
   });
 
   test('closed sessions stay in the palette and reopen in a new tab', async ({ page }) => {
     await boot(page);
     await page.getByTestId('pane-close').first().click();
+    await page.getByTestId('confirm-background').click();
     await expect(panes(page)).toHaveCount(1);
     await page.keyboard.press('Control+Shift+K');
     await page.getByTestId('palette-input').fill('shop claude');
@@ -126,6 +131,40 @@ test.describe('layout', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(4);
     await waitForAttached(page, 1);
+  });
+
+  test('closing a pane with a live session asks: cancel, kill or move to background', async ({ page }) => {
+    await boot(page);
+    const live = () =>
+      page.evaluate(() =>
+        window
+          .__kelta!.stores.sessions.forProject('shop')
+          .filter((s) => s.lifecycle === 'live')
+          .map((s) => s.id),
+      );
+    const before = await live();
+    // Cancel (Escape) from the keyboard action: the pane stays open and focused.
+    const closing = dispatch(page, 'pane.close');
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await closing;
+    await expect(page.getByTestId('confirm-dialog')).toHaveCount(0);
+    await expect(panes(page)).toHaveCount(2);
+    await expect(panes(page).nth(0)).toHaveAttribute('data-focused', 'true');
+    expect(await live()).toEqual(before);
+
+    // Kill from the pane menu Close: the pane closes and its session is stopped.
+    await page.getByRole('button', { name: 'Pane menu' }).first().click();
+    await page.getByRole('menuitem', { name: 'Close pane' }).click();
+    await page.getByTestId('confirm-kill').click();
+    await expect(panes(page)).toHaveCount(1);
+    await expect.poll(async () => (await callsOf(page, 'session_kill')).length).toBe(1);
+
+    // Move to background from the ✕ button: the tab closes, the session keeps running.
+    await page.getByTestId('pane-close').first().click();
+    await page.getByTestId('confirm-background').click();
+    await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(2);
+    expect((await callsOf(page, 'session_kill')).length).toBe(1);
   });
 
   test('focus moves with the pane focus actions', async ({ page }) => {

@@ -366,11 +366,36 @@ export function closePaneById(projectId: ProjectId, tabId: TabId, paneId: PaneId
   layout.update(projectId, (l) => closePaneInLayout(l, tabId, paneId));
 }
 
-export function closeFocusedPane(): void {
+/**
+ * Closes a pane (pane ✕, pane menu, `pane.close`). A live session asks first: stop it, or keep it
+ * running in the background. Cancel and Escape keep the pane.
+ */
+export async function requestClosePane(projectId: ProjectId, tabId: TabId, paneId: PaneId): Promise<void> {
+  const tab = layout.get(projectId)?.tabs.find((t) => t.id === tabId);
+  const node = tab ? findPane(tab.root, paneId)?.pane : null;
+  const sid = node ? paneSession(node) : null;
+  const session = sid ? sessions.get(sid) : null;
+  if (session?.lifecycle === 'live') {
+    // No primary action: Enter and ⌘↵ never pick one, Escape cancels.
+    const answer = await confirms.ask({
+      title: `Close “${session.name}”?`,
+      body: 'The process is still running. It can keep running in the background (listed in the command palette) or be killed with the pane.',
+      actions: [
+        { id: 'background', label: 'Move to background' },
+        { id: 'kill', label: 'Kill process', variant: 'danger' },
+      ],
+    });
+    if (answer === null) return;
+    if (answer === 'kill') return closePaneAndStop(projectId, tabId, paneId);
+  }
+  closePaneById(projectId, tabId, paneId);
+}
+
+export async function closeFocusedPane(): Promise<void> {
   const projectId = projects.activeId;
   const tab = currentTab();
   const p = focusedPane();
-  if (projectId && tab && p) closePaneById(projectId, tab.id, p.id);
+  if (projectId && tab && p) await requestClosePane(projectId, tab.id, p.id);
 }
 
 /** Closes the pane and stops its session. */
