@@ -62,7 +62,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
-use kelta_proto::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketPage, TicketRef};
+use kelta_proto::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef};
 use kelta_secrets::{SECRETS_FILE, Secrets, SecretsOptions};
 use kelta_server::Server;
 use kelta_term::PtyTerminalHost;
@@ -719,6 +719,13 @@ impl CoreApi for Core {
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         self.tracker_list(scope, view_id, None, cursor, refresh).await
+    }
+    async fn ticket_by_key(
+        &self,
+        key: &str,
+        account: Option<&AccountId>,
+    ) -> Result<Option<TicketItem>, KeltaError> {
+        Ok(self.tracker_find(key, account).await)
     }
     async fn ticket_get(&self, ticket: &TicketRef) -> Result<TicketDetail, KeltaError> {
         self.tracker_get(ticket).await

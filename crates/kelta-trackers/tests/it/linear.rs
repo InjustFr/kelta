@@ -305,7 +305,7 @@ async fn planning_fields_map_priority_cycle_estimate_due_and_start() {
         .mount(&server)
         .await;
     let items = lin(&server).list(&view("mine"), None).await.unwrap().items;
-    let [a, b, c, d] = &items[..] else { panic!("four issues") };
+    let [a, b, c, d, done, canceled] = &items[..] else { panic!("six issues") };
     // urgent → 0, low → 3, medium → 2, none → None
     assert_eq!([a, b, c, d].map(|t| t.priority_rank), [Some(0), Some(3), Some(2), None]);
     let cy = a.sprint.as_ref().unwrap();
@@ -321,9 +321,12 @@ async fn planning_fields_map_priority_cycle_estimate_due_and_start() {
     for t in [b, c, d] {
         assert_eq!(t.status_since.as_deref(), Some("2026-10-05T08:00:00.000Z"));
     }
+    // Done: when it was completed or canceled, not its last update
+    assert_eq!(done.status_since.as_deref(), Some("2026-10-03T10:00:00.000Z"));
+    assert_eq!(canceled.status_since.as_deref(), Some("2026-10-04T10:00:00.000Z"));
     let q = &gql_bodies(&server, "issues(filter").await[0]["query"];
     assert!(
-        ["priority ", "estimate", "dueDate", "startedAt", "cycle {"]
+        ["priority ", "estimate", "dueDate", "startedAt", "completedAt", "canceledAt", "cycle {"]
             .iter()
             .all(|f| q.as_str().unwrap().contains(f))
     );

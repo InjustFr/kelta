@@ -504,7 +504,10 @@ impl CodeHost for GitlabHost {
             req = req.query(k, v);
         }
         let resp = self.json(req.with_etag()).await?;
-        self.gate.lock().pending = false;
+        // Only the review-requested list answers what the gate saw change.
+        if q.kind == ReviewKind::ReviewRequested {
+            self.gate.lock().pending = false;
+        }
         let mut list: Vec<(Review, u64)> = resp
             .body
             .as_array()

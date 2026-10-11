@@ -20,11 +20,24 @@ const TOKEN_REF: &str = "keyring:kelta-mcp";
 pub const INSTALL_ACTION: &str = "claude.mcp_install";
 pub const NEVER_ACTION: &str = "claude.mcp_never";
 
-/// Port of the global `/mcp` URL in `claude mcp get` output.
-fn registered_port(out: &str) -> Option<u16> {
-    let rest = out.split("http://127.0.0.1:").nth(1)?;
+/// Port of a registered global `/mcp` URL.
+fn registered_port(url: &str) -> Option<u16> {
+    let rest = url.split("http://127.0.0.1:").nth(1)?;
     let (port, path) = rest.split_once('/')?;
     path.starts_with("mcp").then(|| port.parse().ok()).flatten()
+}
+
+/// A user-scope registration as Claude Code keeps it: `(url, Authorization header value)`.
+type Registration = (String, String);
+
+/// The `kelta` entry of a Claude Code config file (`mcpServers.kelta`), read without running
+/// `claude` (a ~100 MB Node process).
+fn registration_in(config: &[u8]) -> Option<Registration> {
+    let v: serde_json::Value = serde_json::from_slice(config).ok()?;
+    let e = v.get("mcpServers")?.get(NAME)?;
+    let url = e.get("url")?.as_str()?.to_owned();
+    let auth = e.pointer("/headers/Authorization").and_then(|a| a.as_str()).unwrap_or_default();
+    Some((url, auth.to_owned()))
 }
 
 impl Core {
@@ -37,7 +50,7 @@ impl Core {
     async fn claude_mcp(&self, bin: &Path, args: &[&str]) -> Result<String, KeltaError> {
         let home = self.home_dir();
         let argv = std::iter::once("mcp").chain(args.iter().copied());
-        // one-shot: bounded `claude mcp` call (the `get` health check connects to the server).
+        // one-shot: bounded `claude mcp add|remove` call.
         let out =
             crate::ctl::claude_oneshot(bin, argv, &self.login_env.vars, &home, None, Duration::from_secs(30))
                 .await?;
@@ -48,17 +61,24 @@ impl Core {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
+    /// The user-scope registration in `$CLAUDE_CONFIG_DIR/.claude.json` (else `~/.claude.json`).
+    async fn claude_mcp_registration(&self) -> Option<Registration> {
+        let dir =
+            self.login_env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| self.home_dir());
+        registration_in(&tokio::fs::read(dir.join(".claude.json")).await.ok()?)
+    }
+
     /// Startup: offer the install when Claude Code is found and `kelta` is not registered; serve an
     /// existing registration (consented to earlier), re-registering it when its port or token changed.
     pub async fn claude_mcp_startup(&self) {
         let Some(bin) = self.claude_bin() else { return };
-        match self.claude_mcp(&bin, &["get", NAME]).await {
-            Ok(out) => {
-                if let Err(e) = self.claude_mcp_serve(&bin, Some(&out)).await {
+        match self.claude_mcp_registration().await {
+            Some(current) => {
+                if let Err(e) = self.claude_mcp_serve(&bin, Some(&current)).await {
                     tracing::warn!(error = %e.message, "kelta MCP registration not updated");
                 }
             }
-            Err(_) if self.cfg.effective(None).claude.mcp_offer => {
+            None if self.cfg.effective(None).claude.mcp_offer => {
                 let action = |label: &str, command: &str| ToastAction {
                     label: label.into(),
                     command: command.into(),
@@ -70,13 +90,13 @@ impl Core {
                 t.secondary = Some(action("Never", NEVER_ACTION));
                 self.toast(t);
             }
-            Err(_) => {}
+            None => {}
         }
     }
 
-    /// Open the global `/mcp` and make the user-scope registration point at it. `current` = the
-    /// `claude mcp get` output of an existing registration.
-    async fn claude_mcp_serve(&self, bin: &Path, current: Option<&str>) -> Result<(), KeltaError> {
+    /// Open the global `/mcp` and make the user-scope registration point at it. `current` = an
+    /// existing registration.
+    async fn claude_mcp_serve(&self, bin: &Path, current: Option<&Registration>) -> Result<(), KeltaError> {
         let r = SecretRef::new(TOKEN_REF);
         let token = match self.resolver.resolve(&r, &SecretCtx::default()).await {
             Ok(s) => s.expose().to_owned(),
@@ -93,16 +113,17 @@ impl Core {
         let port = match self.server.http_port().filter(|_| self.claude_mcp_ref.load(Ordering::SeqCst)) {
             Some(p) => p,
             None => {
-                let p = self.server.ensure_http_at(current.and_then(registered_port)).await?;
+                let p = self.server.ensure_http_at(current.and_then(|(url, _)| registered_port(url))).await?;
                 self.claude_mcp_ref.store(true, Ordering::SeqCst);
                 p
             }
         };
         let url = format!("http://127.0.0.1:{port}/mcp");
-        let header = format!("Authorization: Bearer {token}");
-        if current.is_some_and(|o| o.contains(&format!("URL: {url}\n")) && o.contains(&header)) {
+        let bearer = format!("Bearer {token}");
+        if current.is_some_and(|(u, auth)| *u == url && *auth == bearer) {
             return Ok(());
         }
+        let header = format!("Authorization: {bearer}");
         let _ = self.claude_mcp(bin, &["remove", "--scope", "user", NAME]).await;
         self.claude_mcp(
             bin,
@@ -115,8 +136,8 @@ impl Core {
 
     /// Settings → Claude: `None` = Claude Code not found, else whether `kelta` is registered.
     pub async fn claude_mcp_status(&self) -> Option<bool> {
-        let bin = self.claude_bin()?;
-        Some(self.claude_mcp(&bin, &["get", NAME]).await.is_ok())
+        self.claude_bin()?;
+        Some(self.claude_mcp_registration().await.is_some())
     }
 
     /// Install (toast or Settings → Claude): `claude mcp add --scope user`.
@@ -149,10 +170,17 @@ mod tests {
 
     #[test]
     fn port_of_registration() {
-        let out = "kelta:\n  Type: http\n  URL: http://127.0.0.1:45678/mcp\n  Headers:\n";
-        assert_eq!(registered_port(out), Some(45678));
-        assert_eq!(registered_port("  URL: http://127.0.0.1:45678/mcp/s1\n"), Some(45678));
-        assert_eq!(registered_port("  URL: http://127.0.0.1:45678/other\n"), None);
-        assert_eq!(registered_port("No MCP server named \"kelta\""), None);
+        assert_eq!(registered_port("http://127.0.0.1:45678/mcp"), Some(45678));
+        assert_eq!(registered_port("http://127.0.0.1:45678/mcp/s1"), Some(45678));
+        assert_eq!(registered_port("http://127.0.0.1:45678/other"), None);
+    }
+
+    #[test]
+    fn registration_from_the_config_file() {
+        let cfg = br#"{"numStartups":3,"mcpServers":{"other":{"type":"stdio"},"kelta":{"type":"http","url":"http://127.0.0.1:45678/mcp","headers":{"Authorization":"Bearer t"}}}}"#;
+        assert_eq!(registration_in(cfg), Some(("http://127.0.0.1:45678/mcp".into(), "Bearer t".into())));
+        assert_eq!(registration_in(br#"{"mcpServers":{"other":{"url":"x"}}}"#), None);
+        assert_eq!(registration_in(b"{}"), None);
+        assert_eq!(registration_in(b"not json"), None);
     }
 }

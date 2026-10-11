@@ -22,6 +22,10 @@ export class SettingsStore {
   /** Paths changed since start that need a restart (Settings shows a marker). */
   pendingRestart = $state<string[]>([]);
   lastChange = $state<SettingsChange | null>(null);
+  /** OS dark preference; Shell keeps it current. */
+  systemDark = $state(
+    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true,
+  );
 
   /** Typed effective settings (global when `projectId` is omitted), or null before load. */
   value(projectId?: ProjectId | null): Settings | null {
@@ -43,8 +47,7 @@ export class SettingsStore {
   get theme(): 'dark' | 'light' {
     const t = this.value()?.app.theme ?? 'system';
     if (t === 'dark' || t === 'light') return t;
-    const dark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
-    return dark ? 'dark' : 'light';
+    return this.systemDark ? 'dark' : 'light';
   }
 
   async load(projectId?: ProjectId | null): Promise<Loadable<EffectiveSettings>> {

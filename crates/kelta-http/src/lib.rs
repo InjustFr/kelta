@@ -132,6 +132,8 @@ pub struct HttpRequest {
     pub json: Option<serde_json::Value>,
     /// Use the ETag cache for this GET.
     pub etag: bool,
+    /// Safe to resend after a timeout or a 502-504: the method's own semantics, or a read sent as POST.
+    pub idempotent: bool,
 }
 
 /// Header names whose values never appear in `Debug` output.
@@ -160,7 +162,15 @@ impl std::fmt::Debug for HttpRequest {
 
 impl HttpRequest {
     pub fn new(method: Method, url: impl Into<String>) -> Self {
-        Self { method, url: url.into(), headers: Vec::new(), query: Vec::new(), json: None, etag: false }
+        Self {
+            method,
+            url: url.into(),
+            headers: Vec::new(),
+            query: Vec::new(),
+            json: None,
+            etag: false,
+            idempotent: method.is_idempotent(),
+        }
     }
     pub fn get(url: impl Into<String>) -> Self {
         Self::new(Method::Get, url)
@@ -199,6 +209,11 @@ impl HttpRequest {
     }
     pub fn with_etag(mut self) -> Self {
         self.etag = true;
+        self
+    }
+    /// A read sent as POST (GraphQL query, search body): retried like a GET.
+    pub fn idempotent(mut self) -> Self {
+        self.idempotent = true;
         self
     }
 }

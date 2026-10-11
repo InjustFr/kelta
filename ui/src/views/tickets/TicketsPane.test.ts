@@ -31,7 +31,6 @@ beforeEach(async () => {
   tickets.columns = {};
   tickets.details = {};
   tickets.transitions = {};
-  tickets.team = {};
   toasts.clear();
   reviews.lists = {};
   ui.sheets = [];
@@ -388,6 +387,16 @@ describe('TicketsPane workbench', () => {
     await press('G'); // none
     await waitFor(() => expect(groupNames(container)).toEqual([]));
     expect(card(container, 'SHOP-151')).not.toBeNull();
+  });
+
+  it('one IPC per list load: the person filter reads the pages, no second call', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Mine 3' })).toBeTruthy());
+    await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
+    await openView();
+    await waitFor(() => expect(screen.getByRole('option', { name: /Bob.*\(tracker only\)/ })).toBeTruthy());
+    const cmds = new Set(mock.calls.map((c) => c.cmd).filter((c) => /^(tracker_list|team)/.test(c)));
+    expect([...cmds]).toEqual(['tracker_list']);
   });
 
   it('w opens the workflow picker for the focused row', async () => {
@@ -807,6 +816,18 @@ describe('TicketsPane split view', () => {
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
     expect(document.activeElement).toBe(pane());
     expect(JSON.stringify(layout.get('shop') ?? null)).not.toContain('"ticket_detail"');
+  });
+
+  it('walking tickets with j/k lists no workflows until w', async () => {
+    const { container } = mountBoard('list');
+    await ready(container, 'SHOP-151');
+    await waitFor(() => expect(detail()).not.toBeNull());
+    for (const k of ['j', 'j', 'j', 'j', 'j', 'k', 'k', 'k', 'k', 'k']) await press(k);
+    expect(mock.calls.filter((c) => c.cmd === 'workflows_list')).toHaveLength(0);
+    await ready(container, 'SHOP-151'); // back on a ticket row (k can stop on a group header)
+    await press('w');
+    await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
+    expect(mock.calls.filter((c) => c.cmd === 'workflows_list')).toHaveLength(1);
   });
 
   it('Shift+Enter opens the standalone pane; a narrow pane opens it from Space and Enter', async () => {

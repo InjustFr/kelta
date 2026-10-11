@@ -348,11 +348,7 @@ fn flood_keeps_inflight_bounded_and_ends_with_a_snapshot() {
         #[allow(clippy::disallowed_methods)] // allowlisted: test pacing
         std::thread::sleep(Duration::from_millis(2));
     }
-    // The exit event can land before the reader has drained the pty (slow runner): acking now would let the
-    // backlog through as Data. Wait until every byte was read (and dropped for the view), then catch up.
-    wait_until(T, || (h.stats().sessions[0].bytes_in >= 10 * 1024 * 1024).then_some(()))
-        .expect("reader did not drain the flood");
-    // Then the view catches up.
+    // Exited is emitted once the reader hit EOF/EIO: every byte is read by now. Then the view catches up.
     let mut seen: Vec<Vec<u8>> = Vec::new();
     let mut acked_bytes: u64 = 0;
     wait_until(T, || {

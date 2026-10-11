@@ -91,6 +91,8 @@ pub struct WorkService {
     hold_wake: std::sync::atomic::AtomicBool,
     /// Test hook: abort the saga right after this step is journaled as done (simulated crash).
     crash_after: Mutex<Option<String>>,
+    /// Bind probe of the port allocation (tests swap it to open no sockets).
+    port_free: Mutex<fn(u16) -> bool>,
 }
 
 impl WorkService {
@@ -112,6 +114,7 @@ impl WorkService {
             starting: Mutex::new(HashSet::new()),
             hold_wake: std::sync::atomic::AtomicBool::new(false),
             crash_after: Mutex::new(None),
+            port_free: Mutex::new(plan::port_free),
         })
     }
 
@@ -136,6 +139,12 @@ impl WorkService {
     #[doc(hidden)]
     pub fn set_crash_after(&self, step: Option<&str>) {
         *self.crash_after.lock() = step.map(str::to_owned);
+    }
+
+    /// Test hook: replace the bind probe that tells whether a port block is free.
+    #[doc(hidden)]
+    pub fn set_port_probe(&self, free: fn(u16) -> bool) {
+        *self.port_free.lock() = free;
     }
 
     /// `work_plan`.

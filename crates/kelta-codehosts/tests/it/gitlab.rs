@@ -374,7 +374,9 @@ async fn todos_gate_stays_changed_until_list_reviews_succeeds() {
     assert!(h.changed_since_last().await.unwrap(), "first poll");
     assert!(h.changed_since_last().await.unwrap(), "still pending: list not done");
     assert!(h.list_reviews(&q).await.is_err());
-    assert!(h.changed_since_last().await.unwrap(), "the list failed, change not lost");
+    let authored = ReviewQuery { kind: ReviewKind::Authored, ..q.clone() };
+    h.list_reviews(&authored).await.unwrap();
+    assert!(h.changed_since_last().await.unwrap(), "the list failed, change not lost (authored ok)");
     h.list_reviews(&q).await.unwrap();
     assert!(!h.changed_since_last().await.unwrap());
 }

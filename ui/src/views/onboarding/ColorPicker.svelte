@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { ui } from '$lib/stores';
-  import { parseProjectColor, slotLabel, SLOTS, type Slot } from '$lib/theme';
+  import { parseProjectColor, resolveProjectColor, slotLabel, SLOTS, type Slot } from '$lib/theme';
 
   // The active theme's 12 slot colours, stored as `theme:<slot>` so they follow the theme, plus a
   // custom hex kept as typed (DESIGN §2.1).
@@ -24,7 +23,7 @@
       type="button"
       class="swatch"
       class:on={slot === s}
-      style:background={ui.theme.terminal.ansi[SLOTS[s]]}
+      style:background={resolveProjectColor(`theme:${s}`)}
       aria-label={slotLabel(s)}
       title={slotLabel(s)}
       aria-pressed={slot === s}

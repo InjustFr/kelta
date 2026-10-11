@@ -40,6 +40,9 @@ use crate::team::{self, Ident};
 /// `tracker_transitions` of one ticket: (status id when fetched, fetched at, transitions).
 type CachedTransitions = (Option<String>, Instant, Vec<Transition>);
 
+/// Status and error of one account side.
+type SideStatus = (AccountStatus, Option<String>);
+
 #[derive(Default)]
 pub struct Feeds {
     /// Accounts whose review-requested list was fetched once in this process.
@@ -50,7 +53,10 @@ pub struct Feeds {
     views: Mutex<HashMap<String, TicketQuery>>,
     /// Background revalidations in flight (cache keys).
     inflight: Mutex<HashSet<String>>,
+    /// Status shown per account (last `AccountStatusChanged`).
     status: Mutex<HashMap<AccountId, AccountStatus>>,
+    /// Status and error per account side (`false` tracker, `true` code host).
+    sides: Mutex<HashMap<(AccountId, bool), SideStatus>>,
     /// Unfinished work items with an open PR → their project (keeps Authored subscribed, B7).
     pr_items: Mutex<HashMap<WorkItemId, ProjectId>>,
     /// PRs whose merge / close was published in this process (live diff and check publish once).
@@ -357,12 +363,20 @@ impl Core {
     // Account status
     // =========================================================================================
 
-    fn note_account<T>(&self, account: &AccountId, r: &Result<T, KeltaError>) {
-        let status = account_status_of(&r.as_ref().map(|_| ()));
-        let detail = r.as_ref().err().map(|e| e.message.clone());
+    /// `code_host`: which side of the account answered. A failing side keeps the account in its error
+    /// until that side recovers, whatever the other side says.
+    fn note_account<T>(&self, account: &AccountId, code_host: bool, r: &Result<T, KeltaError>) {
+        let mut status = account_status_of(&r.as_ref().map(|_| ()));
+        let mut detail = r.as_ref().err().map(|e| e.message.clone());
         let changed = {
-            let mut m = self.feeds.status.lock();
-            let prev = m.insert(account.clone(), status);
+            let mut sides = self.feeds.sides.lock();
+            sides.insert((account.clone(), code_host), (status, detail.clone()));
+            if status == AccountStatus::Ok
+                && let Some(other) = sides.get(&(account.clone(), !code_host))
+            {
+                (status, detail) = other.clone();
+            }
+            let prev = self.feeds.status.lock().insert(account.clone(), status);
             prev != Some(status) && !(prev.is_none() && status == AccountStatus::Ok)
         };
         if changed {
@@ -375,7 +389,7 @@ impl Core {
         if let Err(e) = &r
             && e.code != ErrorCode::NotFound
         {
-            self.note_account::<()>(account, &Err(e.clone()));
+            self.note_account::<()>(account, false, &Err(e.clone()));
         }
         r
     }
@@ -385,7 +399,7 @@ impl Core {
         if let Err(e) = &r
             && e.code != ErrorCode::NotFound
         {
-            self.note_account::<()>(account, &Err(e.clone()));
+            self.note_account::<()>(account, true, &Err(e.clone()));
         }
         r
     }
@@ -399,6 +413,18 @@ impl Core {
         let row = self.store.call(move |c| q::cache_get(c, &k)).await.ok().flatten()?;
         let v = serde_json::from_str(&row.body_json).ok()?;
         Some((v, age_of(&row.fetched_at)))
+    }
+
+    /// Several cache rows in one store round trip; a missing or unreadable row is skipped.
+    async fn cache_get_many<T: serde::de::DeserializeOwned>(&self, keys: Vec<String>) -> Vec<T> {
+        let rows = self
+            .store
+            .call(move |c| {
+                Ok(keys.iter().filter_map(|k| q::cache_get(c, k).ok().flatten()).collect::<Vec<_>>())
+            })
+            .await
+            .unwrap_or_default();
+        rows.into_iter().filter_map(|r| serde_json::from_str(&r.body_json).ok()).collect()
     }
 
     fn cache_put<T: serde::Serialize>(&self, key: &str, v: &T) {
@@ -511,7 +537,7 @@ impl Core {
         let r = tracker.list(&q.view, cursor.clone()).await;
         // `Invalid` is a view the provider cannot answer (e.g. Unassigned without a repo), not account health
         if !matches!(&r, Err(e) if e.code == ErrorCode::InvalidArgument) {
-            self.note_account(&q.account, &r);
+            self.note_account(&q.account, false, &r);
         }
         let mut page = r?;
         if cursor.is_none() {
@@ -520,7 +546,15 @@ impl Core {
             if q.view.status.is_none() {
                 let closed = TrackerView { status: Some("closed".into()), ..q.view.clone() };
                 let week = Duration::from_secs(7 * 86_400);
-                let done = tracker.list(&closed, None).await.map(|p| p.items).unwrap_or_default();
+                let done = match tracker.list(&closed, None).await {
+                    Ok(p) => p.items,
+                    // a failed closed list keeps the Done tickets of the last page instead of emptying Done
+                    Err(_) => self
+                        .cache_get::<Page<Ticket>>(&q.cache_key)
+                        .await
+                        .map(|(p, _)| p.items)
+                        .unwrap_or_default(),
+                };
                 let fresh: Vec<Ticket> = done
                     .into_iter()
                     .filter(|t| t.status.category == StatusCategory::Done)
@@ -612,15 +646,12 @@ impl Core {
 
     /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
     async fn cached_reviews(&self) -> Vec<Review> {
-        let mut out = Vec::new();
-        for a in self.review_accounts(&Scope::All) {
-            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
-                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
-                    out.extend(list);
-                }
-            }
-        }
-        out
+        let keys = self
+            .review_accounts(&Scope::All)
+            .iter()
+            .flat_map(|a| [ReviewKind::Authored, ReviewKind::ReviewRequested].map(|k| reviews_key(a, k)))
+            .collect();
+        self.cache_get_many::<Vec<Review>>(keys).await.into_iter().flatten().collect()
     }
 
     /// Core-filled ticket fields: linked PRs and the tracker's caps.
@@ -685,30 +716,9 @@ impl Core {
 
     /// The scope's cached Team ticket lists; no list is fetched.
     async fn cached_tickets(&self, scope: &Scope) -> Vec<Ticket> {
-        let mut tickets = Vec::new();
-        for q in self.ticket_queries(scope, None, Some(Who::Anyone)) {
-            if let Some((p, _)) = self.cache_get::<Page<Ticket>>(&q.cache_key).await {
-                tickets.extend(p.items);
-            }
-        }
-        tickets
-    }
-
-    /// `team_people`: who the scope's cached tickets (the Team list) and review lists mention. Reads
-    /// the provider cache only: no list is fetched.
-    pub async fn team_people(&self, scope: Scope) -> Result<Vec<Person>, KeltaError> {
-        self.rt.capture();
-        self.check_scope(&scope)?;
-        let tickets = self.cached_tickets(&scope).await;
-        let mut reviews = Vec::new();
-        for a in self.review_accounts(&scope) {
-            for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
-                if let Some((list, _)) = self.cache_get::<Vec<Review>>(&reviews_key(&a, kind)).await {
-                    reviews.extend(list);
-                }
-            }
-        }
-        Ok(self.people_of(&tickets, &reviews).await)
+        let keys =
+            self.ticket_queries(scope, None, Some(Who::Anyone)).into_iter().map(|q| q.cache_key).collect();
+        self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
     }
 
     /// `tracker_list`.
@@ -774,11 +784,28 @@ impl Core {
         let work = self.work_by_ticket().await;
         let reviews = self.cached_reviews().await;
         let mut items = merge_tickets(pages, &work);
-        let people = self.people_of(items.iter().map(|i| &i.ticket), &reviews).await;
+        // The scope's Team list joins in: the page's people feed the pane's person filter too.
+        let team = self.cached_tickets(&scope).await;
+        let people = self.people_of(items.iter().map(|i| &i.ticket).chain(&team), &reviews).await;
         for i in &mut items {
             self.enrich(i, &work, &reviews, &people);
         }
-        Ok(TicketPage { items, next, stale, errors })
+        Ok(TicketPage { items, next, stale, errors, people })
+    }
+
+    /// The ticket `key` names in the lists' first pages (cached, fetched when cold), with the
+    /// projects and sources of every list holding it; no work, PR or people enrichment.
+    pub async fn tracker_find(&self, key: &str, account: Option<&AccountId>) -> Option<TicketItem> {
+        let queries = self.ticket_queries(&Scope::All, None, None);
+        let results =
+            futures::future::join_all(queries.iter().map(|q| self.load_ticket_query(q, None, false))).await;
+        let named = |t: &Ticket| t.r#ref.key == key && account.is_none_or(|a| &t.r#ref.account == a);
+        let pages = queries
+            .iter()
+            .zip(results)
+            .filter_map(|(q, (page, _, _))| Some((page?.items.into_iter().filter(named).collect(), q)))
+            .collect();
+        merge_tickets(pages, &HashMap::new()).into_iter().next()
     }
 
     /// `tracker_search`: each list query of a scope searched by its tracker, plus its cached first page
@@ -864,7 +891,7 @@ impl Core {
         });
         // `Unsupported` says nothing about the account's health
         if !matches!(&r, Err(e) if e.code == ErrorCode::Unsupported) {
-            self.note_account(account, &r);
+            self.note_account(account, false, &r);
         }
         r
     }
@@ -874,7 +901,7 @@ impl Core {
         let r = self.tracker_of(&t.account)?.get(t).await;
         // a missing or malformed key says nothing about the account's health
         if !matches!(&r, Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::InvalidArgument)) {
-            self.note_account(&t.account, &r);
+            self.note_account(&t.account, false, &r);
         }
         let mut d = r?;
         let work = self.work_by_ticket().await;
@@ -948,7 +975,7 @@ impl Core {
             return Ok(list.clone());
         }
         let r = self.tracker_of(&t.account)?.transitions(t).await;
-        self.note_account(&t.account, &r);
+        self.note_account(&t.account, false, &r);
         let list = r?;
         let mut cache = self.feeds.transitions.lock();
         cache.retain(|_, (_, at, _)| at.elapsed() < fresh);
@@ -1257,7 +1284,7 @@ impl Core {
         } else {
             host.list_reviews(&query).await
         };
-        self.note_account(account, &r);
+        self.note_account(account, true, &r);
         let mut list = r?;
         if let Ok(re) = regex::Regex::new(&rs.ticket_key_regex) {
             for x in list.iter_mut().filter(|x| x.linked_tickets.is_empty()) {
@@ -1678,8 +1705,9 @@ impl Core {
         let tickets = self.cached_tickets(&scope).await;
         let people = self.people_of(&tickets, &all).await;
         let mut items = merge_reviews(all, &bindings);
+        let by_key = team::by_key(&tickets);
         for i in &mut items {
-            i.waiting = team::review_row_waiting(&i.review, &tickets, &people);
+            i.waiting = team::review_row_waiting(&i.review, &by_key, &people);
         }
         Ok(ReviewPage { items, stale, errors })
     }
@@ -1687,7 +1715,7 @@ impl Core {
     pub async fn review_get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         self.rt.capture();
         let mut res = self.code_host_of(&r.account)?.get(r).await;
-        self.note_account(&r.account, &res);
+        self.note_account(&r.account, true, &res);
         if let Ok(d) = &mut res {
             fill_reviewed_head(&mut d.review, &self.reviewed_stamps().await);
         }

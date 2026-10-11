@@ -45,22 +45,13 @@
   import { globalContent } from '../views/work/nav';
 
   let prefixArmed = $state(false);
-  let systemDark = $state(
-    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true,
-  );
 
   // ---- theme ---------------------------------------------------------------------------------
 
   const themeSetting = $derived(settings.value()?.app.theme ?? 'system');
-  const resolvedTheme = $derived<'dark' | 'light'>(
-    themeSetting === 'system' ? (systemDark ? 'dark' : 'light') : themeSetting,
-  );
+  const resolvedTheme = $derived(settings.theme);
   const resolved = $derived(resolveTheme(settings.value(), resolvedTheme));
   const terminalConfig = $derived(configFromSettings(settings.value()?.terminal, resolved.terminal));
-
-  $effect.pre(() => {
-    ui.theme = resolved;
-  });
 
   $effect(() => {
     const root = document.documentElement;
@@ -75,6 +66,8 @@
     for (const key of themeKeys) if (!(key in resolved.vars)) style.removeProperty(key);
     for (const [key, value] of Object.entries(resolved.vars)) style.setProperty(key, value);
     themeKeys = Object.keys(resolved.vars);
+    // project colours paint theme slots as var(--k-ansi-N)
+    resolved.terminal.ansi.forEach((c, i) => style.setProperty(`--k-ansi-${i}`, c));
   });
 
   $effect(() => {
@@ -250,7 +243,7 @@
 
     const mql = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
     const onScheme = (e: MediaQueryListEvent): void => {
-      systemDark = e.matches;
+      settings.systemDark = e.matches;
     };
     mql?.addEventListener('change', onScheme);
     const onFocus = (): void => void (ui.focused = true);

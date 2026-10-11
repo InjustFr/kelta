@@ -142,9 +142,17 @@ async fn default_lists_add_tickets_done_this_week() {
     .with_page_size(2);
     let e = env_full(tmp.path(), ListHost::new(vec![]), fake);
     let shop = Scope::Project { id: "shop".into() };
-    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap();
     let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
     assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"], "open first page + done in the last 7 days");
+
+    // the closed list fails: Done keeps the last page's tickets instead of going empty
+    e.tracker.pass_next();
+    e.tracker.fail_next(kelta_proto::KeltaError::upstream("502"));
+    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
+    assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"]);
+    assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list-closed:")).count(), 2);
 }
 
 #[tokio::test]
@@ -985,30 +993,49 @@ async fn writes_patch_the_cached_list() {
 }
 
 #[tokio::test]
-async fn team_people_reads_caches_only_and_waits_name_merged_people() {
+async fn ticket_pages_carry_the_team_people_and_waits_name_merged_people() {
     let tmp = tempfile::tempdir().unwrap();
     let mut authored = review("acme/shop-api", 87, ReviewKind::Authored);
     authored.waiting_on = vec!["bob".into()];
     authored.author_to_act = true;
     let e = env(tmp.path(), vec![authored]);
     let shop = Scope::Project { id: "shop".into() };
-    // nothing cached yet: nobody is known but the accounts' own users, and nothing is fetched
-    let cold = e.h.core.team_people(shop.clone()).await.unwrap();
-    assert!(cold.iter().all(|p| p.me), "{cold:?}");
-    assert_eq!(*e.host.calls.lock(), 0);
-    assert!(!e.tracker.calls().iter().any(|c| c.starts_with("list:")));
 
-    e.h.core.tracker_list(shop.clone(), None, Some(Who::Anyone), None, true).await.unwrap();
+    let team = e.h.core.tracker_list(shop.clone(), None, Some(Who::Anyone), None, true).await.unwrap();
     let page = e.h.core.review_page(shop.clone(), ReviewKind::Authored, true).await.unwrap();
     let names: Vec<_> = page.items[0].waiting.iter().map(|w| (w.name.as_str(), w.why)).collect();
     assert_eq!(names, [("Bob", WaitWhy::Review), ("Bob", WaitWhy::Author)]);
     let (host_calls, tracker_calls) = (*e.host.calls.lock(), e.tracker.calls().len());
 
-    let people = e.h.core.team_people(shop.clone()).await.unwrap();
+    // Any tab's page names the Team list's people, from caches only.
+    let mine = e.h.core.tracker_list(shop, None, Some(Who::Mine), None, false).await.unwrap();
+    let people = &mine.people;
     assert!(people.iter().any(|p| p.ids.iter().any(|i| i.id == "bob" && i.code_host && !p.matched)));
     assert!(people.iter().any(|p| p.me));
-    e.h.core.team_people(shop).await.unwrap();
-    assert_eq!((*e.host.calls.lock(), e.tracker.calls().len()), (host_calls, tracker_calls));
+    let assignees = team.items.iter().filter_map(|i| i.ticket.assignee.as_ref());
+    for a in assignees {
+        assert!(people.iter().any(|p| p.ids.iter().any(|i| !i.code_host && i.id == a.id)), "{a:?}");
+    }
+    let tracker_lists = e.tracker.calls()[tracker_calls..].iter().filter(|c| c.starts_with("list:")).count();
+    assert_eq!((*e.host.calls.lock(), tracker_lists), (host_calls, 1), "Mine fetched once, the rest cached");
+}
+
+#[tokio::test]
+async fn ticket_by_key_reads_the_cached_lists_without_enrichment() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let page = e.h.core.ticket_list(Scope::All, None, None, true).await.unwrap();
+    let want = &page.items[0];
+    let key = want.ticket.r#ref.key.clone();
+    let calls = e.tracker.calls().len();
+    let got = e.h.core.ticket_by_key(&key, None).await.unwrap().unwrap();
+    assert_eq!(got.ticket.r#ref, want.ticket.r#ref);
+    assert_eq!((&got.project_ids, &got.source_ids), (&want.project_ids, &want.source_ids));
+    let mine = e.h.core.ticket_by_key(&key, Some(&want.ticket.r#ref.account)).await.unwrap();
+    assert_eq!(mine.map(|i| i.ticket.r#ref), Some(want.ticket.r#ref.clone()));
+    assert!(e.h.core.ticket_by_key(&key, Some(&AccountId::new("other"))).await.unwrap().is_none());
+    assert!(e.h.core.ticket_by_key("NOPE-1", None).await.unwrap().is_none());
+    assert_eq!(e.tracker.calls().len(), calls, "served from the cache: {:?}", e.tracker.calls());
 }
 
 /// shop (a source feeds it, bound to acme/shop-api) + lab (no source, bound to acme/lab).
@@ -1065,4 +1092,38 @@ async fn team_is_polled_only_while_its_tab_is_shown() {
     e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Authored))));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2);
+}
+
+#[tokio::test]
+async fn a_failing_side_keeps_the_account_status_until_it_recovers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // github-work is both a tracker and a code host
+    e.factory.trackers.lock().insert(AccountId::new("github-work"), e.tracker.clone() as Arc<dyn Tracker>);
+    let pr = review("acme/shop", 999, ReviewKind::ReviewRequested).r#ref;
+    let ticket =
+        TicketRef { account: "github-work".into(), ..e.tracker.ticket("SHOP-141").unwrap().ticket.r#ref };
+    let statuses = || {
+        e.h.ui
+            .events()
+            .iter()
+            .filter_map(|ev| match ev {
+                UiEvent::AccountStatusChanged { status, .. } => Some(*status),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    e.h.ui.take_events();
+    for _ in 0..2 {
+        assert!(e.h.core.review_get(&pr).await.is_err());
+        e.h.core.tracker_get(&ticket).await.unwrap();
+    }
+    assert_eq!(statuses(), [kelta_proto::events::AccountStatus::Error], "no Ok/Error flip-flop");
+    e.host.reviews.lock().push(review("acme/shop", 999, ReviewKind::ReviewRequested));
+    e.h.core.review_get(&pr).await.unwrap();
+    assert_eq!(
+        statuses().last(),
+        Some(&kelta_proto::events::AccountStatus::Ok),
+        "the failing side recovered"
+    );
 }

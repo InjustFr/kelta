@@ -347,4 +347,8 @@ pub struct TicketPage {
     /// Served from cache while a refresh is pending / failed.
     pub stale: bool,
     pub errors: Vec<AccountError>,
+    /// Who the page and the scope's cached Team list (and review lists) mention, merged across
+    /// trackers and code hosts: the person filter's entries.
+    #[serde(default)]
+    pub people: Vec<Person>,
 }

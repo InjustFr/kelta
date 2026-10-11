@@ -38,7 +38,8 @@ pub struct FakeTracker {
     tickets: Mutex<Vec<TicketDetail>>,
     /// Transition ids requiring fields (→ `NeedsFields`).
     needs_fields: Mutex<Vec<String>>,
-    errors: Mutex<VecDeque<KeltaError>>,
+    /// `None` lets one call pass (see `pass_next`).
+    errors: Mutex<VecDeque<Option<KeltaError>>>,
     calls: Mutex<Vec<String>>,
     page_size: usize,
 }
@@ -104,7 +105,12 @@ impl FakeTracker {
 
     /// The next call fails with this error (queue).
     pub fn fail_next(&self, e: KeltaError) {
-        self.errors.lock().push_back(e);
+        self.errors.lock().push_back(Some(e));
+    }
+
+    /// The next call succeeds; queue it before `fail_next` to fail a later call.
+    pub fn pass_next(&self) {
+        self.errors.lock().push_back(None);
     }
 
     /// Transition `id` will return `NeedsFields`.
@@ -122,7 +128,7 @@ impl FakeTracker {
 
     fn enter(&self, call: &str) -> Result<(), KeltaError> {
         self.calls.lock().push(call.to_owned());
-        match self.errors.lock().pop_front() {
+        match self.errors.lock().pop_front().flatten() {
             Some(e) => Err(e),
             None => Ok(()),
         }
