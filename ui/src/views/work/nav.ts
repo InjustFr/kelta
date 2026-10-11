@@ -128,17 +128,19 @@ const ticketsContent = (s: TicketsState | null): PaneContent => ({
 
 const reviewsContent = (tab: ReviewKind | null): PaneContent => ({ kind: 'reviews', scope: ALL, tab });
 
-function seedContent(view: GlobalView): PaneContent {
+/** A view's first pane; the pre-#270 state only on the layout's first fill (`fresh`), never later. */
+function seedContent(view: GlobalView, fresh: boolean): PaneContent {
   if (view === 'now') return { kind: 'inbox' };
   if (view === 'reviews')
-    return reviewsContent(legacy<{ tab?: ReviewKind }>('kelta.view.reviews')?.tab ?? null);
-  return ticketsContent(legacy<TicketsState>('kelta.view.tickets'));
+    return reviewsContent(fresh ? (legacy<{ tab?: ReviewKind }>('kelta.view.reviews')?.tab ?? null) : null);
+  return ticketsContent(fresh ? legacy<TicketsState>('kelta.view.tickets') : null);
 }
 
 /** The pane a global view shows: its pane in the `GLOBAL` layout; the Tickets view is list only. */
 export function globalContent(view: GlobalView): PaneContent {
-  const root = layout.get(GLOBAL)?.tabs.find((t) => t.id === view)?.root;
-  const content = root?.type === 'pane' ? root.content : seedContent(view);
+  const global = layout.get(GLOBAL);
+  const root = global?.tabs.find((t) => t.id === view)?.root;
+  const content = root?.type === 'pane' ? root.content : seedContent(view, (global?.rev ?? 0) === 0);
   return content.kind === 'tickets' ? { ...content, mode: 'list' } : content;
 }
 
@@ -153,7 +155,7 @@ export function seedGlobalLayout(l: Layout): Layout {
     id: v,
     title: v,
     work_item_id: null,
-    root: makePane(seedContent(v), v),
+    root: makePane(seedContent(v, l.rev === 0), v),
     focused_pane: v,
     zoomed_pane: null,
   }));
