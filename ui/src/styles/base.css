@@ -339,6 +339,16 @@ pre,
   }
 }
 
+/* Section titles of detail panes and settings: chrome, so a rule above each one separates the pane's
+   own sections from the headings inside HtmlContent (which never grow past this size). */
+.k-section-title {
+  margin: var(--k-space-6) 0 var(--k-space-3);
+  padding-top: var(--k-space-4);
+  border-top: 1px solid var(--k-border);
+  font-size: var(--k-font-size);
+  font-weight: var(--k-weight-strong);
+}
+
 /* Floating surfaces answer the action that opened them: one 90ms step, never looping. */
 @keyframes k-float-in {
   from {
