@@ -1,6 +1,7 @@
 //! keltad side: one [`PtyTerminalHost`], a thread per client connection, events routed to the
 //! client that spawned or last adopted each session. Exits after `idle_grace` with no client and no
-//! running session (the grace is armed by the disconnect / exit that made it idle).
+//! running session (the grace is armed by the disconnect / exit that made it idle), or at once on
+//! [`Req::Shutdown`].
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufReader, Write};
@@ -14,7 +15,7 @@ use std::time::Duration;
 use kelta_proto::api::{FrameSink, TerminalEvents, TerminalHost};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{PtySpawnSpec, TerminalEvent};
+use kelta_proto::term::{KillSignal, PtySpawnSpec, TerminalEvent};
 use parking_lot::{Condvar, Mutex};
 use serde_json::Value;
 
@@ -32,6 +33,7 @@ pub fn bind(path: &Path) -> Result<UnixListener, KeltaError> {
 struct Idle {
     st: Mutex<(usize, usize)>, // (clients, running sessions)
     cv: Condvar,
+    stop: AtomicBool,
 }
 
 impl Idle {
@@ -43,6 +45,9 @@ impl Idle {
     fn wait(&self, grace: Duration) {
         let mut st = self.st.lock();
         loop {
+            if self.stop.load(Ordering::SeqCst) {
+                return;
+            }
             if *st != (0, 0) {
                 self.cv.wait(&mut st);
                 continue;
@@ -68,6 +73,13 @@ impl Route {
         if self.running.swap(false, Ordering::SeqCst) {
             self.idle.update(|s| s.1 -= 1);
         }
+    }
+}
+
+// A route dropped while running never gets its Exited (a panic mid-Spawn): release the count.
+impl Drop for Route {
+    fn drop(&mut self) {
+        self.exited();
     }
 }
 
@@ -97,6 +109,19 @@ impl FrameSink for ConnSink {
     fn send(&mut self, frame: Vec<u8>) -> bool {
         encode(&Out::Frame { id: self.id.clone(), token: self.token }, &frame)
             .is_ok_and(|m| self.tx.send(m).is_ok())
+    }
+}
+
+/// Ends a connection on return or panic: stops its writer, releases its client count.
+struct ConnGuard {
+    idle: Arc<Idle>,
+    tx: Sender<Vec<u8>>,
+}
+
+impl Drop for ConnGuard {
+    fn drop(&mut self) {
+        let _ = self.tx.send(Vec::new());
+        self.idle.update(|s| s.0 -= 1);
     }
 }
 
@@ -185,6 +210,7 @@ impl Daemon {
             return tracing::warn!(error = %e, "keltad: cannot start a writer thread");
         }
         self.idle.update(|s| s.0 += 1);
+        let _conn = ConnGuard { idle: self.idle.clone(), tx: tx.clone() };
         let mut r = BufReader::new(stream);
         while let Ok(Some(body)) = read_msg(&mut r) {
             let Some((call, raw)) = decode::<Call>(&body) else {
@@ -207,8 +233,6 @@ impl Daemon {
             }
             reply(&tx, seq, self.handle(&tx, seq, call.req, raw));
         }
-        let _ = tx.send(Vec::new());
-        self.idle.update(|s| s.0 -= 1);
     }
 
     fn handle(&self, tx: &Sender<Vec<u8>>, seq: u64, req: Req, raw: &[u8]) -> Result<Value, KeltaError> {
@@ -226,6 +250,10 @@ impl Daemon {
                     idle: self.idle.clone(),
                 });
                 self.idle.update(|s| s.1 += 1);
+                #[cfg(test)]
+                if spec.program == Path::new(tests::PANIC) {
+                    panic!("test hook: handler panic");
+                }
                 let id = spec.id.clone();
                 let r = h.spawn(PtySpawnSpec {
                     id: spec.id,
@@ -299,6 +327,15 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Req::Stats => Ok(serde_json::to_value(h.stats())?),
+            Req::Shutdown => {
+                // SIGKILL each process group (as `session_kill`), exited ones are just closed.
+                for s in h.stats().sessions {
+                    let _ = h.kill(&s.id, KillSignal::Kill);
+                }
+                self.idle.stop.store(true, Ordering::SeqCst);
+                self.idle.update(|_| {});
+                Ok(Value::Null)
+            }
         }
     }
 }
@@ -312,6 +349,9 @@ mod tests {
     use kelta_proto::term::{KillSignal, TerminalLimits};
 
     use super::*;
+
+    /// Spawn program that makes the handler panic.
+    pub(super) const PANIC: &str = "!panic";
 
     fn host() -> PtyTerminalHost {
         PtyTerminalHost::new(TerminalLimits::default())
@@ -508,6 +548,53 @@ mod tests {
         assert!(hits.to_string().contains("a needle"), "{hits}");
     }
 
+    /// #305: Shutdown kills the sessions and exits at once, a client still connected.
+    #[test]
+    fn shutdown_kills_sessions_and_exits() {
+        use super::super::SpawnSpec;
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = tmp.path().join("run/keltad.sock");
+        let l = bind(&sock).unwrap();
+        let t = std::thread::spawn(move || serve(l, host(), Duration::from_secs(60)));
+        let mut s = UnixStream::connect(&sock).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let spec = SpawnSpec {
+            id: SessionId::new("sleep"),
+            program: "/bin/sleep".into(),
+            args: vec!["60".into()],
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+        };
+        let mut r = BufReader::new(s.try_clone().unwrap());
+        let mut call = |seq, req| {
+            s.write_all(&encode(&Call { seq, req }, &[]).unwrap()).unwrap();
+            loop {
+                let body = read_msg(&mut r).unwrap().unwrap();
+                if let Some((Out::Reply { seq: got, result }, _)) = decode::<Out>(&body)
+                    && got == seq
+                {
+                    return result.unwrap();
+                }
+            }
+        };
+        call(1, Req::Spawn { spec });
+        let stats: kelta_proto::term::TerminalStats = serde_json::from_value(call(2, Req::Stats)).unwrap();
+        assert_eq!(stats.sessions.len(), 1);
+        call(3, Req::Shutdown);
+        for _ in 0..200 {
+            if t.is_finished() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert!(t.is_finished(), "keltad still serving after Shutdown");
+        assert!(!sock.exists());
+    }
+
     #[test]
     fn exits_when_idle() {
         let tmp = tempfile::tempdir().unwrap();
@@ -519,6 +606,40 @@ mod tests {
         assert!(!t.is_finished(), "a connected client keeps keltad alive");
         drop(s);
         t.join().unwrap();
+        assert!(!sock.exists());
+    }
+
+    /// #291: a handler panic (here mid-Spawn) releases its client and running counts.
+    #[test]
+    fn exits_when_idle_after_a_handler_panic() {
+        use super::super::SpawnSpec;
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = tmp.path().join("run/keltad.sock");
+        let l = bind(&sock).unwrap();
+        let t = std::thread::spawn(move || serve(l, host(), Duration::from_millis(100)));
+        let mut s = UnixStream::connect(&sock).unwrap();
+        let spec = SpawnSpec {
+            id: SessionId::new("p"),
+            program: PANIC.into(),
+            args: Vec::new(),
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+        };
+        s.write_all(&encode(&Call { seq: 1, req: Req::Spawn { spec } }, &[]).unwrap()).unwrap();
+        // The panic closes the connection (no reply); the client side stays open.
+        s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let mut buf = Vec::new();
+        let _ = s.read_to_end(&mut buf);
+        assert!(buf.is_empty(), "got a reply");
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !t.is_finished() {
+            assert!(std::time::Instant::now() < deadline, "keltad stayed up after the panic");
+            std::thread::sleep(Duration::from_millis(20));
+        }
         assert!(!sock.exists());
     }
 }

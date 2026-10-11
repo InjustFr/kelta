@@ -16,7 +16,7 @@ use kelta_proto::model::{
     AttachInfo, Attention, ClaudeMeta, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy,
     SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, WorkItem,
 };
-use kelta_proto::settings::{BellMode, HookTransport, Osc52, RestoreMode, SessionHost};
+use kelta_proto::settings::{BellMode, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
 use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
 use kelta_proto::tracker::TicketRef;
@@ -38,6 +38,17 @@ pub const QUIT_GRACE: Duration = Duration::from_secs(2);
 pub const RESUME_FAIL_WINDOW: Duration = Duration::from_secs(5);
 /// Persisted text tail (lines).
 pub const TEXT_TAIL_LINES: u32 = 200;
+
+/// [`Core::quit_plan`]: what a user quit (Cmd+Q, a window close that quits) does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuitPlan {
+    /// Quit; keltad keeps the restorable sessions running (or nothing would survive anyway).
+    Keep,
+    /// Quit and stop keltad and its sessions ([`Core::stop_sessions_on_quit`]).
+    Stop,
+    /// Ask first: `live` sessions keltad would keep, the names of the busy ones.
+    Ask { live: u32, busy: Vec<String> },
+}
 
 #[derive(Default)]
 pub struct SessionTimers {
@@ -246,6 +257,27 @@ fn base64(input: &[u8]) -> String {
         out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
     }
     out
+}
+
+/// Input that answers a permission prompt (#303): Enter, `1`-`9`, `y`/`n`, or a lone Esc, raw or as
+/// a kitty CSI-u press (#306). Other escape sequences (arrows, Shift+Tab, DA/DSR replies, mouse
+/// reports, bracketed paste) only move or report.
+fn answers_prompt(bytes: &[u8]) -> bool {
+    match bytes {
+        [0x1b] => true,
+        [0x1b, b'[', params @ .., b'u'] => kitty_answer(params),
+        [0x1b, ..] => false,
+        _ => bytes.iter().any(|b| matches!(b, b'\r' | b'\n' | b'1'..=b'9' | b'y' | b'n')),
+    }
+}
+
+/// `code[:alternates][;1[:1]][;text]`: an answer key pressed with no modifiers (Claude Code pushes
+/// DISAMBIGUATE, so Esc arrives as `ESC [ 27 u`). Repeat (`:2`) and release (`:3`) events don't count.
+fn kitty_answer(params: &[u8]) -> bool {
+    let mut fields = std::str::from_utf8(params).unwrap_or_default().split(';');
+    let code = fields.next().and_then(|f| f.split(':').next()?.parse::<u32>().ok());
+    matches!(code, Some(13 | 27 | 49..=57 | 89 | 78 | 121 | 110))
+        && matches!(fields.next(), None | Some("1" | "1:1"))
 }
 
 fn tail_lines(text: &str, max: u32) -> String {
@@ -480,6 +512,35 @@ impl Core {
                     && e.info.lifecycle == Lifecycle::Live
                     && matches!(e.info.status, SessionStatus::Working | SessionStatus::NeedsInput)
             })
+    }
+
+    /// What a user quit does with the sessions keltad would keep running (`app.quit_sessions`).
+    pub fn quit_plan(&self) -> QuitPlan {
+        let cfg = self.cfg.effective(None);
+        // Same rule as quit_flow: nothing survives without keltad or with restore_mode none.
+        if !self.quit_persistent() || cfg.app.restore_mode == RestoreMode::None {
+            return QuitPlan::Keep;
+        }
+        let (mut live, mut busy) = (0, Vec::new());
+        for e in self.sessions.lock().values() {
+            if e.info.lifecycle == Lifecycle::Live && e.restore != RestorePolicy::None {
+                live += 1;
+                if matches!(e.info.status, SessionStatus::Working | SessionStatus::NeedsInput) {
+                    busy.push(e.info.name.clone());
+                }
+            }
+        }
+        match cfg.app.quit_sessions {
+            _ if live == 0 => QuitPlan::Keep,
+            QuitSessions::Keep => QuitPlan::Keep,
+            QuitSessions::Stop => QuitPlan::Stop,
+            QuitSessions::Ask => QuitPlan::Ask { live, busy },
+        }
+    }
+
+    /// The next quit ends every session and keltad instead of leaving them running.
+    pub fn stop_sessions_on_quit(&self) {
+        self.quit_stop.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     // =========================================================================================
@@ -965,7 +1026,10 @@ impl Core {
         }
         self.terminal.write(id, bytes)?;
         // No hook fires when a permission prompt is answered (#278): the keystroke itself is the signal.
-        if typed && info.status == SessionStatus::NeedsInput && matches!(info.kind, SessionKind::Claude) {
+        if answers_prompt(bytes)
+            && info.status == SessionStatus::NeedsInput
+            && matches!(info.kind, SessionKind::Claude)
+        {
             let d = status::apply_heuristic(&state, Heuristic::Input);
             self.apply_decision(id, d, info.status_source, None);
         }
@@ -1773,8 +1837,10 @@ impl Core {
         if let Err(e) = self.work.quit_hook().await {
             tracing::warn!(error = %e, "work quit hook failed");
         }
-        // keltad: kept sessions stay running and are adopted on the next start.
-        let persistent = self.quit_persistent();
+        // keltad: kept sessions stay running and are adopted on the next start. Stopping them
+        // quits as without keltad: killed, restored per restore_mode.
+        let stop = self.quit_stop.load(std::sync::atomic::Ordering::SeqCst);
+        let persistent = self.quit_persistent() && !stop;
         let restoring = self.cfg.effective(None).app.restore_mode != RestoreMode::None;
         let live: Vec<(SessionId, bool)> = self
             .sessions
@@ -1838,6 +1904,9 @@ impl Core {
             if !keep {
                 self.terminal.history_delete(id);
             }
+        }
+        if stop {
+            self.terminal.shutdown();
         }
         // shortcut: sessions kept by keltad lose their IDE bridge at quit; re-open it on adoption if missed.
         self.server.ide_close_all();

@@ -124,7 +124,7 @@ fn queue_capped<E>(p: &mut Vec<E>, ev: E) {
 
 /// Which events must wake a window that does not exist.
 pub fn needs_window(ev: &UiEvent) -> bool {
-    matches!(ev, UiEvent::CtlCommand { .. } | UiEvent::UiOpen { .. })
+    matches!(ev, UiEvent::CtlCommand { .. } | UiEvent::UiOpen { .. } | UiEvent::QuitRequested { .. })
 }
 
 impl UiBridge for TauriBridge {
@@ -256,6 +256,7 @@ mod tests {
     #[test]
     fn only_window_commands_wake_the_webview() {
         assert!(needs_window(&UiEvent::CtlCommand { cmd: CtlCommand::Palette }));
+        assert!(needs_window(&UiEvent::QuitRequested { live: 1, busy: vec![] }));
         assert!(!needs_window(&UiEvent::ProjectRemoved { id: ProjectId::new("p") }));
     }
 }

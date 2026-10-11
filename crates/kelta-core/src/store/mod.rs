@@ -730,7 +730,7 @@ pub mod q {
         Ok((item, ticket.unwrap_or_default(), review.unwrap_or_default(), state, sessions, threads, rebase))
     }
 
-    fn finish_work(c: &Connection, raw: WorkRaw) -> R<WorkItem> {
+    fn finish_work(raw: WorkRaw, steps: Vec<WorkStepStatus>) -> R<WorkItem> {
         let (mut item, ticket, review, state, sessions, threads, rebase) = raw;
         if !ticket.is_empty() {
             item.ticket = Some(serde_json::from_str::<TicketRef>(&ticket)?);
@@ -742,7 +742,7 @@ pub mod q {
         item.session_ids = serde_json::from_str(&sessions).unwrap_or_default();
         item.sent_threads = serde_json::from_str(&threads).unwrap_or_default();
         item.rebase = rebase.and_then(|r| serde_json::from_str(&r).ok());
-        item.steps = steps(c, &item.id)?;
+        item.steps = steps;
         Ok(item)
     }
 
@@ -751,26 +751,43 @@ pub mod q {
             .query_row(&format!("SELECT {WORK_COLS} FROM work_items WHERE id = ?1"), [id.as_str()], work_row)
             .optional()
             .map_err(db_err)?;
-        raw.map(|r| finish_work(c, r)).transpose()
+        let Some(r) = raw else { return Ok(None) };
+        Ok(Some(finish_work(r, steps(c, id)?)?))
     }
 
     pub fn work_list(c: &Connection, project: Option<&ProjectId>) -> R<Vec<WorkItem>> {
+        work_select(c, project, false)
+    }
+
+    /// Unfinished items only: Finished ones pile up forever and most readers skip them.
+    pub fn work_open(c: &Connection) -> R<Vec<WorkItem>> {
+        work_select(c, None, true)
+    }
+
+    /// The items of `project` (all when `None`), their steps read in one query.
+    fn work_select(c: &Connection, project: Option<&ProjectId>, open_only: bool) -> R<Vec<WorkItem>> {
+        let filter = if open_only {
+            "(?1 IS NULL OR project_id = ?1) AND json_extract(state_json, '$.kind') <> 'finished'"
+        } else {
+            "(?1 IS NULL OR project_id = ?1)"
+        };
+        let param = project.map(|p| p.as_str());
         let mut st = c
-            .prepare(&format!(
-                "SELECT {WORK_COLS} FROM work_items WHERE (?1 IS NULL OR project_id = ?1) ORDER BY created_at, id"
-            ))
+            .prepare(&format!("SELECT {WORK_COLS} FROM work_items WHERE {filter} ORDER BY created_at, id"))
             .map_err(db_err)?;
         let raws = st
-            .query_map([project.map(|p| p.as_str().to_owned())], work_row)
+            .query_map([param], work_row)
             .map_err(db_err)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(db_err)?;
+        let mut steps =
+            step_rows(c, &format!("work_item_id IN (SELECT id FROM work_items WHERE {filter})"), param)?;
         // One undecodable row (older/newer build) must not hide every work item.
         Ok(raws
             .into_iter()
             .filter_map(|r| {
                 let id = r.0.id.clone();
-                finish_work(c, r)
+                finish_work(r, steps.remove(id.as_str()).unwrap_or_default())
                     .inspect_err(
                         |e| tracing::warn!(work_item = %id, error = %e, "skipping unreadable work item"),
                     )
@@ -782,7 +799,7 @@ pub mod q {
     /// `WorkStore::claim_item`: the holder check and the write in one transaction.
     pub fn work_claim(c: &mut Connection, item: &WorkItem) -> R<Result<WorkItem, Box<WorkItem>>> {
         let tx = c.transaction().map_err(db_err)?;
-        let held = kelta_proto::api::claim_holder(&work_list(&tx, None)?, item);
+        let held = kelta_proto::api::claim_holder(&work_open(&tx)?, item);
         let r = item.clone().claim_over(held);
         if let Ok(w) = &r {
             work_put(&tx, w)?;
@@ -862,24 +879,42 @@ pub mod q {
 
     /// Steps in saga order, then unknown steps by name.
     pub fn steps(c: &Connection, id: &WorkItemId) -> R<Vec<WorkStepStatus>> {
+        Ok(step_rows(c, "work_item_id = ?1", Some(id.as_str()))?.remove(id.as_str()).unwrap_or_default())
+    }
+
+    /// Steps matching `filter` (binds `?1` to `param`) by work item id, each in saga order.
+    fn step_rows(
+        c: &Connection,
+        filter: &str,
+        param: Option<&str>,
+    ) -> R<std::collections::HashMap<String, Vec<WorkStepStatus>>> {
         let mut st = c
-            .prepare("SELECT step, status, detail, updated_at FROM work_steps WHERE work_item_id = ?1 ORDER BY step")
+            .prepare(&format!(
+                "SELECT work_item_id, step, status, detail, updated_at FROM work_steps WHERE {filter}"
+            ))
             .map_err(db_err)?;
-        let mut all = st
-            .query_map([id.as_str()], |r| {
-                Ok(WorkStepStatus {
-                    step: r.get(0)?,
-                    status: step_parse(&r.get::<_, String>(1)?),
-                    detail: r.get(2)?,
-                    updated_at: r.get(3)?,
-                })
+        let rows = st
+            .query_map([param], |r| {
+                let step = WorkStepStatus {
+                    step: r.get(1)?,
+                    status: step_parse(&r.get::<_, String>(2)?),
+                    detail: r.get(3)?,
+                    updated_at: r.get(4)?,
+                };
+                Ok((r.get::<_, String>(0)?, step))
             })
             .map_err(db_err)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(db_err)?;
+        let mut by_item = std::collections::HashMap::<String, Vec<WorkStepStatus>>::new();
+        for (id, s) in rows {
+            by_item.entry(id).or_default().push(s);
+        }
         let rank = |s: &str| WORK_STEPS.iter().position(|x| *x == s).unwrap_or(WORK_STEPS.len());
-        all.sort_by(|a, b| rank(&a.step).cmp(&rank(&b.step)).then_with(|| a.step.cmp(&b.step)));
-        Ok(all)
+        for all in by_item.values_mut() {
+            all.sort_by(|a, b| rank(&a.step).cmp(&rank(&b.step)).then_with(|| a.step.cmp(&b.step)));
+        }
+        Ok(by_item)
     }
 
     // ---- grants / trust ------------------------------------------------------------------------

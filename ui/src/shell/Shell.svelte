@@ -33,6 +33,7 @@
   import GlobalHost from './GlobalHost.svelte';
   import { noteFocus } from './jumplist';
   import PeekPopover from './PeekPopover.svelte';
+  import { askQuit } from './quit';
   import { lazyComponents } from './lazy.svelte';
   import { projectAccent } from './accent';
   import { chordFor } from './labels';
@@ -197,6 +198,9 @@
     const stopKeys = keyManager.start();
     const offPrefix = keyManager.onPrefixChange((armed) => (prefixArmed = armed));
     const offRemoved = onUiEvent('session.removed', (ev) => terminalPool.release(ev.id));
+    const offQuit = onUiEvent('app.quit_requested', (ev) => {
+      askQuit(ev).catch((err: unknown) => toasts.error(err, 'Quitting failed'));
+    });
     const offOpen = onUiEvent('ui.open', (ev) => {
       // The backend asks for a pane: the layout store applies it to a loaded layout; an unloaded
       // layout is fetched first. Focus requests also bring the project to the front.
@@ -262,6 +266,7 @@
       stopKeys();
       offPrefix();
       offRemoved();
+      offQuit();
       offOpen();
       offCtl();
       mql?.removeEventListener('change', onScheme);

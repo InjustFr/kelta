@@ -22,6 +22,8 @@ pub const COMMANDS: &[&str] = &[
     "app_update_status",
     "app_update_check",
     "app_restart",
+    "app_quit",
+    "app_close",
     // settings
     "settings_schema",
     "settings_effective",

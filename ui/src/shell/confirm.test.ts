@@ -39,3 +39,17 @@ describe('PromptStore', () => {
     expect(store.current).toBeNull();
   });
 });
+
+describe('ConfirmStore checkbox', () => {
+  it('returns the checkbox state and resets it for the next request', async () => {
+    const store = new ConfirmStore();
+    const a = store.askChecked({ title: 'A', body: '', checkbox: 'Again', actions: [] });
+    const b = store.askChecked({ title: 'B', body: '', actions: [] });
+    store.checked = true;
+    store.answer('ok');
+    expect(await a).toEqual({ id: 'ok', checked: true });
+    expect(store.checked).toBe(false);
+    store.answer(null);
+    expect(await b).toEqual({ id: null, checked: false });
+  });
+});

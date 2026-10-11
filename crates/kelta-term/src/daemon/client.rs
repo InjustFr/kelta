@@ -467,6 +467,10 @@ impl TerminalHost for DaemonTerminalHost {
         true
     }
 
+    fn shutdown(&self) {
+        self.notify(Req::Shutdown);
+    }
+
     fn adopt(
         &self,
         id: &SessionId,

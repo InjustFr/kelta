@@ -2,10 +2,11 @@
 //!
 //! `SecretRef` resolution chain (SETTINGS §5): `keyring:` (macOS Keychain / Linux Secret Service
 //! via keyring-core), `file:` (passphrase-encrypted file, unlocked once per run), `gh-cli`, `glab-cli`, `command:`, `env:`. Resolution runs off the caller's
-//! thread with a 5 s timeout, results are cached in memory only (zeroized on drop) and the cache
-//! is dropped whenever the effective settings or the login environment change (except `keyring:`
-//! values, which neither can change and which may cost a Keychain prompt each), on
-//! [`SecretResolver::invalidate`] (401) and on `set` / `delete`. Secret values are never logged, serialized or put in error messages.
+//! thread with a 5 s timeout, results are cached in memory only (zeroized on drop), keyed by the
+//! ref and host (everything the settings feed into a lookup, so a settings reload keeps them). The
+//! cache is dropped when the login environment changes (except `keyring:` values, which it cannot
+//! change and which may cost a Keychain prompt each), on [`SecretResolver::invalidate`] (401) and on
+//! `set` / `delete`. Secret values are never logged, serialized or put in error messages.
 
 mod file;
 mod glab;
@@ -20,7 +21,6 @@ use async_trait::async_trait;
 use kelta_proto::api::{SecretResolver, SettingsSource};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::secret::{KEYRING_SERVICE, Secret, SecretBackendStatus, SecretCtx, SecretRef, SecretSource};
-use kelta_proto::settings::Settings;
 use keyring_core::CredentialStore;
 use parking_lot::{Mutex, RwLock};
 
@@ -50,19 +50,12 @@ pub struct SecretsOptions {
 /// Name of the encrypted secrets file in the data dir.
 pub const SECRETS_FILE: &str = "secrets.enc";
 
-struct Cache {
-    /// The settings snapshot the entries were resolved under; a different `Arc` means the
-    /// settings changed. Holding it keeps the address unique.
-    generation: Option<Arc<Settings>>,
-    map: HashMap<String, Secret>,
-}
-
 pub struct Secrets {
     settings: Arc<dyn SettingsSource>,
     store: Mutex<Option<Arc<CredentialStore>>>,
     env: RwLock<Option<BTreeMap<String, String>>>,
     timeout: Duration,
-    cache: Mutex<Cache>,
+    cache: Mutex<HashMap<String, Secret>>,
     file: Option<Arc<file::SecretFile>>,
 }
 
@@ -128,7 +121,7 @@ impl Secrets {
             store: Mutex::new(opts.store),
             env: RwLock::new(opts.env),
             timeout: opts.timeout.unwrap_or(RESOLVE_TIMEOUT),
-            cache: Mutex::new(Cache { generation: None, map: HashMap::new() }),
+            cache: Mutex::new(HashMap::new()),
             file: opts.file.map(|p| Arc::new(file::SecretFile::new(p))),
         })
     }
@@ -152,14 +145,10 @@ impl Secrets {
 
     // ---- cache -----------------------------------------------------------------------------
 
-    /// Drop every entry but `keyring:` ones: the settings and the environment cannot change them,
-    /// and re-reading one can prompt for Keychain access again (#275).
+    /// Drop every entry but `keyring:` ones: the environment cannot change them, and re-reading
+    /// one can prompt for Keychain access again (#275).
     fn clear_cache(&self) {
-        Self::drop_unpinned(&mut self.cache.lock().map);
-    }
-
-    fn drop_unpinned(map: &mut HashMap<String, Secret>) {
-        map.retain(|k, _| k.starts_with("keyring:"));
+        self.cache.lock().retain(|k, _| k.starts_with("keyring:"));
     }
 
     fn cache_key(r: &SecretRef, ctx: &SecretCtx) -> String {
@@ -167,18 +156,11 @@ impl Secrets {
     }
 
     fn cached(&self, key: &str) -> Option<Secret> {
-        let current = self.settings.effective(None);
-        let mut c = self.cache.lock();
-        let same = c.generation.as_ref().is_some_and(|g| Arc::ptr_eq(g, &current));
-        if !same {
-            Self::drop_unpinned(&mut c.map);
-            c.generation = Some(current);
-        }
-        c.map.get(key).cloned()
+        self.cache.lock().get(key).cloned()
     }
 
     fn remember(&self, key: String, secret: &Secret) {
-        self.cache.lock().map.insert(key, secret.clone());
+        self.cache.lock().insert(key, secret.clone());
     }
 
     // ---- processes -------------------------------------------------------------------------
@@ -602,6 +584,6 @@ impl SecretResolver for Secrets {
 
     fn invalidate(&self, r: &SecretRef) {
         let prefix = format!("{}\u{1}", r.as_str());
-        self.cache.lock().map.retain(|k, _| !k.starts_with(&prefix));
+        self.cache.lock().retain(|k, _| !k.starts_with(&prefix));
     }
 }
