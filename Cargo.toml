@@ -14,7 +14,7 @@ edition = "2024"
 rust-version = "1.99"
 license = "MIT"
 authors = ["Kelta contributors"]
-repository = "https://github.com/kelta-dev/kelta"
+repository = "https://github.com/InjustFr/kelta"
 publish = false
 
 [workspace.dependencies]
