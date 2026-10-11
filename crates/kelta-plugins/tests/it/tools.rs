@@ -197,6 +197,51 @@ async fn tool_check_runs_the_check_argv() {
     assert_eq!(env.host.tool_check(&ToolId::new("nope")).await.unwrap_err().code, ErrorCode::NotFound);
 }
 
+/// A plugin's relative tool command / check program is its own file, whatever Kelta's cwd is.
+#[tokio::test]
+async fn plugin_tool_check_resolves_relative_paths_in_the_plugin_dir() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = common::Env::new();
+    let tools = r#"
+[[contributes.tools]]
+id = "local"
+kind = "pty"
+command = "./bin/x"
+
+[[contributes.tools]]
+id = "checked"
+kind = "pty"
+command = "./bin/x"
+check = ["./bin/x", "--version"]
+
+[[contributes.tools]]
+id = "escape"
+kind = "pty"
+command = "./bin/x"
+check = ["./bin/link"]
+"#;
+    let perms = ["sessions.spawn", "exec:./bin/x", "exec:./bin/link"];
+    let dir = env.write_plugin(
+        "rel",
+        &common::manifest("rel", &perms, tools),
+        &[("bin/x", "#!/bin/sh\necho own\n")],
+    );
+    std::fs::set_permissions(dir.join("bin/x"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let marker = env.tmp.path().join("escaped");
+    let escape = env.tmp.path().join("escape.sh");
+    std::fs::write(&escape, format!("#!/bin/sh\n: > {}\n", marker.display())).unwrap();
+    std::fs::set_permissions(&escape, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::os::unix::fs::symlink(&escape, dir.join("bin/link")).unwrap();
+    env.host.grant(&PluginId::new("rel"), perms.iter().map(|p| p.to_string()).collect()).await.unwrap();
+    assert!(!std::env::current_dir().unwrap().join("bin/x").exists(), "test cwd must not hold bin/x");
+
+    assert!(env.host.tool_check(&ToolId::new("rel/local")).await.unwrap().installed);
+    let c = env.host.tool_check(&ToolId::new("rel/checked")).await.unwrap();
+    assert_eq!((c.installed, c.version.as_deref()), (true, Some("own")));
+    assert!(!env.host.tool_check(&ToolId::new("rel/escape")).await.unwrap().installed);
+    assert!(!marker.exists(), "a check outside the plugin dir must not run");
+}
+
 #[tokio::test]
 async fn pty_tools_spawn_sessions_with_expanded_templates() {
     let env = common::Env::new().with_settings(|s| {
