@@ -217,14 +217,23 @@ function rebaseAges(items: TicketItem[]): TicketItem[] {
 function settingsWithSources(projects: ProjectInfo[]): JsonValue {
   const sources: Source[] = projects.flatMap((p) =>
     p.tracker
-      ? [{ id: p.id, label: `${p.name} board`, projects: [p.id], tracker: clone(p.tracker), routes: [] }]
+      ? [
+          {
+            id: p.id,
+            label: `${p.name} board`,
+            projects: [p.id],
+            tracker: clone(p.tracker),
+            routes: [],
+            status_colors: {},
+          },
+        ]
       : [],
   );
   const base = projects.find((p) => p.tracker)?.tracker;
   if (base) {
     const view = { ...base.views[0]!, id: 'ops', label: 'Ops issues', jql: null, account: null };
     const tracker = { ...clone(base), account: 'gitlab-corp', views: [view], columns: [] };
-    sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [] });
+    sources.push({ id: 'ops', label: 'Ops board', projects: [], tracker, routes: [], status_colors: {} });
   }
   return { ...clone(samples.settingsDefault), sources } as unknown as JsonValue;
 }
@@ -404,6 +413,7 @@ const withSourceDefaults = (s: Partial<Source>): Source => ({
   label: '',
   projects: [],
   routes: [],
+  status_colors: {},
   ...s,
   tracker: {
     account: '',

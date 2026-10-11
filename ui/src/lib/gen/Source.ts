@@ -14,4 +14,9 @@ projects: Array<ProjectId>,
 /**
  * `repo_rules` must stay empty: `routes` replace them.
  */
-tracker: TrackerBinding, routes: Array<SourceRoute>, };
+tracker: TrackerBinding, routes: Array<SourceRoute>, 
+/**
+ * Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped
+ * statuses keep their category colour. A bad colour is dropped with a warning.
+ */
+status_colors: { [key in string]: string }, };

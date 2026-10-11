@@ -21,14 +21,20 @@
   const ref = $derived(content.ticket);
   const slot = $derived(tickets.details[ticketKey(ref)]);
   const detail = $derived(slot?.data ?? null);
-  /** A detail opened on its own has no list item: build one from `tracker_get` (it carries prs and caps). */
+  /** A detail opened on its own has no list item: build one from `tracker_get` (it carries prs and caps),
+   *  with the sources of a loaded list that has the ticket (its status colour follows them). */
+  const listed = $derived(
+    Object.values(tickets.lists)
+      .flatMap((l) => l.data?.items ?? [])
+      .find((it) => ticketKey(it.ticket.ref) === ticketKey(ref)),
+  );
   const item = $derived<TicketItem | null>(
     detail && {
       ticket: detail.ticket,
       project_ids: [],
       work_item_id: null,
       view_ids: [],
-      source_ids: [],
+      source_ids: listed?.source_ids ?? [],
       prs: detail.prs,
       caps: detail.caps,
       waiting: [],

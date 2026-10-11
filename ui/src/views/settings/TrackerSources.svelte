@@ -1,16 +1,17 @@
 <script lang="ts">
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
-  // Whose tickets, current iteration, a Jira view's board and statuses, and removal save at once to the
-  // global `[[sources]]`.
+  // Whose tickets, current iteration, a Jira view's board and statuses, removal and the status colours
+  // save at once to the global `[[sources]]`.
   import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
-  import type { SourceHit, TrackerView, Who } from '$lib/gen';
+  import type { Column, SourceHit, TrackerView, Who } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { settings, ui } from '$lib/stores';
   import { Badge, Button, IconButton, Select, Toggle } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
+  import ColorPicker from '../onboarding/ColorPicker.svelte';
   import SettingsGroup from './layout/SettingsGroup.svelte';
   import { editSource, iterationWord, viewAccount } from './lib/sources.svelte';
 
@@ -53,7 +54,7 @@
   // Jira: boards per account (from the source picker's discovery) and the statuses of the source's
   // columns, which follow its board. A failed load only leaves the choice empty.
   let boards = $state<Record<string, SourceHit[]>>({});
-  let statusNames = $state<string[]>([]);
+  let columns = $state<Column[]>([]);
   // Strings, so a save that leaves them alone does not reload anything.
   const jiraAccounts = $derived(
     source
@@ -82,16 +83,24 @@
   );
   $effect(() => {
     void columnsKey;
-    if (!jiraAccounts) return;
     ipc
       .trackerColumns({ source_id: sourceId })
-      .then((cols) => {
-        // Done statuses never reach an open view: offer the others.
-        const names = cols.filter((c) => c.category !== 'done').flatMap((c) => c.match_names);
-        statusNames = [...new Set(names)];
-      })
-      .catch(() => (statusNames = []));
+      .then((cols) => (columns = cols))
+      .catch(() => (columns = []));
   });
+  // Done statuses never reach an open view: offer the others.
+  const statusNames = $derived([
+    ...new Set(columns.filter((c) => c.category !== 'done').flatMap((c) => c.match_names)),
+  ]);
+  // Every status of the board, plus the coloured ones it no longer lists (so they can be cleared).
+  const colorNames = $derived([
+    ...new Set([...columns.flatMap((c) => c.match_names), ...Object.keys(source?.status_colors ?? {})]),
+  ]);
+  const setColor = (name: string, color: string | null) =>
+    editSource(sourceId, (s) => {
+      const rest = Object.fromEntries(Object.entries(s.status_colors).filter(([k]) => k !== name));
+      return { ...s, status_colors: color ? { ...rest, [name]: color } : rest };
+    });
 
   const boardOptions = (account: string, v: TrackerView) => {
     const own = (boards[account] ?? []).map((h) => ({ value: String(h.view.board_id), label: h.label }));
@@ -202,6 +211,23 @@
       </ul>
     {/if}
   </SettingsGroup>
+  {#if colorNames.length > 0}
+    <SettingsGroup heading={t('Status colours')} data-testid="status-colors">
+      <p class="empty">{t('A status without a colour keeps the colour of its category.')}</p>
+      <ul>
+        {#each colorNames as name (name)}
+          <li data-status={name}>
+            <span class="label">{name}</span>
+            <ColorPicker
+              label={t('Colour of {status}', { status: name })}
+              value={source.status_colors[name] ?? null}
+              onchange={(c) => void setColor(name, c)}
+            />
+          </li>
+        {/each}
+      </ul>
+    </SettingsGroup>
+  {/if}
 {/if}
 
 <style>

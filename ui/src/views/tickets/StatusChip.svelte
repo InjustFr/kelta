@@ -1,14 +1,23 @@
 <script lang="ts">
   import type { Status } from '$lib/gen';
+  import { settings } from '$lib/stores';
+  import { resolveProjectColor } from '$lib/theme';
 
   import { categoryBar } from './group';
 
-  // Status (DESIGN §6.11): a dot in the category colour, then the tracker's own status name.
-  let { status }: { status: Status } = $props();
+  // Status (DESIGN §6.11): a dot in the source's colour for that status (`status_colors`), else the
+  // category colour, then the tracker's own status name.
+  let { status, source = null }: { status: Status; source?: string | null } = $props();
+
+  const mapped = $derived(settings.value()?.sources.find((s) => s.id === source)?.status_colors[status.name]);
 </script>
 
 <span class="chip" title={status.name}
-  ><span class="dot" style:background={categoryBar(status.category)}></span>{status.name}</span
+  ><span
+    class="dot"
+    data-status-color={mapped ?? null}
+    style:background={resolveProjectColor(mapped) ?? categoryBar(status.category)}
+  ></span>{status.name}</span
 >
 
 <style>

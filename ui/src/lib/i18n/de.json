@@ -2254,5 +2254,10 @@
   "Work: Ask Claude to resolve conflicts": "Arbeit: Claude um Auflösung der Konflikte bitten",
   "Work: Re-request review": "Arbeit: Review erneut anfordern",
   "Work: Resolve sent threads": "Arbeit: Gesendete Threads lösen",
-  "Toggle window (kelta-ctl toggle)": "Fenster ein-/ausblenden (kelta-ctl toggle)"
+  "Toggle window (kelta-ctl toggle)": "Fenster ein-/ausblenden (kelta-ctl toggle)",
+  "Status colours": "Statusfarben",
+  "A status without a colour keeps the colour of its category.": "Ein Status ohne Farbe behält die Farbe seiner Kategorie.",
+  "Colour of {status}": "Farbe von {status}",
+  "Status colors": "Statusfarben",
+  "Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped\nstatuses keep their category colour. A bad colour is dropped with a warning.": "Statusname (wie der Tracker ihn schreibt) → Farbe seines Chips, wie eine Projekt-`color`; Status ohne\nFarbe behalten die Farbe ihrer Kategorie. Eine ungültige Farbe wird mit einer Warnung verworfen."
 }
