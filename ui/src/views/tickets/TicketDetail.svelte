@@ -381,8 +381,8 @@
           onclick={openParent}
           title={parent.title || undefined}
         >
-          {t('parent {key}', { key: parent.key })}{#if parent.title}{' '}<span class="parent-title"
-              >{parent.title}</span
+          {t('parent {key}', { key: parent.key })}{#if parent.title}<span class="parent-title"
+              >&#32;{parent.title}</span
             >{/if}
         </button>
       {/if}
