@@ -5,6 +5,7 @@
 //! with `If-None-Match` and `X-Poll-Interval`, only for classic / `gh` OAuth tokens (fine-grained
 //! tokens cannot read notifications). Actions: REST (`/pulls/{n}/reviews` with `commit_id`).
 
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -41,9 +42,17 @@ latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } autho
 latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
 timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
 
-/// Review threads with their last comment, spread into the authored search only (#208).
-const THREADS_FRAGMENT: &str = "fragment Threads on PullRequest { reviewThreads(first:100){ nodes{ isResolved \
-comments(last:1){ nodes{ createdAt author{ login } } } } } }";
+/// Review threads, spread into the authored search only (#208). Their last comments cost one
+/// point per PR (100 threads × a comments connection), so [`LAST_COMMENTS`] reads them apart.
+const THREADS_FRAGMENT: &str =
+    "fragment Threads on PullRequest { id reviewThreads(first:100){ nodes{ isResolved } } }";
+
+/// The last comment of each review thread, for the PRs whose threads moved (#263).
+const LAST_COMMENTS: &str = "query($ids:[ID!]!){ nodes(ids:$ids){ ... on PullRequest { reviewThreads(first:100){ nodes{ isResolved \
+comments(last:1){ nodes{ createdAt author{ login } } } } } } } }";
+
+/// My PR `(repo, number)` → `((updatedAt, unresolved threads), last comment at)`.
+type ThreadCache = HashMap<(String, u64), ((String, u32), Option<String>)>;
 
 /// Unresolved threads (filtered client side: the connection has no `isResolved` argument), the
 /// latest review per reviewer and the head commit (FLOW §4.2).
@@ -84,6 +93,7 @@ pub struct GithubHost {
     auth: Authed,
     me: Mutex<Option<User>>,
     gate: Mutex<Gate>,
+    threads: Mutex<ThreadCache>,
 }
 
 impl GithubHost {
@@ -109,6 +119,7 @@ impl GithubHost {
             auth,
             me: Mutex::new(None),
             gate: Mutex::new(Gate::default()),
+            threads: Mutex::new(HashMap::new()),
         })
     }
 
@@ -245,6 +256,50 @@ impl GithubHost {
             title,
             ..Review::default()
         })
+    }
+
+    /// My PRs' newest last comment on an open thread not by me: [`LAST_COMMENTS`] for the PRs with
+    /// open threads whose `(updatedAt, unresolved threads)` moved since the last poll. Best effort.
+    async fn last_comments(&self, reviews: &mut [Review], nodes: &[Value], me: &str) {
+        let key = |r: &Review| (r.r#ref.repo.clone(), r.r#ref.number);
+        let stamp = |r: &Review| (r.updated_at.clone(), r.unresolved_threads.unwrap_or(0));
+        let node_id = |r: &Review| {
+            nodes.iter().find_map(|n| {
+                (n.get("number").and_then(Value::as_u64) == Some(r.r#ref.number)
+                    && n.pointer("/repository/nameWithOwner").and_then(Value::as_str) == Some(&r.r#ref.repo))
+                .then(|| s(n, "id"))
+                .flatten()
+            })
+        };
+        let mut todo: Vec<(usize, &str)> = Vec::new();
+        {
+            let mut cache = self.threads.lock();
+            cache.retain(|k, _| reviews.iter().any(|r| key(r) == *k));
+            for (i, r) in reviews.iter_mut().enumerate() {
+                if r.unresolved_threads.unwrap_or(0) == 0 {
+                    continue;
+                }
+                match cache.get(&key(r)).filter(|c| c.0 == stamp(r)) {
+                    Some(c) => r.last_comment_at = c.1.clone(),
+                    None => todo.extend(node_id(r).map(|id| (i, id))),
+                }
+            }
+        }
+        if todo.is_empty() {
+            return;
+        }
+        let ids: Vec<&str> = todo.iter().map(|(_, id)| *id).collect();
+        let Ok(data) = graphql(&self.auth, &self.graphql, LAST_COMMENTS, json!({ "ids": ids })).await else {
+            return;
+        };
+        let found = data.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
+        // `nodes(ids:)` answers in the order asked, null for a node gone since.
+        for ((i, _), n) in todo.iter().zip(&found) {
+            let r = &mut reviews[*i];
+            let (Some(_), at) = thread_state(n, me) else { continue };
+            r.last_comment_at = at.clone();
+            self.threads.lock().insert(key(r), (stamp(r), at));
+        }
     }
 
     /// REST pull request → review (no CI / decision: callers enrich).
@@ -667,7 +722,10 @@ impl CodeHost for GithubHost {
             .into_iter()
             .filter_map(|n| self.graphql_pr(&n, kind, &me))
             .filter(|r| r.reviewed_head.as_deref().is_some_and(|h| h != r.head_sha));
-        let requested: Vec<_> = requested.collect();
+        let mut requested: Vec<_> = requested.collect();
+        if kind == ReviewKind::Authored {
+            self.last_comments(&mut requested, &nodes(alias), &me).await;
+        }
         // A re-requested PR matches both searches.
         let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();
         Ok(requested.into_iter().chain(updated).filter(|r| q.include_drafts || !r.draft).collect())
