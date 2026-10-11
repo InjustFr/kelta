@@ -645,7 +645,7 @@ impl Core {
     }
 
     /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
-    async fn cached_reviews(&self) -> Vec<Review> {
+    pub(crate) async fn cached_reviews(&self) -> Vec<Review> {
         let keys = self
             .review_accounts(&Scope::All)
             .iter()

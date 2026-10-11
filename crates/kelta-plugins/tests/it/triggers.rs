@@ -483,19 +483,13 @@ do = [{ action = "toast", text = "{pr.number} {pr.head}" }]
     env.write_plugin("acts", &m, &[("s.html", "<p>s</p>")]);
     env.host.grant(&PluginId::new("acts"), vec!["ui.open".into()]).await.unwrap();
 
-    // A review ctx: the ref gives `pr.number`, `extra` the rest of `pr.*`.
-    let mut ctx = TemplateCtx {
-        review: Some(kelta_proto::codehost::ReviewRef {
-            account: kelta_proto::ids::AccountId::new("github-work"),
-            repo: "acme/shop-api".into(),
-            number: 42,
-        }),
-        ..Default::default()
-    };
+    // A review ctx is the ref alone (the palette before the detail loads): core resolves `pr.*`.
+    let rv = kelta_proto::samples::review();
+    env.core.respond("review", json!(rv));
+    let mut ctx = TemplateCtx { review: Some(rv.r#ref.clone()), ..Default::default() };
     ctx.extra.insert("project_id".into(), "shop".into());
-    ctx.extra.insert("pr.head".into(), "feat/x".into());
     env.host.command_run("acts/say", ctx).await.unwrap();
-    assert_eq!(toasts(&env).pop().unwrap(), "42 feat/x");
+    assert_eq!(toasts(&env).pop().unwrap(), format!("87 {}", rv.source_branch));
 
     // No project, no session: the work item gives the project (never Home) and `{work.id}`.
     let w = kelta_proto::samples::work_item();

@@ -1,7 +1,7 @@
 // `plugin.command.<id>` (palette, keybindings, ticket/review actions): runs a contributed command in
 // the backend, where its actions are permission-checked against the plugin's grants.
 
-import type { ActionDef, ProjectId, Review, TemplateCtx, TicketRef, WorkItem, WorkItemId } from '$lib/gen';
+import type { ActionDef, ProjectId, ReviewRef, TemplateCtx, TicketRef, WorkItem, WorkItemId } from '$lib/gen';
 import { dispatch, registerAction } from '$lib/actions';
 import { commandRun } from '$lib/ipc/commands';
 import '$lib/plugin-host/boot.svelte';
@@ -54,18 +54,9 @@ export function ticketCtx(
   return { ticket: ref, work_item_id: workItemId, extra: project_id ? { project_id } : {} };
 }
 
-/** A review action's ctx: the review, its project and the `{pr.*}` vars. */
-export function reviewCtx(rv: Review, projectId: ProjectId | null): Partial<TemplateCtx> {
-  return {
-    review: rv.ref,
-    extra: {
-      ...(projectId ? { project_id: projectId } : {}),
-      'pr.head': rv.source_branch,
-      'pr.base': rv.target_branch,
-      'pr.title': rv.title,
-      'pr.url': rv.url,
-    },
-  };
+/** A review action's ctx: the review ref and its project; core resolves the `{pr.*}` vars from the ref. */
+export function reviewCtx(ref: ReviewRef, projectId: ProjectId | null): Partial<TemplateCtx> {
+  return { review: ref, extra: projectId ? { project_id: projectId } : {} };
 }
 
 export function runPluginAction(commandId: string, ctx: Partial<TemplateCtx>): Promise<boolean> {

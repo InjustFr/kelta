@@ -541,6 +541,11 @@ impl CoreApi for FakeCore {
         self.overridden("work_feedback").unwrap_or_else(|| Ok(crate::codehost::Feedback::default()))
     }
 
+    async fn review(&self, r: &crate::codehost::ReviewRef) -> Option<crate::codehost::Review> {
+        self.record("review", serde_json::json!({ "review": r }));
+        self.overridden("review").and_then(Result::ok)
+    }
+
     async fn work_fix_checks(&self, review: &crate::codehost::Review) -> Result<String, KeltaError> {
         self.record("work_fix_checks", serde_json::json!({ "review": review }));
         self.overridden("work_fix_checks").unwrap_or_else(|| Ok("sent 1 failed check".into()))
