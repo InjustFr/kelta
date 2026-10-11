@@ -99,8 +99,8 @@ xattr -dr com.apple.quarantine /Applications/Kelta.app
 
 Closing the window keeps sessions running (background mode); `kelta-ctl toggle` brings it back.
 
-**Linux.** `chmod +x kelta_*_amd64.AppImage && ./kelta_*_amd64.AppImage`, or
-`sudo apt install ./kelta_*_amd64.deb`. It needs `libwebkit2gtk-4.1` and GTK 3.
+**Linux.** `chmod +x kelta_*_aarch64.AppImage && ./kelta_*_aarch64.AppImage`, or
+`sudo apt install ./kelta_*_arm64.deb`. It needs `libwebkit2gtk-4.1` and GTK 3.
 
 - Hyprland and Sway: no title bar (`window.decorations = "auto"`); bind `kelta-ctl toggle` to a key
   ([compositors](docs/user/compositors.md)).
