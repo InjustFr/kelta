@@ -2,6 +2,7 @@
 // sessions, splitting, zooming and closing panes and tabs. Every function works on the stores and
 // the pure layout ops; none of them touches a process except the explicit `kill` paths.
 
+import { t, tn } from '$lib/i18n/index.svelte';
 import type {
   Layout,
   OpenPaneRequest,
@@ -142,7 +143,9 @@ export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
 /** Rail label of a tab: `KEY title` for a work tab whose title lacks the key. */
 export function rowLabel(tab: Tab): string {
   const key = workItemOfTab(tab)?.ticket?.key;
-  return key && !tab.title.startsWith(key) ? `${key} ${tab.title}` : tab.title;
+  // Default titles are stored in English ("Settings"): shown in the interface language.
+  const title = t(tab.title);
+  return key && !tab.title.startsWith(key) ? `${key} ${title}` : title;
 }
 
 /** A rail row click: the project (leaving a global view), then the tab. */
@@ -177,7 +180,7 @@ export async function activateProject(id: ProjectId): Promise<void> {
   terminalPool.protect(visibleSessions(id));
   const pending = projects.activate(id);
   void layout.ensure(id).catch(() => {});
-  pending.catch((err: unknown) => toasts.error(err, 'Switching project failed'));
+  pending.catch((err: unknown) => toasts.error(err, t('Switching project failed')));
   if (typeof performance !== 'undefined') {
     queueMicrotask(() => {
       try {
@@ -205,7 +208,17 @@ export function cycleProject(delta: 1 | -1): void {
   if (next) void activateProject(next.id);
 }
 
-export const VIEW_NAMES: Record<GlobalView, string> = { tickets: 'Tickets', now: 'Now', reviews: 'Reviews' };
+export const VIEW_NAMES: Record<GlobalView, string> = {
+  get tickets() {
+    return t('Tickets');
+  },
+  get now() {
+    return t('Now');
+  },
+  get reviews() {
+    return t('Reviews');
+  },
+};
 
 /** Shows a global view on the rail; the active project stays as it is underneath. `select`: the row
  * key the view lands on (a cross link between Tickets and Reviews). */
@@ -282,7 +295,7 @@ export async function revealSession(sessionId: SessionId): Promise<boolean> {
   try {
     await layout.ensure(projectId);
   } catch (err) {
-    toasts.error(err, 'Loading the layout failed');
+    toasts.error(err, t('Loading the layout failed'));
     return false;
   }
   const l = layout.get(projectId);
@@ -290,7 +303,7 @@ export async function revealSession(sessionId: SessionId): Promise<boolean> {
   if (loc && l && findTab(l, loc.tabId)?.detached) {
     // Its window shows it: raise that one (an existing window is unminimized and focused).
     await windowDetach({ project_id: projectId, tab_id: loc.tabId }).catch((err: unknown) =>
-      toasts.error(err, 'Opening the window failed'),
+      toasts.error(err, t('Opening the window failed')),
     );
     return true;
   }
@@ -368,7 +381,7 @@ export async function splitFocused(dir: SplitDir): Promise<void> {
       })),
     );
   } catch (err) {
-    toasts.error(err, 'Splitting the pane failed');
+    toasts.error(err, t('Splitting the pane failed'));
   }
 }
 
@@ -396,11 +409,13 @@ export async function requestClosePane(projectId: ProjectId, tabId: TabId, paneI
   if (session?.lifecycle === 'live') {
     // No primary action: Enter and ⌘↵ never pick one, Escape cancels.
     const answer = await confirms.ask({
-      title: `Close “${session.name}”?`,
-      body: 'The process is still running. It can keep running in the background (listed in the command palette) or be killed with the pane.',
+      title: t('Close “{name}”?', { name: session.name }),
+      body: t(
+        'The process is still running. It can keep running in the background (listed in the command palette) or be killed with the pane.',
+      ),
       actions: [
-        { id: 'background', label: 'Move to background' },
-        { id: 'kill', label: 'Kill process', variant: 'danger' },
+        { id: 'background', label: t('Move to background') },
+        { id: 'kill', label: t('Kill process'), variant: 'danger' },
       ],
     });
     if (answer === null) return;
@@ -423,7 +438,8 @@ export async function closePaneAndStop(projectId: ProjectId, tabId: TabId, paneI
   const node = tab ? findPane(tab.root, paneId)?.pane : null;
   const sid = node ? paneSession(node) : null;
   closePaneById(projectId, tabId, paneId);
-  if (sid) await sessions.kill(sid).catch((err: unknown) => toasts.error(err, 'Stopping the session failed'));
+  if (sid)
+    await sessions.kill(sid).catch((err: unknown) => toasts.error(err, t('Stopping the session failed')));
 }
 
 // ---- detached windows (#342) ------------------------------------------------------------------
@@ -438,7 +454,7 @@ async function openTabWindow(projectId: ProjectId, tabId: TabId): Promise<void> 
   }
   await layout.flush(projectId);
   await windowDetach({ project_id: projectId, tab_id: tabId }).catch((err: unknown) =>
-    toasts.error(err, 'Opening the window failed'),
+    toasts.error(err, t('Opening the window failed')),
   );
 }
 
@@ -509,12 +525,16 @@ export async function requestCloseTab(projectId: ProjectId, tabId: TabId): Promi
   let stop = false;
   if (live.length > 0) {
     const answer = await confirms.ask({
-      title: `Close “${tab.title}”?`,
-      body: `${live.length} session${live.length === 1 ? ' is' : 's are'} still running. They can keep running in the background (listed in the command palette) or be stopped with the tab.`,
+      title: t('Close “{name}”?', { name: tab.title }),
+      body: tn(
+        '{n} session is still running. They can keep running in the background (listed in the command palette) or be stopped with the tab.',
+        '{n} sessions are still running. They can keep running in the background (listed in the command palette) or be stopped with the tab.',
+        live.length,
+      ),
       details: live.map((s) => s.name),
       actions: [
-        { id: 'keep', label: 'Close tab, keep sessions', variant: 'primary' },
-        { id: 'stop', label: 'Close and stop sessions', variant: 'danger' },
+        { id: 'keep', label: t('Close tab, keep sessions'), variant: 'primary' },
+        { id: 'stop', label: t('Close and stop sessions'), variant: 'danger' },
       ],
     });
     if (answer === null) return;
@@ -525,7 +545,7 @@ export async function requestCloseTab(projectId: ProjectId, tabId: TabId): Promi
   if (stop) {
     await Promise.all(
       sids.map((sid) =>
-        sessions.kill(sid).catch((err: unknown) => toasts.error(err, 'Stopping the session failed')),
+        sessions.kill(sid).catch((err: unknown) => toasts.error(err, t('Stopping the session failed'))),
       ),
     );
   }

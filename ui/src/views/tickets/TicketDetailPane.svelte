@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -63,24 +64,29 @@
     <TicketDetail {item} {projectId} />
   {:else if slot?.error && !slot.loading}
     {#if slot.error.code === 'not_found'}
-      <EmptyState icon="ticket" title={`${ref.key} was not found`} body="It may have been deleted or moved.">
-        {#snippet actions()}<Button onclick={() => void tickets.loadDetail(ref)}>Retry</Button>{/snippet}
+      <EmptyState
+        icon="ticket"
+        title={t('{key} was not found', { key: ref.key })}
+        body={t('It may have been deleted or moved.')}
+      >
+        {#snippet actions()}<Button onclick={() => void tickets.loadDetail(ref)}>{t('Retry')}</Button
+          >{/snippet}
       </EmptyState>
     {:else}
       <ErrorState
         error={slot.error}
-        title={`Could not load ${ref.key}`}
+        title={t('Could not load {name}', { name: ref.key })}
         onretry={() => void tickets.loadDetail(ref)}
       >
         {#snippet actions()}
           <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-            {isAuthError(slot.error) ? 'Re-authenticate' : 'Open account settings'}
+            {isAuthError(slot.error) ? t('Re-authenticate') : t('Open account settings')}
           </Button>
         {/snippet}
       </ErrorState>
     {/if}
   {:else}
-    <Loading label="Loading ticket" />
+    <Loading label={t('Loading ticket')} />
   {/if}
 </div>
 

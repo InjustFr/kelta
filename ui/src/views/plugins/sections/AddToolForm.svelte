@@ -1,6 +1,7 @@
 <script lang="ts">
   // Settings > Tools quick form: appends a plain `[[tools]]` entry (Terminal = pty, App = external
   // `open -a`) to the global layer (tools are personal). Everything else stays in the full editor below.
+  import { t } from '$lib/i18n/index.svelte';
   import type { JsonValue, ToolInfo, ToolScope } from '$lib/gen';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
@@ -57,16 +58,19 @@
       name.trim() !== '' &&
       (kind === 'app' ? app.trim() !== '' : argv !== null && !!argv[0]),
   );
-  const kinds = [
-    { id: 'terminal' as const, label: 'Terminal' },
-    ...(platform === 'macos' ? [{ id: 'app' as const, label: 'App' }] : []),
-  ];
-  const scopes: { value: ToolScope; label: string }[] = [
-    { value: 'work', label: 'Per work item' },
-    { value: 'project', label: 'Per project' },
-    { value: 'user', label: 'For me (one, in Home)' },
-  ];
-  const icons = [{ value: '', label: 'None' }, ...ICON_NAMES.map((n) => ({ value: n, label: n }))];
+  const kinds = $derived([
+    { id: 'terminal' as const, label: t('Terminal') },
+    ...(platform === 'macos' ? [{ id: 'app' as const, label: t('App') }] : []),
+  ]);
+  const scopes: { value: ToolScope; label: string }[] = $derived([
+    { value: 'work', label: t('Per work item') },
+    { value: 'project', label: t('Per project') },
+    { value: 'user', label: t('For me (one, in Home)') },
+  ]);
+  const icons = $derived([
+    { value: '', label: t('None') },
+    ...ICON_NAMES.map((n) => ({ value: n, label: n })),
+  ]);
 
   function record(e: KeyboardEvent): void {
     if (e.key === 'Tab' || e.key === 'Escape') return;
@@ -109,27 +113,27 @@
       void add();
     }}
   >
-    <Tabs items={kinds} bind:value={kind} label="Tool kind" />
+    <Tabs items={kinds} bind:value={kind} label={t('Tool kind')} />
     <TextInput
-      label="Name"
+      label={t('Name')}
       bind:value={name}
       placeholder="lazygit"
       hint={name.trim() ? `id: ${id}` : undefined}
     />
     {#if kind === 'terminal'}
       <TextInput
-        label="Command line"
+        label={t('Command line')}
         bind:value={commandLine}
         placeholder="lazygit"
-        error={argv === null ? 'A quote is not closed' : null}
+        error={argv === null ? t('A quote is not closed') : null}
       />
-      <Select label="One instance" options={scopes} bind:value={scope} />
+      <Select label={t('One instance')} options={scopes} bind:value={scope} />
     {:else}
-      <TextInput label="Application" bind:value={app} placeholder="Fork" />
-      <Toggle label="Open the current folder in it" bind:checked={openFolder} />
+      <TextInput label={t('Application')} bind:value={app} placeholder="Fork" />
+      <Toggle label={t('Open the current folder in it')} bind:checked={openFolder} />
     {/if}
     <div class="key">
-      <span class="label" id="add-tool-key">Key (optional)</span>
+      <span class="label" id="add-tool-key">{t('Key (optional)')}</span>
       <div
         class="recorder"
         role="textbox"
@@ -138,20 +142,20 @@
         data-testid="tool-key"
         onkeydown={record}
       >
-        {#if key}<Kbd chord={key} />{:else}<span class="muted">Focus and press a shortcut</span>{/if}
+        {#if key}<Kbd chord={key} />{:else}<span class="muted">{t('Focus and press a shortcut')}</span>{/if}
       </div>
-      {#if key}<IconButton icon="x" size="sm" label="Clear key" onclick={() => (key = '')} />{/if}
+      {#if key}<IconButton icon="x" size="sm" label={t('Clear key')} onclick={() => (key = '')} />{/if}
     </div>
     {#if conflict}<p class="warn" role="status" data-testid="tool-key-conflict">{conflict}</p>{/if}
-    <Select label="Icon (optional)" options={icons} bind:value={icon} />
+    <Select label={t('Icon (optional)')} options={icons} bind:value={icon} />
     {#if editor.errors['tools']}<p class="error" role="alert">{editor.errors['tools']}</p>{/if}
     <div class="buttons">
-      <Button type="submit" size="sm" variant="primary" disabled={!ready}>Add</Button>
-      <Button size="sm" variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+      <Button type="submit" size="sm" variant="primary" disabled={!ready}>{t('Add')}</Button>
+      <Button size="sm" variant="ghost" onclick={() => (open = false)}>{t('Cancel')}</Button>
     </div>
   </form>
 {:else}
-  <div><Button size="sm" icon="plus" onclick={() => (open = true)}>Add tool</Button></div>
+  <div><Button size="sm" icon="plus" onclick={() => (open = true)}>{t('Add tool')}</Button></div>
 {/if}
 
 <style>

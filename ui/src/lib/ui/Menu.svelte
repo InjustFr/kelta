@@ -21,6 +21,7 @@
 </script>
 
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Snippet } from 'svelte';
 
   import Icon from './Icon.svelte';
@@ -40,7 +41,7 @@
     onclose: () => void;
   }
 
-  let { items, x, y, label = 'Menu', header, filtered = false, onselect, onclose }: Props = $props();
+  let { items, x, y, label, header, filtered = false, onselect, onclose }: Props = $props();
   const headerId = $props.id();
 
   let el = $state<HTMLDivElement>();
@@ -123,7 +124,7 @@
   bind:this={el}
   class="k-menu"
   role="menu"
-  aria-label={label}
+  aria-label={label ?? t('Menu')}
   aria-describedby={header ? headerId : undefined}
   tabindex="-1"
   style:left="{pos.left}px"

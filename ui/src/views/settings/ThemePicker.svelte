@@ -2,6 +2,7 @@
   // Settings → General (global layer): one card grid per mode for `app.dark_theme` / `app.light_theme`.
   // Arrows only move focus; Enter, Space or a click writes the slot (no write per focused card).
   // Import theme... converts a VS Code (#231) or terminal (#232) theme file and makes it the theme of its base slot.
+  import { t } from '$lib/i18n/index.svelte';
   import { tick } from 'svelte';
 
   import type { JsonValue, ThemeDef } from '$lib/gen';
@@ -49,10 +50,10 @@
   async function write(
     path: string,
     value: JsonValue,
-    context = 'Could not change the theme',
+    context = t('Could not change the theme'),
   ): Promise<boolean> {
     const ok = value === null ? await editor.reset(path) : await editor.set(path, value);
-    if (!ok) toasts.error(editor.errors[path] ?? 'write failed', context);
+    if (!ok) toasts.error(editor.errors[path] ?? t('write failed'), context);
     return ok;
   }
 
@@ -60,8 +61,8 @@
   let fileInput = $state<HTMLInputElement>();
 
   async function importTheme(file: File): Promise<void> {
-    const context = 'Could not import the theme';
-    if (file.size > MAX_IMPORT_BYTES) return void toasts.error('The file is larger than 5 MB', context);
+    const context = t('Could not import the theme');
+    if (file.size > MAX_IMPORT_BYTES) return void toasts.error(t('The file is larger than 5 MB'), context);
     const { fromThemeFile, themeId } = await import('$lib/theme/import/terminal');
     const def = fromThemeFile(await file.text(), file.name);
     if (def instanceof Error) return void toasts.error(def.message, context);
@@ -69,24 +70,28 @@
     const existing = settings.value()?.themes?.[id];
     if (existing) {
       const answer = await confirms.ask({
-        title: `Replace "${existing.name}"?`,
-        body: `It will be overwritten by "${def.name}" in config.toml.`,
-        actions: [{ id: 'replace', label: 'Replace', variant: 'primary' }],
+        title: t('Replace "{name}"?', { name: existing.name }),
+        body: t('It will be overwritten by "{name}" in config.toml.', { name: def.name }),
+        actions: [{ id: 'replace', label: t('Replace'), variant: 'primary' }],
       });
       if (answer !== 'replace') return;
     }
     if (!(await write(joinPath(['themes', id]), def, context))) return;
     if (!(await write(`app.${SLOT[def.base]}`, id, context))) return;
     focused[def.base] = id;
-    toasts.info(`Imported ${def.name} (used in ${def.base} mode)`);
+    toasts.info(
+      def.base === 'dark'
+        ? t('Imported {name} (used in dark mode)', { name: def.name })
+        : t('Imported {name} (used in light mode)', { name: def.name }),
+    );
   }
 
   async function remove(id: string, def: ThemeDef, list: Element | null): Promise<void> {
     const answer = await confirms.ask({
-      title: `Delete "${def.name}"?`,
-      body: 'It will be removed from config.toml.',
+      title: t('Delete "{name}"?', { name: def.name }),
+      body: t('It will be removed from config.toml.'),
       tone: 'danger',
-      actions: [{ id: 'delete', label: 'Delete', variant: 'danger' }],
+      actions: [{ id: 'delete', label: t('Delete'), variant: 'danger' }],
     });
     if (answer !== 'delete' || !(await write(joinPath(['themes', id]), null))) return;
     for (const slot of Object.values(SLOT)) {
@@ -125,15 +130,17 @@
   {#each groups as g (g.mode)}
     {@const tabId = focused[g.mode] ?? (g.missing ? g.cards[0]?.id : g.current)}
     <SettingsGroup
-      heading={g.mode === 'dark' ? 'Dark theme' : 'Light theme'}
+      heading={g.mode === 'dark' ? t('Dark theme') : t('Light theme')}
       headingId="theme-{g.mode}-label"
       data-mode={g.mode}
     >
       {#snippet meta()}
-        {#if settings.theme === g.mode}<Badge tone="accent">Active now</Badge>{/if}
+        {#if settings.theme === g.mode}<Badge tone="accent">{t('Active now')}</Badge>{/if}
       {/snippet}
       {#if g.missing}
-        <p class="hint" data-testid="theme-missing">Theme "{g.current}" not found, using Bezel</p>
+        <p class="hint" data-testid="theme-missing">
+          {t('Theme "{name}" not found, using Bezel', { name: g.current })}
+        </p>
       {/if}
       <div class="grid" role="listbox" aria-labelledby="theme-{g.mode}-label">
         {#each g.cards as c, i (c.id)}
@@ -153,10 +160,10 @@
             <div class="top">
               <span class="name">{c.def.name}</span>
               {#if c.custom}
-                <span class="tag">Custom</span>
+                <span class="tag">{t('Custom')}</span>
                 <IconButton
                   icon="trash-2"
-                  label="Delete theme"
+                  label={t('Delete theme')}
                   size="sm"
                   tabindex={-1}
                   onclick={(e) => {
@@ -179,13 +186,14 @@
       </div>
     </SettingsGroup>
   {/each}
-  <SettingsRow label="Import a theme" actions>
+  <SettingsRow label={t('Import a theme')} actions>
     {#snippet control()}
-      <Button icon="folder-open" onclick={() => fileInput?.click()}>Import theme...</Button>
+      <Button icon="folder-open" onclick={() => fileInput?.click()}>{t('Import theme...')}</Button>
     {/snippet}
     <p>
-      VS Code (.json), iTerm2 (.itermcolors), Ghostty, Kitty (.conf), Alacritty (.toml) or base16 (.yaml).
-      Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings' exports the theme you use now.
+      {t(
+        "VS Code (.json), iTerm2 (.itermcolors), Ghostty, Kitty (.conf), Alacritty (.toml) or base16 (.yaml). Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings' exports the theme you use now.",
+      )}
     </p>
   </SettingsRow>
   <input

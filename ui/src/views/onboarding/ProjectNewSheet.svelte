@@ -1,6 +1,7 @@
 <script lang="ts">
   // "New project" (SPEC §2): pick a folder, `project_detect` infers repos, remotes and tracker
   // hints, the user edits the draft and `project_create` writes projects/<id>.toml.
+  import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import type { ProjectDraft } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -30,7 +31,7 @@
 
   const accounts = $derived(Object.entries(settings.value()?.accounts ?? {}));
   const accountOptions = $derived([
-    { value: '', label: 'No tracker' },
+    { value: '', label: t('No tracker') },
     ...accounts.map(([id, a]) => ({ value: id, label: `${id} (${a.kind})` })),
   ]);
   const issues = $derived(
@@ -83,7 +84,7 @@
     try {
       const info = await ipc.projectCreate({ draft: $state.snapshot(draft) as ProjectDraft });
       await projects.activate(info.id).catch(() => undefined);
-      toasts.info(`Project ${info.name} created`);
+      toasts.info(t('Project {name} created', { name: info.name }));
       onclose();
     } catch (err) {
       error = toIpcError('project_create', err).message;
@@ -93,7 +94,7 @@
   }
 </script>
 
-<Sheet title="New project" {onclose} width={620}>
+<Sheet title={t('New project')} {onclose} width={620}>
   <form
     class="sheet"
     onsubmit={(e) => {
@@ -104,43 +105,44 @@
   >
     <div class="pick">
       <TextInput
-        label="Folder"
+        label={t('Folder')}
         bind:value={path}
-        placeholder="Path to a code folder, e.g. ~/code/shop"
+        placeholder={t('Path to a code folder, e.g. ~/code/shop')}
         data-testid="project-path"
       />
       {#if draft}<Button icon="search" loading={detecting} disabled={!path.trim()} onclick={detect}
-          >Scan again</Button
+          >{t('Scan again')}</Button
         >{/if}
     </div>
     <p class="hint">
-      A git repository, or a folder containing several. Kelta lists the repositories and tracker it finds; you
-      confirm before anything is saved.
+      {t(
+        'A git repository, or a folder containing several. Kelta lists the repositories and tracker it finds; you confirm before anything is saved.',
+      )}
     </p>
 
     {#if error}<p class="error" role="alert" data-testid="project-error">{error}</p>{/if}
 
     {#if draft && issues}
-      <TextInput label="Name" bind:value={draft.name} oninput={onName} error={issues.name} />
+      <TextInput label={t('Name')} bind:value={draft.name} oninput={onName} error={issues.name} />
       <TextInput
-        label="Id"
+        label={t('Id')}
         bind:value={draft.suggested_id}
         oninput={() => (idTouched = true)}
         error={issues.id}
-        hint="Becomes projects/&lt;id&gt;.toml."
+        hint={t('Becomes projects/<id>.toml.')}
       />
 
       <ColorPicker value={draft.color} onchange={(c) => draft && (draft.color = c)} />
       <TextInput
-        label="Initial (optional)"
-        hint="One or two letters shown in the sidebar. Leave empty to use the first letter of the name."
+        label={t('Initial (optional)')}
+        hint={t('One or two letters shown in the sidebar. Leave empty to use the first letter of the name.')}
         maxlength={2}
         value={draft.icon ?? ''}
         oninput={(e) => draft && (draft.icon = e.currentTarget.value || null)}
       />
 
       <fieldset>
-        <legend>Repositories</legend>
+        <legend>{t('Repositories')}</legend>
         {#if issues.repos}<p class="error">{issues.repos}</p>{/if}
         {#each draft.repos as repo, i (i)}
           <div class="repo" data-testid="repo-row">
@@ -152,27 +154,31 @@
                   checked={repo.primary}
                   onchange={() => draft && (draft.repos = setPrimary(draft.repos, i))}
                 />
-                Primary
+                {t('Primary')}
               </label>
               {#if repo.code_host}<Badge tone="info">{repo.code_host.repo}</Badge>{/if}
               <span class="spacer"></span>
               <IconButton
                 icon="trash-2"
-                label="Remove repository"
+                label={t('Remove repository')}
                 onclick={() => draft && (draft.repos = removeRepo(draft.repos, i))}
               />
             </div>
             <div class="grid">
-              <TextInput label="Id" bind:value={repo.id} error={issues.repo[i]} />
-              <TextInput label="Path" bind:value={repo.path} />
-              <TextInput label="Remote" bind:value={repo.remote} />
-              <TextInput label="Base branch" bind:value={repo.base} />
+              <TextInput label={t('Id')} bind:value={repo.id} error={issues.repo[i]} />
+              <TextInput label={t('Path')} bind:value={repo.path} />
+              <TextInput label={t('Remote')} bind:value={repo.remote} />
+              <TextInput label={t('Base branch')} bind:value={repo.base} />
             </div>
             {#if draft.code_host_hints.find((h) => h.repo_id === repo.id)}
               {@const hint = draft.code_host_hints.find((h) => h.repo_id === repo.id)!}
               <p class="hint">
-                {hint.kind}&ensp;<code>{hint.host}/{hint.repo}</code>&ensp;{#if hint.account}account {hint.account}{:else}no
-                  matching account yet{/if}
+                {hint.kind}&ensp;<code>{hint.host}/{hint.repo}</code>&ensp;{#if hint.account}{t(
+                    'account {id}',
+                    {
+                      id: hint.account,
+                    },
+                  )}{:else}{t('no matching account yet')}{/if}
               </p>
             {/if}
           </div>
@@ -181,30 +187,32 @@
           size="sm"
           icon="plus"
           onclick={() => draft && (draft.repos = [...draft.repos, newRepo(draft.repos.length, false)])}
-          >Add repository</Button
+          >{t('Add repository')}</Button
         >
       </fieldset>
 
       <fieldset>
-        <legend>Tracker</legend>
+        <legend>{t('Tracker')}</legend>
         {#each draft.tracker_hints as h (h.kind + (h.key ?? ''))}
-          <p class="hint">Detected: {h.kind}{h.key ? ` ${h.key}` : ''} — {h.reason}</p>
+          <p class="hint">
+            {t('Detected: {what}', { what: `${h.kind}${h.key ? ` ${h.key}` : ''}` })} — {h.reason}
+          </p>
         {/each}
         <Select
-          label="Tracker account"
+          label={t('Tracker account')}
           value={draft.tracker?.account ?? ''}
           options={accountOptions}
           onchange={pickTracker}
         />
         {#if accounts.length === 0}
-          <p class="hint">No accounts yet. Add one in Settings → Accounts, then bind it here later.</p>
+          <p class="hint">{t('No accounts yet. Add one in Settings → Accounts, then bind it here later.')}</p>
         {/if}
       </fieldset>
     {/if}
   </form>
 
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <!-- One primary throughout: scan the folder first, then create from what was found. -->
     {#if draft}
       <Button
@@ -212,7 +220,7 @@
         loading={creating}
         disabled={!issues || hasIssues(issues)}
         onclick={create}
-        data-testid="project-create">Create project</Button
+        data-testid="project-create">{t('Create project')}</Button
       >
     {:else}
       <Button
@@ -221,7 +229,7 @@
         loading={detecting}
         disabled={!path.trim()}
         onclick={detect}
-        data-testid="project-create">Scan folder</Button
+        data-testid="project-create">{t('Scan folder')}</Button
       >
     {/if}
   {/snippet}

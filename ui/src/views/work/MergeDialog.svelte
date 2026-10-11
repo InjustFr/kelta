@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { MergeMethod, WorkItem } from '$lib/gen';
@@ -29,7 +30,7 @@
     refused = null;
     try {
       work.upsert(await workArmMerge({ id: item.id, method }));
-      toasts.info(`${item.ticket?.key ?? item.branch}: merges when ready, then finishes`);
+      toasts.info(t('{name}: merges when ready, then finishes', { name: item.ticket?.key ?? item.branch }));
       onclose();
     } catch (err) {
       refused = toIpcError('work_arm_merge', err).message;
@@ -39,19 +40,20 @@
   }
 </script>
 
-<Dialog title="Merge {item.ticket?.key ?? item.branch} when ready" width={480} {onclose}>
+<Dialog title={t('Merge {name} when ready', { name: item.ticket?.key ?? item.branch })} width={480} {onclose}>
   <div class="form" data-testid="merge-dialog">
     <p class="hint">
-      The code host merges the pull request once approvals and checks pass. Kelta then stops the sessions,
-      removes the worktree if it is clean and pushed, deletes the branch and moves the ticket to Done.
+      {t(
+        'The code host merges the pull request once approvals and checks pass. Kelta then stops the sessions, removes the worktree if it is clean and pushed, deletes the branch and moves the ticket to Done.',
+      )}
     </p>
     <Select
-      label="Merge method"
+      label={t('Merge method')}
       bind:value={method}
       options={[
-        { value: 'squash', label: 'Squash and merge' },
-        { value: 'merge', label: 'Merge commit' },
-        { value: 'rebase', label: 'Rebase and merge' },
+        { value: 'squash', label: t('Squash and merge') },
+        { value: 'merge', label: t('Merge commit') },
+        { value: 'rebase', label: t('Rebase and merge') },
       ]}
     />
     {#if refused}
@@ -62,13 +64,14 @@
     {/if}
   </div>
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     {#if refused && url}
-      <Button onclick={() => void openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'))}
-        >Open in browser</Button
+      <Button
+        onclick={() => void openExternal({ url }).catch((err) => toasts.error(err, t('Open in browser')))}
+        >{t('Open in browser')}</Button
       >
     {/if}
-    <Button variant="primary" loading={busy} onclick={() => void arm()}>Merge when ready</Button>
+    <Button variant="primary" loading={busy} onclick={() => void arm()}>{t('Merge when ready')}</Button>
   {/snippet}
 </Dialog>
 

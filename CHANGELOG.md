@@ -17,6 +17,9 @@ All notable changes are listed here. The format follows Keep a Changelog, versio
 
 ### Added
 
+- The interface is translated into French and German: `app.language` (Settings → General) picks English,
+  Français or Deutsch, or follows the OS language by default, and applies without a restart. Dates and relative
+  times follow it; a missing translation fails the UI tests.
 - Detached windows: a pane or a tab moves to its own window (pane menu, rail row menu, `pane.detach`) to put
   it on another screen, sessions untouched; closing that window brings the tab back, and detached windows reopen
   where they were after a restart.

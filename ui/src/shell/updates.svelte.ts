@@ -2,6 +2,7 @@
 // `app.restart` action. No UiEvent: the status is read on start, on window focus, on the
 // backend's `kelta://update` event and after Check now.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { UpdateChannel, UpdateStatus } from '$lib/gen';
 import { appRestart, appUpdateCheck, appUpdateStatus } from '$lib/ipc/commands';
 
@@ -46,10 +47,10 @@ export async function restartApp(): Promise<void> {
   const status = await appUpdateStatus();
   if (status.restart_needs_confirm) {
     const answer = await confirms.ask({
-      title: 'Restart Kelta?',
-      body: 'Claude sessions are working and will stop. Restart anyway?',
+      title: t('Restart Kelta?'),
+      body: t('Claude sessions are working and will stop. Restart anyway?'),
       tone: 'danger',
-      actions: [{ id: 'restart', label: 'Restart', variant: 'danger' }],
+      actions: [{ id: 'restart', label: t('Restart'), variant: 'danger' }],
     });
     if (answer !== 'restart') return;
   }

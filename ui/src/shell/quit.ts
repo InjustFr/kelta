@@ -2,6 +2,7 @@
 // running past the quit. The answer quits through `app_quit`; "Don't ask again" stores it in
 // `app.quit_sessions`, which skips the dialog from then on. Cancel stays open.
 
+import { t, tn } from '$lib/i18n/index.svelte';
 import { appQuit, settingsSet } from '$lib/ipc/commands';
 
 import { confirms } from './confirm.svelte';
@@ -13,16 +14,17 @@ export async function askQuit({ live, busy }: { live: number; busy: string[] }):
   asking = true;
   try {
     const { id, checked } = await confirms.askChecked({
-      title: 'Quit Kelta?',
-      body:
-        live === 1
-          ? '1 session is running. Keep it running in the background (it is back on the next launch), or stop it?'
-          : `${live} sessions are running. Keep them running in the background (they are back on the next launch), or stop them all?`,
-      details: busy.map((name) => `${name} is busy`),
-      checkbox: "Don't ask again",
+      title: t('Quit Kelta?'),
+      body: tn(
+        '{n} session is running. Keep it running in the background (it is back on the next launch), or stop it?',
+        '{n} sessions are running. Keep them running in the background (they are back on the next launch), or stop them all?',
+        live,
+      ),
+      details: busy.map((name) => t('{name} is busy', { name })),
+      checkbox: t("Don't ask again"),
       actions: [
-        { id: 'stop', label: 'Stop all sessions', variant: 'danger' },
-        { id: 'keep', label: 'Keep sessions running', variant: 'primary' },
+        { id: 'stop', label: t('Stop all sessions'), variant: 'danger' },
+        { id: 'keep', label: t('Keep sessions running'), variant: 'primary' },
       ],
     });
     if (id !== 'keep' && id !== 'stop') return;

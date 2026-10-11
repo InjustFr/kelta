@@ -1,5 +1,6 @@
 // Claude usage from statusline snapshots (ticket #135): context, cost and the rate-limit strip.
 
+import { formatDate } from '$lib/i18n/index.svelte';
 import type { ClaudeUsage, RateWindow, SessionInfo, WorkItem } from '$lib/gen';
 
 /** Context use above this: Claude compacts soon. */
@@ -47,4 +48,4 @@ export function meter(pct: number, cells = 4): string {
 
 /** Local `HH:MM` of a unix-seconds reset. */
 export const clock = (resetsAt: number): string =>
-  new Date(resetsAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  formatDate(resetsAt * 1000, { hour: '2-digit', minute: '2-digit' });

@@ -1,6 +1,7 @@
 <script lang="ts">
   // The rail's global views (Tickets, Now, Reviews): one pane rendered outside any project, with
   // the `GLOBAL` sentinel as its project (SPEC §1).
+  import { t } from '$lib/i18n/index.svelte';
   import { paneComponent, type AnyComponent } from '$app/registry';
   import { GLOBAL, type GlobalView } from '$lib/stores';
   import { ErrorState, Spinner } from '$lib/ui';
@@ -30,12 +31,15 @@
         <Component projectId={GLOBAL} tabId={GLOBAL} paneId={view} {content} visible={true} focused={true} />
       {/key}
     {:else if entry.error}
-      <ErrorState error={entry.error} title={`Could not load ${name}`} />
+      <ErrorState error={entry.error} title={t('Could not load {name}', { name })} />
     {:else}
       <div class="loading"><Spinner size={16} /></div>
     {/if}
     {#snippet failed(error)}
-      <ErrorState error={error instanceof Error ? error : String(error)} title={`${name} crashed`} />
+      <ErrorState
+        error={error instanceof Error ? error : String(error)}
+        title={t('{name} crashed', { name })}
+      />
     {/snippet}
   </svelte:boundary>
 </div>

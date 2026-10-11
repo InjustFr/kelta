@@ -1,6 +1,7 @@
 <script lang="ts">
   // Keyboard hints under a list: key caps, then what the key does. Most important first: a narrow
   // pane keeps one line and drops the hints that no longer fit, whole.
+  import { t } from '$lib/i18n/index.svelte';
   import { Kbd } from '$lib/ui';
 
   /** `[keys, label]`; alternative keys are separated by a space (`'j k'`), a sequence by `then` (`'f then s'`). */
@@ -9,10 +10,10 @@
 
 <footer class="hints" aria-hidden="true">
   {#each hints as [keys, label] (keys)}<span class="hint"
-      >{#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">then</span>{:else}<Kbd
+      >{#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">{t('then')}</span>{:else}<Kbd
             chord={k}
           />{/if}{/each}
-      {label}</span
+      {t(label)}</span
     >{/each}
 </footer>
 

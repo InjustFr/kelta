@@ -2,6 +2,7 @@
 // (tickets I have not looked at yet). Kelta-local (SQLite `next_up`, `seen_tickets`), never written to a
 // tracker; the tickets themselves come from the loaded lists (mine + unassigned, every source).
 
+import { t } from '$lib/i18n/index.svelte';
 import type { NextUpItem, ProjectId, TicketItem, TicketRef } from '$lib/gen';
 import { nextUpList, nextUpPut, nextUpRemove, ticketSeen } from '$lib/ipc/commands';
 import { projects, tickets, toasts, work } from '$lib/stores';
@@ -85,7 +86,7 @@ class NextUpStore {
       this.seen = Object.fromEntries(r.seen.map((k) => [k, true]));
       this.loaded = true;
     } catch (err) {
-      toasts.error(err, 'Loading Next up');
+      toasts.error(err, t('Loading Next up'));
     }
   }
 
@@ -154,7 +155,9 @@ class NextUpStore {
     const { [ticketKey(ref)]: gone, ...rest } = this.entries;
     if (!gone) return;
     this.entries = rest;
-    await nextUpRemove({ ticket: ref }).catch((err) => toasts.error(err, `Removing ${ref.key} from Next up`));
+    await nextUpRemove({ ticket: ref }).catch((err) =>
+      toasts.error(err, t('Removing {key} from Next up', { key: ref.key })),
+    );
   }
 
   /** Clears the `New` badge (groomed or opened). */
@@ -162,7 +165,9 @@ class NextUpStore {
     const key = ticketKey(ref);
     if (key in this.seen) return;
     this.seen = { ...this.seen, [key]: true };
-    ticketSeen({ tickets: [ref] }).catch((err) => toasts.error(err, `Marking ${ref.key} seen`));
+    ticketSeen({ tickets: [ref] }).catch((err) =>
+      toasts.error(err, t('Marking {key} seen', { key: ref.key })),
+    );
   }
 
   /**
@@ -176,7 +181,7 @@ class NextUpStore {
     const refs = mine.data.items.map((t) => t.ticket.ref);
     if (!refs.length) return;
     this.seen = Object.fromEntries(refs.map((r) => [ticketKey(r), true]));
-    await ticketSeen({ tickets: refs }).catch((err) => toasts.error(err, 'Marking tickets seen'));
+    await ticketSeen({ tickets: refs }).catch((err) => toasts.error(err, t('Marking tickets seen')));
   }
 
   /**
@@ -202,7 +207,7 @@ class NextUpStore {
     try {
       await nextUpPut({ item });
     } catch (err) {
-      toasts.error(err, `Saving ${item.ticket.key} in Next up`);
+      toasts.error(err, t('Saving {key} in Next up', { key: item.ticket.key }));
       await this.load();
     }
   }

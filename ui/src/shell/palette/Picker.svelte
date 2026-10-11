@@ -13,6 +13,7 @@
 </script>
 
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { Icon, Kbd, Lamp, Sheet, Spinner } from '$lib/ui';
 
   interface Props {
@@ -36,7 +37,7 @@
     onquery,
     onpick,
     onclose,
-    empty = 'No results',
+    empty,
     busy = false,
     testid = 'picker',
   }: Props = $props();
@@ -93,10 +94,10 @@
       />
       {#if busy}<Spinner size={16} />{/if}
     </div>
-    <div class="list" bind:this={list} role="listbox" aria-label="Results">
+    <div class="list" bind:this={list} role="listbox" aria-label={t('Results')}>
       {#each shown as item, i (item.id)}
         {#if item.group && item.group !== shown[i - 1]?.group}
-          <div class="group" role="presentation">{item.group}</div>
+          <div class="group" role="presentation">{t(item.group)}</div>
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
@@ -119,13 +120,13 @@
           {#if item.kbd}<Kbd chord={item.kbd} />{/if}
         </div>
       {:else}
-        <p class="empty">{empty}</p>
+        <p class="empty">{empty ?? t('No results')}</p>
       {/each}
     </div>
     <footer class="hints">
-      <span><Kbd chord="up" /><Kbd chord="down" /> Move</span>
-      <span><Kbd chord="enter" /> Run</span>
-      <span><Kbd chord="escape" /> Close</span>
+      <span><Kbd chord="up" /><Kbd chord="down" /> {t('Move')}</span>
+      <span><Kbd chord="enter" /> {t('Run')}</span>
+      <span><Kbd chord="escape" /> {t('Close')}</span>
     </footer>
   </div>
 </Sheet>

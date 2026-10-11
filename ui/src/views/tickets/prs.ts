@@ -1,6 +1,7 @@
 // Ticket to PR link (TICKETS.md T1): the core fills `TicketItem.prs` / `TicketDetail.prs` (work item
 // PR first, then PRs whose `linked_tickets` name the ticket); this module labels and opens them.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { CiState, PrLink, ProjectId, ReviewKind } from '$lib/gen';
 import { openExternal } from '$lib/ipc/commands';
 import { reviews, toasts, ui } from '$lib/stores';
@@ -47,12 +48,12 @@ export function prLamp(pr: PrLink): LampLevel {
 
 /** Review state word for the detail meta row. */
 export function reviewWord(pr: PrLink): string {
-  if (pr.state === 'merged') return 'Merged';
-  if (pr.state === 'closed') return 'Closed';
-  if (pr.draft) return 'Draft';
-  if (pr.review === 'approved') return 'Approved';
-  if (pr.review === 'changes_requested') return 'Changes requested';
-  return 'Review required';
+  if (pr.state === 'merged') return t('Merged');
+  if (pr.state === 'closed') return t('Closed');
+  if (pr.draft) return t('Draft');
+  if (pr.review === 'approved') return t('Approved');
+  if (pr.review === 'changes_requested') return t('Changes requested');
+  return t('Review required');
 }
 
 /** `p`: Kelta's review detail when the code host is bound; `P` (browser) or unbound: the browser. From a
@@ -73,7 +74,7 @@ export function openPr(pr: PrLink, projectId: ProjectId, browser = false): void 
     void openContent(projectId, { kind: 'review_detail', review });
     return;
   }
-  openExternal({ url: pr.url }).catch((err) => toasts.error(err, 'Open in browser'));
+  openExternal({ url: pr.url }).catch((err) => toasts.error(err, t('Open in browser')));
 }
 
 /** PR picker rows (several PRs on one ticket). */
@@ -89,7 +90,7 @@ export function openPrs(
   browser: boolean,
 ): boolean {
   const [only] = prs;
-  if (!only) toasts.info(`No PR linked to ${key}`);
+  if (!only) toasts.info(t('No PR linked to {key}', { key }));
   else if (prs.length === 1) openPr(only, projectId, browser);
   return prs.length > 1;
 }

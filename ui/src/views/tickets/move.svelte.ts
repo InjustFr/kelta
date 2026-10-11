@@ -1,6 +1,7 @@
 // Ticket moves (SPEC §3.4): optimistic board move with rollback, ambiguous-transition picker,
 // NeedsFields form and the "no transition" toast.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { Column, JsonValue, Ticket, Transition } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
@@ -60,7 +61,8 @@ export class MoveController {
       tickets.patch(updated);
       void tickets.loadTransitions(ticket.ref); // the legal moves changed with the status
       this.dialog = null;
-      if (!quiet) toasts.info(`Moved ${ticket.ref.key} to ${transition.to.name}`);
+      if (!quiet)
+        toasts.info(t('Moved {key} to {status}', { key: ticket.ref.key, status: transition.to.name }));
       return true;
     } catch (err) {
       await this.#handle(err, ticket, transition.to.name, transition.to.category, transition);
@@ -85,8 +87,8 @@ export class MoveController {
     }
     const to = moves[0]?.transition.to.name;
     if (moves.length < 2 || !to) return;
-    if (done === moves.length) toasts.info(`Moved ${done} tickets to ${to}`);
-    else toasts.warn(`Moved ${done} of ${moves.length} tickets to ${to}`);
+    if (done === moves.length) toasts.info(t('Moved {n} tickets to {status}', { n: done, status: to }));
+    else toasts.warn(t('Moved {done} of {n} tickets to {status}', { done, n: moves.length, status: to }));
   }
 
   async choose(transition: Transition): Promise<void> {
@@ -110,7 +112,7 @@ export class MoveController {
       tickets.patch(updated);
       void tickets.loadTransitions(d.ticket.ref);
       this.dialog = null;
-      toasts.info(`Moved ${d.ticket.ref.key} to ${d.target}`);
+      toasts.info(t('Moved {key} to {status}', { key: d.ticket.ref.key, status: d.target }));
     } catch (err) {
       const e = toIpcError('tracker_transition', err);
       if (e.code === 'needs_fields') {
@@ -118,7 +120,7 @@ export class MoveController {
         this.dialog = { ...d, fields: fields.length > 0 ? fields : d.fields, message: e.message };
       } else {
         this.dialog = null;
-        toasts.error(err, `Moving ${d.ticket.ref.key}`);
+        toasts.error(err, t('Moving {key}', { key: d.ticket.ref.key }));
       }
     } finally {
       this.busy = false;
@@ -169,16 +171,20 @@ export class MoveController {
     if (e.code === 'not_found' || e.code === 'unsupported') {
       toasts.push({
         level: 'warn',
-        text: `No transition to ${targetName} for ${ticket.ref.key}`,
-        action: { label: 'Open in browser', command: 'tickets.open_in_browser', args: { url: ticket.url } },
+        text: t('No transition to {status} for {key}', { status: targetName, key: ticket.ref.key }),
+        action: {
+          label: t('Open in browser'),
+          command: 'tickets.open_in_browser',
+          args: { url: ticket.url },
+        },
       });
       return;
     }
     // The tracker's own words (workflow validator, 422...) and the way out: its web UI.
     toasts.push({
       level: 'error',
-      text: `Moving ${ticket.ref.key} failed: ${e.message}`,
-      action: { label: 'Open in browser', command: 'tickets.open_in_browser', args: { url: ticket.url } },
+      text: t('Moving {key} failed: {message}', { key: ticket.ref.key, message: e.message }),
+      action: { label: t('Open in browser'), command: 'tickets.open_in_browser', args: { url: ticket.url } },
     });
   }
 }

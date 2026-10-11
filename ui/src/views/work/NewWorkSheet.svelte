@@ -1,5 +1,6 @@
 <script lang="ts">
   // New work item (FLOW §4.3): a task, a wip/ branch in its own worktree, Claude started on the task.
+  import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import type { ProjectId, TicketItem } from '$lib/gen';
   import { workLink, workPlan, workStart } from '$lib/ipc/commands';
@@ -47,10 +48,10 @@
   });
 
   const errors = $derived({
-    task: title === '' ? 'Describe what Claude should do' : null,
+    task: title === '' ? t('Describe what Claude should do') : null,
     branch: branch === '' && branchEdit === null ? null : validateBranch(branch),
-    base: base.trim() === '' ? 'Base branch is required' : null,
-    project: project ? null : 'Open a project with a repository first',
+    base: base.trim() === '' ? t('Base branch is required') : null,
+    project: project ? null : t('Open a project with a repository first'),
   });
   const valid = $derived(Object.values(errors).every((e) => e === null));
 
@@ -74,11 +75,12 @@
           item = await workLink({ id: item.id, ticket: ticket.ticket.ref, apply_side_effects: true });
           work.upsert(item);
         } catch (err) {
-          toasts.error(err, `Linking ${ticket.ticket.ref.key}`);
+          toasts.error(err, t('Linking {key}', { key: ticket.ticket.ref.key }));
         }
       }
-      if (item.state.kind === 'failed') toasts.warn(`${item.branch}: start failed at ${item.state.step}`);
-      else toasts.info(`Started ${item.branch}`);
+      if (item.state.kind === 'failed')
+        toasts.warn(t('{branch}: start failed at {step}', { branch: item.branch, step: item.state.step }));
+      else toasts.info(t('Started {branch}', { branch: item.branch }));
       onclose();
       await activateProject(projectId);
     } catch (err) {
@@ -97,7 +99,7 @@
   }
 </script>
 
-<Sheet title="New work item" width={480} {onclose}>
+<Sheet title={t('New work item')} width={480} {onclose}>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <form
     id="new-work-form"
@@ -110,10 +112,10 @@
     {onkeydown}
   >
     <p class="lede">
-      Its own branch in a separate folder, with Claude ready to start. You can link a ticket later.
+      {t('Its own branch in a separate folder, with Claude ready to start. You can link a ticket later.')}
     </p>
     <TextInput
-      label="What should Claude do?"
+      label={t('What should Claude do?')}
       bind:value={task}
       multiline
       rows={6}
@@ -122,38 +124,42 @@
     />
     <div class="grid">
       <Select
-        label="Project"
+        label={t('Project')}
         options={withRepos.map((p) => ({ value: p.id, label: p.name }))}
         bind:value={projectId}
       />
       {#if repos.length > 1}
-        <Select label="Repo" options={repos.map((r) => ({ value: r.id, label: r.id }))} bind:value={repoId} />
+        <Select
+          label={t('Repo')}
+          options={repos.map((r) => ({ value: r.id, label: r.id }))}
+          bind:value={repoId}
+        />
       {/if}
       <TextInput
-        label="Branch"
+        label={t('Branch')}
         class="mono"
         value={branch}
         oninput={(e) => (branchEdit = e.currentTarget.value)}
         placeholder="wip/…"
-        hint={branchEdit === null ? 'From the first line' : undefined}
+        hint={branchEdit === null ? t('From the first line') : undefined}
         error={errors.branch}
         spellcheck={false}
         data-testid="new-work-branch"
       />
-      <TextInput label="Base" class="mono" bind:value={base} error={touched ? errors.base : null} />
-      <Select label="Layout" options={layouts} bind:value={layoutId} />
+      <TextInput label={t('Base')} class="mono" bind:value={base} error={touched ? errors.base : null} />
+      <Select label={t('Layout')} options={layouts} bind:value={layoutId} />
       <div class="ticket">
-        <span class="label">Ticket</span>
+        <span class="label">{t('Ticket')}</span>
         {#if ticket}
           <span class="picked" data-testid="new-work-ticket">
             <code>{ticket.ticket.ref.key}</code>
             <span class="ttl">{ticket.ticket.title}</span>
-            <IconButton icon="x" label="Remove ticket" size="sm" onclick={() => (ticket = null)} />
+            <IconButton icon="x" label={t('Remove ticket')} size="sm" onclick={() => (ticket = null)} />
           </span>
-          <span class="hint">Assigned to you and moved per work.on_start; the branch stays.</span>
+          <span class="hint">{t('Assigned to you and moved per work.on_start; the branch stays.')}</span>
         {:else}
           <Button size="sm" variant="ghost" icon="ticket" onclick={() => (picking = true)}
-            >None. Link one…</Button
+            >{t('None. Link one…')}</Button
           >
         {/if}
       </div>
@@ -162,22 +168,22 @@
     {#if failure}<p class="fail" role="alert" data-testid="new-work-error">{failure}</p>{/if}
   </form>
   {#snippet actions()}
-    {#if title}<span class="note" {title}>Title: “{title}”</span>{/if}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    {#if title}<span class="note" {title}>{t('Title: “{title}”', { title })}</span>{/if}
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <Button
       variant="primary"
       type="submit"
       form="new-work-form"
       loading={busy}
       disabled={touched && !valid}
-      chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'}>Start</Button
+      chord={currentPlatform() === 'macos' ? 'cmd+enter' : 'ctrl+enter'}>{t('Start')}</Button
     >
   {/snippet}
 </Sheet>
 
 {#if picking}
   <TicketPicker
-    title="Link a ticket"
+    title={t('Link a ticket')}
     onpick={(hit) => {
       ticket = hit;
       picking = false;

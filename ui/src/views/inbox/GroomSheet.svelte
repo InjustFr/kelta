@@ -1,6 +1,7 @@
 <script lang="ts">
   // Grooming pass (#145, palette `Groom`): one ticket at a time across every bound tracker, mine and
   // unassigned, New ones first, triaged into my Next up list with single keys.
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -55,9 +56,11 @@
     const ref = item.ticket.ref;
     try {
       tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: who } }));
-      toasts.info(who === 'me' ? `${ref.key} assigned to you` : `${ref.key} unassigned`);
+      toasts.info(
+        who === 'me' ? t('{key} assigned to you', { key: ref.key }) : t('{key} unassigned', { key: ref.key }),
+      );
     } catch (err) {
-      toasts.error(err, `Assigning ${ref.key}`);
+      toasts.error(err, t('Assigning {key}', { key: ref.key }));
     }
   }
 
@@ -71,12 +74,16 @@
       case 'N':
         leave();
         void nextUp.add(ref, pid, e.key === 'N');
-        toasts.info(`${ref.key} added to Next up${e.key === 'N' ? ' (top)' : ''}`);
+        toasts.info(
+          e.key === 'N'
+            ? t('{key} added to Next up (top)', { key: ref.key })
+            : t('{key} added to Next up', { key: ref.key }),
+        );
         break;
       case 'l':
         leave();
         void nextUp.snooze(ref, pid);
-        toasts.info(`${ref.key} snoozed for ${SNOOZE_DAYS} days`);
+        toasts.info(t('{key} snoozed for {n} days', { key: ref.key, n: SNOOZE_DAYS }));
         break;
       case 'a':
       case 'u':
@@ -88,7 +95,7 @@
       case 'o':
         curKey = ticketKey(ref);
         nextUp.markSeen(ref);
-        openExternal({ url: cur.ticket.url }).catch((err) => toasts.error(err, 'Open in browser'));
+        openExternal({ url: cur.ticket.url }).catch((err) => toasts.error(err, t('Open in browser')));
         break;
       case 'j':
         go(at + 1);
@@ -103,34 +110,34 @@
     e.stopPropagation();
   }
 
-  const KEYS: [string, string][] = [
-    ['n', 'Next up'],
-    ['shift+n', 'Next up, top'],
-    ['l', `Snooze ${SNOOZE_DAYS} days`],
-    ['a', 'Assign me'],
-    ['u', 'Unassign'],
-    ['m', 'Move'],
-    ['o', 'Open in browser'],
-    ['j', 'Skip'],
-    ['k', 'Back'],
-  ];
+  const KEYS: [string, string][] = $derived([
+    ['n', t('Next up')],
+    ['shift+n', t('Next up, top')],
+    ['l', t('Snooze {n} days', { n: SNOOZE_DAYS })],
+    ['a', t('Assign me')],
+    ['u', t('Unassign')],
+    ['m', t('Move')],
+    ['o', t('Open in browser')],
+    ['j', t('Skip')],
+    ['k', t('Back')],
+  ]);
 </script>
 
-<Sheet title="Groom" width={4000} {onclose}>
+<Sheet title={t('Groom')} width={4000} {onclose}>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions, a11y_autofocus -->
   <div
     class="groom"
     data-testid="groom"
     tabindex="0"
     role="group"
-    aria-label="Groom tickets"
+    aria-label={t('Groom tickets')}
     autofocus
     {onkeydown}
   >
     {#if cur}
       <div class="bar">
         <span class="k-num">{at + 1} / {queue.length}</span>
-        {#if nextUp.isNew(cur.ticket.ref)}<Badge tone="accent">New</Badge>{/if}
+        {#if nextUp.isNew(cur.ticket.ref)}<Badge tone="accent">{t('New')}</Badge>{/if}
         {#if project}<span class="muted">{project.name}</span>{/if}
         <span class="muted">{cur.ticket.status.name}</span>
       </div>
@@ -140,8 +147,8 @@
     {:else}
       <EmptyState
         icon="ticket"
-        title="Nothing to groom"
-        body="Every open ticket assigned to you or unassigned is in Next up, snoozed or started."
+        title={t('Nothing to groom')}
+        body={t('Every open ticket assigned to you or unassigned is in Next up, snoozed or started.')}
       />
     {/if}
     <footer class="hints">

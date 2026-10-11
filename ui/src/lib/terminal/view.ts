@@ -3,6 +3,7 @@
 // decoding with batched acks, resize coalescing, renderer selection, clipboard, search and the
 // terminal-specific key handling.
 
+import { t } from '$lib/i18n/index.svelte';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -455,12 +456,12 @@ export class TerminalView implements PoolView {
 
   #write(data: string): void {
     if (this.#state.exited) return;
-    void sessionWrite(this.id, data).catch((err) => this.#deps.onError?.(err, 'Writing to the terminal'));
+    void sessionWrite(this.id, data).catch((err) => this.#deps.onError?.(err, t('Writing to the terminal')));
   }
 
   #writeBytes(bytes: Uint8Array): void {
     if (this.#state.exited) return;
-    void sessionWrite(this.id, bytes).catch((err) => this.#deps.onError?.(err, 'Writing to the terminal'));
+    void sessionWrite(this.id, bytes).catch((err) => this.#deps.onError?.(err, t('Writing to the terminal')));
   }
 
   /** Sends text as if typed (used for Shift+Enter and by tests). */
@@ -567,7 +568,7 @@ export class TerminalView implements PoolView {
       await clipboardWrite({ kind: 'clipboard', text });
       return true;
     } catch (err) {
-      this.#deps.onError?.(err, 'Copy failed');
+      this.#deps.onError?.(err, t('Copy failed'));
       return false;
     }
   }
@@ -578,7 +579,7 @@ export class TerminalView implements PoolView {
     try {
       text = await clipboardRead({ kind });
     } catch (err) {
-      this.#deps.onError?.(err, 'Paste failed');
+      this.#deps.onError?.(err, t('Paste failed'));
       return;
     }
     await this.pasteText(text);
@@ -635,7 +636,7 @@ export class TerminalView implements PoolView {
 
   #openLink(event: MouseEvent, uri: string): void {
     if (!this.#linkModifier(event)) return;
-    openExternal({ url: uri }).catch((err) => this.#deps.onError?.(err, 'Opening link failed'));
+    openExternal({ url: uri }).catch((err) => this.#deps.onError?.(err, t('Opening link failed')));
   }
 
   // ---- search --------------------------------------------------------------------------------

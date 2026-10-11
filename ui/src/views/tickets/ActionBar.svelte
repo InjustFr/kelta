@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { ProjectId, TicketItem } from '$lib/gen';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button, Menu, currentPlatform, formatChord } from '$lib/ui';
@@ -26,18 +27,18 @@
   /** Plugin actions run where the ticket's work runs, else in the ticket's (or the pane's) project. */
   const pluginCtx = $derived(ticketCtx(item.ticket.ref, item.work_item_id, item.project_ids, projectId));
 
-  const LABELS: Record<TicketAction, string> = {
-    start: 'Start work',
-    move: 'Move',
-    pr: 'Open PR',
-    assign: 'Assign to me',
-    unassign: 'Unassign',
-    comment: 'Comment',
-    refine: 'Refine with Claude',
-    workflow: 'Run workflow…',
-    branch: 'Copy branch',
-    browser: 'Open in browser',
-  };
+  const LABELS: Record<TicketAction, string> = $derived({
+    start: t('Start work'),
+    move: t('Move'),
+    pr: t('Open PR'),
+    assign: t('Assign to me'),
+    unassign: t('Unassign'),
+    comment: t('Comment'),
+    refine: t('Refine with Claude'),
+    workflow: t('Run workflow…'),
+    branch: t('Copy branch'),
+    browser: t('Open in browser'),
+  });
   /** The row; the rest of TICKET_ACTIONS goes under More. */
   const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'assign', 'comment'];
   const mac = currentPlatform() === 'macos';
@@ -48,9 +49,9 @@
       ...a,
       label:
         a.id === 'start' && resume
-          ? 'Resume work'
+          ? t('Resume work')
           : a.id === 'pr' && item.prs.length > 1
-            ? 'Open PRs'
+            ? t('Open PRs')
             : LABELS[a.id],
       reason: blockedReason(a.id, item, branch, workflows[ticketKey(item.ticket.ref)]),
       chord: a.key === 'A' ? 'shift+a' : a.key,
@@ -69,7 +70,7 @@
   }
 </script>
 
-<div class="bar" role="toolbar" aria-label="Ticket actions">
+<div class="bar" role="toolbar" aria-label={t('Ticket actions')}>
   {#each row as a (a.id)}
     <Button
       size="sm"
@@ -95,8 +96,8 @@
       aria-haspopup="menu"
       aria-expanded={menu !== null}
       aria-keyshortcuts={mac ? 'Meta+.' : 'Control+Shift+.'}
-      title={`More actions (${chordText(MORE_CHORD)})`}
-      onclick={openMore}>More</Button
+      title={t('More actions ({keys})', { keys: chordText(MORE_CHORD) })}
+      onclick={openMore}>{t('More')}</Button
     >
   </span>
   <PluginActions kind="ticket" ctx={pluginCtx} />
@@ -113,7 +114,7 @@
     }))}
     x={menu.x}
     y={menu.y}
-    label="More actions"
+    label={t('More actions')}
     onselect={(id) => onrun(id as TicketAction)}
     onclose={() => {
       menu = null;

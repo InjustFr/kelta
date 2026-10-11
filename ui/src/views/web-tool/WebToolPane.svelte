@@ -2,6 +2,7 @@
   // Web tool pane (SPEC §3.5, PLUGINS §2): iframe (direct or through the header-stripping proxy),
   // or an "Open in browser" card for external tools. Exit → code + log tail + Relaunch. Closing the
   // pane stops `on_close` tools.
+  import { t } from '$lib/i18n/index.svelte';
   import { onDestroy } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -23,7 +24,7 @@
 
   function openExternal(): void {
     if (tool)
-      void ipc.openExternal({ url: tool.url }).catch((e: unknown) => toasts.error(e, 'Open in browser'));
+      void ipc.openExternal({ url: tool.url }).catch((e: unknown) => toasts.error(e, t('Open in browser')));
   }
 
   async function relaunch(): Promise<void> {
@@ -54,7 +55,7 @@
         lifecycle: tool.lifecycle,
       });
     } catch (e) {
-      toasts.error(e, `Relaunch ${tool.label}`);
+      toasts.error(e, t('Relaunch {name}', { name: tool.label }));
     } finally {
       busy = false;
     }
@@ -78,30 +79,32 @@
   {#if !tool}
     <EmptyState
       icon="globe"
-      title="This web tool is not running"
-      body="It was stopped, or Kelta restarted. Open it again from the tool picker."
+      title={t('This web tool is not running')}
+      body={t('It was stopped, or Kelta restarted. Open it again from the tool picker.')}
     >
       {#snippet actions()}
-        <Button onclick={() => void dispatch('tools.open')}>Open tools</Button>
+        <Button onclick={() => void dispatch('tools.open')}>{t('Open tools')}</Button>
       {/snippet}
     </EmptyState>
   {:else if tool.exited}
     <div class="exited">
-      <p><strong>{tool.label}</strong> exited with code {tool.exited.code}</p>
+      <p>{t('{name} exited with code {code}', { name: tool.label, code: tool.exited.code ?? '?' })}</p>
       {#if tool.exited.log}<pre class="k-selectable">{tool.exited.log}</pre>{/if}
-      <Button icon="refresh-cw" loading={busy} onclick={relaunch}>Relaunch</Button>
+      <Button icon="refresh-cw" loading={busy} onclick={relaunch}>{t('Relaunch')}</Button>
     </div>
   {:else if tool.embed === 'external' || !framable}
-    <EmptyState icon="globe" title={`${tool.label} opens in your browser`}>
+    <EmptyState icon="globe" title={t('{name} opens in your browser', { name: tool.label })}>
       {#snippet actions()}
-        <Button variant="primary" onclick={openExternal}>Open in browser</Button>
+        <Button variant="primary" onclick={openExternal}>{t('Open in browser')}</Button>
       {/snippet}
     </EmptyState>
   {:else}
     <div class="bar">
       <span class="label">{tool.label}</span>
-      <Button size="sm" variant="ghost" icon="refresh-cw" loading={busy} onclick={relaunch}>Restart</Button>
-      <Button size="sm" variant="ghost" onclick={openExternal}>Open in browser</Button>
+      <Button size="sm" variant="ghost" icon="refresh-cw" loading={busy} onclick={relaunch}
+        >{t('Restart')}</Button
+      >
+      <Button size="sm" variant="ghost" onclick={openExternal}>{t('Open in browser')}</Button>
     </div>
     {#if visible}
       <!-- Loopback tool origin (cross-origin to the app): its own storage, no access to Kelta. -->

@@ -1,6 +1,7 @@
 // Tickets list grouping (TICKETS.md T5/T6): Flow (default), native status, priority, sprint, assignee,
 // source or none; sort within groups; status age.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import type {
   Column,
   Status,
@@ -63,11 +64,11 @@ export function flowOrder(statuses: Status[]): Status[] {
 export type Flow = 'doing' | 'waiting' | 'ready' | 'backlog' | 'done';
 const FLOWS: readonly Flow[] = ['doing', 'waiting', 'ready', 'backlog', 'done'];
 const FLOW_LABELS: Record<Flow, string> = {
-  doing: 'Doing',
-  waiting: 'Waiting',
-  ready: 'Ready',
-  backlog: 'Backlog',
-  done: 'Done in the last 7 days',
+  doing: msg('Doing'),
+  waiting: msg('Waiting'),
+  ready: msg('Ready'),
+  backlog: msg('Backlog'),
+  done: msg('Done in the last 7 days'),
 };
 const BLOCKED = /block|on hold|waiting|impediment/i;
 const BACKLOG = /backlog|triage|icebox/i;
@@ -152,44 +153,44 @@ export function groupTickets(
   flow: (item: TicketItem) => Flow | null = (i) => flowOf(i, { work: null, needsYou: false }, Date.now()),
   columns: readonly Column[] = [],
 ): TicketGroup[] {
-  if (by === 'none') return [{ id: 'all', label: 'All', category: null, items: [...items] }];
+  if (by === 'none') return [{ id: 'all', label: t('All'), category: null, items: [...items] }];
   const groups = new Map<string, TicketGroup & { order: number }>();
   for (const item of items) {
-    const t = item.ticket;
+    const tk = item.ticket;
     let g: [string, string, StatusCategory | null, number];
     if (by === 'flow') {
       const f = flow(item);
       if (!f) continue;
-      g = [f, FLOW_LABELS[f], f === 'done' ? 'done' : null, FLOWS.indexOf(f)];
+      g = [f, t(FLOW_LABELS[f]), f === 'done' ? 'done' : null, FLOWS.indexOf(f)];
     } else if (by === 'status') {
       // By name only: a category match would slot "Open" into the board's Todo column.
-      const lower = t.status.name.toLowerCase();
+      const lower = tk.status.name.toLowerCase();
       const at = columns.findIndex(
         (c) => c.name.toLowerCase() === lower || c.match_names.some((n) => n.toLowerCase() === lower),
       );
-      const order = at >= 0 ? at : columns.length + GROUP_ORDER.indexOf(t.status.category);
-      g = [t.status.name, t.status.name, t.status.category, order];
+      const order = at >= 0 ? at : columns.length + GROUP_ORDER.indexOf(tk.status.category);
+      g = [tk.status.name, tk.status.name, tk.status.category, order];
     } else if (by === 'priority') {
-      const r = t.priority_rank;
+      const r = tk.priority_rank;
       g = [
         r === null ? '' : String(r),
-        t.priority ?? (r === null ? 'No priority' : `Priority ${r}`),
+        tk.priority ?? (r === null ? t('No priority') : t('Priority {n}', { n: r })),
         null,
         rank(item),
       ];
     } else if (by === 'sprint') {
       // Active sprints first, then the others, then no sprint. Keyed per account: ids repeat across trackers.
       g = [
-        t.sprint ? `${t.ref.account}:${t.sprint.id}` : '',
-        t.sprint?.name ?? 'No sprint',
+        tk.sprint ? `${tk.ref.account}:${tk.sprint.id}` : '',
+        tk.sprint?.name ?? t('No sprint'),
         null,
-        t.sprint ? (t.sprint.active ? 0 : 1) : 2,
+        tk.sprint ? (tk.sprint.active ? 0 : 1) : 2,
       ];
     } else if (by === 'assignee') {
-      g = [t.assignee?.id ?? '', t.assignee?.name ?? 'Unassigned', null, t.assignee ? 0 : 1];
+      g = [tk.assignee?.id ?? '', tk.assignee?.name ?? t('Unassigned'), null, tk.assignee ? 0 : 1];
     } else {
       const at = sources.findIndex((s) => s.id === item.source_ids[0]);
-      g = [item.source_ids[0] ?? '', sources[at]?.label ?? 'Other', null, at < 0 ? sources.length : at];
+      g = [item.source_ids[0] ?? '', sources[at]?.label ?? t('Other'), null, at < 0 ? sources.length : at];
     }
     const [id, label, category, order] = g;
     const group = groups.get(id) ?? { id, label, category, order, items: [] };

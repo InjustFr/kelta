@@ -1,6 +1,7 @@
 <script lang="ts">
   // The return strip under the context bar (#248): where you left a work item, decided when the item
   // is (re)focused; leaving it stamps `left_at` (no timers).
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
@@ -69,18 +70,18 @@
   <div
     class="brief"
     role="region"
-    aria-label="Where you left off"
+    aria-label={t('Where you left off')}
     data-testid="return-brief"
     tabindex="-1"
     bind:this={briefEl}
     onkeydown={briefKey}
   >
     <div class="brief-text">
-      {#if brief.next_note}<div class="note"><b>next:</b> {brief.next_note}</div>{/if}
+      {#if brief.next_note}<div class="note"><b>{t('next:')}</b> {brief.next_note}</div>{/if}
       {#if brief.delta}
         <div class="since">
-          <span class="ins">+{brief.delta.insertions}</span>/<span class="del">−{brief.delta.deletions}</span> since
-          you reviewed
+          <span class="ins">+{brief.delta.insertions}</span>/<span class="del">−{brief.delta.deletions}</span>
+          {t('since you reviewed')}
         </div>
       {/if}
       {#if brief.claude_message}
@@ -95,10 +96,10 @@
         size="sm"
         variant="secondary"
         chord="v"
-        onclick={() => void runWorkAction('review_delta', brief)}>Review changes</Button
+        onclick={() => void runWorkAction('review_delta', brief)}>{t('Review changes')}</Button
       >
     {/if}
-    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>Dismiss</Button>
+    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>{t('Dismiss')}</Button>
   </div>
 {/if}
 

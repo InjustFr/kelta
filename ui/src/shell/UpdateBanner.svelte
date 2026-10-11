@@ -1,6 +1,7 @@
 <script lang="ts">
   // Slim banner above the workspace while an installed update waits for a restart (#74). Not a toast:
   // it stays until Restart, or Later for this session. Kelta never restarts by itself.
+  import { t } from '$lib/i18n/index.svelte';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
 
@@ -24,9 +25,13 @@
 
 {#if updates.banner}
   <div class="banner" role="status" data-testid="update-banner">
-    <span class="text">Kelta {updates.banner} is installed. Restart to use it.</span>
-    <Button size="sm" variant="primary" onclick={() => dispatch('app.restart')}>Restart</Button>
-    <Button size="sm" variant="ghost" onclick={() => (updates.dismissed = updates.banner)}>Later</Button>
+    <span class="text"
+      >{t('Kelta {version} is installed. Restart to use it.', { version: updates.banner })}</span
+    >
+    <Button size="sm" variant="primary" onclick={() => dispatch('app.restart')}>{t('Restart')}</Button>
+    <Button size="sm" variant="ghost" onclick={() => (updates.dismissed = updates.banner)}
+      >{t('Later')}</Button
+    >
   </div>
 {/if}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Projects: create from a folder, rename / recolour, remove (the config file moves to
   // projects/.trash/), the sources feeding each, plus the environment variables of the layer being edited.
+  import { t, tn } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { ProjectInfo } from '$lib/gen';
@@ -72,7 +73,7 @@
       });
       editing = null;
     } catch (err) {
-      toasts.error(err, 'Could not update the project');
+      toasts.error(err, t('Could not update the project'));
     } finally {
       saving = false;
     }
@@ -83,9 +84,9 @@
     if (!p) return;
     try {
       await projects.remove(p.id, killSessions);
-      toasts.info(`${p.name} moved to projects/.trash`);
+      toasts.info(t('{name} moved to projects/.trash', { name: p.name }));
     } catch (err) {
-      toasts.error(err, 'Could not remove the project');
+      toasts.error(err, t('Could not remove the project'));
     } finally {
       removing = null;
       killSessions = false;
@@ -95,17 +96,19 @@
 
 <SectionForm sectionId="projects" {...props}>
   {#snippet before()}
-    <SettingsGroup heading="Your projects">
+    <SettingsGroup heading={t('Your projects')}>
       {#snippet actions()}
         <Button size="sm" variant="primary" icon="folder-plus" onclick={() => ui.openSheet('project_new')}
-          >Create project from folder</Button
+          >{t('Create project from folder')}</Button
         >
       {/snippet}
       {#if editable.length === 0}
         <EmptyState
           icon="folder-plus"
-          title="No projects yet"
-          body="Only the Home project exists. Create a project from a folder to get tickets, reviews and worktrees."
+          title={t('No projects yet')}
+          body={t(
+            'Only the Home project exists. Create a project from a folder to get tickets, reviews and worktrees.',
+          )}
         />
       {:else}
         <div data-testid="project-list">
@@ -115,15 +118,20 @@
                 <span class="dot" style:background={resolveProjectColor(p.color) ?? 'var(--k-border)'}></span>
                 <strong>{p.name}</strong>
                 <span class="muted"
-                  ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
+                  ><code>{p.id}</code>&ensp;{tn('{n} repo', '{n} repos', p.repos.length)}</span
                 >
               {/snippet}
               {#snippet actions()}
                 {#if editing !== p.id}
-                  <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
+                  <IconButton
+                    icon="pencil"
+                    label={t('Edit {name}', { name: p.name })}
+                    size="sm"
+                    onclick={() => edit(p)}
+                  />
                   <IconButton
                     icon="trash-2"
-                    label="Remove {p.name}"
+                    label={t('Remove {name}', { name: p.name })}
                     size="sm"
                     onclick={() => (removing = p)}
                   />
@@ -137,35 +145,40 @@
                     void save(p);
                   }}
                 >
-                  <TextInput label="Name" bind:value={name} />
+                  <TextInput label={t('Name')} bind:value={name} />
                   <div class="row">
                     <ColorPicker value={color} onchange={(c) => (color = c)} />
                     <input
                       class="icon"
-                      aria-label="Icon"
+                      aria-label={t('Icon')}
                       maxlength="2"
-                      placeholder="Icon"
+                      placeholder={t('Icon')}
                       bind:value={icon}
                     />
                   </div>
                   {#if colorWarnings[p.id]}
                     <p class="warn" role="status" data-testid="color-warning">
-                      Colour ignored: {colorWarnings[p.id]}. Pick one to replace it.
+                      {t('Colour ignored: {reason}. Pick one to replace it.', {
+                        reason: colorWarnings[p.id] ?? '',
+                      })}
                     </p>
                   {/if}
                   <div class="row">
-                    <Button type="submit" variant="primary" size="sm" loading={saving}>Save</Button>
-                    <Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
+                    <Button type="submit" variant="primary" size="sm" loading={saving}>{t('Save')}</Button>
+                    <Button size="sm" variant="ghost" onclick={() => (editing = null)}>{t('Cancel')}</Button>
                   </div>
                 </form>
               {:else}
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
                 {#if colorWarnings[p.id]}
-                  <span class="warn" data-testid="color-warning">Colour ignored: {colorWarnings[p.id]}</span>
+                  <span class="warn" data-testid="color-warning"
+                    >{t('Colour ignored: {reason}', { reason: colorWarnings[p.id] ?? '' })}</span
+                  >
                 {/if}
                 {#if fedBy(p.id).length > 0}
                   <span class="muted" data-testid="fed-by"
-                    >Fed by {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
+                    >{t('Fed by')}
+                    {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
                         type="button"
                         class="k-link"
                         onclick={() =>
@@ -184,15 +197,17 @@
 </SectionForm>
 
 {#if removing}
-  <Dialog title="Remove project" tone="danger" onclose={() => (removing = null)}>
+  <Dialog title={t('Remove project')} tone="danger" onclose={() => (removing = null)}>
     <p>
-      Remove <strong>{removing.name}</strong>? Its configuration file moves to <code>projects/.trash/</code>
-      and can be restored by hand. Repositories and worktrees on disk are not touched.
+      {t(
+        'Remove {name}? Its configuration file moves to projects/.trash/ and can be restored by hand. Repositories and worktrees on disk are not touched.',
+        { name: removing.name },
+      )}
     </p>
-    <Toggle bind:checked={killSessions} label="Also stop its running sessions" />
+    <Toggle bind:checked={killSessions} label={t('Also stop its running sessions')} />
     {#snippet actions()}
-      <Button variant="ghost" onclick={() => (removing = null)}>Cancel</Button>
-      <Button variant="danger" onclick={confirmRemove} data-testid="confirm-remove">Remove</Button>
+      <Button variant="ghost" onclick={() => (removing = null)}>{t('Cancel')}</Button>
+      <Button variant="danger" onclick={confirmRemove} data-testid="confirm-remove">{t('Remove')}</Button>
     {/snippet}
   </Dialog>
 {/if}

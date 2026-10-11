@@ -2,6 +2,7 @@
   // Keybinding editor: effective chords per action (catalog default ⊕ `keys.bindings`), a chord
   // recorder, conflict warnings (L2's `findConflicts` for the reserved list + duplicate bindings)
   // and the compositor snippets that bind `kelta-ctl toggle`.
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import { ACTIONS, RESERVED_CHORDS } from '$lib/gen/actions';
   import type { JsonValue } from '$lib/gen';
@@ -100,9 +101,9 @@
   async function copy(lines: string[]): Promise<void> {
     try {
       await ipc.clipboardWrite({ kind: 'clipboard', text: lines.join('\n') });
-      toasts.info('Copied');
+      toasts.info(t('Copied'));
     } catch (err) {
-      toasts.error(err, 'Copy failed');
+      toasts.error(err, t('Copy failed'));
     }
   }
 
@@ -112,17 +113,20 @@
 <SectionForm sectionId="keys" {...props} skip={['keys.bindings', 'keys.prefix_bindings']}>
   {#snippet after()}
     <div class="keys" data-testid="keys-section">
-      <SettingsGroup heading="Bindings">
+      <SettingsGroup heading={t('Bindings')}>
         {#if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
         <table data-testid="bindings">
-          <thead><tr><th>Action</th><th>Shortcut</th><th>After prefix</th><th></th></tr></thead>
+          <thead
+            ><tr><th>{t('Action')}</th><th>{t('Shortcut')}</th><th>{t('After prefix')}</th><th></th></tr
+            ></thead
+          >
           <tbody>
             {#each ACTIONS as a (a.id)}
               {@const chords = bindings[a.id] ?? []}
               {@const custom = a.id in overrides}
               <tr data-action={a.id} class:custom>
                 <td>
-                  <div>{a.label}</div>
+                  <div>{t(a.label)}</div>
                   <code class="id">{a.id}</code>
                 </td>
                 <td>
@@ -132,17 +136,17 @@
                       class="recorder"
                       role="textbox"
                       tabindex="0"
-                      aria-label={`Press the new shortcut for ${a.label}`}
+                      aria-label={t('Press the new shortcut for {action}', { action: t(a.label) })}
                       data-testid="recorder"
                       autofocus
                       onkeydown={(e) => onkeydown(e, a.id)}
                       onblur={() => (recording = null)}
                     >
-                      Press a shortcut… (Esc cancels)
+                      {t('Press a shortcut… (Esc cancels)')}
                     </div>
                   {:else if chords.length === 0}
                     <span class="muted"
-                      >{a.id === 'window.toggle' ? 'Bind in your compositor (below)' : 'Unbound'}</span
+                      >{a.id === 'window.toggle' ? t('Bind in your compositor (below)') : t('Unbound')}</span
                     >
                   {:else}
                     {#each chords as c (c)}<Kbd chord={c} />{/each}
@@ -154,11 +158,12 @@
                         <p class="warn" role="status" data-testid="conflict">
                           {#each pending.conflicts as c (c.chord)}
                             {#if c.reserved}
-                              <code>{c.chord}</code> is reserved for terminal programs.
+                              <code>{c.chord}</code> {t('is reserved for terminal programs.')}
                             {:else}
-                              <code>{c.chord}</code> is already used by {c.actions
-                                .filter((x) => x !== a.id)
-                                .join(', ')}.
+                              <code>{c.chord}</code>
+                              {t('is already used by {actions}.', {
+                                actions: c.actions.filter((x) => x !== a.id).join(', '),
+                              })}
                             {/if}
                           {/each}
                         </p>
@@ -168,9 +173,9 @@
                         variant="primary"
                         onclick={() => pending && apply(pending.action, [pending.chord])}
                       >
-                        {pending.conflicts.length > 0 ? 'Bind anyway' : 'Bind'}
+                        {pending.conflicts.length > 0 ? t('Bind anyway') : t('Bind')}
                       </Button>
-                      <Button size="sm" onclick={() => (pending = null)}>Cancel</Button>
+                      <Button size="sm" onclick={() => (pending = null)}>{t('Cancel')}</Button>
                     </div>
                   {/if}
                 </td>
@@ -178,7 +183,7 @@
                   {#if a.prefix !== null || a.id in prefixMap}
                     <input
                       class="prefix"
-                      aria-label={`Prefix key for ${a.label}`}
+                      aria-label={t('Prefix key for {action}', { action: t(a.label) })}
                       maxlength="1"
                       value={prefixMap[a.id] ?? ''}
                       disabled={!access.editable}
@@ -188,14 +193,14 @@
                 </td>
                 <td class="actions">
                   {#if access.editable && a.id !== 'window.toggle'}
-                    <Button size="sm" onclick={() => startRecording(a.id)}>Record</Button>
+                    <Button size="sm" onclick={() => startRecording(a.id)}>{t('Record')}</Button>
                     <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}
-                      >Unbind</Button
+                      >{t('Unbind')}</Button
                     >
                     {#if custom}<IconButton
                         icon="history"
                         size="sm"
-                        label={`Reset ${a.label} to default`}
+                        label={t('Reset {action} to default', { action: t(a.label) })}
                         onclick={() => resetBinding(a.id)}
                       />{/if}
                   {/if}
@@ -210,8 +215,10 @@
       </SettingsGroup>
 
       <SettingsGroup
-        heading="Global toggle"
-        description="Kelta registers no global shortcut. Bind kelta-ctl toggle in your compositor or desktop:"
+        heading={t('Global toggle')}
+        description={t(
+          'Kelta registers no global shortcut. Bind kelta-ctl toggle in your compositor or desktop:',
+        )}
       >
         <div class="tabs" role="tablist">
           {#each TOGGLE_SNIPPETS as s (s.id)}
@@ -220,8 +227,10 @@
             >
           {/each}
         </div>
-        <pre class="snippet" data-testid="snippet">{activeSnippet.lines.join('\n')}</pre>
-        <Button size="sm" icon="copy" onclick={() => copy([...activeSnippet.lines])}>Copy</Button>
+        <pre class="snippet" data-testid="snippet">{activeSnippet.lines.map((l) => t(l)).join('\n')}</pre>
+        <Button size="sm" icon="copy" onclick={() => copy(activeSnippet.lines.map((l) => t(l)))}
+          >{t('Copy')}</Button
+        >
       </SettingsGroup>
     </div>
   {/snippet}
