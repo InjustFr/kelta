@@ -22,6 +22,7 @@ pub mod hooks;
 mod http;
 mod ide;
 mod mcp;
+mod serve;
 
 struct CtlRunning {
     path: PathBuf,

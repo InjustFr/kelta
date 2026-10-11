@@ -13,6 +13,8 @@ autotests = false
 kelta-proto = { workspace = true }
 kelta-work = { workspace = true }
 axum = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true, features = ["service"] }
 tokio = { workspace = true }
 rustix = { workspace = true }
 serde_json = { workspace = true }
