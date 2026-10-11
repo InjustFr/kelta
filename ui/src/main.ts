@@ -12,6 +12,7 @@ import { setDetached } from '$lib/layout';
 import { createTauriTransport } from '$lib/ipc/tauri';
 import { setTransport } from '$lib/ipc/transport';
 import * as stores from '$lib/stores';
+import { setLocale } from '$lib/i18n/index.svelte';
 import { injectSprite } from '$lib/ui/icons';
 
 import * as registry from './app/registry';
@@ -48,6 +49,7 @@ async function start(): Promise<void> {
   window.addEventListener('beforeunload', () => void stores.layout.flush());
 
   injectSprite();
+  await setLocale(null); // the OS language from the first frame; settings may override it once loaded
   const target = document.getElementById('app');
   if (!target) throw new Error('#app missing');
   mount(Shell, { target });

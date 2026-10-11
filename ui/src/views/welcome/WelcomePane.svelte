@@ -1,6 +1,7 @@
 <script lang="ts">
   // Welcome / first-run pane: a three-step guide, then the environment checks Kelta works with.
   // Data comes from `diagnostics_run` (on demand, once per mount).
+  import { msg, t } from '$lib/i18n/index.svelte';
   import { dispatch } from '$lib/actions';
   import type { PaneProps } from '$app/registry';
   import type { Check } from '$lib/gen';
@@ -35,8 +36,8 @@
   // Checks named for what they give the user; the raw backend detail stays in the tooltip.
   const PLAIN: Record<string, { label: string; missing: string }> = {
     'secret-service': {
-      label: 'Secure token storage',
-      missing: "Not found, so account tokens can't be saved in the system keychain yet.",
+      label: msg('Secure token storage'),
+      missing: msg("Not found, so account tokens can't be saved in the system keychain yet."),
     },
   };
   const sorted = $derived(checks ? sortChecks(checks) : []);
@@ -46,19 +47,20 @@
   async function openSettings(section: string): Promise<void> {
     try {
       const handled = await dispatch('settings.open', { section, project_id: projectId });
-      if (!handled) toasts.warn('Settings are not available yet');
+      if (!handled) toasts.warn(t('Settings are not available yet'));
     } catch (err) {
-      toasts.error(err, 'Could not open settings');
+      toasts.error(err, t('Could not open settings'));
     }
   }
 </script>
 
 <div class="welcome" data-testid="welcome-pane">
   <header>
-    <h1>Welcome to Kelta</h1>
+    <h1>{t('Welcome to Kelta')}</h1>
     <p class="lead">
-      Run Claude Code and nvim side by side, with your tickets and pull requests next to them. Three steps to
-      get going.
+      {t(
+        'Run Claude Code and nvim side by side, with your tickets and pull requests next to them. Three steps to get going.',
+      )}
     </p>
   </header>
 
@@ -66,11 +68,11 @@
     <li>
       <span class="num" aria-hidden="true">1</span>
       <div class="step">
-        <h2>Add your first project</h2>
-        <p>Pick a code folder. Kelta finds its git repositories, remotes and tracker.</p>
+        <h2>{t('Add your first project')}</h2>
+        <p>{t('Pick a code folder. Kelta finds its git repositories, remotes and tracker.')}</p>
         <div class="act">
           <Button variant="primary" icon="folder-plus" onclick={() => ui.openSheet('project_new')}>
-            Create project from folder
+            {t('Create project from folder')}
           </Button>
         </div>
       </div>
@@ -78,64 +80,71 @@
     <li>
       <span class="num" aria-hidden="true">2</span>
       <div class="step">
-        <h2>Connect your tracker and code host <Badge>Optional</Badge></h2>
+        <h2>{t('Connect your tracker and code host')} <Badge>{t('Optional')}</Badge></h2>
         <p>
-          Jira, Linear, GitHub, GitLab or Redmine. Shows your tickets and pull requests next to the code.
-          Tokens stay in your system keychain.
+          {t(
+            'Jira, Linear, GitHub, GitLab or Redmine. Shows your tickets and pull requests next to the code. Tokens stay in your system keychain.',
+          )}
         </p>
         <div class="act">
-          <Button onclick={() => openSettings('accounts')}>Add account</Button>
+          <Button onclick={() => openSettings('accounts')}>{t('Add account')}</Button>
         </div>
       </div>
     </li>
     <li>
       <span class="num" aria-hidden="true">3</span>
       <div class="step">
-        <h2>Start Claude and nvim</h2>
-        <p>Once your project is added, one click opens Claude Code and nvim side by side in its folder.</p>
+        <h2>{t('Start Claude and nvim')}</h2>
+        <p>
+          {t('Once your project is added, one click opens Claude Code and nvim side by side in its folder.')}
+        </p>
       </div>
     </li>
   </ol>
 
-  <section class="env" aria-label="Environment">
-    <h2>Your environment</h2>
+  <section class="env" aria-label={t('Environment')}>
+    <h2>{t('Your environment')}</h2>
     {#if error}
       <p class="error" role="alert">{error}</p>
-      <Button icon="refresh-cw" onclick={run}>Check again</Button>
+      <Button icon="refresh-cw" onclick={run}>{t('Check again')}</Button>
     {:else if !checks}
       <div class="wait"><Spinner size={16} /></div>
     {:else}
       <p class="summary">
         {missing === 0
-          ? 'Everything Kelta uses was found.'
-          : `${missing} missing. Kelta still runs; only the features that need them are off.`}
+          ? t('Everything Kelta uses was found.')
+          : t('{n} missing. Kelta still runs; only the features that need them are off.', { n: missing })}
       </p>
       <ul>
         {#each sorted as c (c.id)}
           {@const plain = PLAIN[c.id]}
           <li class={c.status}>
             <Icon name={ICONS[c.status]} size={16} />
-            <span class="label">{plain?.label ?? c.label}</span>
+            <span class="label">{plain ? t(plain.label) : c.label}</span>
             <span class="detail" title={plain ? c.detail : undefined}
-              >{plain && c.status !== 'ok' ? plain.missing : c.detail}</span
+              >{plain && c.status !== 'ok' ? t(plain.missing) : c.detail}</span
             >
-            {#if c.fix}<span class="fix">To fix, run: <code>{c.fix}</code></span>{/if}
+            {#if c.fix}<span class="fix">{t('To fix, run:')} <code>{c.fix}</code></span>{/if}
           </li>
         {/each}
       </ul>
-      <Button icon="refresh-cw" onclick={run}>Check again</Button>
+      <Button icon="refresh-cw" onclick={run}>{t('Check again')}</Button>
     {/if}
   </section>
 
   <footer>
     <p>
-      Just want a terminal?
+      {t('Just want a terminal?')}
       <Button variant="ghost" size="sm" onclick={() => spawnTemplate(projectId, 'shell')}>
-        Open a terminal
+        {t('Open a terminal')}
       </Button>
     </p>
     {#if paletteChord}
-      <p>Press <Kbd chord={paletteChord} /> any time to search commands, projects and tickets.</p>
+      <p>
+        {t('Press')}
+        <Kbd chord={paletteChord} />
+        {t('any time to search commands, projects and tickets.')}
+      </p>
     {/if}
   </footer>
 </div>

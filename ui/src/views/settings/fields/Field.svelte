@@ -2,6 +2,7 @@
   // One settings key, bound to a dotted path in the edited layer: label, source badge, restart /
   // exec markers, reset-at-this-layer, inline errors from Rust and the type-specific control, laid out
   // by SettingsRow (a group by SettingsGroup; its advanced children render in the section's block).
+  import { t } from '$lib/i18n/index.svelte';
   import { settings as store } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
@@ -45,8 +46,8 @@
   const kind = $derived(fieldKind(node));
   const segs = $derived(splitPath(path));
   const copy = $derived(COPY[path]);
-  const label = $derived(title ?? copy?.label ?? titleOf(segs[segs.length - 1] ?? path));
-  const description = $derived(copy?.help ?? descriptionOf(node));
+  const label = $derived(title ?? (copy?.label ? t(copy.label) : titleOf(segs[segs.length - 1] ?? path)));
+  const description = $derived(copy?.help ? t(copy.help) : descriptionOf(node));
   const info = $derived(editor.schema ? infoAt(editor.schema, segs) : null);
   const access = $derived(editor.access(path));
   const source = $derived(editor.sourceOf(path));
@@ -86,17 +87,19 @@
         <SourceBadge {source} {path} />
         {#if info?.exec}<Badge
             tone="warn"
-            title="Runs commands or steers Claude: inert in a repo-local file until trusted"
-            >needs trust</Badge
+            title={t('Runs commands or steers Claude: inert in a repo-local file until trusted')}
+            >{t('needs trust')}</Badge
           >{/if}
-        {#if restart}<Badge tone="info" title="Takes effect after restarting Kelta">restart</Badge>{/if}
-        {#if restartPending}<Badge tone="warn" title="Changed: restart Kelta to apply">restart needed</Badge
+        {#if restart}<Badge tone="info" title={t('Takes effect after restarting Kelta')}>{t('restart')}</Badge
+          >{/if}
+        {#if restartPending}<Badge tone="warn" title={t('Changed: restart Kelta to apply')}
+            >{t('restart needed')}</Badge
           >{/if}
         {#if setHere && access.editable}
           <IconButton
             icon="history"
             size="sm"
-            label={`Reset ${label} at this layer`}
+            label={t('Reset {name} at this layer', { name: label })}
             data-testid="reset"
             onclick={() => editor.reset(path)}
           />
@@ -114,10 +117,10 @@
         />
       {/snippet}
       {#if description}<p>{description}</p>{/if}
-      {#if isTemplate}<p title={TEMPLATE_HELP}>Supports {'{placeholders}'}: hover for the list.</p>{/if}
+      {#if isTemplate}<p title={t(TEMPLATE_HELP)}>{t('Supports placeholders: hover for the list.')}</p>{/if}
       {#if !access.editable && access.reason}<p>{access.reason}</p>{/if}
       {#if error}<p class="error" role="alert" data-testid="field-error">{error}</p>{/if}
-      {#if nullable && value === undefined}<p>Not set.</p>{/if}
+      {#if nullable && value === undefined}<p>{t('Not set.')}</p>{/if}
     </SettingsRow>
   {/if}
 {/if}

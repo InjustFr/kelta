@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import type { Check } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -30,7 +31,7 @@
     try {
       await ipc.notifyTest();
     } catch (err) {
-      toasts.error(err, 'Test notification failed');
+      toasts.error(err, t('Test notification failed'));
     } finally {
       testing = false;
     }
@@ -46,15 +47,16 @@
           <strong>{daemon.label}</strong>
           <p>{daemon.detail}</p>
           {#if daemon.fix}<p class="fix">{daemon.fix}</p>{/if}
-          <p>In-app toasts still work.</p>
+          <p>{t('In-app toasts still work.')}</p>
         </div>
       </div>
     {/if}
-    <SettingsRow label="Test notification" actions>
+    <SettingsRow label={t('Test notification')} actions>
       {#snippet control()}
-        <Button size="sm" icon="bell" loading={testing} onclick={test}>Send a test notification</Button>
+        <Button size="sm" icon="bell" loading={testing} onclick={test}>{t('Send a test notification')}</Button
+        >
       {/snippet}
-      <p>Checks that desktop notifications reach you.</p>
+      <p>{t('Checks that desktop notifications reach you.')}</p>
     </SettingsRow>
   {/snippet}
 </SectionForm>

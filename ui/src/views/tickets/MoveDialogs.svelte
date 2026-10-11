@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { openExternal } from '$lib/ipc/commands';
   import { toasts } from '$lib/stores';
   import { Button, Dialog, Select, TextInput } from '$lib/ui';
@@ -30,7 +31,7 @@
   }
 
   function browser(url: string): void {
-    openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
+    openExternal({ url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 
   function listKeys(e: KeyboardEvent): void {
@@ -46,10 +47,13 @@
 </script>
 
 {#if dialog?.kind === 'pick'}
-  <Dialog title={`Move ${dialog.ticket.ref.key} to ${dialog.target}`} onclose={() => move.cancel()}>
-    <p class="hint">Several transitions lead there. Pick one.</p>
+  <Dialog
+    title={t('Move {key} to {status}', { key: dialog.ticket.ref.key, status: dialog.target })}
+    onclose={() => move.cancel()}
+  >
+    <p class="hint">{t('Several transitions lead there. Pick one.')}</p>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="choices" role="group" aria-label="Transitions" onkeydown={listKeys}>
+    <div class="choices" role="group" aria-label={t('Transitions')} onkeydown={listKeys}>
       {#each dialog.candidates as t (t.id)}
         <Button variant="secondary" onclick={() => void move.choose(t)}>
           {t.name}{t.to.name !== t.name ? ` → ${t.to.name}` : ''}
@@ -58,11 +62,14 @@
     </div>
   </Dialog>
 {:else if dialog?.kind === 'fields'}
-  <Dialog title={`Move ${dialog.ticket.ref.key} to ${dialog.target}`} onclose={() => move.cancel()}>
+  <Dialog
+    title={t('Move {key} to {status}', { key: dialog.ticket.ref.key, status: dialog.target })}
+    onclose={() => move.cancel()}
+  >
     <form id="move-fields" class="form" onsubmit={submit}>
       <p class="hint">{dialog.message}</p>
       {#if fields.length === 0}
-        <p class="hint">The tracker did not say which fields are missing.</p>
+        <p class="hint">{t('The tracker did not say which fields are missing.')}</p>
       {/if}
       {#each fields as f (f.id)}
         {#if f.options.length > 0}
@@ -78,16 +85,16 @@
             value={values[f.id] ?? ''}
             oninput={(e) => (values = { ...values, [f.id]: (e.currentTarget as HTMLInputElement).value })}
             error={touched && f.required && (values[f.id] ?? '').trim() === ''
-              ? `${f.name} is required`
+              ? t('{name} is required', { name: f.name })
               : null}
           />
         {/if}
       {/each}
     </form>
     {#snippet actions()}
-      <Button variant="ghost" onclick={() => browser(dialog.ticket.url)}>Open in browser</Button>
-      <Button variant="ghost" onclick={() => move.cancel()}>Cancel</Button>
-      <Button variant="primary" type="submit" form="move-fields" loading={move.busy}>Move</Button>
+      <Button variant="ghost" onclick={() => browser(dialog.ticket.url)}>{t('Open in browser')}</Button>
+      <Button variant="ghost" onclick={() => move.cancel()}>{t('Cancel')}</Button>
+      <Button variant="primary" type="submit" form="move-fields" loading={move.busy}>{t('Move')}</Button>
     {/snippet}
   </Dialog>
 {/if}

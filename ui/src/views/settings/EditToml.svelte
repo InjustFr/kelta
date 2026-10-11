@@ -1,6 +1,7 @@
 <script lang="ts">
   // Raw TOML editor for one layer file with live validation (positions from Rust) and an
   // "Open in editor" shortcut. Saving goes through `settings_write_raw`, which validates first.
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { ValidationIssue } from '$lib/gen';
@@ -85,7 +86,7 @@
     try {
       await editor.writeRaw(text);
       loadedText = text;
-      toasts.info('Saved');
+      toasts.info(t('Saved'));
     } catch (err) {
       saveError = toIpcError('settings_write_raw', err).message;
     } finally {
@@ -101,7 +102,7 @@
         repo_id: editor.layer === 'repo' ? editor.repoId : null,
       });
     } catch (err) {
-      toasts.error(err, 'Could not open the file');
+      toasts.error(err, t('Could not open the file'));
     }
   }
 
@@ -118,10 +119,10 @@
 
 <section class="edit" data-testid="edit-toml">
   <header>
-    <code class="path">{doc?.path || 'no file yet'}</code>
+    <code class="path">{doc?.path || t('no file yet')}</code>
     <span class="spacer"></span>
-    <Button size="sm" icon="external-link" onclick={openInEditor}>Open in editor</Button>
-    <Button size="sm" onclick={reloadFromDisk} disabled={!dirty}>Revert</Button>
+    <Button size="sm" icon="external-link" onclick={openInEditor}>{t('Open in editor')}</Button>
+    <Button size="sm" onclick={reloadFromDisk} disabled={!dirty}>{t('Revert')}</Button>
     <Button
       size="sm"
       variant="primary"
@@ -129,13 +130,14 @@
       disabled={!dirty || errors.length > 0}
       onclick={save}
     >
-      Save
+      {t('Save')}
     </Button>
   </header>
   {#if externalText !== null}
     <p class="error" role="status" data-testid="toml-external">
-      The file changed on disk. <button type="button" class="link" onclick={reloadFromDisk}>Reload it</button> (your
-      edit is discarded).
+      {t('The file changed on disk.')}
+      <button type="button" class="link" onclick={reloadFromDisk}>{t('Reload it')}</button>
+      {t('(your edit is discarded).')}
     </p>
   {/if}
   <textarea
@@ -143,15 +145,15 @@
     bind:value={text}
     {oninput}
     spellcheck="false"
-    aria-label="TOML source"
+    aria-label={t('TOML source')}
     aria-invalid={errors.length > 0 || undefined}></textarea>
   {#if errors.length > 0}
     {@render issueList(errors, 'toml-issues')}
   {:else if text.trim() !== ''}
-    <p class="ok" data-testid="toml-valid">Valid.</p>
+    <p class="ok" data-testid="toml-valid">{t('Valid.')}</p>
   {/if}
   {#if warnings.length > 0}
-    <p class="warn-title">Warnings (saving is still allowed):</p>
+    <p class="warn-title">{t('Warnings (saving is still allowed):')}</p>
     {@render issueList(warnings, 'toml-warnings')}
   {/if}
   {#snippet issueList(list: ValidationIssue[], testid: string)}

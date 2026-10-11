@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
 
   import SectionForm from '../SectionForm.svelte';
@@ -14,7 +15,7 @@
       <Updates />
       <ThemePicker />
     {:else}
-      <p class="note" data-testid="theme-note">Themes are chosen in global settings.</p>
+      <p class="note" data-testid="theme-note">{t('Themes are chosen in global settings.')}</p>
     {/if}
   {/snippet}
 </SectionForm>

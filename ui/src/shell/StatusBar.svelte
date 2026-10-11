@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { dispatch } from '$lib/actions';
   import type { SessionInfo } from '$lib/gen';
   import { lampOf, projects, sessions, settings, work, type GlobalView, type LampLevel } from '$lib/stores';
@@ -6,7 +7,7 @@
 
   import { claudeSlots } from '../views/work/batch.svelte';
   import { sessionLabel } from '../views/work/live';
-  import { attentionLabel, chordFor } from './labels';
+  import { chordFor } from './labels';
   import { focusedPane, focusedSessionId, revealSession } from './nav';
   import { clock, itemCost, latestWindow, meter as bar, usd } from './usage';
 
@@ -21,11 +22,11 @@
   // The hint line teaches the keyboard: the user's own chords, skipped when unbound. Split and
   // Close pane only show where they act: a project with a focused pane, not a global view or the welcome screen.
   const HINTS: { id: string; verb: string; pane?: true }[] = [
-    { id: 'palette.open', verb: 'Commands' },
-    { id: 'session.new', verb: 'New session' },
-    { id: 'pane.split_right', verb: 'Split', pane: true },
-    { id: 'pane.close', verb: 'Close pane', pane: true },
-    { id: 'attention.next', verb: 'Next waiting' },
+    { id: 'palette.open', verb: msg('Commands') },
+    { id: 'session.new', verb: msg('New session') },
+    { id: 'pane.split_right', verb: msg('Split'), pane: true },
+    { id: 'pane.close', verb: msg('Close pane'), pane: true },
+    { id: 'attention.next', verb: msg('Next waiting') },
   ];
   const panes = $derived(!view && focusedPane() !== null);
   const hints = $derived(
@@ -36,10 +37,10 @@
 
   // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
   const METER: { lamp: LampLevel; label: string }[] = [
-    { lamp: 'needs_input', label: 'need input' },
-    { lamp: 'error', label: 'in error' },
-    { lamp: 'working', label: 'working' },
-    { lamp: 'done', label: 'done' },
+    { lamp: 'needs_input', label: msg('need input') },
+    { lamp: 'error', label: msg('in error') },
+    { lamp: 'working', label: msg('working') },
+    { lamp: 'done', label: msg('done') },
   ];
   const meter = $derived(
     METER.map((m) => ({
@@ -49,9 +50,10 @@
   );
 
   function words(lamp: LampLevel, n: number): string {
-    if (lamp === 'needs_input') return n === 1 ? `${n} needs input` : `${n} need input`;
-    if (lamp === 'done') return `${n} ready to review`;
-    return `${n} ${attentionLabel(lamp).toLowerCase()}`;
+    if (lamp === 'needs_input') return tn('{n} needs input', '{n} need input', n);
+    if (lamp === 'done') return tn('{n} ready to review', '{n} ready to review', n);
+    if (lamp === 'error') return tn('{n} in error', '{n} in error', n);
+    return tn('{n} working', '{n} working', n);
   }
 
   function walk(lamp: LampLevel, list: SessionInfo[]): void {
@@ -83,9 +85,9 @@
       .filter(([, v]) => v > 0)
       .map(([id, v]) => `${projects.byId(id)?.name ?? id}  ${usd(v)}`);
     return [
-      'Top sessions by spend',
-      ...(top.length ? top : ['none yet']),
-      ...(projectLines.length ? ['', 'Work items per project', ...projectLines] : []),
+      t('Top sessions by spend'),
+      ...(top.length ? top : [t('none yet')]),
+      ...(projectLines.length ? ['', t('Work items per project'), ...projectLines] : []),
     ].join('\n');
   });
 </script>
@@ -93,32 +95,34 @@
 <footer class="statusbar k-num" data-testid="statusbar">
   <p class="hints">
     {#each hints as h (h.id)}
-      <span class="hint"><Kbd chord={h.chord} />{h.verb}</span>
+      <span class="hint"><Kbd chord={h.chord} />{t(h.verb)}</span>
     {/each}
   </p>
   {#if prefixArmed}
-    <span class="seg prefix" data-testid="status-prefix" role="status">Prefix: press a key</span>
+    <span class="seg prefix" data-testid="status-prefix" role="status">{t('Prefix: press a key')}</span>
   {/if}
   {#if restart}
-    <span class="seg warn" title="Some settings need a restart">Restart needed</span>
+    <span class="seg warn" title={t('Some settings need a restart')}>{t('Restart needed')}</span>
   {/if}
   {#if slots.live > 0 || slots.queued > 0}
     <span
       class="seg"
       data-testid="status-slots"
-      title="Live Claude processes / claude.max_live, and work items waiting for a slot"
+      title={t('Live Claude processes / claude.max_live, and work items waiting for a slot')}
     >
-      Claude {slots.live}{slots.max ? `/${slots.max}` : ''}{slots.queued ? ` · ${slots.queued} queued` : ''}
+      Claude {slots.live}{slots.max ? `/${slots.max}` : ''}{slots.queued
+        ? ` · ${t('{n} queued', { n: slots.queued })}`
+        : ''}
     </span>
   {/if}
   {#if five || seven}
     <span class="seg" data-testid="status-rate" title={spendTitle}>
       {#if five}<span
-          >5h <span aria-hidden="true">{bar(five.used_percentage)}</span>
+          >{t('5h')} <span aria-hidden="true">{bar(five.used_percentage)}</span>
           {Math.round(five.used_percentage)}% → {clock(five.resets_at)}</span
         >{/if}
       {#if five && seven}<span aria-hidden="true">·</span>{/if}
-      {#if seven}<span>7d {Math.round(seven.used_percentage)}%</span>{/if}
+      {#if seven}<span>{t('7d')} {Math.round(seven.used_percentage)}%</span>{/if}
     </span>
   {/if}
   {#each meter as m (m.lamp)}
@@ -126,11 +130,11 @@
       type="button"
       class="seg btn"
       onclick={() => walk(m.lamp, m.list)}
-      title="{m.list.length} {m.label}: go to the next one"
-      aria-label="{m.list.length} {m.label}"
+      title={t('{n} {state}: go to the next one', { n: m.list.length, state: t(m.label) })}
+      aria-label="{m.list.length} {t(m.label)}"
       data-testid={m.lamp === 'needs_input' ? 'status-needs-input' : `status-${m.lamp}`}
     >
-      <Lamp level={m.lamp} title={m.label} />
+      <Lamp level={m.lamp} title={t(m.label)} />
       {words(m.lamp, m.list.length)}
     </button>
   {/each}

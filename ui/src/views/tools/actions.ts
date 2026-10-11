@@ -4,6 +4,7 @@
 // with no project argument goes back (`nav.back`), one that takes a project asks for another project.
 // `tool.goto.N` opens tool N of the rail's Tools section.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { Placement, ProjectId, TemplateCtx, ToolCheck, ToolInfo, ToolScope, WorkItemId } from '$lib/gen';
 import { dispatch, registerAction } from '$lib/actions';
 import { focusPane, paneSession, type PaneLocation } from '$lib/layout';
@@ -110,12 +111,12 @@ registerAction('tools.open', async (args) => {
   flushJump(); // the place this open leaves is a stop on the way back
   const wantsProject = takesProject || scope === 'project';
   if (args?.pick_project === true || (wantsProject && (!here || (inFront && args?.focus_only !== true)))) {
-    const picked = await ui.pickProject(`Open ${tool.label} for project…`);
+    const picked = await ui.pickProject(t('Open {name} for project…', { name: tool.label }));
     if (!picked) return;
     try {
       if (!projects.byId(picked)?.open) await projects.open(picked);
     } catch (e) {
-      toasts.error(e, 'Opening the project failed');
+      toasts.error(e, t('Opening the project failed'));
       return;
     }
     projectId = picked;

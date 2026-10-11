@@ -1,5 +1,6 @@
 <script lang="ts">
   // Peek & reply (ticket #139): the waiting session's last lines, its menu as buttons, a reply field.
+  import { t } from '$lib/i18n/index.svelte';
   import { sessionTextTail, sessionWrite } from '$lib/ipc/commands';
   import { projects, sessions, toasts, work } from '$lib/stores';
   import { Button, Kbd } from '$lib/ui';
@@ -80,7 +81,7 @@
       await write();
       peek.close();
     } catch (err) {
-      toasts.error(err, 'Sending to the session failed');
+      toasts.error(err, t('Sending to the session failed'));
     }
   }
 
@@ -115,7 +116,7 @@
     class="peek"
     {style}
     role="dialog"
-    aria-label="Peek: {s.name}"
+    aria-label={t('Peek: {name}', { name: s.name })}
     tabindex="-1"
     aria-modal={peek.focused}
     data-testid="peek"
@@ -131,7 +132,7 @@
     {#if message && !asking}
       <p class="message" data-testid="peek-message">{message}</p>
       <details class="screen">
-        <summary>Terminal</summary>
+        <summary>{t('Terminal')}</summary>
         <pre class="tail" data-testid="peek-tail">{tail}</pre>
       </details>
     {:else}
@@ -140,7 +141,7 @@
       {#if message}<p class="preview" title={message}>{message}</p>{/if}
     {/if}
     {#if !live}
-      <Button variant="primary" size="sm" onclick={jump} data-testid="peek-resume">Resume</Button>
+      <Button variant="primary" size="sm" onclick={jump} data-testid="peek-resume">{t('Resume')}</Button>
     {:else}
       {#if menu}
         <div class="menu" data-testid="peek-menu">
@@ -156,16 +157,16 @@
         bind:this={input}
         bind:value={reply}
         class="k-filter reply"
-        placeholder="Reply"
-        aria-label="Reply to {s.name}"
+        placeholder={t('Reply')}
+        aria-label={t('Reply to {name}', { name: s.name })}
         data-testid="peek-reply"
       />
     {/if}
     <footer>
-      {#if live && !menu}<span><Kbd chord="enter" /> Send</span>{/if}
-      <span><Kbd chord="tab" /> Next waiting</span>
-      <span><Kbd chord="mod+enter" /> Go to</span>
-      <span><Kbd chord="escape" /> Close</span>
+      {#if live && !menu}<span><Kbd chord="enter" /> {t('Send')}</span>{/if}
+      <span><Kbd chord="tab" /> {t('Next waiting')}</span>
+      <span><Kbd chord="mod+enter" /> {t('Go to')}</span>
+      <span><Kbd chord="escape" /> {t('Close')}</span>
     </footer>
   </div>
 {/if}

@@ -1,6 +1,7 @@
 // Ticket sources (`[[sources]]`, global): add a discovered `SourceHit` to a source's board, spot one
 // that is already there, create a source from a hit, and save the list to the global settings.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { AccountKind, JsonValue, Source, SourceHit, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { settings, toasts } from '$lib/stores';
@@ -66,7 +67,7 @@ export async function editSource(id: string, f: (s: Source) => Source): Promise<
   try {
     await saveSources(withEdited(settings.value()?.sources ?? [], id, f));
   } catch (err) {
-    toasts.error(err, 'Could not save the ticket source');
+    toasts.error(err, t('Could not save the ticket source'));
   }
 }
 

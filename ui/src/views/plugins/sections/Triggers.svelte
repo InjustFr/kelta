@@ -1,5 +1,6 @@
 <script lang="ts">
   // Settings → Triggers: list with origin, test with a sample payload, and the recent run log.
+  import { t } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
   import type { SettingsSectionProps } from '$app/registry';
@@ -36,15 +37,16 @@
     try {
       log = await ipc.triggerLog({ limit: 50 });
     } catch (e) {
-      toasts.error(e, 'Trigger log');
+      toasts.error(e, t('Trigger log'));
     }
   }
 
-  function origin(t: TriggerInfo): string {
-    const o = t.origin;
-    if (o.kind === 'plugin') return `plugin ${o.plugin_id}`;
-    if (o.kind === 'repo') return `repo ${o.repo_id}${o.trusted ? '' : ' (untrusted)'}`;
-    return o.kind === 'project' ? `project ${o.project_id}` : 'global';
+  function origin(trig: TriggerInfo): string {
+    const o = trig.origin;
+    if (o.kind === 'plugin') return t('plugin {id}', { id: o.plugin_id });
+    if (o.kind === 'repo')
+      return o.trusted ? t('repo {id}', { id: o.repo_id }) : t('repo {id} (untrusted)', { id: o.repo_id });
+    return o.kind === 'project' ? t('project {id}', { id: o.project_id }) : t('global');
   }
 
   async function runTest(): Promise<void> {
@@ -54,21 +56,21 @@
       parsed = JSON.parse(payload) as JsonValue;
       payloadError = null;
     } catch (e) {
-      payloadError = e instanceof Error ? e.message : 'invalid JSON';
+      payloadError = e instanceof Error ? e.message : t('invalid JSON');
       return;
     }
     try {
       result = await ipc.triggerTest({ trigger_id: testing.id, payload: parsed });
       void loadLog();
     } catch (e) {
-      toasts.error(e, `Test ${testing.id}`);
+      toasts.error(e, t('Test {id}', { id: testing.id }));
     }
   }
 </script>
 
 <SectionForm sectionId="triggers" {...props}>
   {#snippet after()}
-    <SettingsGroup heading="All triggers" data-layer={layer}>
+    <SettingsGroup heading={t('All triggers')} data-layer={layer}>
       {#if plugins.triggers.error && !plugins.triggers.data}
         <ErrorState error={plugins.triggers.error} onretry={() => plugins.loadTriggers()} />
       {:else if !plugins.triggers.data}
@@ -76,39 +78,47 @@
       {:else if plugins.triggers.data.length === 0}
         <EmptyState
           icon="zap"
-          title="No triggers yet"
-          body="Triggers run a command when something happens, such as a session finishing. Install a plugin that adds some."
+          title={t('No triggers yet')}
+          body={t(
+            'Triggers run a command when something happens, such as a session finishing. Install a plugin that adds some.',
+          )}
         >
           {#snippet actions()}
-            <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
+            <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>{t('Install plugin')}</Button
+            >
           {/snippet}
         </EmptyState>
       {:else}
-        {#each plugins.triggers.data as t (t.id)}
-          <SettingsCard heading={t.id} mono dim={!t.enabled} data-trigger={t.id}>
+        {#each plugins.triggers.data as trig (trig.id)}
+          <SettingsCard heading={trig.id} mono dim={!trig.enabled} data-trigger={trig.id}>
             {#snippet head()}
-              <code>{t.on}</code>
-              <Badge>{origin(t)}</Badge>
-              {#if !t.enabled}<Badge tone="warn">disabled</Badge>{/if}
-              {#if t.description}<span class="muted">{t.description}</span>{/if}
+              <code>{trig.on}</code>
+              <Badge>{origin(trig)}</Badge>
+              {#if !trig.enabled}<Badge tone="warn">{t('disabled')}</Badge>{/if}
+              {#if trig.description}<span class="muted">{trig.description}</span>{/if}
             {/snippet}
             {#snippet actions()}
-              <Button size="sm" variant="ghost" onclick={() => ((testing = t), (result = null))}>Test</Button>
+              <Button size="sm" variant="ghost" onclick={() => ((testing = trig), (result = null))}
+                >{t('Test')}</Button
+              >
             {/snippet}
-            {#if testing?.id === t.id}
+            {#if testing?.id === trig.id}
               <div class="test">
                 <TextInput
                   bind:value={payload}
                   multiline
                   rows={5}
-                  label="Sample event payload (JSON)"
+                  label={t('Sample event payload (JSON)')}
                   error={payloadError}
                 />
                 <div>
-                  <Button variant="primary" onclick={runTest}>Run test</Button>
+                  <Button variant="primary" onclick={runTest}>{t('Run test')}</Button>
                 </div>
                 {#if result}
-                  <p class={result.ok ? 'ok' : 'bad'}>{result.ok ? 'OK' : 'Failed'} {result.detail ?? ''}</p>
+                  <p class={result.ok ? 'ok' : 'bad'}>
+                    {result.ok ? t('OK') : t('Failed')}
+                    {result.detail ?? ''}
+                  </p>
                 {/if}
               </div>
             {/if}
@@ -117,12 +127,12 @@
       {/if}
     </SettingsGroup>
 
-    <SettingsGroup heading="Recent runs">
+    <SettingsGroup heading={t('Recent runs')}>
       {#snippet actions()}
-        <Button size="sm" variant="ghost" icon="refresh-cw" onclick={loadLog}>Refresh</Button>
+        <Button size="sm" variant="ghost" icon="refresh-cw" onclick={loadLog}>{t('Refresh')}</Button>
       {/snippet}
       {#if log.length === 0}
-        <p class="muted">No trigger has run yet.</p>
+        <p class="muted">{t('No trigger has run yet.')}</p>
       {:else}
         <table>
           <tbody>
@@ -131,8 +141,8 @@
                 <td class="muted">{r.ts}</td>
                 <td>{r.trigger_id}</td>
                 <td><code>{r.event}</code></td>
-                <td class={r.ok ? 'ok' : 'bad'}>{r.ok ? 'ok' : 'failed'}</td>
-                <td class="muted">{r.detail ?? ''}{r.depth ? `, depth ${r.depth}` : ''}</td>
+                <td class={r.ok ? 'ok' : 'bad'}>{r.ok ? t('ok') : t('failed')}</td>
+                <td class="muted">{r.detail ?? ''}{r.depth ? `, ${t('depth {n}', { n: r.depth })}` : ''}</td>
               </tr>
             {/each}
           </tbody>

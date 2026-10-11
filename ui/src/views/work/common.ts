@@ -1,5 +1,6 @@
 // Pure helpers shared by the work views (tickets, reviews, inbox, start-work sheet, work header).
 
+import { formatDate, msg, t } from '$lib/i18n/index.svelte';
 import type { AccountError, GitStatus, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
 import type { LampLevel } from '$lib/stores/reducers';
 
@@ -8,22 +9,23 @@ import type { LampLevel } from '$lib/stores/reducers';
 /** Approximation of `git check-ref-format --branch`. Returns an error message or null. */
 export function validateBranch(name: string): string | null {
   const n = name;
-  if (n.trim() === '') return 'Branch name is required';
-  if (n !== n.trim()) return 'Branch name must not start or end with a space';
-  if (n.startsWith('-')) return 'Branch name must not start with "-"';
-  if (n === '@') return 'Branch name must not be "@"';
+  if (n.trim() === '') return t('Branch name is required');
+  if (n !== n.trim()) return t('Branch name must not start or end with a space');
+  if (n.startsWith('-')) return t('Branch name must not start with "-"');
+  if (n === '@') return t('Branch name must not be "@"');
   for (const ch of n) {
     const c = ch.codePointAt(0) ?? 0;
     if (c <= 0x20 || c === 0x7f || '~^:?*[\\'.includes(ch))
-      return 'Branch name contains an invalid character';
+      return t('Branch name contains an invalid character');
   }
-  if (n.includes('..')) return 'Branch name must not contain ".."';
-  if (n.includes('@{')) return 'Branch name must not contain "@{"';
-  if (n.includes('//') || n.startsWith('/') || n.endsWith('/')) return 'Branch name has an empty path part';
-  if (n.endsWith('.')) return 'Branch name must not end with "."';
+  if (n.includes('..')) return t('Branch name must not contain ".."');
+  if (n.includes('@{')) return t('Branch name must not contain "@{"');
+  if (n.includes('//') || n.startsWith('/') || n.endsWith('/'))
+    return t('Branch name has an empty path part');
+  if (n.endsWith('.')) return t('Branch name must not end with "."');
   for (const part of n.split('/')) {
-    if (part.startsWith('.')) return 'Path parts must not start with "."';
-    if (part.endsWith('.lock')) return 'Path parts must not end with ".lock"';
+    if (part.startsWith('.')) return t('Path parts must not start with "."');
+    if (part.endsWith('.lock')) return t('Path parts must not end with ".lock"');
   }
   return null;
 }
@@ -77,15 +79,15 @@ export interface PlanErrors {
 export function validatePlan(plan: StartWorkPlan): PlanErrors {
   return {
     branch: validateBranch(plan.branch),
-    base: plan.base.trim() === '' ? 'Base branch is required' : null,
-    prompt: plan.claude.prompt.trim() === '' ? 'The prompt must not be empty' : null,
+    base: plan.base.trim() === '' ? t('Base branch is required') : null,
+    prompt: plan.claude.prompt.trim() === '' ? t('The prompt must not be empty') : null,
     repo:
       plan.repo_id === '' || (plan.repo_choices.length > 0 && !plan.repo_choices.includes(plan.repo_id))
-        ? 'Pick a repository'
+        ? t('Pick a repository')
         : null,
     comment:
       plan.side_effects.comment !== null && plan.side_effects.comment.trim() === ''
-        ? 'The comment is empty'
+        ? t('The comment is empty')
         : null,
   };
 }
@@ -95,24 +97,24 @@ export function planValid(errors: PlanErrors): boolean {
 }
 
 const STEP_LABELS: Record<string, string> = {
-  before_start: 'Check start triggers',
-  fetch_ticket: 'Fetch ticket and write ticket.md',
-  fetch_base: 'Fetch base branch',
-  worktree: 'Create worktree',
-  include_files: 'Copy worktree.include files',
-  claude_files: 'Generate Claude settings and context',
-  layout: 'Create tab and layout',
-  setup: 'Run setup commands',
-  editor: 'Start editor',
-  claude: 'Start Claude',
-  tracker_side_effects: 'Tracker updates (assign, move, comment)',
-  persist: 'Save work item',
+  before_start: msg('Check start triggers'),
+  fetch_ticket: msg('Fetch ticket and write ticket.md'),
+  fetch_base: msg('Fetch base branch'),
+  worktree: msg('Create worktree'),
+  include_files: msg('Copy worktree.include files'),
+  claude_files: msg('Generate Claude settings and context'),
+  layout: msg('Create tab and layout'),
+  setup: msg('Run setup commands'),
+  editor: msg('Start editor'),
+  claude: msg('Start Claude'),
+  tracker_side_effects: msg('Tracker updates (assign, move, comment)'),
+  persist: msg('Save work item'),
 };
 
 export const START_STEPS = Object.keys(STEP_LABELS);
 
 export function stepLabel(step: string): string {
-  return STEP_LABELS[step] ?? step.replace(/_/g, ' ');
+  return STEP_LABELS[step] ? t(STEP_LABELS[step]) : step.replace(/_/g, ' ');
 }
 
 // ---- error detail parsing -------------------------------------------------------------------
@@ -198,8 +200,7 @@ export interface BannerInfo {
 }
 
 function hhmm(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return formatDate(ms, { hour: '2-digit', minute: '2-digit' });
 }
 
 /** Message for one failed account next to aggregated data (SPEC §5). */
@@ -207,20 +208,31 @@ export function accountErrorBanner(e: AccountError, now: number = Date.now()): B
   const err = e.error;
   switch (err.code) {
     case 'needs_auth':
-      return { tone: 'danger', text: `Account ${e.account_id} needs authentication`, reauth: true };
+      return {
+        tone: 'danger',
+        text: t('Account {id} needs authentication', { id: e.account_id }),
+        reauth: true,
+      };
     case 'rate_limited':
       return {
         tone: 'warn',
         text: err.retry_after_ms
-          ? `Account ${e.account_id} is rate limited, retrying at ${hhmm(now + err.retry_after_ms)}`
-          : `Account ${e.account_id} is rate limited`,
+          ? t('Account {id} is rate limited, retrying at {time}', {
+              id: e.account_id,
+              time: hhmm(now + err.retry_after_ms),
+            })
+          : t('Account {id} is rate limited', { id: e.account_id }),
         reauth: false,
       };
     case 'network':
     case 'timeout':
-      return { tone: 'warn', text: `Offline: ${e.account_id} unreachable`, reauth: false };
+      return { tone: 'warn', text: t('Offline: {id} unreachable', { id: e.account_id }), reauth: false };
     default:
-      return { tone: 'warn', text: `Account ${e.account_id}: ${err.message}`, reauth: false };
+      return {
+        tone: 'warn',
+        text: t('Account {id}: {message}', { id: e.account_id, message: err.message }),
+        reauth: false,
+      };
   }
 }
 
@@ -272,25 +284,25 @@ export function columnFor<C extends { id: string; name: string; category: string
 export function ciGlyph(state: string): { lamp: LampLevel; label: string } {
   switch (state) {
     case 'success':
-      return { lamp: 'done', label: 'CI passed' };
+      return { lamp: 'done', label: t('CI passed') };
     case 'failure':
     case 'error':
-      return { lamp: 'error', label: 'CI failed' };
+      return { lamp: 'error', label: t('CI failed') };
     case 'pending':
-      return { lamp: 'working', label: 'CI running' };
+      return { lamp: 'working', label: t('CI running') };
     default:
-      return { lamp: 'none', label: 'No CI' };
+      return { lamp: 'none', label: t('No CI') };
   }
 }
 
 export function decisionInfo(decision: string | null): { label: string; tone: Tone } | null {
   switch (decision) {
     case 'approved':
-      return { label: 'approved', tone: 'ok' };
+      return { label: t('approved'), tone: 'ok' };
     case 'changes_requested':
-      return { label: 'changes requested', tone: 'danger' };
+      return { label: t('changes requested'), tone: 'danger' };
     case 'review_required':
-      return { label: 'review required', tone: 'warn' };
+      return { label: t('review required'), tone: 'warn' };
     default:
       return null;
   }
@@ -299,13 +311,13 @@ export function decisionInfo(decision: string | null): { label: string; tone: To
 export function myStateInfo(state: string | null): { label: string; tone: Tone } | null {
   switch (state) {
     case 'approved':
-      return { label: 'you approved', tone: 'ok' };
+      return { label: t('you approved'), tone: 'ok' };
     case 'changes_requested':
-      return { label: 'you requested changes', tone: 'danger' };
+      return { label: t('you requested changes'), tone: 'danger' };
     case 'commented':
-      return { label: 'you commented', tone: 'info' };
+      return { label: t('you commented'), tone: 'info' };
     case 'pending':
-      return { label: 'awaiting you', tone: 'warn' };
+      return { label: t('awaiting you'), tone: 'warn' };
     default:
       return null;
   }
@@ -329,8 +341,8 @@ export function reviewPhase(r: {
 }
 
 /** Why a work action is unavailable on a review-kind item (a `kelta/pr-<n>` checkout is never pushed). */
-export const REVIEW_READONLY = 'Review checkout: read-only';
+export const REVIEW_READONLY = msg('Review checkout: read-only');
 const READONLY_KEYS = ['p', 'r', 'f', 'l', 'T', 'M'];
 export function workActionDisabled(item: { kind: string }, key: string): string | null {
-  return item.kind === 'review' && READONLY_KEYS.includes(key) ? REVIEW_READONLY : null;
+  return item.kind === 'review' && READONLY_KEYS.includes(key) ? t(REVIEW_READONLY) : null;
 }

@@ -2,6 +2,7 @@
 // on a ticket with a kept proposal adds its acceptance criteria to Claude's first prompt.
 // shortcut: proposals live in memory only (lost on reload); persist them if refines must outlive the window.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { ProjectId, StartWorkPlan, TicketRef } from '$lib/gen';
 import { trackerRefine } from '$lib/ipc/commands';
 import { toasts } from '$lib/stores';
@@ -27,7 +28,7 @@ export async function refine(ref: TicketRef, projectId: ProjectId | null): Promi
   } catch (err) {
     if (prev) refines[key] = prev;
     else delete refines[key];
-    toasts.error(err, `Refining ${ref.key}`);
+    toasts.error(err, t('Refining {key}', { key: ref.key }));
   }
 }
 

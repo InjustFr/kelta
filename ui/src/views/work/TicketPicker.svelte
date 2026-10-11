@@ -1,5 +1,6 @@
 <script lang="ts">
   // Ticket search over `tracker_search` (all bound trackers), used by New work item and Link to ticket.
+  import { t } from '$lib/i18n/index.svelte';
   import type { TicketItem } from '$lib/gen';
   import { trackerSearch } from '$lib/ipc/commands';
 
@@ -51,7 +52,7 @@
 
 <Picker
   {title}
-  placeholder="Search tickets by key or title"
+  placeholder={t('Search tickets by key or title')}
   items={hits.map((h) => ({
     id: key(h),
     label: `${h.ticket.ref.key} ${h.ticket.title}`,
@@ -68,10 +69,10 @@
   {busy}
   testid="ticket-picker"
   empty={failed
-    ? `Ticket search failed: ${failed}`
+    ? t('Ticket search failed: {message}', { message: failed })
     : query.trim().length < 2
-      ? 'Type a ticket key or words from its title.'
+      ? t('Type a ticket key or words from its title.')
       : busy
-        ? 'Searching…'
-        : 'No ticket matches.'}
+        ? t('Searching…')
+        : t('No ticket matches.')}
 />

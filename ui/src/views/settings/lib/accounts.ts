@@ -1,6 +1,7 @@
 // Account wizard model (SETTINGS §2 `[accounts.<id>]`): per-kind defaults and validation, and
 // the JSON written to `accounts.<id>` (defaults are omitted so the file stays minimal).
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { AccountKind, JsonValue } from '$lib/gen';
 
 export interface KindInfo {
@@ -21,7 +22,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'jira',
     label: 'Jira',
-    blurb: 'Jira Cloud or Data Center issues.',
+    blurb: msg('Jira Cloud or Data Center issues.'),
     baseUrlRequired: true,
     baseUrlDefault: null,
     baseUrlPlaceholder: 'https://acme.atlassian.net',
@@ -32,7 +33,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'redmine',
     label: 'Redmine',
-    blurb: 'Redmine issues with an API key.',
+    blurb: msg('Redmine issues with an API key.'),
     baseUrlRequired: true,
     baseUrlDefault: null,
     baseUrlPlaceholder: 'https://redmine.example.org',
@@ -43,7 +44,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'github',
     label: 'GitHub',
-    blurb: 'GitHub issues, Projects and pull requests (github.com or Enterprise).',
+    blurb: msg('GitHub issues, Projects and pull requests (github.com or Enterprise).'),
     baseUrlRequired: false,
     baseUrlDefault: 'https://api.github.com',
     baseUrlPlaceholder: 'https://api.github.com',
@@ -54,7 +55,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'gitlab',
     label: 'GitLab',
-    blurb: 'GitLab issues and merge requests (gitlab.com or self-managed).',
+    blurb: msg('GitLab issues and merge requests (gitlab.com or self-managed).'),
     baseUrlRequired: false,
     baseUrlDefault: 'https://gitlab.com',
     baseUrlPlaceholder: 'https://gitlab.com',
@@ -65,7 +66,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'bitbucket',
     label: 'Bitbucket',
-    blurb: 'Bitbucket Cloud pull requests (its issue tracker was removed; use Jira).',
+    blurb: msg('Bitbucket Cloud pull requests (its issue tracker was removed; use Jira).'),
     baseUrlRequired: false,
     baseUrlDefault: 'https://api.bitbucket.org/2.0',
     baseUrlPlaceholder: 'https://api.bitbucket.org/2.0',
@@ -76,7 +77,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'gitea',
     label: 'Gitea / Forgejo',
-    blurb: 'Gitea or Forgejo issues and pull requests (self-hosted, Codeberg).',
+    blurb: msg('Gitea or Forgejo issues and pull requests (self-hosted, Codeberg).'),
     baseUrlRequired: true,
     baseUrlDefault: null,
     baseUrlPlaceholder: 'https://git.example.org',
@@ -87,7 +88,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: 'linear',
     label: 'Linear',
-    blurb: 'Linear issues with a personal API key.',
+    blurb: msg('Linear issues with a personal API key.'),
     baseUrlRequired: false,
     baseUrlDefault: 'https://api.linear.app',
     baseUrlPlaceholder: 'https://api.linear.app',
@@ -169,23 +170,23 @@ export function validateDraft(
   editing = false,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!d.id) errors.id = 'Choose an id';
-  else if (!ID_RE.test(d.id)) errors.id = 'Use lowercase letters, digits and dashes';
-  else if (!editing && taken.includes(d.id)) errors.id = 'This id is already used';
+  if (!d.id) errors.id = t('Choose an id');
+  else if (!ID_RE.test(d.id)) errors.id = t('Use lowercase letters, digits and dashes');
+  else if (!editing && taken.includes(d.id)) errors.id = t('This id is already used');
   const info = kindInfo(d.kind);
-  if (info.baseUrlRequired && !d.base_url.trim()) errors.base_url = 'The server URL is required';
+  if (info.baseUrlRequired && !d.base_url.trim()) errors.base_url = t('The server URL is required');
   if (d.base_url.trim() && !/^https?:\/\/\S+$/.test(d.base_url.trim())) {
-    errors.base_url = 'Enter a full URL starting with http:// or https://';
+    errors.base_url = t('Enter a full URL starting with http:// or https://');
   }
   if (d.web_url.trim() && !/^https?:\/\/\S+$/.test(d.web_url.trim())) {
-    errors.web_url = 'Enter a full URL starting with http:// or https://';
+    errors.web_url = t('Enter a full URL starting with http:// or https://');
   }
   if (d.kind === 'jira' && needsEmail(d) && !d.email.trim())
-    errors.email = 'Jira Cloud needs the account e-mail';
+    errors.email = t('Jira Cloud needs the account e-mail');
   if (d.kind === 'bitbucket' && needsEmail(d) && !d.email.trim())
-    errors.email = 'Bitbucket API tokens need the Atlassian account e-mail';
-  if (d.poll_secs.trim() && !/^\d+$/.test(d.poll_secs.trim())) errors.poll_secs = 'Whole seconds';
-  if (!d.secret.trim()) errors.secret = 'Choose where the token comes from';
+    errors.email = t('Bitbucket API tokens need the Atlassian account e-mail');
+  if (d.poll_secs.trim() && !/^\d+$/.test(d.poll_secs.trim())) errors.poll_secs = t('Whole seconds');
+  if (!d.secret.trim()) errors.secret = t('Choose where the token comes from');
   return errors;
 }
 
@@ -242,11 +243,17 @@ export function backendAdvice(backend: string): SecretAdvice | null {
   switch (backend) {
     case 'secret-service':
       return {
-        title: 'No Secret Service provider',
+        title: t('No Secret Service provider'),
         steps: [
-          'On GNOME / KDE the keyring starts with your session. On Sway or Hyprland nothing provides it by default.',
-          'Start gnome-keyring for secrets, or enable Secret Service integration in KeePassXC (Settings → Secret Service Integration).',
-          'Or avoid the keyring: store tokens in the passphrase-encrypted file (file: references), or use a command: reference (pass, op, secret-tool) or an env: reference.',
+          t(
+            'On GNOME / KDE the keyring starts with your session. On Sway or Hyprland nothing provides it by default.',
+          ),
+          t(
+            'Start gnome-keyring for secrets, or enable Secret Service integration in KeePassXC (Settings → Secret Service Integration).',
+          ),
+          t(
+            'Or avoid the keyring: store tokens in the passphrase-encrypted file (file: references), or use a command: reference (pass, op, secret-tool) or an env: reference.',
+          ),
         ],
         snippets: [
           'gnome-keyring-daemon --start --components=secrets',
@@ -257,16 +264,18 @@ export function backendAdvice(backend: string): SecretAdvice | null {
       };
     case 'gh-cli':
       return {
-        title: 'GitHub CLI not found',
+        title: t('GitHub CLI not found'),
         steps: [
-          'Install gh, then run `gh auth login`. Kelta reads the token with `gh auth token` and never copies it.',
+          t(
+            'Install gh, then run `gh auth login`. Kelta reads the token with `gh auth token` and never copies it.',
+          ),
         ],
         snippets: ['gh auth login'],
       };
     case 'glab-cli':
       return {
-        title: 'GitLab CLI not found',
-        steps: ['Install glab, then run `glab auth login`. Kelta reads glab’s own config.'],
+        title: t('GitLab CLI not found'),
+        steps: [t('Install glab, then run `glab auth login`. Kelta reads glab’s own config.')],
         snippets: ['glab auth login'],
       };
     default:

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { WorkItem } from '$lib/gen';
@@ -37,10 +38,10 @@
         if (item.state.kind === 'merged' && item.state.detail) return { item, skip: item.state.detail };
         try {
           const g = await workStatus({ id: item.id });
-          const skip = g.dirty ? 'uncommitted changes' : g.unpushed ? 'unpushed commits' : null;
+          const skip = g.dirty ? t('uncommitted changes') : g.unpushed ? t('unpushed commits') : null;
           return { item, skip };
         } catch {
-          return { item, skip: 'worktree status unavailable' };
+          return { item, skip: t('worktree status unavailable') };
         }
       }),
     );
@@ -54,11 +55,11 @@
       for (const w of report.finished) work.upsert(w);
       const n = report.finished.length;
       const k = skipped.length + report.skipped.length;
-      const more = k ? `, ${k} skipped` : '';
-      toasts.info(`Finished ${n} merged work item${n === 1 ? '' : 's'}${more}`);
+      const more = k ? `, ${t('{n} skipped', { n: k })}` : '';
+      toasts.info(tn('Finished {n} merged work item', 'Finished {n} merged work items', n) + more);
       onclose();
     } catch (err) {
-      toasts.error(err, 'Finish all merged');
+      toasts.error(err, t('Finish all merged'));
     } finally {
       busy = false;
     }
@@ -67,16 +68,18 @@
   const name = (w: WorkItem): string => w.ticket?.key ?? w.branch;
 </script>
 
-<Dialog title="Finish all merged" tone="danger" width={520} {onclose}>
+<Dialog title={t('Finish all merged')} tone="danger" width={520} {onclose}>
   <div class="body" data-testid="finish-merged">
     {#if rows === null}
-      <p class="hint"><Spinner size={12} /> Checking worktrees…</p>
+      <p class="hint"><Spinner size={12} /> {t('Checking worktrees…')}</p>
     {:else if rows.length === 0}
-      <p class="hint">No merged work items.</p>
+      <p class="hint">{t('No merged work items.')}</p>
     {:else}
       {#if ready.length > 0}
-        <p class="hint">Stops their sessions, removes their worktrees and deletes their local branches.</p>
-        <ul aria-label="To finish">
+        <p class="hint">
+          {t('Stops their sessions, removes their worktrees and deletes their local branches.')}
+        </p>
+        <ul aria-label={t('To finish')}>
           {#each ready as r (r.item.id)}
             <li>
               <span class="key">{name(r.item)}</span> <span class="meta">{prNumber(r.item.pr_url)}</span>
@@ -85,8 +88,8 @@
         </ul>
       {/if}
       {#if skipped.length > 0}
-        <h3>Skipped</h3>
-        <ul aria-label="Skipped">
+        <h3>{t('Skipped')}</h3>
+        <ul aria-label={t('Skipped')}>
           {#each skipped as r (r.item.id)}
             <li><span class="key">{name(r.item)}</span> <span class="meta">{r.skip}</span></li>
           {/each}
@@ -95,9 +98,9 @@
     {/if}
   </div>
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <Button variant="primary" loading={busy} disabled={ready.length === 0} onclick={() => void finish()}>
-      Finish {ready.length}
+      {t('Finish {n}', { n: ready.length })}
     </Button>
   {/snippet}
 </Dialog>

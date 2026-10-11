@@ -32,6 +32,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `theme` | enum(system\|dark\|light) | `system` | |
+| `language` | enum(system\|en\|fr\|de) | `system` | scope global; interface language (Settings → General); `system` follows the OS language, English when it is none of the three. Applies at once, no restart. Ticket and PR content, terminal output and config keys stay as they are |
 | `restore_mode` | enum(lazy\|eager\|none) | `lazy` | Dormant session respawn policy |
 | `confirm_quit_with_running` | bool | `true` | ask before quitting while Claude is working or waiting for you |
 | `quit_sessions` | enum(ask\|keep\|stop) | `ask` | scope global; quitting (Cmd+Q / menu Quit / Dock Quit, a window close that quits) while keltad would keep sessions running: `ask` shows the quit dialog (session count, busy sessions, "Don't ask again" stores the answer here), `keep` leaves them running for the next start, `stop` kills every session (as `session_kill`) and ends keltad; they restore per `restore_mode`, as without keltad. No dialog with `session_host = "inprocess"`, `restore_mode = "none"` (nothing survives), in background mode, or on the updater's restart (always keeps) |

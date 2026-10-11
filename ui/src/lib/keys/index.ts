@@ -2,6 +2,7 @@
 // `findConflicts`; the shell starts the `keyManager` singleton, terminal views route their key
 // events through it.
 
+import { t } from '$lib/i18n/index.svelte';
 import { dispatch, hasAction } from '$lib/actions';
 import { settings, toasts, tools } from '$lib/stores';
 
@@ -53,5 +54,5 @@ export const keyManager = new KeyManager({
   dispatch,
   hasAction,
   extraBindings: toolBindings,
-  onError: (err, id) => toasts.error(err, `Action ${id} failed`),
+  onError: (err, id) => toasts.error(err, t('Action {id} failed', { id })),
 });

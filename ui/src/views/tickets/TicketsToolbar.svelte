@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { tick } from 'svelte';
 
   import type { TicketSort, TicketsMode, Who } from '$lib/gen';
@@ -74,21 +75,21 @@
     onrefresh,
   }: Props = $props();
 
-  const GROUP_LABELS: Record<GroupBy, string> = {
-    flow: 'By flow',
-    status: 'By status',
-    priority: 'By priority',
-    sprint: 'By sprint',
-    assignee: 'By assignee',
-    source: 'By source',
-    none: 'No grouping',
-  };
-  const SORT_LABELS: Record<TicketSort, string> = {
-    priority: 'Sort by priority',
-    updated: 'Sort by updated',
-    age: 'Sort by age in status',
-    key: 'Sort by key',
-  };
+  const GROUP_LABELS: Record<GroupBy, string> = $derived({
+    flow: t('By flow'),
+    status: t('By status'),
+    priority: t('By priority'),
+    sprint: t('By sprint'),
+    assignee: t('By assignee'),
+    source: t('By source'),
+    none: t('No grouping'),
+  });
+  const SORT_LABELS: Record<TicketSort, string> = $derived({
+    priority: t('Sort by priority'),
+    updated: t('Sort by updated'),
+    age: t('Sort by age in status'),
+    key: t('Sort by key'),
+  });
 
   const hasPeople = $derived(people.length > 1);
   const hasView = $derived(hasSource && (hasPeople || showSprint || list));
@@ -96,7 +97,7 @@
   const narrowed = $derived(
     [
       person ? people.find((p) => p.value === person)?.label : '',
-      currentSprint ? 'current sprint' : '',
+      currentSprint ? t('current sprint') : '',
     ].filter(Boolean),
   );
 
@@ -117,7 +118,7 @@
 </script>
 
 <header class="k-toolbar bar">
-  {#if allProjects}<span class="title">All projects</span>{/if}
+  {#if allProjects}<span class="title">{t('All projects')}</span>{/if}
   {#if sourceText !== null}
     <button
       type="button"
@@ -125,7 +126,7 @@
       bind:this={sourceBtn}
       aria-haspopup="menu"
       aria-expanded={sourceOpen}
-      title="Source (v)"
+      title={t('Source (v)')}
       onclick={onsource}
     >
       {sourceText}
@@ -133,7 +134,7 @@
     </button>
   {/if}
   {#if hasSource}
-    <Tabs label="Whose tickets" items={who} value={whoTab ?? undefined} onchange={onwho} />
+    <Tabs label={t('Whose tickets')} items={who} value={whoTab ?? undefined} onchange={onwho} />
   {/if}
   <span class="spacer"></span>
   {#if hasView}
@@ -157,18 +158,20 @@
         bind:this={viewBtn}
         aria-haspopup="dialog"
         aria-expanded={viewOpen}
-        aria-label={narrowed.length > 0 ? `View, narrowed to ${narrowed.join(' and ')}` : 'View'}
-        title="Person, sprint, grouping (Shift+G) and sort"
+        aria-label={narrowed.length > 0
+          ? t('View, narrowed to {what}', { what: narrowed.join(` ${t('and')} `) })
+          : t('View')}
+        title={t('Person, sprint, grouping (Shift+G) and sort')}
         onclick={() => void toggleView()}
       >
-        View{#if narrowed.length > 0}<span class="dot" aria-hidden="true"></span>{/if}
+        {t('View')}{#if narrowed.length > 0}<span class="dot" aria-hidden="true"></span>{/if}
         <Icon name="chevron-down" size={12} />
       </button>
       {#if viewOpen}
-        <div class="pop" role="dialog" aria-label="View" bind:this={viewBox}>
+        <div class="pop" role="dialog" aria-label={t('View')} bind:this={viewBox}>
           {#if hasPeople}
             <Select
-              label="Person"
+              label={t('Person')}
               value={person}
               options={people}
               onchange={(id) => onperson(id === '' ? null : id)}
@@ -176,13 +179,13 @@
           {/if}
           {#if list}
             <Select
-              label="Group (g)"
+              label={t('Group (g)')}
               value={groupBy}
               options={GROUP_BYS.map((g) => ({ value: g, label: GROUP_LABELS[g] }))}
               onchange={ongroup}
             />
             <Select
-              label="Sort"
+              label={t('Sort')}
               value={sort}
               options={SORTS.map((x) => ({ value: x, label: SORT_LABELS[x] }))}
               onchange={onsort}
@@ -194,8 +197,8 @@
               size="sm"
               icon={currentSprint ? 'check' : 'square'}
               aria-pressed={currentSprint}
-              title="Only tickets in an active sprint (f, then s)"
-              onclick={onsprint}>Current sprint</Button
+              title={t('Only tickets in an active sprint (f, then s)')}
+              onclick={onsprint}>{t('Current sprint')}</Button
             >
           {/if}
         </div>
@@ -204,10 +207,10 @@
   {/if}
   {#if canBoard}
     <Tabs
-      label="Display mode"
+      label={t('Display mode')}
       items={[
-        { id: 'list', label: 'List', icon: 'list' },
-        { id: 'board', label: 'Board', icon: 'kanban' },
+        { id: 'list', label: t('List'), icon: 'list' },
+        { id: 'board', label: t('Board'), icon: 'kanban' },
       ]}
       value={mode}
       onchange={onmode}
@@ -217,11 +220,11 @@
     class="k-filter"
     bind:this={filterInput}
     bind:value={filter}
-    placeholder="Filter (/)"
-    aria-label="Filter tickets"
+    placeholder={t('Filter (/)')}
+    aria-label={t('Filter tickets')}
     onkeydown={onfilterkey}
   />
-  <IconButton icon="refresh-cw" label="Refresh" chord="shift+r" size="sm" onclick={onrefresh} />
+  <IconButton icon="refresh-cw" label={t('Refresh')} chord="shift+r" size="sm" onclick={onrefresh} />
 </header>
 
 <style>

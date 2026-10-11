@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg, t } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -49,7 +50,11 @@
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const WHOS: readonly Who[] = ['mine', 'unassigned', 'anyone'];
-  const WHO_LABELS: Record<Who, string> = { mine: 'Mine', unassigned: 'Unassigned', anyone: 'Team' };
+  const WHO_LABELS: Record<Who, string> = $derived({
+    mine: t('Mine'),
+    unassigned: t('Unassigned'),
+    anyone: t('Team'),
+  });
   const move = new MoveController();
 
   // ---- scope, source, who and mode ----------------------------------------------------------
@@ -85,7 +90,8 @@
   const single = $derived(source ?? (sources.length === 1 ? sources[0]! : null));
   const views = $derived(sources.flatMap((s) => s.tracker.views));
   const sourceLabel = $derived(
-    source?.label ?? (project ? `${project.name}'s ticket sources` : 'your ticket sources'),
+    source?.label ??
+      (project ? t("{name}'s ticket sources", { name: project.name }) : t('your ticket sources')),
   );
   /** The source button and `v` only when the menu offers more than one choice. */
   const menuChoices = $derived(sources.length > 1 || (sources[0]?.tracker.views.length ?? 0) > 1);
@@ -284,7 +290,7 @@
   const keyChars = $derived(Math.min(12, Math.max(4, ...shown.map((i) => i.ticket.ref.key.length))));
   const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
   const sourceOf = (item: TicketItem): string =>
-    sources.find((s) => s.id === item.source_ids[0])?.label ?? 'Other';
+    sources.find((s) => s.id === item.source_ids[0])?.label ?? t('Other');
 
   const workOf = (item: TicketItem) =>
     work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
@@ -311,7 +317,7 @@
   /** What Enter will do on the selected row, named before it is pressed (mirrors the Enter key below). */
   const enterLabel = $derived.by(() => {
     const ph = cur && mode === 'list' && !splitShown ? phaseFor(cur) : null;
-    return ph ? (ph.primary ? ph.primaryLabel : 'Go to work tab') : 'Open';
+    return ph ? (ph.primary ? ph.primaryLabel : t('Go to work tab')) : t('Open');
   });
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
@@ -405,26 +411,26 @@
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
   const hints = $derived<[string, string][]>([
-    ['j k', 'Move'],
+    ['j k', msg('Move')],
     ['enter', enterLabel],
-    ['s shift+s', 'Start work, start now'],
-    ['w', 'Run workflow'],
-    ['m', 'Move to'],
-    ['/', 'Filter'],
-    ['space', 'Split'],
-    ['g', 'Open detail'],
-    ['shift+enter', 'Own pane'],
-    ['1 2 3', 'Who'],
-    ['mod+enter', 'Start marked'],
-    ['x', 'Select'],
-    ['p shift+p', 'Pull request, in browser'],
-    ['f then s', 'Current sprint'],
-    ['a shift+a', 'Assign me, unassign'],
-    ['v', 'Source'],
-    ['shift+g', 'Group'],
-    ['c', 'Comment'],
-    ['o', 'Open in browser'],
-    ['shift+r', 'Refresh'],
+    ['s shift+s', msg('Start work, start now')],
+    ['w', msg('Run workflow')],
+    ['m', msg('Move to')],
+    ['/', msg('Filter')],
+    ['space', msg('Split')],
+    ['g', msg('Open detail')],
+    ['shift+enter', msg('Own pane')],
+    ['1 2 3', msg('Who')],
+    ['mod+enter', msg('Start marked')],
+    ['x', msg('Select')],
+    ['p shift+p', msg('Pull request, in browser')],
+    ['f then s', msg('Current sprint')],
+    ['a shift+a', msg('Assign me, unassign')],
+    ['v', msg('Source')],
+    ['shift+g', msg('Group')],
+    ['c', msg('Comment')],
+    ['o', msg('Open in browser')],
+    ['shift+r', msg('Refresh')],
   ]);
 
   // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
@@ -457,14 +463,14 @@
     const key = item.ticket.ref.key;
     try {
       tickets.patch(await trackerAssign({ ticket: item.ticket.ref, assignee: { kind: to } }));
-      toasts.info(to === 'me' ? `${key} assigned to you` : `${key} unassigned`);
+      toasts.info(to === 'me' ? t('{key} assigned to you', { key }) : t('{key} unassigned', { key }));
     } catch (err) {
-      toasts.error(err, `Assigning ${key}`);
+      toasts.error(err, t('Assigning {key}', { key }));
     }
   }
 
   function browse(item: TicketItem): void {
-    openExternal({ url: item.ticket.url }).catch((err) => toasts.error(err, 'Open in browser'));
+    openExternal({ url: item.ticket.url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
 
   function start(item: TicketItem, preview?: boolean): void {
@@ -509,9 +515,11 @@
   /** The tracker can do it, else a toast that says so and the way out. */
   function can(item: TicketItem, cap: 'assign' | 'comment'): boolean {
     if (item.caps[cap]) return true;
-    const what = cap === 'assign' ? 'change assignees' : 'take comments';
+    const vars = { account: item.ticket.ref.account, key: item.ticket.ref.key };
     toasts.info(
-      `${item.ticket.ref.account} can't ${what} from Kelta. Open ${item.ticket.ref.key} in the browser (o).`,
+      cap === 'assign'
+        ? t("{account} can't change assignees from Kelta. Open {key} in the browser (o).", vars)
+        : t("{account} can't take comments from Kelta. Open {key} in the browser (o).", vars),
     );
     return false;
   }
@@ -538,7 +546,7 @@
   }
 
   const sourceItems = $derived<MenuItem[]>([
-    { id: '', label: 'All sources', icon: source === null ? 'check' : undefined },
+    { id: '', label: t('All sources'), icon: source === null ? 'check' : undefined },
     ...sources.flatMap((s) => {
       const vs = s.tracker.views;
       const multiAccount = new Set(vs.map((v) => v.account ?? s.tracker.account)).size > 1;
@@ -554,7 +562,7 @@
           : []),
       ];
     }),
-    { id: '+', label: 'Add source…', icon: 'plus', separator: true },
+    { id: '+', label: t('Add source…'), icon: 'plus', separator: true },
   ]);
 
   function pickSource(id: string): void {
@@ -770,7 +778,7 @@
   bind:clientWidth={paneWidth}
   tabindex="0"
   role="group"
-  aria-label="Tickets"
+  aria-label={t('Tickets')}
   {onkeydown}
 >
   <TicketsToolbar
@@ -786,9 +794,12 @@
     {whoTab}
     onwho={setWho}
     people={[
-      { value: '', label: 'Any person' },
+      { value: '', label: t('Any person') },
       ...(person && !personEntry ? [{ value: person, label: person }] : []),
-      ...people.map((p) => ({ value: p.key, label: p.matched ? p.name : `${p.name} (tracker only)` })),
+      ...people.map((p) => ({
+        value: p.key,
+        label: p.matched ? p.name : t('{name} (tracker only)', { name: p.name }),
+      })),
     ]}
     person={personEntry?.key ?? person ?? ''}
     onperson={setPerson}
@@ -798,7 +809,7 @@
     sourceText={menuChoices
       ? source
         ? [source.label, source.tracker.views.find((v) => v.id === viewId)?.label].filter(Boolean).join(' · ')
-        : 'All sources'
+        : t('All sources')
       : null}
     bind:sourceBtn
     sourceOpen={sourceMenu !== null}
@@ -815,16 +826,16 @@
   />
 
   {#if noSource}
-    <EmptyState icon="ticket" title="Add a ticket source: pick a board">
-      {#snippet actions()}<Button variant="primary" onclick={addSource}>Pick a board</Button>{/snippet}
+    <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
+      {#snippet actions()}<Button variant="primary" onclick={addSource}>{t('Pick a board')}</Button>{/snippet}
     </EmptyState>
   {:else if list.loading && !list.data}
-    <Loading label="Loading tickets" />
+    <Loading label={t('Loading tickets')} />
   {:else if !list.data && list.error}
-    <ErrorState error={list.error} title="Could not load tickets" onretry={refresh}>
+    <ErrorState error={list.error} title={t('Could not load tickets')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}
-          >{isAuthError(list.error) ? 'Re-authenticate' : 'Open account settings'}</Button
+          >{isAuthError(list.error) ? t('Re-authenticate') : t('Open account settings')}</Button
         >
       {/snippet}
     </ErrorState>
@@ -840,27 +851,29 @@
       {#if list.data?.errors.length}
         <!-- the banner above says what failed; "no tickets" would be a false claim -->
       {:else if whoTab === 'mine'}
-        <EmptyState icon="ticket" title={`Nothing assigned to you on ${sourceLabel}.`}>
-          {#snippet actions()}<Button onclick={() => setWho('unassigned')}>Show unassigned</Button><Button
-              onclick={() => setWho('anyone')}>Show team</Button
-            >{/snippet}
+        <EmptyState icon="ticket" title={t('Nothing assigned to you on {source}.', { source: sourceLabel })}>
+          {#snippet actions()}<Button onclick={() => setWho('unassigned')}>{t('Show unassigned')}</Button
+            ><Button onclick={() => setWho('anyone')}>{t('Show team')}</Button>{/snippet}
         </EmptyState>
       {:else if whoTab === 'unassigned'}
-        <EmptyState icon="ticket" title={`Every ticket on ${sourceLabel} has an owner.`}>
-          {#snippet actions()}<Button onclick={() => setWho('anyone')}>Show team</Button>{/snippet}
+        <EmptyState
+          icon="ticket"
+          title={t('Every ticket on {source} has an owner.', { source: sourceLabel })}
+        >
+          {#snippet actions()}<Button onclick={() => setWho('anyone')}>{t('Show team')}</Button>{/snippet}
         </EmptyState>
       {:else}
-        <EmptyState icon="ticket" title={`No open tickets on ${sourceLabel}.`}>
-          {#snippet actions()}<Button onclick={refresh}>Refresh</Button>{/snippet}
+        <EmptyState icon="ticket" title={t('No open tickets on {source}.', { source: sourceLabel })}>
+          {#snippet actions()}<Button onclick={refresh}>{t('Refresh')}</Button>{/snippet}
         </EmptyState>
       {/if}
     {:else if shown.length === 0}
-      <EmptyState icon="search" title={`No tickets match "${filter}".`}>
-        {#snippet actions()}<Button onclick={() => (filter = '')}>Clear filter</Button>{/snippet}
+      <EmptyState icon="search" title={t('No tickets match "{filter}".', { filter })}>
+        {#snippet actions()}<Button onclick={() => (filter = '')}>{t('Clear filter')}</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list' && groupBy === 'flow' && rows.length === 0}
-      <EmptyState icon="ticket" title="Nothing in flow; older done tickets are hidden.">
-        {#snippet actions()}<Button onclick={() => setGroup('status')}>By status</Button>{/snippet}
+      <EmptyState icon="ticket" title={t('Nothing in flow; older done tickets are hidden.')}>
+        {#snippet actions()}<Button onclick={() => setGroup('status')}>{t('By status')}</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list'}
       <div class="k-split">
@@ -870,11 +883,11 @@
             items={rows}
             itemHeight={ROW_HEIGHT}
             key={(r) => r.key}
-            label="Tickets"
+            label={t('Tickets')}
             onend={() =>
               void tickets
                 .loadMore(scope, viewPick, who, sourcePick)
-                .catch((e) => toasts.error(e, 'Loading more tickets'))}
+                .catch((e) => toasts.error(e, t('Loading more tickets')))}
           >
             {#snippet row(r)}
               {#if r.kind === 'group'}
@@ -898,7 +911,8 @@
                   <Icon name={r.open ? 'chevron-down' : 'chevron-right'} size={12} />
                   {r.group.label}
                   <span class="count k-num">{r.group.items.length}</span>
-                  {#if overWip}<span class="wip-note">Above your limit of {wipLimit}</span>{/if}
+                  {#if overWip}<span class="wip-note">{t('Above your limit of {n}', { n: wipLimit })}</span
+                    >{/if}
                 </button>
               {:else}
                 <TicketRow
@@ -930,11 +944,11 @@
           </VirtualList>
         </div>
         {#if splitShown}
-          <aside class="k-split-side" bind:this={side} aria-label="Ticket detail">
+          <aside class="k-split-side" bind:this={side} aria-label={t('Ticket detail')}>
             {#if cur}
               <TicketDetail item={cur} projectId={cur.project_ids[0] ?? home} embedded />
             {:else}
-              <p class="k-split-empty">Select a ticket to see it here.</p>
+              <p class="k-split-empty">{t('Select a ticket to see it here.')}</p>
             {/if}
           </aside>
         {/if}
@@ -945,7 +959,7 @@
           <section
             class="lane"
             class:over={overLane === (lane.column?.id ?? '__other')}
-            aria-label={`${lane.column?.name ?? 'Other'} column`}
+            aria-label={t('{name} column', { name: lane.column?.name ?? t('Other') })}
             data-column={lane.column?.id ?? '__other'}
             role="group"
             ondragover={(e) => {
@@ -957,7 +971,7 @@
             ondragleave={() => (overLane = null)}
             ondrop={(e) => drop(e, lane.column)}
           >
-            <h3>{lane.column?.name ?? 'Other'} <span class="count k-num">{lane.cards.length}</span></h3>
+            <h3>{lane.column?.name ?? t('Other')} <span class="count k-num">{lane.cards.length}</span></h3>
             <div class="cards">
               {#each lane.cards as item (keyOf(item))}
                 <button
@@ -979,15 +993,17 @@
                   <span class="card-row first">
                     <span class="key">{item.ticket.ref.key}</span>
                     <Lamp level={phaseFor(item)?.lamp ?? 'none'} title={phaseFor(item)?.label} />
-                    {#if hasWork(item)}<Badge tone="accent" title="Local work in progress">work</Badge>{/if}
+                    {#if hasWork(item)}<Badge tone="accent" title={t('Local work in progress')}
+                        >{t('work')}</Badge
+                      >{/if}
                     {#if batch.has(item.ticket.ref)}<Badge
                         tone="accent"
-                        title="Marked: Mod+Enter starts the marked tickets">marked</Badge
+                        title={t('Marked: Mod+Enter starts the marked tickets')}>{t('marked')}</Badge
                       >{/if}
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
                   <span class="card-row">
-                    <span class="k-avatar" title={item.ticket.assignee?.name ?? 'Unassigned'}
+                    <span class="k-avatar" title={item.ticket.assignee?.name ?? t('Unassigned')}
                       >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
                     >
                     {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
@@ -1001,9 +1017,9 @@
           </section>
         {/each}
         {#if columnsState?.loading && columns.length === 0}
-          <Loading label="Loading columns" />
+          <Loading label={t('Loading columns')} />
         {:else if columnsState?.error && columns.length === 0}
-          <ErrorState error={columnsState.error} title="Could not load columns" onretry={refresh} />
+          <ErrorState error={columnsState.error} title={t('Could not load columns')} onretry={refresh} />
         {/if}
         {#if list.data?.next}
           <Button
@@ -1012,16 +1028,17 @@
             onclick={() =>
               void tickets
                 .loadMore(scope, viewPick, who, sourcePick)
-                .catch((e) => toasts.error(e, 'Loading more tickets'))}
+                .catch((e) => toasts.error(e, t('Loading more tickets')))}
           >
-            <Icon name="plus" size={12} /> More
+            <Icon name="plus" size={12} />
+            {t('More')}
           </Button>
         {/if}
       </div>
     {/if}
   {/if}
 
-  <KeyHints hints={[...hints.slice(0, 5), ['?', 'All keys']]} />
+  <KeyHints hints={[...hints.slice(0, 5), ['?', msg('All keys')]]} />
 </div>
 
 {#if picker}
@@ -1033,7 +1050,7 @@
     items={prMenuItems(m.prs)}
     x={m.x}
     y={m.y}
-    label="Open pull request"
+    label={t('Open pull request')}
     onselect={(url) => {
       const pr = m.prs.find((p) => p.url === url);
       if (pr) openPr(pr, m.projectId, m.browser);
@@ -1049,7 +1066,7 @@
     items={sourceItems}
     x={sourceMenu.x}
     y={sourceMenu.y}
-    label="Source"
+    label={t('Source')}
     onselect={pickSource}
     onclose={() => {
       sourceMenu = null;
@@ -1069,7 +1086,7 @@
 <MoveDialogs {move} />
 {#if keysOpen}
   <Dialog
-    title="Ticket keys"
+    title={t('Ticket keys')}
     width={420}
     onclose={() => {
       keysOpen = false;
@@ -1079,11 +1096,11 @@
     <dl class="keys">
       {#each hints as [keys, label] (keys)}
         <dt>
-          {#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">then</span>{:else}<Kbd
+          {#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">{t('then')}</span>{:else}<Kbd
                 chord={k}
               />{/if}{/each}
         </dt>
-        <dd>{label}</dd>
+        <dd>{t(label)}</dd>
       {/each}
     </dl>
   </Dialog>

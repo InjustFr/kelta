@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { SheetProps } from '$app/registry';
   import type { TicketRef, WorkflowInfo } from '$lib/gen';
 
@@ -32,13 +33,13 @@
 </script>
 
 <Picker
-  title={`Run workflow on ${ticket.key}`}
-  placeholder="Workflow name…"
+  title={t('Run workflow on {key}', { key: ticket.key })}
+  placeholder={t('Workflow name…')}
   {items}
   {query}
   onquery={(q) => (query = q)}
   onpick={pick}
   {onclose}
   testid="workflow-picker"
-  empty="No matching workflow"
+  empty={t('No matching workflow')}
 />

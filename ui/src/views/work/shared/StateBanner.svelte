@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { dispatch } from '$lib/actions';
   import type { AccountError, KeltaError } from '$lib/gen';
   import { Button, Icon, relativeTime } from '$lib/ui';
@@ -34,17 +35,20 @@
       <div class="banner info" role="status">
         <Icon name="clock" size={14} />
         <span>
-          Showing cached data{fetchedAt ? `, updated ${relativeTime(fetchedAt)}` : ''}.
+          {fetchedAt
+            ? t('Showing cached data, updated {ago}.', { ago: relativeTime(fetchedAt) })
+            : t('Showing cached data.')}
         </span>
-        {#if onretry}<Button size="sm" variant="ghost" onclick={onretry}>Retry</Button>{/if}
+        {#if onretry}<Button size="sm" variant="ghost" onclick={onretry}>{t('Retry')}</Button>{/if}
       </div>
     {/if}
     {#each banners as b, i (i)}
       <div class="banner {b.tone}" role="alert">
         <Icon name="triangle-alert" size={14} />
         <span>{b.text}</span>
-        {#if b.reauth}<Button size="sm" variant="ghost" onclick={reauth}>Re-authenticate</Button>{/if}
-        {#if !b.reauth && onretry}<Button size="sm" variant="ghost" onclick={onretry}>Retry</Button>{/if}
+        {#if b.reauth}<Button size="sm" variant="ghost" onclick={reauth}>{t('Re-authenticate')}</Button>{/if}
+        {#if !b.reauth && onretry}<Button size="sm" variant="ghost" onclick={onretry}>{t('Retry')}</Button
+          >{/if}
       </div>
     {/each}
   </div>

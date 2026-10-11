@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { Spinner } from '$lib/ui';
 
-  let { label = 'Loading' }: { label?: string } = $props();
+  let { label: given }: { label?: string } = $props();
+  const label = $derived(given ?? t('Loading'));
 </script>
 
 <!-- Appears only after 150 ms (CSS delay, no timer): quick loads never flash a spinner. -->

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { TicketRef } from '$lib/gen';
   import { trackerComment } from '$lib/ipc/commands';
   import { toasts } from '$lib/stores';
@@ -20,11 +21,11 @@
     busy = true;
     try {
       await trackerComment({ ticket, markdown: text });
-      toasts.info(`Comment added to ${ticket.key}`);
+      toasts.info(t('Comment added to {key}', { key: ticket.key }));
       ondone?.();
       onclose();
     } catch (err) {
-      toasts.error(err, `Commenting on ${ticket.key}`);
+      toasts.error(err, t('Commenting on {key}', { key: ticket.key }));
     } finally {
       busy = false;
     }
@@ -38,12 +39,12 @@
   }
 </script>
 
-<Dialog title={`Comment on ${ticket.key}`} {onclose}>
-  <TextInput bind:value={text} label="Comment (Markdown)" multiline rows={6} {onkeydown} />
+<Dialog title={t('Comment on {key}', { key: ticket.key })} {onclose}>
+  <TextInput bind:value={text} label={t('Comment (Markdown)')} multiline rows={6} {onkeydown} />
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     <Button variant="primary" loading={busy} disabled={text.trim() === ''} onclick={() => void submit()}>
-      Comment
+      {t('Comment')}
     </Button>
   {/snippet}
 </Dialog>

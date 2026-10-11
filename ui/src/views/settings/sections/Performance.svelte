@@ -1,5 +1,6 @@
 <script lang="ts">
   // Live memory per component and per session, on demand (a Refresh button; nothing polls).
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import type { PerfSnapshot } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
@@ -41,20 +42,22 @@
 
 <SectionForm sectionId="performance" {...props}>
   {#snippet after()}
-    <SettingsRow label="Performance overlay" actions>
+    <SettingsRow label={t('Performance overlay')} actions>
       {#snippet control()}
-        <Button size="sm" icon="cpu" onclick={() => (hud = !hud)}>Show performance overlay</Button>
+        <Button size="sm" icon="cpu" onclick={() => (hud = !hud)}>{t('Show performance overlay')}</Button>
       {/snippet}
     </SettingsRow>
     {#if hud}<PerfHud onclose={() => (hud = false)} />{/if}
-    <SettingsGroup heading="Live memory" data-testid="perf">
+    <SettingsGroup heading={t('Live memory')} data-testid="perf">
       {#snippet actions()}
-        <Button size="sm" variant="ghost" icon="refresh-cw" {loading} onclick={refresh}>Refresh</Button>
+        <Button size="sm" variant="ghost" icon="refresh-cw" {loading} onclick={refresh}>{t('Refresh')}</Button
+        >
       {/snippet}
       {#if error}<p class="error" role="alert">{error}</p>{/if}
       {#if snap}
         <table>
-          <thead><tr><th>Process</th><th>Role</th><th class="num">Memory</th></tr></thead>
+          <thead><tr><th>{t('Process')}</th><th>{t('Role')}</th><th class="num">{t('Memory')}</th></tr></thead
+          >
           <tbody>
             {#each snap.processes as p (p.pid)}
               <tr
@@ -64,18 +67,18 @@
               >
             {/each}
             <tr class="sum"
-              ><td colspan="2">Kelta total (core + web view)</td><td class="num">{mb(total)}</td></tr
+              ><td colspan="2">{t('Kelta total (core + web view)')}</td><td class="num">{mb(total)}</td></tr
             >
           </tbody>
         </table>
         {#if snap.sessions.length > 0}
-          <h4>Sessions</h4>
+          <h4>{t('Sessions')}</h4>
           <table>
             <thead
               ><tr
-                ><th>Session</th><th class="num">History lines</th><th class="num">Model</th><th class="num"
-                  >Child process</th
-                ></tr
+                ><th>{t('Session')}</th><th class="num">{t('History lines')}</th><th class="num"
+                  >{t('Model')}</th
+                ><th class="num">{t('Child process')}</th></tr
               ></thead
             >
             <tbody>
@@ -91,9 +94,14 @@
           </table>
         {/if}
         <p class="muted">
-          Live terminal views: {snap.live_views}. Armed timers: {snap.timers_armed}. Local server:
-          {snap.http_server ? 'running' : 'stopped'}. Plugin screens are destroyed when hidden unless kept
-          alive below.
+          {t(
+            'Live terminal views: {views}. Armed timers: {timers}. Local server: {server}. Plugin screens are destroyed when hidden unless kept alive below.',
+            {
+              views: snap.live_views,
+              timers: snap.timers_armed,
+              server: snap.http_server ? t('running') : t('stopped'),
+            },
+          )}
         </p>
       {/if}
     </SettingsGroup>

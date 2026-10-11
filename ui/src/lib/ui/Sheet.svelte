@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Snippet } from 'svelte';
 
   import IconButton from './IconButton.svelte';
@@ -43,7 +44,7 @@
   {:else}
     <header>
       <h2 id={titleId}>{title}</h2>
-      <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
+      <IconButton icon="x" label={t('Close')} size="sm" onclick={onclose} />
     </header>
   {/if}
   <div class="body">{@render children()}</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { GitStatus, WorkItem } from '$lib/gen';
@@ -32,9 +33,9 @@
   // Refusals first: they disable Ship (FLOW §4.5).
   const blocked = $derived(
     working
-      ? 'Claude is working in this worktree. Ship when it stops.'
+      ? t('Claude is working in this worktree. Ship when it stops.')
       : nothing
-        ? `No commits ahead of ${item.base}.`
+        ? t('No commits ahead of {base}.', { base: item.base })
         : null,
   );
 
@@ -66,12 +67,12 @@
       const url = updated.pr_url;
       toasts.push({
         level: 'info',
-        text: `Opened PR ${prNumber(url)}`.trim(),
-        action: url ? { label: 'Open', command: 'tickets.open_in_browser', args: { url } } : null,
+        text: t('Opened PR {pr}', { pr: prNumber(url) }).trim(),
+        action: url ? { label: t('Open'), command: 'tickets.open_in_browser', args: { url } } : null,
       });
       onclose();
     } catch (err) {
-      toasts.error(err, 'Ship');
+      toasts.error(err, t('Ship'));
     } finally {
       busy = false;
     }
@@ -81,37 +82,41 @@
     if (!claude) return;
     try {
       await sessionWrite(claude.id, 'Commit the current changes with a clear message. Do not push.\r');
-      toasts.info('Asked Claude to commit. Ship when it stops.');
+      toasts.info(t('Asked Claude to commit. Ship when it stops.'));
       onclose();
     } catch (err) {
-      toasts.error(err, 'Ask Claude to commit');
+      toasts.error(err, t('Ask Claude to commit'));
     }
   }
 </script>
 
-<Dialog title="Ship {item.ticket?.key ?? item.branch}" width={520} {onclose}>
+<Dialog title={t('Ship {name}', { name: item.ticket?.key ?? item.branch })} width={520} {onclose}>
   <div class="form" data-testid="ship-dialog">
     <p class="hint">
-      Pushes <code>{item.branch}</code> and opens a pull request against <code>{item.base}</code>.
+      {t('Pushes {branch} and opens a pull request against {base}.', {
+        branch: item.branch,
+        base: item.base,
+      })}
     </p>
     {#if blocked}
       <p class="msg" role="alert"><Icon name="triangle-alert" size={14} /> {blocked}</p>
     {:else if git?.dirty}
       <p class="msg" data-testid="ship-dirty">
-        <Icon name="triangle-alert" size={14} /> Uncommitted changes will not be in the PR.
+        <Icon name="triangle-alert" size={14} />
+        {t('Uncommitted changes will not be in the PR.')}
       </p>
     {/if}
-    <TextInput label="Title" bind:value={title} />
-    <TextInput label="Description" bind:value={body} multiline rows={5} />
-    <Toggle label="Draft" bind:checked={draft} />
+    <TextInput label={t('Title')} bind:value={title} />
+    <TextInput label={t('Description')} bind:value={body} multiline rows={5} />
+    <Toggle label={t('Draft')} bind:checked={draft} />
   </div>
   {#snippet actions()}
-    <Button variant="ghost" onclick={onclose}>Cancel</Button>
+    <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
     {#if git?.dirty && !blocked}
-      <Button disabled={!claude} onclick={() => void askToCommit()}>Ask Claude to commit</Button>
+      <Button disabled={!claude} onclick={() => void askToCommit()}>{t('Ask Claude to commit')}</Button>
     {/if}
     <Button variant="primary" loading={busy} disabled={loading || !!blocked} onclick={() => void ship()}>
-      {git?.dirty ? 'Ship anyway' : 'Ship'}
+      {git?.dirty ? t('Ship anyway') : t('Ship')}
     </Button>
   {/snippet}
 </Dialog>

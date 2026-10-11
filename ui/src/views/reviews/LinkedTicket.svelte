@@ -1,5 +1,6 @@
 <script lang="ts">
   // A linked ticket key as a button. A span, not a <button>: in the Reviews list it sits inside the row button.
+  import { t } from '$lib/i18n/index.svelte';
   import type { ProjectId } from '$lib/gen';
   import { Badge } from '$lib/ui';
 
@@ -26,8 +27,8 @@
   class="link k-row-keep"
   role="button"
   {tabindex}
-  title={`Open ${ticketKey}`}
-  aria-label={`Open ${ticketKey}`}
+  title={t('Open {name}', { name: ticketKey })}
+  aria-label={t('Open {name}', { name: ticketKey })}
   onclick={open}
   ondblclick={(e) => e.stopPropagation()}
   onkeydown={(e) => {

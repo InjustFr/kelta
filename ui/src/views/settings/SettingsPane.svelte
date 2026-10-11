@@ -1,6 +1,7 @@
 <script lang="ts">
   // Settings pane (Mod+,): layer selector, section list, search across every owned key, the
   // schema-generated forms and a raw "Edit TOML" mode per layer.
+  import { t } from '$lib/i18n/index.svelte';
   import {
     settingsSections,
     type PaneProps,
@@ -39,7 +40,7 @@
   const sections = $derived(settingsSections.filter((s) => !s.platform || s.platform === platform));
   const navGroups = $derived(
     SECTION_GROUPS.map((g) => ({
-      label: g.label,
+      label: t(g.label),
       sections: g.ids.flatMap((id) => sections.filter((s) => s.id === id)),
     })).filter((g) => g.sections.length > 0),
   );
@@ -125,14 +126,14 @@
   // ---- search ---------------------------------------------------------------------------------
   const allRoots = Object.values(SECTION_ROOTS).flatMap((r) => r ?? []);
   const sectionOfRoot = (root: string): string =>
-    sections.find((s) => SECTION_ROOTS[s.id]?.includes(root))?.label ?? '';
+    t(sections.find((s) => SECTION_ROOTS[s.id]?.includes(root))?.label ?? '');
 
   function matches(f: LeafField, q: string): boolean {
     const hay = [
       f.path,
       titleOf(f.segs[f.segs.length - 1] ?? ''),
-      COPY[f.path]?.label,
-      COPY[f.path]?.help,
+      t(COPY[f.path]?.label ?? ''),
+      t(COPY[f.path]?.help ?? ''),
       descriptionOf(f.node),
       ...enumOptions(f.node).map((o) => o.value),
     ]
@@ -156,35 +157,35 @@
 
 <div class="pane" data-testid="settings-pane" data-pane-kind="settings">
   <header class="k-toolbar bar">
-    <div class="layers" role="group" aria-label="Layer being edited">
+    <div class="layers" role="group" aria-label={t('Layer being edited')}>
       <button
         type="button"
-        title="Applies everywhere"
+        title={t('Applies everywhere')}
         class:active={editor.layer === 'global'}
         aria-pressed={editor.layer === 'global'}
         onclick={() => chooseLayer('global')}
       >
-        Global
+        {t('Global')}
       </button>
       <button
         type="button"
         class:active={editor.layer === 'project'}
         aria-pressed={editor.layer === 'project'}
         disabled={configurable.length === 0}
-        title="Overrides Global for one project"
+        title={t('Overrides Global for one project')}
         onclick={() => chooseLayer('project')}
       >
-        Project
+        {t('Project')}
       </button>
       <button
         type="button"
         class:active={editor.layer === 'repo'}
         aria-pressed={editor.layer === 'repo'}
         disabled={configurable.length === 0}
-        title="Overrides the project for one repository"
+        title={t('Overrides the project for one repository')}
         onclick={() => chooseLayer('repo')}
       >
-        Repo
+        {t('Repo')}
       </button>
     </div>
     {#if editor.layer !== 'global'}
@@ -205,7 +206,12 @@
     {/if}
     <label class="search">
       <Icon name="search" size={14} />
-      <input type="search" placeholder="Search settings" aria-label="Search settings" bind:value={query} />
+      <input
+        type="search"
+        placeholder={t('Search settings')}
+        aria-label={t('Search settings')}
+        bind:value={query}
+      />
     </label>
     <Button
       size="sm"
@@ -214,21 +220,21 @@
       onclick={() => (editor.raw = !editor.raw)}
       data-testid="edit-toml-toggle"
     >
-      {editor.raw ? 'Back to form' : 'Edit TOML'}
+      {editor.raw ? t('Back to form') : t('Edit TOML')}
     </Button>
   </header>
   {#if editor.layer !== 'global'}
     <p class="layer-help" data-testid="layer-help">
       {editor.layer === 'project'
-        ? 'Values set here override Global for this project.'
-        : 'Values set here override Global and the project for this repository.'}
+        ? t('Values set here override Global for this project.')
+        : t('Values set here override Global and the project for this repository.')}
     </p>
   {/if}
 
   {#if settingsStore.pendingRestart.length > 0}
     <div class="banner warn" role="status" data-testid="restart-banner">
       <Icon name="refresh-cw" size={14} />
-      Restart Kelta to apply: {settingsStore.pendingRestart.join(', ')}
+      {t('Restart Kelta to apply: {keys}', { keys: settingsStore.pendingRestart.join(', ') })}
     </div>
   {/if}
 
@@ -237,7 +243,9 @@
       <Icon name="circle-alert" size={14} />
       <div>
         <strong
-          >{editor.doc?.path.split('/').pop() ?? 'config'} has errors; the last good configuration is still active.</strong
+          >{t('{file} has errors; the last good configuration is still active.', {
+            file: editor.doc?.path.split('/').pop() ?? 'config',
+          })}</strong
         >
         {@render issueList(layerErrors)}
       </div>
@@ -248,7 +256,9 @@
       <Icon name="triangle-alert" size={14} />
       <div>
         <strong
-          >Warnings: these settings in {editor.doc?.path.split('/').pop() ?? 'config'} are ignored; the rest applies.</strong
+          >{t('Warnings: these settings in {file} are ignored; the rest applies.', {
+            file: editor.doc?.path.split('/').pop() ?? 'config',
+          })}</strong
         >
         {@render issueList(layerWarnings)}
       </div>
@@ -269,7 +279,7 @@
   {#if editor.layer === 'repo'}<RepoTrust {editor} />{/if}
 
   <div class="body">
-    <nav aria-label="Settings sections">
+    <nav aria-label={t('Settings sections')}>
       {#each navGroups as g (g.label)}
         <h2 class="nav-group">{g.label}</h2>
         {#each g.sections as s (s.id)}
@@ -295,11 +305,11 @@
         <EditToml {editor} />
       {:else if query.trim()}
         <section data-testid="search-results">
-          <h1>Results for “{query.trim()}”</h1>
+          <h1>{t('Results for “{query}”', { query: query.trim() })}</h1>
           {#if !editor.ready}
             <Spinner size={16} />
           {:else if results.length === 0}
-            <EmptyState title="No matching setting" icon="search" />
+            <EmptyState title={t('No matching setting')} icon="search" />
           {:else}
             {#each results as f (f.path)}
               <div class="result">

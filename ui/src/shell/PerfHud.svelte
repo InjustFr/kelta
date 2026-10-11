@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { PerfSnapshot } from '$lib/gen';
   import { perfSnapshot } from '$lib/ipc/commands';
   import { terminalPool } from '$lib/terminal';
@@ -44,12 +45,12 @@
   );
 </script>
 
-<div class="hud" role="dialog" aria-label="Performance" data-testid="perf-hud">
+<div class="hud" role="dialog" aria-label={t('Performance')} data-testid="perf-hud">
   <header>
-    <strong>Performance</strong>
+    <strong>{t('Performance')}</strong>
     <span class="spacer"></span>
-    <Button size="sm" icon="refresh-cw" onclick={refresh} {loading}>Refresh</Button>
-    <IconButton icon="x" label="Close" size="sm" onclick={onclose} />
+    <Button size="sm" icon="refresh-cw" onclick={refresh} {loading}>{t('Refresh')}</Button>
+    <IconButton icon="x" label={t('Close')} size="sm" onclick={onclose} />
   </header>
   {#if error}
     <p class="err">{error}</p>
@@ -57,16 +58,16 @@
     <div class="wait"><Spinner size={14} /></div>
   {:else}
     <dl>
-      <dt>Kelta (core + web view)</dt>
+      <dt>{t('Kelta (core + web view)')}</dt>
       <dd data-testid="perf-kelta">{mb(kelta)}</dd>
-      <dt>Child processes</dt>
+      <dt>{t('Child processes')}</dt>
       <dd data-testid="perf-children">{mb(children)}</dd>
-      <dt>Live terminal views</dt>
-      <dd>{terminalPool.liveCount} (core reports {snap.live_views})</dd>
-      <dt>Armed timers</dt>
+      <dt>{t('Live terminal views')}</dt>
+      <dd>{terminalPool.liveCount} {t('(core reports {n})', { n: snap.live_views })}</dd>
+      <dt>{t('Armed timers')}</dt>
       <dd>{snap.timers_armed}</dd>
-      <dt>HTTP server</dt>
-      <dd>{snap.http_server ? 'running' : 'stopped'}</dd>
+      <dt>{t('HTTP server')}</dt>
+      <dd>{snap.http_server ? t('running') : t('stopped')}</dd>
     </dl>
     <table>
       <tbody>

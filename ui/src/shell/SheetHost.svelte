@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { sheetRegistry, type AnyComponent, type RegisteredSheetKey } from '$app/registry';
   import { ui } from '$lib/stores';
   import type { SheetEntry } from '$lib/stores/ui.svelte';
@@ -29,7 +30,7 @@
         <div class="failed">
           <ErrorState
             error={error instanceof Error ? error : String(error)}
-            title="This sheet crashed"
+            title={t('This sheet crashed')}
             onretry={() => ui.closeSheet(entry.key)}
           />
         </div>
@@ -39,7 +40,7 @@
     <div class="failed">
       <ErrorState
         error={loaded.error}
-        title="Could not load this sheet"
+        title={t('Could not load this sheet')}
         onretry={() => ui.closeSheet(entry.key)}
       />
     </div>

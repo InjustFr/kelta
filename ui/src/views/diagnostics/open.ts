@@ -1,3 +1,4 @@
+import { t } from '$lib/i18n/index.svelte';
 import { layout, projects, toasts } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
@@ -16,6 +17,6 @@ export async function openDiagnostics(): Promise<void> {
       work_item_id: null,
     });
   } catch (err) {
-    toasts.error(err, 'Could not open diagnostics');
+    toasts.error(err, t('Could not open diagnostics'));
   }
 }

@@ -1,6 +1,7 @@
 // "New project" draft model: validation, slugs and the minimal tracker binding built from a
 // detected hint. The authoritative validation is the backend's; this keeps the sheet honest.
 
+import { t } from '$lib/i18n/index.svelte';
 import type { AccountKind, ProjectDraft, RepoDraft, TrackerBinding, TrackerView } from '$lib/gen';
 
 export const ID_RE = /^[a-z0-9-]{1,40}$/;
@@ -25,18 +26,18 @@ export interface DraftIssues {
 
 export function validateDraft(d: ProjectDraft, existingIds: readonly string[]): DraftIssues {
   const out: DraftIssues = { repo: {} };
-  if (!ID_RE.test(d.suggested_id)) out.id = 'Use 1 to 40 characters from a-z, 0-9 and "-".';
-  else if (d.suggested_id === 'home') out.id = '"home" is reserved for the built-in Home project.';
-  else if (existingIds.includes(d.suggested_id)) out.id = 'A project with this id already exists.';
-  if (!d.name.trim()) out.name = 'Give the project a name.';
-  if (d.repos.length === 0) out.repos = 'Add at least one repository.';
+  if (!ID_RE.test(d.suggested_id)) out.id = t('Use 1 to 40 characters from a-z, 0-9 and "-".');
+  else if (d.suggested_id === 'home') out.id = t('"home" is reserved for the built-in Home project.');
+  else if (existingIds.includes(d.suggested_id)) out.id = t('A project with this id already exists.');
+  if (!d.name.trim()) out.name = t('Give the project a name.');
+  if (d.repos.length === 0) out.repos = t('Add at least one repository.');
   else if (d.repos.filter((r) => r.primary).length !== 1)
-    out.repos = 'Exactly one repository must be primary.';
+    out.repos = t('Exactly one repository must be primary.');
   const seen = new Set<string>();
   d.repos.forEach((r, i) => {
-    if (!/^[A-Za-z0-9_.-]+$/.test(r.id)) out.repo[i] = 'Repository id: letters, digits, "-", "_" and ".".';
-    else if (seen.has(r.id)) out.repo[i] = 'Duplicate repository id.';
-    else if (!r.path.trim()) out.repo[i] = 'Path is required.';
+    if (!/^[A-Za-z0-9_.-]+$/.test(r.id)) out.repo[i] = t('Repository id: letters, digits, "-", "_" and ".".');
+    else if (seen.has(r.id)) out.repo[i] = t('Duplicate repository id.');
+    else if (!r.path.trim()) out.repo[i] = t('Path is required.');
     seen.add(r.id);
   });
   return out;

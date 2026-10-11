@@ -2,6 +2,7 @@
   // Fix with Claude (FLOW §4.2): the PR's review feedback, what is new since the last send checked,
   // an editable prompt, and one `⌘↵` that writes feedback.md to the private run dir and resumes the
   // item's previous Claude (held until its Stop while it works).
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -58,9 +59,9 @@
   const groups = $derived(
     (
       [
-        ['thread', 'Unresolved threads'],
-        ['review', 'Reviews'],
-        ['check', 'Failed checks'],
+        ['thread', t('Unresolved threads')],
+        ['review', t('Reviews')],
+        ['check', t('Failed checks')],
       ] as const
     )
       .map(([kind, label]) => {
@@ -111,7 +112,9 @@
       work.upsert(await ipc.workSend({ id, prompt, files, threads, feedback_at }));
       void work.refreshStatus();
       if (!deferred)
-        toasts.info(`Sent ${chosen.length} feedback item${chosen.length === 1 ? '' : 's'} to Claude.`);
+        toasts.info(
+          tn('Sent {n} feedback item to Claude.', 'Sent {n} feedback items to Claude.', chosen.length),
+        );
       onclose();
     } catch (err) {
       sendError = isIpcError(err) ? err.message : toIpcError('work_send', err).message;
@@ -124,9 +127,9 @@
     const text = feedback ? `${prompt}\n\n${feedbackMarkdown(chosen)}` : prompt;
     try {
       await ipc.clipboardWrite({ kind: 'clipboard', text });
-      toasts.info('Prompt copied.');
+      toasts.info(t('Prompt copied.'));
     } catch (err) {
-      toasts.error(err, 'Copy prompt');
+      toasts.error(err, t('Copy prompt'));
     }
   }
 
@@ -147,42 +150,42 @@
   }
 
   function age(iso: string | undefined): string {
-    const t = iso ? Date.parse(iso) : NaN;
-    return Number.isNaN(t) ? '' : ` from ${relativeTime(t)}`;
+    const ms = iso ? Date.parse(iso) : NaN;
+    return Number.isNaN(ms) ? '' : ` ${t('from {ago}', { ago: relativeTime(ms) })}`;
   }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="host" {onkeydown}>
-  <Sheet title="Fix with Claude" width={480} {onclose}>
+  <Sheet title={t('Fix with Claude')} width={480} {onclose}>
     {#if item}
       <p class="subject">
         <code>{item.branch}</code>
-        <span>PR {prLabel(item)}</span>
+        <span>{t('PR {pr}', { pr: prLabel(item) })}</span>
       </p>
 
       <div class="prompt">
-        <TextInput label="Prompt" multiline rows={4} bind:value={prompt} data-testid="fix-prompt" />
+        <TextInput label={t('Prompt')} multiline rows={4} bind:value={prompt} data-testid="fix-prompt" />
       </div>
 
-      <section class="feedback" aria-label="Review feedback" bind:this={list}>
+      <section class="feedback" aria-label={t('Review feedback')} bind:this={list}>
         {#if loadError}
           <div class="problem" role="alert">
             <p>{loadError.message}</p>
             <div class="row-actions">
               <Button size="sm" onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-                Open account settings
+                {t('Open account settings')}
               </Button>
               <Button size="sm" onclick={() => (withoutFeedback = true)} disabled={withoutFeedback}>
-                Send without feedback
+                {t('Send without feedback')}
               </Button>
             </div>
           </div>
         {:else if !feedback}
-          <p class="muted"><Spinner size={12} /> Reading the review feedback</p>
+          <p class="muted"><Spinner size={12} /> {t('Reading the review feedback')}</p>
         {:else if entries.length === 0}
           <p class="muted">
-            No unresolved threads, review summaries or failed checks. The prompt goes alone.
+            {t('No unresolved threads, review summaries or failed checks. The prompt goes alone.')}
           </p>
         {:else}
           {#each groups as g (g.kind)}
@@ -206,7 +209,7 @@
             {/snippet}
             {@render rows(g.news)}
             {#if g.seen.length > 0}
-              <h4>Seen before</h4>
+              <h4>{t('Seen before')}</h4>
               {@render rows(g.seen)}
             {/if}
           {/each}
@@ -215,39 +218,41 @@
 
       {#if hooksInactive}
         <div class="problem" role="status">
-          <p>Kelta can't tell whether Claude is idle (status hooks inactive): sending copies the prompt.</p>
+          <p>
+            {t("Kelta can't tell whether Claude is idle (status hooks inactive): sending copies the prompt.")}
+          </p>
           <div class="row-actions">
             <Button
               size="sm"
               onclick={() =>
                 void openContent(item.project_id, { kind: 'diagnostics' }, { placement: 'new_tab' })}
             >
-              Fix hooks
+              {t('Fix hooks')}
             </Button>
-            <Button size="sm" onclick={() => void copyPrompt()}>Copy prompt</Button>
+            <Button size="sm" onclick={() => void copyPrompt()}>{t('Copy prompt')}</Button>
           </div>
         </div>
       {/if}
       {#if sendError}<p class="problem" role="alert">{sendError}</p>{/if}
     {:else}
-      <p class="muted">This work item is gone.</p>
+      <p class="muted">{t('This work item is gone.')}</p>
     {/if}
 
     {#snippet actions()}
       <span class="resumes" data-testid="fix-resumes">
         {#if busy}
-          Claude is working: it gets this when it stops.
+          {t('Claude is working: it gets this when it stops.')}
         {:else if item?.claude_uuid}
-          Resumes conversation <code>{item.claude_uuid.slice(0, 8)}</code>{age(item.created_at)}
+          {t('Resumes conversation')} <code>{item.claude_uuid.slice(0, 8)}</code>{age(item.created_at)}
         {/if}
       </span>
-      <Button variant="ghost" onclick={onclose}>Cancel</Button>
+      <Button variant="ghost" onclick={onclose}>{t('Cancel')}</Button>
       <Button
         variant="primary"
         disabled={!ready}
         loading={sending}
         chord={submitChord}
-        onclick={() => void send()}>{hooksInactive ? 'Copy for Claude' : 'Send to Claude'}</Button
+        onclick={() => void send()}>{hooksInactive ? t('Copy for Claude') : t('Send to Claude')}</Button
       >
     {/snippet}
   </Sheet>

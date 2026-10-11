@@ -2,6 +2,7 @@
 // settings sections and reviews are built synchronously from the stores; tickets come from
 // `tracker_search`. Every item carries its own `run`.
 
+import { msg, t } from '$lib/i18n/index.svelte';
 import { dispatch, hasAction } from '$lib/actions';
 import { settingsSections } from '$app/registry';
 import type { CommandDef, ProjectId, SessionInfo, TemplateCtx, TicketItem } from '$lib/gen';
@@ -45,17 +46,17 @@ export interface PaletteItem {
   run: () => void | Promise<void>;
 }
 
-/** Display order of the groups when the query is empty. */
+/** Display order of the groups when the query is empty (headers are translated where shown). */
 export const GROUP_ORDER: readonly PaletteGroup[] = [
-  'Work items',
-  'Sessions',
-  'Projects',
-  'Actions',
-  'Tools',
-  'Commands',
-  'Tickets',
-  'Reviews',
-  'Settings',
+  msg('Work items'),
+  msg('Sessions'),
+  msg('Projects'),
+  msg('Actions'),
+  msg('Tools'),
+  msg('Commands'),
+  msg('Tickets'),
+  msg('Reviews'),
+  msg('Settings'),
 ];
 
 /** Text matched against the query. */
@@ -117,7 +118,7 @@ export function projectItems(): PaletteItem[] {
     id: `project:${p.id}`,
     group: 'Projects' as const,
     label: p.name,
-    detail: p.builtin ? 'Home' : p.open ? 'open project' : 'closed project',
+    detail: p.builtin ? t('Home') : p.open ? t('open project') : t('closed project'),
     icon: p.builtin ? 'house' : 'folder',
     run: () => void activateProject(p.id),
   }));
@@ -135,7 +136,7 @@ export function actionItems(): PaletteItem[] {
   ).map((a) => ({
     id: `action:${a.id}`,
     group: 'Actions' as const,
-    label: a.label,
+    label: t(a.label),
     kbd: effectiveChords(a.id, keys, platform)[0],
     icon: 'command',
     run: () => void dispatch(a.id),
@@ -143,23 +144,23 @@ export function actionItems(): PaletteItem[] {
 }
 
 export function toolItems(): PaletteItem[] {
-  return railTools().flatMap((t) => {
+  return railTools().flatMap((tool) => {
     const item = {
-      id: `tool:${t.id}`,
+      id: `tool:${tool.id}`,
       group: 'Tools' as const,
-      label: `Open ${t.label}`,
-      detail: t.installed === false ? 'not installed' : (t.description ?? undefined),
-      kbd: t.keybinding ?? undefined,
-      icon: t.icon && t.icon.length > 0 ? t.icon : 'wrench',
-      run: () => void dispatch('tools.open', { tool_id: t.id }),
+      label: t('Open {name}', { name: tool.label }),
+      detail: tool.installed === false ? t('not installed') : (tool.description ?? undefined),
+      kbd: tool.keybinding ?? undefined,
+      icon: tool.icon && tool.icon.length > 0 ? tool.icon : 'wrench',
+      run: () => void dispatch('tools.open', { tool_id: tool.id }),
     };
-    if (!t.needs_project) return [item];
+    if (!tool.needs_project) return [item];
     const forProject = {
       ...item,
-      id: `tool-for:${t.id}`,
-      label: `Open ${t.label} for project…`,
+      id: `tool-for:${tool.id}`,
+      label: t('Open {name} for project…', { name: tool.label }),
       kbd: undefined,
-      run: () => void dispatch('tools.open', { tool_id: t.id, pick_project: true }),
+      run: () => void dispatch('tools.open', { tool_id: tool.id, pick_project: true }),
     };
     return [item, forProject];
   });
@@ -225,7 +226,7 @@ export function commandItems(): PaletteItem[] {
       out.push({
         id: `command:${p.name}:${p.id}/open:${s.id}`,
         group: 'Commands',
-        label: `Open ${s.title}`,
+        label: t('Open {name}', { name: s.title }),
         detail: p.name,
         icon: 'zap',
         run: () =>
@@ -245,7 +246,7 @@ export function settingsItems(): PaletteItem[] {
     .map((s) => ({
       id: `setting:${s.id}`,
       group: 'Settings' as const,
-      label: `Settings: ${s.label}`,
+      label: t('Settings: {section}', { section: t(s.label) }),
       icon: s.icon,
       run: () => void dispatch('settings.open', { section: s.id }),
     }));
@@ -307,27 +308,27 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
     run,
   });
   return [
-    verb('start', `Start work on ${ref.key}`, 'play', () => void startWorkOnTicket(ref)),
-    verb('workflow', `Run workflow on ${ref.key}…`, 'play', () => void pickWorkflow(ref)),
-    verb('move', `Move ${ref.key} to…`, 'arrow-right', () =>
+    verb('start', t('Start work on {key}', { key: ref.key }), 'play', () => void startWorkOnTicket(ref)),
+    verb('workflow', t('Run workflow on {key}…', { key: ref.key }), 'play', () => void pickWorkflow(ref)),
+    verb('move', t('Move {key} to…', { key: ref.key }), 'arrow-right', () =>
       ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),
     ),
     // A tracker that cannot assign from Kelta (caps) offers no assign verb.
     ...(hit.caps.assign
       ? [
-          verb('assign', `Assign ${ref.key} to me`, 'user', async () => {
+          verb('assign', t('Assign {key} to me', { key: ref.key }), 'user', async () => {
             try {
               tickets.patch(await trackerAssign({ ticket: ref, assignee: { kind: 'me' } }));
-              toasts.info(`${ref.key} assigned to you`);
+              toasts.info(t('{key} assigned to you', { key: ref.key }));
             } catch (err) {
-              toasts.error(err, `Assigning ${ref.key}`);
+              toasts.error(err, t('Assigning {key}', { key: ref.key }));
             }
           }),
         ]
       : []),
     verb(
       'browser',
-      `Open ${ref.key} in browser`,
+      t('Open {key} in browser', { key: ref.key }),
       'external-link',
       () => void dispatch('tickets.open_in_browser', { url }),
     ),

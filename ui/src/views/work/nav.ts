@@ -2,6 +2,7 @@
 // one per the requested placement. Every action that leaves a global view (Tickets, Now, Reviews)
 // closes it and focuses the target in its project (FLOW §3.3, bug B1).
 
+import { t } from '$lib/i18n/index.svelte';
 import type {
   Layout,
   PaneContent,
@@ -224,7 +225,7 @@ export async function goToWork(item: WorkItem): Promise<boolean> {
     work.upsert(await workResume({ id: item.id }));
     return false;
   } catch (err) {
-    toasts.error(err, 'Open work item');
+    toasts.error(err, t('Open work item'));
     return false;
   }
 }

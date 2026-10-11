@@ -1612,7 +1612,7 @@ impl Core {
         Ok(())
     }
 
-    fn review_notify(&self, kind: NotifyKind, title: &str, r: &Review, project: Option<ProjectId>) {
+    fn review_notify(&self, kind: NotifyKind, title: &'static str, r: &Review, project: Option<ProjectId>) {
         let settings = self.accounts_settings();
         if !crate::notifier::should_notify(
             kind,
@@ -1624,7 +1624,7 @@ impl Core {
             return;
         }
         self.deliver(Notification {
-            title: title.to_owned(),
+            title: kelta_proto::i18n::tr(settings.app.language, title).to_owned(),
             body: Some(format!("{}#{} {}", r.r#ref.repo, r.r#ref.number, r.title)),
             urgency: Urgency::Normal,
             project_id: project,

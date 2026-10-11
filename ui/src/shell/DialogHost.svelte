@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { Button, Dialog, TextInput, Toggle } from '$lib/ui';
 
   import { confirms, prompts } from './confirm.svelte';
@@ -23,7 +24,7 @@
       {/if}
     </div>
     {#snippet actions()}
-      <Button onclick={() => confirms.answer(null)}>Cancel</Button>
+      <Button onclick={() => confirms.answer(null)}>{t('Cancel')}</Button>
       {#each req.actions as a (a.id)}
         <Button
           variant={a.variant ?? 'secondary'}
@@ -47,8 +48,8 @@
       <TextInput label={req.label} type={req.type ?? 'text'} autocomplete="off" bind:value={text} />
     </form>
     {#snippet actions()}
-      <Button onclick={() => prompts.answer(null)}>Cancel</Button>
-      <Button variant="primary" onclick={() => prompts.answer(text)}>{req.confirmLabel ?? 'OK'}</Button>
+      <Button onclick={() => prompts.answer(null)}>{t('Cancel')}</Button>
+      <Button variant="primary" onclick={() => prompts.answer(text)}>{req.confirmLabel ?? t('OK')}</Button>
     {/snippet}
   </Dialog>
 {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -142,14 +143,14 @@
         const delta = phase.section === 'to_review' ? item.delta : null;
         if (delta) meta.push(...deltaParts(delta));
         else if (git && (git.insertions || git.deletions))
-          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ' uncommitted' : ''}`);
+          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ` ${t('uncommitted')}` : ''}`);
         else if (pr) meta.push(`#${pr.ref.number}`);
-        if (git?.behind) meta.push(`${git.behind} behind ${item.base}`);
-        if (item.auto_finish) meta.push('armed');
+        if (git?.behind) meta.push(t('{n} behind {base}', { n: git.behind, base: item.base }));
+        if (item.auto_finish) meta.push(t('armed'));
         if (phase.lamp === 'parked' && item.parked_at)
-          meta.push(`parked ${age(item.parked_at).replace(/ ago$/, '')}`);
+          meta.push(t('parked {ago}', { ago: age(item.parked_at) }));
         if (item.nvim_kept)
-          meta.push(`nvim kept: ${item.nvim_kept} unsaved buffer${item.nvim_kept === 1 ? '' : 's'}`);
+          meta.push(tn('nvim kept: {n} unsaved buffer', 'nvim kept: {n} unsaved buffers', item.nvim_kept));
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
@@ -158,9 +159,9 @@
               a.key && Object.values(NOW_KEYS).includes(a.id) && blockedReason(a.id, item, phase) === null,
           ).map((a) => ({ key: a.key!, label: a.label({ item, phase }) })),
           ...(item.claude_message && phase.section === 'to_review'
-            ? [{ key: 'm', label: expanded === row.id ? 'Hide message' : 'Full message' }]
+            ? [{ key: 'm', label: expanded === row.id ? t('Hide message') : t('Full message') }]
             : []),
-          { key: 'g', label: 'Go to work tab' },
+          { key: 'g', label: t('Go to work tab') },
         ];
         const claude = claudeOf(item)?.claude;
         const u = claude?.usage;
@@ -169,8 +170,9 @@
         const said = item.claude_message?.trim().split('\n')[0] || preview;
         const more =
           phase.section === 'to_review'
-            ? [item.next_note ? `next: ${item.next_note}` : '', said].filter(Boolean).join('  ·  ') ||
-              phase.detail
+            ? [item.next_note ? t('next: {note}', { note: item.next_note }) : '', said]
+                .filter(Boolean)
+                .join('  ·  ') || phase.detail
             : phase.section === 'needs_you' && preview
               ? preview
               : phase.id === 'checks_failed' && pr?.failed_check_names.length
@@ -186,7 +188,7 @@
           meta,
           ctx:
             u && u.context_pct !== null
-              ? { text: `ctx ${Math.round(u.context_pct)}%`, hot: ctxHot(u) }
+              ? { text: `${t('ctx')} ${Math.round(u.context_pct)}%`, hot: ctxHot(u) }
               : null,
           cost:
             spent > 0
@@ -195,7 +197,7 @@
                   over: overBudget(spent, settings.value(item.project_id)?.claude.budget_usd),
                 }
               : null,
-          warn: delta && testsMissing(delta) ? 'tests: none' : undefined,
+          warn: delta && testsMissing(delta) ? t('tests: none') : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
           more,
@@ -212,11 +214,11 @@
           title: sessionLabel(s),
           project: p.name,
           color: p.color,
-          reason: preview || 'Needs input',
+          reason: preview || t('Needs input'),
           meta: [],
           age: age(s.created_at),
           more: preview,
-          actions: [{ key: 'enter', label: 'Go to session' }],
+          actions: [{ key: 'enter', label: t('Go to session') }],
         };
       }
       case 'review': {
@@ -231,50 +233,50 @@
           project: p.name ?? r.ref.repo,
           color: p.color,
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
-          reason: !row.mine && row.reason === 'Review requested' ? r.author.name : row.reason,
+          reason: !row.mine && row.reason === 'Review requested' ? r.author.name : t(row.reason),
           meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
           age: age((!row.mine && r.requested_at) || r.updated_at),
-          more: `${r.source_branch} into ${r.target_branch}${
+          more: `${r.source_branch} ${t('into')} ${r.target_branch}${
             r.failed_check_names.length
-              ? `, checks failed: ${r.failed_check_names.join(', ')}`
+              ? `, ${t('checks failed: {names}', { names: r.failed_check_names.join(', ') })}`
               : r.ci === 'failure'
-                ? ', checks failed'
+                ? `, ${t('checks failed')}`
                 : ''
           }`,
           actions: [
-            { key: 'enter', label: 'Open review' },
-            ...(row.mine ? [] : [{ key: 's', label: 'Review locally' }]),
-            { key: 'o', label: 'Open on host' },
+            { key: 'enter', label: t('Open review') },
+            ...(row.mine ? [] : [{ key: 's', label: t('Review locally') }]),
+            { key: 'o', label: t('Open on host') },
           ],
         };
       }
       case 'ticket': {
-        const t = row.ticket.ticket;
+        const tk = row.ticket.ticket;
         const p = projectOf(row.ticket.project_ids);
         return {
           lamp: 'none',
-          id: t.ref.key,
-          title: t.title,
+          id: tk.ref.key,
+          title: tk.title,
           project: p.name,
           color: p.color,
-          reason: t.status.name,
+          reason: tk.status.name,
           meta: [
-            ...(nextUp.isNew(t.ref) ? ['New'] : []),
-            ...(batch.has(t.ref) ? ['marked'] : []),
-            ...(t.priority ? [t.priority] : []),
+            ...(nextUp.isNew(tk.ref) ? [t('New')] : []),
+            ...(batch.has(tk.ref) ? [t('marked')] : []),
+            ...(tk.priority ? [tk.priority] : []),
           ],
-          age: age(t.updated_at),
+          age: age(tk.updated_at),
           more: waitChip(row.ticket.waiting, { withWhy: true })?.label ?? '',
           actions: [
-            { key: 'enter', label: 'Start work' },
+            { key: 'enter', label: t('Start work') },
             ...(isNextUp(row)
               ? [
-                  { key: 'shift+s', label: 'Start the top ones' },
-                  { key: 'shift+j', label: 'Down' },
-                  { key: 'shift+k', label: 'Up' },
+                  { key: 'shift+s', label: t('Start the top ones') },
+                  { key: 'shift+j', label: t('Down') },
+                  { key: 'shift+k', label: t('Up') },
                 ]
               : []),
-            { key: 'o', label: 'Open in tracker' },
+            { key: 'o', label: t('Open in tracker') },
           ],
         };
       }
@@ -360,7 +362,7 @@
             ? (row.item.pr_url ?? prOf(row.item)?.url ?? null)
             : null;
     if (row.type === 'ticket') nextUp.markSeen(row.ticket.ticket.ref);
-    if (url) openExternal({ url }).catch((err) => toasts.error(err, 'Open in browser'));
+    if (url) openExternal({ url }).catch((err) => toasts.error(err, t('Open in browser')));
     else if (row.type === 'work') void runWorkAction('open_ticket', row.item);
   }
 
@@ -429,7 +431,7 @@
         if (cur?.type === 'work' && cur.item.claude_message) expanded = expanded === cur.id ? null : cur.id;
         break;
       case 'N':
-        toasts.info('New work item: not available yet');
+        toasts.info(t('New work item: not available yet'));
         break;
       case 'S':
         if (cur && isNextUp(cur)) startNextUp(nextUpRows());
@@ -488,39 +490,43 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label="Now"
+  aria-label={t('Now')}
   {onkeydown}
 >
   <header class="bar">
     <span class="heading">
-      <span class="title">Now</span>
-      <span class="subtitle">Everything waiting on you, across projects</span>
+      <span class="title">{t('Now')}</span>
+      <span class="subtitle">{t('Everything waiting on you, across projects')}</span>
     </span>
     <span class="split" data-testid="now-header" title={summary.header}>
       {#each summary.parts as part (part)}<span>{part}</span>{/each}
     </span>
-    {#if stale}<span class="asof" data-testid="now-asof">Updated {relativeTime(stale.ms)}</span>{/if}
+    {#if stale}<span class="asof" data-testid="now-asof"
+        >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
+      >{/if}
     <span class="spacer"></span>
     <input
       bind:this={filterEl}
       bind:value={filter}
       class="k-filter"
-      placeholder="Filter"
-      aria-label="Filter Now"
+      placeholder={t('Filter')}
+      aria-label={t('Filter Now')}
       onfocus={() => (filtering = true)}
       onkeydown={onFilterKey}
       onblur={() => (filtering = false)}
     />
-    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}>Refresh</Button>
+    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
+      >{t('Refresh')}</Button
+    >
   </header>
 
   {#if loading}
-    <Loading label="Loading Now" />
+    <Loading label={t('Loading Now')} />
   {:else if noData && firstError}
-    <ErrorState error={firstError} title="Could not load Now" onretry={refresh}>
+    <ErrorState error={firstError} title={t('Could not load Now')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
-          {isAuthError(firstError) ? 'Re-authenticate' : 'Open account settings'}
+          {isAuthError(firstError) ? t('Re-authenticate') : t('Open account settings')}
         </Button>
       {/snippet}
     </ErrorState>
@@ -528,42 +534,52 @@
     <StateBanner error={noData ? null : firstError} errors={accountErrors} onretry={refresh} />
     {#if noSource && lines.length > 0}
       <div class="nosource" data-testid="now-no-source">
-        No ticket source yet · <button type="button" class="k-link" onclick={pickBoard}>Pick a board</button>
+        {t('No ticket source yet')} ·
+        <button type="button" class="k-link" onclick={pickBoard}>{t('Pick a board')}</button>
       </div>
     {/if}
     {#if lines.length === 0 && noSource && !filter}
-      <EmptyState icon="ticket" title="Add a ticket source: pick a board">
-        {#snippet actions()}<Button variant="primary" onclick={pickBoard}>Pick a board</Button>{/snippet}
+      <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
+        {#snippet actions()}<Button variant="primary" onclick={pickBoard}>{t('Pick a board')}</Button
+          >{/snippet}
       </EmptyState>
     {:else if lines.length === 0}
       <EmptyState
         icon="inbox"
-        title={filter ? `Nothing matches "${filter}".` : 'Nothing needs you right now'}
+        title={filter ? t('Nothing matches "{filter}".', { filter }) : t('Nothing needs you right now')}
         body={filter
           ? ''
-          : 'Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.'}
+          : t(
+              'Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.',
+            )}
       >
         {#snippet actions()}
-          {#if filter}<Button onclick={() => (filter = '')}>Clear filter</Button>{:else}<Button
-              onclick={refresh}>Refresh</Button
+          {#if filter}<Button onclick={() => (filter = '')}>{t('Clear filter')}</Button>{:else}<Button
+              onclick={refresh}>{t('Refresh')}</Button
             >{/if}
         {/snippet}
       </EmptyState>
     {:else}
       <div class="list">
-        <VirtualList bind:this={vlist} items={lines} itemHeight={ROW_HEIGHT} key={(l) => l.id} label="Now">
+        <VirtualList
+          bind:this={vlist}
+          items={lines}
+          itemHeight={ROW_HEIGHT}
+          key={(l) => l.id}
+          label={t('Now')}
+        >
           {#snippet row(l)}
             {#if l.type === 'section'}
               <div class="section" role="heading" aria-level="2" data-section={l.section.id}>
                 <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
-                {l.section.label}
+                {t(l.section.label)}
                 <span class="count">{l.count}</span>
               </div>
             {:else if l.type === 'msg'}
               <div class="row msgline" data-testid="now-message">{l.text}</div>
             {:else if l.type === 'more'}
               <button type="button" tabindex="-1" class="row moreline" onclick={() => void showAll()}>
-                {l.count} more, show all
+                {t('{n} more, show all', { n: l.count })}
               </button>
             {:else}
               {@const v = view(l.row)}
@@ -590,12 +606,13 @@
                   {#if v.ctx}<span
                       class="meta"
                       class:hot={v.ctx.hot}
-                      title={v.ctx.hot ? 'Compacts soon' : 'Context window used'}>{v.ctx.text}</span
+                      title={v.ctx.hot ? t('Compacts soon') : t('Context window used')}>{v.ctx.text}</span
                     >{/if}
                   {#if v.cost}<span
                       class="meta"
                       class:over={v.cost.over}
-                      title={v.cost.over ? 'Over budget' : 'Claude spend on this item'}>{v.cost.text}</span
+                      title={v.cost.over ? t('Over budget') : t('Claude spend on this item')}
+                      >{v.cost.text}</span
                     >{/if}
                   <span class="meta age">{v.age}</span>
                 </button>
@@ -619,14 +636,14 @@
   {/if}
 
   <footer class="hints">
-    <span><Kbd chord="j" /><Kbd chord="k" /> Move</span>
-    <span><Kbd chord="enter" /> Next action</span>
-    <span><Kbd chord="g" /> Go to</span>
-    <span><Kbd chord="o" /> Open in browser</span>
-    <span><Kbd chord="/" /> Filter</span>
-    <span><Kbd chord="shift+r" /> Refresh</span>
-    <span><Kbd chord="space" /> Mark ticket</span>
-    <span><Kbd chord="mod+enter" /> Start marked</span>
+    <span><Kbd chord="j" /><Kbd chord="k" /> {t('Move')}</span>
+    <span><Kbd chord="enter" /> {t('Next action')}</span>
+    <span><Kbd chord="g" /> {t('Go to')}</span>
+    <span><Kbd chord="o" /> {t('Open in browser')}</span>
+    <span><Kbd chord="/" /> {t('Filter')}</span>
+    <span><Kbd chord="shift+r" /> {t('Refresh')}</span>
+    <span><Kbd chord="space" /> {t('Mark ticket')}</span>
+    <span><Kbd chord="mod+enter" /> {t('Start marked')}</span>
   </footer>
 </div>
 
@@ -639,7 +656,7 @@
     }))}
     x={queueMenu.x}
     y={queueMenu.y}
-    label="Queued work"
+    label={t('Queued work')}
     onselect={(id) => void runWorkAction(id as WorkActionId, item)}
     onclose={() => {
       queueMenu = null;
