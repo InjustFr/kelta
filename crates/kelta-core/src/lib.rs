@@ -274,7 +274,7 @@ impl Core {
         let store = if in_memory_store {
             Store::open_in_memory()?
         } else {
-            match Store::open(&dirs.db_path()) {
+            match Store::open_with_sources(&dirs.db_path(), settings.sources.clone()) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!(error = %e, "cannot open the state database; using an in-memory store");
@@ -718,7 +718,7 @@ impl CoreApi for Core {
         cursor: Option<Cursor>,
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
-        self.tracker_list(scope, view_id, None, cursor, refresh).await
+        self.tracker_list(scope, None, view_id, None, cursor, refresh).await
     }
     async fn ticket_by_key(
         &self,

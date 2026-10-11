@@ -351,4 +351,11 @@ pub struct TicketPage {
     /// trackers and code hosts: the person filter's entries.
     #[serde(default)]
     pub people: Vec<Person>,
+    /// What the list shows once core resolved the pane's narrowing: the `source_id` asked for when
+    /// it still feeds the scope, else the scope itself. The UI renders this, never its own guess.
+    #[serde(default)]
+    pub scope: crate::model::Scope,
+    /// The `view_id` asked for when a queried source has that view, else `None` (every view).
+    #[serde(default)]
+    pub view_id: Option<String>,
 }

@@ -553,7 +553,12 @@ export const ticketPage: TicketPage = {
     "value": "eyJuZXh0IjoyfQ"
   },
   "people": [],
-  "stale": false
+  "scope": {
+    "id": "product",
+    "kind": "source"
+  },
+  "stale": false,
+  "view_id": "mine"
 };
 
 export const ticket: Ticket = {

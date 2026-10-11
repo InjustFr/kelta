@@ -146,7 +146,8 @@ export async function goToRow(row: NowRow): Promise<void> {
 /** `Enter`: the row's next action. */
 export async function enterRow(row: NowRow): Promise<void> {
   if (row.type === 'work') await runPrimary(row.item);
-  else if (row.type === 'ticket') await startWorkOnTicket(row.ticket.ticket.ref);
+  else if (row.type === 'ticket')
+    await startWorkOnTicket(row.ticket.ticket.ref, null, { source: row.ticket.source_ids[0] ?? null });
   // shortcut: a PR of mine without a work item opens its review until Fix with Claude adopts it.
   else await goToRow(row);
 }

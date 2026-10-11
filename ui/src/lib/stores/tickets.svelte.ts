@@ -23,11 +23,18 @@ export interface TicketList extends Loadable<TicketPage> {
   viewId: string | null;
   /** Overrides the view's own `who` (`null` = the view decides). */
   who: Who | null;
+  /** The pane's narrowing as asked; what it resolved to is `data.scope`. */
+  sourceId: string | null;
   loadingMore: boolean;
 }
 
-export function ticketListKey(scope: Scope, viewId: string | null, who: Who | null = null): string {
-  return `${scopeKey(scope)}|${viewId ?? ''}|${who ?? ''}`;
+export function ticketListKey(
+  scope: Scope,
+  viewId: string | null,
+  who: Who | null = null,
+  sourceId: string | null = null,
+): string {
+  return `${scopeKey(scope)}|${viewId ?? ''}|${who ?? ''}|${sourceId ?? ''}`;
 }
 
 export function ticketKey(ref: TicketRef): string {
@@ -54,20 +61,31 @@ export class TicketsStore {
   columns = $state<Record<string, Loadable<Column[]>>>({});
   transitions = $state<Record<string, Loadable<Transition[]>>>({});
 
-  list(scope: Scope, viewId: string | null = null, who: Who | null = null): TicketList {
+  list(
+    scope: Scope,
+    viewId: string | null = null,
+    who: Who | null = null,
+    sourceId: string | null = null,
+  ): TicketList {
     return (
-      this.lists[ticketListKey(scope, viewId, who)] ?? {
+      this.lists[ticketListKey(scope, viewId, who, sourceId)] ?? {
         ...idle<TicketPage>(),
         scope,
         viewId,
         who,
+        sourceId,
         loadingMore: false,
       }
     );
   }
 
-  items(scope: Scope, viewId: string | null = null, who: Who | null = null): TicketItem[] {
-    return this.list(scope, viewId, who).data?.items ?? [];
+  items(
+    scope: Scope,
+    viewId: string | null = null,
+    who: Who | null = null,
+    sourceId: string | null = null,
+  ): TicketItem[] {
+    return this.list(scope, viewId, who, sourceId).data?.items ?? [];
   }
 
   async load(
@@ -75,33 +93,48 @@ export class TicketsStore {
     viewId: string | null = null,
     refresh = false,
     who: Who | null = null,
+    sourceId: string | null = null,
   ): Promise<TicketList> {
-    const key = ticketListKey(scope, viewId, who);
-    const prev = this.list(scope, viewId, who);
+    const key = ticketListKey(scope, viewId, who, sourceId);
+    const prev = this.list(scope, viewId, who, sourceId);
     this.lists = { ...this.lists, [key]: { ...prev, loading: true, invalidated: false } };
     const next = await settle(
       prev,
-      () => ipc.trackerList({ scope, view_id: viewId, cursor: null, refresh, who }),
+      () => ipc.trackerList({ scope, source_id: sourceId, view_id: viewId, cursor: null, refresh, who }),
       {
         stale: (p) => p.stale,
       },
     );
     // `apply` flags a list that is loading and `refreshInvalidated` skips it: reload here.
     const again = this.lists[key]?.invalidated ?? false;
-    const entry: TicketList = { ...next, scope, viewId, who, loadingMore: false, invalidated: again };
+    const entry: TicketList = {
+      ...next,
+      scope,
+      viewId,
+      who,
+      sourceId,
+      loadingMore: false,
+      invalidated: again,
+    };
     this.lists = { ...this.lists, [key]: entry };
-    return again ? this.load(scope, viewId, false, who) : entry;
+    return again ? this.load(scope, viewId, false, who, sourceId) : entry;
   }
 
   /** Fetches the next page and appends it. */
-  async loadMore(scope: Scope, viewId: string | null = null, who: Who | null = null): Promise<void> {
-    const key = ticketListKey(scope, viewId, who);
+  async loadMore(
+    scope: Scope,
+    viewId: string | null = null,
+    who: Who | null = null,
+    sourceId: string | null = null,
+  ): Promise<void> {
+    const key = ticketListKey(scope, viewId, who, sourceId);
     const prev = this.lists[key];
     if (!prev?.data?.next || prev.loadingMore) return;
     this.lists = { ...this.lists, [key]: { ...prev, loadingMore: true } };
     try {
       const page = await ipc.trackerList({
         scope,
+        source_id: sourceId,
         view_id: viewId,
         cursor: prev.data.next,
         refresh: false,
@@ -214,6 +247,6 @@ export class TicketsStore {
   /** Refetches every invalidated list that was loaded. */
   async refreshInvalidated(): Promise<void> {
     const stale = Object.values(this.lists).filter((l) => l.invalidated && !l.loading);
-    await Promise.all(stale.map((l) => this.load(l.scope, l.viewId, false, l.who)));
+    await Promise.all(stale.map((l) => this.load(l.scope, l.viewId, false, l.who, l.sourceId)));
   }
 }

@@ -27,16 +27,19 @@ struct SourceHint {
 
 impl Core {
     /// `work_plan`: the plan in the default project (`project` is an explicit pick), with the choices.
+    /// `source_id` is the ticket's source as the clicked row lists it (`TicketItem.source_ids`).
     pub async fn work_plan(
         &self,
         project: Option<ProjectId>,
         source: WorkSource,
+        source_id: Option<String>,
     ) -> Result<StartWorkPlan, KeltaError> {
         if matches!(source, WorkSource::Branch { .. }) {
             let project = project.unwrap_or_else(|| self.active_project());
             return self.work.plan(&project, source).await;
         }
-        let (target, choices, hint) = self.plan_target(project.as_ref(), &source).await?;
+        let (target, choices, hint) =
+            self.plan_target(project.as_ref(), &source, source_id.as_deref()).await?;
         let (project, repo, guessed) = target;
         let mut plan = self.work.plan_with_repo(&project, source, repo).await?;
         plan.project_choices = choices;
@@ -49,7 +52,7 @@ impl Core {
     /// The project a ticket's background run goes to (#233): the start-work rules, no plan built.
     pub(crate) async fn ticket_project(&self, ticket: &TicketRef) -> Result<ProjectId, KeltaError> {
         let source = WorkSource::Ticket { ticket: ticket.clone() };
-        Ok(self.plan_target(None, &source).await?.0.0)
+        Ok(self.plan_target(None, &source, None).await?.0.0)
     }
 
     /// SPEC §3.1 for a ticket or a PR: the default (project, route repo, guessed), the choices and
@@ -58,6 +61,7 @@ impl Core {
         &self,
         project: Option<&ProjectId>,
         source: &WorkSource,
+        source_id: Option<&str>,
     ) -> Result<(Target, Vec<ProjectId>, Option<SourceHint>), KeltaError> {
         let open = self.open_projects();
         let configs = self.project_configs();
@@ -68,7 +72,7 @@ impl Core {
             .collect();
         let sources = self.sources();
         let hint = match source {
-            WorkSource::Ticket { ticket } => self.source_hint(ticket, &sources).await,
+            WorkSource::Ticket { ticket } => self.source_hint(ticket, &sources, source_id).await,
             WorkSource::Review { review } => {
                 let binds: Vec<ProjectId> = self
                     .review_bindings()
@@ -88,18 +92,24 @@ impl Core {
         // A removed project (or one without a repository) keeps its work items but cannot host a start.
         let mut items = self.store.call(|c| q::work_list(c, None)).await?;
         items.retain(|w| configs.iter().any(|p| p.id == w.project_id && !p.repos.is_empty()));
-        fill_sources(&mut items, &sources);
         let active = self.active_project();
         let target = default_project(source, project, &items, &choices, hint.as_ref(), &active)?;
         Ok((target, choices, hint))
     }
 
-    /// The ticket's source, and the route it matches from the cached ticket, else the tracker's (a
-    /// failed fetch matches no route: the plan reports it).
-    async fn source_hint(&self, t: &TicketRef, sources: &[Source]) -> Option<SourceHint> {
+    /// The ticket's source (`source_id` when it still exists, else a guess), and the route it
+    /// matches from the cached ticket, else the tracker's (a failed fetch matches no route: the
+    /// plan reports it).
+    async fn source_hint(
+        &self,
+        t: &TicketRef,
+        sources: &[Source],
+        source_id: Option<&str>,
+    ) -> Option<SourceHint> {
         let cached = self.cached_ticket(t, true).await;
         let listed_in = cached.as_ref().map(|(_, ids)| ids.as_slice()).unwrap_or_default();
-        let s = source_of(sources, &t.account, listed_in)?;
+        let picked = source_id.and_then(|id| sources.iter().find(|s| s.id == id));
+        let s = picked.or_else(|| source_of(sources, &t.account, listed_in))?;
         let route = if s.routes.is_empty() {
             None
         } else {
@@ -116,8 +126,8 @@ impl Core {
     }
 }
 
-/// The source using `account`; when several do, the first listing the ticket (`listed_in`, from the
-/// cached views), else the first in config order.
+/// No row to say (CLI, background runs): the source using `account`; when several do, the first
+/// listing the ticket (`listed_in`, from the cached views), else the first in config order.
 fn source_of<'a>(sources: &'a [Source], account: &AccountId, listed_in: &[String]) -> Option<&'a Source> {
     let mut using = sources.iter().filter(|s| uses_account(s, account));
     let first = using.clone().next()?;
@@ -128,17 +138,6 @@ fn source_of<'a>(sources: &'a [Source], account: &AccountId, listed_in: &[String
 fn route_for(s: &Source, t: &Ticket) -> Option<(ProjectId, Option<String>)> {
     let r = s.routes.iter().find(|r| r.r#match.matches(t.kind.as_deref(), &t.labels))?;
     Some((r.project.clone(), Some(r.repo.clone()).filter(|x| !x.is_empty())))
-}
-
-/// Items started before work items stored their source count for the only source on their account.
-fn fill_sources(items: &mut [WorkItem], sources: &[Source]) {
-    for w in items.iter_mut().filter(|w| w.ticket_source.is_none()) {
-        let Some(t) = &w.ticket else { continue };
-        let mut using = sources.iter().filter(|s| uses_account(s, &t.account));
-        if let (Some(s), None) = (using.next(), using.next()) {
-            w.ticket_source = Some(s.id.clone());
-        }
-    }
 }
 
 /// Rules of SPEC §3.1, first match wins: the project, the route's repo when the project is the
@@ -396,14 +395,6 @@ mod tests {
             pick(&ticket(), None, &items, &["shop", "blog", "api"], Some(&h)).unwrap(),
             (p("api"), None, false)
         );
-        // an item with no source counts only when its account has one source
-        let one = [source("product", "jira-acme", vec![])];
-        let two = [source("product", "jira-acme", vec![]), source("tech-lead", "jira-acme", vec![])];
-        let mut old = [picked("blog", "2026-01-01", None)];
-        fill_sources(&mut old, &two);
-        assert_eq!(old[0].ticket_source, None);
-        fill_sources(&mut old, &one);
-        assert_eq!(old[0].ticket_source.as_deref(), Some("product"));
     }
 
     #[test]

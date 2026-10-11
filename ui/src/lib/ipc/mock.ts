@@ -23,6 +23,7 @@ import type {
   ReviewItem,
   ReviewNote,
   ReviewNotes,
+  Scope,
   ScreenInstanceId,
   SessionInfo,
   SessionKind,
@@ -897,16 +898,22 @@ export function createMockTransport(options: MockOptions = {}): {
         .slice(0, limit),
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
-    tracker_list: ({ scope, view_id, cursor, who }) => {
+    tracker_list: ({ scope: asked, source_id, view_id: askedView, cursor, who }) => {
+      // core `list_scope`: the source when it is in the scope and has views, else the scope; the
+      // view when a listed source has it
+      const within = (sc: Scope) =>
+        sourcesNow().filter((s) =>
+          sc.kind === 'all' ? true : sc.kind === 'source' ? s.id === sc.id : s.projects.includes(sc.id),
+        );
+      const narrowed = within(asked).find((s) => s.id === source_id && s.tracker.views.length > 0);
+      const scope: Scope = narrowed ? { kind: 'source', id: narrowed.id } : asked;
+      const inScope = within(scope);
+      const view_id =
+        (!source_id || narrowed) && inScope.some((s) => s.tracker.views.some((v) => v.id === askedView))
+          ? (askedView ?? null)
+          : null;
       // the sources of the scope that feed one of the ticket's projects; the view the core would
       // query (`view_id` inside the first one, else its first view)
-      const inScope = sourcesNow().filter((s) =>
-        scope.kind === 'all'
-          ? true
-          : scope.kind === 'source'
-            ? s.id === scope.id
-            : s.projects.includes(scope.id),
-      );
       const scoped = state.tickets
         .map((t) => {
           // a project-less ticket comes from the sources feeding no project
@@ -945,6 +952,8 @@ export function createMockTransport(options: MockOptions = {}): {
         stale: false,
         errors: [],
         people: teamPeople(scoped.map((s) => s.item)),
+        scope,
+        view_id,
       };
     },
     tracker_get: ({ ticket }) => {

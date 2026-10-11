@@ -2,6 +2,7 @@
 import type { AccountError } from "./AccountError";
 import type { Cursor } from "./Cursor";
 import type { Person } from "./Person";
+import type { Scope } from "./Scope";
 import type { TicketItem } from "./TicketItem";
 
 export type TicketPage = { items: Array<TicketItem>, next: Cursor | null, 
@@ -13,4 +14,13 @@ stale: boolean, errors: Array<AccountError>,
  * Who the page and the scope's cached Team list (and review lists) mention, merged across
  * trackers and code hosts: the person filter's entries.
  */
-people: Array<Person>, };
+people: Array<Person>, 
+/**
+ * What the list shows once core resolved the pane's narrowing: the `source_id` asked for when
+ * it still feeds the scope, else the scope itself. The UI renders this, never its own guess.
+ */
+scope: Scope, 
+/**
+ * The `view_id` asked for when a queried source has that view, else `None` (every view).
+ */
+view_id: string | null, };

@@ -21,7 +21,6 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{
     AccountKind, ColumnSpec, ProjectConfig, Settings, Source, TrackerBinding, TrackerView,
-    sources_from_trackers,
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
@@ -90,6 +89,15 @@ pub struct TicketQuery {
 fn hash16(s: &str) -> String {
     let d = Sha256::digest(s.as_bytes());
     d.iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+/// The source lists tickets for `scope`: it feeds the project, is the source, or any for All.
+fn in_scope(s: &Source, scope: &Scope) -> bool {
+    match scope {
+        Scope::Project { id } => s.projects.contains(id),
+        Scope::Source { id } => &s.id == id,
+        Scope::All => true,
+    }
 }
 
 /// The source's tracker, or one of its views, uses `account`.
@@ -447,12 +455,9 @@ impl Core {
     // Tickets
     // =========================================================================================
 
-    /// The ticket sources: the global `[[sources]]` plus, in memory, the deprecated
-    /// `[project.tracker]` blocks still on disk (moved at the next launch).
+    /// The ticket sources (config folds the deprecated `[project.tracker]` blocks in, #264).
     pub fn sources(&self) -> Vec<Source> {
-        let legacy: Vec<ProjectConfig> =
-            self.project_configs().iter().filter(|p| p.tracker.is_some()).map(|p| (**p).clone()).collect();
-        sources_from_trackers(&self.cfg.effective(None).sources, &legacy)
+        self.cfg.effective(None).sources.clone()
     }
 
     /// A project's board: its first source's, with that source's routes for it as `repo_rules`.
@@ -466,6 +471,30 @@ impl Core {
             .into_iter()
             .find(|s| s.id == id)
             .ok_or_else(|| KeltaError::not_found(format!("source {id}")))
+    }
+
+    /// What a tickets pane lists (#264: the one narrowing rule; `tracker_list` returns it, the UI
+    /// renders it, `resubscribe` polls it): the source `source_id` names when it is in `scope` and
+    /// has views, else `scope`; `view_id` when a listed source has that view, else `None` (every
+    /// view; also when the asked source is gone, rather than another source's view).
+    pub(crate) fn list_scope(
+        &self,
+        scope: &Scope,
+        source_id: Option<&str>,
+        view_id: Option<&str>,
+    ) -> (Scope, Option<String>) {
+        let sources = self.sources();
+        let narrowed = source_id.and_then(|id| {
+            sources.iter().find(|s| s.id == id && in_scope(s, scope) && !s.tracker.views.is_empty())
+        });
+        if source_id.is_some() && narrowed.is_none() {
+            return (scope.clone(), None);
+        }
+        let scope = narrowed.map_or_else(|| scope.clone(), |s| Scope::Source { id: s.id.clone() });
+        let view = view_id.filter(|v| {
+            sources.iter().any(|s| in_scope(s, &scope) && s.tracker.views.iter().any(|x| x.id == *v))
+        });
+        (scope, view.map(str::to_owned))
     }
 
     /// `NotFound` for a project or source scope that does not exist.
@@ -484,11 +513,7 @@ impl Core {
     /// union). `who` overrides `view.who`.
     pub fn ticket_queries(&self, scope: &Scope, view_id: Option<&str>, who: Option<Who>) -> Vec<TicketQuery> {
         let known: HashSet<ProjectId> = self.project_configs().iter().map(|p| p.id.clone()).collect();
-        let sources = self.sources().into_iter().filter(|s| match scope {
-            Scope::Project { id } => s.projects.contains(id),
-            Scope::Source { id } => &s.id == id,
-            Scope::All => true,
-        });
+        let sources = self.sources().into_iter().filter(|s| in_scope(s, scope));
         let mut out: Vec<TicketQuery> = Vec::new();
         for s in sources {
             let b = &s.tracker;
@@ -721,10 +746,11 @@ impl Core {
         self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
     }
 
-    /// `tracker_list`.
+    /// `tracker_list`: `source_id` / `view_id` are the pane's raw picks, resolved by `list_scope`.
     pub async fn tracker_list(
         &self,
         scope: Scope,
+        source_id: Option<String>,
         view_id: Option<String>,
         who: Option<Who>,
         cursor: Option<Cursor>,
@@ -732,9 +758,10 @@ impl Core {
     ) -> Result<TicketPage, KeltaError> {
         self.rt.capture();
         self.check_scope(&scope)?;
+        let (scope, view_id) = self.list_scope(&scope, source_id.as_deref(), view_id.as_deref());
         let queries = self.ticket_queries(&scope, view_id.as_deref(), who);
         if queries.is_empty() {
-            return Ok(TicketPage::default());
+            return Ok(TicketPage { scope, view_id, ..TicketPage::default() });
         }
         let single = queries.len() == 1;
         // Several queries page together: their cursor is one provider cursor per query (cache key → cursor).
@@ -790,7 +817,7 @@ impl Core {
         for i in &mut items {
             self.enrich(i, &work, &reviews, &people);
         }
-        Ok(TicketPage { items, next, stale, errors, people })
+        Ok(TicketPage { items, next, stale, errors, people, scope, view_id })
     }
 
     /// The ticket `key` names in the lists' first pages (cached, fetched when cold), with the
@@ -1838,7 +1865,7 @@ impl Core {
             for q in self.ticket_queries(scope, view, who) {
                 if s.accounts.contains_key(&q.account) {
                     let p = self.policy_for(&q.account, &s);
-                    want.insert(SubKey { account: q.account, query: q.cache_key }, p);
+                    want.insert(SubKey { account: q.account, query: q.cache_key, review: None }, p);
                 }
             }
         };
@@ -1850,7 +1877,7 @@ impl Core {
                     }
                     for k in kinds {
                         want.insert(
-                            SubKey { account: a.clone(), query: reviews_key(&a, *k) },
+                            SubKey { account: a.clone(), query: reviews_key(&a, *k), review: Some(*k) },
                             self.policy_for(&a, &s),
                         );
                     }
@@ -1860,16 +1887,9 @@ impl Core {
         for c in &contents {
             match c {
                 PaneContent::Tickets { scope, view_id, who, source_id, .. } => {
-                    // a pane narrowed to one source lists that source's queries (as the UI loads it);
-                    // a removed source, or one no longer feeding the pane's project, is ignored (UI shows all)
-                    let narrowed = source_id.as_ref().filter(|id| {
-                        self.sources().iter().any(|s| {
-                            s.id == **id
-                                && !matches!(scope, Scope::Project { id: p } if !s.projects.contains(p))
-                        })
-                    });
-                    let scope = narrowed.map_or_else(|| scope.clone(), |id| Scope::Source { id: id.clone() });
-                    tickets(&scope, view_id.as_deref(), *who, &mut want)
+                    // the queries `tracker_list` loads for this pane
+                    let (scope, view) = self.list_scope(scope, source_id.as_deref(), view_id.as_deref());
+                    tickets(&scope, view.as_deref(), *who, &mut want)
                 }
                 PaneContent::Reviews { scope, tab } => {
                     reviews(self.review_accounts(scope), &both, &mut want);
@@ -1922,19 +1942,12 @@ impl Core {
     }
 
     async fn refresh_key(&self, key: &SubKey) -> Result<(), KeltaError> {
-        if key.query.starts_with("tickets:") {
+        let Some(kind) = key.review else {
             let q = self.feeds.views.lock().get(&key.query).cloned();
             let Some(q) = q else { return Ok(()) };
             self.fetch_tickets(&q, None).await?;
             self.emit_tickets_changed(&q.projects, &q.sources);
             return Ok(());
-        }
-        let kind = if key.query.ends_with(":authored") {
-            ReviewKind::Authored
-        } else if key.query.ends_with(":team") {
-            ReviewKind::Team
-        } else {
-            ReviewKind::ReviewRequested
         };
         let host = self.code_host_of(&key.account)?;
         let has_cache = self.cache_get::<Vec<Review>>(&reviews_key(&key.account, kind)).await.is_some();

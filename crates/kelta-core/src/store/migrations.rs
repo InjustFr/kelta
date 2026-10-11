@@ -1,7 +1,11 @@
 //! Schema migrations (ARCHITECTURE §10). Each entry upgrades the schema by one version; the index
 //! + 1 is the version recorded in `schema_version(v)`.
 
+use kelta_proto::settings::Source;
+use kelta_proto::tracker::TicketRef;
 use rusqlite::Connection;
+
+use crate::feeds::uses_account;
 
 /// v1: every table of ARCHITECTURE §10.
 ///
@@ -220,8 +224,29 @@ const V16: &str = r#"
 ALTER TABLE work_items ADD COLUMN feedback_at TEXT;
 "#;
 
+/// v17: the ticket source of the items started before v15 (#264), once: the only source using the
+/// ticket's account (two or more stay unknown). No SQL: `migrate` runs `backfill_ticket_sources`.
+const V17: &str = "";
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17];
+
+fn backfill_ticket_sources(c: &Connection, sources: &[Source]) -> rusqlite::Result<()> {
+    let rows: Vec<(String, String)> = c
+        .prepare(
+            "SELECT id, ticket_json FROM work_items WHERE ticket_source IS NULL AND ticket_json IS NOT NULL",
+        )?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    for (id, json) in rows {
+        let Ok(t) = serde_json::from_str::<TicketRef>(&json) else { continue };
+        let mut using = sources.iter().filter(|s| uses_account(s, &t.account));
+        if let (Some(s), None) = (using.next(), using.next()) {
+            c.execute("UPDATE work_items SET ticket_source = ?1 WHERE id = ?2", [&s.id, &id])?;
+        }
+    }
+    Ok(())
+}
 
 /// Current recorded version (0 for an empty database).
 pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {
@@ -230,8 +255,9 @@ pub fn current_version(conn: &Connection) -> rusqlite::Result<u32> {
     Ok(v.unwrap_or(0))
 }
 
-/// Apply every pending migration in its own transaction. Idempotent.
-pub fn migrate(conn: &mut Connection) -> rusqlite::Result<u32> {
+/// Apply every pending migration in its own transaction. Idempotent. `sources` (the config's) feed
+/// the v17 backfill.
+pub fn migrate(conn: &mut Connection, sources: &[Source]) -> rusqlite::Result<u32> {
     let mut cur = current_version(conn)?;
     for (i, sql) in MIGRATIONS.iter().enumerate() {
         let v = (i + 1) as u32;
@@ -240,6 +266,9 @@ pub fn migrate(conn: &mut Connection) -> rusqlite::Result<u32> {
         }
         let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
+        if v == 17 {
+            backfill_ticket_sources(&tx, sources)?;
+        }
         tx.execute("INSERT INTO schema_version (v) VALUES (?1)", [v])?;
         tx.commit()?;
         cur = v;

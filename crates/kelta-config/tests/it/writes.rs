@@ -461,6 +461,34 @@ fn migration_leaves_an_account_less_block_in_place() {
 }
 
 #[test]
+fn legacy_blocks_read_as_sources_in_both_the_typed_and_the_ui_value() {
+    let e = env();
+    e.global(GLOBAL);
+    e.project("web", &board(""));
+    // no binding account: the view's own account is the source's (#264), as core and the UI see it
+    e.project(
+        "api",
+        "[project.tracker]\nviews = [{ id = \"team\", label = \"Team\", jql = \"x\", account = \"jira-two\" }]\n",
+    );
+    e.project(
+        "old",
+        "[project.tracker]\ncolumns = [{ id = \"todo\", label = \"To do\", categories = [\"todo\"] }]\n",
+    );
+    let svc = e.load();
+    let typed: Vec<(String, String)> =
+        svc.effective(None).sources.iter().map(|s| (s.id.clone(), s.tracker.account.to_string())).collect();
+    assert_eq!(typed, [("team".into(), "jira-two".into()), ("my-open".into(), "jira-acme".into())]);
+    let ui = svc.effective_doc(None).unwrap().value["sources"].clone();
+    assert_eq!(ui, serde_json::to_value(&svc.effective(None).sources).unwrap(), "the UI reads the same list");
+    let web = svc.effective(Some(&ProjectId::new("web")));
+    assert_eq!(web.sources, svc.effective(None).sources);
+    // the account-less view block moves too; the block with no account anywhere stays, unused
+    assert_eq!(svc.migrate_project_trackers().unwrap(), 2);
+    assert!(svc.project(&ProjectId::new("old")).unwrap().tracker.is_some());
+    assert_eq!(svc.effective(None).sources.len(), 2);
+}
+
+#[test]
 fn migration_after_a_crash_between_writes_only_strips() {
     let e = env();
     e.project("web", &board(""));

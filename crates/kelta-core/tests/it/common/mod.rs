@@ -17,7 +17,9 @@ use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::model::{ProjectDraft, ProjectPatch};
-use kelta_proto::settings::{AccountConfig, AccountKind, ProjectConfig, RepoConfig, Settings, SettingsDiff};
+use kelta_proto::settings::{
+    AccountConfig, AccountKind, ProjectConfig, RepoConfig, Settings, SettingsDiff, sources_from_trackers,
+};
 use kelta_proto::term::{LoginEnv, LoginEnvSource};
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
 use kelta_proto::tracker::User;
@@ -51,8 +53,12 @@ impl MemConfig {
 }
 
 impl SettingsSource for MemConfig {
+    /// Like `ConfigService`: the projects' deprecated `[project.tracker]` blocks read as sources.
     fn effective(&self, project: Option<&ProjectId>) -> Arc<Settings> {
         let mut s = self.global.read().clone();
+        let legacy: Vec<ProjectConfig> =
+            self.projects.read().iter().filter(|p| p.tracker.is_some()).map(|p| (**p).clone()).collect();
+        s.sources = sources_from_trackers(&s.sources, &legacy);
         if let Some(p) = project
             && let Some(env) = self.env.read().get(p)
         {
