@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAction } from '$lib/actions';
 import type { Source, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
-import { createMockTransport, type MockControls } from '$lib/ipc/mock';
+import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport, type IpcTransport } from '$lib/ipc/transport';
 import { projects, settings, toasts } from '$lib/stores';
 
@@ -33,11 +33,7 @@ const mount = (props: { sourceId?: string; projectId?: string }, onclose = vi.fn
 const rows = () => screen.queryAllByTestId('source-hit');
 const labels = () => rows().map((r) => r.querySelector('.label')?.textContent);
 /** The last `sources` list written to the global settings. */
-const lastSources = () =>
-  (
-    mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as
-      { path: string; value: Source[] } | undefined
-  )?.value;
+const lastSources = () => lastSettingsValue<Source[]>(mock);
 const written = (id: string) => lastSources()?.find((s) => s.id === id);
 
 describe('SourcePickerSheet', () => {

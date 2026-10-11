@@ -381,6 +381,11 @@ function kindLabel(kind: SessionKind): string {
   }
 }
 
+/** The `value` of the last `settings_set` call (tests: the last `sources` list written). */
+export function lastSettingsValue<T>(mock: MockControls): T | undefined {
+  return (mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as { value: T } | undefined)?.value;
+}
+
 export function createMockTransport(options: MockOptions = {}): {
   transport: IpcTransport;
   controls: MockControls;

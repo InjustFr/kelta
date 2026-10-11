@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dispatch } from '$lib/actions';
 import type { SourceRoute, TrackerBinding, TrackerView } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
-import { createMockTransport, type MockControls } from '$lib/ipc/mock';
+import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { projects, settings, ui } from '$lib/stores';
 
@@ -38,11 +38,7 @@ type SourceList = {
   tracker: TrackerBinding;
 }[];
 /** The last `sources` list written to the global settings. */
-const lastSources = () =>
-  (
-    mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as
-      { layer: string; path: string; value: SourceList } | undefined
-  )?.value;
+const lastSources = () => lastSettingsValue<SourceList>(mock);
 const shop = () => lastSources()?.find((s) => s.id === 'shop');
 
 describe('Board block of a source', () => {
