@@ -420,6 +420,7 @@ describe('keys.list_keys', () => {
     expect(reached(false, { code: 'KeyP', key: 'P', shiftKey: true })).toEqual([]);
     expect(reached(false, { code: 'ArrowDown', key: 'ArrowDown' })).toEqual(['ArrowDown']);
     expect(reached(false, { code: 'Enter', key: 'Enter' })).toEqual(['Enter']);
+    expect(reached(false, { code: 'Space', key: ' ' })).toEqual([' ']);
     expect(reached(false, { code: 'KeyA', key: 'a' }, 'menu')).toEqual(['a']);
   });
 

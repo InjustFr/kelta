@@ -126,7 +126,8 @@ export function contextFromEvent(event: KeyboardEvent): KeyContext {
 
 /** A plain printable key outside text fields, terminals, menus and dialogs: a list/board shortcut. */
 export function isListKey(event: KeyboardEvent, ctx: KeyContext): boolean {
-  if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (event.key.length !== 1 || event.key === ' ' || event.ctrlKey || event.metaKey || event.altKey)
+    return false;
   if (ctx.terminal || ctx.textInput || ctx.overlay) return false;
   const target = event.target instanceof Element ? event.target : null;
   return !target?.closest('[role="menu"], [role="dialog"], [role="listbox"]');
