@@ -4,6 +4,8 @@
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
 
+  import SettingsCard from '../layout/SettingsCard.svelte';
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import { joinPath, isRecord, splitPath } from '../lib/paths';
   import { childEntries, entrySchema, type SchemaNode } from '../lib/schema';
@@ -37,17 +39,14 @@
   }
 </script>
 
-<section class="map" data-testid="object-map" data-path={path}>
-  <header>
-    <h3>{label}</h3>
-    {#if description}<p class="desc">{description}</p>{/if}
-  </header>
+<SettingsGroup heading={label} {description} data-testid="object-map" data-path={path}>
   {#each keys as key (key)}
     {@const entryPath = joinPath([...segs, key])}
-    <div class="entry" data-testid="map-entry" data-path={entryPath}>
-      <div class="entry-head">
-        <h4>{key}</h4>
+    <SettingsCard heading={key} mono data-testid="map-entry" data-path={entryPath}>
+      {#snippet head()}
         <SourceBadge source={editor.sourceOf(entryPath)} path={entryPath} />
+      {/snippet}
+      {#snippet actions()}
         {#if editor.layerValue(entryPath) !== undefined && access.editable}
           <IconButton
             icon="trash-2"
@@ -56,13 +55,13 @@
             onclick={() => editor.reset(entryPath)}
           />
         {/if}
-      </div>
+      {/snippet}
       {#if item}
         {#each childEntries(item) as [prop, child] (prop)}
           <Field path={joinPath([...segs, key, prop])} node={child} depth={2} />
         {/each}
       {/if}
-    </div>
+    </SettingsCard>
   {/each}
   {#if access.editable}
     <form
@@ -77,47 +76,13 @@
     </form>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-</section>
+</SettingsGroup>
 
 <style>
-  .map {
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-3);
-    margin-top: var(--k-space-4);
-  }
-
-  header h3 {
-    margin: 0;
-    font-size: var(--k-font-size-lg);
-  }
-
-  .desc {
-    margin: 0;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
-  .entry {
-    padding: var(--k-space-3) var(--k-space-4);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-  }
-
-  .entry-head {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-  }
-
-  .entry-head h4 {
-    margin: 0;
-    font-family: var(--k-font-mono);
-  }
-
   .add {
     display: flex;
     gap: var(--k-space-3);
+    margin-top: var(--k-space-3);
   }
 
   .add input {
@@ -125,7 +90,7 @@
     padding: 0 var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
-    background: var(--k-bg);
+    background: var(--k-well);
     color: var(--k-fg);
   }
 

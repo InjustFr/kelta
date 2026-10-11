@@ -6,6 +6,7 @@
   import Button from '$lib/ui/Button.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
+  import SettingsRow from '../layout/SettingsRow.svelte';
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -49,9 +50,12 @@
         </div>
       </div>
     {/if}
-    <div class="test">
-      <Button size="sm" icon="bell" loading={testing} onclick={test}>Send a test notification</Button>
-    </div>
+    <SettingsRow label="Test notification" actions>
+      {#snippet control()}
+        <Button size="sm" icon="bell" loading={testing} onclick={test}>Send a test notification</Button>
+      {/snippet}
+      <p>Checks that desktop notifications reach you.</p>
+    </SettingsRow>
   {/snippet}
 </SectionForm>
 
@@ -72,9 +76,5 @@
 
   .fix {
     font-family: var(--k-font-mono);
-  }
-
-  .test {
-    margin-bottom: var(--k-space-3);
   }
 </style>

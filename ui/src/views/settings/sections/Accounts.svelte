@@ -17,6 +17,9 @@
   import DeviceSignIn from '../fields/DeviceSignIn.svelte';
   import Field from '../fields/Field.svelte';
   import SecretControl from '../fields/SecretControl.svelte';
+  import SettingsCard from '../layout/SettingsCard.svelte';
+  import SettingsDisclosure from '../layout/SettingsDisclosure.svelte';
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import {
     KINDS,
@@ -33,6 +36,7 @@
   } from '../lib/accounts';
   import { joinPath, isRecord } from '../lib/paths';
   import { childEntries, entrySchema, nodeAt } from '../lib/schema';
+  import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
   const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
@@ -235,284 +239,300 @@
           : 'neutral';
 </script>
 
-<section class="accounts" data-testid="accounts-section">
-  <p class="blurb">
-    Accounts connect trackers and code hosts. Tokens are kept in your system keychain or read from a CLI you
-    already use, never in config files.
-  </p>
-
-  {#if globalOnly}
-    <div class="notice" role="status" data-testid="accounts-global-only">
-      <Icon name="info" size={16} />
-      <span>Accounts are global settings.</span>
-      <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
-        >Switch to Global</Button
-      >
-    </div>
-  {/if}
-
-  <h3>Secret storage</h3>
-  {#if backendError}<p class="error" role="alert">{backendError}</p>{/if}
-  <ul class="backends" data-testid="backend-status">
-    {#each backends as b (b.backend)}
-      {@const advice = !b.available ? backendAdvice(b.backend) : null}
-      <li data-backend={b.backend} data-available={b.available}>
-        <Icon name={b.available ? 'circle-check' : 'triangle-alert'} size={14} />
-        <strong>{b.backend}</strong>
-        <span class="muted">{b.detail ?? (b.available ? 'available' : 'unavailable')}</span>
-        {#if b.backend === 'encrypted-file' && !b.available}
-          <form
-            class="advice unlock"
-            data-testid="secret-file-unlock"
-            onsubmit={(e) => {
-              e.preventDefault();
-              void unlock();
-            }}
+<SectionForm sectionId="accounts" {...props} skip={['accounts']}>
+  {#snippet before()}
+    <div class="accounts" data-testid="accounts-section">
+      {#if globalOnly}
+        <div class="notice" role="status" data-testid="accounts-global-only">
+          <Icon name="info" size={16} />
+          <span>Accounts are global settings.</span>
+          <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
+            >Switch to Global</Button
           >
-            <TextInput
-              bind:value={passphrase}
-              type="password"
-              autocomplete="off"
-              label={creating ? 'New passphrase' : 'Passphrase'}
-            />
-            {#if creating}
-              <TextInput
-                bind:value={passphraseAgain}
-                type="password"
-                autocomplete="off"
-                label="Repeat the passphrase"
-              />
-            {/if}
-            <Button size="sm" variant="primary" type="submit" loading={unlocking} disabled={!passphrase}
-              >{creating ? 'Create' : 'Unlock'}</Button
-            >
-            {#if unlockError}<p class="error" role="alert">{unlockError}</p>{/if}
-          </form>
-        {/if}
-        {#if advice}
-          <div class="advice" data-testid="backend-advice">
-            <p>{advice.title}</p>
-            <ul>
-              {#each advice.steps as s, i (i)}<li>{s}</li>{/each}
-            </ul>
-            {#each advice.snippets as sn (sn)}<pre>{sn}</pre>{/each}
-          </div>
-        {/if}
-      </li>
-    {/each}
-  </ul>
-  {#if keyringBackend && !keyringBackend.available}
-    <p class="hint" data-testid="keyring-fallback">
-      The keyring is unavailable: choose the encrypted file, <code>command:</code> or <code>env:</code> when you
-      add an account.
-    </p>
-  {/if}
+        </div>
+      {/if}
 
-  <header class="head">
-    <h3>Connected accounts</h3>
-    <!-- While the list is empty its empty state carries the one Add account button. -->
-    {#if !globalOnly && accounts.length > 0}<Button
-        size="sm"
-        icon="plus"
-        variant="primary"
-        onclick={openWizard}
-        data-testid="add-account">Add account</Button
-      >{/if}
-  </header>
-
-  {#if wizardOpen}
-    <div class="wizard" data-testid="account-wizard" data-step={step}>
-      <ol class="steps">
-        {#each ['Service', 'Connection', 'Token', 'Test'] as label, i (label)}
-          <li class:current={step === i} class:done={step > i}>{label}</li>
-        {/each}
-      </ol>
-
-      {#if step === 0}
-        <div class="kinds">
-          {#each KINDS as k (k.kind)}
-            <button type="button" class="kind" data-kind={k.kind} onclick={() => pickKind(k.kind)}>
-              <strong>{k.label}</strong>
-              <span>{k.blurb}</span>
-            </button>
+      <SettingsGroup heading="Secret storage">
+        {#if backendError}<p class="error" role="alert">{backendError}</p>{/if}
+        <ul class="backends" data-testid="backend-status">
+          {#each backends as b (b.backend)}
+            {@const advice = !b.available ? backendAdvice(b.backend) : null}
+            <li data-backend={b.backend} data-available={b.available}>
+              <Icon name={b.available ? 'circle-check' : 'triangle-alert'} size={14} />
+              <strong>{b.backend}</strong>
+              <span class="muted">{b.detail ?? (b.available ? 'available' : 'unavailable')}</span>
+              {#if b.backend === 'encrypted-file' && !b.available}
+                <form
+                  class="advice unlock"
+                  data-testid="secret-file-unlock"
+                  onsubmit={(e) => {
+                    e.preventDefault();
+                    void unlock();
+                  }}
+                >
+                  <TextInput
+                    bind:value={passphrase}
+                    type="password"
+                    autocomplete="off"
+                    label={creating ? 'New passphrase' : 'Passphrase'}
+                  />
+                  {#if creating}
+                    <TextInput
+                      bind:value={passphraseAgain}
+                      type="password"
+                      autocomplete="off"
+                      label="Repeat the passphrase"
+                    />
+                  {/if}
+                  <Button size="sm" variant="primary" type="submit" loading={unlocking} disabled={!passphrase}
+                    >{creating ? 'Create' : 'Unlock'}</Button
+                  >
+                  {#if unlockError}<p class="error" role="alert">{unlockError}</p>{/if}
+                </form>
+              {/if}
+              {#if advice}
+                <div class="advice" data-testid="backend-advice">
+                  <p>{advice.title}</p>
+                  <ul>
+                    {#each advice.steps as s, i (i)}<li>{s}</li>{/each}
+                  </ul>
+                  {#each advice.snippets as sn (sn)}<pre>{sn}</pre>{/each}
+                </div>
+              {/if}
+            </li>
           {/each}
-        </div>
-      {:else if step === 1}
-        {@const info = kindInfo(draft.kind)}
-        <div class="form">
-          <TextInput
-            label="Server URL{info.baseUrlRequired ? '' : ' (optional)'}"
-            bind:value={draft.base_url}
-            placeholder={info.baseUrlPlaceholder}
-            error={errors.base_url}
-            onchange={onUrl}
-          />
-          {#if draft.kind === 'jira'}
-            <Select
-              label="Flavor"
-              value={draft.flavor}
-              options={[
-                { value: 'auto', label: 'Detect from the URL' },
-                { value: 'cloud', label: 'Jira Cloud' },
-                { value: 'dc', label: 'Data Center / Server' },
-              ]}
-              onchange={(v) => (draft.flavor = v as AccountDraft['flavor'])}
-            />
-          {/if}
-          {#if needsEmail(draft)}
-            <TextInput
-              label="Account e-mail"
-              bind:value={draft.email}
-              error={errors.email}
-              placeholder="me@acme.com"
-            />
-          {/if}
-          {#if info.authOptions.length > 1}
-            <Select
-              label="Authentication"
-              value={draft.auth}
-              options={[
-                { value: '', label: 'Default for this service' },
-                ...info.authOptions.map((a) => ({ value: a, label: a })),
-              ]}
-              onchange={(v) => (draft.auth = v as AccountDraft['auth'])}
-            />
-          {/if}
-          {#if draft.kind === 'redmine'}
-            <Select
-              label="Text format"
-              value={draft.text_format}
-              options={[
-                { value: 'textile', label: 'Textile' },
-                { value: 'markdown', label: 'Markdown' },
-              ]}
-              onchange={(v) => (draft.text_format = v as AccountDraft['text_format'])}
-            />
-          {/if}
-          <TextInput
-            label="Account id"
-            bind:value={draft.id}
-            error={errors.id}
-            hint="Used in project files and secret names: lowercase letters, digits, dashes."
-            oninput={() => (idTouched = true)}
-          />
-        </div>
-        <div class="nav">
-          <Button onclick={() => (step = 0)}>Back</Button>
-          <Button variant="primary" onclick={toSecret}>Next</Button>
-        </div>
-      {:else if step === 2}
-        {@const host = oauthHost(draft.kind, draft.base_url)}
-        {@const signInReady = !!host && typeof clientIds[host] === 'string' && !!clientIds[host].trim()}
-        <div class="form">
-          {#if signInReady}
-            {@const ref = oauthSecretRef(draft)}
-            <DeviceSignIn
-              kind={draft.kind}
-              baseUrl={draft.base_url.trim() || kindInfo(draft.kind).baseUrlDefault!}
-              secretRef={ref}
-              onsigned={() => signedIn(ref)}
-            />
-          {:else if host}
-            <p class="hint" data-testid="oauth-unset">
-              To sign in with the browser instead of a token, register an OAuth app on {host} and add its client
-              id under <code>oauth.client_ids</code> (see docs/user/oauth.md).
-            </p>
-          {/if}
-          <p class="muted">
-            {signInReady ? 'Or choose' : 'Choose'} where Kelta gets the token for <strong>{draft.id}</strong>.
+        </ul>
+        {#if keyringBackend && !keyringBackend.available}
+          <p class="hint" data-testid="keyring-fallback">
+            The keyring is unavailable: choose the encrypted file, <code>command:</code> or <code>env:</code> when
+            you add an account.
           </p>
-          <SecretControl
-            value={draft.secret}
-            accountKind={draft.kind}
-            onchange={(ref) => (draft.secret = ref ?? '')}
-            accountId={null}
-          />
-          {#if errors.secret}<p class="error" role="alert">{errors.secret}</p>{/if}
-          {#if wizardError}<p class="error" role="alert" data-testid="wizard-error">{wizardError}</p>{/if}
-        </div>
-        <div class="nav">
-          <Button onclick={() => (step = 1)}>Back</Button>
-          <Button onclick={() => save(false)} loading={saving}>Save</Button>
-          <Button variant="primary" onclick={() => save(true)} loading={saving} data-testid="save-and-test"
-            >Save &amp; test</Button
-          >
-        </div>
-      {:else}
-        <div class="form" data-testid="wizard-result">
-          {#if wizardResult?.ok}
-            <p class="ok">
-              <Icon name="circle-check" size={16} /> Connected{wizardResult.user
-                ? ` as ${wizardResult.user.name}`
-                : ''}.
-            </p>
-          {:else if wizardResult}
-            <p class="error" role="alert">
-              <Icon name="circle-x" size={16} />
-              {wizardResult.error?.message ?? 'Connection failed'}
-            </p>
-            <p class="muted">The account is saved. Fix the token or URL and test again from the list.</p>
-          {:else}
-            <p class="muted">Testing…</p>
-          {/if}
-        </div>
-        <div class="nav"><Button variant="primary" onclick={() => (wizardOpen = false)}>Done</Button></div>
-      {/if}
-    </div>
-  {/if}
-
-  {#if accounts.length === 0 && !wizardOpen}
-    <EmptyState
-      title="No accounts yet"
-      icon="key-round"
-      body="Add a tracker or code-host account to see tickets and reviews."
-    >
-      {#snippet actions()}
-        {#if !globalOnly}<Button variant="primary" icon="plus" onclick={openWizard} data-testid="add-account"
-            >Add account</Button
-          >{/if}
-      {/snippet}
-    </EmptyState>
-  {/if}
-
-  {#each accounts as a (a.id)}
-    {@const st = settingsStore.accounts[a.id]}
-    {@const r = results[a.id]}
-    <article class="account" data-testid="account" data-account={a.id}>
-      <header>
-        <strong>{a.id}</strong>
-        <Badge>{kindInfo(a.kind).label}</Badge>
-        {#if st}<Badge tone={statusTone(st.status)} title={st.detail ?? undefined}
-            >{st.status.replace('_', ' ')}</Badge
-          >{/if}
-        <span class="muted">{a.base_url ?? ''}</span>
-        <span class="spacer"></span>
-        <Button size="sm" loading={r === 'running'} onclick={() => test(a.id)}>Test</Button>
-        {#if !globalOnly}<IconButton
-            icon="trash-2"
-            size="sm"
-            label={`Remove ${a.id}`}
-            onclick={() => remove(a.id)}
-          />{/if}
-      </header>
-      {#if r && r !== 'running'}
-        <p class:ok={r.ok} class:error={!r.ok} role="status" data-testid="test-result">
-          {r.ok
-            ? `Connected${r.user ? ` as ${r.user.name}` : ''}.`
-            : (r.error?.message ?? 'Connection failed')}
-        </p>
-      {/if}
-      <details>
-        <summary>Settings</summary>
-        {#if itemSchema}
-          {#each childEntries(itemSchema) as [prop, child] (prop)}
-            <Field path={joinPath(['accounts', a.id, prop])} node={child} depth={2} />
-          {/each}
         {/if}
-      </details>
-    </article>
-  {/each}
-</section>
+      </SettingsGroup>
+
+      <SettingsGroup heading="Connected accounts">
+        {#snippet actions()}
+          <!-- While the list is empty its empty state carries the one Add account button. -->
+          {#if !globalOnly && accounts.length > 0}<Button
+              size="sm"
+              icon="plus"
+              variant="primary"
+              onclick={openWizard}
+              data-testid="add-account">Add account</Button
+            >{/if}
+        {/snippet}
+
+        {#if wizardOpen}
+          <SettingsCard heading="Add an account" data-testid="account-wizard" data-step={step}>
+            <div class="wizard">
+              <ol class="steps">
+                {#each ['Service', 'Connection', 'Token', 'Test'] as label, i (label)}
+                  <li class:current={step === i} class:done={step > i}>{label}</li>
+                {/each}
+              </ol>
+
+              {#if step === 0}
+                <div class="kinds">
+                  {#each KINDS as k (k.kind)}
+                    <button type="button" class="kind" data-kind={k.kind} onclick={() => pickKind(k.kind)}>
+                      <strong>{k.label}</strong>
+                      <span>{k.blurb}</span>
+                    </button>
+                  {/each}
+                </div>
+              {:else if step === 1}
+                {@const info = kindInfo(draft.kind)}
+                <div class="form">
+                  <TextInput
+                    label="Server URL{info.baseUrlRequired ? '' : ' (optional)'}"
+                    bind:value={draft.base_url}
+                    placeholder={info.baseUrlPlaceholder}
+                    error={errors.base_url}
+                    onchange={onUrl}
+                  />
+                  {#if draft.kind === 'jira'}
+                    <Select
+                      label="Flavor"
+                      value={draft.flavor}
+                      options={[
+                        { value: 'auto', label: 'Detect from the URL' },
+                        { value: 'cloud', label: 'Jira Cloud' },
+                        { value: 'dc', label: 'Data Center / Server' },
+                      ]}
+                      onchange={(v) => (draft.flavor = v as AccountDraft['flavor'])}
+                    />
+                  {/if}
+                  {#if needsEmail(draft)}
+                    <TextInput
+                      label="Account e-mail"
+                      bind:value={draft.email}
+                      error={errors.email}
+                      placeholder="me@acme.com"
+                    />
+                  {/if}
+                  {#if info.authOptions.length > 1}
+                    <Select
+                      label="Authentication"
+                      value={draft.auth}
+                      options={[
+                        { value: '', label: 'Default for this service' },
+                        ...info.authOptions.map((a) => ({ value: a, label: a })),
+                      ]}
+                      onchange={(v) => (draft.auth = v as AccountDraft['auth'])}
+                    />
+                  {/if}
+                  {#if draft.kind === 'redmine'}
+                    <Select
+                      label="Text format"
+                      value={draft.text_format}
+                      options={[
+                        { value: 'textile', label: 'Textile' },
+                        { value: 'markdown', label: 'Markdown' },
+                      ]}
+                      onchange={(v) => (draft.text_format = v as AccountDraft['text_format'])}
+                    />
+                  {/if}
+                  <TextInput
+                    label="Account id"
+                    bind:value={draft.id}
+                    error={errors.id}
+                    hint="Used in project files and secret names: lowercase letters, digits, dashes."
+                    oninput={() => (idTouched = true)}
+                  />
+                </div>
+                <div class="nav">
+                  <Button onclick={() => (step = 0)}>Back</Button>
+                  <Button variant="primary" onclick={toSecret}>Next</Button>
+                </div>
+              {:else if step === 2}
+                {@const host = oauthHost(draft.kind, draft.base_url)}
+                {@const signInReady =
+                  !!host && typeof clientIds[host] === 'string' && !!clientIds[host].trim()}
+                <div class="form">
+                  {#if signInReady}
+                    {@const ref = oauthSecretRef(draft)}
+                    <DeviceSignIn
+                      kind={draft.kind}
+                      baseUrl={draft.base_url.trim() || kindInfo(draft.kind).baseUrlDefault!}
+                      secretRef={ref}
+                      onsigned={() => signedIn(ref)}
+                    />
+                  {:else if host}
+                    <p class="hint" data-testid="oauth-unset">
+                      To sign in with the browser instead of a token, register an OAuth app on {host} and add its
+                      client id under <code>oauth.client_ids</code> (see docs/user/oauth.md).
+                    </p>
+                  {/if}
+                  <p class="muted">
+                    {signInReady ? 'Or choose' : 'Choose'} where Kelta gets the token for
+                    <strong>{draft.id}</strong>.
+                  </p>
+                  <SecretControl
+                    value={draft.secret}
+                    accountKind={draft.kind}
+                    onchange={(ref) => (draft.secret = ref ?? '')}
+                    accountId={null}
+                  />
+                  {#if errors.secret}<p class="error" role="alert">{errors.secret}</p>{/if}
+                  {#if wizardError}<p class="error" role="alert" data-testid="wizard-error">
+                      {wizardError}
+                    </p>{/if}
+                </div>
+                <div class="nav">
+                  <Button onclick={() => (step = 1)}>Back</Button>
+                  <Button onclick={() => save(false)} loading={saving}>Save</Button>
+                  <Button
+                    variant="primary"
+                    onclick={() => save(true)}
+                    loading={saving}
+                    data-testid="save-and-test">Save &amp; test</Button
+                  >
+                </div>
+              {:else}
+                <div class="form" data-testid="wizard-result">
+                  {#if wizardResult?.ok}
+                    <p class="ok">
+                      <Icon name="circle-check" size={16} /> Connected{wizardResult.user
+                        ? ` as ${wizardResult.user.name}`
+                        : ''}.
+                    </p>
+                  {:else if wizardResult}
+                    <p class="error" role="alert">
+                      <Icon name="circle-x" size={16} />
+                      {wizardResult.error?.message ?? 'Connection failed'}
+                    </p>
+                    <p class="muted">
+                      The account is saved. Fix the token or URL and test again from the list.
+                    </p>
+                  {:else}
+                    <p class="muted">Testing…</p>
+                  {/if}
+                </div>
+                <div class="nav">
+                  <Button variant="primary" onclick={() => (wizardOpen = false)}>Done</Button>
+                </div>
+              {/if}
+            </div>
+          </SettingsCard>
+        {/if}
+
+        {#if accounts.length === 0 && !wizardOpen}
+          <EmptyState
+            title="No accounts yet"
+            icon="key-round"
+            body="Add a tracker or code-host account to see tickets and reviews."
+          >
+            {#snippet actions()}
+              {#if !globalOnly}<Button
+                  variant="primary"
+                  icon="plus"
+                  onclick={openWizard}
+                  data-testid="add-account">Add account</Button
+                >{/if}
+            {/snippet}
+          </EmptyState>
+        {/if}
+
+        {#each accounts as a (a.id)}
+          {@const st = settingsStore.accounts[a.id]}
+          {@const r = results[a.id]}
+          <SettingsCard heading={a.id} mono data-testid="account" data-account={a.id}>
+            {#snippet head()}
+              <Badge>{kindInfo(a.kind).label}</Badge>
+              {#if st}<Badge tone={statusTone(st.status)} title={st.detail ?? undefined}
+                  >{st.status.replace('_', ' ')}</Badge
+                >{/if}
+              <span class="muted">{a.base_url ?? ''}</span>
+            {/snippet}
+            {#snippet actions()}
+              <Button size="sm" loading={r === 'running'} onclick={() => test(a.id)}>Test</Button>
+              {#if !globalOnly}<IconButton
+                  icon="trash-2"
+                  size="sm"
+                  label={`Remove ${a.id}`}
+                  onclick={() => remove(a.id)}
+                />{/if}
+            {/snippet}
+            {#if r && r !== 'running'}
+              <p class:ok={r.ok} class:error={!r.ok} role="status" data-testid="test-result">
+                {r.ok
+                  ? `Connected${r.user ? ` as ${r.user.name}` : ''}.`
+                  : (r.error?.message ?? 'Connection failed')}
+              </p>
+            {/if}
+            {#if itemSchema}
+              <SettingsDisclosure label="Settings">
+                {#each childEntries(itemSchema) as [prop, child] (prop)}
+                  <Field path={joinPath(['accounts', a.id, prop])} node={child} depth={2} />
+                {/each}
+              </SettingsDisclosure>
+            {/if}
+          </SettingsCard>
+        {/each}
+      </SettingsGroup>
+    </div>
+  {/snippet}
+</SectionForm>
 
 <style>
   .accounts {
@@ -521,17 +541,6 @@
     gap: var(--k-space-3);
   }
 
-  h3 {
-    margin: var(--k-space-4) 0 0;
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .blurb,
   .hint,
   .muted {
     margin: 0;
@@ -593,14 +602,11 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .wizard,
-  .account {
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    padding: var(--k-space-4);
+  .wizard {
     display: flex;
     flex-direction: column;
     gap: var(--k-space-3);
+    padding: var(--k-space-2) 0;
   }
 
   .steps {
@@ -661,16 +667,6 @@
     gap: var(--k-space-3);
   }
 
-  .account header {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
   .ok {
     color: var(--k-ok);
     margin: 0;
@@ -679,10 +675,5 @@
   .error {
     color: var(--k-danger);
     margin: 0;
-  }
-
-  summary {
-    cursor: pointer;
-    color: var(--k-fg-muted);
   }
 </style>

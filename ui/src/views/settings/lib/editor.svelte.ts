@@ -36,6 +36,8 @@ export class SettingsEditor {
   saving = $state<Record<string, boolean>>({});
   loading = $state(false);
   loadError = $state<string | null>(null);
+  /** The pane shows the raw TOML of this layer (Edit TOML) instead of the forms. */
+  raw = $state(false);
 
   constructor(target: Partial<EditorTarget> = {}) {
     this.layer = target.layer ?? 'global';

@@ -35,8 +35,13 @@
   };
 </script>
 
+<!-- Quiet layer model: a default value carries no chip, so the keys you set are the ones marked. -->
 <span class="source" data-testid="source-badge" data-source={source} data-path={path}>
-  <Badge tone={TONE[source]} title={HELP[source]}>{LABEL[source]}</Badge>
+  {#if source === 'default'}
+    <span class="k-visually-hidden">{LABEL[source]}</span>
+  {:else}
+    <Badge tone={TONE[source]} title={HELP[source]}>{LABEL[source]}</Badge>
+  {/if}
 </span>
 
 <style>
