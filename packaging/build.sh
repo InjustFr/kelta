@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Builds the installers with the release overlay (ARCHITECTURE §2 "Bundling").
 #   Linux: bash packaging/build.sh            -> deb + AppImage
-#   macOS: bash packaging/build.sh            -> host-arch dmg
-#          UNIVERSAL=1 bash packaging/build.sh -> universal dmg (needs both rust targets)
+#   macOS: bash packaging/build.sh            -> Apple silicon dmg (the host arch; Intel Macs are not supported)
 # Signing and notarization read APPLE_* variables when set; without them the dmg is unsigned.
 # TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) also makes the signed updater bundles (`.app.tar.gz`, AppImage,
 # each with its `.sig`); without it the build has no update artifacts. KELTA_VERSION overrides the app version.
@@ -26,23 +25,9 @@ build_sidecars() {
     --bin kelta-ctl --bin keltad --timings "$@"
 }
 
-if [[ "$(uname)" == Darwin && "${UNIVERSAL:-0}" == 1 ]]; then
-  for t in aarch64-apple-darwin x86_64-apple-darwin; do
-    build_sidecars --target "$t"
-    phase "sidecars $t"
-    for b in "${sidecars[@]}"; do cp "target/$t/release/$b" "$bins/$b-$t"; done
-  done
-  for b in "${sidecars[@]}"; do
-    lipo -create -output "$bins/$b-universal-apple-darwin" \
-      "$bins/$b-aarch64-apple-darwin" "$bins/$b-x86_64-apple-darwin"
-  done
-  target=(--target universal-apple-darwin)
-else
-  build_sidecars
-  phase sidecars
-  for b in "${sidecars[@]}"; do cp "target/release/$b" "$bins/$b-$host"; done
-  target=()
-fi
+build_sidecars
+phase sidecars
+for b in "${sidecars[@]}"; do cp "target/release/$b" "$bins/$b-$host"; done
 
 pnpm install --frozen-lockfile
 phase "pnpm install"
@@ -56,5 +41,5 @@ cd apps/desktop/src-tauri
 # opens the volume in Finder and leaves it mounted (on the Desktop) after every build.
 # ${a[@]+"${a[@]}"}: macOS /bin/bash 3.2 calls an empty array unbound under `set -u`.
 CI=true ../../../ui/node_modules/.bin/tauri build --config ../../../packaging/tauri.release.json \
-  ${extra[@]+"${extra[@]}"} --bundles "$bundles" ${target[@]+"${target[@]}"} -- --timings
+  ${extra[@]+"${extra[@]}"} --bundles "$bundles" -- --timings
 phase "tauri build (frontend, app, bundles)"

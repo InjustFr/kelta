@@ -2,8 +2,8 @@ name: nightly
 
 # Every night (and on a manual run): the newest main commit with a green `ci` push run (or the `sha` input: release.yml
 # passes its release commit, which only bumps the versions of a green commit), unless the `nightly` tag is already on
-# it or past it, built as the macOS Apple silicon dmg + updater bundle (ad-hoc signed, not notarized; release.yml keeps
-# the universal one) and the Linux deb + AppImage for amd64 and arm64 (native runners), the updater bundles signed
+# it or past it, built as the macOS Apple silicon dmg + updater bundle (ad-hoc signed, not notarized, like
+# release.yml's) and the Linux deb + AppImage for amd64 and arm64 (native runners), the updater bundles signed
 # with the TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) secrets, then published to the rolling "nightly" prerelease by
 # scripts/publish-nightly.sh. scripts/nightly-local.sh is the same publish from the maintainer's Mac.
 on:
@@ -129,7 +129,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: 1.99.0
-      # Its own key: the universal release job caches target/<triple>/release, this host build target/release.
+      # Shared with release.yml's macOS job: both build the host target into target/release.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: release-host

@@ -572,8 +572,8 @@ The 1.0.0 highlights, written by hand before semantic-release generated this fil
 - Background mode: closing the window destroys the webview and keeps sessions alive; Dock click, a second
   `kelta` or `kelta-ctl toggle` reopens it.
 - Diagnostics probes: graphics, WebKitGTK, notification daemon, Secret Service, tool versions, hooks, sockets.
-- Packaging: deb, AppImage, universal dmg, desktop entry with a Safe graphics action, AppStream metadata,
+- Packaging: deb, AppImage, Apple silicon dmg (no Intel Macs), desktop entry with a Safe graphics action, AppStream metadata,
   AUR and Homebrew cask templates.
-- Release workflow (manual, semantic-release: deb, AppImage, universal dmg, in-app updates) and a rolling
+- Release workflow (manual, semantic-release: deb, AppImage, Apple silicon dmg, in-app updates) and a rolling
   `nightly` prerelease.
 - `kelta-bench` harness with memory, latency, wakeup and bundle-size budgets.

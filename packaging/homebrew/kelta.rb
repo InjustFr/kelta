@@ -3,11 +3,12 @@ cask "kelta" do
   version "1.0.0"
   sha256 :no_check
 
-  url "https://github.com/InjustFr/kelta/releases/download/v#{version}/Kelta_#{version}_universal.dmg"
+  url "https://github.com/InjustFr/kelta/releases/download/v#{version}/Kelta_#{version}_aarch64.dmg"
   name "Kelta"
   desc "Claude Code and nvim side by side, with tickets and pull request reviews"
   homepage "https://github.com/InjustFr/kelta"
 
+  depends_on arch: :arm64
   depends_on macos: ">= :ventura"
 
   app "Kelta.app"

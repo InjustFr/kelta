@@ -94,7 +94,7 @@ Download a build from the [Releases page](https://github.com/InjustFr/kelta/rele
 
 | Platform | Stable | Nightly |
 |---|---|---|
-| macOS 13+ | `Kelta_*_universal.dmg` (Intel and Apple silicon) | `Kelta_*_aarch64.dmg` (Apple silicon) |
+| macOS 13+, Apple silicon (no Intel Macs) | `Kelta_*_aarch64.dmg` | same |
 | Linux, any distro | `kelta_*_amd64.AppImage` / `kelta_*_aarch64.AppImage` | same |
 | Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb` / `kelta_*_arm64.deb` | same |
 

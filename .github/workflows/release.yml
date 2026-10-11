@@ -3,11 +3,12 @@ name: release
 # Manual only (Actions, release, Run workflow on main). semantic-release (.releaserc.json) reads the conventional
 # commits since the last vX.Y.Z tag, sets the version (scripts/set-version.py), prepends the notes to CHANGELOG.md,
 # and pushes the release commit and the tag to main. The same run then builds that commit: deb + AppImage for
-# amd64 and arm64, the universal dmg, the signed updater bundles. The publish job creates the GitHub release with
+# amd64 and arm64, the Apple silicon dmg (no Intel Macs), the signed updater bundles. The publish job creates the GitHub release with
 # all of them and latest.json at once, so releases/latest never lacks its manifest, then runs nightly.yml on the
 # release commit. Everything happens in this run: refs pushed with GITHUB_TOKEN trigger no workflow. A failed
-# build leaves the tag without a release: re-run the failed jobs. `dry_run` pushes and publishes nothing but
-# still builds, with the version semantic-release would pick.
+# build leaves the tag without a release: run again with `tag` set to it (builds and publishes that tag, no
+# semantic-release). `dry_run` pushes and publishes nothing but still builds, with the version semantic-release
+# would pick (or the `tag`'s).
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +16,10 @@ on:
         description: Compute the version and build, publish nothing
         type: boolean
         default: false
+      tag:
+        description: Build and publish this existing vX.Y.Z tag instead of cutting a new release
+        type: string
+        default: ""
 
 concurrency:
   group: release
@@ -50,13 +55,23 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
           DRY_RUN: ${{ inputs.dry_run }}
+          TAG: ${{ inputs.tag }}
         run: |
           # A release without signed updater bundles would strand every installed copy: refuse before tagging.
           [[ "$HAS_KEY" == true ]] || { echo "::error::updater key secrets missing (CONTRIBUTING, Nightly builds)"; exit 1; }
+          # An existing tag (a cut whose builds failed or were cancelled): build that commit, release nothing new.
+          if [[ -n "$TAG" ]]; then
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              echo "::error::no tag $TAG"; exit 1
+            fi
+            git checkout -q "$TAG"
+            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # The version output comes from verifyReleaseCmd (.releaserc.json); none when there is nothing to release.
           if [[ "$DRY_RUN" == true ]]; then pnpm exec semantic-release --dry-run; else pnpm exec semantic-release; fi
       - id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT" # the release commit (HEAD itself in a dry run)
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT" # the release commit (the tag's, or HEAD in a dry run)
 
   linux:
     needs: version
@@ -121,20 +136,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: 1.99.0
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-      # Caches both targets' dependencies (target/<triple>/release).
+      # The nightly's key: both build the Apple silicon host target into target/release.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: release
+          shared-key: release-host
           cache-on-failure: true
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
-      - name: Universal dmg + updater bundle
+      - name: Apple silicon dmg + updater bundle
         env:
-          UNIVERSAL: "1"
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -151,12 +164,12 @@ jobs:
             export APPLE_SIGNING_IDENTITY=-
           fi
           bash packaging/build.sh
-      # Versioned name: one universal bundle, which latest.json lists for both Macs.
+      # Versioned name, as the nightly's: latest.json lists it for darwin-aarch64 only.
       - run: |
-          out=target/universal-apple-darwin/release/bundle
+          out=target/release/bundle
           mkdir dist && cp "$out"/dmg/*.dmg dist/
           for ext in tar.gz tar.gz.sig; do
-            cp "$out/macos/Kelta.app.$ext" "dist/Kelta_${KELTA_VERSION}_universal.app.$ext"
+            cp "$out/macos/Kelta.app.$ext" "dist/Kelta_${KELTA_VERSION}_aarch64.app.$ext"
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
