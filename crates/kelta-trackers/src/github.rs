@@ -499,7 +499,7 @@ impl GithubIssues {
     /// REST issues as tickets with their board Status and fields, from ONE GraphQL call over the
     /// issues' node ids (they may span repos). Runs on every poll, a 304 included: a board move does not
     /// change the REST ETag. No project scope or a failed call: the plain Open/Closed tickets.
-    /// `closed_only`: skip the call, a closed issue is "Closed" whatever its board says.
+    /// `closed_only`: query the parents alone, a closed issue is "Closed" whatever its board says.
     async fn with_boards(&self, issues: &[Value], closed_only: bool) -> Vec<Ticket> {
         // 5 items per issue keeps a 50-issue page at ~3 rate-limit points (20 would be ~11).
         const Q: &str = concat!(
@@ -507,17 +507,16 @@ impl GithubIssues {
             project_items!(5),
             " } } }"
         );
+        const Q_PARENTS: &str = "query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id parent{ number title url repository{ nameWithOwner } } } } }";
         let ids: Vec<&str> = issues
             .iter()
             .filter(|i| i.get("pull_request").is_none())
             .filter_map(|i| s(i, "node_id"))
             .collect();
         let mut by_id: HashMap<String, ItemInfo> = HashMap::new();
-        // shortcut: closed-only lists skip the call, so their tickets show no parent; query parents alone if it matters.
         let mut parents: HashMap<String, TicketParent> = HashMap::new();
-        if !closed_only
-            && !ids.is_empty()
-            && let Ok(d) = self.gql(Q, json!({"ids": ids})).await
+        if !ids.is_empty()
+            && let Ok(d) = self.gql(if closed_only { Q_PARENTS } else { Q }, json!({"ids": ids})).await
         {
             for n in d.get("nodes").and_then(Value::as_array).into_iter().flatten() {
                 if let (Some(id), Some(p)) = (s(n, "id"), parent_from(n)) {

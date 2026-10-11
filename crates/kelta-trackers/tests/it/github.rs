@@ -114,7 +114,10 @@ async fn repo_views_filter_by_state_and_assignee() {
     let page = gh(&server).list(&v, None).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.next.is_none());
-    assert!(bodies(&server, "POST", "/graphql").await.is_empty(), "closed lists skip the board lookup");
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(b.len(), 1, "closed lists still look the parents up");
+    let q = b[0]["query"].as_str().unwrap();
+    assert!(q.contains("parent{") && !q.contains("projectItems"), "parents only, no board lookup");
 }
 
 #[tokio::test]

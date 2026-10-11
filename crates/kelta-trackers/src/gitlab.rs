@@ -380,7 +380,13 @@ impl GitlabIssues {
 
     async fn put(&self, project: &str, iid: u64, body: Value) -> Result<Ticket, KeltaError> {
         let v = self.json(HttpRequest::put(self.issue_url(project, iid, "")).json(body)).await?.body;
-        self.ticket_from(&v).ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))
+        let mut ticket = [self
+            .ticket_from(&v)
+            .ok_or_else(|| KeltaError::upstream("gitlab issue response without iid"))?];
+        // The store replaces the ticket wholesale: keep its work-item parent.
+        self.work_item_parents(&mut ticket).await;
+        let [ticket] = ticket;
+        Ok(ticket)
     }
 
     /// The project's `priority::<name>` labels (project and group ones) as names, highest first.
