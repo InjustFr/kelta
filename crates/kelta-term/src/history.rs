@@ -32,8 +32,8 @@ const MAX_PENDING: usize = 1024 * 1024;
 const QUEUE: usize = 64;
 /// Bytes read per requested line by `tail`.
 const TAIL_BYTES_PER_LINE: usize = 512;
-/// How long a caller waits for the writer to catch up before reading what is on disk.
-const SYNC_WAIT: Duration = Duration::from_secs(2);
+/// How long a caller waits for the writer to catch up, or for a disk read, before going on without it.
+const SYNC_WAIT: Duration = if cfg!(test) { Duration::from_millis(300) } else { Duration::from_secs(2) };
 
 enum Msg {
     Append(SessionId, String),
@@ -85,18 +85,20 @@ impl HistoryLog {
 
     /// Append and wait until the writer wrote it (reader exit: the process may quit right after).
     pub fn append_sync(&self, id: &SessionId, text: String) {
-        // Never blocks on a stalled writer: exit must finish (deliver, close, quit) within SYNC_WAIT.
-        self.send_later(Msg::Append(id.clone(), text));
-        self.request(Msg::Sync);
+        // A busy writer is waited for, a stalled one costs at most SYNC_WAIT: exit must finish
+        // (deliver, close, quit). One ordered send, so the Sync cannot overtake the text.
+        let (tx, rx) = mpsc::channel();
+        self.send_later([Msg::Append(id.clone(), text), Msg::Sync(tx)]);
+        let _ = rx.recv_timeout(SYNC_WAIT);
     }
 
     pub fn set_caps(&self, limits: &TerminalLimits) {
         let (per, total) = caps(limits);
-        self.send_later(Msg::Caps(per, total));
+        self.send_later([Msg::Caps(per, total)]);
     }
 
     pub fn delete(&self, id: &SessionId) {
-        self.send_later(Msg::Delete(id.clone()));
+        self.send_later([Msg::Delete(id.clone())]);
     }
 
     /// Reads on the calling thread once queued batches landed (or [`SYNC_WAIT`] passed).
@@ -105,9 +107,15 @@ impl HistoryLog {
         self.tail_now(id, max_lines)
     }
 
-    /// What is on disk, without waiting for the writer (a respawn must not hang on a slow disk's queue).
+    /// What is on disk, without waiting for the writer. The read runs on a short thread and is
+    /// abandoned after [`SYNC_WAIT`] (empty): a hung disk must not hold the caller (keltad's connection loop).
     pub fn tail_now(&self, id: &SessionId, max_lines: usize) -> String {
-        tail(&self.dir, id, max_lines)
+        let (tx, rx) = mpsc::channel();
+        let (dir, id) = (self.dir.clone(), id.clone());
+        detach("kelta-history-read", move || {
+            let _ = tx.send(tail(&dir, &id, max_lines));
+        });
+        rx.recv_timeout(SYNC_WAIT).unwrap_or_default()
     }
 
     /// Scans on the calling thread (a long scan must not stall the writer) once queued batches landed.
@@ -118,29 +126,39 @@ impl HistoryLog {
         search(&self.dir, ids, &query.to_lowercase(), limit)
     }
 
-    /// `None` when the queue is full (stalled writer: nothing to wait for) or the wait timed out.
+    /// `None` when the wait timed out (stalled writer).
     fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg) -> Option<T> {
         let (tx, rx) = mpsc::channel();
-        self.tx.try_send(msg(tx)).ok()?;
+        self.send_later([msg(tx)]);
         rx.recv_timeout(SYNC_WAIT).ok()
     }
 
-    /// Never waits: callers serve keystrokes (keltad's connection loop). A full queue hands the
-    /// message to a short-lived thread.
-    fn send_later(&self, msg: Msg) {
-        if let Err(TrySendError::Full(msg)) = self.tx.try_send(msg) {
-            let tx = self.tx.clone();
-            #[allow(clippy::disallowed_methods)] // allowlisted (ARCHITECTURE §9.6)
-            let r = std::thread::Builder::new()
-                .name("kelta-history-send".into())
-                .stack_size(64 * 1024)
-                .spawn(move || {
-                    let _ = tx.send(msg);
+    /// Never waits: callers serve keystrokes (keltad's connection loop). On a full queue the
+    /// rest goes, in order, to a short-lived thread.
+    fn send_later<const N: usize>(&self, msgs: [Msg; N]) {
+        let mut it = msgs.into_iter();
+        while let Some(msg) = it.next() {
+            if let Err(TrySendError::Full(msg)) = self.tx.try_send(msg) {
+                let tx = self.tx.clone();
+                detach("kelta-history-send", move || {
+                    for m in std::iter::once(msg).chain(it) {
+                        if tx.send(m).is_err() {
+                            break;
+                        }
+                    }
                 });
-            if let Err(e) = r {
-                tracing::warn!("history log: request dropped: {e}");
+                return;
             }
         }
+    }
+}
+
+/// Run `f` on a short-lived thread nobody joins.
+fn detach(name: &str, f: impl FnOnce() + Send + 'static) {
+    #[allow(clippy::disallowed_methods)] // allowlisted (ARCHITECTURE §9.6)
+    let r = std::thread::Builder::new().name(name.into()).stack_size(256 * 1024).spawn(f);
+    if let Err(e) = r {
+        tracing::warn!("history log: {name} thread: {e}");
     }
 }
 
@@ -433,7 +451,28 @@ mod tests {
         log.append_sync(&id, "last words\n".into());
         assert_eq!(log.tail(&id, 5), "");
         assert!(log.search(std::slice::from_ref(&id), "x", 5).is_empty());
-        assert!(t.elapsed() < SYNC_WAIT, "{:?}", t.elapsed());
+        // Each call waits SYNC_WAIT at most; none waits for the writer.
+        assert!(t.elapsed() < SYNC_WAIT * 4, "{:?}", t.elapsed());
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)] // test thread standing in for a slow disk
+    fn busy_writer_is_waited_for() {
+        let d = tempfile::tempdir().unwrap();
+        // Full queue, drained only after a pause shorter than SYNC_WAIT.
+        let (tx, rx) = mpsc::sync_channel(QUEUE);
+        let log = HistoryLog { tx, dir: d.path().to_owned() };
+        let id = SessionId::new("s");
+        while log.tx.try_send(Msg::Delete(SessionId::new("other"))).is_ok() {}
+        let w = writer(d.path(), 1 << 20, 1 << 30);
+        std::thread::spawn(move || {
+            std::thread::sleep(SYNC_WAIT / 4);
+            w.run(rx);
+        });
+        log.append_sync(&id, "last words\n".into());
+        assert_eq!(tail(d.path(), &id, 5), "last words");
+        log.append(&id, "x\n".into()).ok();
+        assert_eq!(log.tail(&id, 5), "last words\nx");
     }
 
     #[test]

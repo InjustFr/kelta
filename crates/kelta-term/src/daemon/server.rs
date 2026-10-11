@@ -309,7 +309,7 @@ mod tests {
     use std::io::Read;
     use std::os::unix::fs::PermissionsExt;
 
-    use kelta_proto::term::TerminalLimits;
+    use kelta_proto::term::{KillSignal, TerminalLimits};
 
     use super::*;
 
@@ -425,10 +425,10 @@ mod tests {
         assert!(start.elapsed() < Duration::from_millis(100), "{:?}", start.elapsed());
     }
 
-    /// #299: the client gives up on a spawn keltad still finishes: no session may keep running
-    /// without a handler.
+    /// #299: a hung history disk must not hold up a spawn: the restore read is bounded, the session
+    /// starts without its old output.
     #[test]
-    fn spawn_timeout_leaves_no_running_session() {
+    fn spawn_restores_without_history_when_the_disk_hangs() {
         struct NoEvents;
         impl TerminalEvents for NoEvents {
             fn on_event(&self, _: &SessionId, _: TerminalEvent) {}
@@ -446,27 +446,23 @@ mod tests {
         let c = super::super::DaemonTerminalHost::connect(&sock).unwrap();
         let id = SessionId::new("slow");
         let spec = cat_spec(&id);
-        let e = c
-            .spawn(PtySpawnSpec {
-                id: spec.id,
-                program: spec.program,
-                args: spec.args,
-                cwd: spec.cwd,
-                env: spec.env,
-                cols: spec.cols,
-                rows: spec.rows,
-                scrollback_lines: spec.scrollback_lines,
-                kind: spec.kind,
-                events: Arc::new(NoEvents),
-            })
-            .unwrap_err();
-        assert_eq!(e.code, kelta_proto::error::ErrorCode::Timeout);
+        c.spawn(PtySpawnSpec {
+            id: spec.id,
+            program: spec.program,
+            args: spec.args,
+            cwd: spec.cwd,
+            env: spec.env,
+            cols: spec.cols,
+            rows: spec.rows,
+            scrollback_lines: spec.scrollback_lines,
+            kind: spec.kind,
+            events: Arc::new(NoEvents),
+        })
+        .unwrap();
+        assert!(c.adopt(&id, Arc::new(NoEvents)).unwrap().is_some());
+        // Release the abandoned read.
         std::fs::write(&fifo, "").unwrap();
-        // Adopt is served after the spawn and the kill queued behind it.
-        let deadline = std::time::Instant::now() + Duration::from_secs(20);
-        while c.adopt(&id, Arc::new(NoEvents)).unwrap().is_some() {
-            assert!(std::time::Instant::now() < deadline, "the timed-out spawn left a running session");
-        }
+        c.kill(&id, KillSignal::Kill).unwrap();
     }
 
     /// #262: a client's slow history search must not hold up its other calls.
