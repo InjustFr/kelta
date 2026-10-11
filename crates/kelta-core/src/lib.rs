@@ -192,8 +192,9 @@ pub struct Core {
     pub(crate) oauth_polling: Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>,
     /// Running refines (Tickets T10): their MCP sid → the ticket `get_ticket` returns.
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
-    /// The global `/mcp` holds an HTTP server reference (Claude Code registration, ticket #234).
-    pub(crate) claude_mcp_ref: AtomicBool,
+    /// The global `/mcp` holds an HTTP server reference (Claude Code registration, ticket #234);
+    /// locked for a whole install / remove so concurrent ones take one reference and one token (#294).
+    pub(crate) claude_mcp_ref: tokio::sync::Mutex<bool>,
     /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
     pub(crate) claude_mode: Mutex<Option<kelta_proto::settings::PermissionMode>>,
     /// Startup toast held until `app_ready`: the bridge drops events while no window listens.
@@ -352,7 +353,7 @@ impl Core {
                 oauth: Mutex::default(),
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
-                claude_mcp_ref: AtomicBool::new(false),
+                claude_mcp_ref: tokio::sync::Mutex::new(false),
                 claude_mode: Mutex::new(None),
                 boot_toast: Mutex::new(None),
                 started: AtomicBool::new(false),

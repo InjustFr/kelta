@@ -1,9 +1,7 @@
 //! Kelta's MCP for every Claude Code session (ticket #234): the global `/mcp` registered at user
-//! scope with `claude mcp add`, offered at startup when Claude Code is found, like an IDE's MCP.
+//! scope in Claude Code's config (`mcpServers.kelta`), offered at startup when Claude Code is found, like an IDE's MCP.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use kelta_proto::api::CoreApi;
 use kelta_proto::error::KeltaError;
@@ -47,41 +45,73 @@ fn registration_in(config: &[u8]) -> Option<Registration> {
     Some((url, auth.to_owned()))
 }
 
+/// Set (`Some`) or drop (`None`) `mcpServers.kelta` in a Claude Code config file, keeping the other
+/// keys: written beside it, 0600 (it holds the token), then renamed over it. Not `claude mcp add`:
+/// its argv would show the token to any local user in `ps` (#294).
+fn write_registration(path: &Path, reg: Option<&Registration>) -> Result<(), KeltaError> {
+    // A symlinked config (dotfiles) is updated where it points.
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+    let mut v: serde_json::Value = match std::fs::read(&path) {
+        // Unparsable: refuse rather than clobber Claude Code's settings.
+        Ok(b) => {
+            serde_json::from_slice(&b).map_err(|e| KeltaError::invalid(format!("{}: {e}", path.display())))?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+        Err(e) => return Err(e.into()),
+    };
+    let not_object = || KeltaError::invalid(format!("{}: mcpServers is not an object", path.display()));
+    let servers = v
+        .as_object_mut()
+        .ok_or_else(not_object)?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(not_object)?;
+    match reg {
+        Some((url, auth)) => {
+            let entry = serde_json::json!({"type": "http", "url": url, "headers": {"Authorization": auth}});
+            servers.insert(NAME.to_owned(), entry);
+        }
+        None if servers.remove(NAME).is_none() => return Ok(()),
+        None => {}
+    }
+    let mut tmp = path.clone().into_os_string();
+    tmp.push(format!(".kelta-{}", std::process::id()));
+    let tmp = PathBuf::from(tmp);
+    crate::templates::write_private(&tmp, &serde_json::to_string_pretty(&v)?)?;
+    std::fs::rename(&tmp, &path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })?;
+    Ok(())
+}
+
 impl Core {
     fn claude_bin(&self) -> Option<PathBuf> {
         let bin = self.cfg.effective(None).claude.binary.clone();
         crate::spawn_env::resolve_program(&bin, self.login_env.path(), &std::env::temp_dir()).ok()
     }
 
-    /// `claude mcp <args>` in the login environment; stdout, or an error when it exits non-zero.
-    async fn claude_mcp(&self, bin: &Path, args: &[&str]) -> Result<String, KeltaError> {
-        let home = self.home_dir();
-        let argv = std::iter::once("mcp").chain(args.iter().copied());
-        // one-shot: bounded `claude mcp add|remove` call.
-        let out =
-            crate::ctl::claude_oneshot(bin, argv, &self.login_env.vars, &home, None, Duration::from_secs(30))
-                .await?;
-        if !out.status.success() {
-            let err = String::from_utf8_lossy(if out.stderr.is_empty() { &out.stdout } else { &out.stderr });
-            return Err(KeltaError::upstream(format!("claude mcp {}: {}", args[0], err.trim())));
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    }
-
-    /// The user-scope registration in `$CLAUDE_CONFIG_DIR/.claude.json` (else `~/.claude.json`).
-    async fn claude_mcp_registration(&self) -> Option<Registration> {
+    /// Claude Code's user config: `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json`.
+    fn claude_config(&self) -> PathBuf {
         let dir =
             self.login_env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| self.home_dir());
-        registration_in(&tokio::fs::read(dir.join(".claude.json")).await.ok()?)
+        dir.join(".claude.json")
+    }
+
+    /// The user-scope registration in Claude Code's user config.
+    async fn claude_mcp_registration(&self) -> Option<Registration> {
+        registration_in(&tokio::fs::read(self.claude_config()).await.ok()?)
     }
 
     /// Startup: offer the install when Claude Code is found and `kelta` is not registered; serve an
     /// existing registration (consented to earlier), re-registering it when its port or token changed.
     pub async fn claude_mcp_startup(&self) {
-        let Some(bin) = self.claude_bin() else { return };
+        if self.claude_bin().is_none() {
+            return;
+        }
         match self.claude_mcp_registration().await {
             Some(current) => {
-                if let Err(e) = self.claude_mcp_serve(&bin, Some(&current)).await {
+                if let Err(e) = self.claude_mcp_serve(Some(&current)).await {
                     tracing::warn!(error = %e.message, "kelta MCP registration not updated");
                 }
             }
@@ -103,29 +133,23 @@ impl Core {
 
     /// Open the global `/mcp` and make the user-scope registration point at it. `current` = an
     /// existing registration.
-    async fn claude_mcp_serve(&self, bin: &Path, current: Option<&Registration>) -> Result<(), KeltaError> {
+    async fn claude_mcp_serve(&self, current: Option<&Registration>) -> Result<(), KeltaError> {
+        let mut held = self.claude_mcp_ref.lock().await;
         let token = install_token(current);
         self.server.set_install_token(Some(&token));
-        let port = match self.server.http_port().filter(|_| self.claude_mcp_ref.load(Ordering::SeqCst)) {
+        let port = match self.server.http_port().filter(|_| *held) {
             Some(p) => p,
             None => {
                 let p = self.server.ensure_http_at(current.and_then(|(url, _)| registered_port(url))).await?;
-                self.claude_mcp_ref.store(true, Ordering::SeqCst);
+                *held = true;
                 p
             }
         };
-        let url = format!("http://127.0.0.1:{port}/mcp");
-        let bearer = format!("Bearer {token}");
-        if current.is_some_and(|(u, auth)| *u == url && *auth == bearer) {
+        let reg = (format!("http://127.0.0.1:{port}/mcp"), format!("Bearer {token}"));
+        if current == Some(&reg) {
             return Ok(());
         }
-        let header = format!("Authorization: {bearer}");
-        let _ = self.claude_mcp(bin, &["remove", "--scope", "user", NAME]).await;
-        self.claude_mcp(
-            bin,
-            &["add", "--scope", "user", "--transport", "http", NAME, &url, "--header", &header],
-        )
-        .await?;
+        write_registration(&self.claude_config(), Some(&reg))?;
         tracing::info!(port, "kelta MCP registered in Claude Code (user scope)");
         Ok(())
     }
@@ -136,23 +160,20 @@ impl Core {
         Some(self.claude_mcp_registration().await.is_some())
     }
 
-    /// Install (toast or Settings → Claude): `claude mcp add --scope user`.
+    /// Install (toast or Settings → Claude): registers `kelta` at user scope.
     pub async fn claude_mcp_install(&self) -> Result<(), KeltaError> {
-        let bin = self
-            .claude_bin()
-            .ok_or_else(|| KeltaError::not_found("Claude Code not found in your login PATH"))?;
-        self.claude_mcp_serve(&bin, None).await
+        self.claude_bin().ok_or_else(|| KeltaError::not_found("Claude Code not found in your login PATH"))?;
+        self.claude_mcp_serve(None).await
     }
 
-    /// Remove: `claude mcp remove` (the token goes with the registration), then revoke it and close
-    /// the global `/mcp`. A `dev.kelta`/`kelta-mcp` Keychain item left by builds before #275 is not
-    /// deleted: touching it would prompt.
+    /// Remove: drop the registration (the token goes with it), then revoke it and close the global
+    /// `/mcp`. A `dev.kelta`/`kelta-mcp` Keychain item left by builds before #275 is not deleted:
+    /// touching it would prompt.
     pub async fn claude_mcp_remove(&self) -> Result<(), KeltaError> {
-        if let Some(bin) = self.claude_bin() {
-            self.claude_mcp(&bin, &["remove", "--scope", "user", NAME]).await?;
-        }
+        let mut held = self.claude_mcp_ref.lock().await;
+        write_registration(&self.claude_config(), None)?;
         self.server.set_install_token(None);
-        if self.claude_mcp_ref.swap(false, Ordering::SeqCst) {
+        if std::mem::take(&mut *held) {
             self.server.release_http();
         }
         Ok(())
@@ -188,5 +209,40 @@ mod tests {
         assert_eq!(registration_in(br#"{"mcpServers":{"other":{"url":"x"}}}"#), None);
         assert_eq!(registration_in(b"{}"), None);
         assert_eq!(registration_in(b"not json"), None);
+    }
+
+    #[test]
+    fn registration_written_to_the_config_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("dotfiles.json");
+        std::fs::write(&real, r#"{"numStartups":3,"mcpServers":{"other":{"type":"stdio"}}}"#).unwrap();
+        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let link = tmp.path().join(".claude.json");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let reg = ("http://127.0.0.1:45678/mcp".to_owned(), "Bearer t".to_owned());
+
+        write_registration(&link, Some(&reg)).unwrap();
+        assert_eq!(registration_in(&std::fs::read(&link).unwrap()), Some(reg));
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o600);
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&real).unwrap()).unwrap();
+        assert_eq!(v["numStartups"], 3);
+        assert_eq!(v["mcpServers"]["other"]["type"], "stdio");
+
+        write_registration(&link, None).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&real).unwrap()).unwrap();
+        assert_eq!(v, serde_json::json!({"numStartups":3,"mcpServers":{"other":{"type":"stdio"}}}));
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "no temp file left");
+
+        // Unparsable: left as it is. Missing: created; removing from a missing file writes nothing.
+        std::fs::write(&real, "not json").unwrap();
+        assert!(write_registration(&link, None).is_err());
+        assert_eq!(std::fs::read(&real).unwrap(), b"not json");
+        let fresh = tmp.path().join("cfg/.claude.json");
+        write_registration(&fresh, None).unwrap();
+        assert!(!fresh.exists());
+        write_registration(&fresh, Some(&("u".into(), "a".into()))).unwrap();
+        assert_eq!(registration_in(&std::fs::read(&fresh).unwrap()), Some(("u".into(), "a".into())));
     }
 }

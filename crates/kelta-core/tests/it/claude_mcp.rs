@@ -1,5 +1,6 @@
-//! Kelta's MCP in Claude Code: startup offer, install / remove, silent re-registration, with a fake
-//! `claude` that keeps its user-scope registration in `~/.claude.json` of a fake home.
+//! Kelta's MCP in Claude Code: startup offer, install / remove, silent re-registration in
+//! `~/.claude.json` of a fake home, with a fake `claude` that logs any call (none is expected: the
+//! token must not reach an argv, #294).
 
 use std::path::Path;
 
@@ -11,22 +12,9 @@ fn config(root: &Path) -> std::path::PathBuf {
     root.join("home/.claude.json")
 }
 
-/// `claude mcp add|remove kelta`, logging each call to `claude.log`.
+/// A `claude` that logs each call to `claude.log`.
 fn fake_claude(root: &Path) {
-    let reg = config(root);
-    let log = root.join("claude.log");
-    let script = format!(
-        r#"#!/bin/sh
-echo "$*" >> '{log}'
-case "$2" in
-  remove) [ -f '{reg}' ] && rm '{reg}' && exit 0; exit 1 ;;
-  add) mkdir -p "$(dirname '{reg}')"; h="${{10}}"
-    printf '{{"mcpServers":{{"kelta":{{"type":"http","url":"%s","headers":{{"Authorization":"%s"}}}}}}}}' "$8" "${{h#Authorization: }}" > '{reg}' ;;
-esac
-"#,
-        log = log.display(),
-        reg = reg.display()
-    );
+    let script = format!("#!/bin/sh\necho \"$*\" >> '{}'\n", root.join("claude.log").display());
     // Written by a child `sh` (see `bin_dir`): no write fd of ours leaks into a concurrent fork.
     let ok = std::process::Command::new("sh")
         .args(["-c", "printf '%s' \"$1\" > \"$2\" && chmod 755 \"$2\"", "sh", &script])
@@ -34,6 +22,14 @@ esac
         .status()
         .unwrap();
     assert!(ok.success());
+}
+
+/// The registered `(url, Authorization)`.
+fn registered(root: &Path) -> (String, String) {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(config(root)).unwrap()).unwrap();
+    let e = &v["mcpServers"]["kelta"];
+    assert_eq!(e["type"], "http");
+    (e["url"].as_str().unwrap().to_owned(), e["headers"]["Authorization"].as_str().unwrap().to_owned())
 }
 
 fn log(root: &Path) -> Vec<String> {
@@ -71,14 +67,13 @@ async fn offer_install_and_silent_reregistration() {
     h.core.claude_mcp_startup().await;
     assert_eq!(offers(&h), 0);
 
-    // Install: user scope, global endpoint, install token.
+    // Install: user scope, global endpoint, install token, written without running `claude`.
     h.core.claude_mcp_install().await.unwrap();
-    let add = log(root).into_iter().find(|l| l.starts_with("mcp add")).unwrap();
     let port = h.core.server().http_port().unwrap();
-    let prefix = format!(
-        "mcp add --scope user --transport http kelta http://127.0.0.1:{port}/mcp --header Authorization: Bearer "
-    );
-    let token = add.strip_prefix(&prefix).unwrap_or_else(|| panic!("{add}"));
+    let (url, auth) = registered(root);
+    assert_eq!(url, format!("http://127.0.0.1:{port}/mcp"));
+    let token = auth.strip_prefix("Bearer ").unwrap_or_else(|| panic!("{auth}"));
+    assert!(token.len() >= 32);
     assert_eq!(h.core.claude_mcp_status().await, Some(true));
     let ping = |tok: &str| {
         reqwest::Client::builder()
@@ -93,32 +88,31 @@ async fn offer_install_and_silent_reregistration() {
     assert_eq!(ping(token).await.unwrap().status(), 200);
     assert_eq!(ping("other").await.unwrap().status(), 401);
 
-    // Up to date: read from the config file, `claude` never runs.
-    let calls = log(root).len();
+    // Up to date: left as it is.
+    let before = std::fs::read(config(root)).unwrap();
     h.core.claude_mcp_startup().await;
-    assert!(log(root)[calls..].is_empty(), "{:?}", &log(root)[calls..]);
+    assert_eq!(std::fs::read(config(root)).unwrap(), before);
 
     // Stale port: updated without asking, keeping the token Claude Code holds.
     std::fs::write(
         config(root),
-        r#"{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:1/mcp","headers":{"Authorization":"Bearer old"}}}}"#,
+        r#"{"numStartups":3,"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:1/mcp","headers":{"Authorization":"Bearer old"}}}}"#,
     )
     .unwrap();
-    let calls = log(root).len();
     h.cfg.update(|s| s.claude.mcp_offer = true);
     h.core.claude_mcp_startup().await;
     assert_eq!(offers(&h), 0);
-    let tail = &log(root)[calls..];
-    assert_eq!(tail, ["mcp remove --scope user kelta".to_owned(), format!("{prefix}old")]);
+    assert_eq!(registered(root), (url.clone(), "Bearer old".to_owned()));
     assert_eq!(ping("old").await.unwrap().status(), 200);
 
     // The token lives in the registration only: no Keychain access at all (#275).
     assert!(h.secrets.resolved().is_empty(), "{:?}", h.secrets.resolved());
     assert!(h.secrets.invalidated().is_empty());
 
-    // Remove: unregistered, endpoint closed.
+    // Remove: unregistered (other keys kept), endpoint closed.
     h.core.claude_mcp_remove().await.unwrap();
-    assert_eq!(log(root).last().unwrap(), "mcp remove --scope user kelta");
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(config(root)).unwrap()).unwrap();
+    assert_eq!(v, serde_json::json!({"mcpServers": {}, "numStartups": 3}));
     assert_eq!(h.core.claude_mcp_status().await, Some(false));
     assert_eq!(h.core.server().http_port(), None);
     // Nothing written to, read from or deleted in the Keychain.
@@ -126,6 +120,28 @@ async fn offer_install_and_silent_reregistration() {
     let r = kelta_proto::secret::SecretRef::new("keyring:kelta-mcp");
     let ctx = kelta_proto::secret::SecretCtx::default();
     assert!(kelta_proto::api::SecretResolver::resolve(&*h.secrets, &r, &ctx).await.is_err());
+    // The token never reached an argv: `claude` did not run.
+    assert!(log(root).is_empty(), "{:?}", log(root));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_installs_then_remove_close_the_endpoint() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let h = start(root, Settings::defaults(), vec![]);
+    fake_claude(root);
+    // Toast Install and the Settings button at once: one server reference, one token.
+    let (a, b) = (h.core.clone(), h.core.clone());
+    let (ra, rb) = tokio::join!(
+        tokio::spawn(async move { a.claude_mcp_install().await }),
+        tokio::spawn(async move { b.claude_mcp_install().await })
+    );
+    ra.unwrap().unwrap();
+    rb.unwrap().unwrap();
+    assert!(h.core.server().http_port().is_some());
+    h.core.claude_mcp_remove().await.unwrap();
+    assert_eq!(h.core.server().http_port(), None);
+    assert_eq!(h.core.claude_mcp_status().await, Some(false));
 }
 
 #[tokio::test]
