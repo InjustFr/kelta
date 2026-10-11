@@ -1273,13 +1273,19 @@ impl Core {
     pub(crate) fn apply_decision(
         &self,
         id: &SessionId,
-        d: Decision,
+        mut d: Decision,
         source: StatusSource,
         preview: Option<String>,
     ) {
         let out = {
             let mut s = self.sessions.lock();
             let Some(e) = s.get_mut(id) else { return };
+            // An open `ask` question keeps the run needing input through Stop/Done and mark_seen (#356).
+            if e.info.claude.as_ref().is_some_and(|c| c.question.is_some())
+                && !matches!(d.status, SessionStatus::Error | SessionStatus::Exited)
+            {
+                d.attention = Attention::NeedsInput;
+            }
             let prev = e.info.status;
             let was_parkable = crate::park::parkable(&e.info);
             let mut changed =

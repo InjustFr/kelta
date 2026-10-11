@@ -335,6 +335,18 @@ async fn ask_waits_on_the_session_until_typed_input() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn ask_survives_the_stop_hook() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::Working)).await.unwrap();
+    h.core.session_ask(&s.id, "Which one?".into(), vec!["A".into()], None).unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::Done)).await.unwrap();
+    let info = h.core.session_get(&s.id).unwrap();
+    assert_eq!((info.status, info.attention), (S::Done, A::NeedsInput));
+}
+
+#[tokio::test(start_paused = true)]
 async fn hooks_inactive_falls_back_to_heuristics() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
