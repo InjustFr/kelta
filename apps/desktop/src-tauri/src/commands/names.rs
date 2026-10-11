@@ -69,6 +69,8 @@ pub const COMMANDS: &[&str] = &[
     "session_link",
     "session_text_tail",
     "session_history_search",
+    "claude_runs_list",
+    "claude_run_tail",
     "terminal_set_palette",
     // tickets
     "tracker_list",

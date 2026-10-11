@@ -2,6 +2,7 @@
 import type { AccountId } from "./AccountId";
 import type { AccountStatus } from "./AccountStatus";
 import type { Attention } from "./Attention";
+import type { ClaudeRun } from "./ClaudeRun";
 import type { CtlCommand } from "./CtlCommand";
 import type { Layer } from "./Layer";
 import type { Layout } from "./Layout";
@@ -20,4 +21,4 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * The single UI event channel (`events_subscribe`). Serde tag `type`.
  */
-export type UiEvent = { "type": "session.updated", session: SessionInfo, } | { "type": "session.removed", id: SessionId, } | { "type": "attention.changed", project_id: ProjectId, level: Attention, needs_input_count: number, total_needs_input: number, } | { "type": "project.updated", project: ProjectInfo, } | { "type": "project.removed", id: ProjectId, } | { "type": "layout.changed", project_id: ProjectId, layout: Layout, } | { "type": "tickets.changed", scope: Scope, } | { "type": "reviews.changed", scope: Scope, new_keys: Array<ReviewRef>, } | { "type": "work.updated", work: WorkItem, } | { "type": "settings.changed", layers: Array<Layer>, paths: Array<string>, requires_restart: Array<string>, } | { "type": "account.status", account_id: AccountId, status: AccountStatus, detail: string | null, } | { "type": "toast", toast: Toast, } | { "type": "plugin.event", instance_id: ScreenInstanceId, name: string, payload: JsonValue, } | { "type": "ctl.command", cmd: CtlCommand, } | { "type": "ui.open", request: OpenPaneRequest, project_id: ProjectId, };
+export type UiEvent = { "type": "session.updated", session: SessionInfo, } | { "type": "session.removed", id: SessionId, } | { "type": "attention.changed", project_id: ProjectId, level: Attention, needs_input_count: number, total_needs_input: number, } | { "type": "project.updated", project: ProjectInfo, } | { "type": "project.removed", id: ProjectId, } | { "type": "layout.changed", project_id: ProjectId, layout: Layout, } | { "type": "tickets.changed", scope: Scope, } | { "type": "reviews.changed", scope: Scope, new_keys: Array<ReviewRef>, } | { "type": "work.updated", work: WorkItem, } | { "type": "settings.changed", layers: Array<Layer>, paths: Array<string>, requires_restart: Array<string>, } | { "type": "account.status", account_id: AccountId, status: AccountStatus, detail: string | null, } | { "type": "toast", toast: Toast, } | { "type": "plugin.event", instance_id: ScreenInstanceId, name: string, payload: JsonValue, } | { "type": "ctl.command", cmd: CtlCommand, } | { "type": "ui.open", request: OpenPaneRequest, project_id: ProjectId, } | { "type": "workflow.updated", run: ClaudeRun, };

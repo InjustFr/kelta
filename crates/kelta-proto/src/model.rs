@@ -821,6 +821,49 @@ pub enum WorkflowSource {
     Home,
 }
 
+/// A Claude Code `Workflow` run inside a Kelta session (#272), read from Claude's undocumented
+/// on-disk files under `~/.claude/projects/<slug>/<claude session>/`; every field is best effort.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClaudeRun {
+    /// `wf_<id>`.
+    pub run_id: String,
+    pub session_id: SessionId,
+    /// Workflow name (`kelta-ticket-pass`), from the final record or the script file name.
+    pub name: Option<String>,
+    /// `running` until the final record exists, then its `status` (`completed`, `killed`, ...).
+    pub status: String,
+    /// In first-seen order; agents in spawn order.
+    pub phases: Vec<ClaudeRunPhase>,
+    pub duration_ms: Option<u64>,
+    pub total_tokens: Option<u64>,
+    pub total_tool_calls: Option<u64>,
+    /// The run's result (pretty JSON unless a string), truncated.
+    pub result: Option<String>,
+    pub logs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ClaudeRunPhase {
+    pub title: String,
+    pub agents: Vec<ClaudeRunAgent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ClaudeRunAgent {
+    pub id: String,
+    /// The agent's label (`implement-#202`).
+    pub label: String,
+    pub done: bool,
+}
+
+/// One line of an agent transcript's tail (`claude_run_tail`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TranscriptLine {
+    /// `text` (assistant prose), `tool` (a tool call) or `result` (a tool result; `error` when failed).
+    pub kind: String,
+    pub text: String,
+}
+
 /// `next_up_list`: the list and snoozes, plus the tickets I have seen (`account:key`, the `New` badge).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct NextUp {

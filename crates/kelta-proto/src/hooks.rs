@@ -45,6 +45,9 @@ pub mod names {
     pub const STOP: &str = "Stop";
     pub const STOP_FAILURE: &str = "StopFailure";
     pub const SESSION_END: &str = "SessionEnd";
+    /// Fire for `Workflow` agents too (#272): Kelta reads the run's files on them.
+    pub const SUBAGENT_START: &str = "SubagentStart";
+    pub const SUBAGENT_STOP: &str = "SubagentStop";
     /// Not a hook: `kelta-ctl statusline` relays Claude's statusline JSON under this name.
     pub const STATUS: &str = "Status";
 
@@ -57,13 +60,15 @@ pub mod names {
         STOP,
         STOP_FAILURE,
         SESSION_END,
+        SUBAGENT_START,
+        SUBAGENT_STOP,
     ];
 
     /// Notification matcher Kelta installs.
     pub const NOTIFICATION_MATCHER: &str =
         "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input";
-    /// PostToolUse matcher Kelta installs.
-    pub const EDIT_TOOLS_MATCHER: &str = "Edit|Write|MultiEdit";
+    /// PostToolUse matcher Kelta installs: edited files, and `Workflow` launches (#272).
+    pub const POST_TOOL_USE_MATCHER: &str = "Edit|Write|MultiEdit|Workflow";
 }
 
 /// The `--settings` document Kelta generates per Claude session (PLUGINS §8). `hook_command` is
@@ -100,7 +105,7 @@ pub fn claude_settings(
         };
         let group = match *event {
             names::NOTIFICATION => json!({ "matcher": names::NOTIFICATION_MATCHER, "hooks": [handler] }),
-            names::POST_TOOL_USE => json!({ "matcher": names::EDIT_TOOLS_MATCHER, "hooks": [handler] }),
+            names::POST_TOOL_USE => json!({ "matcher": names::POST_TOOL_USE_MATCHER, "hooks": [handler] }),
             _ => json!({ "hooks": [handler] }),
         };
         hooks.insert((*event).to_owned(), Value::Array(vec![group]));

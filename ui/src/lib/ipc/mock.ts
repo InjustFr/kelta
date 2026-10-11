@@ -7,6 +7,7 @@
 
 import * as samples from '$lib/gen/fixtures';
 import type {
+  ClaudeRun,
   Column,
   EffectiveSettings,
   FinishMergedReport,
@@ -123,6 +124,8 @@ export interface MockState {
   nextUp: NextUp;
   /** Saved Claude workflows (`workflows_list`, #233). */
   workflows: WorkflowInfo[];
+  /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
+  claudeRuns: ClaudeRun[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
 }
@@ -244,6 +247,7 @@ function freshState(): MockState {
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
+    claudeRuns: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
@@ -896,6 +900,13 @@ export function createMockTransport(options: MockOptions = {}): {
         .filter((s) => s.project_id === project_id && (!session_id || s.id === session_id))
         .map((s) => ({ session_id: s.id, line: `${s.name}: ${query}` }))
         .slice(0, limit),
+    claude_runs_list: ({ id }) => clone(state.claudeRuns.filter((r) => r.session_id === id)),
+    // Any run and agent: e2e specs emit runs the state does not hold.
+    claude_run_tail: ({ agent_id }) => [
+      { kind: 'text', text: `${agent_id}: reading the code` },
+      { kind: 'tool', text: 'Bash: Run the tests' },
+      { kind: 'result', text: 'ok. 12 passed' },
+    ],
     terminal_set_palette: () => null,
     // ---- tickets ---------------------------------------------------------------------------
     tracker_list: ({ scope: asked, source_id, view_id: askedView, cursor, who }) => {
@@ -1104,6 +1115,21 @@ export function createMockTransport(options: MockOptions = {}): {
       };
       state.work.push(item);
       emit({ type: 'work.updated', work: clone(item) });
+      // What the hooks then report: the run, its first agent spawned (#272).
+      const wf: ClaudeRun = {
+        run_id: `wf_${s.id.slice(0, 8)}-000`,
+        session_id: s.id,
+        name: workflow,
+        status: 'running',
+        phases: [{ title: 'Pick', agents: [{ id: `a${s.id.slice(0, 8)}`, label: 'pick', done: false }] }],
+        duration_ms: null,
+        total_tokens: null,
+        total_tool_calls: null,
+        result: null,
+        logs: [],
+      };
+      state.claudeRuns.push(wf);
+      emit({ type: 'workflow.updated', run: clone(wf) });
       const content = { kind: 'terminal' as const, session_id: s.id };
       const req = {
         content,

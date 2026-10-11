@@ -617,6 +617,30 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
                 project_id: ProjectId::new("shop"),
             },
         ),
+        (
+            "ui_event_workflow_updated",
+            UiEvent::WorkflowUpdated {
+                run: ClaudeRun {
+                    run_id: "wf_00c72039-31f".into(),
+                    session_id: SessionId::new(SID),
+                    name: Some("kelta-ticket-pass".into()),
+                    status: "running".into(),
+                    phases: vec![ClaudeRunPhase {
+                        title: "Implement".into(),
+                        agents: vec![ClaudeRunAgent {
+                            id: "aee124594e7f7c00b".into(),
+                            label: "implement-#222".into(),
+                            done: false,
+                        }],
+                    }],
+                    duration_ms: None,
+                    total_tokens: None,
+                    total_tool_calls: None,
+                    result: None,
+                    logs: vec!["Picked #222".into()],
+                },
+            },
+        ),
     ]
 }
 

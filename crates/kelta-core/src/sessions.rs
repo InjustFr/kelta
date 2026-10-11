@@ -83,6 +83,8 @@ pub struct SessionEntry {
     /// Last delivered OSC 9/777 notification (rate limit).
     pub last_program_notify: Option<Instant>,
     pub timers: Arc<SessionTimers>,
+    /// Claude `Workflow` runs seen in its hooks (#272).
+    pub claude_runs: crate::claude_runs::Runs,
 }
 
 impl SessionEntry {
@@ -327,6 +329,7 @@ impl Core {
                 heuristic: false,
                 last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
+                claude_runs: Default::default(),
             };
             if let Ok(r) = entry.row("dormant") {
                 self.store.exec("session_dormant", move |c| q::session_put(c, &r));
@@ -764,6 +767,7 @@ impl Core {
                 heuristic: false,
                 last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
+                claude_runs: Default::default(),
             };
             s.insert(id.clone(), entry)
         };

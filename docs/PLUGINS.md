@@ -458,11 +458,13 @@ Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600
   "PermissionRequest": [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
   "Notification":      [ { "matcher": "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input",
                            "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
-  "PostToolUse":       [ { "matcher": "Edit|Write|MultiEdit",
+  "PostToolUse":       [ { "matcher": "Edit|Write|MultiEdit|Workflow",
                            "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
   "Stop":              [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
   "StopFailure":       [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
-  "SessionEnd":        [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "timeout": 5 } ] } ]
+  "SessionEnd":        [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "timeout": 5 } ] } ],
+  "SubagentStart":     [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ],
+  "SubagentStop":      [ { "hooks": [ { "type": "command", "command": "'<data>/bin/current/kelta-ctl' hook", "async": true, "timeout": 5 } ] } ]
 },
   "statusLine": { "type": "command", "command": "'<data>/bin/current/kelta-ctl' statusline" } }
 ```

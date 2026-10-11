@@ -1,0 +1,4 @@
+{"type":"launched"}
+{"type":"started","key":"v2:p","agentId":"b1","label":"pick","phase":"Pick"}
+{"type":"result","key":"v2:p","agentId":"b1","result":{"ticket":7}}
+{"type":"started","key":"v2:i","agentId":"b2","label":"implement-#7","phase":"Implement"}

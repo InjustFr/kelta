@@ -523,6 +523,8 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `session_link` | `{id, work_item_id?: WorkItemId, ticket?: TicketRef}` | `SessionInfo` | |
 | `session_text_tail` | `{id, max_lines}` | `String` | Dormant: on-disk history log first (§9.6), else the tail stored at quit |
 | `session_history_search` | `{project_id, session_id?, query, limit}` | `Vec<HistoryHit{session_id, line}>` | on-disk history log (§9.6) of one session or every session of the project; case-insensitive substring |
+| `claude_runs_list` | `{id}` | `Vec<ClaudeRun>` | the session's Claude `Workflow` runs as core last read them (§7.7) |
+| `claude_run_tail` | `{id, run_id, agent_id}` | `Vec<TranscriptLine{kind, text}>` | last 40 lines (prose, tool calls, results) of one agent's transcript, read from its last 256 KiB |
 | `terminal_set_palette` | `{palette: TerminalPalette}` | `()` (pushed on theme change) | |
 | **tickets** | | | `commands/tracker.rs` (L3) |
 | `tracker_list` | `{scope, source_id?, view_id?, who?: Who, cursor?: Cursor, refresh: bool}` (`source_id`/`view_id` are the pane's raw picks, resolved once in core: `TicketPage.scope`/`view_id` say what the page lists and the UI renders that; `who` overrides `view.who` and has its own cache key; no `view_id` = union of the project's views, deduped by account + key) | `TicketPage{items: Vec<TicketItem{ticket, project_ids, view_ids, work_item_id?, prs: Vec<PrLink>, caps: TrackerCaps}>, next: Option<Cursor>, stale: bool, errors: Vec<AccountError>, people: Vec<Person>, scope: Scope, view_id?}` (`people`: who the page, the scope's cached Team list and the cached review lists mention, identities merged) | |
@@ -628,6 +630,7 @@ type UiEvent =
  | {type:'plugin.event', instance_id: ScreenInstanceId, name: string, payload: unknown}   // relayed bus events granted to a screen
  | {type:'ctl.command', cmd: CtlCommand}                                                    // toggle, palette, focus-project…
  | {type:'ui.open', request: OpenPaneRequest, project_id: ProjectId}                       // backend asks UI to open a pane
+ | {type:'workflow.updated', run: ClaudeRun}                                                // a session's Claude Workflow run changed (§7.7)
 ```
 
 ### 6.3 Internal bus (`BusEvent`) — catalogue in PLUGINS.md §6
@@ -702,8 +705,17 @@ exit: waitpid (WNOHANG loop + blocking wait), emit Exited, close fds
 | StopFailure | Error | Error |
 | SessionEnd / PTY exit | Exited | — |
 | PostToolUse `Edit\|Write\|MultiEdit` | unchanged (`StatusChange.status = Unknown`); `file_edited = tool_input.file_path` → bus `claude.file_edited` | — |
+| PostToolUse `Workflow`, SubagentStart, SubagentStop | unchanged; feed the workflow view (§7.7) | — |
 
 **Hooks-inactive fallback:** no SessionStart within 10 s of spawn (one-shot) → `hooks_active=false`, status source `Heuristic`: output → Working; BEL / OSC 9 / OSC 777 → NeedsInput; 3 s quiet after output (one-shot armed only by output) → Done. Pane header shows "status hooks inactive · Fix" → Diagnostics.
+
+### 7.7 Claude workflow runs (#272, `kelta-core::claude_runs`)
+
+A Claude Code `Workflow` run inside a Kelta session is read from Claude's own files (undocumented, observed with Claude Code in 2026-10) under the session dir, the hook's `transcript_path` minus `.jsonl` (`~/.claude/projects/<slug>/<uuid>/`): `workflows/scripts/<name>-<run>.js` (written at launch), `subagents/workflows/<run>/journal.jsonl` (`{type: started, agentId, label, phase}` and `{type: result, agentId}` per agent), `subagents/workflows/<run>/agent-<id>.meta.json` (`description`, `workflowPhase`), `agent-<id>.jsonl` (the agent transcript) and `workflows/<run>.json` (final record: `workflowName`, `status`, `phases`, `durationMs`, `totalTokens`, `totalToolCalls`, `result`, `logs`; written only when the run ends).
+
+Hooks drive it, no watcher: SubagentStart / SubagentStop fire for workflow agents (checked 2026-10-11), so Kelta registers them, and the PostToolUse matcher includes `Workflow`. `CoreApi::session_claude_runs_hook` gets every hook of the session: the `Workflow` PostToolUse names a new run (the first `wf_…` in `tool_response`); a Subagent hook names its agent's run (`agent_transcript_path`'s directory, else the run dir holding `agent-<agent_id>.*`), and SubagentStop marks the agent done before the journal does. Each hook then re-reads every unfinished run of the session (the final record lands after the last agent stops, before Claude's next turn and its hooks) and emits `workflow.updated` when the `ClaudeRun` changed. A run is `running` until its final record exists, then takes its `status` (`completed`, `killed`, …). Phases are the final record's titles, then the agents' phases in first-seen order (`Other` without one); agents come from the journal, then the metas it lacks. Every field is optional, unparsable lines and files are skipped, ids that reach a path are checked (`[A-Za-z0-9_-]`, ≤ 64). Runs live in memory per session (`SessionEntry::claude_runs`), so a Kelta restart forgets them; sessions Kelta did not start are not seen.
+
+UI: the context bar shows `⚙ <workflow> · <phase with a running agent>` (or the final status) for the focused session's latest run; it opens the `claude_runs` sheet: the work items the session claimed (ticket, branch, worktree, PR), then each run with its phases and agents (✓ done, ● running, ■ stopped in a finished run), totals, logs and result. Selecting an agent reads its transcript tail (`claude_run_tail`), again on each update of its run; no polling, so a long agent's tail moves only when a hook updates the run.
 
 ---
 
