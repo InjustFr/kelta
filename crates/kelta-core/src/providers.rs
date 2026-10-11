@@ -18,6 +18,9 @@ pub const IDLE_DROP: Duration = Duration::from_secs(30 * 60);
 
 struct Entry {
     cfg: AccountConfig,
+    /// One per account: the tracker and code host share its token, so they share its quota, rate-limit
+    /// block, request permits and ETag cache.
+    ctx: HttpCtx,
     tracker: Option<Arc<dyn Tracker>>,
     code_host: Option<Arc<dyn CodeHost>>,
     last_used: Instant,
@@ -46,6 +49,7 @@ impl ProviderRegistry {
     }
 
     fn entry<'a>(
+        http: &HttpClient,
         map: &'a mut HashMap<AccountId, Entry>,
         id: &AccountId,
         cfg: &AccountConfig,
@@ -57,6 +61,7 @@ impl ProviderRegistry {
         }
         let e = map.entry(id.clone()).or_insert_with(|| Entry {
             cfg: cfg.clone(),
+            ctx: HttpCtx::new(http.clone(), id.clone(), HttpPolicy::default()),
             tracker: None,
             code_host: None,
             last_used: now,
@@ -81,12 +86,11 @@ impl ProviderRegistry {
         let now = Instant::now();
         let mut map = self.entries.lock();
         Self::sweep(&mut map, now);
-        let e = Self::entry(&mut map, id, cfg, now);
+        let e = Self::entry(&self.http, &mut map, id, cfg, now);
         if let Some(t) = &e.tracker {
             return Ok(t.clone());
         }
-        let ctx = HttpCtx::new(self.http.clone(), id.clone(), HttpPolicy::default());
-        let t = self.trackers.tracker(cfg, ctx, self.secrets.clone())?;
+        let t = self.trackers.tracker(cfg, e.ctx.clone(), self.secrets.clone())?;
         e.tracker = Some(t.clone());
         Ok(t)
     }
@@ -103,12 +107,11 @@ impl ProviderRegistry {
         let now = Instant::now();
         let mut map = self.entries.lock();
         Self::sweep(&mut map, now);
-        let e = Self::entry(&mut map, id, cfg, now);
+        let e = Self::entry(&self.http, &mut map, id, cfg, now);
         if let Some(c) = &e.code_host {
             return Ok(c.clone());
         }
-        let ctx = HttpCtx::new(self.http.clone(), id.clone(), HttpPolicy::default());
-        let c = self.code_hosts.code_host(cfg, ctx, self.secrets.clone())?;
+        let c = self.code_hosts.code_host(cfg, e.ctx.clone(), self.secrets.clone())?;
         e.code_host = Some(c.clone());
         Ok(c)
     }

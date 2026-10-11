@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 use crate::common::{self, COMMENT_LIMIT, columns_from_binding, idstr, last_n, s, split_repo_number};
-use crate::github::{date_of, labels_rank, today};
+use crate::github::{date_of, labels_rank};
 
 const PER_PAGE: u32 = 50;
 
@@ -103,7 +103,7 @@ impl GiteaIssues {
                 id: m.get("id").and_then(idstr)?,
                 name: s(m, "title")?.to_owned(),
                 active: s(m, "state") != Some("closed")
-                    && milestone_due.as_deref().is_none_or(|d| d >= today().as_str()),
+                    && milestone_due.as_deref().is_none_or(|d| d >= common::today().as_str()),
                 ends_at: milestone_due.clone(),
             })
         });

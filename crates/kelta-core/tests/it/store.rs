@@ -293,3 +293,46 @@ async fn trigger_log_is_capped() {
     assert_eq!(all.len(), 1000);
     assert_eq!(all[0].trigger_id, "t1004");
 }
+
+#[tokio::test]
+async fn startup_prunes_old_cache_rows_and_seen_reviews() {
+    use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let now = kelta_proto::now_rfc3339();
+    let cache = |key: &str, at: &str| ProviderCacheRow {
+        key: key.into(),
+        etag: None,
+        body_json: "[]".into(),
+        fetched_at: at.into(),
+    };
+    let seen = |number: u64, at: &str| SeenReviewRow {
+        account: "gh".into(),
+        repo: "acme/shop".into(),
+        number,
+        head_sha: "sha".into(),
+        first_seen: at.into(),
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        let rows = [cache("old", "2020-01-01T00:00:00Z"), cache("fresh", &now)];
+        let seens = [seen(1, "2020-01-01T00:00:00Z"), seen(2, &now)];
+        s.call(move |c| {
+            for r in &rows {
+                q::cache_put(c, r)?;
+            }
+            for r in &seens {
+                q::seen_review_put(c, r)?;
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
+    let s = Store::open(&db).unwrap();
+    assert!(s.call(|c| q::cache_get(c, "old")).await.unwrap().is_none());
+    assert!(s.call(|c| q::cache_get(c, "fresh")).await.unwrap().is_some());
+    let left: Vec<u64> =
+        s.call(|c| q::seen_reviews(c, "gh")).await.unwrap().iter().map(|r| r.number).collect();
+    assert_eq!(left, [2]);
+}

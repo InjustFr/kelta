@@ -64,6 +64,9 @@ impl Store {
                 let opened = open().and_then(|mut c| {
                     configure(&c)?;
                     migrations::migrate(&mut c)?;
+                    if let Err(e) = q::prune(&c) {
+                        tracing::warn!(error = %e, "cannot prune the provider cache and seen reviews");
+                    }
                     Ok(c)
                 });
                 let mut conn = match opened {
@@ -453,6 +456,17 @@ pub mod q {
     }
 
     // ---- provider_cache ------------------------------------------------------------------------
+
+    /// Startup cleanup of rows nothing reads any more: cache entries not refreshed for 30 days (gone
+    /// views and tickets) and seen reviews first seen 90 days ago. A pruned PR still open is re-seen
+    /// silently: the first poll of a process never notifies.
+    pub fn prune(c: &Connection) -> R<()> {
+        c.execute_batch(
+            "DELETE FROM provider_cache WHERE julianday(fetched_at) < julianday('now', '-30 days');
+             DELETE FROM seen_reviews WHERE julianday(first_seen) < julianday('now', '-90 days');",
+        )
+        .map_err(db_err)
+    }
 
     pub fn cache_get(c: &Connection, key: &str) -> R<Option<ProviderCacheRow>> {
         c.query_row(
