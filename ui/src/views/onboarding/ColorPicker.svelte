@@ -7,9 +7,11 @@
   interface Props {
     value: string | null;
     onchange: (color: string | null) => void;
+    /** The group's name, when a form holds several pickers. */
+    label?: string;
   }
 
-  let { value, onchange }: Props = $props();
+  let { value, onchange, label }: Props = $props();
 
   const HEX = /^#[0-9a-f]{6}$/i;
   const slots = Object.keys(SLOTS) as Slot[];
@@ -18,7 +20,7 @@
   const custom = $derived(parsed && 'hex' in parsed ? parsed.hex : '');
 </script>
 
-<div class="colors" role="group" aria-label={t('Colour')}>
+<div class="colors" role="group" aria-label={label ?? t('Colour')}>
   {#each slots as s (s)}
     <button
       type="button"
