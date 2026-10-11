@@ -13,7 +13,12 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
-  let { layer }: SettingsSectionProps = $props();
+  import SettingsCard from '../../settings/layout/SettingsCard.svelte';
+  import SettingsGroup from '../../settings/layout/SettingsGroup.svelte';
+  import SectionForm from '../../settings/SectionForm.svelte';
+
+  let props: SettingsSectionProps = $props();
+  const layer = $derived(props.layer);
 
   let removing = $state<PluginInfo | null>(null);
 
@@ -39,61 +44,61 @@
   }
 </script>
 
-<section data-layer={layer} class="plugins">
-  <header>
-    <h2>Plugins</h2>
-    <Button icon="plus" onclick={() => ui.openSheet('plugin_install')}>Install plugin…</Button>
-  </header>
-
-  {#if plugins.plugins.error && !plugins.plugins.data}
-    <ErrorState error={plugins.plugins.error} onretry={() => plugins.load()} />
-  {:else if !plugins.plugins.data}
-    <Spinner />
-  {:else if plugins.plugins.data.length === 0}
-    <EmptyState
-      icon="puzzle"
-      title="No plugins installed"
-      body="Install one from a directory, a git URL or a tarball."
-    />
-  {:else}
-    <ul>
-      {#each plugins.plugins.data as p (p.id)}
-        {@const newPerms = missing(p)}
-        <li data-plugin={p.id}>
-          <div class="head">
-            <strong>{p.name}</strong>
-            <span class="muted">{p.id} {p.version}</span>
-            {#if p.dev}<Badge tone="info">dev</Badge>{/if}
-            <span class="grow"></span>
-            <Toggle
-              checked={p.enabled}
-              label="Enabled"
-              onchange={(on) => run(`Enable ${p.name}`, () => ipc.pluginEnable({ id: p.id, enabled: on }))}
-            />
-            <Button size="sm" variant="ghost" onclick={() => (removing = p)}>Uninstall</Button>
-          </div>
-          {#if p.description}<p class="muted">{p.description}</p>{/if}
-          {#each p.problems as problem (problem)}<p class="problem" role="alert">{problem}</p>{/each}
-          {#if newPerms.length}
-            <div class="regrant" role="status">
-              <span
-                >An update asks for new permissions: <code>{newPerms.join(', ')}</code>. They stay off until
-                granted.</span
-              >
-              <Button
-                size="sm"
-                onclick={() =>
-                  run(`Grant ${p.name}`, () => ipc.pluginGrant({ id: p.id, permissions: p.permissions }))}
-              >
-                Grant
-              </Button>
-            </div>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</section>
+<SectionForm sectionId="plugins" {...props}>
+  {#snippet after()}
+    <SettingsGroup heading="Installed plugins" data-layer={layer}>
+      {#snippet actions()}
+        <Button size="sm" icon="plus" onclick={() => ui.openSheet('plugin_install')}>Install plugin…</Button>
+      {/snippet}
+      {#if plugins.plugins.error && !plugins.plugins.data}
+        <ErrorState error={plugins.plugins.error} onretry={() => plugins.load()} />
+      {:else if !plugins.plugins.data}
+        <Spinner />
+      {:else if plugins.plugins.data.length === 0}
+        <EmptyState
+          icon="puzzle"
+          title="No plugins installed"
+          body="Install one from a directory, a git URL or a tarball."
+        />
+      {:else}
+        {#each plugins.plugins.data as p (p.id)}
+          {@const newPerms = missing(p)}
+          <SettingsCard heading={p.name} data-plugin={p.id}>
+            {#snippet head()}
+              <span class="muted">{p.id} {p.version}</span>
+              {#if p.dev}<Badge tone="info">dev</Badge>{/if}
+            {/snippet}
+            {#snippet actions()}
+              <Toggle
+                checked={p.enabled}
+                label="Enabled"
+                onchange={(on) => run(`Enable ${p.name}`, () => ipc.pluginEnable({ id: p.id, enabled: on }))}
+              />
+              <Button size="sm" variant="ghost" onclick={() => (removing = p)}>Uninstall</Button>
+            {/snippet}
+            {#if p.description}<p class="muted">{p.description}</p>{/if}
+            {#each p.problems as problem (problem)}<p class="problem" role="alert">{problem}</p>{/each}
+            {#if newPerms.length}
+              <div class="regrant" role="status">
+                <span
+                  >An update asks for new permissions: <code>{newPerms.join(', ')}</code>. They stay off until
+                  granted.</span
+                >
+                <Button
+                  size="sm"
+                  onclick={() =>
+                    run(`Grant ${p.name}`, () => ipc.pluginGrant({ id: p.id, permissions: p.permissions }))}
+                >
+                  Grant
+                </Button>
+              </div>
+            {/if}
+          </SettingsCard>
+        {/each}
+      {/if}
+    </SettingsGroup>
+  {/snippet}
+</SectionForm>
 
 {#if removing}
   {@const p = removing}
@@ -107,37 +112,8 @@
 {/if}
 
 <style>
-  .plugins header,
-  .head,
-  .regrant {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-  }
-
-  h2 {
-    flex: 1;
-    margin: 0;
-    font-size: var(--k-font-size-lg);
-  }
-
-  ul {
-    list-style: none;
-    margin: var(--k-space-4) 0 0;
-    padding: 0;
-  }
-
-  li {
-    padding: var(--k-space-3) 0;
-    border-bottom: 1px solid var(--k-border);
-  }
-
   p {
-    margin: var(--k-space-2) 0 0;
-  }
-
-  .grow {
-    flex: 1;
+    margin: 0;
   }
 
   .muted {
@@ -150,7 +126,9 @@
   }
 
   .regrant {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
-    margin-top: var(--k-space-2);
+    gap: var(--k-space-3);
   }
 </style>

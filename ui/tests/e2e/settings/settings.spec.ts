@@ -66,4 +66,38 @@ test.describe('settings pane', () => {
     // #277: the mode of sessions whose profile forces none
     await expect(page.getByTestId('claude-permission-mode')).toContainText('last used: auto');
   });
+
+  test('grouped nav, advanced keys collapsed, search by label and path, TOML-only link (#282)', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=terminal`);
+    const nav = page.getByRole('navigation', { name: 'Settings sections' });
+    await expect(nav.getByRole('heading')).toHaveText(['Basics', 'Work', 'Integrations', 'Advanced']);
+
+    // a rarely changed key sits in the closed Advanced block
+    const advanced = page.getByTestId('advanced');
+    await expect(advanced.locator('[data-testid="field"][data-path="terminal.renderer"]')).toBeHidden();
+    await advanced.getByText('Advanced settings').click();
+    await expect(advanced.locator('[data-testid="field"][data-path="terminal.renderer"]')).toBeVisible();
+
+    const search = page.getByRole('searchbox', { name: 'Search settings' });
+    await search.fill('font size');
+    await expect(
+      page.locator('[data-testid="search-results"] [data-testid="field"][data-path="terminal.font_size"]'),
+    ).toBeVisible();
+    await search.fill('reopen sessions');
+    await expect(
+      page.locator('[data-testid="search-results"] [data-testid="field"][data-path="app.restore_mode"]'),
+    ).toBeVisible();
+    await search.fill('polling.focused_secs');
+    await expect(page.locator('[data-testid="search-results"] [data-testid="field"]')).toHaveCount(1);
+
+    await search.fill('');
+    await nav.getByText('Triggers').click();
+    await page.getByTestId('toml-only').getByRole('button', { name: 'Edit TOML' }).click();
+    await expect(page.getByTestId('edit-toml-toggle')).toHaveText('Back to form');
+    expect(errors).toEqual([]);
+  });
 });

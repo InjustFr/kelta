@@ -15,6 +15,8 @@
   import Toggle from '$lib/ui/Toggle.svelte';
 
   import ColorPicker from '../../onboarding/ColorPicker.svelte';
+  import SettingsCard from '../layout/SettingsCard.svelte';
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -93,52 +95,70 @@
 
 <SectionForm sectionId="projects" {...props}>
   {#snippet before()}
-    <div class="head">
-      <h3>Your projects</h3>
-      <Button size="sm" variant="primary" icon="folder-plus" onclick={() => ui.openSheet('project_new')}
-        >Create project from folder</Button
-      >
-    </div>
-    {#if editable.length === 0}
-      <EmptyState
-        icon="folder-plus"
-        title="No projects yet"
-        body="Only the Home project exists. Create a project from a folder to get tickets, reviews and worktrees."
-      />
-    {:else}
-      <ul class="list" data-testid="project-list">
-        {#each editable as p (p.id)}
-          <li data-testid="project-row" data-project-id={p.id}>
-            {#if editing === p.id}
-              <form
-                class="edit"
-                onsubmit={(e) => {
-                  e.preventDefault();
-                  void save(p);
-                }}
-              >
-                <TextInput label="Name" bind:value={name} />
-                <div class="row">
-                  <ColorPicker value={color} onchange={(c) => (color = c)} />
-                  <input class="icon" aria-label="Icon" maxlength="2" placeholder="Icon" bind:value={icon} />
-                </div>
-                {#if colorWarnings[p.id]}
-                  <p class="warn" role="status" data-testid="color-warning">
-                    Colour ignored: {colorWarnings[p.id]}. Pick one to replace it.
-                  </p>
-                {/if}
-                <div class="row">
-                  <Button type="submit" variant="primary" size="sm" loading={saving}>Save</Button>
-                  <Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
-                </div>
-              </form>
-            {:else}
-              <span class="dot" style:background={resolveProjectColor(p.color) ?? 'var(--k-border)'}></span>
-              <div class="info">
+    <SettingsGroup heading="Your projects">
+      {#snippet actions()}
+        <Button size="sm" variant="primary" icon="folder-plus" onclick={() => ui.openSheet('project_new')}
+          >Create project from folder</Button
+        >
+      {/snippet}
+      {#if editable.length === 0}
+        <EmptyState
+          icon="folder-plus"
+          title="No projects yet"
+          body="Only the Home project exists. Create a project from a folder to get tickets, reviews and worktrees."
+        />
+      {:else}
+        <div data-testid="project-list">
+          {#each editable as p (p.id)}
+            <SettingsCard data-testid="project-row" data-project-id={p.id}>
+              {#snippet head()}
+                <span class="dot" style:background={resolveProjectColor(p.color) ?? 'var(--k-border)'}></span>
                 <strong>{p.name}</strong>
                 <span class="muted"
                   ><code>{p.id}</code>&ensp;{p.repos.length} repo{p.repos.length === 1 ? '' : 's'}</span
                 >
+              {/snippet}
+              {#snippet actions()}
+                {#if editing !== p.id}
+                  <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
+                  <IconButton
+                    icon="trash-2"
+                    label="Remove {p.name}"
+                    size="sm"
+                    onclick={() => (removing = p)}
+                  />
+                {/if}
+              {/snippet}
+              {#if editing === p.id}
+                <form
+                  class="edit"
+                  onsubmit={(e) => {
+                    e.preventDefault();
+                    void save(p);
+                  }}
+                >
+                  <TextInput label="Name" bind:value={name} />
+                  <div class="row">
+                    <ColorPicker value={color} onchange={(c) => (color = c)} />
+                    <input
+                      class="icon"
+                      aria-label="Icon"
+                      maxlength="2"
+                      placeholder="Icon"
+                      bind:value={icon}
+                    />
+                  </div>
+                  {#if colorWarnings[p.id]}
+                    <p class="warn" role="status" data-testid="color-warning">
+                      Colour ignored: {colorWarnings[p.id]}. Pick one to replace it.
+                    </p>
+                  {/if}
+                  <div class="row">
+                    <Button type="submit" variant="primary" size="sm" loading={saving}>Save</Button>
+                    <Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
+                  </div>
+                </form>
+              {:else}
                 <span class="muted paths">{p.repos.map((r) => r.path).join(', ')}</span>
                 {#if colorWarnings[p.id]}
                   <span class="warn" data-testid="color-warning">Colour ignored: {colorWarnings[p.id]}</span>
@@ -154,15 +174,12 @@
                       >{/each}</span
                   >
                 {/if}
-              </div>
-              <IconButton icon="pencil" label="Edit {p.name}" size="sm" onclick={() => edit(p)} />
-              <IconButton icon="trash-2" label="Remove {p.name}" size="sm" onclick={() => (removing = p)} />
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    {/if}
-    <h3 class="env">Environment</h3>
+              {/if}
+            </SettingsCard>
+          {/each}
+        </div>
+      {/if}
+    </SettingsGroup>
   {/snippet}
 </SectionForm>
 
@@ -181,51 +198,11 @@
 {/if}
 
 <style>
-  .head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--k-space-3);
-  }
-
-  h3 {
-    margin: 0;
-  }
-
-  .env {
-    margin: var(--k-space-5) 0 var(--k-space-3);
-  }
-
-  .list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-2);
-  }
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-3) var(--k-space-4);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-  }
-
   .dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
     flex: none;
-  }
-
-  .info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
   }
 
   .muted {
@@ -240,7 +217,6 @@
   }
 
   .edit {
-    flex: 1;
     display: flex;
     flex-direction: column;
     gap: var(--k-space-3);

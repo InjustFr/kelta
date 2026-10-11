@@ -12,6 +12,8 @@
   import { Badge, Button, Icon, IconButton } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
+  import SettingsGroup from './layout/SettingsGroup.svelte';
+  import SettingsRow from './layout/SettingsRow.svelte';
   import { useEditor } from './lib/editor.svelte';
   import { joinPath } from './lib/paths';
 
@@ -122,11 +124,14 @@
 <div class="picker" data-testid="theme-picker">
   {#each groups as g (g.mode)}
     {@const tabId = focused[g.mode] ?? (g.missing ? g.cards[0]?.id : g.current)}
-    <div class="group" data-mode={g.mode}>
-      <h3 id="theme-{g.mode}-label">
-        {g.mode === 'dark' ? 'Dark theme' : 'Light theme'}
+    <SettingsGroup
+      heading={g.mode === 'dark' ? 'Dark theme' : 'Light theme'}
+      headingId="theme-{g.mode}-label"
+      data-mode={g.mode}
+    >
+      {#snippet meta()}
         {#if settings.theme === g.mode}<Badge tone="accent">Active now</Badge>{/if}
-      </h3>
+      {/snippet}
       {#if g.missing}
         <p class="hint" data-testid="theme-missing">Theme "{g.current}" not found, using Bezel</p>
       {/if}
@@ -172,60 +177,40 @@
           </div>
         {/each}
       </div>
-    </div>
+    </SettingsGroup>
   {/each}
-  <div class="import">
-    <Button icon="folder-open" onclick={() => fileInput?.click()}>Import theme...</Button>
-    <p class="help">
+  <SettingsRow label="Import a theme" actions>
+    {#snippet control()}
+      <Button icon="folder-open" onclick={() => fileInput?.click()}>Import theme...</Button>
+    {/snippet}
+    <p>
       VS Code (.json), iTerm2 (.itermcolors), Ghostty, Kitty (.conf), Alacritty (.toml) or base16 (.yaml).
       Tip: in VS Code, 'Developer: Generate Color Theme From Current Settings' exports the theme you use now.
     </p>
-    <input
-      bind:this={fileInput}
-      type="file"
-      hidden
-      data-testid="theme-import-input"
-      onchange={(e) => {
-        const input = e.currentTarget;
-        const file = input.files?.[0];
-        input.value = ''; // picking the same file again still fires change
-        if (file) void importTheme(file);
-      }}
-    />
-  </div>
+  </SettingsRow>
+  <input
+    bind:this={fileInput}
+    type="file"
+    hidden
+    data-testid="theme-import-input"
+    onchange={(e) => {
+      const input = e.currentTarget;
+      const file = input.files?.[0];
+      input.value = ''; // picking the same file again still fires change
+      if (file) void importTheme(file);
+    }}
+  />
 </div>
 
 <style>
   .picker {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-4);
-    margin-bottom: var(--k-space-4);
-  }
-
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    margin: 0 0 var(--k-space-2);
-    font-size: var(--k-font-size);
   }
 
   .hint {
     margin: 0 0 var(--k-space-2);
     color: var(--k-warn);
-  }
-
-  .import {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--k-space-2);
-  }
-
-  .help {
-    margin: 0;
-    color: var(--k-fg-muted);
   }
 
   .grid {

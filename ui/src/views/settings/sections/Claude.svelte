@@ -5,6 +5,7 @@
   import { toasts } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
 
+  import SettingsRow from '../layout/SettingsRow.svelte';
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -46,7 +47,14 @@
 <SectionForm sectionId="claude" {...props}>
   {#snippet before()}
     {#if installed !== undefined}
-      <div class="mcp" data-testid="claude-mcp">
+      <SettingsRow label="Kelta's ticket tools in Claude Code" actions data-testid="claude-mcp">
+        {#snippet control()}
+          {#if installed !== null}
+            <Button size="sm" icon={installed ? 'trash-2' : 'plug'} loading={busy} onclick={toggle}>
+              {installed ? 'Remove' : 'Install'}
+            </Button>
+          {/if}
+        {/snippet}
         <p>
           {#if installed === null}
             Claude Code was not found in your login PATH.
@@ -56,37 +64,18 @@
             Install Kelta's ticket tools in Claude Code to use them from any Claude session.
           {/if}
         </p>
-        {#if installed !== null}
-          <Button size="sm" icon={installed ? 'trash-2' : 'plug'} loading={busy} onclick={toggle}>
-            {installed ? 'Remove' : 'Install'}
-          </Button>
-        {/if}
-      </div>
+      </SettingsRow>
     {/if}
     {#if mode !== undefined}
-      <p class="mode" data-testid="claude-permission-mode">
-        Profiles without a permission mode start in: {mode ? `last used: ${mode}` : 'Claude default'}
-      </p>
+      <SettingsRow
+        label="Profiles without a permission mode start in"
+        actions
+        data-testid="claude-permission-mode"
+      >
+        {#snippet control()}
+          <span>{mode ? `last used: ${mode}` : 'Claude default'}</span>
+        {/snippet}
+      </SettingsRow>
     {/if}
   {/snippet}
 </SectionForm>
-
-<style>
-  .mcp {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    margin-bottom: var(--k-space-3);
-  }
-
-  .mcp p {
-    flex: 1;
-    margin: 0;
-    color: var(--k-fg-muted);
-  }
-
-  .mode {
-    margin: 0 0 var(--k-space-3);
-    color: var(--k-fg-muted);
-  }
-</style>

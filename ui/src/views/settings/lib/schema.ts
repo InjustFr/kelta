@@ -197,6 +197,7 @@ export function enumOptions(node: SchemaNode): EnumOption[] {
 
 /** UI wording for settings whose generated title or doc comment speaks implementation. */
 export const COPY: Record<string, { label?: string; help?: string }> = {
+  env: { label: 'Environment variables' },
   'app.restore_mode': {
     label: 'Reopen sessions on launch',
     help: 'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',

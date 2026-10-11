@@ -13,7 +13,12 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import TextInput from '$lib/ui/TextInput.svelte';
 
-  let { layer }: SettingsSectionProps = $props();
+  import SettingsCard from '../../settings/layout/SettingsCard.svelte';
+  import SettingsGroup from '../../settings/layout/SettingsGroup.svelte';
+  import SectionForm from '../../settings/SectionForm.svelte';
+
+  let props: SettingsSectionProps = $props();
+  const layer = $derived(props.layer);
 
   let log = $state<TriggerRun[]>([]);
   let testing = $state<TriggerInfo | null>(null);
@@ -61,121 +66,92 @@
   }
 </script>
 
-<section data-layer={layer} class="triggers">
-  <h2>Triggers</h2>
-  <p class="muted">Defined as <code>[[triggers]]</code> in config files, or contributed by plugins.</p>
-
-  {#if plugins.triggers.error && !plugins.triggers.data}
-    <ErrorState error={plugins.triggers.error} onretry={() => plugins.loadTriggers()} />
-  {:else if !plugins.triggers.data}
-    <Spinner />
-  {:else if plugins.triggers.data.length === 0}
-    <EmptyState
-      icon="zap"
-      title="No triggers yet"
-      body="Triggers run a command when something happens, such as a session finishing. Install a plugin that adds some."
-    >
-      {#snippet actions()}
-        <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
-      {/snippet}
-    </EmptyState>
-  {:else}
-    <ul>
-      {#each plugins.triggers.data as t (t.id)}
-        <li>
-          <strong>{t.id}</strong>
-          <code>{t.on}</code>
-          <Badge>{origin(t)}</Badge>
-          {#if !t.enabled}<Badge tone="warn">disabled</Badge>{/if}
-          <span class="grow muted">{t.description ?? ''}</span>
-          <Button size="sm" variant="ghost" onclick={() => ((testing = t), (result = null))}>Test</Button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-
-  {#if testing}
-    <div class="test">
-      <h3>Run test <code>{testing.id}</code></h3>
-      <TextInput
-        bind:value={payload}
-        multiline
-        rows={5}
-        label="Sample event payload (JSON)"
-        error={payloadError}
-      />
-      <Button variant="primary" onclick={runTest}>Run test</Button>
-      {#if result}
-        <p class={result.ok ? 'ok' : 'bad'}>{result.ok ? 'OK' : 'Failed'} {result.detail ?? ''}</p>
-      {/if}
-    </div>
-  {/if}
-
-  <div class="loghead">
-    <h3>Recent runs</h3>
-    <Button size="sm" variant="ghost" icon="refresh-cw" onclick={loadLog}>Refresh</Button>
-  </div>
-  {#if log.length === 0}
-    <p class="muted">No trigger has run yet.</p>
-  {:else}
-    <table>
-      <tbody>
-        {#each log as r, i (i)}
-          <tr>
-            <td class="muted">{r.ts}</td>
-            <td>{r.trigger_id}</td>
-            <td><code>{r.event}</code></td>
-            <td class={r.ok ? 'ok' : 'bad'}>{r.ok ? 'ok' : 'failed'}</td>
-            <td class="muted">{r.detail ?? ''}{r.depth ? `, depth ${r.depth}` : ''}</td>
-          </tr>
+<SectionForm sectionId="triggers" {...props}>
+  {#snippet after()}
+    <SettingsGroup heading="All triggers" data-layer={layer}>
+      {#if plugins.triggers.error && !plugins.triggers.data}
+        <ErrorState error={plugins.triggers.error} onretry={() => plugins.loadTriggers()} />
+      {:else if !plugins.triggers.data}
+        <Spinner />
+      {:else if plugins.triggers.data.length === 0}
+        <EmptyState
+          icon="zap"
+          title="No triggers yet"
+          body="Triggers run a command when something happens, such as a session finishing. Install a plugin that adds some."
+        >
+          {#snippet actions()}
+            <Button size="sm" onclick={() => ui.openSheet('plugin_install', {})}>Install plugin</Button>
+          {/snippet}
+        </EmptyState>
+      {:else}
+        {#each plugins.triggers.data as t (t.id)}
+          <SettingsCard heading={t.id} mono dim={!t.enabled} data-trigger={t.id}>
+            {#snippet head()}
+              <code>{t.on}</code>
+              <Badge>{origin(t)}</Badge>
+              {#if !t.enabled}<Badge tone="warn">disabled</Badge>{/if}
+              {#if t.description}<span class="muted">{t.description}</span>{/if}
+            {/snippet}
+            {#snippet actions()}
+              <Button size="sm" variant="ghost" onclick={() => ((testing = t), (result = null))}>Test</Button>
+            {/snippet}
+            {#if testing?.id === t.id}
+              <div class="test">
+                <TextInput
+                  bind:value={payload}
+                  multiline
+                  rows={5}
+                  label="Sample event payload (JSON)"
+                  error={payloadError}
+                />
+                <div>
+                  <Button variant="primary" onclick={runTest}>Run test</Button>
+                </div>
+                {#if result}
+                  <p class={result.ok ? 'ok' : 'bad'}>{result.ok ? 'OK' : 'Failed'} {result.detail ?? ''}</p>
+                {/if}
+              </div>
+            {/if}
+          </SettingsCard>
         {/each}
-      </tbody>
-    </table>
-  {/if}
-</section>
+      {/if}
+    </SettingsGroup>
+
+    <SettingsGroup heading="Recent runs">
+      {#snippet actions()}
+        <Button size="sm" variant="ghost" icon="refresh-cw" onclick={loadLog}>Refresh</Button>
+      {/snippet}
+      {#if log.length === 0}
+        <p class="muted">No trigger has run yet.</p>
+      {:else}
+        <table>
+          <tbody>
+            {#each log as r, i (i)}
+              <tr>
+                <td class="muted">{r.ts}</td>
+                <td>{r.trigger_id}</td>
+                <td><code>{r.event}</code></td>
+                <td class={r.ok ? 'ok' : 'bad'}>{r.ok ? 'ok' : 'failed'}</td>
+                <td class="muted">{r.detail ?? ''}{r.depth ? `, depth ${r.depth}` : ''}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </SettingsGroup>
+  {/snippet}
+</SectionForm>
 
 <style>
-  h2,
-  h3 {
+  p {
     margin: 0;
-  }
-
-  h2 {
-    font-size: var(--k-font-size-lg);
-  }
-
-  ul {
-    list-style: none;
-    margin: var(--k-space-4) 0;
-    padding: 0;
-  }
-
-  li,
-  .loghead {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) 0;
-    border-bottom: 1px solid var(--k-border);
-  }
-
-  .grow {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .test {
     display: flex;
     flex-direction: column;
     gap: var(--k-space-3);
-    margin: var(--k-space-4) 0;
-  }
-
-  .loghead {
-    justify-content: space-between;
-    margin-top: var(--k-space-4);
+    padding: var(--k-space-2) 0;
   }
 
   table {
@@ -185,7 +161,8 @@
   }
 
   td {
-    padding: var(--k-space-1) var(--k-space-3);
+    padding: var(--k-space-2) var(--k-space-3) var(--k-space-2) 0;
+    border-bottom: 1px solid var(--k-border);
   }
 
   .muted {

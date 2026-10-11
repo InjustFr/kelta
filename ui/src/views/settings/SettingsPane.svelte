@@ -22,8 +22,8 @@
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
-  import { leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
-  import { SECTION_ROOTS, sectionLabel } from './lib/sections';
+  import { COPY, leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
+  import { SECTION_GROUPS, SECTION_ROOTS, sectionLabel } from './lib/sections';
   import RepoTrust from './RepoTrust.svelte';
 
   let { projectId, content }: PaneProps<'settings'> = $props();
@@ -34,12 +34,18 @@
     projectId: tomlProject ?? (projectId !== 'home' ? projectId : null),
   });
   const editor = provideEditor(new SettingsEditor(initialTarget()));
+  editor.raw = tomlProject !== null;
   const platform = currentPlatform();
   const sections = $derived(settingsSections.filter((s) => !s.platform || s.platform === platform));
+  const navGroups = $derived(
+    SECTION_GROUPS.map((g) => ({
+      label: g.label,
+      sections: g.ids.flatMap((id) => sections.filter((s) => s.id === id)),
+    })).filter((g) => g.sections.length > 0),
+  );
 
   let sectionId = $state<string>('general');
   let query = $state('');
-  let editRaw = $state(tomlProject !== null);
   let Active = $state<Component<SettingsSectionProps> | null>(null);
   let sectionLoading = $state(false);
   let layerIssues = $state<ValidationIssue[]>([]);
@@ -119,6 +125,8 @@
     const hay = [
       f.path,
       titleOf(f.segs[f.segs.length - 1] ?? ''),
+      COPY[f.path]?.label,
+      COPY[f.path]?.help,
       descriptionOf(f.node),
       ...enumOptions(f.node).map((o) => o.value),
     ]
@@ -145,6 +153,7 @@
     <div class="layers" role="group" aria-label="Layer being edited">
       <button
         type="button"
+        title="Applies everywhere"
         class:active={editor.layer === 'global'}
         aria-pressed={editor.layer === 'global'}
         onclick={() => chooseLayer('global')}
@@ -156,6 +165,7 @@
         class:active={editor.layer === 'project'}
         aria-pressed={editor.layer === 'project'}
         disabled={configurable.length === 0}
+        title="Overrides Global for one project"
         onclick={() => chooseLayer('project')}
       >
         Project
@@ -165,6 +175,7 @@
         class:active={editor.layer === 'repo'}
         aria-pressed={editor.layer === 'repo'}
         disabled={configurable.length === 0}
+        title="Overrides the project for one repository"
         onclick={() => chooseLayer('repo')}
       >
         Repo
@@ -193,16 +204,20 @@
     <Button
       size="sm"
       icon="file-code"
-      variant={editRaw ? 'primary' : 'ghost'}
-      onclick={() => (editRaw = !editRaw)}
+      variant={editor.raw ? 'primary' : 'ghost'}
+      onclick={() => (editor.raw = !editor.raw)}
       data-testid="edit-toml-toggle"
     >
-      {editRaw ? 'Back to form' : 'Edit TOML'}
+      {editor.raw ? 'Back to form' : 'Edit TOML'}
     </Button>
   </header>
-  <p class="layer-help">
-    Global applies everywhere. Project and Repo override it for one project or one repository.
-  </p>
+  {#if editor.layer !== 'global'}
+    <p class="layer-help" data-testid="layer-help">
+      {editor.layer === 'project'
+        ? 'Values set here override Global for this project.'
+        : 'Values set here override Global and the project for this repository.'}
+    </p>
+  {/if}
 
   {#if settingsStore.pendingRestart.length > 0}
     <div class="banner warn" role="status" data-testid="restart-banner">
@@ -249,29 +264,32 @@
 
   <div class="body">
     <nav aria-label="Settings sections">
-      {#each sections as s (s.id)}
-        <button
-          type="button"
-          class:active={sectionId === s.id && !query}
-          aria-current={sectionId === s.id && !query ? 'page' : undefined}
-          data-section={s.id}
-          onclick={() => {
-            sectionId = s.id;
-            query = '';
-            editRaw = false;
-          }}
-        >
-          <Icon name={s.icon} size={14} />
-          {sectionLabel(s)}
-        </button>
+      {#each navGroups as g (g.label)}
+        <h2 class="nav-group">{g.label}</h2>
+        {#each g.sections as s (s.id)}
+          <button
+            type="button"
+            class:active={sectionId === s.id && !query}
+            aria-current={sectionId === s.id && !query ? 'page' : undefined}
+            data-section={s.id}
+            onclick={() => {
+              sectionId = s.id;
+              query = '';
+              editor.raw = false;
+            }}
+          >
+            <Icon name={s.icon} size={14} />
+            {sectionLabel(s)}
+          </button>
+        {/each}
       {/each}
     </nav>
     <main>
-      {#if editRaw}
+      {#if editor.raw}
         <EditToml {editor} />
       {:else if query.trim()}
         <section data-testid="search-results">
-          <h2>Results for “{query.trim()}”</h2>
+          <h1>Results for “{query.trim()}”</h1>
           {#if !editor.ready}
             <Spinner size={16} />
           {:else if results.length === 0}
@@ -286,7 +304,7 @@
           {/if}
         </section>
       {:else}
-        <h2>{section ? sectionLabel(section) : ''}</h2>
+        <h1>{section ? sectionLabel(section) : ''}</h1>
         {#if sectionLoading && !Active}
           <Spinner size={16} />
         {:else if Active}
@@ -304,10 +322,11 @@
     padding: var(--k-space-2) var(--k-space-4);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
-    border-bottom: 1px solid var(--k-border);
+    background: var(--k-bezel-raised);
   }
 
   .pane {
+    container: settings / inline-size;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -401,9 +420,22 @@
     gap: var(--k-space-1);
     width: 190px;
     flex: none;
-    padding: var(--k-space-3) 0;
+    padding: var(--k-space-2) 0 var(--k-space-5);
     border-right: var(--k-gap) solid var(--k-bezel);
     overflow-y: auto;
+  }
+
+  /* Same grammar as list group headers (DESIGN §6.8): 13/600 muted, sentence case. */
+  .nav-group {
+    margin: var(--k-space-4) 0 var(--k-space-1);
+    padding: 0 var(--k-space-4);
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg-subtle);
+  }
+
+  .nav-group:first-child {
+    margin-top: var(--k-space-2);
   }
 
   nav button {
@@ -440,10 +472,29 @@
     max-width: 880px;
   }
 
-  h2 {
-    margin: 0 0 var(--k-space-3);
+  h1 {
+    margin: 0 0 var(--k-space-2);
     font-size: var(--k-font-size-lg);
     font-weight: var(--k-weight-strong);
+  }
+
+  /* Narrow pane: a slimmer nav, so the rows keep their two columns longer. */
+  @container settings (max-width: 760px) {
+    nav {
+      width: 150px;
+    }
+
+    nav button {
+      padding: 0 var(--k-space-3);
+    }
+
+    .nav-group {
+      padding: 0 var(--k-space-3);
+    }
+
+    main {
+      padding: var(--k-space-4);
+    }
   }
 
   .result {

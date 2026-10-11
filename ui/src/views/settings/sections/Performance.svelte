@@ -8,6 +8,8 @@
 
   import PerfHud from '../../../shell/PerfHud.svelte';
 
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
+  import SettingsRow from '../layout/SettingsRow.svelte';
   import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -38,16 +40,17 @@
 </script>
 
 <SectionForm sectionId="performance" {...props}>
-  {#snippet before()}
-    <section class="perf" data-testid="perf">
-      <div class="overlay">
-        <Button icon="cpu" onclick={() => (hud = !hud)}>Show performance overlay</Button>
-      </div>
-      {#if hud}<PerfHud onclose={() => (hud = false)} />{/if}
-      <header>
-        <h3>Live memory</h3>
-        <Button size="sm" icon="refresh-cw" {loading} onclick={refresh}>Refresh</Button>
-      </header>
+  {#snippet after()}
+    <SettingsRow label="Performance overlay" actions>
+      {#snippet control()}
+        <Button size="sm" icon="cpu" onclick={() => (hud = !hud)}>Show performance overlay</Button>
+      {/snippet}
+    </SettingsRow>
+    {#if hud}<PerfHud onclose={() => (hud = false)} />{/if}
+    <SettingsGroup heading="Live memory" data-testid="perf">
+      {#snippet actions()}
+        <Button size="sm" variant="ghost" icon="refresh-cw" {loading} onclick={refresh}>Refresh</Button>
+      {/snippet}
       {#if error}<p class="error" role="alert">{error}</p>{/if}
       {#if snap}
         <table>
@@ -93,27 +96,15 @@
           alive below.
         </p>
       {/if}
-    </section>
+    </SettingsGroup>
   {/snippet}
 </SectionForm>
 
 <style>
-  .perf {
-    margin-bottom: var(--k-space-5);
-    padding: var(--k-space-4);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-  }
-
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  h3,
   h4 {
-    margin: 0 0 var(--k-space-3);
+    margin: 0 0 var(--k-space-2);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
   }
 
   table {

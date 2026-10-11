@@ -13,7 +13,6 @@
   import Kbd from '$lib/ui/Kbd.svelte';
   import { currentPlatform } from '$lib/ui/format';
 
-  import Field from '../fields/Field.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import {
     chordFromEvent,
@@ -24,7 +23,8 @@
     type BindingConflict,
   } from '../lib/chords';
   import { joinPath, isRecord } from '../lib/paths';
-  import { nodeAt } from '../lib/schema';
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
+  import SectionForm from '../SectionForm.svelte';
 
   let props: SettingsSectionProps = $props();
   const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
@@ -107,129 +107,125 @@
   }
 
   const activeSnippet = $derived(TOGGLE_SNIPPETS.find((s) => s.id === snippet) ?? TOGGLE_SNIPPETS[0]!);
-  const schema = $derived(editor.schema);
 </script>
 
-<section class="keys" data-testid="keys-section">
-  <p class="blurb">
-    Matching uses physical keys. On Linux <code>Mod</code> is Ctrl+Shift, on macOS it is Cmd. An app prefix key
-    followed by one key reaches every action.
-  </p>
-  {#if editor.ready && schema}
-    {#each ['prefix', 'prefix_timeout_ms', 'list_keys'] as key (key)}
-      {@const node = nodeAt(schema, ['keys', key])}
-      {#if node}<Field path={joinPath(['keys', key])} {node} depth={1} />{/if}
-    {/each}
-  {/if}
-
-  <h3>Bindings</h3>
-  {#if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
-  <table data-testid="bindings">
-    <thead><tr><th>Action</th><th>Shortcut</th><th>After prefix</th><th></th></tr></thead>
-    <tbody>
-      {#each ACTIONS as a (a.id)}
-        {@const chords = bindings[a.id] ?? []}
-        {@const custom = a.id in overrides}
-        <tr data-action={a.id} class:custom>
-          <td>
-            <div>{a.label}</div>
-            <code class="id">{a.id}</code>
-          </td>
-          <td>
-            {#if recording === a.id}
-              <!-- svelte-ignore a11y_autofocus -->
-              <div
-                class="recorder"
-                role="textbox"
-                tabindex="0"
-                aria-label={`Press the new shortcut for ${a.label}`}
-                data-testid="recorder"
-                autofocus
-                onkeydown={(e) => onkeydown(e, a.id)}
-                onblur={() => (recording = null)}
-              >
-                Press a shortcut… (Esc cancels)
-              </div>
-            {:else if chords.length === 0}
-              <span class="muted"
-                >{a.id === 'window.toggle' ? 'Bind in your compositor (below)' : 'Unbound'}</span
-              >
-            {:else}
-              {#each chords as c (c)}<Kbd chord={c} />{/each}
-            {/if}
-            {#if pending && pending.action === a.id}
-              <div class="pending" data-testid="pending-binding">
-                <Kbd chord={pending.chord} />
-                {#if pending.conflicts.length > 0}
-                  <p class="warn" role="status" data-testid="conflict">
-                    {#each pending.conflicts as c (c.chord)}
-                      {#if c.reserved}
-                        <code>{c.chord}</code> is reserved for terminal programs.
-                      {:else}
-                        <code>{c.chord}</code> is already used by {c.actions
-                          .filter((x) => x !== a.id)
-                          .join(', ')}.
+<SectionForm sectionId="keys" {...props} skip={['keys.bindings', 'keys.prefix_bindings']}>
+  {#snippet after()}
+    <div class="keys" data-testid="keys-section">
+      <SettingsGroup heading="Bindings">
+        {#if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
+        <table data-testid="bindings">
+          <thead><tr><th>Action</th><th>Shortcut</th><th>After prefix</th><th></th></tr></thead>
+          <tbody>
+            {#each ACTIONS as a (a.id)}
+              {@const chords = bindings[a.id] ?? []}
+              {@const custom = a.id in overrides}
+              <tr data-action={a.id} class:custom>
+                <td>
+                  <div>{a.label}</div>
+                  <code class="id">{a.id}</code>
+                </td>
+                <td>
+                  {#if recording === a.id}
+                    <!-- svelte-ignore a11y_autofocus -->
+                    <div
+                      class="recorder"
+                      role="textbox"
+                      tabindex="0"
+                      aria-label={`Press the new shortcut for ${a.label}`}
+                      data-testid="recorder"
+                      autofocus
+                      onkeydown={(e) => onkeydown(e, a.id)}
+                      onblur={() => (recording = null)}
+                    >
+                      Press a shortcut… (Esc cancels)
+                    </div>
+                  {:else if chords.length === 0}
+                    <span class="muted"
+                      >{a.id === 'window.toggle' ? 'Bind in your compositor (below)' : 'Unbound'}</span
+                    >
+                  {:else}
+                    {#each chords as c (c)}<Kbd chord={c} />{/each}
+                  {/if}
+                  {#if pending && pending.action === a.id}
+                    <div class="pending" data-testid="pending-binding">
+                      <Kbd chord={pending.chord} />
+                      {#if pending.conflicts.length > 0}
+                        <p class="warn" role="status" data-testid="conflict">
+                          {#each pending.conflicts as c (c.chord)}
+                            {#if c.reserved}
+                              <code>{c.chord}</code> is reserved for terminal programs.
+                            {:else}
+                              <code>{c.chord}</code> is already used by {c.actions
+                                .filter((x) => x !== a.id)
+                                .join(', ')}.
+                            {/if}
+                          {/each}
+                        </p>
                       {/if}
-                    {/each}
-                  </p>
-                {/if}
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onclick={() => pending && apply(pending.action, [pending.chord])}
-                >
-                  {pending.conflicts.length > 0 ? 'Bind anyway' : 'Bind'}
-                </Button>
-                <Button size="sm" onclick={() => (pending = null)}>Cancel</Button>
-              </div>
-            {/if}
-          </td>
-          <td>
-            {#if a.prefix !== null || a.id in prefixMap}
-              <input
-                class="prefix"
-                aria-label={`Prefix key for ${a.label}`}
-                maxlength="1"
-                value={prefixMap[a.id] ?? ''}
-                disabled={!access.editable}
-                onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
-              />
-            {/if}
-          </td>
-          <td class="actions">
-            {#if access.editable && a.id !== 'window.toggle'}
-              <Button size="sm" onclick={() => startRecording(a.id)}>Record</Button>
-              <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}>Unbind</Button>
-              {#if custom}<IconButton
-                  icon="history"
-                  size="sm"
-                  label={`Reset ${a.label} to default`}
-                  onclick={() => resetBinding(a.id)}
-                />{/if}
-            {/if}
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-  {#if editor.errors[joinPath(['keys', 'bindings'])]}<p class="error" role="alert">
-      {editor.errors[joinPath(['keys', 'bindings'])]}
-    </p>{/if}
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onclick={() => pending && apply(pending.action, [pending.chord])}
+                      >
+                        {pending.conflicts.length > 0 ? 'Bind anyway' : 'Bind'}
+                      </Button>
+                      <Button size="sm" onclick={() => (pending = null)}>Cancel</Button>
+                    </div>
+                  {/if}
+                </td>
+                <td>
+                  {#if a.prefix !== null || a.id in prefixMap}
+                    <input
+                      class="prefix"
+                      aria-label={`Prefix key for ${a.label}`}
+                      maxlength="1"
+                      value={prefixMap[a.id] ?? ''}
+                      disabled={!access.editable}
+                      onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
+                    />
+                  {/if}
+                </td>
+                <td class="actions">
+                  {#if access.editable && a.id !== 'window.toggle'}
+                    <Button size="sm" onclick={() => startRecording(a.id)}>Record</Button>
+                    <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}
+                      >Unbind</Button
+                    >
+                    {#if custom}<IconButton
+                        icon="history"
+                        size="sm"
+                        label={`Reset ${a.label} to default`}
+                        onclick={() => resetBinding(a.id)}
+                      />{/if}
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if editor.errors[joinPath(['keys', 'bindings'])]}<p class="error" role="alert">
+            {editor.errors[joinPath(['keys', 'bindings'])]}
+          </p>{/if}
+      </SettingsGroup>
 
-  <h3>Global toggle</h3>
-  <p class="blurb">
-    Kelta registers no global shortcut. Bind <code>kelta-ctl toggle</code> in your compositor or desktop:
-  </p>
-  <div class="tabs" role="tablist">
-    {#each TOGGLE_SNIPPETS as s (s.id)}
-      <button type="button" role="tab" aria-selected={snippet === s.id} onclick={() => (snippet = s.id)}
-        >{s.label}</button
+      <SettingsGroup
+        heading="Global toggle"
+        description="Kelta registers no global shortcut. Bind kelta-ctl toggle in your compositor or desktop:"
       >
-    {/each}
-  </div>
-  <pre class="snippet" data-testid="snippet">{activeSnippet.lines.join('\n')}</pre>
-  <Button size="sm" icon="copy" onclick={() => copy([...activeSnippet.lines])}>Copy</Button>
-</section>
+        <div class="tabs" role="tablist">
+          {#each TOGGLE_SNIPPETS as s (s.id)}
+            <button type="button" role="tab" aria-selected={snippet === s.id} onclick={() => (snippet = s.id)}
+              >{s.label}</button
+            >
+          {/each}
+        </div>
+        <pre class="snippet" data-testid="snippet">{activeSnippet.lines.join('\n')}</pre>
+        <Button size="sm" icon="copy" onclick={() => copy([...activeSnippet.lines])}>Copy</Button>
+      </SettingsGroup>
+    </div>
+  {/snippet}
+</SectionForm>
 
 <style>
   .keys {
@@ -238,14 +234,9 @@
     gap: var(--k-space-3);
   }
 
-  .blurb,
   .hint {
     margin: 0;
     color: var(--k-fg-muted);
-  }
-
-  h3 {
-    margin: var(--k-space-4) 0 0;
   }
 
   table {
