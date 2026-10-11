@@ -8,12 +8,12 @@ test.use({ colorScheme: 'dark' });
 const rgb = (hex: string): string =>
   `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
 
-/** `--project-color` of a project's rail row. */
+/** `--project-color` of a project's rail row, as painted (a slot is var(--k-ansi-N)). */
 const bar = (page: Page, id: string) =>
   page
     .locator(`[data-testid="rail-project"][data-project-id="${id}"]`)
     .evaluate((el) =>
-      (el.closest('[data-testid="rail-band"]') as HTMLElement).style.getPropertyValue('--project-color'),
+      getComputedStyle(el.closest('[data-testid="rail-band"]')!).getPropertyValue('--project-color').trim(),
     );
 
 const accent = (page: Page) =>

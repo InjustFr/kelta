@@ -13,7 +13,7 @@
   } from '$lib/gen';
   import { openExternal, workPlan, workResume, workRetryStep, workStart } from '$lib/ipc/commands';
   import { toIpcError } from '$lib/ipc/transport';
-  import { projects, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { projects, settings, tickets, toasts, work } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, Icon, Select, Sheet, Spinner, TextInput, Toggle } from '$lib/ui';
 
@@ -268,8 +268,7 @@
         {#if plan.project_choices.length > 1}
           <div
             class="project"
-            style:--bar={resolveProjectColor(projects.byId(plan.project_id)?.color, ui.theme) ??
-              'transparent'}
+            style:--bar={resolveProjectColor(projects.byId(plan.project_id)?.color) ?? 'transparent'}
           >
             <Select
               label="Project"

@@ -56,12 +56,15 @@ export function parseProjectColor(
   return legacy ? { slot: legacy } : { hex };
 }
 
-/** The colour to paint: the active theme's slot colour, the custom hex as typed, or null. */
+/** The colour to paint, or null: a slot is `var(--k-ansi-N)` (Shell sets those from the active theme)
+ *  or, given a theme, its hex for code that parses the colour; a custom hex stays as typed. */
 export function resolveProjectColor(
   stored: string | null | undefined,
-  theme: Pick<ResolvedTheme, 'terminal'>,
+  theme?: Pick<ResolvedTheme, 'terminal'>,
 ): string | null {
   const c = parseProjectColor(stored);
   if (!c) return null;
-  return 'slot' in c ? (theme.terminal.ansi[SLOTS[c.slot]] ?? null) : c.hex;
+  if ('hex' in c) return c.hex;
+  const i = SLOTS[c.slot];
+  return theme ? (theme.terminal.ansi[i] ?? null) : `var(--k-ansi-${i})`;
 }
