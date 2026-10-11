@@ -1,7 +1,7 @@
 <script lang="ts">
   // Peek & reply (ticket #139): the waiting session's last lines, its menu as buttons, a reply field.
   import { sessionTextTail, sessionWrite } from '$lib/ipc/commands';
-  import { projects, sessions, toasts } from '$lib/stores';
+  import { projects, sessions, toasts, work } from '$lib/stores';
   import { Button, Kbd } from '$lib/ui';
 
   import { sessionLabel } from '../views/work/live';
@@ -22,7 +22,12 @@
   const s = $derived(peek.id ? sessions.get(peek.id) : null);
   const live = $derived(s?.lifecycle === 'live');
   // The hook said permission / elicitation (needs_input): only then is a numbered list a menu.
-  const menu = $derived(live && s?.status === 'needs_input' ? detectMenu(tail) : null);
+  const asking = $derived(live && s?.status === 'needs_input');
+  const menu = $derived(asking ? detectMenu(tail) : null);
+  // Claude's last Stop message: the work item keeps it whole, the session only 200 chars.
+  const message = $derived(
+    (s?.work_item_id && work.get(s.work_item_id)?.claude_message?.trim()) || s?.claude?.preview || '',
+  );
   const style = $derived.by(() => {
     if (!peek.at) return `left: calc(50% - ${PEEK_WIDTH / 2}px); top: 48px;`;
     const top = Math.max(8, Math.min(peek.at.y, window.innerHeight - PEEK_HEIGHT - 8));
@@ -123,8 +128,17 @@
       <span class="proj">{projects.byId(s.project_id)?.name ?? ''}</span>
       <span class="name">{sessionLabel(s)}</span>
     </header>
-    <pre class="tail" data-testid="peek-tail">{tail}</pre>
-    {#if s.claude?.preview}<p class="preview" title={s.claude.preview}>{s.claude.preview}</p>{/if}
+    {#if message && !asking}
+      <p class="message" data-testid="peek-message">{message}</p>
+      <details class="screen">
+        <summary>Terminal</summary>
+        <pre class="tail" data-testid="peek-tail">{tail}</pre>
+      </details>
+    {:else}
+      <!-- Asking: the screen holds the prompt to answer, the stale message stays one line. -->
+      <pre class="tail" data-testid="peek-tail">{tail}</pre>
+      {#if message}<p class="preview" title={message}>{message}</p>{/if}
+    {/if}
     {#if !live}
       <Button variant="primary" size="sm" onclick={jump} data-testid="peek-resume">Resume</Button>
     {:else}
@@ -184,6 +198,7 @@
 
   .proj,
   .preview,
+  .screen summary,
   footer {
     color: var(--k-fg-muted);
   }
@@ -204,11 +219,34 @@
     background: var(--k-bg-sunken);
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-xs);
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .message {
+    margin: 0;
+    max-height: 12lh;
+    overflow-y: auto;
+    line-height: var(--k-line-height-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .screen summary {
+    font-size: var(--k-font-size-xs);
+    cursor: pointer;
+  }
+
+  .screen .tail {
+    margin-top: var(--k-space-2);
   }
 
   .preview {
     margin: 0;
+  }
+
+  .reply {
+    width: 100%;
   }
 
   .menu {
