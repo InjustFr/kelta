@@ -121,6 +121,8 @@ pub async fn ingest(
         result = core.session_apply_hook(sid, change.clone()).await;
     }
 
+    core.session_claude_runs_hook(sid, &payload);
+
     let raw = serde_json::to_value(&payload).unwrap_or(serde_json::Value::Null);
     core.publish(with_ctx(BusEvent::new(
         bus::CLAUDE_HOOK,

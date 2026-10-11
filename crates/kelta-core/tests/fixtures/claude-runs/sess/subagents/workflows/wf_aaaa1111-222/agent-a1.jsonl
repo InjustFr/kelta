@@ -1,0 +1,8 @@
+{"type":"user","message":{"role":"user","content":"[task prompt, redacted]"}}
+{"type":"attachment","attachment":{"type":"redacted"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hidden"},{"type":"text","text":"Reading the hooks module."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"graft skeleton crates/kelta-server/src/hooks.rs","description":"Skeleton of hooks.rs"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"graft skeleton (redacted output)"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/w/crates/kelta-core/src/lib.rs"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":[{"type":"text","text":"File does not exist."}]}]}}
+{broken line
+{"type":"assistant","message":{"role":"assistant","content":"Implemented and committed."}}

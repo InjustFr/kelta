@@ -14,6 +14,7 @@ import type {
   AppInfo,
   Assignee,
   AttachInfo,
+  ClaudeRun,
   ClipboardKind,
   Column,
   Cursor,
@@ -64,6 +65,7 @@ import type {
   SubscribeResult,
   TemplateCtx,
   TerminalPalette,
+  TranscriptLine,
   Ticket,
   TicketDetail,
   TicketItem,
@@ -198,6 +200,10 @@ export interface Commands {
     args: { project_id: ProjectId; session_id?: SessionId | null; query: string; limit: number };
     result: HistoryHit[];
   };
+  /** The session's Claude `Workflow` runs, as core last read them from Claude's files (#272). */
+  claude_runs_list: { args: { id: SessionId }; result: ClaudeRun[] };
+  /** The last lines of one workflow agent's transcript. */
+  claude_run_tail: { args: { id: SessionId; run_id: string; agent_id: string }; result: TranscriptLine[] };
   terminal_set_palette: { args: { palette: TerminalPalette }; result: null };
   // ---- tickets -----------------------------------------------------------------------------
   tracker_list: {
@@ -415,6 +421,8 @@ export const COMMAND_NAMES = [
   'session_link',
   'session_text_tail',
   'session_history_search',
+  'claude_runs_list',
+  'claude_run_tail',
   'terminal_set_palette',
   'tracker_list',
   'tracker_get',
@@ -605,6 +613,8 @@ export const sessionMarkSeen = wrap('session_mark_seen');
 export const sessionLink = wrap('session_link');
 export const sessionTextTail = wrap('session_text_tail');
 export const sessionHistorySearch = wrap('session_history_search');
+export const claudeRunsList = wrap('claude_runs_list');
+export const claudeRunTail = wrap('claude_run_tail');
 export const terminalSetPalette = wrap('terminal_set_palette');
 
 /** Normalizes what a Tauri raw channel delivers into bytes. */

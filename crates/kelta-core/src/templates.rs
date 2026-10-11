@@ -38,7 +38,7 @@ pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Va
         if *name == names::NOTIFICATION {
             entry["matcher"] = serde_json::json!(names::NOTIFICATION_MATCHER);
         } else if *name == names::POST_TOOL_USE {
-            entry["matcher"] = serde_json::json!(names::EDIT_TOOLS_MATCHER);
+            entry["matcher"] = serde_json::json!(names::POST_TOOL_USE_MATCHER);
         }
         hooks.insert((*name).to_owned(), serde_json::json!([entry]));
     }

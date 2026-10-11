@@ -8,7 +8,7 @@
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { appInfo } from '$lib/ipc';
-  import { GLOBAL, layout, projects, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
+  import { GLOBAL, layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Icon, IconButton, Kbd, Menu, type MenuItem } from '$lib/ui';
 
@@ -110,6 +110,22 @@
     import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(t))
       .catch(() => {});
+  });
+
+  // ---- the focused session's Claude workflow run (#272) -----------------------------------------
+
+  const run = $derived.by(() => {
+    const list = session ? sessions.runs[session.id] : undefined;
+    return list?.findLast((r) => r.status === 'running') ?? list?.at(-1) ?? null;
+  });
+  /** `<workflow> · <phase with a running agent>`, or its final status. */
+  const runChip = $derived.by(() => {
+    if (!run) return null;
+    const phase = run.phases.findLast((p) => p.agents.some((a) => !a.done)) ?? run.phases.at(-1);
+    return `${run.name ?? 'workflow'} · ${run.status === 'running' ? (phase?.title ?? 'starting') : run.status}`;
+  });
+  $effect(() => {
+    if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
   });
 
   // ---- the work item segment (lazy, like the rest of views/work) -------------------------------
@@ -255,6 +271,19 @@
         >{cwd}{#if model}<span class="sep">·</span>{model}{/if}</span
       >
     {/if}
+  {/if}
+
+  {#if runChip && session}
+    {@const sid = session.id}
+    <Button
+      size="sm"
+      variant="ghost"
+      class="chip"
+      title="Workflow runs of this session"
+      data-testid="context-workflow"
+      onclick={() => ui.openSheet('claude_runs', { sessionId: sid })}
+      ><span aria-hidden="true">⚙</span> {runChip}</Button
+    >
   {/if}
 
   <Button

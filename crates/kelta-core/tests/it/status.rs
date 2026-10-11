@@ -427,3 +427,76 @@ async fn claude_cost_rolls_up_to_the_work_item() {
     }
     panic!("killed session's cost not saved: {}", cost(&h).await);
 }
+
+/// #272: hooks drive the live view of a session's Claude `Workflow` run, read from its files.
+#[tokio::test]
+async fn workflow_runs_follow_hooks_and_files() {
+    use kelta_proto::hooks::HookPayload;
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    let sess = tmp.path().join("claude/sess");
+    let run_dir = sess.join("subagents/workflows/wf_t1-1");
+    std::fs::create_dir_all(sess.join("workflows/scripts")).unwrap();
+    std::fs::create_dir_all(&run_dir).unwrap();
+    std::fs::write(sess.join("workflows/scripts/demo-wf_t1-1.js"), "").unwrap();
+    let hook = |event: &str, tool: Option<&str>, extra: serde_json::Value| {
+        let mut p = HookPayload {
+            hook_event_name: event.into(),
+            transcript_path: Some(tmp.path().join("claude/sess.jsonl")),
+            tool_name: tool.map(Into::into),
+            ..Default::default()
+        };
+        if let serde_json::Value::Object(m) = extra {
+            p.extra.extend(m);
+        }
+        h.core.session_claude_runs_hook(&s.id, &p);
+    };
+    let runs = || -> Vec<(String, Vec<(String, bool)>)> {
+        h.ui.events()
+            .into_iter()
+            .filter_map(|e| match e {
+                UiEvent::WorkflowUpdated { run } => Some((
+                    run.status,
+                    run.phases
+                        .iter()
+                        .flat_map(|p| p.agents.iter().map(|a| (a.label.clone(), a.done)))
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect()
+    };
+
+    hook("PostToolUse", Some("Workflow"), serde_json::json!({"tool_response": {"runId": "wf_t1-1"}}));
+    assert_eq!(runs(), [("running".to_owned(), vec![])]);
+    assert_eq!(h.core.claude_runs_list(&s.id)[0].name.as_deref(), Some("demo"));
+
+    std::fs::write(
+        run_dir.join("journal.jsonl"),
+        "{\"type\":\"started\",\"agentId\":\"a1\",\"label\":\"implement-#1\",\"phase\":\"Implement\"}\n",
+    )
+    .unwrap();
+    hook("SubagentStart", None, serde_json::json!({"agent_id": "a1"}));
+    hook("SubagentStop", None, serde_json::json!({"agent_id": "a1"}));
+    let r = runs();
+    assert_eq!(r.len(), 3);
+    assert_eq!(r[1].1, [("implement-#1".to_owned(), false)]);
+    assert_eq!(r[2].1, [("implement-#1".to_owned(), true)]);
+
+    std::fs::write(sess.join("workflows/wf_t1-1.json"), r#"{"status":"completed","totalTokens":9}"#).unwrap();
+    hook("Stop", None, serde_json::json!({}));
+    hook("Stop", None, serde_json::json!({}));
+    assert_eq!(runs().len(), 4, "a finished run is not read again");
+    assert_eq!(h.core.claude_runs_list(&s.id)[0].total_tokens, Some(9));
+
+    std::fs::write(
+        run_dir.join("agent-a1.jsonl"),
+        "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n",
+    )
+    .unwrap();
+    let tail = h.core.claude_run_tail(&s.id, "wf_t1-1", "a1").unwrap();
+    assert_eq!(tail[0].text, "hi");
+    assert!(h.core.claude_run_tail(&s.id, "wf_t1-1", "../a1").is_err());
+    assert!(h.core.claude_run_tail(&s.id, "wf_other", "a1").is_err());
+}

@@ -230,6 +230,8 @@ describe('mock transport', () => {
       session_link: { id: session.id, work_item_id: work.id },
       session_text_tail: { id: session.id, max_lines: 3 },
       session_history_search: { project_id: session.project_id, query: 'error', limit: 10 },
+      claude_runs_list: { id: session.id },
+      claude_run_tail: { id: session.id, run_id: 'wf_1', agent_id: 'a1' },
       terminal_set_palette: { palette: { foreground: '#fff', background: '#000', cursor: '#fff', ansi: [] } },
       tracker_list: { scope: { kind: 'all' }, refresh: false },
       tracker_get: { ticket },

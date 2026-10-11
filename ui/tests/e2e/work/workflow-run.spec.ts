@@ -1,5 +1,5 @@
 // Run a saved workflow on a ticket (#233) on the IPC mock: `w` in the detail, the picker, the run in
-// a background tab, the toast's Open and Peek, and the ticket row's run chip.
+// a background tab, the toast's Open and Peek, the ticket row's run chip, and the run's live view (#272).
 import { expect, test } from '@playwright/test';
 
 import { boot, callsOf, dispatch } from '../shell/helpers';
@@ -45,4 +45,36 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   await expect(
     page.locator(`[data-testid="pane"][data-focused="true"] [data-session-id="${sid}"]`),
   ).toHaveCount(1);
+
+  // #272: the run's hooks show in the context bar; its sheet lists phases and agents, live.
+  const chip = page.getByTestId('context-workflow');
+  await expect(chip).toHaveText('⚙ kelta-ticket-pass · Pick');
+  await chip.click();
+  const sheet = page.getByTestId('workflow-runs');
+  const agents = sheet.getByTestId('workflow-agent');
+  await expect(agents).toHaveText(['●pick']);
+  await agents.first().click();
+  await expect(sheet.getByTestId('workflow-tail')).toContainText('Bash: Run the tests');
+  await page.evaluate((session) => {
+    const run = {
+      run_id: `wf_${session.slice(0, 8)}-000`,
+      session_id: session,
+      name: 'kelta-ticket-pass',
+      status: 'completed',
+      phases: [
+        { title: 'Pick', agents: [{ id: 'p', label: 'pick', done: true }] },
+        { title: 'Implement', agents: [{ id: 'i', label: 'implement-#151', done: true }] },
+      ],
+      duration_ms: 90_000,
+      total_tokens: 5000,
+      total_tool_calls: 12,
+      result: '{"status": "merged"}',
+      logs: ['Picked #151'],
+    };
+    window.__keltaMock!.emit({ type: 'workflow.updated', run });
+  }, sid);
+  await expect(agents).toHaveText(['✓pick', '✓implement-#151']);
+  await expect(sheet.getByTestId('workflow-run')).toContainText('1m 30s · 5,000 tokens · 12 tool calls');
+  await page.keyboard.press('Escape');
+  await expect(chip).toHaveText('⚙ kelta-ticket-pass · completed');
 });

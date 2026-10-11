@@ -91,4 +91,4 @@ export const PLUGIN_METHODS = [
   "kv.list"
 ] as const;
 
-export const HOOK_EVENTS = ["SessionStart","UserPromptSubmit","PermissionRequest","Notification","PostToolUse","Stop","StopFailure","SessionEnd"] as const;
+export const HOOK_EVENTS = ["SessionStart","UserPromptSubmit","PermissionRequest","Notification","PostToolUse","Stop","StopFailure","SessionEnd","SubagentStart","SubagentStop"] as const;

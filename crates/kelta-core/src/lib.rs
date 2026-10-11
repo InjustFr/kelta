@@ -11,6 +11,7 @@
 pub mod attention;
 pub mod bus;
 pub mod claude_mcp;
+mod claude_runs;
 pub mod clipboard;
 pub mod ctl;
 pub mod detect;
@@ -665,6 +666,9 @@ impl CoreApi for Core {
     }
     async fn session_set_usage(&self, id: &SessionId, usage: ClaudeUsage) -> Result<(), KeltaError> {
         self.set_usage(id, usage)
+    }
+    fn session_claude_runs_hook(&self, id: &SessionId, payload: &kelta_proto::hooks::HookPayload) {
+        self.claude_runs_hook(id, payload);
     }
     async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError> {
         self.rt.capture();
