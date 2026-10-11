@@ -46,6 +46,56 @@
     margin: 0 0 0.75em;
   }
 
+  .k-html > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
+  /* Content headings stay at the body size: the pane's section titles are the largest headings. */
+  .k-html :global(:is(h1, h2, h3, h4, h5, h6)) {
+    margin: 1em 0 0.4em;
+    font-size: 1em;
+    font-weight: var(--k-weight-strong);
+    line-height: inherit;
+  }
+
+  .k-html :global(:is(h4, h5, h6)) {
+    color: var(--k-fg-muted);
+  }
+
+  .k-html :global(:is(h1, h2, h3, h4, h5, h6):first-child) {
+    margin-top: 0;
+  }
+
+  .k-html :global(:is(ul, ol)) {
+    margin: 0 0 0.75em;
+    padding-left: 1.5em;
+  }
+
+  .k-html :global(li > :is(ul, ol)) {
+    margin: 0.2em 0 0;
+  }
+
+  .k-html :global(li + li) {
+    margin-top: 0.2em;
+  }
+
+  .k-html :global(hr) {
+    margin: 1em 0;
+    border: 0;
+    border-top: 1px solid var(--k-border);
+  }
+
+  /* Task lists are the tracker's to tick: shown, never toggled here. */
+  .k-html :global(li:has(> input[type='checkbox'])) {
+    list-style: none;
+  }
+
+  .k-html :global(input[type='checkbox']) {
+    margin: 0 var(--k-space-2) 0 -1.3em;
+    vertical-align: -1px;
+    pointer-events: none;
+  }
+
   .k-html :global(a) {
     color: var(--k-accent);
     text-decoration: underline;

@@ -37,3 +37,35 @@ test('palette move refused by the tracker: its message and Open in browser', asy
   await toast.getByRole('button', { name: 'Open in browser' }).click();
   await expect.poll(async () => (await callsOf(page, 'open_external')).length).toBe(1);
 });
+
+test('description headings never outgrow the section titles, and sections are ruled off', async ({
+  page,
+}) => {
+  await boot(page);
+  await dispatch(page, 'tickets.open', { project_id: 'shop' });
+  await page.locator('[data-key="jira-acme:SHOP-151"]').click();
+  await page.keyboard.press('Enter');
+  const detail = page.getByTestId('ticket-detail');
+  const body = detail.getByRole('region', { name: 'Description' }).locator('.k-html');
+  await expect(body.locator('h2')).toHaveText('Acceptance');
+  // A `#` heading: kept out of the shared fixture, where it would be a second level-1 heading.
+  await body.evaluate((el) => el.insertAdjacentHTML('afterbegin', '<h1>Context</h1>'));
+  const px = (sel: string) =>
+    body
+      .locator(sel)
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  const title = await detail.getByRole('heading', { level: 2, name: 'Description' }).evaluate((el) => ({
+    size: parseFloat(getComputedStyle(el).fontSize),
+    rule: getComputedStyle(el).borderTopWidth,
+  }));
+  for (const h of ['h1', 'h2', 'h3']) expect(await px(h)).toBeLessThanOrEqual(title.size);
+  expect(title.rule).toBe('1px');
+  expect(await body.locator('hr').evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe('1px');
+  expect(
+    await body
+      .locator('li')
+      .first()
+      .evaluate((el) => getComputedStyle(el).listStyleType),
+  ).toBe('none');
+});

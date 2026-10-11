@@ -442,7 +442,7 @@
     </dl>
 
     <section aria-label="Pull requests" data-testid="ticket-pr">
-      <h2>
+      <h2 class="k-section-title">
         Pull requests {#if item.prs.length > 1}<span class="muted k-num">{item.prs.length}</span>{/if}
       </h2>
       {#each item.prs as pr (pr.url)}
@@ -469,7 +469,7 @@
 
     {#if detail && detail.children.length > 0}
       <section aria-label="Sub-tasks">
-        <h2>Sub-tasks <span class="muted k-num">{detail.children.length}</span></h2>
+        <h2 class="k-section-title">Sub-tasks <span class="muted k-num">{detail.children.length}</span></h2>
         {#each detail.children as c (c.ticket.ref.key)}
           <button
             type="button"
@@ -490,7 +490,7 @@
 
     {#if proposal}
       <section aria-label="Refinement" data-testid="ticket-refine">
-        <h2>
+        <h2 class="k-section-title">
           Refinement {#if proposal.running}<span class="muted">Claude is working…</span>{/if}
         </h2>
         {#if proposal.text !== null}
@@ -513,7 +513,7 @@
     {/if}
 
     <section aria-label="Description">
-      <h2>Description</h2>
+      <h2 class="k-section-title">Description</h2>
       {#if !detail}
         <p class="muted">
           {slot?.error ? `Could not load the description: ${slot.error.message}` : 'Loading…'}
@@ -526,7 +526,7 @@
     </section>
 
     <section aria-label="Comments">
-      <h2>
+      <h2 class="k-section-title">
         Comments {#if detail}<span class="muted k-num">{detail.comments.length}</span>{/if}
       </h2>
       {#each (detail?.comments ?? []).slice(-20) as c, i (i)}
@@ -640,12 +640,6 @@
     font-size: var(--k-font-size-xl);
     font-weight: var(--k-weight-strong);
     line-height: 1.28;
-  }
-
-  h2 {
-    margin: var(--k-space-5) 0 var(--k-space-3);
-    font-size: var(--k-font-size);
-    font-weight: var(--k-weight-strong);
   }
 
   .line {
@@ -784,15 +778,10 @@
     background: var(--k-bezel-raised);
   }
 
-  /* Task lists are the tracker's to tick: shown, never toggled here. */
-  section :global(.k-html input[type='checkbox']) {
-    margin: 0 var(--k-space-2) 0 0;
-    vertical-align: -1px;
-    pointer-events: none;
-  }
-
-  section :global(.k-html li:has(> input[type='checkbox'])) {
-    list-style: none;
+  /* The description is content inside the ticket: an indented block keeps its headings inside it. */
+  section :global(.k-html.body) {
+    padding-left: var(--k-space-4);
+    border-left: 1px solid var(--k-border);
   }
 
   .comment {
