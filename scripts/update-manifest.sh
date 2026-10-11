@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Writes <dist>/latest.json, the Tauri updater manifest (ARCHITECTURE §2 "Bundling"), for the signed
-# updater bundles in <dist>: the macOS `*.app.tar.gz` (required) and the Linux AppImages (when built).
+# updater bundles in <dist>: the macOS `*.app.tar.gz` (required; `*_universal.app.tar.gz` serves both Macs) and the Linux AppImages (when built).
 # Every bundle needs its `.sig`: a manifest without one would strand the installed copies.
 # Usage: update-manifest.sh <dist> <version> <notes-file> <base-url>
 set -euo pipefail
@@ -17,8 +17,12 @@ add() { # <target> <bundle>
 shopt -s nullglob
 macs=("$dist"/*.app.tar.gz)
 [[ ${#macs[@]} -eq 1 ]] || die "want one .app.tar.gz in $dist, found ${#macs[@]}"
-# The nightly Mac is Apple silicon (packaging/build.sh builds the host arch).
-add darwin-aarch64 "${macs[0]}"
+case "${macs[0]}" in
+  # The release's universal bundle serves both Macs.
+  *_universal.app.tar.gz) add darwin-aarch64 "${macs[0]}"; add darwin-x86_64 "${macs[0]}" ;;
+  # The nightly Mac is Apple silicon (packaging/build.sh builds the host arch).
+  *) add darwin-aarch64 "${macs[0]}" ;;
+esac
 for f in "$dist"/*.AppImage; do
   case "$f" in
     *_amd64.AppImage) add linux-x86_64 "$f" ;;

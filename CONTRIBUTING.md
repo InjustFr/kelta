@@ -127,7 +127,8 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
 3. Label a PR `perf` to run the benchmarks (bundle budgets and the bench dry run) on it. The real memory/CPU
    runs are manual: Actions, bench, Run workflow.
 4. Nightly builds: the `nightly` workflow runs every night at 03:00 UTC (and on a manual run). It picks the
-   newest `main` commit with a green `ci` push run, skips when the `nightly` tag is already on it, builds the
+   newest `main` commit with a green `ci` push run (or its `sha` input), skips when the `nightly` tag is already
+   on it or past it, builds the
    Apple silicon dmg + updater bundle and the deb + AppImage for amd64 and arm64 on native runners, and
    publishes them with `scripts/publish-nightly.sh`. The same publish by hand, from a Mac:
    `bash scripts/nightly-local.sh` (clean tree, needs `gh` and Docker) builds the
@@ -136,8 +137,15 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    to the prerelease, `latest.json` after the other assets. A nightly without `--amd64` drops the amd64
    assets and the `linux-x86_64` entry of `latest.json`, so installed amd64 AppImages stop updating. It runs
    `bash scripts/ci-local.sh --full` first, and refuses to run without the updater key (see Nightly builds).
-   Tags `v*` build the release: run `bash scripts/ci-local.sh --full` on the commit before you tag it. A
-   manual run of `release` builds without publishing (universal dmg).
+5. Releases: run `bash scripts/ci-local.sh --full` on `main`, then Actions, release, Run workflow on `main`
+   (tick `dry_run` first to see the version and build without publishing). semantic-release (`.releaserc.json`)
+   picks the version from the commits since the last `vX.Y.Z` tag (see Commits), writes it everywhere
+   (`scripts/set-version.py`), prepends the notes to `CHANGELOG.md`, pushes `chore(release): X.Y.Z` and the tag
+   to `main` and opens a draft release. The same run builds that commit (deb + AppImage for amd64 and arm64,
+   universal dmg ad-hoc signed unless the `APPLE_*` secrets are set, updater bundles signed like the nightly),
+   uploads them with `latest.json` and `SHA256SUMS`, publishes the release (installed release builds update
+   from it) and runs `nightly` on the release commit. A failed build leaves the tag and the draft: re-run the
+   failed jobs.
 
 ## Nightly builds
 
@@ -154,8 +162,8 @@ Put the content of `~/.tauri/kelta-updater.key.pub` in `packaging/tauri.release.
 password manager: losing either strands every installed build until a manual reinstall. `nightly-local.sh` reads
 the key from `${KELTA_UPDATER_KEY:-~/.tauri/kelta-updater.key}` and the password from the Keychain, and stops
 before building when either is missing or the pubkey is still the placeholder. `packaging/build.sh` without
-`TAURI_SIGNING_PRIVATE_KEY` still builds unsigned installers (no update artifacts) from source. The `nightly`
-workflow reads the same key and password from the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY` still builds unsigned installers (no update artifacts) from source. The `nightly` and
+`release` workflows read the same key and password from the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, passed to the build steps only:
 
 ```sh
@@ -177,4 +185,9 @@ printf %s "$(security find-generic-password -s kelta-updater -w)" | gh secret se
 
 ## Commits
 
-Conventional commits (`feat(scope): ...`).
+Conventional commits (`feat(scope): ...`). They make the releases: `fix:` and `perf:` give a patch, `feat:` a
+minor, `!` after the type or a `BREAKING CHANGE:` footer a major, and their subjects are the release notes. Other
+types (`chore`, `docs`, `ci`, ...) release nothing and stay out of the notes.
+
+`CHANGELOG.md` belongs to semantic-release: do not edit it or keep an `[Unreleased]` section. To get a change
+into the notes, write its commit subject for the user.
