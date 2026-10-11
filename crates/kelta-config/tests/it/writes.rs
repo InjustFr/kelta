@@ -106,6 +106,20 @@ fn raw_write_validates_first() {
 }
 
 #[test]
+fn editor_and_load_agree_on_soft_issues() {
+    let e = env();
+    // (project `tools` is moved to the global file on load, so only the colour stays to compare)
+    let text = "[project]\nid = \"shop\"\ncolor = \"red\"\n\n[terminal]\nfont_size = 15\n";
+    std::fs::write(e.dirs.projects_dir().join("shop.toml"), text).unwrap();
+    let svc = e.load();
+    let loaded: Vec<_> = svc.issues().into_iter().map(|i| i.issue).collect();
+    assert_eq!(loaded.len(), 1, "{loaded:?}");
+    assert_eq!(loaded[0].severity, Severity::Warning);
+    assert_eq!(svc.layer_validate(Layer::Project, text).unwrap(), loaded);
+    assert_eq!(svc.effective(Some(&ProjectId::new("shop"))).terminal.font_size, 15.0);
+}
+
+#[test]
 fn ipc_rejects_a_bad_project_colour() {
     let e = env();
     let svc = e.load();
