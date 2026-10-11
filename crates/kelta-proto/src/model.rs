@@ -334,10 +334,24 @@ pub struct ClaudeMeta {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub usage: Option<ClaudeUsage>,
+    /// The open MCP `ask` question (#356), in memory only; the next input to the session clears it.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    /// Boxed: `UiEvent::SessionUpdated` stays under clippy's large-variant limit.
+    pub question: Option<Box<ClaudeQuestion>>,
     /// Set when it runs outside Kelta (#347): its pane only waits for it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub host: Option<ClaudeHost>,
+}
+
+/// MCP `ask` (#356): a question with one button per option, answered by typing the option.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ClaudeQuestion {
+    pub question: String,
+    pub options: Vec<String>,
+    /// `body_md` rendered and sanitized in Rust (`kelta_http::markdown::to_html`).
+    pub body_html: Option<String>,
 }
 
 /// What Claude Code's statusline reports (`HookPayload::usage`), plus Kelta's cost bookkeeping.

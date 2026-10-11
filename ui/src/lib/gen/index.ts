@@ -32,6 +32,7 @@ export type * from './ClaudeHost';
 export type * from './ClaudeMeta';
 export type * from './ClaudePlan';
 export type * from './ClaudeProfile';
+export type * from './ClaudeQuestion';
 export type * from './ClaudeRun';
 export type * from './ClaudeRunAgent';
 export type * from './ClaudeRunPhase';

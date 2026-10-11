@@ -4,7 +4,16 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
+  import type {
+    Column,
+    PrLink,
+    SessionInfo,
+    Ticket,
+    TicketItem,
+    TicketSort,
+    TicketsMode,
+    Who,
+  } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { GLOBAL, projects, sessions, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
@@ -33,7 +42,8 @@
   import { startWorkOnTicket } from '../work/startWork';
   import { batch, batchKey } from '../work/batch.svelte';
   import { runPrimary } from '../work/actions';
-  import { phaseNow } from '../work/live';
+  import AskBar from '../work/AskBar.svelte';
+  import { askerOf, phaseNow } from '../work/live';
   import { outsidePhase } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
@@ -253,7 +263,9 @@
   // ---- grouped rows (list) ------------------------------------------------------------------
   type Row =
     | { kind: 'group'; key: string; group: TicketGroup; open: boolean }
-    | { kind: 'ticket'; key: string; item: TicketItem };
+    | { kind: 'ticket'; key: string; item: TicketItem }
+    /** A workflow's question (#356) under its ticket: the option buttons. */
+    | { kind: 'ask'; key: string; session: SessionInfo };
 
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
@@ -277,13 +289,19 @@
       columns,
     ),
   );
+  const ticketRows = (item: TicketItem): Row[] => {
+    const w = liveWork(item);
+    const asker = w ? askerOf(w) : null;
+    const row: Row = { kind: 'ticket', key: keyOf(item), item };
+    return asker ? [row, { kind: 'ask', key: `ask:${row.key}`, session: asker }] : [row];
+  };
   const rows = $derived.by<Row[]>(() => {
-    if (groupBy === 'none') return sorted.map((item) => ({ kind: 'ticket', key: keyOf(item), item }));
+    if (groupBy === 'none') return sorted.flatMap(ticketRows);
     const out: Row[] = [];
     for (const group of groups) {
       const open = toggled[`${groupBy}:${group.id}`] ?? group.category !== 'done';
       out.push({ kind: 'group', key: `group:${group.id}`, group, open });
-      if (open) for (const item of group.items) out.push({ kind: 'ticket', key: keyOf(item), item });
+      if (open) out.push(...group.items.flatMap(ticketRows));
     }
     return out;
   });
@@ -375,7 +393,7 @@
 
   /** Keys of the rows j/k walk: the grouped rows, or the current lane's cards. */
   function sequence(): string[] {
-    if (mode === 'list') return rows.map((r) => r.key);
+    if (mode === 'list') return rows.filter((r) => r.kind !== 'ask').map((r) => r.key);
     return (lanes.find((l) => cur && l.cards.includes(cur))?.cards ?? []).map(keyOf);
   }
 
@@ -946,6 +964,8 @@
                   {#if overWip}<span class="wip-note">{t('Above your limit of {n}', { n: wipLimit })}</span
                     >{/if}
                 </button>
+              {:else if r.kind === 'ask'}
+                <div class="ask-line"><AskBar session={r.session} /></div>
               {:else}
                 <TicketRow
                   item={r.item}
@@ -1192,6 +1212,14 @@
   .head.selected {
     background: var(--k-bg-selected);
     box-shadow: inset 2px 0 0 var(--k-accent);
+  }
+
+  /* Under the title column: past the lamp and key columns. */
+  .ask-line {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 var(--k-space-3) 0 calc(var(--key-chars, 8) * 0.6 * var(--k-font-size-sm) + 40px);
   }
 
   .head.wip {

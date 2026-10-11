@@ -26,6 +26,7 @@ pub(crate) fn parkable(i: &SessionInfo) -> bool {
         && matches!(i.status, SessionStatus::Done | SessionStatus::WaitingUser)
         && i.seen
         && i.attention == Attention::None
+        && i.claude.as_ref().is_none_or(|c| c.question.is_none())
 }
 
 impl Core {

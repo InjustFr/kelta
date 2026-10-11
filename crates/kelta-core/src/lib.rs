@@ -64,8 +64,9 @@ use kelta_proto::ext::{BlockingOutcome, ProxiedRequest, ProxiedResponse, ToolHan
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::ipc::AppInfo;
 use kelta_proto::model::{
-    ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo, ProjectPatch,
-    Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx, WorkItem,
+    ClaudeQuestion, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft,
+    ProjectInfo, ProjectPatch, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, TemplateCtx,
+    WorkItem,
 };
 use kelta_proto::settings::{Layer, ProjectConfig, RuntimeOverrides, SessionHost, Settings, SettingsDiff};
 use kelta_proto::term::{LoginEnv, TerminalLimits};
@@ -695,6 +696,16 @@ impl CoreApi for Core {
     }
     async fn session_set_usage(&self, id: &SessionId, usage: ClaudeUsage) -> Result<(), KeltaError> {
         self.set_usage(id, usage)
+    }
+    fn session_ask(
+        &self,
+        id: &SessionId,
+        question: String,
+        options: Vec<String>,
+        body_md: Option<String>,
+    ) -> Result<(), KeltaError> {
+        let body_html = body_md.map(|md| kelta_http::markdown::to_html(&md));
+        self.ask(id, ClaudeQuestion { question, options, body_html })
     }
     fn session_claude_runs_hook(&self, id: &SessionId, payload: &kelta_proto::hooks::HookPayload) {
         self.remember_permission_mode(id, payload);

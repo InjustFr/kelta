@@ -2342,6 +2342,7 @@
   "Only items tagged {name}": "Nur Elemente mit dem Tag {name}",
   "Create tags in Settings": "Tags in den Einstellungen anlegen",
   "Tags…": "Tags…",
+  "Answer the prompt open in this session first": "Beantworten Sie zuerst die offene Abfrage in dieser Sitzung",
   "Claude host": "Claude-Host",
   "In a Kelta terminal pane.": "In einem Kelta-Terminalbereich.",
   "In a new window of the repository's tmux session, created when missing.": "In einem neuen Fenster der tmux-Sitzung des Repositorys, die bei Bedarf angelegt wird.",
