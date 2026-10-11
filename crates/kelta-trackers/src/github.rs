@@ -19,7 +19,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, BlockedMarker, ProjectV2Ref, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -66,6 +66,16 @@ macro_rules! project_items {
     };
 }
 
+/// An issue's parent (sub-issues), from `parent{ number title url repository{ nameWithOwner } }`.
+fn parent_from(issue: &Value) -> Option<TicketParent> {
+    let p = issue.get("parent").filter(|p| !p.is_null())?;
+    Some(TicketParent {
+        key: format!("{}#{}", p.pointer("/repository/nameWithOwner")?.as_str()?, p.get("number")?.as_u64()?),
+        title: s(p, "title").unwrap_or("").to_owned(),
+        url: s(p, "url").unwrap_or("").to_owned(),
+    })
+}
+
 /// One Projects v2 item of an issue.
 #[derive(Debug, Clone)]
 struct ItemInfo {
@@ -81,6 +91,7 @@ struct ItemInfo {
 struct IssueProjects {
     open: bool,
     items: Vec<ItemInfo>,
+    parent: Option<TicketParent>,
 }
 
 pub struct GithubIssues {
@@ -343,7 +354,7 @@ impl GithubIssues {
         const Q: &str = concat!(
             "query($owner:String!,$number:Int!,$after:String,$query:String){ repositoryOwner(login:$owner){ ... on ProjectV2Owner { projectV2(number:$number){ items(first:50, after:$after, query:$query, orderBy:{field:POSITION, direction:ASC}){ pageInfo{hasNextPage endCursor} nodes{ fieldValues(first:30){ nodes{ ",
             field_value_fragments!(),
-            " } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } assignees(first:1){ nodes{ login name avatarUrl } } author{ login avatarUrl } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }"
+            " } } content{ ... on Issue { id databaseId number title url state updatedAt closedAt milestone{ dueOn } repository{ nameWithOwner } parent{ number title url repository{ nameWithOwner } } assignees(first:1){ nodes{ login name avatarUrl } } author{ login avatarUrl } labels(first:10){ nodes{ name } } issueType{ name } } } } } } } }"
         );
         let data = self
             .gql(Q, json!({"owner": p.owner, "number": p.number, "after": after, "query": filter}))
@@ -400,6 +411,7 @@ impl GithubIssues {
                 updated_at,
                 due: c.pointer("/milestone/dueOn").and_then(Value::as_str).and_then(date_of),
                 project_hint: Some(repo),
+                parent: parent_from(c),
                 ..Default::default()
             };
             apply_project_fields(&mut t, vals, &today);
@@ -417,6 +429,7 @@ impl GithubIssues {
     async fn issue_projects(&self, repo: &str, number: u64) -> Result<IssueProjects, KeltaError> {
         const Q: &str = concat!(
             "query($owner:String!,$name:String!,$number:Int!){ repository(owner:$owner,name:$name){ issue(number:$number){ state ",
+            "parent{ number title url repository{ nameWithOwner } } ",
             project_items!(20),
             " } } }"
         );
@@ -427,7 +440,11 @@ impl GithubIssues {
             .pointer("/repository/issue")
             .filter(|v| !v.is_null())
             .ok_or_else(|| KeltaError::not_found(format!("{repo}#{number}")))?;
-        Ok(IssueProjects { open: s(issue, "state") != Some("CLOSED"), items: self.items_of(issue) })
+        Ok(IssueProjects {
+            open: s(issue, "state") != Some("CLOSED"),
+            items: self.items_of(issue),
+            parent: parent_from(issue),
+        })
     }
 
     /// The Projects v2 items of an issue node (selected with `project_items!`).
@@ -482,22 +499,29 @@ impl GithubIssues {
     /// REST issues as tickets with their board Status and fields, from ONE GraphQL call over the
     /// issues' node ids (they may span repos). Runs on every poll, a 304 included: a board move does not
     /// change the REST ETag. No project scope or a failed call: the plain Open/Closed tickets.
-    /// `closed_only`: skip the call, a closed issue is "Closed" whatever its board says.
+    /// `closed_only`: query the parents alone, a closed issue is "Closed" whatever its board says.
     async fn with_boards(&self, issues: &[Value], closed_only: bool) -> Vec<Ticket> {
         // 5 items per issue keeps a 50-issue page at ~3 rate-limit points (20 would be ~11).
-        const Q: &str =
-            concat!("query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id ", project_items!(5), " } } }");
+        const Q: &str = concat!(
+            "query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id parent{ number title url repository{ nameWithOwner } } ",
+            project_items!(5),
+            " } } }"
+        );
+        const Q_PARENTS: &str = "query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue { id parent{ number title url repository{ nameWithOwner } } } } }";
         let ids: Vec<&str> = issues
             .iter()
             .filter(|i| i.get("pull_request").is_none())
             .filter_map(|i| s(i, "node_id"))
             .collect();
         let mut by_id: HashMap<String, ItemInfo> = HashMap::new();
-        if !closed_only
-            && !ids.is_empty()
-            && let Ok(d) = self.gql(Q, json!({"ids": ids})).await
+        let mut parents: HashMap<String, TicketParent> = HashMap::new();
+        if !ids.is_empty()
+            && let Ok(d) = self.gql(if closed_only { Q_PARENTS } else { Q }, json!({"ids": ids})).await
         {
             for n in d.get("nodes").and_then(Value::as_array).into_iter().flatten() {
+                if let (Some(id), Some(p)) = (s(n, "id"), parent_from(n)) {
+                    parents.insert(id.to_owned(), p);
+                }
                 if let (Some(id), Some(item)) = (s(n, "id"), self.pick_item(self.items_of(n))) {
                     by_id.insert(id.to_owned(), item);
                 }
@@ -510,6 +534,7 @@ impl GithubIssues {
             .filter_map(|i| {
                 let item = s(i, "node_id").and_then(|id| by_id.get(id));
                 let mut t = self.ticket_from_rest(i, item.and_then(|x| x.current.as_deref()))?;
+                t.parent = s(i, "node_id").and_then(|id| parents.get(id)).cloned();
                 let board = item.map(|x| (x.owner.clone(), x.number));
                 if let Some(x) = item {
                     apply_project_fields(&mut t, &x.vals, &today);
@@ -602,6 +627,7 @@ impl GithubIssues {
                             .ok_or_else(|| KeltaError::upstream("issue response without repository"))?;
                         // a move changes Status only; keep the board fields read before it
                         apply_project_fields(&mut t, &item.vals, &common::today());
+                        t.parent = info.parent.clone();
                         return Ok(t);
                     }
                     Err(e) => {
@@ -620,8 +646,12 @@ impl GithubIssues {
     /// priority, estimate), so assign / open / close / get never strip them. `None` = a pull request.
     async fn ticket_with_board(&self, repo: &str, number: u64, v: &Value) -> Option<Ticket> {
         // No project, or a token without project scope: the plain issue.
-        let item = self.issue_projects(repo, number).await.ok().and_then(|p| self.pick_item(p.items));
+        let (item, parent) = match self.issue_projects(repo, number).await {
+            Ok(p) => (self.pick_item(p.items), p.parent),
+            Err(_) => (None, None),
+        };
         let mut t = self.ticket_from_rest(v, item.as_ref().and_then(|i| i.current.as_deref()))?;
+        t.parent = parent;
         if let Some(i) = &item {
             apply_project_fields(&mut t, &i.vals, &common::today());
         }
@@ -1039,13 +1069,18 @@ impl Tracker for GithubIssues {
             .flatten()
             .unwrap_or_default();
         let body = s(&issue, "body").unwrap_or("").to_owned();
+        let parent = ticket.parent.as_ref().map(|p| TicketRef {
+            account: ticket.r#ref.account.clone(),
+            key: p.key.clone(),
+            id: p.key.clone(),
+        });
         Ok(TicketDetail {
             ticket,
             body_html: markdown::to_html(&body),
             body_md: body,
             body_format: BodyFormat::Markdown,
+            parent,
             comments: common::last_n(comments, COMMENT_LIMIT),
-            parent: None,
             children,
             prs: Vec::new(),
             caps: Default::default(),

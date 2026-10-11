@@ -5,7 +5,7 @@ import type { StartWorkPlan, TicketItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
+import { layout, projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { sheetRegistry } from '$app/registry';
@@ -279,6 +279,16 @@ describe('TicketDetail', () => {
         transition_id: 'to-in_review',
       }),
     );
+  });
+
+  it('shows the parent above the title; Enter on it opens its detail', async () => {
+    mount('SHOP-160');
+    const link = screen.getByRole('button', { name: /parent SHOP-142/ });
+    expect(link.textContent).toContain('Rate-limit login');
+    await waitFor(() => expect(tickets.details[ticketKey(itemOf('SHOP-160').ticket.ref)]?.data).toBeTruthy());
+    link.focus();
+    await fireEvent.click(link); // a focused button's Enter is its click
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toMatch(/"ticket_detail".*"SHOP-142"/));
   });
 
   it('lists sub-tasks with their status; s on one starts work on it, not on the parent', async () => {

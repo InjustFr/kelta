@@ -661,6 +661,11 @@
       },
       "title": "Apple Pay: waiting on merchant certificate",
       "url": "https://acme.atlassian.net/browse/SHOP-160",
+      "parent": {
+        "key": "SHOP-142",
+        "title": "Rate-limit login",
+        "url": "https://acme.atlassian.net/browse/SHOP-142"
+      },
       "status": {
         "id": "10010",
         "name": "Blocked",

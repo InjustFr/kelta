@@ -71,6 +71,9 @@
   const tooltip = $derived(
     [
       tk.title,
+      tk.parent && groupBy !== 'parent'
+        ? t('Parent: {name}', { name: [tk.parent.key, tk.parent.title].filter(Boolean).join(' · ') })
+        : '',
       tk.sprint && groupBy !== 'sprint'
         ? tk.sprint.active
           ? t('Sprint: {name} (current)', { name: tk.sprint.name })
@@ -108,7 +111,8 @@
   <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
     ><span class="text"
-      >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span>{/if}{tk.title}</span
+      >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span>{/if}{#if tk.parent && groupBy !== 'parent'}<span class="parent" data-parent>{tk.parent.key}</span
+        >{/if}{tk.title}</span
     ><span class="acts" data-acts>
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
@@ -247,6 +251,21 @@
     border-radius: var(--k-radius-sm);
     color: var(--k-danger);
     font-size: var(--k-font-size-xs);
+  }
+
+  .parent {
+    display: inline-block;
+    max-width: 16ch;
+    overflow: hidden;
+    margin-right: var(--k-space-2);
+    padding: 0 var(--k-space-1);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg-hover);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
   }
 
   .c-signals {

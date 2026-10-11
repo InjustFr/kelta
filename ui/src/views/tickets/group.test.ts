@@ -88,6 +88,24 @@ describe('groupTickets', () => {
     ]);
   });
 
+  it('groups by parent with no parent last; a parent without title takes the listed ticket title', () => {
+    const parent = (key: string, title = '') => ({ parent: { key, title, url: `https://t/${key}` } });
+    const list = [
+      item('A', ['Backlog', 'todo'], null, [], parent('E-2', 'Search')),
+      item('B', ['Done', 'done'], null, [], { parent: null }),
+      item('C', ['QA', 'in_review'], null, [], parent('E-1', 'Checkout')),
+      item('D', ['Todo', 'todo'], null, [], parent('E-2', 'Search')),
+      item('E-3', ['Todo', 'todo'], null, [], { parent: undefined, title: 'Login' }),
+      item('F', ['Todo', 'todo'], null, [], parent('E-3')),
+    ];
+    expect(summary(groupTickets(list, 'parent'))).toEqual([
+      ['E-1 · Checkout', ['C']],
+      ['E-2 · Search', ['A', 'D']],
+      ['E-3 · Login', ['F']],
+      ['No parent', ['B', 'E-3']],
+    ]);
+  });
+
   it('groups by source in source order, unknown sources last', () => {
     const sources = [
       { id: 'v1', label: 'Mine' },

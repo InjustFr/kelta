@@ -521,6 +521,11 @@ export const ticketPage: TicketPage = {
         "labels": [
           "api"
         ],
+        "parent": {
+          "key": "SHOP-100",
+          "title": "Login hardening",
+          "url": "https://acme.atlassian.net/browse/SHOP-100"
+        },
         "priority": "High",
         "priority_rank": 1,
         "project_hint": "SHOP",
@@ -581,6 +586,11 @@ export const ticket: Ticket = {
   "labels": [
     "api"
   ],
+  "parent": {
+    "key": "SHOP-100",
+    "title": "Login hardening",
+    "url": "https://acme.atlassian.net/browse/SHOP-100"
+  },
   "priority": "High",
   "priority_rank": 1,
   "project_hint": "SHOP",
@@ -677,6 +687,11 @@ export const ticketDetail: TicketDetail = {
         "labels": [
           "api"
         ],
+        "parent": {
+          "key": "SHOP-100",
+          "title": "Login hardening",
+          "url": "https://acme.atlassian.net/browse/SHOP-100"
+        },
         "priority": "High",
         "priority_rank": 1,
         "project_hint": "SHOP",
@@ -737,6 +752,11 @@ export const ticketDetail: TicketDetail = {
     "labels": [
       "api"
     ],
+    "parent": {
+      "key": "SHOP-100",
+      "title": "Login hardening",
+      "url": "https://acme.atlassian.net/browse/SHOP-100"
+    },
     "priority": "High",
     "priority_rank": 1,
     "project_hint": "SHOP",

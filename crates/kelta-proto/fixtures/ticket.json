@@ -13,6 +13,11 @@
   "labels": [
     "api"
   ],
+  "parent": {
+    "key": "SHOP-100",
+    "title": "Login hardening",
+    "url": "https://acme.atlassian.net/browse/SHOP-100"
+  },
   "priority": "High",
   "priority_rank": 1,
   "project_hint": "SHOP",

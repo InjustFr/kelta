@@ -1,5 +1,5 @@
 // Tickets list grouping (TICKETS.md T5/T6): Flow (default), native status, priority, sprint, assignee,
-// source or none; sort within groups; status age.
+// source, parent or none; sort within groups; status age.
 
 import { msg, t } from '$lib/i18n/index.svelte';
 import type {
@@ -23,6 +23,7 @@ export const GROUP_BYS: readonly GroupBy[] = [
   'sprint',
   'assignee',
   'source',
+  'parent',
   'none',
 ];
 export const SORTS: readonly TicketSort[] = ['priority', 'updated', 'age', 'key'];
@@ -193,6 +194,17 @@ export function groupTickets(
       ];
     } else if (by === 'assignee') {
       g = [tk.assignee?.id ?? '', tk.assignee?.name ?? t('Unassigned'), null, tk.assignee ? 0 : 1];
+    } else if (by === 'parent') {
+      // Keyed by URL: keys repeat across trackers. Redmine sends no title: the listed parent's, if any.
+      const p = tk.parent;
+      const title =
+        p &&
+        (p.title ||
+          items.find((i) => i.ticket.ref.account === tk.ref.account && i.ticket.ref.key === p.key)?.ticket
+            .title);
+      g = p
+        ? [p.url || `${tk.ref.account}:${p.key}`, title ? `${p.key} · ${title}` : p.key, null, 0]
+        : ['', t('No parent'), null, 1];
     } else {
       const at = sources.findIndex((s) => s.id === item.source_ids[0]);
       g = [item.source_ids[0] ?? '', sources[at]?.label ?? t('Other'), null, at < 0 ? sources.length : at];

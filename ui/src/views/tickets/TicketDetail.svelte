@@ -316,6 +316,18 @@
     if (project) void openContent(project, { kind: 'ticket_detail', ticket });
   }
 
+  /** The list's parent (with its title), else the detail's (Jira and Redmine sub-tasks). */
+  const parent = $derived(
+    ticket.parent ?? (detail?.parent ? { key: detail.parent.key, title: '', url: '' } : null),
+  );
+
+  /** An issue parent opens here; one the tracker cannot open as a ticket (GitLab epic, Linear project) in the browser. */
+  function openParent(): void {
+    if (detail?.parent) openTicket(detail.parent);
+    else if (parent?.url)
+      openExternal({ url: parent.url }).catch((err) => toasts.error(err, t('Open in browser')));
+  }
+
   /** A focused sub-task row: `s` starts work on it (`S` with no sheet); its other keys do nothing. */
   function childKeys(e: KeyboardEvent, child: TicketItem): void {
     if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== 's' && e.key !== 'S')) return;
@@ -378,10 +390,17 @@
   <header class="head">
     <div class="line">
       <span class="key k-selectable">{ref.key}</span>
-      {#if detail?.parent}
-        {@const parent = detail.parent}
-        <button type="button" class="link" onclick={() => openTicket(parent)}>
-          {t('parent {key}', { key: parent.key })}
+      {#if parent}
+        <button
+          type="button"
+          class="link parent"
+          data-parent
+          onclick={openParent}
+          title={parent.title || undefined}
+        >
+          {t('parent {key}', { key: parent.key })}{#if parent.title}<span class="parent-title"
+              >&#32;{parent.title}</span
+            >{/if}
         </button>
       {/if}
       {#if runPhase?.id === 'run'}<span class="run" data-run title={runPhase.detail}
@@ -701,6 +720,17 @@
 
   .late {
     color: var(--k-danger);
+  }
+
+  .parent {
+    min-width: 0;
+  }
+
+  .parent-title {
+    overflow: hidden;
+    color: var(--k-fg-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .link {
