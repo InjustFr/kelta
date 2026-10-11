@@ -2,12 +2,12 @@ name: release
 
 # Manual only (Actions, release, Run workflow on main). semantic-release (.releaserc.json) reads the conventional
 # commits since the last vX.Y.Z tag, sets the version (scripts/set-version.py), prepends the notes to CHANGELOG.md,
-# pushes the release commit and the tag to main and opens a draft release. The same run then builds that commit:
-# deb + AppImage for amd64 and arm64, the universal dmg, the signed updater bundles. The publish job uploads them
-# with latest.json and only then publishes the draft, so releases/latest never lacks its manifest. Last, it runs
-# nightly.yml on the release commit. Everything happens in this run: refs pushed with GITHUB_TOKEN trigger no
-# workflow. A failed build leaves the tag and the draft: re-run the failed jobs. `dry_run` pushes and publishes
-# nothing but still builds, with the version semantic-release would pick.
+# and pushes the release commit and the tag to main. The same run then builds that commit: deb + AppImage for
+# amd64 and arm64, the universal dmg, the signed updater bundles. The publish job creates the GitHub release with
+# all of them and latest.json at once, so releases/latest never lacks its manifest, then runs nightly.yml on the
+# release commit. Everything happens in this run: refs pushed with GITHUB_TOKEN trigger no workflow. A failed
+# build leaves the tag without a release: re-run the failed jobs. `dry_run` pushes and publishes nothing but
+# still builds, with the version semantic-release would pick.
 on:
   workflow_dispatch:
     inputs:
@@ -31,7 +31,7 @@ jobs:
   version:
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # the release commit, the tag and the draft release
+      contents: write # the release commit and the tag
     outputs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.sha.outputs.sha }}
@@ -188,16 +188,26 @@ jobs:
         run: |
           for f in dist/*.dmg; do [ "$(stat -c %s "$f")" -le 20971520 ] || { echo "$f over 20 MB"; exit 1; }; done
           for f in dist/*.deb; do [ "$(stat -c %s "$f")" -le 15728640 ] || { echo "$f over 15 MB"; exit 1; }; done
-      - name: Updater manifest and checksums
+      - name: Notes, updater manifest and checksums
         run: |
-          gh release view "v$VERSION" --json body --jq .body > "$RUNNER_TEMP/notes"
-          bash scripts/update-manifest.sh dist "$VERSION" "$RUNNER_TEMP/notes" \
+          # The notes: the CHANGELOG.md section semantic-release just wrote (the first `## ` one), under GitHub's
+          # 125000-character release body limit (the first release lists every commit).
+          notes="$RUNNER_TEMP/notes"
+          awk '/^## /{n++; next} n==1' CHANGELOG.md > "$notes"
+          if [ "$(wc -c < "$notes")" -gt 120000 ]; then
+            head -c 115000 "$notes" | sed '$d' > "$notes.cut"
+            printf '\n... the rest is in [CHANGELOG.md](https://github.com/InjustFr/kelta/blob/v%s/CHANGELOG.md).\n' \
+              "$VERSION" >> "$notes.cut"
+            mv "$notes.cut" "$notes"
+          fi
+          bash scripts/update-manifest.sh dist "$VERSION" "$notes" \
             "https://github.com/InjustFr/kelta/releases/download/v$VERSION"
           (cd dist && sha256sum -- * > SHA256SUMS)
-      # Assets on the draft first, then public: releases/latest never points at a release without latest.json.
+      # gh creates the release as a draft, uploads every asset, then publishes it: releases/latest never points
+      # at a release without latest.json.
       - name: Publish the release
         run: |
-          gh release upload "v$VERSION" dist/* --clobber
-          gh release edit "v$VERSION" --draft=false --latest
+          gh release create "v$VERSION" dist/* --verify-tag --latest --title "v$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes"
       - name: Nightly on the release commit
         run: gh workflow run nightly.yml --ref main -f sha="$SHA"

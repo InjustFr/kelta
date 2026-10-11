@@ -141,11 +141,11 @@ GitHub Actions is the confirmation, not the test bench. Do not push to see wheth
    (tick `dry_run` first to see the version and build without publishing). semantic-release (`.releaserc.json`)
    picks the version from the commits since the last `vX.Y.Z` tag (see Commits), writes it everywhere
    (`scripts/set-version.py`), prepends the notes to `CHANGELOG.md`, pushes `chore(release): X.Y.Z` and the tag
-   to `main` and opens a draft release. The same run builds that commit (deb + AppImage for amd64 and arm64,
-   universal dmg ad-hoc signed unless the `APPLE_*` secrets are set, updater bundles signed like the nightly),
-   uploads them with `latest.json` and `SHA256SUMS`, publishes the release (installed release builds update
-   from it) and runs `nightly` on the release commit. A failed build leaves the tag and the draft: re-run the
-   failed jobs.
+   to `main`. The same run builds that commit (deb + AppImage for amd64 and arm64, universal dmg ad-hoc signed
+   unless the `APPLE_*` secrets are set, updater bundles signed like the nightly), publishes the GitHub release
+   with them, `latest.json` and `SHA256SUMS` (installed release builds update from it; the notes are the new
+   `CHANGELOG.md` section) and runs `nightly` on the release commit. A failed build leaves the tag without a
+   release: re-run the failed jobs.
 
 ## Nightly builds
 
