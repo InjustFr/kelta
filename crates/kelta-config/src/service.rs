@@ -636,7 +636,8 @@ impl ConfigService {
     }
 
     fn repo_trusted(&self, r: &RepoEntry) -> bool {
-        self.trusted.read().get(&r.file.path).is_some_and(|h| *h == r.file.hash)
+        // an invalid file keeps its last good value, which is not the content the hash covers
+        r.file.valid && self.trusted.read().get(&r.file.path).is_some_and(|h| *h == r.file.hash)
     }
 
     fn repo_value(&self, r: &RepoEntry) -> Value {
@@ -812,8 +813,11 @@ impl ConfigService {
                             cfg = pe.config.clone();
                             changed = true;
                         }
-                        for (r, o) in repos.iter_mut().zip(pe.repos.iter()) {
-                            if r.file.hash != o.file.hash {
+                        // pair by path: a reordered repo list must not hand one repo another's value
+                        for r in &mut repos {
+                            if let Some(o) = pe.repos.iter().find(|o| o.file.path == r.file.path)
+                                && r.file.hash != o.file.hash
+                            {
                                 r.file.value = o.file.value.clone();
                                 r.file.valid = false;
                                 changed = true;
