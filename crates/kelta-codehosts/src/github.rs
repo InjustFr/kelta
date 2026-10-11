@@ -77,6 +77,10 @@ mergePullRequest(input:{pullRequestId:$id,mergeMethod:$m}){ clientMutationId } }
 
 const DISARM_AUTO_MERGE: &str =
     "mutation($id:ID!){ disablePullRequestAutoMerge(input:{pullRequestId:$id}){ clientMutationId } }";
+const MARK_READY: &str =
+    "mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ clientMutationId } }";
+const TO_DRAFT: &str =
+    "mutation($id:ID!){ convertPullRequestToDraft(input:{pullRequestId:$id}){ clientMutationId } }";
 
 #[derive(Default)]
 struct Gate {
@@ -1181,6 +1185,12 @@ impl CodeHost for GithubHost {
     async fn disarm_auto_merge(&self, r: &ReviewRef) -> Result<(), KeltaError> {
         let (id, _) = self.pr_node(r).await?;
         graphql(&self.auth, &self.graphql, DISARM_AUTO_MERGE, json!({ "id": id })).await.map(|_| ())
+    }
+
+    async fn set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        let (id, _) = self.pr_node(r).await?;
+        let q = if draft { TO_DRAFT } else { MARK_READY };
+        graphql(&self.auth, &self.graphql, q, json!({ "id": id })).await.map(|_| ())
     }
 
     fn repo_from_remote(&self, url: &str) -> Option<String> {

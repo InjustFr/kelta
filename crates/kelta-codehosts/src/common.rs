@@ -140,9 +140,28 @@ pub fn user(login: &str, name: Option<&str>, avatar: Option<&str>) -> User {
     }
 }
 
+/// `title` without its draft prefixes (`Draft:`, `[WIP]`, … in any case), with `prefix` when `draft`
+/// (GitLab and Gitea mark a draft by its title).
+pub fn draft_title(title: &str, draft: bool, prefix: &str) -> String {
+    const KNOWN: [&str; 5] = ["draft:", "[draft]", "(draft)", "wip:", "[wip]"];
+    let mut t = title.trim_start();
+    while let Some(p) = KNOWN.iter().find(|p| t.get(..p.len()).is_some_and(|h| h.eq_ignore_ascii_case(p))) {
+        t = t[p.len()..].trim_start();
+    }
+    if draft { format!("{prefix} {t}") } else { t.to_owned() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_titles_swap_any_known_prefix() {
+        assert_eq!(draft_title("Draft: [WIP] Fix", false, "Draft:"), "Fix");
+        assert_eq!(draft_title("wip: Fix", true, "Draft:"), "Draft: Fix");
+        assert_eq!(draft_title("Fix", true, "WIP:"), "WIP: Fix");
+        assert_eq!(draft_title("Drafty", false, "Draft:"), "Drafty");
+    }
 
     #[test]
     fn remote_forms() {

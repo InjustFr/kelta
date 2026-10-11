@@ -1782,6 +1782,14 @@ impl Core {
         Ok(())
     }
 
+    /// Mark ready for review (`draft` false) or back to draft.
+    pub async fn review_set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.code_host_of(&r.account)?.set_draft(r, draft).await?;
+        self.after_review_write(r).await;
+        Ok(())
+    }
+
     pub async fn review_request_changes(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         self.rt.capture();
         self.code_host_of(&r.account)?.request_changes(r, body).await?;

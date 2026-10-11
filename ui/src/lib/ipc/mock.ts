@@ -1293,6 +1293,11 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
       return null;
     },
+    review_set_draft: ({ review, draft }) => {
+      reviewItem(review).review.draft = draft;
+      emit({ type: 'reviews.changed', scope: { kind: 'all' }, new_keys: [] });
+      return null;
+    },
     // ---- work ------------------------------------------------------------------------------
     work_plan: ({ project_id: asked, source }) => {
       // Simplified SPEC §3.1: the existing item, the caller's pick, a route, the last pick for the
