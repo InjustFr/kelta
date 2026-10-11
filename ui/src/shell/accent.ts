@@ -1,6 +1,6 @@
 // Project hue as the only accent (DESIGN §2.1): tokens.css clamps --k-project to a fixed oklch L/C.
 
-import { linear, parseHex } from '$lib/theme/hex';
+import { oklab, parseHex } from '$lib/theme/hex';
 
 /** oklch chroma and hue (degrees) of a `#rgb` / `#rrggbb` colour, or null when it is not a hex colour. */
 export function oklch(color: string): { c: number; h: number } | null {
@@ -8,12 +8,7 @@ export function oklch(color: string): { c: number; h: number } | null {
   // no alpha forms: those keep the colour as is in projectAccent
   const p = t.length === 4 || t.length === 7 ? parseHex(t) : null;
   if (!p) return null;
-  const [r, g, b] = p.slice(0, 3).map(linear) as [number, number, number];
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const md = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  const a = 1.9779984951 * l - 2.428592205 * md + 0.4505937099 * s;
-  const bb = 0.0259040371 * l + 0.7827717662 * md - 0.808675766 * s;
+  const [, a, bb] = oklab(p);
   return { c: Math.hypot(a, bb), h: ((Math.atan2(bb, a) * 180) / Math.PI + 360) % 360 };
 }
 

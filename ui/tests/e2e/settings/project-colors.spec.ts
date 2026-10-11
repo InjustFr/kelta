@@ -70,9 +70,11 @@ test('a picked theme colour follows the theme, a custom hex stays as typed', asy
     await expect.poll(() => bar(page, 'billing')).toBe('#ff8800');
   }
 
-  // Nord: the chips are Nord's, the slot stays selected, the custom hex keeps its chip.
+  // Nord: the chips are Nord's, less the bright ones that repeat their base (#364), the slot stays
+  // selected, the custom hex keeps its chip.
   await pickTheme(page, 'nord');
   await editProject(page, 'Shop');
+  await expect(page.locator('[data-slot]')).toHaveCount(6);
   await expect(page.getByRole('button', { name: 'Green', exact: true })).toHaveCSS(
     'background-color',
     rgb('#a3be8c'),
