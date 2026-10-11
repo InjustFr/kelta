@@ -3528,6 +3528,15 @@
             },
             "type": "array"
           },
+          "status_colors": {
+            "additionalProperties": {
+              "pattern": "^(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|theme:(bright-)?(red|green|yellow|blue|magenta|cyan))$",
+              "type": "string"
+            },
+            "default": {},
+            "description": "Status name (as the tracker spells it) → colour of its chip, like a project `color`; unmapped\nstatuses keep their category colour. A bad colour is dropped with a warning.",
+            "type": "object"
+          },
           "tracker": {
             "additionalProperties": false,
             "default": {

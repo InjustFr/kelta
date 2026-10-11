@@ -283,6 +283,8 @@ Ticket boards. A source belongs to no project: it feeds zero or more of them, an
 id = "product"
 label = "Product board"
 projects = ["web", "api"]          # projects this board feeds; may be empty
+# status name → chip colour, like a project `color`; unmapped statuses keep their category colour
+status_colors = { "In QA" = "theme:magenta", "Ready for release" = "#2f8c86" }
 
 [sources.tracker]                  # the §3 tracker binding without repo_rules
 account = "jira-acme"
@@ -296,11 +298,11 @@ project = "web"
 repo = "web"
 ```
 
-Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account.
+Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or `#rrggbb` is a warning: that entry is dropped, the rest applies (IPC writes reject it).
 
 `ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
 
-**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
+**Settings → Sources** (after Projects, global layer only) edits the list: one card per source with its **Label**; **Board** (the account, the view rows with whose tickets, current iteration and remove, and **Add view…**, which opens the picker on that source); **Status colours** (every status of the source's columns, plus any already coloured, each with the project colour picker); **Columns** and **Status map** (schema forms); **Projects** (chips of the non-Home projects; unticking one drops its routes); **Routes** (Match component / label / type and its value, a Project among the source's, a Repository of that project; add, remove, reorder; the first match wins). Removing a source is confirmed. **Add source** opens the picker, which creates a source labelled after the picked board. Settings → Projects shows "Fed by …" per project, each source name opening its card.
 
 ### [[tools]], [[triggers]], [[commands]]
 Schemas in PLUGINS.md §2-3 (same schema in config and plugin manifests). by_id; x-kelta-exec. `tools` has scope global only (tools are personal: `[[tools]]` in a project file is a scope issue, in a repo file the issue "`tools` is personal: add it in Settings → Tools", with the tools ignored and the rest of the repo file applied); `triggers` and `commands` have scope global+project+repo.

@@ -144,7 +144,7 @@
         disabled={!detail}
         onclick={(e: MouseEvent) => (picking = e.currentTarget as HTMLElement)}
       >
-        {#if detail}<StatusChip status={detail.ticket.status} />{:else}…{/if}
+        {#if detail}<StatusChip status={detail.ticket.status} source={item?.ticket_source} />{:else}…{/if}
         <Icon name="chevron-down" size={14} />
       </Button>
     {/if}

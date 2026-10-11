@@ -159,7 +159,7 @@
   <span class="c-status" data-status
     ><RowButton
       label={t('{status}: move {key} (m)', { status: tk.status.name, key: tk.ref.key })}
-      onclick={onmove}><StatusChip status={tk.status} /></RowButton
+      onclick={onmove}><StatusChip status={tk.status} source={item.source_ids[0]} /></RowButton
     ></span
   >
   <span class="c-age"

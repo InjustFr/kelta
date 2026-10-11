@@ -18,6 +18,7 @@ import SettingsPane from './SettingsPane.svelte';
 import { iterationWord } from './lib/sources.svelte';
 import Projects from './sections/Projects.svelte';
 import Sources from './sections/Sources.svelte';
+import StatusChip from '../tickets/StatusChip.svelte';
 import TrackerSources from './TrackerSources.svelte';
 
 let mock: MockControls;
@@ -38,10 +39,37 @@ type SourceList = {
   projects: string[];
   routes: SourceRoute[];
   tracker: TrackerBinding;
+  status_colors: Record<string, string>;
 }[];
 /** The last `sources` list written to the global settings. */
 const lastSources = () => lastSettingsValue<SourceList>(mock);
 const shop = () => lastSources()?.find((s) => s.id === 'shop');
+
+/** Gives the shop source configured columns: Doing (In Progress, Code Review) and Done (Resolved). */
+async function shopColumns(): Promise<void> {
+  const plain = JSON.parse(JSON.stringify(settings.value()!.sources)) as SourceList;
+  const sources = plain.map((s) =>
+    s.id === 'shop'
+      ? {
+          ...s,
+          tracker: {
+            ...s.tracker,
+            columns: [
+              {
+                id: 'doing',
+                label: 'Doing',
+                categories: ['in_progress'],
+                names: ['In Progress', 'Code Review'],
+              },
+              { id: 'done', label: 'Done', categories: ['done'], names: ['Resolved'] },
+            ],
+          },
+        }
+      : s,
+  );
+  await ipc.settingsSet({ layer: 'global', path: 'sources', value: sources as unknown as JsonValue });
+  await settings.load();
+}
 
 describe('Board block of a source', () => {
   it("lists the source's views with account, who and the current sprint toggle", async () => {
@@ -86,28 +114,7 @@ describe('Board block of a source', () => {
   });
 
   it("binds a Jira view to a board and to statuses of the source's open columns", async () => {
-    const plain = JSON.parse(JSON.stringify(settings.value()!.sources)) as SourceList;
-    const sources = plain.map((s) =>
-      s.id === 'shop'
-        ? {
-            ...s,
-            tracker: {
-              ...s.tracker,
-              columns: [
-                {
-                  id: 'doing',
-                  label: 'Doing',
-                  categories: ['in_progress'],
-                  names: ['In Progress', 'Code Review'],
-                },
-                { id: 'done', label: 'Done', categories: ['done'], names: ['Resolved'] },
-              ],
-            },
-          }
-        : s,
-    );
-    await ipc.settingsSet({ layer: 'global', path: 'sources', value: sources as unknown as JsonValue });
-    await settings.load();
+    await shopColumns();
     render(TrackerSources, { sourceId: 'shop' });
     const id = views()[0]!.dataset.viewId!;
     const row = within(views()[0]!);
@@ -134,6 +141,33 @@ describe('Board block of a source', () => {
     render(TrackerSources, { sourceId: 'billing' });
     await fireEvent.click(screen.getByTestId('add-source'));
     expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: { sourceId: 'billing' } });
+  });
+
+  it('colours a status per source; the chip follows it, other statuses keep their category', async () => {
+    await shopColumns();
+    render(TrackerSources, { sourceId: 'shop' });
+    const group = await screen.findByTestId('status-colors');
+    const statuses = () =>
+      [...group.querySelectorAll<HTMLElement>('[data-status]')].map((e) => e.dataset.status);
+    await waitFor(() => expect(statuses()).toEqual(['In Progress', 'Code Review', 'Resolved']));
+    const name = 'Code Review';
+    const picker = within(group).getByRole('group', { name: `Colour of ${name}` });
+    await fireEvent.click(within(picker).getByRole('button', { name: 'Green' }));
+    await waitFor(() => expect(shop()?.status_colors[name]).toBe('theme:green'));
+
+    const dot = (status: string, source: string | null) => {
+      const { container } = render(StatusChip, {
+        status: { id: status, name: status, category: 'in_review' },
+        source,
+      });
+      return container.querySelector<HTMLElement>('.dot')!.style.background;
+    };
+    expect(dot(name, 'shop')).toBe('var(--k-ansi-2)');
+    expect(dot(name, 'ops')).toBe('var(--k-warn)');
+    expect(dot('Some other status', 'shop')).toBe('var(--k-warn)');
+
+    await fireEvent.click(within(picker).getByRole('button', { name: 'Green' }));
+    await waitFor(() => expect(shop()?.status_colors).toEqual({}));
   });
 });
 
