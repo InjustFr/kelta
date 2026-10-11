@@ -26,14 +26,31 @@ fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
         .build()
 }
 
-fn init_tracing() {
-    // File logging (size-capped, `info` default, no stdout in release) is wired by L10/L3;
-    // debug builds log to stderr.
-    if cfg!(debug_assertions) {
-        let filter = tracing_subscriber::EnvFilter::try_from_env("KELTA_LOG")
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-        let _ = tracing_subscriber::fmt().with_env_filter(filter).with_writer(std::io::stderr).try_init();
+/// Past this size at launch, `kelta.log` becomes `kelta.log.1` (ARCHITECTURE §2.1: 5 MB × 2).
+const LOG_CAP: u64 = 5 * 1024 * 1024;
+
+/// `<logs>/kelta.log` beside `keltad.log` (macOS `~/Library/Logs/Kelta`), `info` by default
+/// (`KELTA_LOG`); debug builds also log to stderr.
+fn init_tracing(logs: &std::path::Path) {
+    use tracing_subscriber::fmt::writer::MakeWriterExt;
+    let filter = tracing_subscriber::EnvFilter::try_from_env("KELTA_LOG")
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let path = logs.join("kelta.log");
+    // shortcut: rotated at launch only; rotate while running if one run can outgrow LOG_CAP.
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > LOG_CAP) {
+        let _ = std::fs::rename(&path, logs.join("kelta.log.1"));
     }
+    let file = std::fs::create_dir_all(logs)
+        .and_then(|()| std::fs::OpenOptions::new().create(true).append(true).open(&path));
+    let fmt = tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false);
+    let _ = match (file, cfg!(debug_assertions)) {
+        (Ok(f), true) => fmt.with_writer(std::io::stderr.and(std::sync::Mutex::new(f))).try_init(),
+        (Ok(f), false) => fmt.with_writer(std::sync::Mutex::new(f)).try_init(),
+        (Err(e), _) => {
+            eprintln!("kelta: cannot open {}: {e}", path.display());
+            fmt.with_writer(std::io::stderr).try_init()
+        }
+    };
 }
 
 // allowlisted: `tauri::generate_context!` expands to code calling `std::process::exit`.
@@ -46,7 +63,6 @@ fn context() -> tauri::Context<tauri::Wry> {
 pub fn run() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let pre = platform::pre_init(&args);
-    init_tracing();
 
     let mut cli = CliArgs::parse(&args);
     cli.safe_graphics |= pre.safe_graphics;
@@ -59,6 +75,7 @@ pub fn run() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
+    init_tracing(&dirs.logs);
 
     let runtime = match build_runtime() {
         Ok(rt) => rt,
@@ -117,5 +134,18 @@ pub fn run() -> ExitCode {
             eprintln!("kelta: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn launch_writes_the_app_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let logs = tmp.path().join("Logs/Kelta");
+        super::init_tracing(&logs);
+        tracing::info!("kelta started");
+        let text = std::fs::read_to_string(logs.join("kelta.log")).unwrap();
+        assert!(text.contains("kelta started"), "{text}");
     }
 }
