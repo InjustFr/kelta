@@ -97,3 +97,36 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
     }
   }
 });
+
+test('Reviews rows beside the split detail never cut a chip on the left: it fits or ends in an ellipsis (#308)', async ({
+  page,
+}) => {
+  await boot(page);
+  const host = page.getByTestId('global-host');
+  await page.getByTestId('rail-reviews').click();
+  await host.getByText('SHOP-150: cache product images').click();
+  await expect(host.getByTestId('review-detail')).toBeVisible();
+  for (const width of [1440, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const tab of ['1', '2', '3']) {
+      await host.getByTestId('reviews-pane').focus();
+      await page.keyboard.press(tab);
+      await expect(host.getByTestId('review-detail')).toBeVisible();
+      await expect(host.locator('.k-row-tail .k-badge').first()).toBeVisible();
+      const bad = await host.locator('.k-row-tail').evaluateAll((tails) =>
+        tails.flatMap((tail) => {
+          const left = tail.getBoundingClientRect().left;
+          return [...tail.querySelectorAll<HTMLElement>('.k-badge')]
+            .filter(
+              (b) =>
+                b.checkVisibility() &&
+                (b.getBoundingClientRect().left < left - 0.5 ||
+                  (b.scrollWidth > b.clientWidth && getComputedStyle(b).textOverflow !== 'ellipsis')),
+            )
+            .map((b) => b.textContent);
+        }),
+      );
+      expect(bad, `clipped chips at ${width}px, tab ${tab}`).toEqual([]);
+    }
+  }
+});
