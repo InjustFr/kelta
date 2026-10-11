@@ -74,7 +74,6 @@ describe('registries', { timeout: 30_000 }, () => {
       'editors',
       'worktree',
       'reviews',
-      'polling',
       'notifications',
       'performance',
       'tools',

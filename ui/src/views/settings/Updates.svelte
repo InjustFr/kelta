@@ -8,6 +8,8 @@
 
   import { releasePage, restartApp, updates } from '../../shell/updates.svelte';
   import { clock } from '../../shell/usage';
+  import SettingsGroup from './layout/SettingsGroup.svelte';
+  import SettingsRow from './layout/SettingsRow.svelte';
 
   onMount(() => void updates.refresh().catch(() => {}));
 
@@ -37,57 +39,32 @@
 </script>
 
 {#if s}
-  <div class="updates" data-testid="updates">
-    <h3>Updates</h3>
-    <p class="version">Kelta {s.current} <span class="channel">({s.channel})</span></p>
-    <p class="state" class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
-    <div class="actions">
-      {#if s.state.type === 'ready'}
-        <Button variant="primary" onclick={() => void restartApp()}>Restart</Button>
-      {/if}
-      {#if s.state.type !== 'unsupported'}
+  <SettingsGroup heading="Updates" data-testid="updates">
+    <SettingsRow label="Kelta {s.current} ({s.channel})" actions>
+      {#snippet control()}
+        {#if s.state.type === 'ready'}
+          <Button variant="primary" onclick={() => void restartApp()}>Restart</Button>
+        {/if}
+        {#if s.state.type !== 'unsupported'}
+          <Button
+            loading={updates.checking}
+            onclick={() => void updates.check().catch(() => {})}
+            data-testid="update-check">Check now</Button
+          >
+        {/if}
         <Button
-          loading={updates.checking}
-          onclick={() => void updates.check().catch(() => {})}
-          data-testid="update-check">Check now</Button
+          variant="ghost"
+          onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}
+          >What's new</Button
         >
-      {/if}
-      <Button
-        variant="ghost"
-        onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}>What's new</Button
-      >
-    </div>
-  </div>
+      {/snippet}
+      <p class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
+    </SettingsRow>
+  </SettingsGroup>
 {/if}
 
 <style>
-  .updates {
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-2);
-    margin-bottom: var(--k-space-4);
-  }
-
-  h3 {
-    margin: 0;
-    font-size: var(--k-font-size);
-  }
-
-  p {
-    margin: 0;
-  }
-
-  .channel,
-  .state {
-    color: var(--k-fg-muted);
-  }
-
-  .state.failed {
+  .failed {
     color: var(--k-warn);
-  }
-
-  .actions {
-    display: flex;
-    gap: var(--k-space-2);
   }
 </style>

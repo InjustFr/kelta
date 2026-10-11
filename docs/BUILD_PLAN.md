@@ -96,7 +96,7 @@ docs/** (these five docs)     owned by the merge owner, read-only for lanes (exc
 | sheet `start_work` | `views/work/StartWorkSheet.svelte` | L9 |
 | pane `settings`, `diagnostics` | `views/settings/SettingsPane.svelte`, `views/diagnostics/DiagnosticsPane.svelte` | L4 |
 | sheet `onboarding`, `project_new` | `views/onboarding/OnboardingSheet.svelte`, `views/onboarding/ProjectNewSheet.svelte` | L4 |
-| settings sections `general, window, keys, terminal, linux-graphics, projects, accounts, claude, editors, worktree, reviews, polling, notifications, performance` | `views/settings/sections/*.svelte` | L4 |
+| settings sections `general, window, keys, terminal, linux-graphics, projects, accounts, claude, editors, worktree, reviews, notifications, performance` (Polling merged into Performance, #282) | `views/settings/sections/*.svelte` | L4 |
 | settings sections `tools, triggers, plugins` | `views/plugins/sections/*.svelte` | L8 |
 | pane `web` | `views/web-tool/WebToolPane.svelte` | L8 |
 | pane `plugin_screen` | `views/plugin-screen/PluginScreenPane.svelte` | L8 |

@@ -7,6 +7,8 @@
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
 
+  import SettingsCard from '../layout/SettingsCard.svelte';
+  import SettingsGroup from '../layout/SettingsGroup.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import { clone, isRecord } from '../lib/paths';
   import { entrySchema, type SchemaNode } from '../lib/schema';
@@ -88,57 +90,52 @@
   }
 </script>
 
-<section class="list" data-testid="keyed-list" data-path={path}>
-  <header>
-    <h3>{label}</h3>
-    {#if description}<p class="desc">{description}</p>{/if}
-    <details class="desc">
-      <summary>How layering works</summary>
-      Entries merge by <code>id</code>: a higher layer replaces the whole entry; a stub with only
-      <code>enabled</code> toggles an inherited one.
-    </details>
-  </header>
+<SettingsGroup heading={label} {description} data-testid="keyed-list" data-path={path}>
+  <details class="layering">
+    <summary>How layering works</summary>
+    Entries merge by <code>id</code>: a higher layer replaces the whole entry; a stub with only
+    <code>enabled</code> toggles an inherited one.
+  </details>
 
   {#each merged as e (idOf(e))}
     {@const id = idOf(e)}
     {@const src = sourceOf(id)}
     {@const mine = ownOf(id)}
-    <div class="entry" class:disabled={e.enabled === false} data-testid="list-entry" data-id={id}>
-      <div class="entry-head">
-        <strong class="id">{id}</strong>
+    <SettingsCard heading={id} mono dim={e.enabled === false} data-testid="list-entry" data-id={id}>
+      {#snippet head()}
         {#if typeof e.label === 'string' && e.label !== id}<span class="muted">{e.label}</span>{/if}
         <SourceBadge source={src} path={`${path}.${id}`} />
         {#if e.enabled === false}<Badge tone="neutral">disabled</Badge>{/if}
-        <span class="actions">
-          {#if access.editable}
-            {#if src === editor.layer && mine}
-              <Button size="sm" onclick={() => (editing = editing === id ? null : id)}
-                >{editing === id ? 'Close' : 'Edit'}</Button
-              >
-              <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
-                >{e.enabled === false ? 'Enable' : 'Disable'}</Button
-              >
-              <IconButton
+      {/snippet}
+      {#snippet actions()}
+        {#if access.editable}
+          {#if src === editor.layer && mine}
+            <Button size="sm" onclick={() => (editing = editing === id ? null : id)}
+              >{editing === id ? 'Close' : 'Edit'}</Button
+            >
+            <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
+              >{e.enabled === false ? 'Enable' : 'Disable'}</Button
+            >
+            <IconButton
+              icon="trash-2"
+              size="sm"
+              label={`Remove ${id} from this layer`}
+              onclick={() => removeOwn(id)}
+            />
+          {:else}
+            <Button size="sm" onclick={() => override(e)}>Override here</Button>
+            <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
+              >{e.enabled === false ? 'Enable' : 'Disable here'}</Button
+            >
+            {#if mine}<IconButton
                 icon="trash-2"
                 size="sm"
-                label={`Remove ${id} from this layer`}
+                label={`Remove ${id} override`}
                 onclick={() => removeOwn(id)}
-              />
-            {:else}
-              <Button size="sm" onclick={() => override(e)}>Override here</Button>
-              <Button size="sm" onclick={() => setEnabled(e, e.enabled === false)}
-                >{e.enabled === false ? 'Enable' : 'Disable here'}</Button
-              >
-              {#if mine}<IconButton
-                  icon="trash-2"
-                  size="sm"
-                  label={`Remove ${id} override`}
-                  onclick={() => removeOwn(id)}
-                />{/if}
-            {/if}
+              />{/if}
           {/if}
-        </span>
-      </div>
+        {/if}
+      {/snippet}
       {#if editing === id && mine && item}
         <Control
           node={item}
@@ -148,7 +145,7 @@
           onchange={(v) => void replace(id, v)}
         />
       {/if}
-    </div>
+    </SettingsCard>
   {:else}
     <p class="desc">No entries.</p>
   {/each}
@@ -168,64 +165,32 @@
     <p class="desc">{access.reason}</p>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-</section>
+</SettingsGroup>
 
 <style>
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-3);
-    margin-top: var(--k-space-4);
-  }
-
-  header h3 {
-    margin: 0;
-    font-size: var(--k-font-size-lg);
-  }
-
-  .desc {
-    margin: 0;
+  .layering {
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
   }
 
-  .entry {
-    padding: var(--k-space-3) var(--k-space-4);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-3);
+  .layering summary {
+    cursor: pointer;
   }
 
-  .entry.disabled {
-    opacity: 0.65;
-  }
-
-  .entry-head {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    flex-wrap: wrap;
-  }
-
-  .id {
-    font-family: var(--k-font-mono);
+  .desc {
+    margin: var(--k-space-3) 0 0;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
   }
 
   .muted {
     color: var(--k-fg-muted);
   }
 
-  .actions {
-    margin-left: auto;
-    display: inline-flex;
-    gap: var(--k-space-2);
-  }
-
   .add {
     display: flex;
     gap: var(--k-space-3);
+    margin-top: var(--k-space-3);
   }
 
   .add input {
@@ -233,7 +198,7 @@
     padding: 0 var(--k-space-3);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius);
-    background: var(--k-bg);
+    background: var(--k-well);
     color: var(--k-fg);
   }
 
