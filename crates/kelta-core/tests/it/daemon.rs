@@ -156,12 +156,31 @@ async fn quit_asks_when_keltad_will_not_keep_a_working_claude() {
     keltad.join().unwrap();
 }
 
-/// A pid still running (a zombie waiting for init to reap it is not).
+/// A pid still running (a zombie waiting to be reaped is not): its state from `/proc`, else `ps`
+/// (macOS, where `kill -0` succeeds on a zombie).
 fn running(pid: &str) -> bool {
-    let exists = std::process::Command::new("kill").args(["-0", pid]).status().is_ok_and(|s| s.success());
-    exists
-        && std::fs::read_to_string(format!("/proc/{pid}/stat"))
-            .map_or(true, |s| !s.rsplit(')').next().unwrap_or("").trim_start().starts_with('Z'))
+    let state = std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .map(|s| s.rsplit(')').next().unwrap_or("").trim_start().to_owned())
+        .or_else(|_| {
+            let out = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output()?;
+            Ok::<_, std::io::Error>(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+        })
+        .unwrap_or_default();
+    !state.is_empty() && !state.starts_with('Z')
+}
+
+/// #305: `running` treats an exited-but-unreaped child as gone (`kill -0` still succeeds on one).
+#[tokio::test]
+async fn running_is_false_for_a_zombie() {
+    let mut child = std::process::Command::new("sh").args(["-c", "exit 0"]).spawn().unwrap();
+    let pid = child.id().to_string();
+    let zombie = || {
+        let out = std::process::Command::new("ps").args(["-o", "stat=", "-p", &pid]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().starts_with('Z')
+    };
+    assert!(eventually(zombie).await, "the child never became a zombie");
+    assert!(!running(&pid));
+    child.wait().unwrap();
 }
 
 /// #305: quit with "stop all sessions" ends every session process and keltad (socket removed).
