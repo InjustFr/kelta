@@ -10,7 +10,9 @@ use crate::codehost::{ReviewKind, ReviewRef};
 use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
-use crate::settings::{ClaudeEffort, CodeHostBinding, PermissionMode, TrackerBinding, TransitionTarget};
+use crate::settings::{
+    ClaudeEffort, ClaudeHost, CodeHostBinding, PermissionMode, TrackerBinding, TransitionTarget,
+};
 use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 
 // ---------------------------------------------------------------------------------------------
@@ -315,6 +317,10 @@ pub struct ClaudeMeta {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub usage: Option<ClaudeUsage>,
+    /// Set when it runs outside Kelta (#347): its pane only waits for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub host: Option<ClaudeHost>,
 }
 
 /// What Claude Code's statusline reports (`HookPayload::usage`), plus Kelta's cost bookkeeping.

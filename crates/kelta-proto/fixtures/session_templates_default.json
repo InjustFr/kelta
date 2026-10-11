@@ -1,5 +1,6 @@
 [
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "claude+editor",
     "label": "Claude + editor",
@@ -26,6 +27,7 @@
     }
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "review",
     "label": "Review",
@@ -67,6 +69,7 @@
     }
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "claude",
     "label": "Claude",
@@ -78,6 +81,7 @@
     }
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "editor",
     "label": "Editor",
@@ -89,6 +93,7 @@
     }
   },
   {
+    "claude_host": "builtin",
     "enabled": true,
     "id": "shell",
     "label": "Shell",

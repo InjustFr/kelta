@@ -813,6 +813,10 @@ pub struct ClaudeSettings {
     pub queue_hold_pct: Option<f64>,
     /// Park a work item's Claude once it has been done and seen, with no input, this long (min, 0 = off).
     pub auto_park_after_mins: u32,
+    /// Opens a template's Claude when its host is `terminal`: `{command}` (the script to run), `{cwd}`,
+    /// `{shell}`. Empty = Terminal on macOS, `x-terminal-emulator -e` on Linux.
+    #[schemars(extend("x-kelta-exec" = true))]
+    pub terminal_command: Vec<String>,
 }
 
 impl Default for ClaudeSettings {
@@ -870,6 +874,7 @@ impl Default for ClaudeSettings {
             budget_usd: None,
             max_live: 4,
             queue_hold_pct: None,
+            terminal_command: Vec::new(),
             auto_park_after_mins: 45,
         }
     }
@@ -1462,6 +1467,19 @@ impl TemplateNode {
     }
 }
 
+/// Where a template's Claude runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeHost {
+    /// In a Kelta terminal pane.
+    #[default]
+    Builtin,
+    /// In a window of your terminal (`claude.terminal_command`).
+    Terminal,
+    /// In a new window of the repository's tmux session, created when missing.
+    Multiplexer,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct SessionTemplate {
@@ -1469,11 +1487,19 @@ pub struct SessionTemplate {
     pub label: String,
     pub layout: TemplateNode,
     pub enabled: bool,
+    /// Where its Claude runs; Kelta still writes its hooks and MCP and follows its state.
+    pub claude_host: ClaudeHost,
 }
 
 impl Default for SessionTemplate {
     fn default() -> Self {
-        Self { id: String::new(), label: String::new(), layout: TemplateNode::default(), enabled: true }
+        Self {
+            id: String::new(),
+            label: String::new(),
+            layout: TemplateNode::default(),
+            enabled: true,
+            claude_host: ClaudeHost::Builtin,
+        }
     }
 }
 
@@ -1483,7 +1509,7 @@ pub fn default_session_templates() -> Vec<SessionTemplate> {
         id: id.to_owned(),
         label: label.to_owned(),
         layout,
-        enabled: true,
+        ..SessionTemplate::default()
     };
     vec![
         t(
