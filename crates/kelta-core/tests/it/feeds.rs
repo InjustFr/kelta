@@ -97,7 +97,7 @@ async fn all_scope_dedups_and_tags_projects() {
             review("acme/unbound", 5, ReviewKind::ReviewRequested),
         ],
     );
-    let page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
     // shop and blog share the same view → one provider call
     assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count(), 1);
     assert_eq!(page.items.len(), 3);
@@ -142,14 +142,14 @@ async fn default_lists_add_tickets_done_this_week() {
     .with_page_size(2);
     let e = env_full(tmp.path(), ListHost::new(vec![]), fake);
     let shop = Scope::Project { id: "shop".into() };
-    let page = e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(shop.clone(), None, None, None, None, true).await.unwrap();
     let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
     assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"], "open first page + done in the last 7 days");
 
     // the closed list fails: Done keeps the last page's tickets instead of going empty
     e.tracker.pass_next();
     e.tracker.fail_next(kelta_proto::KeltaError::upstream("502"));
-    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(shop, None, None, None, None, true).await.unwrap();
     let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
     assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"]);
     assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list-closed:")).count(), 2);
@@ -161,10 +161,10 @@ async fn cache_serves_first_then_revalidates_when_stale() {
     let e = env(tmp.path(), vec![]);
     let shop = Scope::Project { id: "shop".into() };
     let lists = || e.tracker.calls().iter().filter(|c| c.starts_with("list:")).count();
-    let p1 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
+    let p1 = e.h.core.tracker_list(shop.clone(), None, None, None, None, false).await.unwrap();
     assert_eq!((lists(), p1.stale), (1, false));
     // fresh cache: no network
-    let p2 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
+    let p2 = e.h.core.tracker_list(shop.clone(), None, None, None, None, false).await.unwrap();
     assert_eq!((lists(), p2.stale, p2.items.len()), (1, false, 3));
     // age the cache row → served stale + background refresh + tickets.changed
     let key = e.h.core.ticket_queries(&shop, None, None)[0].cache_key.clone();
@@ -172,7 +172,7 @@ async fn cache_serves_first_then_revalidates_when_stale() {
     let old = ProviderCacheRow { fetched_at: "2020-01-01T00:00:00Z".into(), ..row };
     e.h.core.store().call(move |c| q::cache_put(c, &old)).await.unwrap();
     e.h.ui.take_events();
-    let p3 = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
+    let p3 = e.h.core.tracker_list(shop.clone(), None, None, None, None, false).await.unwrap();
     assert!(p3.stale);
     for _ in 0..50 {
         settle().await;
@@ -186,7 +186,7 @@ async fn cache_serves_first_then_revalidates_when_stale() {
 
     // a failing account keeps serving the cache and reports the error
     e.tracker.fail_next(kelta_proto::KeltaError::needs_auth("401"));
-    let p4 = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let p4 = e.h.core.tracker_list(shop, None, None, None, None, true).await.unwrap();
     assert!(p4.stale);
     assert_eq!(p4.items.len(), 3);
     assert_eq!(p4.errors[0].account_id.as_str(), "jira-acme");
@@ -283,10 +283,14 @@ async fn who_override_view_account_and_sources() {
     assert_ne!(key(Some(Who::Mine)), key(Some(Who::Unassigned)));
     let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
     e.tracker.assign(&t, Assignee::None).await.unwrap();
-    let page = e.h.core.tracker_list(shop.clone(), None, Some(Who::Unassigned), None, true).await.unwrap();
+    let page =
+        e.h.core.tracker_list(shop.clone(), None, None, Some(Who::Unassigned), None, true).await.unwrap();
     assert_eq!(page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect::<Vec<_>>(), ["SHOP-142"]);
     assert_eq!(page.items[0].view_ids, ["mine"]);
-    assert_eq!(e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap().items.len(), 3);
+    assert_eq!(
+        e.h.core.tracker_list(shop.clone(), None, None, None, None, true).await.unwrap().items.len(),
+        3
+    );
     let jira = AccountId::new("jira-acme");
     let hits = e.h.core.tracker_sources(&jira, "sh").await.unwrap();
     assert_eq!(hits.len(), 2);
@@ -316,7 +320,7 @@ async fn transitions_are_cached_until_a_move() {
     let tmp = tempfile::tempdir().unwrap();
     let e = env(tmp.path(), vec![]);
     let shop = Scope::Project { id: "shop".into() };
-    e.h.core.tracker_list(shop, None, None, None, false).await.unwrap();
+    e.h.core.tracker_list(shop, None, None, None, None, false).await.unwrap();
     let t = e.tracker.ticket("SHOP-142").unwrap().ticket.r#ref;
     let fetches = || e.tracker.calls().iter().filter(|c| c.starts_with("transitions:")).count();
     let first = e.h.core.tracker_transitions(&t).await.unwrap();
@@ -421,7 +425,7 @@ async fn unchanged_gate_skips_requested_but_authored_still_polls() {
     *e.host.changed.lock() = false;
     *e.host.calls.lock() = 0;
     let acc = AccountId::new("github-work");
-    let sub = |k| SubKey { account: acc.clone(), query: reviews_key(&acc, k) };
+    let sub = |k| SubKey { account: acc.clone(), query: reviews_key(&acc, k), review: Some(k) };
     e.h.core.refresh(&sub(ReviewKind::ReviewRequested)).await.unwrap();
     assert_eq!(*e.host.calls.lock(), 0, "gate says unchanged");
     e.h.core.refresh(&sub(ReviewKind::Authored)).await.unwrap();
@@ -610,7 +614,7 @@ fn union_env(root: &std::path::Path) -> (Env, AccountId) {
 async fn union_of_views_dedups_across_views_and_accounts() {
     let tmp = tempfile::tempdir().unwrap();
     let (e, linear) = union_env(tmp.path());
-    let page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
     let mut lists: Vec<String> = e.tracker.calls().into_iter().filter(|c| c.starts_with("list:")).collect();
     lists.sort();
     assert_eq!(lists, ["list:mine", "list:sprint"], "blog shares shop's `mine` query");
@@ -632,7 +636,8 @@ async fn union_of_views_dedups_across_views_and_accounts() {
     assert!(page.next.is_none() && page.errors.is_empty());
     // an explicit view stays a single query
     let shop = Scope::Project { id: "shop".into() };
-    let team = e.h.core.tracker_list(shop.clone(), Some("team".into()), None, None, true).await.unwrap();
+    let team =
+        e.h.core.tracker_list(shop.clone(), None, Some("team".into()), None, None, true).await.unwrap();
     assert!(team.items.iter().all(|i| i.ticket.r#ref.account == linear && i.view_ids == ["team"]));
     // who overrides every view of the union, under its own cache keys
     let keys = |who| -> Vec<String> {
@@ -706,16 +711,22 @@ async fn all_scope_pages_each_query_and_search_reaches_past_the_first_page() {
     }
     // two queries (mine, sprint): the cursor carries one provider cursor per query
     let mut seen = Vec::new();
-    let mut page = e.h.core.tracker_list(Scope::All, None, None, None, true).await.unwrap();
+    let mut page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
     loop {
         assert!(page.items.iter().all(|i| i.view_ids == ["mine", "sprint"]), "{:?}", page.items);
         seen.extend(keys(&page));
         let Some(next) = page.next.clone() else { break };
-        page = e.h.core.tracker_list(Scope::All, None, None, Some(next), false).await.unwrap();
+        page = e.h.core.tracker_list(Scope::All, None, None, None, Some(next), false).await.unwrap();
     }
     assert_eq!(seen, ["SHOP-141", "SHOP-142", "SHOP-143"]);
-    let bad =
-        e.h.core.tracker_list(Scope::All, None, None, Some(kelta_proto::tracker::Cursor::Offset(1)), false);
+    let bad = e.h.core.tracker_list(
+        Scope::All,
+        None,
+        None,
+        None,
+        Some(kelta_proto::tracker::Cursor::Offset(1)),
+        false,
+    );
     assert_eq!(bad.await.unwrap_err().code, ErrorCode::InvalidArgument);
 }
 
@@ -779,7 +790,7 @@ async fn visible_list_refreshes_after_a_saga_transition() {
         work_item_id: None,
     };
     e.h.core.layout_open(&ProjectId::new("shop"), req).await.unwrap();
-    e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap();
+    e.h.core.tracker_list(shop.clone(), None, None, None, None, true).await.unwrap();
     // the saga moves the ticket through the provider itself, then publishes the bus event
     let t = e.tracker.ticket("SHOP-141").unwrap().ticket.r#ref;
     let moved = e.tracker.transition(&t, "t3", None).await.unwrap();
@@ -788,7 +799,7 @@ async fn visible_list_refreshes_after_a_saga_transition() {
         serde_json::json!({ "ticket": t, "to": moved.status }),
     ));
     let status = || async {
-        let page = e.h.core.tracker_list(shop.clone(), None, None, None, false).await.unwrap();
+        let page = e.h.core.tracker_list(shop.clone(), None, None, None, None, false).await.unwrap();
         page.items.into_iter().find(|i| i.ticket.r#ref == t).unwrap().ticket.status.category
     };
     for _ in 0..200 {
@@ -852,7 +863,7 @@ async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
     e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
     let shop = || Scope::Project { id: "shop".into() };
     // Before any review poll: only the work item's PR, from its URL and the repo binding.
-    let page = e.h.core.tracker_list(shop(), None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(shop(), None, None, None, None, true).await.unwrap();
     let prs = |p: &kelta_proto::tracker::TicketPage, key: &str| {
         p.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().prs.clone()
     };
@@ -866,7 +877,7 @@ async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
         e.h.core.review_page(Scope::All, kind, true).await.unwrap();
     }
     let calls = *e.host.calls.lock();
-    let page = e.h.core.tracker_list(shop(), None, None, None, false).await.unwrap();
+    let page = e.h.core.tracker_list(shop(), None, None, None, None, false).await.unwrap();
     assert_eq!(*e.host.calls.lock(), calls, "PR links come from the cache, never the network");
     let linked = prs(&page, "SHOP-142");
     let got: Vec<_> = linked.iter().map(|l| (l.number, l.source, l.ci)).collect();
@@ -1001,14 +1012,14 @@ async fn ticket_pages_carry_the_team_people_and_waits_name_merged_people() {
     let e = env(tmp.path(), vec![authored]);
     let shop = Scope::Project { id: "shop".into() };
 
-    let team = e.h.core.tracker_list(shop.clone(), None, Some(Who::Anyone), None, true).await.unwrap();
+    let team = e.h.core.tracker_list(shop.clone(), None, None, Some(Who::Anyone), None, true).await.unwrap();
     let page = e.h.core.review_page(shop.clone(), ReviewKind::Authored, true).await.unwrap();
     let names: Vec<_> = page.items[0].waiting.iter().map(|w| (w.name.as_str(), w.why)).collect();
     assert_eq!(names, [("Bob", WaitWhy::Review), ("Bob", WaitWhy::Author)]);
     let (host_calls, tracker_calls) = (*e.host.calls.lock(), e.tracker.calls().len());
 
     // Any tab's page names the Team list's people, from caches only.
-    let mine = e.h.core.tracker_list(shop, None, Some(Who::Mine), None, false).await.unwrap();
+    let mine = e.h.core.tracker_list(shop, None, None, Some(Who::Mine), None, false).await.unwrap();
     let people = &mine.people;
     assert!(people.iter().any(|p| p.ids.iter().any(|i| i.id == "bob" && i.code_host && !p.matched)));
     assert!(people.iter().any(|p| p.me));

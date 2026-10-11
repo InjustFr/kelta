@@ -27,8 +27,10 @@ use crate::rt::{Rt, TimerGauge};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SubKey {
     pub account: AccountId,
-    /// `tickets:<view hash>` | `reviews:review_requested` | `reviews:authored`.
+    /// `tickets:<view hash>` | `reviews:<account>:<kind>` (the cache key).
     pub query: String,
+    /// The review feed it polls; `None` = a ticket list.
+    pub review: Option<kelta_proto::codehost::ReviewKind>,
 }
 
 /// Interval inputs of one subscription.
@@ -420,7 +422,7 @@ mod tests {
     fn kick_during_inflight_poll_reruns_once() {
         let focused = WindowState { exists: true, visible: true, focused: true };
         let mut st = State { subs: BTreeMap::new(), paused: HashMap::new(), window: focused, refreshes: 0 };
-        let key = SubKey { account: AccountId::new("acc"), query: "tickets:x".into() };
+        let key = SubKey { account: AccountId::new("acc"), query: "tickets:x".into(), review: None };
         let policy = IntervalPolicy::from_settings(&PollingSettings::default(), 0, None);
         let t0 = Instant::now();
         st.set(vec![(key.clone(), policy)], t0);

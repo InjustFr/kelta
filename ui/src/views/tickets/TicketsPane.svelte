@@ -3,7 +3,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { Column, PrLink, Scope, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
+  import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { GLOBAL, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
@@ -65,20 +65,22 @@
     ),
   );
   let sourceOverride = $state<string | null | undefined>(undefined);
-  /** The source the list narrows to; a removed one falls back to all sources. */
-  const source = $derived.by(() => {
-    const id = sourceOverride !== undefined ? sourceOverride : (content.source_id ?? null);
-    return sources.find((s) => s.id === id) ?? null;
-  });
   let viewOverride = $state<string | null | undefined>(undefined);
-  /** `null` = all views of the source (or of every source). */
-  const viewId = $derived.by(() => {
-    const v = viewOverride !== undefined ? viewOverride : content.view_id;
-    // A removed or renamed view falls back to the whole source instead of another one.
-    return v && source?.tracker.views.some((x) => x.id === v) ? v : null;
+  let whoOverride = $state<Who | null | undefined>(undefined);
+  /** The pane's picks as saved; the core resolves them (`TicketPage.scope` / `view_id`). */
+  const sourcePick = $derived(sourceOverride !== undefined ? sourceOverride : (content.source_id ?? null));
+  const viewPick = $derived(viewOverride !== undefined ? viewOverride : (content.view_id ?? null));
+  /** The persisted who the list loads with (`null` = each view decides). */
+  const who = $derived(whoOverride !== undefined ? whoOverride : content.who);
+  const list = $derived(tickets.list(scope, viewPick, who, sourcePick));
+  /** The source the list narrows to, as the core resolved it (a removed one, or one no longer
+   * feeding the project, falls back to all sources). */
+  const source = $derived.by(() => {
+    const s = list.data?.scope;
+    return s?.kind === 'source' ? (sources.find((x) => x.id === s.id) ?? null) : null;
   });
-  /** What the list loads: the narrowed source, else the pane's scope. */
-  const listScope = $derived<Scope>(source ? { kind: 'source', id: source.id } : scope);
+  /** `null` = all views of the source (or of every source), as the core resolved it. */
+  const viewId = $derived(list.data?.view_id ?? null);
   /** The one source in effect (board mode and its columns need one). */
   const single = $derived(source ?? (sources.length === 1 ? sources[0]! : null));
   const views = $derived(sources.flatMap((s) => s.tracker.views));
@@ -89,9 +91,6 @@
   const menuChoices = $derived(sources.length > 1 || (sources[0]?.tracker.views.length ?? 0) > 1);
   const noSource = $derived(settings.hasSources() !== null && sources.length === 0);
 
-  let whoOverride = $state<Who | null | undefined>(undefined);
-  /** The persisted who the list loads with (`null` = each view decides). */
-  const who = $derived(whoOverride !== undefined ? whoOverride : content.who);
   /** The tab shown: the pane's who, else the who every queried view agrees on. */
   const whoTab = $derived.by<Who | null>(() => {
     if (who) return who;
@@ -158,7 +157,6 @@
   }
 
   // ---- data ---------------------------------------------------------------------------------
-  const list = $derived(tickets.list(listScope, viewId, who));
   const items = $derived(list.data?.items ?? []);
   let filter = $state('');
   const shown = $derived.by(() => {
@@ -179,7 +177,7 @@
   // Team people with a tracker identity (the core merges them across trackers and code hosts): any
   // tab's page names the scope's cached Team list; the Anyone page, once loaded, is the freshest.
   const people = $derived(
-    ((tickets.list(listScope, viewId, 'anyone').data ?? list.data)?.people ?? [])
+    ((tickets.list(scope, viewPick, 'anyone', sourcePick).data ?? list.data)?.people ?? [])
       .filter((p) => p.ids.some((i) => !i.code_host))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
@@ -198,14 +196,14 @@
   const hasSprints = $derived(items.some((i) => i.ticket.sprint));
 
   $effect(() => {
-    const [s, v, w, tab] = [listScope, viewId, who, whoTab];
+    const [s, v, w, src] = [scope, viewPick, who, sourcePick];
     if (noSource) return;
     untrack(() => {
-      void tickets.load(s, v, false, w);
+      void tickets.load(s, v, false, w, src);
       // Counts for the other tabs (served from the core's cache); Anyone can be large, so only on demand.
       for (const o of ['mine', 'unassigned'] as const) {
-        const l = tickets.list(s, v, o);
-        if (o !== tab && !l.data && !l.loading) void tickets.load(s, v, false, o);
+        const l = tickets.list(s, v, o, src);
+        if (o !== whoTab && !l.data && !l.loading) void tickets.load(s, v, false, o, src);
       }
       ensureReviews();
       if (settings.value() === null) void settings.load().catch(() => undefined);
@@ -213,7 +211,7 @@
   });
 
   const countOf = (w: Who): number | undefined =>
-    (w === whoTab ? list : tickets.list(listScope, viewId, w)).data?.items.length;
+    (w === whoTab ? list : tickets.list(scope, viewPick, w, sourcePick)).data?.items.length;
 
   const columnsSource = $derived(single?.id ?? null);
   $effect(() => {
@@ -447,7 +445,7 @@
   }
 
   function refresh(): void {
-    void tickets.load(listScope, viewId, true, who);
+    void tickets.load(scope, viewPick, true, who, sourcePick);
     if (columnsSource && (mode === 'board' || groupBy === 'status')) void tickets.loadColumns(columnsSource);
   }
 
@@ -470,7 +468,7 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, null, { preview });
+    void startWorkOnTicket(item.ticket.ref, null, { preview, source: item.source_ids[0] ?? null });
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -875,7 +873,7 @@
             label="Tickets"
             onend={() =>
               void tickets
-                .loadMore(listScope, viewId, who)
+                .loadMore(scope, viewPick, who, sourcePick)
                 .catch((e) => toasts.error(e, 'Loading more tickets'))}
           >
             {#snippet row(r)}
@@ -1013,7 +1011,7 @@
             loading={list.loadingMore}
             onclick={() =>
               void tickets
-                .loadMore(listScope, viewId, who)
+                .loadMore(scope, viewPick, who, sourcePick)
                 .catch((e) => toasts.error(e, 'Loading more tickets'))}
           >
             <Icon name="plus" size={12} /> More

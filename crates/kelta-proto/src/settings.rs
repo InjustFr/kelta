@@ -1709,6 +1709,15 @@ pub struct TrackerBinding {
     pub repo_rules: Vec<RepoRule>,
 }
 
+impl TrackerBinding {
+    /// The account of a source built from this (deprecated `[project.tracker]`) block: its own, else
+    /// its first view's; `None` when it names none at all (no source, so no tickets, anywhere).
+    pub fn source_account(&self) -> Option<AccountId> {
+        let views = self.views.iter().filter_map(|v| v.account.clone());
+        std::iter::once(self.account.clone()).chain(views).find(|a| !a.as_str().is_empty())
+    }
+}
+
 /// `[[sources.routes]]`: tickets matching `match` start in `project`'s `repo`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -1778,11 +1787,13 @@ pub fn slug(s: &str) -> String {
 /// project and its `repo_rules` as routes; another becomes a new source, labelled after its only
 /// view or its account, plus ` · <project name>` when another source has the same views but
 /// other columns or status_map. Ids are the label's slug, made unique with `-2`, `-3`, ….
+/// An account-less block takes `source_account`; one without any account is skipped.
 pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) -> Vec<Source> {
     let mut out = existing.to_vec();
     for p in projects {
         let Some(t) = &p.tracker else { continue };
-        let tracker = TrackerBinding { repo_rules: Vec::new(), ..t.clone() };
+        let Some(account) = t.source_account() else { continue };
+        let tracker = TrackerBinding { account, repo_rules: Vec::new(), ..t.clone() };
         let i = match out.iter().position(|s| same_board(&s.tracker, &tracker)) {
             Some(i) => i,
             None => {
@@ -2186,6 +2197,19 @@ enabled = true
         let taken = Source { id: "jira-acme".into(), label: "x".into(), ..Source::default() };
         let out = sources_from_trackers(std::slice::from_ref(&taken), &[tracked("web", "Web", a)]);
         assert_eq!((out[1].id.as_str(), out[1].label.as_str()), ("jira-acme-2", "jira-acme"));
+    }
+
+    #[test]
+    fn an_account_less_block_takes_its_first_view_account_and_one_with_none_is_skipped() {
+        let mut a = crate::samples::tracker_binding();
+        let acc = a.account.clone();
+        a.account = AccountId::default();
+        a.views[0].account = Some(acc.clone());
+        let out = sources_from_trackers(&[], &[tracked("web", "Web", a.clone())]);
+        assert_eq!(out[0].tracker.account, acc);
+        assert_eq!(sources_from_trackers(&out, &[tracked("web", "Web", a.clone())]), out, "idempotent");
+        a.views[0].account = None;
+        assert!(sources_from_trackers(&[], &[tracked("web", "Web", a)]).is_empty());
     }
 
     #[test]

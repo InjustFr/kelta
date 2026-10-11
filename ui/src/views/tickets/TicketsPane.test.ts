@@ -960,18 +960,52 @@ describe('TicketsPane in the rail Tickets view', () => {
     ]);
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Ops board' }));
     await waitFor(() =>
+      // the pane's raw pick: the core resolves it
       expect(mock.calls.filter((c) => c.cmd === 'tracker_list').at(-1)?.args).toMatchObject({
-        scope: { kind: 'source', id: 'ops' },
+        scope: { kind: 'all' },
+        source_id: 'ops',
         view_id: null,
       }),
     );
     expect(savedContent()).toMatchObject({ source_id: 'ops', view_id: null });
     await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
-    // one source in effect: the board is offered, on that source's columns
-    expect(screen.getByRole('tab', { name: /Board/ })).toBeTruthy();
+    // one source in effect (once the core's page says so): the board is offered, on its columns
+    expect(await screen.findByRole('tab', { name: /Board/ })).toBeTruthy();
     await press('v');
     await fireEvent.click(await screen.findByRole('menuitem', { name: /Current sprint/ }));
     expect(savedContent()).toMatchObject({ source_id: 'shop', view_id: 'sprint' });
-    expect(screen.getByRole('button', { name: /Shop board · Current sprint/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Shop board · Current sprint/ })).toBeTruthy();
+  });
+
+  it('renders the scope and view the core resolved, not its own reading of the pane (#264)', async () => {
+    // the core narrows the pane to the Shop board's sprint view although the pane asked for none
+    const created = createMockTransport({ latencyMs: 15 });
+    mock = created.controls;
+    setTransport({
+      ...created.transport,
+      invoke: async <T>(cmd: string, args?: Record<string, unknown> | Uint8Array) => {
+        const r = await created.transport.invoke<T>(cmd, args);
+        return (
+          cmd === 'tracker_list' ? { ...r, scope: { kind: 'source', id: 'shop' }, view_id: 'sprint' } : r
+        ) as T;
+      },
+    });
+    await Promise.all([projects.load(), settings.load()]);
+    inLayout();
+    render(TicketsPane, {
+      props: {
+        projectId: 'shop',
+        tabId: 'tab-1',
+        paneId: 'pane-1',
+        content: { kind: 'tickets', scope: { kind: 'all' }, view_id: null, mode: 'list', who: 'anyone' },
+        visible: true,
+        focused: true,
+      },
+    });
+    expect(await screen.findByRole('button', { name: /Shop board · Current sprint/ })).toBeTruthy();
+    expect(mock.calls.find((c) => c.cmd === 'tracker_list')?.args).toMatchObject({
+      scope: { kind: 'all' },
+      source_id: null,
+    });
   });
 });

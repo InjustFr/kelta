@@ -205,6 +205,8 @@ export interface Commands {
   tracker_list: {
     args: {
       scope: Scope;
+      /** The pane's narrowing; core resolves it (`TicketPage.scope`). */
+      source_id?: string | null;
       view_id?: string | null;
       cursor?: Cursor | null;
       refresh: boolean;
@@ -252,7 +254,11 @@ export interface Commands {
   review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
   // ---- work --------------------------------------------------------------------------------
   /** `project_id` null: the backend picks the default project (SPEC §3.1). */
-  work_plan: { args: { project_id: ProjectId | null; source: WorkSource }; result: StartWorkPlan };
+  work_plan: {
+    /** `source_id`: the ticket's source as its row lists it (`TicketItem.source_ids`). */
+    args: { project_id: ProjectId | null; source: WorkSource; source_id?: string | null };
+    result: StartWorkPlan;
+  };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };
   work_list: { args: { project_id?: ProjectId | null }; result: WorkItem[] };
   work_resume: { args: { id: WorkItemId }; result: WorkItem };

@@ -42,7 +42,11 @@ async fn wait(secs: u64) {
 }
 
 fn key() -> SubKey {
-    SubKey { account: AccountId::new("github-work"), query: "reviews:github-work:review_requested".into() }
+    SubKey {
+        account: AccountId::new("github-work"),
+        query: "reviews:github-work:review_requested".into(),
+        review: Some(kelta_proto::codehost::ReviewKind::ReviewRequested),
+    }
 }
 
 fn setup() -> (Arc<Counter>, Rt, Scheduler) {

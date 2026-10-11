@@ -11,7 +11,7 @@ use kelta_proto::dirs::Dirs;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{SessionInfo, SessionKind};
 use kelta_proto::samples;
-use kelta_proto::settings::{ProjectConfig, Settings, sources_from_trackers};
+use kelta_proto::settings::Settings;
 use kelta_proto::testing::{FakeCodeHost, FakeCore, FakeTracker, MemWorkStore};
 use kelta_work::WorkService;
 
@@ -95,13 +95,6 @@ impl Fx {
         let core = FakeCore::new();
         let mut p = samples::project_info();
         p.repos[0].path = repo.clone();
-        // a migrated fixture (#238): the binding core derives from the `[[sources]]` entry the
-        // sample `[project.tracker]` moves to, status_map and repo_rules (as routes) included
-        let legacy =
-            ProjectConfig { id: p.id.clone(), tracker: p.tracker.take(), ..ProjectConfig::default() };
-        let sources = sources_from_trackers(&[], std::slice::from_ref(&legacy));
-        assert!(sources[0].tracker.repo_rules.is_empty() && !sources[0].routes.is_empty());
-        p.tracker = Some(sources[0].binding_for(&p.id));
         core.add_project(p);
         let tracker = Arc::new(FakeTracker::new());
         core.add_tracker(AccountId::new("jira-acme"), tracker.clone());

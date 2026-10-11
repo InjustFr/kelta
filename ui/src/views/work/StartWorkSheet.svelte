@@ -53,7 +53,7 @@
   async function switchProject(id: string): Promise<void> {
     switching = true;
     try {
-      const next = await workPlan({ project_id: id, source: plan.source });
+      const next = await workPlan({ project_id: id, source: plan.source, source_id: plan.ticket_source });
       if (next.source.kind === 'ticket') withCriteria(next, next.source.ticket);
       plan = { ...next, project_choices: plan.project_choices, project_guessed: plan.project_guessed };
       origTransition = next.side_effects.transition_to;

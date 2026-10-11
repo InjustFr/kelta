@@ -103,14 +103,17 @@ async fn shared_view_is_fetched_once_and_unknown_source_is_not_found() {
     let (h, tracker) = env(tmp.path());
     let page = h
         .core
-        .tracker_list(Scope::Project { id: "shop".into() }, Some("mine".into()), None, None, true)
+        .tracker_list(Scope::Project { id: "shop".into() }, None, Some("mine".into()), None, None, true)
         .await
         .unwrap();
     assert_eq!(tracker.calls().iter().filter(|c| c.starts_with("list:")).count(), 1);
     assert!(!page.items.is_empty());
     assert!(page.items.iter().all(|i| i.project_ids == [ProjectId::new("shop"), ProjectId::new("blog")]));
-    let err =
-        h.core.tracker_list(Scope::Source { id: "nope".into() }, None, None, None, false).await.unwrap_err();
+    let err = h
+        .core
+        .tracker_list(Scope::Source { id: "nope".into() }, None, None, None, None, false)
+        .await
+        .unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
@@ -119,14 +122,14 @@ async fn a_fetch_emits_tickets_changed_for_the_source_scope() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, tracker) = env(tmp.path());
     let team = Scope::Source { id: "team".into() };
-    h.core.tracker_list(team.clone(), None, None, None, false).await.unwrap();
+    h.core.tracker_list(team.clone(), None, None, None, None, false).await.unwrap();
     // age the cache row → served stale + background refresh + tickets.changed
     let key = h.core.ticket_queries(&team, None, None)[0].cache_key.clone();
     let row = h.core.store().call(move |c| q::cache_get(c, &key)).await.unwrap().unwrap();
     let old = ProviderCacheRow { fetched_at: "2020-01-01T00:00:00Z".into(), ..row };
     h.core.store().call(move |c| q::cache_put(c, &old)).await.unwrap();
     h.ui.take_events();
-    assert!(h.core.tracker_list(team.clone(), None, None, None, false).await.unwrap().stale);
+    assert!(h.core.tracker_list(team.clone(), None, None, None, None, false).await.unwrap().stale);
     for _ in 0..50 {
         settle().await;
         if tracker.calls().iter().filter(|c| c.starts_with("list:")).count() == 2 {
@@ -144,10 +147,10 @@ async fn now_lists_my_tickets_of_a_source_feeding_no_project() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, _) = env(tmp.path());
     // Now's Up next reads `tracker_list(All, None, Mine)`
-    let all = h.core.tracker_list(Scope::All, None, Some(Who::Mine), None, true).await.unwrap();
+    let all = h.core.tracker_list(Scope::All, None, None, Some(Who::Mine), None, true).await.unwrap();
     assert!(all.items.iter().any(|i| i.source_ids.contains(&"team".to_owned())));
     let team =
-        h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, true).await.unwrap();
+        h.core.tracker_list(Scope::Source { id: "team".into() }, None, None, None, None, true).await.unwrap();
     assert!(!team.items.is_empty());
     assert!(team.items.iter().all(|i| i.source_ids == ["team"] && i.project_ids.is_empty()));
 }
@@ -181,6 +184,28 @@ async fn a_tickets_pane_narrowed_to_a_source_polls_only_that_source() {
 }
 
 #[tokio::test]
+async fn tracker_list_returns_the_scope_and_view_it_resolved_the_pane_to() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    let shop = Scope::Project { id: "shop".into() };
+    let list = |source: Option<&str>, view: Option<&str>| {
+        let (h, shop) = (&h, shop.clone());
+        let (source, view) = (source.map(str::to_owned), view.map(str::to_owned));
+        async move {
+            let p = h.core.tracker_list(shop, source, view, None, None, false).await.unwrap();
+            (p.scope, p.view_id)
+        }
+    };
+    let src = |id: &str| Scope::Source { id: id.into() };
+    assert_eq!(list(Some("shop-only"), Some("bugs")).await, (src("shop-only"), Some("bugs".into())));
+    assert_eq!(list(Some("shop-only"), Some("blog")).await, (src("shop-only"), None), "not a view of it");
+    // `closed` does not feed shop, `gone` does not exist: the pane's scope, every view
+    assert_eq!(list(Some("closed"), Some("blog")).await, (shop.clone(), None));
+    assert_eq!(list(Some("gone"), Some("mine")).await, (shop.clone(), None));
+    assert_eq!(list(None, Some("mine")).await, (shop.clone(), Some("mine".into())));
+}
+
+#[tokio::test]
 async fn project_info_tracker_is_the_first_source_binding() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, _) = env(tmp.path());
@@ -205,7 +230,8 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
         project: "blog".into(),
         repo: "main".into(),
     }];
-    s.sources = vec![product];
+    // a second source on the same account, feeding shop only
+    s.sources = vec![product, source("tech", &["shop"], vec![view("bugs", "type = Bug")])];
     let factory = Arc::new(Factory::default());
     factory
         .trackers
@@ -222,10 +248,15 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
         id: "10141".into(),
         ..samples::ticket_ref()
     };
-    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }).await.unwrap();
+    // no row (CLI): the first source using the account
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket: ticket.clone() }, None).await.unwrap();
     assert_eq!(plan.ticket_source.as_deref(), Some("product"));
     assert_eq!(plan.project_id, ProjectId::new("blog"));
     assert_eq!(plan.project_choices, [ProjectId::new("blog"), ProjectId::new("shop")]);
+    // the clicked row's source wins over that guess (#264)
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }, Some("tech".into())).await.unwrap();
+    assert_eq!(plan.ticket_source.as_deref(), Some("tech"));
+    assert_eq!(plan.project_id, ProjectId::new("shop"));
 }
 
 // ---- startup migration on a real config dir -----------------------------------------------
