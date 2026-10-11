@@ -14,9 +14,19 @@ kind = "gitea"
 base_url = "https://git.example.org"   # required; a trailing /api/v1 is fine
 secret = "keyring:gitea-main"
 
-# in a project file
+# in the project file, on the repository
+[[project.repos]]
+id = "api"
+path = "~/code/api"
 code_host = { account = "gitea-main", repo = "owner/name" }
-[project.tracker]
+
+# in config.toml: a ticket source (Settings > Sources > Add source does this for you)
+[[sources]]
+id = "gitea"
+label = "Gitea issues"
+projects = ["shop"]
+
+[sources.tracker]
 account = "gitea-main"
 views = [
   { id = "mine", label = "My issues", project = "owner/name" },
@@ -27,3 +37,6 @@ views = [
 Issues are open or closed, so the board has two columns and moves are Close / Reopen. With `assigned_to_me` and
 a `project`, the assigned search is filtered to that repository, so a page can come back short. Kelta does not
 poll a change gate for Gitea: reviews refresh on the polling interval.
+
+With two statuses there is no blocked status: mark blocked tickets with a label by setting
+`blocked = { label = "blocked" }` on the source ([blocked tickets](tickets.md#blocked-tickets)).

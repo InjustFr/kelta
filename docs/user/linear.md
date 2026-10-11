@@ -11,8 +11,13 @@ kind = "linear"
 secret = "keyring:linear-acme"
 # auth = "bearer"   # only for OAuth access tokens; a personal key is sent as is
 
-# in a project file
-[project.tracker]
+# in config.toml: a ticket source (Settings > Sources > Add source does this for you)
+[[sources]]
+id = "linear"
+label = "Engineering"
+projects = ["shop"]
+
+[sources.tracker]
 account = "linear-acme"
 views = [
   { id = "eng", label = "Engineering", team = "ENG", project = "Website", labels = ["bug"] },
@@ -24,3 +29,6 @@ Board columns are the workflow states of the team (all teams if no `team` is set
 state by name in the ticket's own team at the time you move it, so renamed or custom states just work.
 Lists stop after 20 pages of 50 issues. Linear's rate limit is shared by all your tools; when it is spent Kelta
 pauses requests to that account until the window resets.
+
+A ticket that is "blocked by" an open issue shows as Blocked ([blocked tickets](tickets.md#blocked-tickets)).
+Kelta cannot set that relation: set it in Linear.

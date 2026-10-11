@@ -2,6 +2,8 @@
 
 - [Getting started](getting-started.md)
 - [Working with tickets](tickets.md)
+- [Reviews](reviews.md)
+- [Claude: setup, questions, outside sessions, workflows](claude-code.md)
 - [Tools: lazygit, lazydocker, apps like Fork](tools.md)
 - [Colour themes and VS Code import](themes.md)
 - [Compositor bindings and window rules](compositors.md) (Hyprland, Sway, GNOME)
@@ -14,5 +16,6 @@
 - [Sapling ISL (`sl web`)](sapling-isl.md)
 - [Wayland notes](wayland.md)
 
-Plugin authors: [docs/plugins-guide](../plugins-guide/README.md), including
-[Act on a ticket, a PR or a branch](../plugins-guide/acting-on-work.md).
+Every setting is listed in [Settings](../SETTINGS.md). Plugin authors: [docs/plugins-guide](../plugins-guide/README.md),
+including [Act on a ticket, a PR or a branch](../plugins-guide/acting-on-work.md). To report a bug or ask for a
+feature, see [CONTRIBUTING](../../CONTRIBUTING.md#reporting-bugs-and-requesting-features).

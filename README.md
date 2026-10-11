@@ -4,7 +4,7 @@ Pick a ticket, get Claude Code and nvim side by side in its own worktree, review
 you, all in one light desktop window.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/InjustFr/kelta?include_prereleases&sort=date)](https://github.com/InjustFr/kelta/releases)
+[![Latest release](https://img.shields.io/github/v/release/InjustFr/kelta)](https://github.com/InjustFr/kelta/releases)
 ![Platforms: macOS 13+, Linux](https://img.shields.io/badge/platforms-macOS%2013%2B%20%7C%20Linux-lightgrey.svg)
 
 ![A work item: Claude Code and nvim side by side in the SHOP-142 worktree](docs/images/readme/work-item.webp)
@@ -24,8 +24,8 @@ you, all in one light desktop window.
 
 ## Features
 
-Kelta is pre-1.0 (v0.1). It runs on macOS 13+ first, and on Ubuntu 24.04+ (Hyprland, Sway, GNOME). Desktop app
-built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below.
+Kelta 1.0 runs on macOS 13+ and on Ubuntu 24.04+ (Hyprland, Sway, GNOME). Desktop app built with Tauri v2,
+Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below.
 
 **Tickets & work items**
 
@@ -35,16 +35,22 @@ built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) co
   [first launch](docs/user/getting-started.md#first-launch).
 - A keyboard-first list grouped by flow (Doing, Waiting, Ready), with a detail column, status moves and bulk
   moves, or a board: [keys](docs/user/tickets.md#keys).
-- Start work in the right project: Kelta proposes the ticket's project and remembers your pick:
+- Start work in the right project: Kelta proposes the ticket's project and remembers your pick; per-ticket options
+  in the plan sheet; a list of unfinished work before you start another ticket:
   [starting a session](docs/user/tickets.md#starting-a-session).
+- Per source: a Jira board and status filters, status colours, tracker fields as chips on the rows, a blocked
+  marker, grouping by parent: [per-source settings](docs/user/tickets.md#per-source-settings),
+  [blocked tickets](docs/user/tickets.md#blocked-tickets).
+- Local tags, kept in Kelta, on tickets and pull requests, with a filter in the toolbar:
+  [local tags](docs/user/tickets.md#local-tags).
 
 **Reviews**
 
 - Review requests and your own PRs (GitHub, GitLab, Bitbucket Cloud, Gitea/Forgejo) with CI, review state and
   linked tickets: [pull requests](docs/user/tickets.md#pull-requests),
   [Bitbucket](docs/user/bitbucket.md), [Gitea](docs/user/gitea.md).
-- Approve, comment, request changes, or review locally in a worktree:
-  [review list and actions](docs/SPEC.md#33-pr--mr-review-list-and-actions).
+- Approve, comment, request changes, or review locally in a worktree; mark your own draft ready, or convert it
+  back; nudge slow reviewers: [reviews](docs/user/reviews.md).
 
 **Claude integration**
 
@@ -54,15 +60,24 @@ built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) co
   [tickets from any Claude session](docs/user/tickets.md#tickets-from-any-claude-session).
 - Refine a ticket with Claude (`r`): acceptance criteria, open questions and sub-tasks to post or keep:
   [keys](docs/user/tickets.md#keys).
+- Set Kelta up by asking Claude (**Set up with Claude**), answer a workflow's questions with buttons, and run
+  prompt or slash-command workflows on a ticket, a pull request or on their own:
+  [Claude](docs/user/claude-code.md).
+- Claude sessions you start in another terminal show in Now, and Kelta jumps to their tmux pane or window; a
+  session template can run Claude in your own terminal or in tmux: [Claude](docs/user/claude-code.md).
 
 **Tools**
 
 - lazygit, lazydocker, k9s, `sl web` or an app like Fork, defined once in Global settings and opened from the tab
   bar where you are: [tools](docs/user/tools.md).
 
-**Themes**
+**Interface**
 
-- Dark and light theme slots, and import from VS Code, iTerm2, Ghostty or Kitty: [themes](docs/user/themes.md).
+- English, French and German (`app.language`); a sidebar you can resize and collapse (`Cmd+B`, `Ctrl+Shift+S`);
+  panes you drag to rearrange, or out of the window to open them in their own window; closed projects you can
+  reopen: [getting started](docs/user/getting-started.md#the-rail).
+- Dark and light theme slots, and import from VS Code, iTerm2, Ghostty, Kitty, Alacritty or base16:
+  [themes](docs/user/themes.md).
 
 **Plugins**
 
@@ -71,24 +86,31 @@ built with Tauri v2, Svelte 5 and Rust. The [user guide](docs/user/README.md) co
 
 ## Install
 
-Builds are unsigned test builds of `main`, published to the rolling `nightly` prerelease on the
-[Releases page](https://github.com/InjustFr/kelta/releases) every night by the `nightly` workflow, from the newest
-`main` commit that passed CI. Expect rough edges; if no build is listed yet, [build from source](#build-from-source).
+Download a build from the [Releases page](https://github.com/InjustFr/kelta/releases). There are two channels:
 
-| Platform | File |
-|---|---|
-| macOS 13+ (Apple silicon) | `Kelta_*_aarch64.dmg` |
-| Linux, any distro (x86_64 / arm64) | `kelta_*_amd64.AppImage` / `kelta_*_aarch64.AppImage` |
-| Debian, Ubuntu 24.04+ (x86_64 / arm64) | `kelta_*_amd64.deb` / `kelta_*_arm64.deb` |
+- **Stable**: the numbered releases (1.0.0 and later). Take the latest one.
+- **Nightly**: the rolling `nightly` prerelease, rebuilt every night from the newest `main` commit that passed CI,
+  when `main` has moved. It has the newest changes and rough edges.
 
-The release notes list the commit and the changes since the previous build; `SHA256SUMS` is attached.
+| Platform | Stable | Nightly |
+|---|---|---|
+| macOS 13+ | `Kelta_*_universal.dmg` (Intel and Apple silicon) | `Kelta_*_aarch64.dmg` (Apple silicon) |
+| Linux, any distro | `kelta_*_amd64.AppImage` / `kelta_*_aarch64.AppImage` | same |
+| Debian, Ubuntu 24.04+ | `kelta_*_amd64.deb` / `kelta_*_arm64.deb` | same |
 
-Kelta updates itself: it installs each new nightly in the background and a banner offers **Restart** (sessions
-kept by keltad keep running). See Settings → General → Updates. A `.deb` install never updates itself: apt owns
-the files, so install the new `.deb` from the Releases page.
+`SHA256SUMS` is attached to each release. The nightly's notes list the commit and the changes since the previous
+build. If no build fits your machine, [build from source](#build-from-source).
 
-**macOS.** Open the dmg and drag Kelta to Applications. The app is not signed: right-click it and choose
-**Open** the first time, or remove the quarantine flag:
+Kelta updates itself, on the channel it was installed from: a stable install gets stable releases, a nightly
+install gets nightlies, and neither moves to the other. To change channel, install the other build. The new
+version installs in the background and a banner offers **Restart** (sessions kept by keltad keep running).
+Settings > General > Updates shows the version and channel and has **Check now**; `app.updates = false` stops the
+automatic checks. Two installs cannot update themselves: a `.deb` (apt owns the files, so install the new `.deb`
+from the Releases page), and a macOS app that is not in `/Applications`.
+
+**macOS.** Open the dmg and drag Kelta to Applications. The app is ad-hoc signed, not notarized, so macOS asks
+you to confirm the first launch: right-click Kelta and choose **Open**. On macOS 15 and later, open Kelta once,
+then go to System Settings > Privacy & Security and click **Open Anyway**. Or remove the quarantine flag:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Kelta.app
@@ -97,7 +119,7 @@ xattr -dr com.apple.quarantine /Applications/Kelta.app
 Closing the window keeps sessions running (background mode); `kelta-ctl toggle` brings it back.
 
 **Linux.** `chmod +x kelta_*_aarch64.AppImage && ./kelta_*_aarch64.AppImage`, or
-`sudo apt install ./kelta_*_arm64.deb`. It needs `libwebkit2gtk-4.1` and GTK 3.
+`sudo apt install ./kelta_*_arm64.deb`. On x86_64 take the `amd64` files. It needs `libwebkit2gtk-4.1` and GTK 3.
 
 - Hyprland and Sway: no title bar (`window.decorations = "auto"`); bind `kelta-ctl toggle` to a key
   ([compositors](docs/user/compositors.md)).
@@ -109,9 +131,10 @@ Closing the window keeps sessions running (background mode); `kelta-ctl toggle` 
 
 ## Quick start
 
-1. **Add a project**: `+` in the rail, or `kelta-ctl open ~/code/shop`.
-2. **Add a ticket source**: an account in Settings > Accounts, then **Add source** in Settings > Projects >
-   Tracker.
+1. **Add a project**: **Add project** in the rail, or `kelta-ctl open ~/code/shop`.
+2. **Add a ticket source**: an account in Settings > Accounts, then **Pick a board** in Tickets (or **Add source**
+   in Settings > Sources). Or let Claude do steps 1 and 2: the welcome sheet and the palette have **Set up with
+   Claude**.
 3. **Start work on a ticket**: **Tickets** (`Cmd+Shift+B`), select one, press `s`.
 4. **Review a PR**: **Reviews** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
 

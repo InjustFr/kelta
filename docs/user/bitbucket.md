@@ -15,9 +15,14 @@ kind = "bitbucket"
 email = "me@acme.com"            # the Atlassian account e-mail; not needed with auth = "bearer"
 secret = "keyring:bitbucket-acme"
 
-# in a project file, per repository
+# in the project file, on the repository
+[[project.repos]]
+id = "api"
+path = "~/code/shop-api"
 code_host = { account = "bitbucket-acme", repo = "workspace/repo-slug" }
 ```
+
+The New project sheet binds a repository to the matching account for you when its remote is on bitbucket.org.
 
 Limits: review requests are searched in the 50 most recently updated repositories you are a member of in each
 workspace, lists show no CI status (the detail view does), approving cannot be pinned to a commit, and "Review

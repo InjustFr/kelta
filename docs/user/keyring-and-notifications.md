@@ -8,6 +8,8 @@ Account tokens are references, never plain text:
 |---|---|
 | `keyring:<name>` | macOS Keychain, Linux Secret Service (service `dev.kelta`) |
 | `file:<name>` | Kelta's own encrypted file (`secrets.enc` in the data folder), unlocked with a passphrase once per run |
+| `gh-cli` | the token of your `gh` login for the account's host, read on demand and never copied (GitHub) |
+| `glab-cli` | the token of your `glab` login for the account's host (GitLab) |
 | `command:<argv>` | output of a command, run without a shell, 5 s limit (`command:pass show jira/acme`) |
 | `env:<VAR>` | environment variable |
 
