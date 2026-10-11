@@ -5,8 +5,7 @@
   import { dispatch } from '$lib/actions';
   import type { Column, PrLink, Scope, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
-  import { findPane, replacePaneContent } from '$lib/layout';
-  import { GLOBAL, layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { scopeKey } from '$lib/stores/reducers';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
@@ -26,7 +25,7 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { openFrom, saveTicketsView } from '../work/nav';
+  import { openFrom, persistPaneContent, saveTicketsView } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -115,18 +114,7 @@
   let currentSprint = $state(false);
 
   function persist(patch: Partial<Omit<typeof content, 'kind' | 'scope'>>): void {
-    if (projectId === GLOBAL) return saveTicketsView(patch);
-    const current = layout.get(projectId);
-    if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
-    layout.update(projectId, (l) => ({
-      ...l,
-      // Merged onto the stored content: two changes in one tick must not drop the first.
-      tabs: l.tabs.map((t) => {
-        const stored = findPane(t.root, paneId)?.pane.content;
-        const base = stored?.kind === 'tickets' ? stored : content;
-        return { ...t, root: replacePaneContent(t.root, paneId, { ...base, ...patch }) };
-      }),
-    }));
+    persistPaneContent(projectId, paneId, patch, () => saveTicketsView(patch));
   }
 
   function setSource(id: string | null, view: string | null = null): void {

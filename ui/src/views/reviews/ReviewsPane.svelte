@@ -5,8 +5,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { findPane, replacePaneContent } from '$lib/layout';
-  import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -26,7 +25,7 @@
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
-  import { openFrom, saveReviewsView } from '../work/nav';
+  import { openFrom, persistPaneContent, saveReviewsView } from '../work/nav';
   import { groupByTicket } from './group';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
@@ -61,14 +60,8 @@
 
   function setTab(k: ReviewKind): void {
     tabOverride = k;
-    if (projectId === GLOBAL) return saveReviewsView(k);
-    const current = layout.get(projectId);
-    if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
     // The core polls Team only while a visible pane shows it (its `tab`).
-    layout.update(projectId, (l) => ({
-      ...l,
-      tabs: l.tabs.map((t) => ({ ...t, root: replacePaneContent(t.root, paneId, { ...content, tab: k }) })),
-    }));
+    persistPaneContent(projectId, paneId, { tab: k }, () => saveReviewsView(k));
   }
 
   const lists = $derived({
