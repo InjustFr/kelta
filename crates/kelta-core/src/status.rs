@@ -62,13 +62,16 @@ fn unless_visible(prev: &SessState, a: Attention) -> (Attention, bool) {
 /// Fold a hook [`StatusChange`] (ARCHITECTURE §7.6 table).
 pub fn apply_hook(prev: &SessState, change: &StatusChange) -> Decision {
     let mut d = Decision::keep(prev);
-    match change.status {
-        // A tool ran after a permission prompt: the user answered, Claude is working again (#278).
-        SessionStatus::Unknown
-            if prev.status == SessionStatus::NeedsInput && change.raw_event == names::POST_TOOL_USE =>
-        {
-            return apply_hook(prev, &StatusChange { status: SessionStatus::Working, ..change.clone() });
-        }
+    // A tool ran after a permission prompt: the user answered, Claude is working again (#278).
+    // shortcut: any tool counts, so a parallel tool or subagent can clear another tool's pending
+    // prompt; the next Stop or prompt corrects it, match the tool name if that ever bites.
+    let tool_ran = prev.status == SessionStatus::NeedsInput && change.raw_event == names::POST_TOOL_USE;
+    let status = if tool_ran && change.status == SessionStatus::Unknown {
+        SessionStatus::Working
+    } else {
+        change.status
+    };
+    match status {
         // PostToolUse & co: status unchanged.
         SessionStatus::Unknown => {}
         SessionStatus::Starting | SessionStatus::Running => {

@@ -252,13 +252,32 @@ async fn answering_a_permission_prompt_clears_needs_input() {
     h.core.session_apply_hook(&s.id, ch(S::Running)).await.unwrap();
     h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
     assert_eq!(h.core.session_get(&s.id).unwrap().attention, A::NeedsInput);
-    // A focus report is not an answer.
-    h.core.session_write(&s.id, b"\x1b[I").await.unwrap();
-    assert_eq!(h.core.session_get(&s.id).unwrap().status, S::NeedsInput);
+    // Focus reports, arrows, Shift+Tab, DA/DSR replies, an SGR mouse report, paste markers: not answers (#303).
+    let moves: [&[u8]; 9] = [
+        b"\x1b[I",
+        b"\x1b[A",
+        b"\x1b[B",
+        b"\x1bOA",
+        b"\x1b[Z",
+        b"\x1b[?1;2c",
+        b"\x1b[12;40R",
+        b"\x1b[<0;10;5M",
+        b"\x1b[200~",
+    ];
+    for bytes in moves {
+        h.core.session_write(&s.id, bytes).await.unwrap();
+        let info = h.core.session_get(&s.id).unwrap();
+        assert_eq!((info.status, info.attention), (S::NeedsInput, A::NeedsInput), "{bytes:?}");
+    }
     h.core.session_write(&s.id, b"1").await.unwrap();
     let info = h.core.session_get(&s.id).unwrap();
     assert_eq!((info.status, info.attention, info.status_source), (S::Working, A::None, StatusSource::Hook));
     assert_eq!(h.ui.badge(), 0);
+    for answer in [&b"\r"[..], b"y", b"n", b"\x1b"] {
+        h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
+        h.core.session_write(&s.id, answer).await.unwrap();
+        assert_eq!(h.core.session_get(&s.id).unwrap().status, S::Working, "{answer:?}");
+    }
 
     // idle_prompt (Claude finished, unseen): typing the next prompt waits for UserPromptSubmit.
     h.core.session_apply_hook(&s.id, ch(S::Done)).await.unwrap();
