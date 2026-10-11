@@ -131,6 +131,8 @@ pub async fn run_detached(argv: &[String], cwd: &Path) -> Result<(), KeltaError>
     let mut cmd = tokio::process::Command::new(prog);
     cmd.args(args)
         .current_dir(cwd)
+        .env_clear()
+        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())

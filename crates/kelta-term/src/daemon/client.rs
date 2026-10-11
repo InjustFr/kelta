@@ -149,7 +149,13 @@ fn hello(s: &UnixStream) -> Result<(), KeltaError> {
 fn keltad_pid(sock: &Path) -> Option<i32> {
     let from_file = std::fs::read_to_string(pidfile(sock)).ok().and_then(|t| t.trim().parse().ok());
     let from_lsof = || {
-        let out = Command::new("lsof").args(["-F", "pn", "--"]).arg(sock).output().ok()?;
+        let out = Command::new("lsof")
+            .env_clear()
+            .envs(kelta_proto::term::LoginEnv::inherited().vars)
+            .args(["-F", "pn", "--"])
+            .arg(sock)
+            .output()
+            .ok()?;
         lsof_holders(&String::from_utf8_lossy(&out.stdout), sock).into_iter().find(is_keltad)
     };
     from_file.filter(is_keltad).or_else(from_lsof)

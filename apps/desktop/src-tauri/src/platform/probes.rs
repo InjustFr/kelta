@@ -243,7 +243,8 @@ pub fn secret_file(list: &[SecretBackendStatus]) -> Option<Check> {
 /// Runs `<path> --version` with a 3 s limit.
 async fn run_version(path: &Path) -> Option<String> {
     let mut cmd = tokio::process::Command::new(path);
-    cmd.arg("--version").stdin(std::process::Stdio::null()).kill_on_drop(true);
+    cmd.arg("--version").env_clear().envs(kelta_proto::term::LoginEnv::inherited().vars);
+    cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
     // one-shot: a hung tool must not hang the diagnostics pane
     let out = tokio::time::timeout(Duration::from_secs(3), cmd.output()).await.ok()?.ok()?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);

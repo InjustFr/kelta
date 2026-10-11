@@ -257,7 +257,7 @@ impl Core {
                 }
                 if preset.external {
                     let mut cmd = tokio::process::Command::new(&preset.command);
-                    cmd.args(&args).current_dir(cwd).envs(self.login_env.vars.iter());
+                    cmd.args(&args).current_dir(cwd).env_clear().envs(self.login_env.vars.iter());
                     cmd.stdin(std::process::Stdio::null())
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null());
