@@ -75,6 +75,8 @@ pub struct PluginHost {
     bus_task: Mutex<Option<tokio::task::AbortHandle>>,
     /// Provider (KPP) processes by plugin.
     kpp: Mutex<HashMap<PluginId, Arc<kpp::KppProcess>>>,
+    /// Serializes `settings.set` (mark + write) so concurrent calls cannot invert mark and value (#331).
+    settings_set: tokio::sync::Mutex<()>,
 }
 
 impl PluginHost {
@@ -92,6 +94,7 @@ impl PluginHost {
             engine: triggers::Engine::default(),
             bus_task: Mutex::new(None),
             kpp: Mutex::new(HashMap::new()),
+            settings_set: tokio::sync::Mutex::new(()),
         })
     }
 

@@ -28,7 +28,7 @@ use crate::PluginHost;
 use crate::context::CtxSpec;
 use crate::perms::Granted;
 use crate::registry::Entry;
-use crate::screens::{SpawnParams, is_secret_prop, keys_bytes};
+use crate::screens::{PLUGIN_SET_KEY, SpawnParams, is_secret_prop, keys_bytes};
 use crate::template::Vars;
 use crate::util::{signal_group, truncate};
 
@@ -762,9 +762,18 @@ impl PluginHost {
             .ok_or_else(|| KeltaError::unsupported("`secret_headers` need a secret resolver"))?;
         let ctx = SecretCtx { host: kelta_http::util::url_host(&req.url), ..Default::default() };
         let settings = self.settings(project);
+        let mut plugin_set = Map::new();
+        if let Some(e) = plugin {
+            for spec in secret_headers.values() {
+                let (SecretHeader::Name(n) | SecretHeader::Setting { setting: n, .. }) = spec;
+                if let Some(v) = self.plugin_set_setting(&e.id, n).await? {
+                    plugin_set.insert(n.clone(), v);
+                }
+            }
+        }
         let mut refs = Vec::new();
         for (header, spec) in secret_headers {
-            let (r, format) = secret_ref(plugin, &settings, spec)?;
+            let (r, format) = secret_ref(plugin, &settings, &plugin_set, spec)?;
             let secret = resolver.resolve(&r, &ctx).await?;
             req.headers.insert(header.clone(), format.replace("{secret}", secret.expose()));
             refs.push(r);
@@ -775,13 +784,25 @@ impl PluginHost {
         }
         Ok(resp)
     }
+
+    /// The value the plugin wrote to `key` through `settings.set` (reserved `kv` entry).
+    pub(crate) async fn plugin_set_setting(
+        &self,
+        plugin: &PluginId,
+        key: &str,
+    ) -> Result<Option<Value>, KeltaError> {
+        let v = self.grant_store().kv_get(plugin, &format!("{PLUGIN_SET_KEY}/{key}")).await?;
+        Ok(v.and_then(|v| serde_json::from_str(&v).ok()))
+    }
 }
 
 /// SecretRef and header format of one `secret_headers` entry. A plugin may only name its own
 /// `x-kelta-secret` settings: a raw ref (`gh-cli`) would let it send any user secret to its host.
+/// Nor a value it wrote itself (`plugin_set`): `settings.set` before a schema flip to secret (#331).
 fn secret_ref(
     plugin: Option<&Entry>,
     settings: &Settings,
+    plugin_set: &Map<String, Value>,
     spec: &SecretHeader,
 ) -> Result<(SecretRef, String), KeltaError> {
     let (name, format) = match spec {
@@ -820,6 +841,18 @@ fn secret_ref(
             let plugin = entry.manifest().map_or(entry.id.as_str(), |m| m.name.as_str());
             KeltaError::needs_auth(format!("{plugin}: set \"{title}\" in Settings → Plugins"))
         })?;
+    // shortcut: matched by value, so the user re-entering the plugin's exact value stays refused;
+    // upgrade by clearing the mark on user settings writes if that ever bites.
+    if plugin_set.get(name).and_then(Value::as_str) == Some(r) {
+        return Err(KeltaError::new(
+            ErrorCode::PermissionDenied,
+            format!(
+                "`secret_headers`: `{name}` was written by plugin {} itself (settings.set); \
+                 the user must set it in Settings → Plugins",
+                entry.id
+            ),
+        ));
+    }
     Ok((SecretRef::new(r), format))
 }
 
