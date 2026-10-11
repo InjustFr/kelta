@@ -400,7 +400,8 @@ impl WorkService {
                     git::check_branch_name(&repo.path, name.trim()).await?
                 };
                 // The resolved branch (not the possibly empty name) identifies the item.
-                let by_branch = WorkSource::Branch { name: branch.clone(), task: None, repo: None };
+                let by_branch =
+                    WorkSource::Branch { name: branch.clone(), task: None, repo: Some(repo_id.clone()) };
                 let existing = plan::existing_for(&items, &by_branch).cloned();
                 ctx.set("key", slugify(&branch, slug_max));
                 ctx.set("type", "");
