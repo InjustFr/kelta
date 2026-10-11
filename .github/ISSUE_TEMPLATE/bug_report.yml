@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Kelta does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the [existing issues](https://github.com/InjustFr/kelta/issues?q=is%3Aissue) first. Security problems go to
+        [private vulnerability reporting](https://github.com/InjustFr/kelta/security/advisories/new), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Kelta version
+      description: Settings > Diagnostics > Version (or Settings > General > Updates). Nightlies end in `-nightly.<timestamp>`.
+      placeholder: 0.1.0-nightly.202610100300
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      description: On Linux, add the desktop or compositor (GNOME, KDE, Hyprland, Sway, ...).
+      placeholder: macOS 15.1 / Ubuntu 24.04 GNOME / Arch Hyprland
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - dmg (macOS)
+        - AppImage
+        - deb
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: providers
+    attributes:
+      label: Providers involved
+      description: Trackers, code hosts or tools in play, if any.
+      placeholder: Jira, GitHub, Claude Code
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a project
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and diagnostics
+      description: |
+        The relevant lines of `kelta.log` (and `keltad.log` beside it):
+        macOS `~/Library/Logs/Kelta/`, Linux `~/.local/state/kelta/logs/` (`$XDG_STATE_HOME/kelta/logs/`).
+        Settings > Diagnostics > Copy report is also useful. Remove tokens, secrets and private ticket content before pasting.
+      render: text
