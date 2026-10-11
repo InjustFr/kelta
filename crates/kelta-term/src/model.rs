@@ -530,18 +530,16 @@ pub struct TermModel {
     tail: Tail,
     history_limit: usize,
     kitty_keyboard: bool,
-    osc52_read: bool,
     /// Last title sent to core (none yet = the next one is sent).
     title: Option<String>,
     /// Lines for the on-disk history log, drained by the session (None = logging off).
     log: Option<String>,
 }
 
-/// Model configuration (D7: kitty keyboard per `terminal.keyboard_protocol`; OSC 52 copy only unless
-/// `terminal.osc52 = "read-write"`).
-fn config(history: usize, kitty_keyboard: bool, osc52_read: bool) -> Config {
-    let osc52 = if osc52_read { Osc52::CopyPaste } else { Osc52::OnlyCopy };
-    Config { scrolling_history: history, kitty_keyboard, osc52, ..Config::default() }
+/// Model configuration (D7: kitty keyboard per `terminal.keyboard_protocol`). OSC 52 stores and
+/// queries all reach core, which applies the session's project `terminal.osc52`.
+fn config(history: usize, kitty_keyboard: bool) -> Config {
+    Config { scrolling_history: history, kitty_keyboard, osc52: Osc52::CopyPaste, ..Config::default() }
 }
 
 impl TermModel {
@@ -551,7 +549,7 @@ impl TermModel {
         let listener = Listener::default();
         let events = listener.events.clone();
         Self {
-            term: Term::new(config(history, true, false), &size, listener),
+            term: Term::new(config(history, true), &size, listener),
             processor: Processor::new(),
             shadow: Shadow::new(size.rows),
             events,
@@ -559,7 +557,6 @@ impl TermModel {
             tail: Tail::new(),
             history_limit: history,
             kitty_keyboard: true,
-            osc52_read: false,
             title: None,
             log: None,
         }
@@ -583,7 +580,14 @@ impl TermModel {
             self.processor = Processor::new();
             rest = later;
         }
-        out.extend(evs.into_iter().map(Output::Event));
+        // Like BEL and titles: a flood of OSC 9 / 777 is one notification per chunk, the last.
+        let notify = evs.iter().rposition(|e| matches!(e, TerminalEvent::Notify { .. }));
+        out.extend(
+            evs.into_iter()
+                .enumerate()
+                .filter(|(i, e)| Some(*i) == notify || !matches!(e, TerminalEvent::Notify { .. }))
+                .map(|(_, e)| Output::Event(e)),
+        );
         self.drain(palette, out);
     }
 
@@ -699,16 +703,8 @@ impl TermModel {
         self.shadow.keyboard_depth = [0; 2];
     }
 
-    /// Let programs query the clipboard (OSC 52 `?`): `terminal.osc52 = "read-write"`.
-    pub fn set_osc52_read(&mut self, on: bool) {
-        if on != self.osc52_read {
-            self.osc52_read = on;
-            self.apply_config();
-        }
-    }
-
     fn apply_config(&mut self) {
-        self.term.set_options(config(self.history_limit, self.kitty_keyboard, self.osc52_read));
+        self.term.set_options(config(self.history_limit, self.kitty_keyboard));
         // `set_options` re-announces the title; that is not a change.
         self.events.lock().clear();
     }
@@ -1013,11 +1009,8 @@ mod tests {
                 Output::Event(TerminalEvent::Title("hello".into())),
             ]
         );
-        // OSC 52 read is not allowed (copy only) until `terminal.osc52 = "read-write"`.
+        // Queries reach core too: it answers per project `terminal.osc52` (#262).
         let mut out = Vec::new();
-        m.advance(b"\x1b]52;c;?\x07", &Palette::default(), &mut out);
-        assert!(out.is_empty());
-        m.set_osc52_read(true);
         m.advance(b"\x1b]52;c;?\x07", &Palette::default(), &mut out);
         assert_eq!(out, vec![Output::Event(TerminalEvent::ClipboardLoad { kind: ClipboardKind::Clipboard })]);
     }
@@ -1034,13 +1027,22 @@ mod tests {
     }
 
     #[test]
-    fn bell_and_title_floods_collapse() {
+    fn bell_title_and_notify_floods_collapse() {
         let mut m = TermModel::new(80, 24, 100);
         assert_eq!(events(&mut m, &b"\x07".repeat(10_000)), vec![TerminalEvent::Bell]);
         let flood = b"\x1b]2;a\x07\x1b]2;b\x07".repeat(1000);
         assert_eq!(events(&mut m, &flood), vec![TerminalEvent::Title("b".into())]);
         assert!(events(&mut m, &flood).is_empty(), "an unchanged title emits nothing");
         assert_eq!(events(&mut m, b"\x1b]2;a\x07"), vec![TerminalEvent::Title("a".into())]);
+        let mut flood = b"\x1b]9;x\x07".repeat(10_000);
+        flood.extend_from_slice(b"\x1b]777;notify;T;last\x07\x1b]7;file:///tmp\x07");
+        assert_eq!(
+            events(&mut m, &flood),
+            vec![
+                TerminalEvent::Notify { title: Some("T".into()), body: "last".into() },
+                TerminalEvent::Cwd("/tmp".into())
+            ]
+        );
     }
 
     #[test]

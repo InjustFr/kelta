@@ -9,7 +9,8 @@
 //!   POLLOUT               → drain the EAGAIN input queue
 //!   POLLIN                → read ≤ 64 KiB, parse, replies → PTY, events → core, Data frame → view
 //!   idle                  → release the grid cache of hidden sessions
-//! exit (EOF/EIO): flush, close fds, waitpid, Exit frame, TerminalEvent::Exited
+//! exit (EOF/EIO, or the child's pidfd once the master is drained): flush, close fds, waitpid, Exit
+//! frame, TerminalEvent::Exited
 //! ```
 
 use std::os::fd::OwnedFd;
@@ -66,6 +67,7 @@ fn earliest(a: Option<Instant>, b: Option<Instant>) -> Option<Instant> {
 fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake: OwnedFd) {
     let mut buf = vec![0u8; READ_CHUNK];
     let mut idle_check = false;
+    let child = child_exit_fd(session);
     loop {
         let (sync_dl, ack_dl) = {
             let st = session.state.lock();
@@ -83,10 +85,19 @@ fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake
         if want_out {
             flags |= PollFlags::OUT;
         }
-        let (m_rev, w_rev) = {
-            let mut fds = [PollFd::new(&**master, flags), PollFd::new(&wake, PollFlags::IN)];
-            match poll(&mut fds, ts.as_ref()) {
-                Ok(_) => (fds[0].revents(), fds[1].revents()),
+        let (m_rev, w_rev, c_rev) = {
+            let mut fds = [
+                PollFd::new(&**master, flags),
+                PollFd::new(&wake, PollFlags::IN),
+                PollFd::new(child.as_ref().unwrap_or(&wake), PollFlags::IN),
+            ];
+            let n = if child.is_some() { 3 } else { 2 };
+            match poll(&mut fds[..n], ts.as_ref()) {
+                Ok(_) => (
+                    fds[0].revents(),
+                    fds[1].revents(),
+                    if n == 3 { fds[2].revents() } else { PollFlags::empty() },
+                ),
                 Err(Errno::INTR) => continue,
                 Err(e) => {
                     tracing::warn!(session = %session.id, "poll failed: {e}");
@@ -124,9 +135,31 @@ fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake
                 Err(_) => break,
             }
         }
+        if c_rev.contains(PollFlags::IN) && !m_rev.contains(PollFlags::IN) {
+            break;
+        }
     }
     drop(wake);
     exit(session, shared);
+}
+
+/// Readable once the child exits. Linux needs it: a background job still holding the slave keeps
+/// the master open (no EIO) after the shell exits. macOS revokes the terminal of an exited session
+/// leader, so EOF suffices there.
+fn child_exit_fd(session: &Session) -> Option<OwnedFd> {
+    #[cfg(target_os = "linux")]
+    {
+        use rustix::process::{Pid, PidfdFlags, pidfd_open};
+        let pid = Pid::from_raw(session.proc.lock().pid)?;
+        pidfd_open(pid, PidfdFlags::empty())
+            .inspect_err(|e| tracing::debug!(session = %session.id, "pidfd_open: {e}"))
+            .ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = session;
+        None
+    }
 }
 
 /// Expired DEC 2026 deadline → flush; expired ack watchdog → AckTimeout.
