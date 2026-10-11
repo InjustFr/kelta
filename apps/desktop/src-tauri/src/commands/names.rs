@@ -24,6 +24,7 @@ pub const COMMANDS: &[&str] = &[
     "app_restart",
     "app_quit",
     "app_close",
+    "window_detach",
     // settings
     "settings_schema",
     "settings_effective",

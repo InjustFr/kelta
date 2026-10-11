@@ -85,28 +85,32 @@ pub fn active_tab(l: &Layout) -> Option<&Tab> {
     l.active_tab.as_ref().and_then(|id| l.tabs.iter().find(|t| &t.id == id)).or_else(|| l.tabs.first())
 }
 
-/// Sessions on screen in this layout: the active tab (only the zoomed pane when zoomed).
-pub fn visible_sessions(l: &Layout) -> Vec<SessionId> {
-    let Some(tab) = active_tab(l) else { return Vec::new() };
-    if let Some(z) = &tab.zoomed_pane
-        && let Some((_, PaneContent::Terminal { session_id })) =
-            all_panes(&tab.root).into_iter().find(|(id, _)| *id == z)
-    {
-        return vec![session_id.clone()];
-    }
-    sessions_in(&tab.root)
+/// Sessions on screen in this layout (see `visible_contents`).
+pub fn visible_sessions(l: &Layout, active: bool) -> Vec<SessionId> {
+    visible_contents(l, active)
+        .into_iter()
+        .filter_map(|c| match c {
+            PaneContent::Terminal { session_id } => Some(session_id),
+            _ => None,
+        })
+        .collect()
 }
 
-/// Content of visible panes of the active tab (scheduler subscriptions).
-pub fn visible_contents(l: &Layout) -> Vec<PaneContent> {
-    let Some(tab) = active_tab(l) else { return Vec::new() };
-    let panes = all_panes(&tab.root);
-    if let Some(z) = &tab.zoomed_pane
-        && let Some((_, c)) = panes.iter().find(|(id, _)| *id == z)
-    {
-        return vec![(*c).clone()];
-    }
-    panes.into_iter().map(|(_, c)| c.clone()).collect()
+/// Content of the panes on screen: the active tab's when `active` (the main window shows this
+/// layout) plus every detached tab's (#342), only the zoomed pane of a zoomed tab.
+pub fn visible_contents(l: &Layout, active: bool) -> Vec<PaneContent> {
+    let front = active.then(|| active_tab(l)).flatten().map(|t| &t.id);
+    l.tabs
+        .iter()
+        .filter(|t| t.detached || Some(&t.id) == front)
+        .flat_map(|tab| {
+            let panes = all_panes(&tab.root);
+            match tab.zoomed_pane.as_ref().and_then(|z| panes.iter().find(|(id, _)| *id == z)) {
+                Some((_, c)) => vec![(*c).clone()],
+                None => panes.into_iter().map(|(_, c)| c.clone()).collect(),
+            }
+        })
+        .collect()
 }
 
 fn path_to(node: &LayoutNode, pane_id: &PaneId) -> Option<Vec<usize>> {
@@ -288,7 +292,15 @@ pub fn default_title(c: &PaneContent) -> String {
 
 fn new_tab(title: String, root: LayoutNode, work_item_id: Option<kelta_proto::ids::WorkItemId>) -> Tab {
     let focused = first_pane(&root);
-    Tab { id: TabId::generate(), title, work_item_id, root, focused_pane: focused, zoomed_pane: None }
+    Tab {
+        id: TabId::generate(),
+        title,
+        work_item_id,
+        root,
+        focused_pane: focused,
+        zoomed_pane: None,
+        detached: false,
+    }
 }
 
 /// Apply an `OpenPaneRequest` with a whole subtree (templates) or a single pane.
@@ -394,11 +406,16 @@ mod tests {
         open_node(&mut l, pane(term("a")), &req(term("a"), Placement::NewTab));
         open_node(&mut l, pane(term("b")), &req(term("b"), Placement::SplitRight));
         assert_eq!(l.tabs.len(), 1);
-        assert_eq!(visible_sessions(&l), vec![SessionId::new("a"), SessionId::new("b")]);
+        assert_eq!(visible_sessions(&l, true), vec![SessionId::new("a"), SessionId::new("b")]);
         // moving "a" to a new tab vacates its old pane
         open_node(&mut l, pane(term("a")), &req(term("a"), Placement::NewTab));
         assert_eq!(l.tabs.len(), 2);
         assert_eq!(layout_sessions(&l), vec![SessionId::new("b"), SessionId::new("a")]);
+        // a detached tab stays on screen whichever tab is active, and in a background project
+        assert_eq!(visible_sessions(&l, true), vec![SessionId::new("a")]);
+        l.tabs[0].detached = true;
+        assert_eq!(visible_sessions(&l, true), vec![SessionId::new("b"), SessionId::new("a")]);
+        assert_eq!(visible_sessions(&l, false), vec![SessionId::new("b")]);
         // focused placement focuses the existing pane
         let (t, _) = open_node(&mut l, pane(term("b")), &req(term("b"), Placement::Focused));
         assert_eq!(l.active_tab.as_ref(), Some(&t));

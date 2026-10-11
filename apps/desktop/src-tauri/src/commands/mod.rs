@@ -113,6 +113,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         app::app_restart,
         app::app_quit,
         app::app_close,
+        app::window_detach,
         // settings
         settings::settings_schema,
         settings::settings_effective,
@@ -276,7 +277,9 @@ mod tests {
             let p = format!("allow-{}", c.replace('_', "-"));
             assert!(perms.contains(&p.as_str()), "capabilities/main.json lacks {p}");
         }
-        assert_eq!(cap["windows"], serde_json::json!(["main"]));
+        // The main window and the detached tab windows (#342), never a plugin or tool webview.
+        let detached = format!("{}*", crate::window::DETACHED_PREFIX);
+        assert_eq!(cap["windows"], serde_json::json!([crate::window::MAIN_WINDOW, detached]));
     }
 
     #[test]

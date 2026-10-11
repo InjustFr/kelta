@@ -148,6 +148,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | (prefix only) | `h j k l` / arrows |
 | `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Z | `z` |
 | `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
+| `pane.detach` ("Move pane to new window": the focused pane alone in its own OS window, a lone pane with its tab; in a detached window, its tab back to the main one; closing a detached window does the same, and detached windows come back with their geometry after a restart) | unbound | unbound | |
 | `tickets.open` (the Tickets view; with `project_id`, that project's Tickets tab) | Cmd+Shift+B | Ctrl+Shift+B | `t` |
 | `tickets.board` ("Open project board": the active project's Tickets tab as a board; palette only) | — | — | — |
 | `reviews.open` (the Reviews view; with `project_id`, that project's Reviews tab) | Cmd+Shift+R | Ctrl+Shift+R | `r` |

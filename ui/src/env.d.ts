@@ -11,6 +11,8 @@ interface ImportMeta {
 }
 
 interface Window {
+  /** Set by Rust in a detached window (#342): the tab it shows. */
+  __KELTA_DETACHED__?: import('./shell/detached').DetachedTab;
   /** Mock IPC controls (VITE_IPC=mock only). */
   __keltaMock?: import('$lib/ipc/mock').MockControls;
   /** Debug handles for e2e tests (VITE_IPC=mock only). */

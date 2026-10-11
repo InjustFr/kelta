@@ -247,6 +247,7 @@ export const layout: Layout = {
   "rev": 7,
   "tabs": [
     {
+      "detached": false,
       "focused_pane": "pane-1",
       "id": "tab-1",
       "root": {
@@ -280,6 +281,7 @@ export const layout: Layout = {
       "zoomed_pane": null
     },
     {
+      "detached": false,
       "focused_pane": null,
       "id": "tab-2",
       "root": {
@@ -3474,6 +3476,7 @@ export const uiEventLayoutChanged: UiEvent = {
     "rev": 7,
     "tabs": [
       {
+        "detached": false,
         "focused_pane": "pane-1",
         "id": "tab-1",
         "root": {
@@ -3507,6 +3510,7 @@ export const uiEventLayoutChanged: UiEvent = {
         "zoomed_pane": null
       },
       {
+        "detached": false,
         "focused_pane": null,
         "id": "tab-2",
         "root": {

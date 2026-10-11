@@ -364,6 +364,7 @@ export function makeTab(
     root,
     focused_pane: first ? first.id : null,
     zoomed_pane: null,
+    detached: false,
   };
 }
 
@@ -399,10 +400,12 @@ export function moveTab(layout: Layout, tabId: TabId, toIndex: number): Layout {
   return { ...layout, tabs };
 }
 
+/** Focuses a pane; its tab becomes the active one unless it is detached (in its own window). */
 export function focusPane(layout: Layout, tabId: TabId, paneId: PaneId): Layout {
   const tab = findTab(layout, tabId);
   if (!tab || !findPane(tab.root, paneId)) return layout;
-  return { ...updateTab(layout, tabId, (t) => ({ ...t, focused_pane: paneId })), active_tab: tabId };
+  const next = updateTab(layout, tabId, (t) => ({ ...t, focused_pane: paneId }));
+  return tab.detached ? next : { ...next, active_tab: tabId };
 }
 
 export function toggleZoom(layout: Layout, tabId: TabId, paneId?: PaneId): Layout {
@@ -588,6 +591,39 @@ export function movePane(layout: Layout, from: PaneLocation, to: PaneDrop): Layo
     root: splitPane(t.root, anchor, dir, moved, { before }),
   }));
   return focusPane(placed, to.tabId, moved.id);
+}
+
+/**
+ * Shows a tab in its own window (#342), or back in the main one where it becomes the active tab. A
+ * detached active tab hands the main window to the nearest tab still in it.
+ */
+export function setDetached(layout: Layout, tabId: TabId, detached: boolean): Layout {
+  const index = layout.tabs.findIndex((t) => t.id === tabId);
+  const tab = layout.tabs[index];
+  if (!tab || !!tab.detached === detached) return detached ? layout : activateTab(layout, tabId);
+  const next = updateTab(layout, tabId, (t) => ({ ...t, detached }));
+  if (!detached) return { ...next, active_tab: tabId };
+  if (activeTab(layout)?.id !== tabId) return next;
+  const nearest = [...next.tabs.slice(index + 1), ...next.tabs.slice(0, index).reverse()].find(
+    (t) => !t.detached,
+  );
+  return { ...next, active_tab: nearest?.id ?? tabId };
+}
+
+/**
+ * "Move to new window": detaches the pane's tab when the pane is alone in it, else a new tab holding
+ * just the pane (the source tab stays in front). `tabId`: the tab to show in the new window.
+ */
+export function detachPane(layout: Layout, from: PaneLocation): { layout: Layout; tabId: TabId | null } {
+  const src = findTab(layout, from.tabId);
+  if (!src || !findPane(src.root, from.paneId)) return { layout, tabId: null };
+  if (allPanes(src.root).length === 1) {
+    return { layout: setDetached(layout, from.tabId, true), tabId: from.tabId };
+  }
+  const moved = movePane(layout, from, { tabId: null });
+  const tabId = moved.active_tab; // movePane activates the new tab
+  if (moved === layout || !tabId) return { layout, tabId: null };
+  return { layout: setDetached({ ...moved, active_tab: layout.active_tab }, tabId, true), tabId };
 }
 
 /** Checks the structural invariants (used by tests and dev assertions). Returns problems found. */

@@ -8,6 +8,7 @@ import { mount } from 'svelte';
 
 import * as actions from '$lib/actions';
 import { appClose, appReady } from '$lib/ipc/commands';
+import { setDetached } from '$lib/layout';
 import { createTauriTransport } from '$lib/ipc/tauri';
 import { setTransport } from '$lib/ipc/transport';
 import * as stores from '$lib/stores';
@@ -30,11 +31,15 @@ async function start(): Promise<void> {
     setTransport(createTauriTransport());
     // The webview is destroyed on close: save the debounced layout first, then let Rust decide
     // (quit question or close). Without preventDefault Tauri destroys the window right after.
+    // Closing a detached window (#342) brings its tab back to the main window.
+    const shown = window.__KELTA_DETACHED__;
     void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
       getCurrentWindow().onCloseRequested(async (e) => {
         e.preventDefault();
+        if (shown) stores.layout.update(shown.project_id, (l) => setDetached(l, shown.tab_id, false));
         await stores.layout.flushForClose();
-        await appClose().catch(() => getCurrentWindow().destroy()); // never leave an unclosable window
+        if (shown) await getCurrentWindow().destroy();
+        else await appClose().catch(() => getCurrentWindow().destroy()); // never leave an unclosable window
       }),
     );
   }
@@ -47,10 +52,13 @@ async function start(): Promise<void> {
   mount(Shell, { target });
   void stores.bootstrap();
 
-  // First frame after mount: clears the launch crash guard (ARCH §12.4) and marks cold start.
-  requestAnimationFrame(() => {
-    appReady({ t_ms: performance.now() }).catch(() => {});
-  });
+  // First frame after mount: clears the launch crash guard (ARCH §12.4) and marks cold start (the
+  // main window's, not a detached one's).
+  if (!window.__KELTA_DETACHED__) {
+    requestAnimationFrame(() => {
+      appReady({ t_ms: performance.now() }).catch(() => {});
+    });
+  }
 }
 
 void start();

@@ -90,6 +90,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("pane.focus_right", "Focus pane right", ["cmd+alt+right"], [], Some("l"), Global),
     a!("pane.zoom", "Zoom pane", ["cmd+shift+enter"], ["ctrl+shift+z"], Some("z"), Global),
     a!("pane.close", "Close pane", ["cmd+w"], ["ctrl+shift+w"], Some("x"), Global),
+    a!("pane.detach", "Move pane to new window", [], [], None, Global),
     // Mod+J / Mod+Shift+J belong to the jump queue (ticket #136).
     a!("tickets.open", "Open tickets", ["cmd+shift+b"], ["ctrl+shift+b"], Some("t"), Global),
     a!("tickets.board", "Open project board", [], [], None, Global),

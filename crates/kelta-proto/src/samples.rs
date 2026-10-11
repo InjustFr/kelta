@@ -263,6 +263,7 @@ pub fn layout() -> Layout {
                 },
                 focused_pane: Some(PaneId::new("pane-1")),
                 zoomed_pane: None,
+                detached: false,
             },
             Tab {
                 id: TabId::new("tab-2"),
@@ -283,6 +284,7 @@ pub fn layout() -> Layout {
                 },
                 focused_pane: None,
                 zoomed_pane: None,
+                detached: false,
             },
         ],
         active_tab: Some(TabId::new("tab-1")),

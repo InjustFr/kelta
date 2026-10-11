@@ -5,7 +5,7 @@ use std::sync::Arc;
 use kelta_core::Core;
 use kelta_proto::prelude::*;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Window};
 
 use super::Res;
 
@@ -23,10 +23,11 @@ pub async fn app_info(core: State<'_, Arc<Core>>) -> Res<AppInfo> {
 /// One subscription per window; the bridge fans out `UiEvent`s to every channel.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn events_subscribe(
+    window: Window,
     bridge: State<'_, Arc<TauriBridge>>,
     channel: Channel<UiEvent>,
 ) -> Res<SubscribeResult> {
-    Ok(SubscribeResult { sub_id: bridge.subscribe(channel) })
+    Ok(SubscribeResult { sub_id: bridge.subscribe(window.label(), channel) })
 }
 
 /// The UI rendered its first frame: clears the launch crash guard, records the bench mark, binds
@@ -74,6 +75,13 @@ pub async fn app_quit(app: AppHandle, core: State<'_, Arc<Core>>, stop: bool) ->
 pub async fn app_close(app: AppHandle) -> Res<()> {
     crate::window::close_requested(&app);
     Ok(())
+}
+
+/// Shows a tab in its own window (#342), creating the window; the tab is already marked detached.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn window_detach(app: AppHandle, project_id: ProjectId, tab_id: TabId) -> Res<()> {
+    crate::window::open_detached(&app, &project_id, &tab_id)
+        .map_err(|e| KeltaError::internal(format!("cannot open the window: {e}")))
 }
 
 /// kelta-bench metric measured in the UI (no-op unless `KELTA_BENCH_MARKS` is set).

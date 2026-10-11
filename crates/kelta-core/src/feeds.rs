@@ -1848,15 +1848,21 @@ impl Core {
         IntervalPolicy::from_settings(&s.polling, floor, acc.and_then(|a| a.poll_secs))
     }
 
-    /// Recompute subscriptions: visible panes of the active tab + notification rules. A global
-    /// view on screen (the `global` layout's active tab, `None` = a project) is polled like a pane.
+    /// Recompute subscriptions: visible panes of the active and detached tabs + notification rules.
+    /// A global view on screen (the `global` layout's active tab, `None` = a project) is polled like a pane.
     pub(crate) fn resubscribe(&self) {
         let s = self.accounts_settings();
         let active = self.active_project();
         let contents: Vec<PaneContent> = {
             let layouts = self.layouts.lock();
-            let global = layouts.get(&ProjectId::new(ProjectId::GLOBAL)).filter(|l| l.active_tab.is_some());
-            layouts.get(&active).into_iter().chain(global).flat_map(crate::layout::visible_contents).collect()
+            let global = ProjectId::new(ProjectId::GLOBAL);
+            layouts
+                .iter()
+                .flat_map(|(p, l)| {
+                    let shown = *p == active || (*p == global && l.active_tab.is_some());
+                    crate::layout::visible_contents(l, shown)
+                })
+                .collect()
         };
         let mut want: BTreeMap<SubKey, IntervalPolicy> = BTreeMap::new();
         let tickets = |scope: &Scope,

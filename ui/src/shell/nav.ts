@@ -16,20 +16,23 @@ import type {
   TabId,
   ToolInfo,
 } from '$lib/gen';
-import { sessionSpawn, workCheckPrs } from '$lib/ipc/commands';
+import { sessionSpawn, windowDetach, workCheckPrs } from '$lib/ipc/commands';
 import {
   activateTab,
   activeTab,
   allPanes,
   closePaneInLayout,
   closeTab,
+  detachPane,
   findPane,
   findSession,
   focusPane,
+  findTab,
   layoutSessions,
   neighbor,
   pane as makePane,
   paneSession,
+  setDetached,
   splitPane,
   toggleZoom,
   updateTab,
@@ -45,6 +48,7 @@ import { phaseNow } from '../views/work/live';
 import { maxLamp, type Lamp } from '../views/work/phase';
 
 import { confirms } from './confirm.svelte';
+import { detached } from './detached';
 
 // ---- projects -------------------------------------------------------------------------------
 
@@ -214,16 +218,23 @@ export function openView(view: GlobalView, select?: string): void {
 
 // ---- focus helpers --------------------------------------------------------------------------
 
-export function currentLayout(projectId: ProjectId | null = projects.activeId): Layout | null {
+/** The project this window works on: its detached tab's (#342), else the active one. */
+function here(): ProjectId | null {
+  return detached?.project_id ?? projects.activeId;
+}
+
+export function currentLayout(projectId: ProjectId | null = here()): Layout | null {
   return projectId ? layout.get(projectId) : null;
 }
 
-export function currentTab(projectId: ProjectId | null = projects.activeId): Tab | null {
+/** The tab on screen: a detached window's own tab, else the project's active tab. */
+export function currentTab(projectId: ProjectId | null = here()): Tab | null {
   const l = currentLayout(projectId);
-  return l ? activeTab(l) : null;
+  if (!l) return null;
+  return detached?.project_id === projectId ? findTab(l, detached.tab_id) : activeTab(l);
 }
 
-export function focusedPane(projectId: ProjectId | null = projects.activeId): PaneNode | null {
+export function focusedPane(projectId: ProjectId | null = here()): PaneNode | null {
   const tab = currentTab(projectId);
   if (!tab) return null;
   const id = tab.focused_pane;
@@ -231,12 +242,12 @@ export function focusedPane(projectId: ProjectId | null = projects.activeId): Pa
   return hit?.pane ?? allPanes(tab.root)[0] ?? null;
 }
 
-export function focusedSessionId(projectId: ProjectId | null = projects.activeId): SessionId | null {
+export function focusedSessionId(projectId: ProjectId | null = here()): SessionId | null {
   const p = focusedPane(projectId);
   return p ? paneSession(p) : null;
 }
 
-export function focusedSession(projectId: ProjectId | null = projects.activeId): SessionInfo | null {
+export function focusedSession(projectId: ProjectId | null = here()): SessionInfo | null {
   const id = focusedSessionId(projectId);
   return id ? sessions.get(id) : null;
 }
@@ -249,7 +260,7 @@ export function focusPaneById(projectId: ProjectId, tabId: TabId, paneId: PaneId
 }
 
 export function focusDirection(direction: Direction): void {
-  const projectId = projects.activeId;
+  const projectId = here();
   const tab = currentTab();
   const from = focusedPane();
   if (!projectId || !tab || !from) return;
@@ -314,8 +325,8 @@ export async function openContent(
 /** Splits the focused pane; the new pane is a shell in the same working directory. */
 export async function splitFocused(dir: SplitDir): Promise<void> {
   // From a global view the split lands in the active project: show it first.
-  if (projects.activeId) await activateProject(projects.activeId);
-  const projectId = projects.activeId;
+  if (projects.activeId && !detached) await activateProject(projects.activeId);
+  const projectId = here();
   const tab = currentTab();
   const from = focusedPane();
   if (!projectId || !tab || !from) return;
@@ -355,7 +366,7 @@ export async function splitFocused(dir: SplitDir): Promise<void> {
 }
 
 export function toggleZoomFocused(): void {
-  const projectId = projects.activeId;
+  const projectId = here();
   const tab = currentTab();
   if (!projectId || !tab) return;
   layout.update(projectId, (l) => toggleZoom(l, tab.id));
@@ -392,7 +403,7 @@ export async function requestClosePane(projectId: ProjectId, tabId: TabId, paneI
 }
 
 export async function closeFocusedPane(): Promise<void> {
-  const projectId = projects.activeId;
+  const projectId = here();
   const tab = currentTab();
   const p = focusedPane();
   if (projectId && tab && p) await requestClosePane(projectId, tab.id, p.id);
@@ -406,6 +417,54 @@ export async function closePaneAndStop(projectId: ProjectId, tabId: TabId, paneI
   const sid = node ? paneSession(node) : null;
   closePaneById(projectId, tabId, paneId);
   if (sid) await sessions.kill(sid).catch((err: unknown) => toasts.error(err, 'Stopping the session failed'));
+}
+
+// ---- detached windows (#342) ------------------------------------------------------------------
+
+/** Shows a detached tab's window: the layout is saved first (the window reads it), the main window's views let go. */
+async function openTabWindow(projectId: ProjectId, tabId: TabId): Promise<void> {
+  const l = layout.get(projectId);
+  const tab = l ? findTab(l, tabId) : null;
+  for (const p of tab ? allPanes(tab.root) : []) {
+    const sid = paneSession(p);
+    if (sid) terminalPool.release(sid);
+  }
+  await layout.flush(projectId);
+  await windowDetach({ project_id: projectId, tab_id: tabId }).catch((err: unknown) =>
+    toasts.error(err, 'Opening the window failed'),
+  );
+}
+
+/** "Move to new window" on a pane: its tab when alone, else a new tab holding just the pane. */
+export async function detachPaneToWindow(projectId: ProjectId, tabId: TabId, paneId: PaneId): Promise<void> {
+  let target: TabId | null = null;
+  layout.update(projectId, (l) => {
+    const r = detachPane(l, { tabId, paneId });
+    target = r.tabId;
+    return r.layout;
+  });
+  if (target) await openTabWindow(projectId, target);
+}
+
+/** "Move to new window" on a tab, or brings its window to the front when it already has one. */
+export async function detachTab(projectId: ProjectId, tabId: TabId): Promise<void> {
+  layout.update(projectId, (l) => setDetached(l, tabId, true));
+  await openTabWindow(projectId, tabId);
+}
+
+/** "Move back to main window": the detached window closes itself when it sees the saved layout. */
+export async function attachTab(projectId: ProjectId, tabId: TabId): Promise<void> {
+  layout.update(projectId, (l) => setDetached(l, tabId, false));
+  await layout.flush(projectId);
+}
+
+/** `pane.detach`: the focused pane to a new window; in a detached window, its tab back to the main one. */
+export async function toggleFocusedPaneWindow(): Promise<void> {
+  if (detached) return attachTab(detached.project_id, detached.tab_id);
+  const projectId = here();
+  const tab = currentTab();
+  const p = focusedPane();
+  if (projectId && tab && p) await detachPaneToWindow(projectId, tab.id, p.id);
 }
 
 /** `tab.next/prev`: walks the rail rows across bands; from a global view, next is the first row. */

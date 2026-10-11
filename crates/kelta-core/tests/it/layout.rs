@@ -132,7 +132,15 @@ async fn global_views_layout_survives_a_restart() {
 /// A tab with one pane that has no session (startup prunes dead sessions' panes).
 fn tab(id: &str) -> Tab {
     let root = LayoutNode::Pane { id: id.into(), content: PaneContent::Inbox };
-    Tab { id: id.into(), title: id.into(), work_item_id: None, root, focused_pane: None, zoomed_pane: None }
+    Tab {
+        id: id.into(),
+        title: id.into(),
+        work_item_id: None,
+        root,
+        focused_pane: None,
+        zoomed_pane: None,
+        detached: false,
+    }
 }
 
 /// Before #270 a project could be `global`: its row then held the project's tabs, merged with the views'.

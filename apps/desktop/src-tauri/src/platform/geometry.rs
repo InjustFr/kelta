@@ -1,11 +1,14 @@
 //! Window geometry persistence (`window.restore_geometry`). Stored as `<data>/window-geometry.json`
-//! (the `ui_state` table is core-private; see docs/contract-requests/L10.md).
+//! (the `ui_state` table is core-private; see docs/contract-requests/L10.md), and the detached
+//! windows' (#342) as `<data>/detached-windows.json`, by window label.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 pub const FILE: &str = "window-geometry.json";
+pub const DETACHED_FILE: &str = "detached-windows.json";
 
 /// Logical-pixel geometry of the main window.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -57,14 +60,30 @@ pub fn load(data_dir: &Path) -> Option<Geometry> {
 
 /// Best effort; errors are ignored.
 pub fn save(data_dir: &Path, g: &Geometry) {
-    if !g.sane() {
-        return;
+    if g.sane() {
+        write(data_dir, FILE, g);
     }
+}
+
+/// The detached windows' geometry by window label (insane entries dropped).
+pub fn load_detached(data_dir: &Path) -> BTreeMap<String, Geometry> {
+    let text = std::fs::read_to_string(data_dir.join(DETACHED_FILE)).unwrap_or_default();
+    let mut map: BTreeMap<String, Geometry> = serde_json::from_str(&text).unwrap_or_default();
+    map.retain(|_, g| g.sane());
+    map
+}
+
+/// Replaces the whole map: windows not in it are not restored. Best effort.
+pub fn save_detached(data_dir: &Path, map: &BTreeMap<String, Geometry>) {
+    write(data_dir, DETACHED_FILE, map);
+}
+
+fn write(data_dir: &Path, file: &str, value: &impl Serialize) {
     let _ = std::fs::create_dir_all(data_dir);
-    if let Ok(text) = serde_json::to_string(g) {
-        let tmp = data_dir.join(format!("{FILE}.tmp"));
+    if let Ok(text) = serde_json::to_string(value) {
+        let tmp = data_dir.join(format!("{file}.tmp"));
         if std::fs::write(&tmp, text).is_ok() {
-            let _ = std::fs::rename(&tmp, path(data_dir));
+            let _ = std::fs::rename(&tmp, data_dir.join(file));
         }
     }
 }
@@ -83,6 +102,18 @@ mod tests {
         let geo = g(10.0, 20.0, 1000.0, 700.0);
         save(tmp.path(), &geo);
         assert_eq!(load(tmp.path()), Some(geo));
+    }
+
+    #[test]
+    fn detached_map_round_trips_without_insane_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(load_detached(tmp.path()).is_empty());
+        let map = BTreeMap::from([
+            ("detached-a".to_string(), g(10.0, 20.0, 800.0, 600.0)),
+            ("detached-b".to_string(), g(0.0, 0.0, 1.0, 1.0)),
+        ]);
+        save_detached(tmp.path(), &map);
+        assert_eq!(load_detached(tmp.path()).into_keys().collect::<Vec<_>>(), ["detached-a"]);
     }
 
     #[test]

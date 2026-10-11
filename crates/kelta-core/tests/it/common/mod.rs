@@ -365,6 +365,7 @@ pub fn show_global(core: &Core, content: Option<PaneContent>) {
             root,
             focused_pane: None,
             zoomed_pane: None,
+            detached: false,
         }];
     }
     core.layout_save(l).unwrap();
