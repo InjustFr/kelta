@@ -85,6 +85,8 @@ pub struct SessionEntry {
     pub timers: Arc<SessionTimers>,
     /// Claude `Workflow` runs seen in its hooks (#272).
     pub claude_runs: crate::claude_runs::Runs,
+    /// Its last Claude permission mode: the launch flag, then what its hooks report (#277).
+    pub permission_mode: Option<kelta_proto::settings::PermissionMode>,
 }
 
 impl SessionEntry {
@@ -313,6 +315,7 @@ impl Core {
             };
             let entry = SessionEntry {
                 info,
+                permission_mode: crate::permission_mode::launched_with(&spec.args),
                 spec,
                 restore,
                 hook_token: spawn_env::token(),
@@ -768,6 +771,7 @@ impl Core {
                 last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
                 claude_runs: Default::default(),
+                permission_mode: crate::permission_mode::launched_with(&spec.args),
             };
             s.insert(id.clone(), entry)
         };

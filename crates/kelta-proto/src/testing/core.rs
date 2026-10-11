@@ -371,6 +371,11 @@ impl CoreApi for FakeCore {
         self.settings.lock().clone()
     }
 
+    /// Set with `respond("claude_permission_mode", json!("auto"))`.
+    fn claude_permission_mode(&self) -> Option<crate::settings::PermissionMode> {
+        self.overridden("claude_permission_mode").and_then(Result::ok)
+    }
+
     /// Set with `respond("login_path", json!("/dir"))`.
     fn login_path(&self) -> Option<String> {
         self.overridden("login_path").and_then(Result::ok)

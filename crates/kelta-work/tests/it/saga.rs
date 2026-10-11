@@ -90,6 +90,9 @@ async fn start_work_end_to_end() {
     let fx = Fx::new();
     let w = fx.service();
     let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    // The default profile forces no mode: the last one a session switched to applies (#277).
+    assert_eq!(plan.claude.permission_mode, None);
+    fx.core.respond("claude_permission_mode", serde_json::json!("auto"));
     let item = w.start(plan.clone()).await.unwrap();
     assert_eq!(item.state, WorkState::Active, "{:?}", item.steps);
     assert_eq!(item.steps.len(), WORK_STEPS.len());
@@ -119,7 +122,7 @@ async fn start_work_end_to_end() {
     assert_eq!(args[0], "--session-id");
     assert_eq!(Some(&args[1]), item.claude_uuid.as_ref());
     assert!(args.windows(2).any(|w| w[0] == "-n" && w[1] == "SHOP-141 Add login form"));
-    assert!(args.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "acceptEdits"));
+    assert!(args.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "auto"));
     let settings_file = args.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
     let run = std::path::Path::new(&settings_file).parent().unwrap().to_path_buf();
     assert!(run.starts_with(fx.dirs.runtime.join("s")));

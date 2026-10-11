@@ -1009,7 +1009,8 @@ pub struct ClaudePlan {
     pub profile: String,
     pub model: String,
     pub effort: ClaudeEffort,
-    pub permission_mode: PermissionMode,
+    /// `None` = the remembered mode, else Claude's own default (no `--permission-mode`).
+    pub permission_mode: Option<PermissionMode>,
     /// Rendered prompt (editable).
     pub prompt: String,
 }

@@ -475,6 +475,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `claude_mcp_status` | `{}` | `Option<bool>` (Kelta's MCP registered in Claude Code at user scope; `None` = Claude Code not found) | `commands/app.rs` |
 | `claude_mcp_install` | `{}` | `()` (`claude mcp add --scope user`, opens the global `/mcp`) | `commands/app.rs` |
 | `claude_mcp_remove` | `{}` | `()` (`claude mcp remove --scope user kelta`, revokes the install token) | `commands/app.rs` |
+| `claude_permission_mode` | `{}` | `Option<PermissionMode>` (the last mode a Claude session switched to, used when the profile forces none; `None` = Claude's default) | `commands/app.rs` |
 | `app_update_status` | `{}` | `UpdateStatus` (running version, channel, `state`, `checked_at`, `restart_needs_confirm`) | `commands/app.rs` |
 | `app_update_check` | `{}` | `UpdateStatus` after checking and installing what it found ("Check now") | `commands/app.rs` |
 | `app_restart` | `{}` | `()` (`request_restart`: the normal exit path, then the installed build starts) | `commands/app.rs` |

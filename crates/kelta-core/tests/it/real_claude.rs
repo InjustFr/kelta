@@ -211,7 +211,7 @@ async fn real_claude_gate_c1() {
     plan.template_id = "claude".into();
     plan.claude.model = "haiku".into();
     plan.claude.effort = ClaudeEffort::Low;
-    plan.claude.permission_mode = PermissionMode::Default;
+    plan.claude.permission_mode = Some(PermissionMode::Default);
     plan.claude.prompt = "Step 1: call the MCP tool mcp__kelta__notify with message \"c1-mcp-ok\". \
         Step 2: use the Write tool to create the file c1.txt containing hi. Then reply with one word."
         .into();

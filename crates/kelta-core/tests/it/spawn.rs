@@ -194,6 +194,60 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     );
 }
 
+/// #277: a Claude session starts in the last mode a session switched to, kept across restarts; a
+/// mode Kelta forced at launch (plan) is not remembered.
+#[tokio::test]
+async fn claude_sessions_start_in_the_last_permission_mode() {
+    use kelta_proto::hooks::HookPayload;
+    use kelta_proto::settings::PermissionMode;
+    let tmp = tempfile::tempdir().unwrap();
+    let shop = ProjectId::new("shop");
+    let mode_arg = |h: &H, id| {
+        let args = h.term.with_session(id, |s| s.spec.args.clone()).unwrap();
+        args.windows(2).find(|w| w[0] == "--permission-mode").map(|w| w[1].clone())
+    };
+    let hook = |h: &H, id, mode: &str| {
+        let mut p = HookPayload { hook_event_name: "Stop".into(), ..Default::default() };
+        p.extra.insert("permission_mode".into(), mode.into());
+        h.core.session_claude_runs_hook(id, &p);
+    };
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+        let spawn = || {
+            h.core.session_spawn_template(&shop, "claude+editor", TemplateCtx::default(), Placement::NewTab)
+        };
+        let first = spawn().await.unwrap();
+        assert_eq!(mode_arg(&h, &first[0].id), None, "nothing remembered: Claude's own default");
+        hook(&h, &first[0].id, "auto");
+        assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::Auto));
+        let next = spawn().await.unwrap();
+        assert_eq!(mode_arg(&h, &next[0].id).as_deref(), Some("auto"));
+
+        let planned = h
+            .core
+            .session_spawn(req(SessionKind::Claude, Some("claude"), &["--permission-mode", "plan"]))
+            .await
+            .unwrap();
+        hook(&h, &planned.id, "plan");
+        assert_eq!(
+            h.core.claude_permission_mode(),
+            Some(PermissionMode::Auto),
+            "a forced mode is not a choice"
+        );
+        hook(&h, &planned.id, "acceptEdits");
+        hook(&h, &first[0].id, "auto");
+        assert_eq!(
+            h.core.claude_permission_mode(),
+            Some(PermissionMode::AcceptEdits),
+            "unchanged sessions repeat"
+        );
+        h.core.store().flush().await.unwrap();
+        h.core.shutdown().await.unwrap();
+    }
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::AcceptEdits));
+}
+
 #[tokio::test]
 async fn template_shell_command_quotes_placeholders() {
     let tmp = tempfile::tempdir().unwrap();
