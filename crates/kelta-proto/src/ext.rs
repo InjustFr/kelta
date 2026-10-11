@@ -742,7 +742,18 @@ impl Permission {
                 match kind {
                     "events" => Self::Events(arg.to_owned()),
                     "exec" => Self::Exec(arg.to_owned()),
-                    "net" => Self::Net(arg.to_owned()),
+                    "net" => {
+                        // `*.`, `*`, `*.*.x`, `.x`, `x.` would widen or dodge the host match.
+                        let host = arg.strip_prefix("*.").unwrap_or(arg);
+                        if host.is_empty()
+                            || host.contains('*')
+                            || host.starts_with('.')
+                            || host.ends_with('.')
+                        {
+                            return None;
+                        }
+                        Self::Net(arg.to_owned())
+                    }
                     _ => return None,
                 }
             }
@@ -1075,6 +1086,9 @@ mod tests {
             assert_eq!(p.to_string(), s);
         }
         assert!(Permission::parse("exec:").is_none());
+        for bad in ["net:*.", "net:*", "net:", "net:*.*.acme.com", "net:.acme.com", "net:acme.com."] {
+            assert!(Permission::parse(bad).is_none(), "{bad}");
+        }
         assert!(Permission::parse("bogus").is_none());
     }
 
