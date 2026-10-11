@@ -173,7 +173,7 @@ impl HttpCtx {
             match self.attempt(&req, cache_key.as_deref()).await {
                 Attempt::Done(resp) => return Ok(resp),
                 Attempt::Transport(err) => {
-                    if err.code == ErrorCode::Timeout && req.method.is_idempotent() && attempt < MAX_RETRIES {
+                    if err.code == ErrorCode::Timeout && req.idempotent && attempt < MAX_RETRIES {
                         let wait = self.backoff(attempt);
                         if wait <= INLINE_WAIT_MAX {
                             attempt += 1;
@@ -184,7 +184,7 @@ impl HttpCtx {
                     return Err(err);
                 }
                 Attempt::Status { status, headers, body } => {
-                    if let Some(wait) = self.classify_wait(req.method, status, &headers, &body, attempt) {
+                    if let Some(wait) = self.classify_wait(req.idempotent, status, &headers, &body, attempt) {
                         if wait.rate_limit && !own_quota(&headers) {
                             self.block_for(wait.dur);
                         }
@@ -234,7 +234,7 @@ impl HttpCtx {
     /// How long to wait before retrying this status, if it is a retryable one.
     fn classify_wait(
         &self,
-        method: Method,
+        idempotent: bool,
         status: u16,
         headers: &BTreeMap<String, String>,
         body: &str,
@@ -255,7 +255,7 @@ impl HttpCtx {
         {
             return Some(Wait { dur: d, rate_limit: false });
         }
-        if matches!(status, 502..=504) && method.is_idempotent() {
+        if matches!(status, 502..=504) && idempotent {
             return Some(Wait { dur: self.backoff(attempt), rate_limit: false });
         }
         None

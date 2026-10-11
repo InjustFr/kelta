@@ -31,7 +31,6 @@
     isToolTab,
     liveSessionsOfTab,
     openView,
-    paneTool,
     railProjects,
     railRows,
     railTools,
@@ -41,8 +40,8 @@
     rowLabel,
     selectRow,
     tabAttention,
-    toolInstances,
     toolLamp,
+    toolSubLines,
     VIEW_NAMES,
     workItemOfTab,
     type ToolInstance,
@@ -63,8 +62,10 @@
 
   const toolsOf = $derived(railToolsOf());
   const toolList = $derived(railTools());
+  // Tool membership, once per change: the Tools sub-lines and which tabs leave the bands.
+  const lines = $derived(toolSubLines());
   // `project.goto.N` index of each row.
-  const index = $derived(new Map(railRows().map((r, i) => [r.tab.id, i + 1])));
+  const index = $derived(new Map(railRows(lines).map((r, i) => [r.tab.id, i + 1])));
   $effect(() => {
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
   });
@@ -72,7 +73,7 @@
   // The pane in front (no global view): marks the tool row or sub-line it belongs to.
   const front = $derived(ui.view ? null : focusedPane());
   const frontTab = $derived(ui.view ? null : currentTab());
-  const frontTool = $derived(front ? paneTool(front) : null);
+  const frontTool = $derived(front ? (lines.get(front.id)?.tool ?? null) : null);
 
   // Startup and window focus refresh Now's sources (no polling).
   onMount(() => void refreshNow());
@@ -192,7 +193,7 @@
 
   /** The band's rows: the project's non-tool tabs, in tab order. */
   function rowsOf(id: ProjectId): Tab[] {
-    return (layout.get(id)?.tabs ?? []).filter((t) => !isToolTab(t));
+    return (layout.get(id)?.tabs ?? []).filter((t) => !isToolTab(t, lines));
   }
 
   /** Moves a row to `target`'s place; rows move only inside their band. */
@@ -333,7 +334,7 @@
           aria-label={p.name}
           data-testid="rail-band"
           data-project-id={p.id}
-          style:--project-color={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border-strong)'}
+          style:--project-color={resolveProjectColor(p.color) ?? 'var(--k-border-strong)'}
         >
           <!-- The caption: click = the project's last row, ⋯ / right-click = project menu, drag = reorder. -->
           <div class="row caption-row" class:over={overId === p.id && dragId !== p.id}>
@@ -465,12 +466,13 @@
               {@const launchOnly = t.kind !== 'pty'}
               {@const lvl = launchOnly ? 'none' : toolLamp(t.id)}
               <!-- A `user` tool has one instance: its row is the way to it. -->
-              {@const instances = t.scope === 'user' ? [] : toolInstances(t.id)}
+              {@const instances =
+                t.scope === 'user' ? [] : [...lines.values()].filter((x) => x.tool === t.id)}
               <li class="row">
                 <button
                   type="button"
                   class="item tool-row"
-                  class:active={frontTool === t.id && !!frontTab && isToolTab(frontTab)}
+                  class:active={frontTool === t.id && !!frontTab && isToolTab(frontTab, lines)}
                   class:missing={t.installed === false}
                   title={toolHint(t)}
                   data-testid="rail-tool"

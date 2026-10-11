@@ -129,7 +129,7 @@ impl RedmineTracker {
     /// `/projects/{p}/versions.json` once per project (shared versions included), then `/versions/{id}.json`
     /// for any id that list lacks. A failed lookup keeps the sprint as inactive.
     async fn resolve_sprints(&self, tickets: &mut [Ticket]) {
-        let today = today();
+        let today = common::today();
         let mut listed: Vec<Value> = Vec::new();
         let mut projects: Vec<&str> = Vec::new();
         for p in tickets.iter().filter(|t| t.sprint.is_some()).filter_map(|t| t.project_hint.as_deref()) {
@@ -200,19 +200,22 @@ impl RedmineTracker {
             .get("id")
             .and_then(idstr)
             .ok_or_else(|| KeltaError::upstream("redmine issue without id"))?;
+        let status: Status = issue.get("status").map(|s| self.status_from(s)).unwrap_or_default();
+        let closed_on = (status.category == StatusCategory::Done).then(|| s(issue, "closed_on")).flatten();
         Ok(Ticket {
             r#ref: TicketRef { account: self.account().clone(), key: id.clone(), id: id.clone() },
             title: s(issue, "subject").unwrap_or("").to_owned(),
             url: format!("{}/issues/{id}", self.web),
-            status: issue.get("status").map(|s| self.status_from(s)).unwrap_or_default(),
+            status,
             kind: issue.pointer("/tracker/name").and_then(Value::as_str).map(str::to_owned),
             assignee: issue.get("assigned_to").and_then(Self::user_from),
             reporter: issue.get("author").and_then(Self::user_from),
             labels: Vec::new(),
             priority: issue.pointer("/priority/name").and_then(Value::as_str).map(str::to_owned),
             updated_at: s(issue, "updated_on").unwrap_or("").to_owned(),
-            // Redmine keeps no status-change date on the issue: the last update is the closest.
-            status_since: s(issue, "updated_on").map(str::to_owned),
+            // `closed_on` survives a reopen, so it only counts while closed; otherwise the last update
+            // is the closest to a status-change date Redmine keeps.
+            status_since: closed_on.or_else(|| s(issue, "updated_on")).map(str::to_owned),
             priority_rank: issue.pointer("/priority/id").and_then(idstr).and_then(|id| {
                 let l = self.priorities.lock();
                 let l = l.as_ref()?;
@@ -308,7 +311,7 @@ impl RedmineTracker {
             && let Some(p) = &view.project_id
         {
             let v = self.json(HttpRequest::get(format!("{}/projects/{p}/versions.json", self.base))).await?;
-            version = current_version(&v, &today());
+            version = current_version(&v, &common::today());
         }
         // A saved query ignores short filters like `fixed_version_id`: it is applied to what comes back.
         if let Some(id) = version.clone().filter(|_| view.query_id.is_none()) {
@@ -388,11 +391,6 @@ fn current_version(versions: &Value, today: &str) -> Option<String> {
         .map(|(_, v)| v)
         .or_else(|| open.iter().find(|v| s(v, "due_date").is_none()))
         .and_then(|v| v.get("id").and_then(idstr))
-}
-
-fn today() -> String {
-    let d = time::OffsetDateTime::now_utc().date();
-    format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day())
 }
 
 /// `422 {"errors": ["Subject cannot be blank"]}` → readable message + `detail.errors`.

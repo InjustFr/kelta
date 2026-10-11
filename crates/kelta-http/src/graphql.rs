@@ -12,7 +12,10 @@ use crate::{Authed, HttpRequest};
 /// `INSUFFICIENT_SCOPES` → `PermissionDenied`, anything else → `Upstream`). Partial data with
 /// errors is returned as is, unless every top-level field is null.
 pub async fn graphql(auth: &Authed, url: &str, query: &str, variables: Value) -> Result<Value, KeltaError> {
-    let req = HttpRequest::post(url).json(json!({ "query": query, "variables": variables }));
+    let mut req = HttpRequest::post(url).json(json!({ "query": query, "variables": variables }));
+    if !query.trim_start().starts_with("mutation") {
+        req = req.idempotent();
+    }
     let resp = auth.send_json::<Value>(req).await?.body;
     let data = resp.get("data").filter(|d| !d.is_null()).cloned();
     let errors = resp.get("errors").and_then(Value::as_array).filter(|e| !e.is_empty());

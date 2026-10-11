@@ -8,6 +8,7 @@ mod layout;
 mod oauth;
 mod park;
 mod projects;
+mod providers;
 mod real_claude;
 mod restore;
 mod scheduler;

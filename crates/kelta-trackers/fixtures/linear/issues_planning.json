@@ -113,6 +113,60 @@
           "team": {
             "key": "ENG"
           }
+        },
+        {
+          "id": "iss-uuid-35",
+          "identifier": "ENG-35",
+          "title": "Issue 35",
+          "url": "https://linear.app/acme/issue/ENG-35",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "No priority",
+          "priority": 0,
+          "estimate": null,
+          "dueDate": null,
+          "startedAt": "2026-09-01T09:00:00.000Z",
+          "cycle": null,
+          "state": {
+            "id": "st-completed",
+            "name": "Done",
+            "type": "completed"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          },
+          "completedAt": "2026-10-03T10:00:00.000Z",
+          "canceledAt": null
+        },
+        {
+          "id": "iss-uuid-36",
+          "identifier": "ENG-36",
+          "title": "Issue 36",
+          "url": "https://linear.app/acme/issue/ENG-36",
+          "updatedAt": "2026-10-05T08:00:00.000Z",
+          "priorityLabel": "No priority",
+          "priority": 0,
+          "estimate": null,
+          "dueDate": null,
+          "startedAt": "2026-09-01T09:00:00.000Z",
+          "cycle": null,
+          "state": {
+            "id": "st-canceled",
+            "name": "Canceled",
+            "type": "canceled"
+          },
+          "assignee": null,
+          "labels": {
+            "nodes": []
+          },
+          "team": {
+            "key": "ENG"
+          },
+          "completedAt": null,
+          "canceledAt": "2026-10-04T10:00:00.000Z"
         }
       ],
       "pageInfo": {

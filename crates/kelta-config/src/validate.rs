@@ -156,23 +156,52 @@ pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (globa
 
 pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
 
-/// Load-time reading of a global, project or repo document: `tools` outside the global file and a bad
-/// project colour are dropped from `value` and returned as warnings (the rest of the file still applies).
+/// Keys a hand-written file may get wrong without losing the rest of it: on load and in the settings
+/// editor the key is dropped and its issue becomes this warning. IPC writes stay strict ([`layer_issues`]).
+const SOFT_KEYS: &[(Layer, &[&str], &str)] = &[
+    (Layer::Repo, &["tools"], REPO_TOOLS_PERSONAL),
+    (Layer::Project, &["tools"], PROJECT_TOOLS_GLOBAL),
+    (Layer::Project, &["project", "color"], PROJECT_COLOR),
+];
+
+/// Load-time reading of a global, project or repo document: an issue under a [`SOFT_KEYS`] path drops
+/// that key from `value` and comes back as a warning (the rest of the file still applies).
 /// Returns `(errors, warnings)`.
 pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (Vec<RawIssue>, Vec<RawIssue>) {
-    let mut warnings = Vec::new();
-    if layer != Layer::Global && value.as_object_mut().and_then(|m| m.remove("tools")).is_some() {
-        warnings.push(RawIssue::new(
-            &["tools".to_owned()],
-            if layer == Layer::Repo { REPO_TOOLS_PERSONAL } else { PROJECT_TOOLS_GLOBAL },
-        ));
+    // `#rgb` reads as `#rrggbb`
+    if let Some(c) = value.pointer_mut("/project/color")
+        && let Some(h) = c.as_str().and_then(|s| s.strip_prefix('#'))
+        && h.len() == 3
+        && h.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
+        *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
     }
-    let errors = if layer == Layer::Project {
-        lenient_project_color(value, stem, &mut warnings)
-    } else {
-        layer_issues(layer, value, stem)
-    };
-    (errors, warnings)
+    let owned = |p: &[&str]| -> Vec<String> { p.iter().map(|s| (*s).to_owned()).collect() };
+    let mut dropped = [false; SOFT_KEYS.len()];
+    loop {
+        let raw = layer_issues(layer, value, stem);
+        let mut again = false;
+        for (i, (l, path, _)) in SOFT_KEYS.iter().enumerate() {
+            let hit = *l == layer
+                && raw
+                    .iter()
+                    .any(|r| r.path.iter().map(String::as_str).take(path.len()).eq(path.iter().copied()));
+            // schema problems hide the follow-up checks, so validate again after a drop
+            if hit && crate::path::remove(value, &owned(path)) {
+                dropped[i] = true;
+                again = true;
+            }
+        }
+        if !again {
+            let warnings = SOFT_KEYS
+                .iter()
+                .zip(dropped)
+                .filter(|(_, d)| *d)
+                .map(|((_, path, message), _)| RawIssue::new(&owned(path), *message))
+                .collect();
+            return (raw, warnings);
+        }
+    }
 }
 
 /// [`position`] for non-blocking issues.
@@ -181,33 +210,6 @@ pub fn position_warnings(text: &str, parsed: Option<&Parsed>, issues: Vec<RawIss
         .into_iter()
         .map(|i| ValidationIssue { severity: Severity::Warning, ..i })
         .collect()
-}
-
-/// A project colour is cosmetic: `#rgb` reads as `#rrggbb`, and a bad one is reported in `warnings` and
-/// dropped so the project still loads. Returns the file's other issues.
-fn lenient_project_color(
-    value: &mut Value,
-    stem: Option<&str>,
-    warnings: &mut Vec<RawIssue>,
-) -> Vec<RawIssue> {
-    if let Some(c) = value.pointer_mut("/project/color")
-        && let Some(h) = c.as_str().and_then(|s| s.strip_prefix('#'))
-        && h.len() == 3
-        && h.chars().all(|ch| ch.is_ascii_hexdigit())
-    {
-        *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
-    }
-    let path = ["project".to_owned(), "color".to_owned()];
-    let raw = layer_issues(Layer::Project, value, stem);
-    if !raw.iter().any(|i| i.path == path) {
-        return raw;
-    }
-    if let Some(p) = value.get_mut("project").and_then(Value::as_object_mut) {
-        p.remove("color");
-    }
-    warnings.push(RawIssue::new(&path, PROJECT_COLOR));
-    // schema problems hide the follow-up checks, so validate again without the colour
-    layer_issues(Layer::Project, value, stem)
 }
 
 /// Duplicate or missing ids in keyed lists, per layer.
@@ -779,6 +781,26 @@ mod tests {
         let issues = layer_issues(Layer::Project, &v, Some("x"));
         let t = vec!["tools".to_owned()];
         assert_eq!(issues, vec![RawIssue::new(&t, "`tools` cannot be set per project (global only)")]);
+    }
+
+    #[test]
+    fn soft_keys_are_dropped_as_warnings() {
+        let paths = |v: &[RawIssue]| -> Vec<String> { v.iter().map(|i| join_path(&i.path)).collect() };
+        // `tools` that fails the schema, next to a bad colour hidden behind it until the first drop
+        let doc = json!({"project": {"id": "x", "color": "red"}, "tools": [{"id": 3}]});
+        let mut v = doc.clone();
+        let (errors, warnings) = lenient_issues(Layer::Project, &mut v, Some("x"));
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(paths(&warnings), ["tools", "project.color"]);
+        assert_eq!(v, json!({"project": {"id": "x"}}));
+        let mut v = json!({"tools": [{"id": 3}], "env": {"A": "1"}});
+        let (errors, warnings) = lenient_issues(Layer::Repo, &mut v, None);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(warnings, [RawIssue::new(&["tools".to_owned()], REPO_TOOLS_PERSONAL)]);
+        // global `tools` is no soft key: its errors stay errors
+        let mut v = json!({"tools": [{"id": 3}]});
+        let (errors, warnings) = lenient_issues(Layer::Global, &mut v, None);
+        assert!(!errors.is_empty() && warnings.is_empty());
     }
 
     #[test]

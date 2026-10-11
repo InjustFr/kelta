@@ -244,7 +244,13 @@ async fn notifications_gate_uses_etag_and_honours_poll_interval_for_classic_toke
     // the follow-up list has not succeeded yet: the change stays pending, still no request
     assert!(h.changed_since_last().await.unwrap());
     assert_eq!(count(&server, "GET", "/notifications").await, 1);
+    // no /graphql mock yet: the review-requested list fails, then an authored success must not
+    // swallow the change
+    assert!(h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.is_err());
     mount(&server, "POST", "/graphql", 200, "github/gql_list.json").await;
+    h.list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
+    assert!(h.changed_since_last().await.unwrap(), "authored ok, review-requested still pending");
+    assert_eq!(count(&server, "GET", "/notifications").await, 1);
     h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
 
     // within X-Poll-Interval: no request at all

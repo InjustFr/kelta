@@ -142,9 +142,17 @@ async fn default_lists_add_tickets_done_this_week() {
     .with_page_size(2);
     let e = env_full(tmp.path(), ListHost::new(vec![]), fake);
     let shop = Scope::Project { id: "shop".into() };
-    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let page = e.h.core.tracker_list(shop.clone(), None, None, None, true).await.unwrap();
     let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
     assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"], "open first page + done in the last 7 days");
+
+    // the closed list fails: Done keeps the last page's tickets instead of going empty
+    e.tracker.pass_next();
+    e.tracker.fail_next(kelta_proto::KeltaError::upstream("502"));
+    let page = e.h.core.tracker_list(shop, None, None, None, true).await.unwrap();
+    let keys: Vec<&str> = page.items.iter().map(|i| i.ticket.r#ref.key.as_str()).collect();
+    assert_eq!(keys, ["SHOP-141", "SHOP-142", "SHOP-143"]);
+    assert_eq!(e.tracker.calls().iter().filter(|c| c.starts_with("list-closed:")).count(), 2);
 }
 
 #[tokio::test]
@@ -1084,4 +1092,38 @@ async fn team_is_polled_only_while_its_tab_is_shown() {
     e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Authored))));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2);
+}
+
+#[tokio::test]
+async fn a_failing_side_keeps_the_account_status_until_it_recovers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // github-work is both a tracker and a code host
+    e.factory.trackers.lock().insert(AccountId::new("github-work"), e.tracker.clone() as Arc<dyn Tracker>);
+    let pr = review("acme/shop", 999, ReviewKind::ReviewRequested).r#ref;
+    let ticket =
+        TicketRef { account: "github-work".into(), ..e.tracker.ticket("SHOP-141").unwrap().ticket.r#ref };
+    let statuses = || {
+        e.h.ui
+            .events()
+            .iter()
+            .filter_map(|ev| match ev {
+                UiEvent::AccountStatusChanged { status, .. } => Some(*status),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    e.h.ui.take_events();
+    for _ in 0..2 {
+        assert!(e.h.core.review_get(&pr).await.is_err());
+        e.h.core.tracker_get(&ticket).await.unwrap();
+    }
+    assert_eq!(statuses(), [kelta_proto::events::AccountStatus::Error], "no Ok/Error flip-flop");
+    e.host.reviews.lock().push(review("acme/shop", 999, ReviewKind::ReviewRequested));
+    e.h.core.review_get(&pr).await.unwrap();
+    assert_eq!(
+        statuses().last(),
+        Some(&kelta_proto::events::AccountStatus::Ok),
+        "the failing side recovered"
+    );
 }

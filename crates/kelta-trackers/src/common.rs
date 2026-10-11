@@ -21,6 +21,22 @@ pub fn idstr(v: &Value) -> Option<String> {
     }
 }
 
+/// Today in the local timezone as `YYYY-MM-DD`: a milestone due today stays current until local midnight.
+pub fn today() -> String {
+    let mut t: libc::time_t = 0;
+    // SAFETY: `time` writes the current time into `t`; `localtime_r` fills `tm` (a plain C struct,
+    // zero-initialised) and does not retain the pointers.
+    let tm = unsafe {
+        libc::time(&mut t);
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&t, &mut tm).is_null() {
+            return time::OffsetDateTime::now_utc().date().to_string();
+        }
+        tm
+    };
+    format!("{:04}-{:02}-{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday)
+}
+
 /// `base_url` of the account, trimmed; required for Jira and Redmine.
 pub fn base_url(account: &AccountConfig) -> Result<String, KeltaError> {
     account

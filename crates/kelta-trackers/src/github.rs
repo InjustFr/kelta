@@ -123,11 +123,6 @@ pub(crate) fn labels_rank<'a>(labels: impl IntoIterator<Item = &'a String>) -> O
     labels.into_iter().filter_map(|l| label_rank(l)).min()
 }
 
-/// Today (UTC) as `YYYY-MM-DD`.
-pub(crate) fn today() -> String {
-    time::OffsetDateTime::now_utc().date().to_string()
-}
-
 /// `YYYY-MM-DD` plus `days`; `None` on a malformed date.
 fn add_days(date: &str, days: i64) -> Option<String> {
     let mut p = date.get(..10)?.split('-');
@@ -355,7 +350,7 @@ impl GithubIssues {
             .await?;
         let items = data.pointer("/repositoryOwner/projectV2/items");
         let nodes = items.and_then(|i| i.get("nodes")).and_then(Value::as_array).cloned().unwrap_or_default();
-        let today = today();
+        let today = common::today();
         let mut out = Vec::new();
         for n in &nodes {
             let Some(c) = n.get("content").filter(|c| c.get("number").is_some()) else { continue };
@@ -508,7 +503,7 @@ impl GithubIssues {
                 }
             }
         }
-        let today = today();
+        let today = common::today();
         let mut boards = self.boards.lock();
         issues
             .iter()
@@ -606,7 +601,7 @@ impl GithubIssues {
                             .ticket_from_rest(&issue, Some(&opt_name))
                             .ok_or_else(|| KeltaError::upstream("issue response without repository"))?;
                         // a move changes Status only; keep the board fields read before it
-                        apply_project_fields(&mut t, &item.vals, &today());
+                        apply_project_fields(&mut t, &item.vals, &common::today());
                         return Ok(t);
                     }
                     Err(e) => {
@@ -628,7 +623,7 @@ impl GithubIssues {
         let item = self.issue_projects(repo, number).await.ok().and_then(|p| self.pick_item(p.items));
         let mut t = self.ticket_from_rest(v, item.as_ref().and_then(|i| i.current.as_deref()))?;
         if let Some(i) = &item {
-            apply_project_fields(&mut t, &i.vals, &today());
+            apply_project_fields(&mut t, &i.vals, &common::today());
         }
         Some(t)
     }

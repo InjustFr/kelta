@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { settingsDefault } from '$lib/gen/fixtures';
-import { resolveTheme } from '$lib/theme';
+import { resolveProjectColor, resolveTheme } from '$lib/theme';
 
 import { oklch, projectAccent } from './accent';
 
@@ -36,6 +36,14 @@ describe('project accent', () => {
     expect(projectAccent('#b5533c')).toBeNull(); // brick swatch
     expect(projectAccent('#b85278')).toBeNull(); // rose swatch
     expect(projectAccent('#c93a33')).toBeNull();
+  });
+
+  it('gets a hex for a theme slot, never a var() that would skip the red/grey rules', () => {
+    // Shell: projectAccent(resolveProjectColor(project colour, resolved theme))
+    const theme = resolveTheme(settingsDefault, 'dark');
+    expect(resolveProjectColor('theme:green', theme)).toBe(theme.terminal.ansi[2]);
+    expect(projectAccent(resolveProjectColor('theme:green', theme))).toBe(theme.terminal.ansi[2]);
+    expect(projectAccent(resolveProjectColor('theme:red', theme))).toBeNull();
   });
 
   it('drops colours the browser cannot parse', () => {

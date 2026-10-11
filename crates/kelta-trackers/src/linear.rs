@@ -30,7 +30,7 @@ pub const MAX_PAGES: u32 = 20;
 
 const USER: &str = "id name displayName avatarUrl";
 const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
-    startedAt cycle { id name number isActive endsAt } state { id name type } \
+    startedAt completedAt canceledAt cycle { id name number isActive endsAt } state { id name type } \
     assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key }";
 
 /// Linear's fixed priorities as (label, API value), highest first.
@@ -136,9 +136,11 @@ impl LinearTracker {
         let priority = s(v, "priorityLabel").filter(|p| *p != "No priority").map(str::to_owned);
         let status = status_from(v.get("state")?);
         let updated_at = s(v, "updatedAt").unwrap_or("").to_owned();
-        let started = matches!(status.category, StatusCategory::InProgress | StatusCategory::InReview)
-            .then(|| s(v, "startedAt"))
-            .flatten();
+        let since = match status.category {
+            StatusCategory::InProgress | StatusCategory::InReview => s(v, "startedAt"),
+            StatusCategory::Done => s(v, "completedAt").or_else(|| s(v, "canceledAt")),
+            _ => None,
+        };
         Some(Ticket {
             r#ref: TicketRef { account: self.account().clone(), id: s(v, "id")?.to_owned(), key },
             title: s(v, "title").unwrap_or("").to_owned(),
@@ -155,7 +157,7 @@ impl LinearTracker {
             priority,
             // 0 = none, 1 urgent .. 4 low.
             priority_rank: v["priority"].as_u64().filter(|p| (1..=4).contains(p)).map(|p| (p - 1) as u8),
-            status_since: Some(started.map_or(updated_at.clone(), str::to_owned)),
+            status_since: Some(since.map_or(updated_at.clone(), str::to_owned)),
             updated_at,
             project_hint: v.pointer("/team/key").and_then(Value::as_str).map(str::to_owned),
             sprint: v.get("cycle").filter(|c| !c.is_null()).and_then(|c| {
