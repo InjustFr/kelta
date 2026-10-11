@@ -116,7 +116,9 @@ pub fn feedback_error(host: &str, what: &str, scope: &str) -> impl Fn(KeltaError
 pub fn repo_path(repo: &str) -> Result<String, KeltaError> {
     match repo.split_once('/') {
         Some((a, b))
-            if ![a, b].iter().any(|p| p.is_empty() || *p == "." || *p == ".." || p.contains('/')) =>
+            if ![a, b]
+                .iter()
+                .any(|p| p.is_empty() || *p == "." || *p == ".." || p.contains(['/', '?', '#'])) =>
         {
             Ok(format!("{}/{}", kelta_http::util::percent_encode(a), kelta_http::util::percent_encode(b)))
         }

@@ -29,7 +29,8 @@ use serde_json::{Value, json};
 use tokio::time::Instant;
 
 use crate::common::{
-    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote, s, user,
+    MAX_LOGS, clean_log_line, feedback_error, host_matches, linked_tickets, log_tail, parse_remote,
+    repo_path, s, user,
 };
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -131,8 +132,8 @@ impl GithubHost {
         self.auth.send_json::<Value>(req).await
     }
 
-    fn repo_url(&self, repo: &str, tail: &str) -> String {
-        format!("{}/repos/{repo}{tail}", self.api)
+    fn repo_url(&self, repo: &str, tail: &str) -> Result<String, KeltaError> {
+        Ok(format!("{}/repos/{}{tail}", self.api, repo_path(repo)?))
     }
 
     fn user_from(v: &Value) -> User {
@@ -334,7 +335,7 @@ impl GithubHost {
 
     /// Check runs of `sha` (REST), shared by `get` and `feedback`.
     async fn check_runs(&self, repo: &str, sha: &str) -> Result<Vec<Value>, KeltaError> {
-        let url = self.repo_url(repo, &format!("/commits/{sha}/check-runs"));
+        let url = self.repo_url(repo, &format!("/commits/{sha}/check-runs"))?;
         let body = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
         Ok(body.get("check_runs").and_then(Value::as_array).cloned().unwrap_or_default())
     }
@@ -347,7 +348,7 @@ impl GithubHost {
         let id = run.get("id").and_then(Value::as_u64)?;
         // 302 to a signed blob URL on another host: the client stops cross-host redirects, so
         // fetch the `location` ourselves without credentials.
-        let url = self.repo_url(repo, &format!("/actions/jobs/{id}/logs"));
+        let url = self.repo_url(repo, &format!("/actions/jobs/{id}/logs")).ok()?;
         let text = match self.auth.send_text(HttpRequest::get(url)).await {
             Ok(r) => r.body,
             Err(e) => {
@@ -758,7 +759,7 @@ impl CodeHost for GithubHost {
     }
 
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
-        let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number))?;
         let me = self.me().await?;
         let (pull, reviews, files) = tokio::join!(
             self.rest(HttpRequest::get(&pull_url)),
@@ -782,7 +783,7 @@ impl CodeHost for GithubHost {
         let sha = review.head_sha.clone();
         let (runs, statuses) = tokio::join!(
             self.check_runs(&r.repo, &sha),
-            self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status")))),
+            self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status"))?)),
         );
         let mut checks: Vec<CiCheck> = Vec::new();
         for run in runs.unwrap_or_default() {
@@ -898,7 +899,7 @@ impl CodeHost for GithubHost {
             }
             return self.publish(r, &p, "APPROVE", "").await;
         }
-        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number))?;
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "APPROVE", "commit_id": head_sha})))
             .await
@@ -915,7 +916,7 @@ impl CodeHost for GithubHost {
 
     async fn post_note(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         // PR conversation comments live on the issue endpoint.
-        let url = self.repo_url(&r.repo, &format!("/issues/{}/comments", r.number));
+        let url = self.repo_url(&r.repo, &format!("/issues/{}/comments", r.number))?;
         self.auth.send_text(HttpRequest::post(url).json(json!({"body": body}))).await?;
         Ok(())
     }
@@ -924,7 +925,7 @@ impl CodeHost for GithubHost {
         if let Some(p) = self.pending_review(r).await? {
             return self.publish(r, &p, "REQUEST_CHANGES", body).await;
         }
-        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number))?;
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": "REQUEST_CHANGES", "body": body})))
             .await
@@ -943,7 +944,7 @@ impl CodeHost for GithubHost {
             Some(p) => p,
             // No event = a pending review, created on the current head.
             None => {
-                let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+                let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number))?;
                 let v = self.auth.send_json::<Value>(HttpRequest::post(url).json(json!({}))).await?.body;
                 let (Some(id), Some(node_id)) = (v["id"].as_u64(), s(&v, "node_id")) else {
                     return Err(KeltaError::upstream("create pending review response without id"));
@@ -964,7 +965,7 @@ impl CodeHost for GithubHost {
     }
 
     async fn create(&self, d: &PrCreate) -> Result<Review, KeltaError> {
-        let url = self.repo_url(&d.repo, "/pulls");
+        let url = self.repo_url(&d.repo, "/pulls")?;
         let body =
             json!({"title": d.title, "head": d.head, "base": d.base, "body": d.body, "draft": d.draft});
         let v = self.auth.send_json::<Value>(HttpRequest::post(url).json(body)).await.map_err(|e| {
@@ -981,7 +982,7 @@ impl CodeHost for GithubHost {
     }
 
     async fn update_title(&self, r: &ReviewRef, title: &str) -> Result<(), KeltaError> {
-        let url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number))?;
         self.auth.send_text(HttpRequest::patch(url).json(json!({ "title": title }))).await.map(|_| ())
     }
 
@@ -990,7 +991,7 @@ impl CodeHost for GithubHost {
         let head = if branch.contains(':') { branch.to_owned() } else { format!("{owner}:{branch}") };
         let v = self
             .rest(
-                HttpRequest::get(self.repo_url(repo, "/pulls"))
+                HttpRequest::get(self.repo_url(repo, "/pulls")?)
                     .query("head", head)
                     .query("state", "open")
                     .query("per_page", "1"),
@@ -1069,7 +1070,7 @@ impl CodeHost for GithubHost {
         let sha = s(pr, "headRefOid").unwrap_or("");
         let (runs, statuses) = tokio::join!(
             self.check_runs(&r.repo, sha),
-            self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status")))),
+            self.rest(HttpRequest::get(self.repo_url(&r.repo, &format!("/commits/{sha}/status"))?)),
         );
         let runs = runs.map_err(&refused)?;
         let failed: Vec<&Value> = runs.iter().filter(|run| check_state(run) == CiState::Failure).collect();
@@ -1101,7 +1102,7 @@ impl CodeHost for GithubHost {
     }
 
     async fn rerequest_review(&self, r: &ReviewRef, who: &[String]) -> Result<Vec<String>, KeltaError> {
-        let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number));
+        let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number))?;
         if !who.is_empty() {
             // `waiting_on` names teams `org/slug`; logins never hold a `/`.
             let (teams, users): (Vec<&String>, Vec<&String>) = who.iter().partition(|w| w.contains('/'));
@@ -1192,13 +1193,13 @@ impl GithubHost {
     }
 
     async fn pending_review(&self, r: &ReviewRef) -> Result<Option<Pending>, KeltaError> {
-        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number));
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews", r.number))?;
         let v = self.rest(HttpRequest::get(url).query("per_page", "100")).await?.body;
         Ok(v.as_array().and_then(|a| pending_of(a)))
     }
 
     async fn publish(&self, r: &ReviewRef, p: &Pending, event: &str, body: &str) -> Result<(), KeltaError> {
-        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews/{}/events", r.number, p.id));
+        let url = self.repo_url(&r.repo, &format!("/pulls/{}/reviews/{}/events", r.number, p.id))?;
         self.auth
             .send_text(HttpRequest::post(url).json(json!({"event": event, "body": body})))
             .await
