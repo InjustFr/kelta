@@ -34,6 +34,9 @@ use crate::session::{Session, Shared};
 /// History kept by an exited session: the text tail core persists (ARCHITECTURE §7.5, ≤ 200 lines).
 const EXITED_HISTORY: usize = 200;
 
+/// How long a child may outlive the PTY hangup (SIGHUP) before its process group is killed.
+const HANGUP_GRACE: Duration = Duration::from_secs(2);
+
 /// Start the reader thread of a session.
 pub(crate) fn start(
     session: Arc<Session>,
@@ -52,10 +55,10 @@ pub(crate) fn start(
             // (ARCHITECTURE §12.1); parking_lot mutexes don't poison.
             if std::panic::catch_unwind(AssertUnwindSafe(|| run(&session, &sh, &master, wake))).is_err() {
                 tracing::error!(session = %session.id, "reader thread panicked; ending the session");
-                // Our master fd hangs up the PTY with close_io's: the child gets SIGHUP, so reap returns.
-                drop(master);
-                exit(&session, &sh);
             }
+            // Our master fd hangs up the PTY with close_io's: the child gets SIGHUP.
+            drop(master);
+            exit(&session, &sh);
         });
     match r {
         Ok(_) => Ok(()),
@@ -149,8 +152,6 @@ fn run(session: &Arc<Session>, shared: &Arc<Shared>, master: &Arc<OwnedFd>, wake
             break;
         }
     }
-    drop(wake);
-    exit(session, shared);
 }
 
 /// Readable once the child exits. Linux needs it: a background job still holding the slave keeps
@@ -245,11 +246,36 @@ fn housekeeping(session: &Session, shared: &Shared) {
     st.released_at = Some(st.history);
 }
 
-fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
+/// Sends Exited even when `exit` panics (#314), reaping the child first if `exit` did not.
+struct ExitGuard<'a> {
+    session: &'a Session,
+    shared: &'a Shared,
+    status: Option<(Option<i32>, Option<i32>)>,
+}
+
+impl Drop for ExitGuard<'_> {
+    fn drop(&mut self) {
+        let (code, signal) = self.status.unwrap_or_else(|| {
+            self.session.close_io();
+            reap(self.session)
+        });
+        self.shared.reader_threads.fetch_sub(1, Ordering::SeqCst);
+        self.session.emit(TerminalEvent::Exited { code, signal });
+        // Only now may `spawn` reuse the id: a late Exited must not reach core after the new session.
+        self.session.exited.store(true, Ordering::SeqCst);
+    }
+}
+
+fn exit(session: &Session, shared: &Shared) {
+    let mut guard = ExitGuard { session, shared, status: None };
     let palette = *shared.palette.read();
     let mut outs = Vec::new();
     let log = {
         let mut st = session.state.lock();
+        #[cfg(test)]
+        if session.id.as_str() == tests::EXIT_PANIC {
+            panic!("test hook: exit panic");
+        }
         st.model.flush_sync(&palette, &mut outs);
         // The screen rows never scroll out now: log them, and finish writing before Exited (quit
         // follows the last exit).
@@ -263,6 +289,7 @@ fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
     session.close_io();
 
     let (code, signal) = reap(session);
+    guard.status = Some((code, signal));
     {
         let mut st = session.state.lock();
         st.exit = Some((code, signal));
@@ -278,31 +305,37 @@ fn exit(session: &Arc<Session>, shared: &Arc<Shared>) {
         st.model.release_cache();
         st.refresh_memory(shared);
     }
-    shared.reader_threads.fetch_sub(1, Ordering::SeqCst);
-    session.emit(TerminalEvent::Exited { code, signal });
-    // Only now may `spawn` reuse the id: a late Exited must not reach core after the new session.
-    session.exited.store(true, Ordering::SeqCst);
 }
 
 /// Wait for the child without reaping (so `kill` cannot hit a recycled pid), then reap it under
-/// the process lock.
+/// the process lock. A child still alive `HANGUP_GRACE` after the hangup (SIGHUP ignored) gets its
+/// group killed.
 fn reap(session: &Session) -> (Option<i32>, Option<i32>) {
+    use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, kill_process_group, waitid};
     let pid = session.proc.lock().pid;
+    let Some(p) = Pid::from_raw(pid) else { return (None, None) };
+    let deadline = Instant::now() + HANGUP_GRACE;
+    let mut opts = WaitIdOptions::EXITED | WaitIdOptions::NOWAIT | WaitIdOptions::NOHANG;
     loop {
-        // SAFETY: zeroed siginfo_t is a valid out-parameter for waitid.
-        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        // SAFETY: plain syscall on our own child.
-        let r =
-            unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOWAIT) };
-        if r == 0 {
-            break;
+        match waitid(WaitId::Pid(p), opts) {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => {
+                #[allow(clippy::disallowed_methods)] // allowlisted: bounded hangup grace
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                tracing::warn!(session = %session.id, "child ignored the hangup; killing its group");
+                // Not reaped yet (NOWAIT): the group cannot be a recycled one.
+                let _ = kill_process_group(p, Signal::KILL);
+                opts.remove(WaitIdOptions::NOHANG);
+            }
+            Err(Errno::INTR) => {}
+            // ECHILD: already reaped elsewhere (e.g. SIGCHLD ignored).
+            Err(_) => {
+                session.proc.lock().reaped = true;
+                return (None, None);
+            }
         }
-        if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
-            continue;
-        }
-        // ECHILD: already reaped elsewhere (e.g. SIGCHLD ignored).
-        session.proc.lock().reaped = true;
-        return (None, None);
     }
     let mut proc = session.proc.lock();
     let mut status = 0;
@@ -334,18 +367,19 @@ mod tests {
 
     /// Output that makes `process` panic, as a parser bug would.
     pub(super) const PANIC: &[u8] = b"KELTA_TEST_PANIC";
+    /// Session id whose `exit` panics, as a broken grid in `flush_sync` would.
+    pub(super) const EXIT_PANIC: &str = "exit-panic";
 
-    /// #291: a panicking reader still sends Exited and gives its thread back.
-    #[test]
-    fn panicking_reader_exits_the_session() {
-        let h = crate::PtyTerminalHost::new(TerminalLimits::default());
+    fn spawn(
+        h: &crate::PtyTerminalHost,
+        id: &SessionId,
+        script: &str,
+    ) -> std::sync::Arc<RecordingTerminalEvents> {
         let ev = RecordingTerminalEvents::new();
-        let id = SessionId::new("panic");
         h.spawn(PtySpawnSpec {
             id: id.clone(),
             program: "/bin/sh".into(),
-            // The child outlives the panic: only the PTY hangup ends it.
-            args: vec!["-c".into(), "echo KELTA_TEST_PANIC; exec sleep 30".into()],
+            args: vec!["-c".into(), script.into()],
             cwd: "/".into(),
             env: BTreeMap::new(),
             cols: 80,
@@ -355,15 +389,55 @@ mod tests {
             events: ev.clone(),
         })
         .unwrap();
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while !ev.events().iter().any(|(_, e)| matches!(e, TerminalEvent::Exited { .. })) {
-            assert!(Instant::now() < deadline, "no Exited after the panic");
+        ev
+    }
+
+    /// The session's Exited (code, signal), within `within`.
+    fn exited(ev: &RecordingTerminalEvents, within: Duration) -> (Option<i32>, Option<i32>) {
+        let deadline = Instant::now() + within;
+        loop {
+            if let Some((code, signal)) = ev.events().iter().find_map(|(_, e)| match e {
+                TerminalEvent::Exited { code, signal } => Some((*code, *signal)),
+                _ => None,
+            }) {
+                return (code, signal);
+            }
+            assert!(Instant::now() < deadline, "no Exited");
             #[allow(clippy::disallowed_methods)] // allowlisted: test polling
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    /// #291: a panicking reader still sends Exited and gives its thread back.
+    #[test]
+    fn panicking_reader_exits_the_session() {
+        let h = crate::PtyTerminalHost::new(TerminalLimits::default());
+        let id = SessionId::new("panic");
+        // The child outlives the panic: only the PTY hangup ends it.
+        let ev = spawn(&h, &id, "echo KELTA_TEST_PANIC; exec sleep 30");
+        exited(&ev, Duration::from_secs(10));
         assert_eq!(h.stats().reader_threads, 0);
         // kill closes it, freeing the id.
         h.kill(&id, KillSignal::Kill).unwrap();
         assert!(h.text_tail(&id, 1).is_err());
+    }
+
+    /// #314: a child ignoring the hangup is killed after the grace period, not waited on forever.
+    #[test]
+    fn child_ignoring_sighup_is_killed_after_the_grace() {
+        let h = crate::PtyTerminalHost::new(TerminalLimits::default());
+        let ev = spawn(&h, &SessionId::new("nohup"), "trap '' HUP; echo KELTA_TEST_PANIC; sleep 1000");
+        let (_, signal) = exited(&ev, super::HANGUP_GRACE + Duration::from_secs(3));
+        assert_eq!(signal, Some(libc::SIGKILL));
+        assert_eq!(h.stats().reader_threads, 0);
+    }
+
+    /// #314: a panic in the exit path still reaps the child and sends Exited.
+    #[test]
+    fn panicking_exit_still_sends_exited() {
+        let h = crate::PtyTerminalHost::new(TerminalLimits::default());
+        let ev = spawn(&h, &SessionId::new(EXIT_PANIC), "exit 3");
+        assert_eq!(exited(&ev, Duration::from_secs(10)), (Some(3), None));
+        assert_eq!(h.stats().reader_threads, 0);
     }
 }
