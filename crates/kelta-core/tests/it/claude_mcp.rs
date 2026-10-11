@@ -3,6 +3,7 @@
 //! token must not reach an argv, #294).
 
 use std::path::Path;
+use std::time::Duration;
 
 use crate::common::*;
 use kelta_proto::events::UiEvent;
@@ -154,4 +155,47 @@ async fn no_offer_without_claude() {
     assert_eq!(offers(&h), 0);
     assert_eq!(h.core.claude_mcp_status().await, None);
     assert!(h.core.claude_mcp_install().await.is_err());
+}
+
+/// Whether `kelta` is in the config.
+fn has_entry(root: &Path) -> bool {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(config(root)).unwrap()).unwrap();
+    v["mcpServers"].get("kelta").is_some()
+}
+
+/// A write by a concurrent Claude Code save is repaired by the check armed 5 s after the install;
+/// Remove cancels it.
+#[tokio::test(start_paused = true)]
+async fn recheck_restores_a_dropped_entry_and_remove_cancels_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let h = start(root, Settings::defaults(), vec![]);
+    fake_claude(root);
+    h.core.claude_mcp_install().await.unwrap();
+    let before = registered(root);
+
+    std::fs::write(config(root), r#"{"mcpServers":{}}"#).unwrap();
+    settle().await; // the timer task starts its sleep before the clock moves
+    tokio::time::advance(Duration::from_secs(6)).await;
+    // The check reads and writes through the blocking pool: let it finish.
+    for _ in 0..200 {
+        if has_entry(root) {
+            break;
+        }
+        settle().await;
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(registered(root), before);
+
+    // Re-armed by nothing: a second drop is not repaired once Remove ran.
+    h.core.claude_mcp_install().await.unwrap();
+    h.core.claude_mcp_remove().await.unwrap();
+    std::fs::write(config(root), r#"{"mcpServers":{}}"#).unwrap();
+    settle().await; // the timer task starts its sleep before the clock moves
+    tokio::time::advance(Duration::from_secs(6)).await;
+    for _ in 0..20 {
+        settle().await;
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!has_entry(root));
 }
