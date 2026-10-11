@@ -619,6 +619,11 @@ impl ConfigService {
         if issues.is_empty() {
             match serde_json::from_value::<Settings>(base.clone()) {
                 Ok(settings) => {
+                    // keys a source omits in TOML are serde defaults: the UI reads `value` as `Source` (#281)
+                    if let (Some(o), Ok(v)) = (base.as_object_mut(), serde_json::to_value(&settings.sources))
+                    {
+                        o.insert("sources".into(), v);
+                    }
                     return Ok(Computed {
                         settings: Arc::new(settings),
                         doc: Arc::new(EffectiveSettings { value: base, sources }),
