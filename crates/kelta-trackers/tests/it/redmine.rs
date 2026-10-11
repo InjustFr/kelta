@@ -108,6 +108,7 @@ async fn detail_keeps_textile_preformatted_and_only_notes_become_comments() {
     assert_eq!(d.comments[0].author.name, "Carol Client");
     assert!(d.comments[1].body_html.contains("&lt;b&gt;now&lt;/b&gt;"), "{}", d.comments[1].body_html);
     assert_eq!(d.parent.unwrap().key, "4500");
+    assert!(d.ticket.parent.unwrap().url.ends_with("/issues/4500"));
     let q = server.received_requests().await.unwrap();
     assert!(q.iter().any(|r| r.url.query().unwrap_or("").contains("include=journals")));
 }

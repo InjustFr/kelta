@@ -690,6 +690,9 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
         ]
     );
     assert_eq!(page.items[0].priority.as_deref(), Some("P1"));
+    let parent = page.items[0].parent.as_ref().unwrap();
+    assert_eq!((parent.key.as_str(), parent.title.as_str()), ("acme/shop#10", "Checkout epic"));
+    assert!(page.items[1].parent.is_none());
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     assert_eq!(gql_bodies.len(), 1, "one enrichment request per page, not one per issue");
     assert_eq!(gql_bodies[0]["variables"]["ids"], json!(["I_12", "I_14", "I_15"]));
@@ -703,6 +706,8 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
     let d = t.get(&r()).await.unwrap();
     assert_eq!(d.ticket.status, page.items[0].status);
     assert_eq!(d.ticket.priority, page.items[0].priority);
+    assert_eq!(d.ticket.parent, page.items[0].parent);
+    assert_eq!(d.parent.map(|p| p.key), Some("acme/shop#10".to_owned()));
 }
 
 #[tokio::test]

@@ -531,3 +531,41 @@ async fn search_sends_the_text_as_search() {
         .await;
     assert_eq!(gl(&server).search(&view("mine"), "login").await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn parents_are_the_epic_else_the_parent_work_item() {
+    let server = MockServer::start().await;
+    let issue = |iid: u64, epic: serde_json::Value| {
+        json!({"id": 9000 + iid, "iid": iid, "title": "t", "state": "opened", "labels": [], "epic": epic,
+               "updated_at": "2026-10-03T09:00:00.000Z", "references": {"full": format!("grp/proj#{iid}")}})
+    };
+    Mock::given(method("GET"))
+        .and(path("/api/v4/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            issue(1, json!({"iid": 5, "title": "Checkout", "url": "/groups/grp/-/epics/5"})),
+            issue(2, serde_json::Value::Null),
+            issue(3, serde_json::Value::Null),
+        ])))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"project": {"workItems": {"nodes": [
+            {"iid": "2", "widgets": [{}, {"parent": {"title": "Parent", "webUrl": "https://g/grp/proj/-/issues/1",
+                                                 "reference": "grp/proj#1"}}]},
+            {"iid": "3", "widgets": [{"parent": null}]},
+        ]}}}})))
+        .mount(&server)
+        .await;
+    let items = gl(&server).list(&view("mine"), None).await.unwrap().items;
+    let parents: Vec<_> =
+        items.iter().map(|t| t.parent.as_ref().map(|p| (p.key.as_str(), p.title.as_str()))).collect();
+    assert_eq!(parents, vec![Some(("&5", "Checkout")), Some(("grp/proj#1", "Parent")), None]);
+    assert!(items[0].parent.as_ref().unwrap().url.ends_with("/groups/grp/-/epics/5"));
+    let b = bodies(&server, "POST", "/api/graphql").await;
+    assert_eq!(b.len(), 1);
+    assert_eq!(
+        (&b[0]["variables"]["p"], &b[0]["variables"]["iids"]),
+        (&json!("grp/proj"), &json!(["2", "3"]))
+    );
+}

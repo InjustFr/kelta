@@ -244,6 +244,7 @@ export type * from './TicketDetail';
 export type * from './TicketGroupBy';
 export type * from './TicketItem';
 export type * from './TicketPage';
+export type * from './TicketParent';
 export type * from './TicketRef';
 export type * from './TicketSort';
 export type * from './TicketsMode';
