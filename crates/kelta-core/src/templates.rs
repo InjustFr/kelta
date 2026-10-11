@@ -256,7 +256,7 @@ impl Core {
                     args.extend(kelta_work::editor::render_args(&s.editor.review_args, &v)?);
                 }
                 if preset.external {
-                    let mut cmd = tokio::process::Command::new(&preset.command);
+                    let mut cmd = kelta_proto::term::async_command(&preset.command);
                     cmd.args(&args).current_dir(cwd).env_clear().envs(self.login_env.vars.iter());
                     cmd.stdin(std::process::Stdio::null())
                         .stdout(std::process::Stdio::null())

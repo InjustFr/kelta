@@ -292,7 +292,10 @@ impl LoginEnv {
     /// The inherited process environment without the AppImage runtime's variables
     /// ([`strip_appimage_env`]): what a child process of Kelta should start from.
     pub fn inherited() -> Self {
-        let mut vars = std::env::vars().collect();
+        // A non-UTF-8 pair can't live in the map: drop it rather than panic like `vars()`.
+        let mut vars = std::env::vars_os()
+            .filter_map(|(k, v)| Some((k.to_str()?.to_owned(), v.to_str()?.to_owned())))
+            .collect();
         strip_appimage_env(&mut vars);
         Self { vars, source: LoginEnvSource::Inherited, shell: std::env::var_os("SHELL").map(PathBuf::from) }
     }
@@ -306,20 +309,30 @@ impl LoginEnv {
     }
 }
 
-/// Undo what an AppImage runtime set up for Kelta itself (no-op without `APPDIR`): a saved original
-/// (`APPIMAGE_ORIGINAL_<VAR>`, `<VAR>_ORIG`) is restored, `$APPDIR` entries leave path lists
-/// (`PATH`, `XDG_DATA_DIRS`, `LD_LIBRARY_PATH`), and a variable left pointing only into the mount
-/// (`PYTHONHOME`, `GTK_PATH`, ...) or naming it (`APPDIR`, `APPIMAGE`, `OWD`, `ARGV0`) is removed.
+/// Undo what an AppImage runtime and AppImageLauncher set up for Kelta itself (no-op without
+/// `APPDIR`): a saved original (`APPIMAGE_ORIGINAL_<VAR>`, `<VAR>_ORIG`) is restored, entries naming
+/// the mount or the `.AppImage` file leave path lists (`PATH`, `XDG_DATA_DIRS`, `LD_LIBRARY_PATH`,
+/// ...), a variable left with nothing else is removed, and so are the launch-only ones (`APPDIR`,
+/// `APPIMAGE`, `OWD`, `ARGV0`, `*_APPIMAGE`, `DESKTOPINTEGRATION`, `GIO_LAUNCHED_DESKTOP_FILE*`).
 pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
     let Some(appdir) =
         vars.get("APPDIR").map(|d| d.trim_end_matches('/').to_owned()).filter(|d| !d.is_empty())
     else {
         return;
     };
-    for k in ["APPDIR", "APPIMAGE", "OWD", "ARGV0"] {
-        vars.remove(k);
-    }
-    let in_mount = |e: &str| e == appdir || e.starts_with(&format!("{appdir}/"));
+    let appimage = vars.get("APPIMAGE").cloned().filter(|a| !a.is_empty());
+    vars.retain(|k, _| {
+        !(matches!(k.as_str(), "APPDIR" | "APPIMAGE" | "OWD" | "ARGV0" | "DESKTOPINTEGRATION")
+            || k.ends_with("_APPIMAGE")
+            || k.starts_with("GIO_LAUNCHED_DESKTOP_FILE"))
+    });
+    // `p` as a whole path in `v`: `/x/.mount_K` names `/x/.mount_K/usr`, not `/x/.mount_Kx`.
+    let names = |p: &str, v: &str| {
+        v.match_indices(p).any(|(i, _)| {
+            v[i + p.len()..].chars().next().is_none_or(|c| !(c.is_alphanumeric() || "._-".contains(c)))
+        })
+    };
+    let refers = |v: &str| names(&appdir, v) || appimage.as_deref().is_some_and(|a| names(a, v));
     let keys: Vec<String> = vars.keys().cloned().collect();
     for k in keys {
         let Some(v) = vars.get(&k).cloned() else { continue };
@@ -327,7 +340,7 @@ pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
         let original = if let Some(name) = k.strip_prefix("APPIMAGE_ORIGINAL_") {
             let v = vars.remove(&k).unwrap_or_default();
             Some((name.to_owned(), v))
-        } else if v.contains(&appdir) && vars.contains_key(&saved) {
+        } else if refers(&v) && vars.contains_key(&saved) {
             vars.remove(&saved).map(|v| (k.clone(), v))
         } else {
             None
@@ -339,8 +352,8 @@ pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
             Some((name, v)) => {
                 vars.insert(name, v);
             }
-            None if v.contains(&appdir) => {
-                let kept: Vec<&str> = v.split(':').filter(|e| !e.is_empty() && !in_mount(e)).collect();
+            None if refers(&v) => {
+                let kept: Vec<&str> = v.split(':').filter(|e| !e.is_empty() && !refers(e)).collect();
                 if kept.is_empty() {
                     vars.remove(&k);
                 } else {
@@ -351,6 +364,20 @@ pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
             None => {}
         }
     }
+}
+
+/// A child process of Kelta: starts from [`LoginEnv::inherited`] (what Kelta was launched with,
+/// without the AppImage runtime's variables). Every spawn goes through here (clippy.toml).
+#[allow(clippy::disallowed_methods)] // allowlisted: the one place a child process starts
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.env_clear().envs(LoginEnv::inherited().vars);
+    cmd
+}
+
+/// [`command`] for async callers.
+pub fn async_command(program: impl AsRef<std::ffi::OsStr>) -> tokio::process::Command {
+    command(program).into()
 }
 
 /// Fully resolved spawn request handed to the `TerminalHost` by core.
@@ -433,6 +460,18 @@ mod tests {
             ("QT_PLUGIN_PATH_ORIG", "/usr/lib/qt".to_owned()),
             ("HOME", "/home/u".to_owned()),
             ("MOUNTS", format!("{m}x/not-this-mount")),
+            ("SOME_FUTURE_RUNTIME_DIR", format!("--dir={m}/usr/share/x")),
+            ("PERLLIB", format!("{m}/usr/share/perl5/:{m}/usr/lib/perl5/")),
+            ("REDIRECT_APPIMAGE", "1".to_owned()),
+            ("TARGET_APPIMAGE", "/home/u/Kelta.AppImage".to_owned()),
+            ("DESKTOPINTEGRATION", "AppImageLauncher".to_owned()),
+            (
+                "GIO_LAUNCHED_DESKTOP_FILE",
+                "/home/u/.local/share/applications/appimagekit_1-Kelta.desktop".to_owned(),
+            ),
+            ("GIO_LAUNCHED_DESKTOP_FILE_PID", "42".to_owned()),
+            ("LAUNCHER_ARG", "/home/u/Kelta.AppImage --x".to_owned()),
+            ("APPIMAGE_EXTRACT_AND_RUN", "1".to_owned()),
         ]);
         strip_appimage_env(&mut vars);
         let expected = env(&[
@@ -443,6 +482,7 @@ mod tests {
             ("QT_PLUGIN_PATH", "/usr/lib/qt".to_owned()),
             ("HOME", "/home/u".to_owned()),
             ("MOUNTS", format!("{m}x/not-this-mount")),
+            ("APPIMAGE_EXTRACT_AND_RUN", "1".to_owned()),
         ]);
         assert_eq!(vars, expected);
 
@@ -451,5 +491,64 @@ mod tests {
         let mut vars = plain.clone();
         strip_appimage_env(&mut vars);
         assert_eq!(vars, plain);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn inherited_drops_non_utf8_vars() {
+        use std::os::unix::ffi::OsStrExt;
+        const NAME: &str = "term::tests::inherited_drops_non_utf8_vars";
+        // Inner run, re-executed below with a Latin-1 variable (no `set_var` in a threaded test).
+        if std::env::var_os("KELTA_TEST_NON_UTF8").is_some() {
+            let env = LoginEnv::inherited();
+            assert!(env.get("KELTA_TEST_NON_UTF8").is_none());
+            assert!(env.path().is_some());
+            return;
+        }
+        let status = command(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--test-threads=1"])
+            .env("KELTA_TEST_NON_UTF8", std::ffi::OsStr::from_bytes(b"caf\xe9"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    #[test]
+    fn command_child_gets_no_appimage_env() {
+        const NAME: &str = "term::tests::command_child_gets_no_appimage_env";
+        // Inner run, re-executed below as a fake AppImage launch: print what its child sees.
+        if std::env::var_os("KELTA_TEST_FAKE_LAUNCH").is_some() {
+            let out = command("env").output().unwrap();
+            std::io::Write::write_all(&mut std::io::stdout(), &out.stdout).unwrap();
+            return;
+        }
+        let m = "/tmp/.mount_KeltaTest";
+        let path = std::env::var("PATH").unwrap_or_default();
+        let out = command(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--test-threads=1"])
+            .envs([
+                ("KELTA_TEST_FAKE_LAUNCH", "1".to_owned()),
+                ("APPDIR", m.to_owned()),
+                ("APPIMAGE", "/home/u/Kelta.AppImage".to_owned()),
+                ("ARGV0", "Kelta".to_owned()),
+                ("OWD", "/home/u".to_owned()),
+                ("TARGET_APPIMAGE", "/home/u/Kelta.AppImage".to_owned()),
+                ("DESKTOPINTEGRATION", "AppImageLauncher".to_owned()),
+                ("PATH", format!("{m}/usr/bin:{path}")),
+                ("LD_LIBRARY_PATH", format!("{m}/usr/lib")),
+                ("UNKNOWN_FUTURE_VAR", format!("{m}/usr/share/thing")),
+            ])
+            .output()
+            .unwrap();
+        let env = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            env.contains("KELTA_TEST_FAKE_LAUNCH=1"),
+            "the inner run did not print its child's env: {env}"
+        );
+        assert!(env.lines().any(|l| l == format!("PATH={path}")), "{env}");
+        assert!(!env.contains(m) && !env.contains(".AppImage"), "{env}");
+        for k in ["APPDIR=", "APPIMAGE=", "ARGV0=", "OWD=", "DESKTOPINTEGRATION=", "LD_LIBRARY_PATH="] {
+            assert!(!env.lines().any(|l| l.starts_with(k)), "{k} reached the child: {env}");
+        }
     }
 }

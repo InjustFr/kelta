@@ -899,10 +899,8 @@ pub(crate) async fn run_process(
     stdin: Option<Vec<u8>>,
     timeout: Duration,
 ) -> Result<ProcOutput, KeltaError> {
-    let mut cmd = tokio::process::Command::new(command);
+    let mut cmd = kelta_proto::term::async_command(command);
     cmd.args(args)
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .envs(env)
         .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())

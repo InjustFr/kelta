@@ -21,7 +21,7 @@ async-trait = { workspace = true }
 ts-rs = { workspace = true }
 schemars = { workspace = true }
 uuid = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "process"] }
 parking_lot = { workspace = true }
 rustix = { workspace = true }
 time = { workspace = true }

@@ -174,10 +174,8 @@ pub fn parse_version(text: &str) -> Option<semver::Version> {
 
 /// Run `<binary> --version` (5 s, non-interactive).
 pub async fn probe_version(binary: &Path) -> Option<semver::Version> {
-    let mut cmd = tokio::process::Command::new(binary);
+    let mut cmd = kelta_proto::term::async_command(binary);
     cmd.arg("--version")
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

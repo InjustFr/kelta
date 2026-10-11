@@ -87,10 +87,8 @@ pub async fn open_external(url: &str) -> Result<(), KeltaError> {
         return Err(KeltaError::invalid("only http, https and mailto links can be opened"));
     }
     let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-    let mut child = tokio::process::Command::new(opener)
+    let mut child = kelta_proto::term::async_command(opener)
         .arg(url.trim())
-        .env_clear()
-        .envs(LoginEnv::inherited().vars)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -191,7 +189,7 @@ pub(crate) async fn claude_oneshot<'a, A: AsRef<std::ffi::OsStr>>(
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
     let io = |e: std::io::Error| KeltaError::internal(format!("claude: {e}"));
-    let mut child = tokio::process::Command::new(bin)
+    let mut child = kelta_proto::term::async_command(bin)
         .args(args)
         .current_dir(cwd)
         .env_clear()
