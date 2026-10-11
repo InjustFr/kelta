@@ -178,7 +178,13 @@ impl WorkService {
             other => other.clone(),
         };
         let found = plan::existing_for(&items, &source).map(|w| w.id.clone());
-        if plan.existing.is_none()
+        // The repo was switched after planning: the plan's item is the old repo's, the new one's is `found`.
+        let stale = |id: &WorkItemId| items.iter().any(|w| &w.id == id && w.repo_id != plan.repo_id);
+        let existing = match plan.existing.clone() {
+            Some(id) if stale(&id) => found.clone(),
+            e => e,
+        };
+        if existing.is_none()
             && found.is_some()
             && matches!(&plan.source, WorkSource::Branch { task: Some(_), .. })
         {
@@ -187,7 +193,7 @@ impl WorkService {
                 plan.branch
             )));
         }
-        if let Some(existing) = plan.existing.clone().or(found) {
+        if let Some(existing) = existing.or(found) {
             drop(guard);
             return self.resume(&existing).await;
         }
@@ -404,6 +410,16 @@ impl WorkService {
     /// Park (#142): `worktree.teardown` when configured.
     pub async fn park_teardown(&self, item: &WorkItem) -> Result<(), KeltaError> {
         self.park_teardown_impl(item).await
+    }
+
+    /// `work_get`: the item as `work_list` shows it (steps merged, claim liveness computed).
+    pub async fn get(&self, id: &WorkItemId) -> Option<WorkItem> {
+        let mut item = self.store.get_item(id).await.ok()??;
+        if let Ok(steps) = self.merged_steps(id, &item.steps).await {
+            item.steps = steps;
+        }
+        self.shown(&mut item);
+        Some(item)
     }
 
     /// Work item owning a session (for `CoreApi::work_for_session`).

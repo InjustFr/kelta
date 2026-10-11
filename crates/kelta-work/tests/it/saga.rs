@@ -612,6 +612,12 @@ async fn same_branch_name_in_two_repos_gets_two_items() {
     assert_eq!(plan.existing.as_ref(), Some(&web.id));
     assert_eq!(w.start(plan).await.unwrap().id, web.id);
     assert_eq!(fx.store_items().await.len(), 2);
+    // Planned in api, switched to web in the picker: web's item, not the plan's stale api one (#319).
+    let mut plan = w.plan(&p.id, src("api")).await.unwrap();
+    assert_eq!(plan.existing.as_ref(), Some(&api.id));
+    plan.repo_id = "web".into();
+    assert_eq!(w.start(plan).await.unwrap().id, web.id);
+    assert_eq!(fx.store_items().await.len(), 2);
 }
 
 #[tokio::test]

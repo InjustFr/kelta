@@ -456,3 +456,77 @@ async fn startup_prunes_old_cache_rows_and_seen_reviews() {
         s.call(|c| q::seen_reviews(c, "gh")).await.unwrap().iter().map(|r| r.number).collect();
     assert_eq!(left, [2, 3]);
 }
+
+#[tokio::test]
+async fn startup_prunes_finished_items_past_the_retention() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let item = |id: &str, state: WorkState| kelta_proto::model::WorkItem {
+        id: WorkItemId::new(id),
+        state,
+        ..kelta_proto::samples::work_item()
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        for w in [
+            item("old-done", WorkState::Finished),
+            item("new-done", WorkState::Finished),
+            item("old-open", WorkState::Active),
+        ] {
+            s.put_item(&w).await.unwrap();
+        }
+        s.call(|c| {
+            c.execute("UPDATE work_items SET updated_at = '2026-01-01T00:00:00Z' WHERE id LIKE 'old-%'", [])
+                .map_err(kelta_core::store::db_err)
+        })
+        .await
+        .unwrap();
+    }
+    let s = Store::open(&db).unwrap();
+    let mut ids: Vec<String> =
+        s.list_items(None).await.unwrap().into_iter().map(|w| w.id.as_str().to_owned()).collect();
+    ids.sort();
+    assert_eq!(ids, ["new-done", "old-open"], "only the old Finished item is gone");
+    assert!(s.steps(&WorkItemId::new("old-done")).await.unwrap().is_empty(), "its steps went with it");
+}
+
+#[test]
+fn unreadable_work_items_raise_one_toast_at_load() {
+    use kelta_proto::dirs::{CliArgs, Dirs};
+    use kelta_proto::events::UiEvent;
+    use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
+    let tmp = tempfile::tempdir().unwrap();
+    let dirs = Dirs::under(tmp.path());
+    std::fs::create_dir_all(&dirs.data).unwrap();
+    {
+        let s = Store::open(&dirs.db_path()).unwrap();
+        for id in ["good", "bad-1", "bad-2"] {
+            let w =
+                kelta_proto::model::WorkItem { id: WorkItemId::new(id), ..kelta_proto::samples::work_item() };
+            s.call_blocking(move |c| q::work_put(c, &w)).unwrap();
+        }
+        s.call_blocking(|c| {
+            c.execute("UPDATE work_items SET state_json = '{not json' WHERE id LIKE 'bad-%'", [])
+                .map_err(kelta_core::store::db_err)
+        })
+        .unwrap();
+    }
+    let ui = FakeUiBridge::new();
+    let mut deps = kelta_core::CoreDeps::new(dirs, CliArgs::default(), ui.clone());
+    deps.terminal = Some(FakeTerminalHost::new());
+    deps.secrets = Some(FakeSecrets::new());
+    deps.login_env = Some(crate::common::login_env(tmp.path()));
+    deps.install_ctl = false;
+    deps.start_services = false;
+    let core = kelta_core::Core::start_with(deps).unwrap();
+    tokio::runtime::Runtime::new().unwrap().block_on(core.app_ready(0.0)).unwrap();
+    let toasts: Vec<String> = ui
+        .events()
+        .into_iter()
+        .filter_map(|e| match e {
+            UiEvent::Toast { toast } => Some(toast.text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(toasts, ["2 work items could not be read"]);
+}

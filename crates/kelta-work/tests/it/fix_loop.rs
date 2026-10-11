@@ -183,6 +183,21 @@ async fn send_holds_for_a_busy_claude_until_its_stop() {
     }
     let (one, two) = (format!("Fix {}", file.display()), format!("Fix {}", file2.display()));
     assert_eq!(fx.core.written_text(&sid), format!("\x1b[200~{one}\n\n{two}\x1b[201~\r"), "both sends, once");
+    assert!(file2.exists(), "the delivered turn still reads it");
+
+    // That turn ends with nothing held: the held copies are spent (#319).
+    fx.core.publish(
+        BusEvent::new(bus::CLAUDE_HOOK, json!({ "event": "Stop", "payload": { "hook_event_name": "Stop" } }))
+            .with_session(sid.clone()),
+    );
+    for _ in 0..500 {
+        if !file2.exists() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(!file2.exists(), "no leftover held brief");
+    assert!(file.exists() && run_dir(&fx).join("ticket.md").exists(), "plain names and Kelta's files stay");
 }
 
 #[tokio::test]

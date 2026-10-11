@@ -467,6 +467,15 @@ pub mod q {
             "DELETE FROM provider_cache WHERE julianday(fetched_at) < julianday('now', '-30 days');
              DELETE FROM seen_reviews WHERE reviewed_sha IS NULL AND julianday(first_seen) < julianday('now', '-90 days');",
         )
+        .map_err(db_err)?;
+        // shortcut: fixed 30-day retention of Finished items (their last write); make it a setting if asked.
+        let old = "SELECT id FROM work_items WHERE julianday(updated_at) < julianday('now', '-30 days') AND
+            (CASE WHEN json_valid(state_json) THEN json_extract(state_json, '$.kind') END) = 'finished'";
+        c.execute_batch(&format!(
+            "DELETE FROM work_steps WHERE work_item_id IN ({old});
+             DELETE FROM notes WHERE work_item IN ({old});
+             DELETE FROM work_items WHERE id IN ({old});"
+        ))
         .map_err(db_err)
     }
 
@@ -793,6 +802,13 @@ pub mod q {
                     .ok()
             })
             .collect())
+    }
+
+    /// Rows `work_list` skips because they do not decode (the load toast, #319).
+    pub fn work_unreadable(c: &Connection) -> R<usize> {
+        let mut st = c.prepare(&format!("SELECT {WORK_COLS} FROM work_items")).map_err(db_err)?;
+        let raws = st.query_map([], work_row).map_err(db_err)?.collect::<rusqlite::Result<Vec<_>>>();
+        Ok(raws.map_err(db_err)?.into_iter().filter_map(|r| finish_work(r, Vec::new()).err()).count())
     }
 
     /// `WorkStore::claim_item`: the holder check and the write in one transaction.
