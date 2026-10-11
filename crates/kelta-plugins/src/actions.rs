@@ -221,6 +221,10 @@ impl PluginHost {
             ActionDef::Run { command, args, cwd, env, stdin, timeout_ms, show } => {
                 let command = cx.x(command)?;
                 cx.require_exec(&command)?;
+                let command = match &cx.plugin {
+                    Some(p) => crate::util::plugin_command(&p.dir, &command)?,
+                    None => command,
+                };
                 let args = cx.vars.expand_all(args)?;
                 let cwd = cwd.as_deref().map(|c| cx.x(c)).transpose()?.filter(|c| !c.is_empty());
                 let mut env: std::collections::BTreeMap<String, String> =
@@ -293,6 +297,10 @@ impl PluginHost {
                 if let Some(c) = &command {
                     cx.require_exec(c)?;
                 }
+                let command = match (&cx.plugin, command) {
+                    (Some(p), Some(c)) => Some(crate::util::plugin_command(&p.dir, &c)?),
+                    (_, c) => c,
+                };
                 let project = cx.project()?;
                 let params = SpawnParams {
                     template: template.as_deref().map(|t| cx.x(t)).transpose()?,

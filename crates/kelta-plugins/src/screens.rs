@@ -356,7 +356,9 @@ impl PluginHost {
                 to_value(core.session_list(project.as_ref()))
             }
             PluginMethod::SessionsSpawn => {
-                let q: SpawnParams = p(method, params)?;
+                let mut q: SpawnParams = p(method, params)?;
+                let dir = &self.active_entry(screen.plugin.as_str())?.dir;
+                q.command = q.command.map(|c| crate::util::plugin_command(dir, &c)).transpose()?;
                 let project = q
                     .project
                     .clone()
@@ -417,22 +419,11 @@ impl PluginHost {
                 }
                 let mut q: Q = p(method, params)?;
                 let dir = self.active_entry(screen.plugin.as_str())?.dir.clone();
-                // A path runs a file of the plugin itself (no `..`, absolute or escaping symlink); a bare name
-                // is looked up on the login PATH.
-                let command = if q.command.contains('/') {
-                    crate::uri::resolve_path(&dir, &q.command).ok_or_else(|| {
-                        KeltaError::invalid(format!(
-                            "exec.run: `{}` is not a file inside the plugin directory",
-                            q.command
-                        ))
-                    })?
-                } else {
-                    q.command.into()
-                };
+                let command = crate::util::plugin_command(&dir, &q.command)?;
                 crate::util::plugin_env(&mut q.env, core.login_path());
                 let cwd = dir.join(q.cwd.unwrap_or_default());
                 let out = crate::actions::run_process(
-                    &command.to_string_lossy(),
+                    &command,
                     &q.args,
                     cwd.to_str(),
                     &q.env,

@@ -361,7 +361,7 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
 | `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
-| `exec:<command>` | run that argv[0] in `run` actions and `exec.run`: a name runs from the login shell's `PATH`; a relative path inside the plugin (`exec:./bin/deploy.sh`) grants that path exactly as written |
+| `exec:<command>` | run that argv[0] in `run` / `spawn_session` actions, `sessions.spawn`, plugin tools and `exec.run`: a name runs from the login shell's `PATH`; a relative path (`exec:./bin/deploy.sh`) grants that path exactly as written and always runs the plugin's own file (resolved in the plugin directory, whatever the `cwd`). Plugin-supplied `env` never sets `PATH`, `DYLD_*` or `LD_*`. The grant means that program **with any arguments and any other environment**: options such as `git -c core.sshCommand=…`, `kubectl --kubeconfig`, or variables such as `GIT_SSH_COMMAND` and `NODE_OPTIONS` are not filtered, so granting `exec:git` grants what git can run |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
 | `provider` | run the `[provider]` program for the accounts that name the plugin, handing it their settings and secret (§9); its own network access is its business |
 

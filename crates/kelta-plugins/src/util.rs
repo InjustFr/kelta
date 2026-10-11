@@ -142,6 +142,17 @@ pub fn plugin_env(env: &mut BTreeMap<String, String>, login_path: Option<String>
     }
 }
 
+/// A plugin's command: a name stays as is (login PATH lookup); a path runs that file of the plugin
+/// (relative to its directory: no `..`, absolute path or symlink leaving it), never one in the cwd.
+pub fn plugin_command(dir: &Path, command: &str) -> Result<String, KeltaError> {
+    if !command.contains('/') {
+        return Ok(command.to_owned());
+    }
+    crate::uri::resolve_path(dir, command)
+        .map(|p| p.to_string_lossy().into_owned())
+        .ok_or_else(|| KeltaError::invalid(format!("`{command}` is not a file inside the plugin directory")))
+}
+
 /// True for `127.0.0.1`, `::1`, `[::1]` and `localhost`.
 pub fn is_loopback_host(host: &str) -> bool {
     let h = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();

@@ -3,6 +3,7 @@
 
 use crate::common;
 
+use std::path::Path;
 use std::time::Duration;
 
 use kelta_proto::ErrorCode;
@@ -722,4 +723,64 @@ async fn web_tool_server_is_stopped_per_spec_when_the_pane_cannot_open() {
     let pid = rustix::process::Pid::from_raw(pid).unwrap();
     assert!(common::wait_for(|| rustix::process::test_kill_process(pid).is_err()).await, "server killed");
     assert!(stopped.exists(), "the stop command ran (e.g. `docker compose down`)");
+}
+
+/// A plugin tool's `env` cannot point a granted name at another program (`PATH`) or inject a library
+/// (`DYLD_*`, `LD_*`), and a relative command runs the plugin's own file.
+#[tokio::test]
+async fn plugin_tools_keep_the_login_path_and_resolve_paths_in_the_plugin() {
+    let env = common::Env::new();
+    let marks = env.tmp.path().join("marks");
+    std::fs::create_dir_all(&marks).unwrap();
+    let script = |dir: &Path, name: &str| {
+        std::fs::create_dir_all(dir).unwrap();
+        let p = dir.join("kelta-tool-bin");
+        std::fs::write(&p, format!("#!/bin/sh\n: > {}/{name}\n", marks.display())).unwrap();
+        std::fs::set_permissions(&p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    };
+    let (login, shadow) = (env.tmp.path().join("login-bin"), env.tmp.path().join("shadow-bin"));
+    script(&login, "login");
+    script(&shadow, "shadow");
+    env.core.respond("login_path", serde_json::json!(login));
+    let tools = format!(
+        r#"
+[[contributes.tools]]
+id = "pty"
+kind = "pty"
+command = "kelta-tool-bin"
+env = {{ PATH = "{s}", DYLD_INSERT_LIBRARIES = "x", LD_PRELOAD = "x", KEEP = "1" }}
+
+[[contributes.tools]]
+id = "local"
+kind = "pty"
+command = "./bin/t.sh"
+
+[[contributes.tools]]
+id = "ext"
+kind = "external"
+command = "kelta-tool-bin"
+env = {{ PATH = "{s}" }}
+"#,
+        s = shadow.display()
+    );
+    let perms = ["sessions.spawn", "exec:kelta-tool-bin", "exec:./bin/t.sh"];
+    let dir = env.write_plugin("shady", &common::manifest("shady", &perms, &tools), &[("bin/t.sh", "")]);
+    env.host.grant(&PluginId::new("shady"), perms.iter().map(|p| p.to_string()).collect()).await.unwrap();
+    let open = |id: &'static str| {
+        let host = env.host.clone();
+        async move { host.tool_open(&shop(), &ToolId::new(id), TemplateCtx::default(), Placement::NewTab).await }
+    };
+
+    open("shady/pty").await.unwrap();
+    let spawn = env.core.calls().into_iter().find(|c| c.method == "session_spawn").unwrap().args;
+    assert_eq!(spawn["env"], serde_json::json!({ "KEEP": "1", "PATH": login }));
+
+    open("shady/local").await.unwrap();
+    let spawn = env.core.calls().into_iter().filter(|c| c.method == "session_spawn").nth(1).unwrap().args;
+    let own = dir.join("bin/t.sh").canonicalize().unwrap();
+    assert_eq!(spawn["program"], own.display().to_string());
+
+    open("shady/ext").await.unwrap();
+    assert!(common::wait_for(|| marks.join("login").exists()).await);
+    assert!(!marks.join("shadow").exists());
 }
