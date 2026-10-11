@@ -13,9 +13,9 @@
   import { chordFor, paneIcon, paneTitle, statusLabel } from './labels';
   import {
     closePaneAndStop,
-    closePaneById,
     focusPaneById,
     openContent,
+    requestClosePane,
     splitFocused,
     toggleZoomFocused,
   } from './nav';
@@ -63,7 +63,7 @@
   }
 
   function close(): void {
-    closePaneById(projectId, tabId, node.id);
+    void requestClosePane(projectId, tabId, node.id);
   }
 
   function menuItems(): MenuItem[] {
