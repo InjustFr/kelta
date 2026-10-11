@@ -271,6 +271,64 @@ async fn claude_sessions_start_in_the_last_permission_mode() {
     assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::AcceptEdits));
 }
 
+/// #318: a resume re-reads the mode from where the launch took it: the profile's forced mode is kept
+/// (across a quit too), a remembered one gives way to the current remembered mode.
+#[tokio::test]
+async fn resumed_claude_takes_its_mode_from_its_launch_source() {
+    use kelta_proto::hooks::HookPayload;
+    use kelta_proto::settings::{PermissionMode, SessionTemplate, TemplateNode};
+    let tmp = tempfile::tempdir().unwrap();
+    let shop = ProjectId::new("shop");
+    let mut settings = Settings::defaults();
+    settings.claude.profiles.get_mut("review").unwrap().permission_mode = Some(PermissionMode::AcceptEdits);
+    settings.session_templates.push(SessionTemplate {
+        id: "edits".into(),
+        label: "Edits".into(),
+        layout: TemplateNode::Session {
+            session: "claude".into(),
+            name: None,
+            profile: Some("review".into()),
+            command: None,
+        },
+        enabled: true,
+    });
+    let mode_arg = |h: &H, id: &kelta_proto::ids::SessionId| {
+        let args = h.term.with_session(id, |s| s.spec.args.clone()).unwrap();
+        args.windows(2).find(|w| w[0] == "--permission-mode").map(|w| w[1].clone())
+    };
+    let hook = |h: &H, id: &kelta_proto::ids::SessionId, mode: &str| {
+        let mut p = HookPayload { hook_event_name: "Stop".into(), ..Default::default() };
+        p.extra.insert("permission_mode".into(), mode.into());
+        h.core.session_claude_runs_hook(id, &p);
+    };
+    let edits = {
+        let h = start(tmp.path(), settings.clone(), vec![project("shop", tmp.path())]);
+        let spawn = |t| h.core.session_spawn_template(&shop, t, TemplateCtx::default(), Placement::NewTab);
+        let a = spawn("claude+editor").await.unwrap()[0].id.clone();
+        hook(&h, &a, "plan");
+        let b = spawn("claude+editor").await.unwrap()[0].id.clone();
+        assert_eq!(mode_arg(&h, &b).as_deref(), Some("plan"), "launched in the remembered plan");
+        hook(&h, &a, "auto");
+        h.term.emit(&b, kelta_proto::term::TerminalEvent::Exited { code: Some(0), signal: None });
+        settle().await;
+        h.core.session_restart(&b).await.unwrap();
+        assert_eq!(
+            mode_arg(&h, &b).as_deref(),
+            Some("auto"),
+            "a remembered plan follows the remembered mode"
+        );
+        let edits = spawn("edits").await.unwrap()[0].id.clone();
+        assert_eq!(mode_arg(&h, &edits).as_deref(), Some("acceptEdits"));
+        h.core.store().flush().await.unwrap();
+        h.core.shutdown().await.unwrap();
+        edits
+    };
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    h.core.session_restart(&edits).await.unwrap();
+    assert_eq!(mode_arg(&h, &edits).as_deref(), Some("acceptEdits"), "the profile's mode is kept");
+    assert_eq!(h.core.claude_permission_mode(), Some(PermissionMode::Auto));
+}
+
 #[tokio::test]
 async fn stored_dangerous_permission_mode_is_not_loaded() {
     let tmp = tempfile::tempdir().unwrap();
