@@ -21,6 +21,8 @@
   let tail = $state('');
 
   const s = $derived(peek.id ? sessions.get(peek.id) : null);
+  // A Claude session Kelta did not start (#346): its last message and where it runs, no terminal.
+  const o = $derived(peek.outside ? sessions.outside[peek.outside.id] : null);
   const live = $derived(s?.lifecycle === 'live');
   // The hook said permission / elicitation (needs_input): only then is a numbered list a menu.
   const asking = $derived(live && s?.status === 'needs_input');
@@ -58,7 +60,7 @@
   });
 
   $effect(() => {
-    if (peek.id && !s) peek.close();
+    if ((peek.id && !s) || (peek.outside && !o)) peek.close();
   });
 
   $effect(() => {
@@ -67,7 +69,7 @@
   });
 
   $effect(() => {
-    if (!peek.id) return;
+    if (!peek.id && !peek.outside) return;
     // A click outside closes it without taking focus back.
     const onDown = (e: PointerEvent): void => {
       if (root && e.target instanceof Node && !root.contains(e.target)) peek.close(false);
@@ -96,8 +98,8 @@
 
   function onkeydown(e: KeyboardEvent): void {
     const id = peek.id;
-    if (!id) return;
-    if (e.key === 'Escape') peek.close();
+    if (e.key === 'Escape' && (id || peek.outside)) peek.close();
+    else if (!id) return;
     else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) jump();
     else if (e.key === 'Tab' && !e.shiftKey) peek.next();
     // Never paste over a menu: it ignores the paste and the \r confirms the highlighted option.
@@ -168,6 +170,29 @@
       <span><Kbd chord="mod+enter" /> {t('Go to')}</span>
       <span><Kbd chord="escape" /> {t('Close')}</span>
     </footer>
+  </div>
+{:else if peek.outside && o}
+  <div
+    bind:this={root}
+    class="peek"
+    {style}
+    role="dialog"
+    aria-label={t('Peek: {name}', { name: o.title })}
+    tabindex="-1"
+    aria-modal="true"
+    data-testid="peek"
+    data-outside-id={o.id}
+    {onkeydown}
+  >
+    <header><span class="name">{o.title}</span></header>
+    {#if o.preview}<p class="message" data-testid="peek-message">{o.preview}</p>{/if}
+    <p class="where" data-testid="peek-where">
+      {peek.outside.place
+        ? t('Kelta cannot bring its window forward: it runs in {place}.', { place: peek.outside.place })
+        : t('Kelta cannot bring its window forward.')}
+    </p>
+    {#if o.cwd}<pre class="tail">{o.cwd}</pre>{/if}
+    <footer><span><Kbd chord="escape" /> {t('Close')}</span></footer>
   </div>
 {/if}
 
@@ -244,6 +269,11 @@
 
   .preview {
     margin: 0;
+  }
+
+  .where {
+    margin: 0;
+    color: var(--k-fg-muted);
   }
 
   .reply {

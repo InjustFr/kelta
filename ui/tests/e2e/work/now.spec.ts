@@ -176,6 +176,16 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
   await expect(now(page).locator('[data-row="o:u1"]')).toContainText('Claude needs you, outside Kelta');
   await dispatch(page, 'attention.next');
   await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · Fix checkout/);
+  // #346: no window control in the mock, so the jump degrades to Peek with where it runs.
+  const peekBox = page.getByTestId('peek');
+  await expect(page.getByTestId('peek-where')).toContainText('it runs in Terminal');
+  await expect(peekBox).toContainText('/src/shop');
+  await page.keyboard.press('Escape');
+  await expect(peekBox).toBeHidden();
+  await rail.click();
+  await expect(peekBox).toHaveAttribute('data-outside-id', 'u1');
+  await page.keyboard.press('Escape');
+  expect((await callsOf(page, 'outside_jump')).map((c) => c.args)).toEqual([{ id: 'u1' }, { id: 'u1' }]);
 
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
   await page.getByRole('tab', { name: 'List' }).click();

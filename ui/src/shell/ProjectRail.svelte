@@ -20,7 +20,7 @@
   import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
   import { formatChord } from '$lib/ui/format';
 
-  import { nowSummary, refreshNow } from '../views/inbox/now';
+  import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
   import { outsidePhase } from '../views/work/phase';
   import { confirms } from './confirm.svelte';
   import { chordFor } from './labels';
@@ -524,7 +524,7 @@
                     (s.cwd ? `\n${s.cwd}` : '')}
                   data-testid="rail-outside"
                   data-attention={ph.lamp}
-                  onclick={() => void dispatch('inbox.open')}
+                  onclick={() => void jumpOutside(s.id)}
                 >
                   <span class="socket" aria-hidden="true"><Lamp level={ph.lamp} /></span>
                   <span class="kind" aria-hidden="true"><Icon name="bot" size={14} /></span>
