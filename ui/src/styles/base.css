@@ -191,8 +191,7 @@ pre,
 }
 
 .k-filter {
-  width: 240px;
-  flex: 0 1 240px; /* gives way in narrow panes before the toolbar wraps */
+  width: 240px; /* flex-basis stays auto: shrinks from 240px in a row toolbar, keeps its height in a column */
   min-width: 96px;
   height: var(--k-control-height-sm);
   padding: 0 var(--k-space-3);

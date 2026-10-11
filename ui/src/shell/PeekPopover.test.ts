@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, sessions } from '$lib/stores';
+import { projects, sessions, work } from '$lib/stores';
 
 import { HOVER_MS, peek, peekHover, peekWaiting } from './peek.svelte';
 import PeekPopover from './PeekPopover.svelte';
@@ -49,6 +49,7 @@ describe('PeekPopover', () => {
     flushSync();
     await waitFor(() => expect(screen.getByTestId('peek-menu').textContent).toContain('Yes'));
     expect(screen.getByTestId('peek-tail').textContent).toContain('Do you want to proceed?');
+    expect(screen.queryByTestId('peek-message')).toBeNull(); // the prompt stays the readable part
     expect(document.activeElement).toBe(screen.getByTestId('peek-reply'));
 
     await fireEvent.keyDown(screen.getByTestId('peek-reply'), { key: '1' });
@@ -100,10 +101,14 @@ describe('PeekPopover', () => {
   });
 
   it('a dormant session shows its tail and Resume, without a reply field', async () => {
+    await work.load();
     render(PeekPopover);
     peek.open(DORMANT, null, true);
     flushSync();
     await waitFor(() => expect(screen.getByTestId('peek-tail').textContent).not.toBe(''));
+    // Its work item keeps Claude's whole last message: shown first, the screen folded under it.
+    expect(screen.getByTestId('peek-message').textContent).toContain('say if you want it configurable');
+    expect(screen.getByTestId('peek-tail').closest('details')?.open).toBe(false);
     expect(screen.getByTestId('peek-resume')).toBeTruthy();
     expect(screen.queryByTestId('peek-reply')).toBeNull();
   });

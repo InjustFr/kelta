@@ -860,8 +860,13 @@ impl WorkService {
         if opts.remove_worktree && is_worktree {
             // Teardown and the kills may have let Claude commit or edit: only this answer is current.
             let report = self.finish_dirty_check(&env, &item, &j, opts.force).await?;
-            verified_clean =
-                report.files.is_empty() && report.ignored_edited.is_empty() && report.unpushed == 0;
+            // The report reads HEAD: it only vouches for `item.branch` while that is what's checked out.
+            let on_branch = git::worktree_at(&repo, &item.worktree).await?.and_then(|w| w.branch).as_deref()
+                == Some(item.branch.as_str());
+            verified_clean = on_branch
+                && report.files.is_empty()
+                && report.ignored_edited.is_empty()
+                && report.unpushed == 0;
             // Delete our include copies so git's own clean check (no --force) still guards files
             // written after the dirty report (e.g. by Claude before it was killed).
             for f in &report.copies {
