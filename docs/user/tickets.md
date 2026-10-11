@@ -39,6 +39,23 @@ accounts, so one board can show Jira and GitHub tickets together.
   toast's action opens Settings > Sources to choose its projects. **Add view...** on a source adds a view to it.
   Providers that cannot list sources tell you so; edit the TOML instead ([views schema](../SETTINGS.md)).
 
+### Per-source settings
+
+Settings > Sources has one card per source. Besides the account, views, columns and projects:
+
+- **Jira board and statuses.** Under each Jira view, pick a board: its filter narrows the view (ANDed with the
+  view's JQL) and its columns become the view's columns. "Any board" turns it off when the view has a query of
+  its own. **Statuses** lists only the ones you switch on; none on lists every status the query returns.
+- **Status colours.** Give a status name a colour (the same picker as a project colour). A status without one
+  keeps the colour of its category. The chip on rows and in the detail uses it.
+- **Ticket fields.** Add a tracker field Kelta has no column for (a Jira custom field, a GitHub Projects v2
+  field). Each field with a value shows as a `label: value` chip on the row, and as a line of the detail. An
+  empty label shows the value alone. Settings lists the fields of the tracker to pick from; an id the tracker
+  does not have shows nothing and is flagged *Unknown field*.
+- **Blocked.** Says how the tracker marks a ticket blocked (`blocked` in the TOML): `status`, `flag`,
+  `relation` or `{ label = "<name>" }`. Unset, Jira uses its flag, Linear a "blocked by" relation and the others
+  the status name. See [blocked tickets](#blocked-tickets).
+
 ## Mine, Unassigned, Team
 
 Keys `1`, `2`, `3` switch the tabs; the pane remembers the choice. Counts show once loaded. Team is every open
@@ -80,7 +97,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `/` | filter |
 | `1` `2` `3` | Mine, Unassigned, Team |
 | `v` | choose sources |
-| `Shift+g` | cycle the grouping |
+| `Shift+g` | cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None) |
 | `f` `s` | only the current sprint (press again to clear) |
 | `x` | add or remove the ticket from the selection |
 | `Shift+j` `Shift+k` | extend the selection down or up |
@@ -93,7 +110,9 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
-| `w` | run a saved Claude workflow on the ticket, in the background |
+| `b` | block or unblock the ticket (in the detail; [blocked tickets](#blocked-tickets)) |
+| `t` | put a local tag on the ticket, or take it off ([tags](#local-tags)) |
+| `w` | run a workflow on the ticket, in the background ([workflows](claude-code.md#workflows)) |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |
@@ -106,7 +125,7 @@ person or the sprint is narrowing the list. `?` lists every key of the pane.
 
 | Group by | Groups |
 |---|---|
-| Flow (default) | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
+| Flow (default) | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, the ticket is [blocked](#blocked-tickets), or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
 | Status | the tracker's own status names, in progress first, Done collapsed |
 | Priority | the provider's priorities, highest first, then no priority |
 | Sprint | active sprints, other sprints, then no sprint |
@@ -142,8 +161,8 @@ assignee, priority, sprint, estimate, due date, labels and last update, the pull
 lists are shown, not editable) and the last 20 comments with a box to add one (`Cmd+Enter` posts).
 
 The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign `a` and Comment `c`; More
-(`Cmd+.`, `Ctrl+Shift+.` on Linux) holds Unassign `A`, Refine with Claude `r`, Copy branch `y` and Open in browser
-`o`. Hover a button for its key; every key works without the bar. An action the tracker cannot do (a tracker without assignment
+(`Cmd+.`, `Ctrl+Shift+.` on Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`,
+Copy branch `y`, Open in browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An action the tracker cannot do (a tracker without assignment
 or comments), or that has nothing to act on (no pull request yet, no branch yet), stays visible but dimmed; hover
 it or press its key to read why. The selected or hovered row shows the same actions in small form (Move, pull
 request, Start work).
@@ -156,6 +175,38 @@ small dot waiting for review. Hover it for both states. A ticket links to the pu
 review lists whose branch or title carries the ticket key. The detail lists each with its title, state, CI,
 review state and branch. `p` opens it in Kelta's review detail when its repository is bound to a code host
 account, else in the browser; `P` always opens the browser. With several pull requests a small menu asks which.
+
+## Blocked tickets
+
+A ticket can be marked blocked without changing its status. A blocked ticket shows a Blocked chip, goes to
+Waiting in the Flow grouping and sorts last in its group.
+
+`b` in the detail (or **Block ticket** under More) blocks or unblocks. What it does depends on the source's
+`blocked` setting:
+
+| Setting | Marker | Block / Unblock |
+|---|---|---|
+| `flag` (Jira default) | the Jira flag | sets or clears the flag |
+| `relation` (Linear default) | a "blocked by" an open issue | off: set it in Linear |
+| `status` (default elsewhere) | a status named blocked, on hold, waiting or impediment | moves to a blocked status, and back to in progress (else to do) |
+| `{ label = "name" }` | a label | adds or removes the label (Jira, GitHub, GitLab, Gitea); off on Linear and Redmine |
+
+When Kelta cannot set the marker, the action stays dimmed and its tooltip says why. A status name that reads
+blocked puts the ticket in Waiting whatever the setting.
+
+## Local tags
+
+Tags are reminders only you see, on tickets and on pull requests. They stay in Kelta: nothing is sent to the
+tracker or the code host.
+
+- Create them in Settings > Tags: a name and a colour. Renaming keeps the tag on its items; deleting removes it
+  everywhere, after a confirmation.
+- `t` on a ticket (or **Tags** under More) opens a menu to tick the tags it carries. With no tag yet it takes
+  you to Settings > Tags.
+- A tag shows as a chip on the row, in the detail and in Now. The toolbar has one chip per tag in the list, with its count; click it to
+  keep only those tickets, click again to clear.
+- Reviews has the same `t` key and filter ([reviews](reviews.md#local-tags)). The MCP tool `list_tickets` takes
+  a `tag` argument.
 
 ## Moving status
 
@@ -173,10 +224,20 @@ Dragging a card on the board and `Shift+Left` / `Shift+Right` still move by colu
 
 ## Starting a session
 
-`s` opens the plan sheet (branch, repo, template) and starts on `Enter`; `S` skips the sheet. Kelta creates the
-worktree, opens Claude and nvim, assigns the ticket to you and moves it to in progress (see `status_map`). Starting
-again resumes, in whichever project the work item lives. The row then shows the pull request and its CI state once
-one exists.
+`s` opens the plan sheet and starts on `Enter`; `S` skips the sheet. The sheet shows the project, repository, base
+branch and branch, Claude's model, effort, permission mode and prompt, the options below, and the side effects
+(assign, move, comment, run setup). Kelta creates the worktree, opens Claude and nvim, assigns the ticket to you and
+moves it to in progress (see `work.on_start` and `status_map`). Starting again resumes, in whichever project the
+work item lives. The row then shows the pull request and its CI state once one exists.
+
+A source route (or the session template) can declare **options** for the ticket, such as `--auto` or a mode flag.
+The sheet shows them under the prompt: one value is a switch, several values are a choice (or none). The picks
+replace `{options}` in the Claude prompt, or follow it when the prompt has no `{options}`. Kelta remembers the last
+picks for that route or template and starts a sheet-less `S` with them. The TOML is in
+[Settings](../SETTINGS.md).
+
+No ticket? **New work item** (`Cmd+Shift+N`, `Ctrl+Shift+N` on Linux, or `kelta-ctl start --task "..."`) starts
+Claude and nvim from a task text, on a `wip/` branch (`work.scratch_branch_template`).
 
 When other work is still unfinished (work items, or your tickets in progress or in review), starting a new ticket
 first lists it, closest to done first: pick one to go finish it, or **Start anyway** (`Enter`) for the plan.
@@ -208,11 +269,10 @@ to order and colour them.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.
-- **Hand a ticket to a workflow**: `w` lists your saved Claude Code workflows (`.claude/workflows/*.js` in the
-  project's main repository, then `~/.claude/workflows/`). Pick one and Kelta claims the ticket for it, then starts
-  Claude in a new tab that stays in the background, told to run that workflow on the ticket. The row shows the
-  workflow and its phase (`kelta-ticket-pass · Starting`) as it reports progress; the toast's **Open** shows the
-  session and **Peek** its last lines. A ticket someone is already working on is refused.
+- **Hand a ticket to a workflow**: `w` lists your workflows and runs one on the ticket in the background
+  ([workflows](claude-code.md#workflows)). The row shows the workflow and its phase (`kelta-ticket-pass · Starting`)
+  as it reports progress; the toast's **Open** shows the session and **Peek** its last lines. A ticket someone is
+  already working on is refused.
 
 ## Tickets from any Claude session
 
@@ -233,7 +293,7 @@ The tools work on any ticket of your Kelta projects by key:
 
 | Tool | Does |
 |---|---|
-| `list_tickets` | the tickets of every open project (or `project`, `view`), filtered by `status`, `assignee`, `label`; from Kelta's cache, `refresh` to fetch again. Parallel agents share one fetch |
+| `list_tickets` | the tickets of every open project (or `project`, `view`), filtered by `status`, `assignee`, `label` or your local `tag`; from Kelta's cache, `refresh` to fetch again. Parallel agents share one fetch |
 | `get_ticket_by_key` | description, comments, links, status and the description's revision |
 | `transition_ticket_by_key` | move to a status, transition or category (`in_progress`, `done`...) |
 | `comment_ticket_by_key` | add a Markdown comment |
@@ -243,3 +303,6 @@ The tools work on any ticket of your Kelta projects by key:
 
 `claude.mcp_board_writes = false` keeps the board tools read-only (`list_tickets`, `get_ticket_by_key`). A ticket
 the lists do not show needs its `account` (the tracker account id) besides its key.
+
+Sessions Kelta starts get more tools (the linked ticket, the pull request, `ask`, `notify`...), and Claude can
+set Kelta up: see [Claude](claude-code.md).
