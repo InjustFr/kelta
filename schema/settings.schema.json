@@ -2158,6 +2158,7 @@
             "type": "string"
           },
           "type": "array",
+          "x-kelta-exec": true,
           "x-kelta-scope": [
             "global",
             "project",
@@ -2866,6 +2867,7 @@
       },
       "type": "array",
       "x-kelta-category": "Worktree & work",
+      "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
       "x-kelta-order": 9,
       "x-kelta-scope": [

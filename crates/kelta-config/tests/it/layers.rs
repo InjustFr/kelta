@@ -223,7 +223,7 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let e = env();
     e.project("shop", "");
     let path = e.repo_file(
-        "[worktree]\nsetup = [\"pnpm install\"]\ninclude = [\".npmrc\"]\n\n[env]\nTOKEN_URL = \"x\"\n\n[[tools]]\nid = \"repo-tool\"\nlabel = \"R\"\nkind = \"pty\"\ncommand = \"make\"\n",
+        "[worktree]\nsetup = [\"pnpm install\"]\ninclude = [\".npmrc\"]\n\n[env]\nTOKEN_URL = \"x\"\n\n[editor]\nreview_args = [\"-c\", \"DiffviewOpen\"]\n\n[[session_templates]]\nid = \"repo-tpl\"\nlabel = \"T\"\nlayout = { session = \"shell\", command = \"make\" }\n\n[[tools]]\nid = \"repo-tool\"\nlabel = \"R\"\nkind = \"pty\"\ncommand = \"make\"\n",
     );
     let svc = e.load();
     let p = pid("shop");
@@ -234,6 +234,8 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let s = svc.effective(Some(&p));
     assert!(s.worktree.setup.is_empty());
     assert!(s.env.is_empty());
+    assert!(s.editor.review_args.is_empty());
+    assert!(!s.session_templates.iter().any(|t| t.id == "repo-tpl"));
     assert!(s.tools.is_empty());
     assert_eq!(s.worktree.include, vec![".npmrc".to_owned()]);
     let doc = svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap();
@@ -253,6 +255,8 @@ fn untrusted_trusted_edited_untrusted_cycle() {
     let s = svc.effective(Some(&p));
     assert_eq!(s.worktree.setup, vec!["pnpm install".to_owned()]);
     assert_eq!(s.env["TOKEN_URL"], "x");
+    assert_eq!(s.editor.review_args, vec!["-c".to_owned(), "DiffviewOpen".to_owned()]);
+    assert!(s.session_templates.iter().any(|t| t.id == "repo-tpl"));
     assert!(s.tools.is_empty(), "repo tools are personal: ignored even when trusted");
     assert!(svc.issues().iter().any(|i| i.file == path && i.issue.message.contains("`tools` is personal")));
     assert_eq!(svc.layer_get(Layer::Repo, Some(&p), Some("api")).unwrap().trusted, Some(true));
