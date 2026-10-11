@@ -36,6 +36,12 @@
         "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
+        "fields": [
+          {
+            "label": "Verified",
+            "value": "Yes"
+          }
+        ],
         "kind": "Story",
         "labels": [
           "api"
@@ -101,6 +107,12 @@
     "blocked": false,
     "due": "2026-10-15",
     "estimate": "3",
+    "fields": [
+      {
+        "label": "Verified",
+        "value": "Yes"
+      }
+    ],
     "kind": "Story",
     "labels": [
       "api"

@@ -191,6 +191,17 @@ pub struct Ticket {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub parent: Option<TicketParent>,
+    /// The source's chosen tracker fields that have a value (`Source.fields`, #351), in its order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<TicketField>>", optional)]
+    pub fields: Vec<TicketField>,
+}
+
+/// One chosen tracker field of a ticket (#351): `label` is the source's (may be empty), `value` as shown.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TicketField {
+    pub label: String,
+    pub value: String,
 }
 
 /// A status name that reads as blocked (`Blocked`, `On hold`, `Waiting for QA`, `Impediment`).

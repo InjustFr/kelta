@@ -2738,7 +2738,8 @@
               0.5
             ],
             "split": "row"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -2779,7 +2780,8 @@
               0.5
             ],
             "split": "row"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -2790,7 +2792,8 @@
             "name": null,
             "profile": null,
             "session": "claude"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -2801,7 +2804,8 @@
             "name": null,
             "profile": null,
             "session": "editor"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -2812,7 +2816,8 @@
             "name": null,
             "profile": null,
             "session": "shell"
-          }
+          },
+          "options": []
         }
       ],
       "items": {
@@ -2905,6 +2910,30 @@
               "session": "shell"
             },
             "description": "`{ split = \"row\", ratios = [..], children = [..] }` | `{ session = \"claude\", ... }`."
+          },
+          "options": {
+            "default": [],
+            "description": "Picked per ticket in the Start sheet, unless the ticket's route declares its own.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.",
+              "properties": {
+                "label": {
+                  "default": "",
+                  "type": "string"
+                },
+                "values": {
+                  "default": [],
+                  "description": "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -2969,6 +2998,30 @@
             "default": null,
             "description": "How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on\nLinear, status elsewhere."
           },
+          "fields": {
+            "description": "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A tracker field to show on the tickets.",
+              "properties": {
+                "id": {
+                  "description": "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "default": "",
+                  "description": "Shown before the value; empty shows the value alone.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "id": {
             "default": "",
             "type": "string"
@@ -3023,6 +3076,30 @@
                     }
                   },
                   "type": "object"
+                },
+                "options": {
+                  "default": [],
+                  "description": "Picked per ticket in the Start sheet; replace the template's options.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.",
+                    "properties": {
+                      "label": {
+                        "default": "",
+                        "type": "string"
+                      },
+                      "values": {
+                        "default": [],
+                        "description": "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "project": {
                   "default": "",

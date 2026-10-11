@@ -485,6 +485,8 @@
       <dd class="k-num">{relativeTime(Date.parse(ticket.updated_at))}</dd>
       {#if ticket.kind}<dt>{t('Type')}</dt>
         <dd>{ticket.kind}</dd>{/if}
+      {#each ticket.fields ?? [] as f, i (i)}<dt>{f.label || t('Field')}</dt>
+        <dd data-field>{f.value}</dd>{/each}
       {#if ticket.labels.length > 0}<dt>{t('Labels')}</dt>
         <dd>
           {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}

@@ -1,7 +1,15 @@
 // Pure helpers shared by the work views (tickets, reviews, inbox, start-work sheet, work header).
 
 import { formatDate, msg, t } from '$lib/i18n/index.svelte';
-import type { AccountError, GitStatus, JsonValue, KeltaError, StartWorkPlan, Transition } from '$lib/gen';
+import type {
+  AccountError,
+  GitStatus,
+  JsonValue,
+  KeltaError,
+  StartOption,
+  StartWorkPlan,
+  Transition,
+} from '$lib/gen';
 import type { LampLevel } from '$lib/stores/reducers';
 
 // ---- plan validation ------------------------------------------------------------------------
@@ -66,6 +74,34 @@ export function scratchBranch(task: string, template: string, max: number): stri
     slug = slug[max] === '-' ? cut.replace(/-+$/, '') : dash > 0 ? cut.slice(0, dash) : cut;
   }
   return slug === '' ? '' : template.replaceAll('{slug}', slug);
+}
+
+// ---- start options (#357, kelta-work `apply_options`) ------------------------------------------
+
+/** The picked values, at most one per option, in the declared order, joined by spaces. */
+export function optionsText(declared: readonly StartOption[], picked: readonly string[]): string {
+  return declared.flatMap((o) => o.values.find((v) => picked.includes(v)) ?? []).join(' ');
+}
+
+/** `prompt` with the picked values in its `{options}`, else after it. */
+export function applyOptions(
+  prompt: string,
+  declared: readonly StartOption[],
+  picked: readonly string[],
+): string {
+  const text = optionsText(declared, picked);
+  if (prompt.includes('{options}')) return prompt.replaceAll('{options}', text);
+  return text ? `${prompt.trimEnd()} ${text}` : prompt;
+}
+
+/**
+ * The prompt the user edited, back to its `{options}` form: the last `text` (the applied values)
+ * becomes `{options}`. shortcut: with nothing picked the spot is unknown, so later picks go at the
+ * end; fine while the edited prompt is rare.
+ */
+export function unapplyOptions(prompt: string, text: string): string {
+  const i = text ? prompt.lastIndexOf(text) : -1;
+  return i < 0 ? prompt : `${prompt.slice(0, i)}{options}${prompt.slice(i + text.length)}`;
 }
 
 export interface PlanErrors {

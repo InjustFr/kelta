@@ -29,7 +29,7 @@ use crate::model::{
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
-use crate::settings::{BlockedMarker, Layer, ProjectConfig, Settings, TrackerBinding};
+use crate::settings::{BlockedMarker, Layer, ProjectConfig, Settings, SourceField, TrackerBinding};
 use crate::term::{
     HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits, TerminalPalette, TerminalStats,
 };
@@ -136,6 +136,11 @@ pub trait Tracker: Send + Sync {
     /// First page of `view`'s tickets matching the free `text`, searched by the provider (not the cache).
     async fn search(&self, _view: &TrackerView, _text: &str) -> Result<Vec<Ticket>, KeltaError> {
         Err(KeltaError::unsupported("this tracker cannot search"))
+    }
+
+    /// The fields `view`'s tickets can show (`Source.fields`, #351): id and the tracker's name.
+    async fn fields(&self, _view: &TrackerView) -> Result<Vec<SourceField>, KeltaError> {
+        Err(KeltaError::unsupported("this tracker cannot list its fields"))
     }
 
     /// Users `t` can be assigned to whose name or login matches `query` (empty = the first ones) (Tickets T8).

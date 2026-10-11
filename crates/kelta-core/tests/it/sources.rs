@@ -11,10 +11,11 @@ use kelta_proto::api::Tracker;
 use kelta_proto::dirs::{CliArgs, Dirs};
 use kelta_proto::events::UiEvent;
 use kelta_proto::ids::{AccountId, ProjectId};
-use kelta_proto::model::{Scope, WorkSource};
+use kelta_proto::model::{PlanOptions, Scope, StartWorkPlan, WorkSource};
 use kelta_proto::samples;
 use kelta_proto::settings::{
-    AccountKind, BlockedMarker, RepoMatch, Settings, Source, SourceRoute, TrackerView,
+    AccountKind, BlockedMarker, RepoMatch, Settings, Source, SourceField, SourceRoute, StartOption,
+    TrackerView,
 };
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
@@ -43,6 +44,7 @@ fn env(root: &std::path::Path) -> (H, Arc<FakeTracker>) {
         r#match: RepoMatch { component: Some("Web".into()), ..RepoMatch::default() },
         project: "shop".into(),
         repo: "main".into(),
+        ..SourceRoute::default()
     }];
     s.sources = vec![
         product,
@@ -231,7 +233,12 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
         r#match: RepoMatch { kind: Some("Story".into()), ..RepoMatch::default() },
         project: "blog".into(),
         repo: "main".into(),
+        options: vec![
+            StartOption { label: "Auto".into(), values: vec!["--auto".into()] },
+            StartOption { label: "Mode".into(), values: vec!["--mode=quick".into(), "--mode=skip".into()] },
+        ],
     }];
+    s.claude.prompt_templates.insert("ticket".into(), "/pass {ticket.key} {options}".into());
     // a second source on the same account, feeding shop only
     s.sources = vec![product, source("tech", &["shop"], vec![view("bugs", "type = Bug")])];
     let factory = Arc::new(Factory::default());
@@ -255,10 +262,23 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
     assert_eq!(plan.ticket_source.as_deref(), Some("product"));
     assert_eq!(plan.project_id, ProjectId::new("blog"));
     assert_eq!(plan.project_choices, [ProjectId::new("blog"), ProjectId::new("shop")]);
+    // the route's options (#357): none picked yet, then the last picks are pre-selected
+    let o = plan.options.clone().unwrap();
+    assert_eq!((o.key.as_str(), o.prompt.as_str()), ("route:product:0", "/pass SHOP-141 {options}"));
+    assert_eq!(plan.claude.prompt, "/pass SHOP-141 ");
+    let other = |key: &str| kelta_proto::tracker::TicketRef { key: key.into(), ..ticket.clone() };
+    let plan2 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-142") }, None).await.unwrap();
+    let picked = vec!["--mode=skip".into(), "--auto".into()];
+    // the saga may fail later in this bare repo: the picks are kept first
+    let _ = h.core.work_start(StartWorkPlan { options: Some(PlanOptions { picked, ..o }), ..plan2 }).await;
+    let plan3 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-143") }, None).await.unwrap();
+    assert_eq!(plan3.options.unwrap().picked, ["--auto", "--mode=skip"]);
+    assert_eq!(plan3.claude.prompt, "/pass SHOP-143 --auto --mode=skip");
     // the clicked row's source wins over that guess (#264)
     let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }, Some("tech".into())).await.unwrap();
     assert_eq!(plan.ticket_source.as_deref(), Some("tech"));
     assert_eq!(plan.project_id, ProjectId::new("shop"));
+    assert_eq!((plan.options, plan.claude.prompt.as_str()), (None, "/pass SHOP-141 "), "no route here");
 }
 
 // ---- startup migration on a real config dir -----------------------------------------------
@@ -377,4 +397,38 @@ async fn a_source_label_marks_tickets_blocked_and_block_round_trips() {
 
     assert!(!h.core.tracker_set_blocked(&t, false).await.unwrap().blocked);
     assert!(blocked(&list("labelled").await).is_empty());
+}
+
+#[tokio::test]
+async fn a_source_field_reaches_the_list_call_and_the_detail() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::defaults();
+    s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    let mut chosen = source("chosen", &["shop"], vec![view("mine", "assignee = currentUser()")]);
+    chosen.fields = vec![SourceField { id: "customfield_1".into(), label: "QA".into() }];
+    s.sources = vec![chosen, source("plain", &[], vec![view("mine", "assignee = currentUser()")])];
+    let factory = Arc::new(Factory::default());
+    factory
+        .trackers
+        .lock()
+        .insert(AccountId::new("jira-acme"), Arc::new(FakeTracker::new()) as Arc<dyn Tracker>);
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(s, vec![project("shop", tmp.path())]),
+        FakeTerminalHost::new(),
+        factory,
+    );
+    let list = |id: &str| {
+        let scope = Scope::Source { id: id.into() };
+        let core = h.core.clone();
+        async move { core.tracker_list(scope, None, None, None, None, true).await.unwrap() }
+    };
+    let page = list("chosen").await;
+    let f = &page.items[0].ticket.fields;
+    assert_eq!((f.len(), f[0].label.as_str(), f[0].value.as_str()), (1, "QA", "customfield_1"));
+    // same view, other fields: its own query and cache entry
+    let plain = list("plain").await;
+    assert!(plain.items.iter().all(|i| i.ticket.fields.iter().all(|f| f.label != "QA")));
+    let d = h.core.tracker_get(&page.items[0].ticket.r#ref).await.unwrap();
+    assert_eq!(&d.ticket.fields, f, "the detail shows the listed fields");
 }

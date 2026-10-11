@@ -8,6 +8,8 @@ import { trackerRefine } from '$lib/ipc/commands';
 import { toasts } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
+import { applyOptions } from '../work/common';
+
 export interface Refine {
   running: boolean;
   /** Claude's Markdown proposal; null while the first run is going. */
@@ -59,7 +61,13 @@ export function criteriaFor(ref: TicketRef): string | null {
 export function withCriteria(plan: StartWorkPlan, ref: TicketRef): StartWorkPlan {
   const criteria = criteriaFor(ref);
   // Braces escaped: `{x}` in the prompt is a placeholder, `{{`/`}}` collapse back to literals.
-  if (criteria)
-    plan.claude.prompt += `\n\nAcceptance criteria (from the refine):\n${criteria.replaceAll('{', '{{').replaceAll('}', '}}')}`;
+  if (!criteria) return plan;
+  const text = `\n\nAcceptance criteria (from the refine):\n${criteria.replaceAll('{', '{{').replaceAll('}', '}}')}`;
+  const o = plan.options;
+  // With start options the sheet rebuilds the prompt from `options.prompt`, so the criteria go there too.
+  if (o) {
+    o.prompt += text;
+    plan.claude.prompt = applyOptions(o.prompt, o.declared, o.picked);
+  } else plan.claude.prompt += text;
   return plan;
 }

@@ -129,3 +129,27 @@ test('b in the detail blocks the ticket: the row shows Blocked and moves to Wait
     { blocked: false },
   ]);
 });
+
+test("a source's chosen tracker fields show as chips on the row and in the detail; no value, no chip", async ({
+  page,
+}) => {
+  await openTickets(page);
+  const fields = row(page, 'SHOP-142').locator('[data-field]');
+  await expect(fields).toHaveText(['Verified: Yes', 'EU']);
+  await expect(row(page, 'SHOP-155').locator('[data-field]')).toHaveCount(0);
+  const detail = page.getByTestId('ticket-detail');
+  await expect(detail.locator('dd[data-field]')).toHaveText(['Yes', 'EU']);
+  // the chips stay inside the title cell (they give way with the title, never past it)
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    const out = await row(page, 'SHOP-142')
+      .locator('.c-title')
+      .evaluate((cell) => {
+        const right = cell.getBoundingClientRect().right;
+        return [...cell.querySelectorAll<HTMLElement>('[data-field]')].filter(
+          (f) => f.checkVisibility() && f.getBoundingClientRect().right > right + 0.5,
+        ).length;
+      });
+    expect(out, `chips past the title at ${width}px`).toBe(0);
+  }
+});

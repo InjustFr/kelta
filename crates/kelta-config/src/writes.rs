@@ -593,6 +593,7 @@ impl ConfigService {
                         r#match: r.r#match.clone(),
                         project: id.clone(),
                         repo: r.repo.clone(),
+                        ..SourceRoute::default()
                     }));
                 }
                 None => {
