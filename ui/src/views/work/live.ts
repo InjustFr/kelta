@@ -5,7 +5,7 @@ import { reviews, sessions, tickets, work } from '$lib/stores';
 import { reviewKey } from '$lib/stores/reducers';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
-import { phaseOf, workKey, type Phase } from './phase';
+import { phaseOf, questionOf, workKey, type Phase } from './phase';
 
 const ALL = { kind: 'all' } as const;
 
@@ -49,8 +49,14 @@ export function prOf(item: WorkItem): Review | null {
   );
 }
 
+/** The session asking a question for the item (#356): its run's session (a workflow), else its own. */
+export function askerOf(item: WorkItem): SessionInfo | null {
+  const ids = [item.run?.session_id, ...item.session_ids];
+  return ids.map((id) => (id ? sessions.get(id) : null)).find((s) => questionOf(s)) ?? null;
+}
+
 export function phaseNow(item: WorkItem): Phase {
-  return phaseOf(item, claudeOf(item), prOf(item), work.git[item.id] ?? null);
+  return phaseOf(item, askerOf(item) ?? claudeOf(item), prOf(item), work.git[item.id] ?? null);
 }
 
 /** Title for rows and the palette: the ticket or PR title when a list has it, else the scratch task title or branch. */

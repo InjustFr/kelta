@@ -237,6 +237,7 @@ pub fn session_info() -> SessionInfo {
             files_touched: vec![PathBuf::from("src/login.rs")],
             hooks_active: true,
             usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
+            question: None,
         }),
         editor: None,
         cols: 120,

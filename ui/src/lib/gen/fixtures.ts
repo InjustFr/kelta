@@ -348,6 +348,7 @@ export const sessionInfo: SessionInfo = {
     "hooks_active": true,
     "model": "opus",
     "preview": "I need permission to run `cargo test`.",
+    "question": null,
     "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
     "usage": {
       "context_pct": 72.0,
@@ -3368,6 +3369,7 @@ export const uiEventSessionUpdated: UiEvent = {
       "hooks_active": true,
       "model": "opus",
       "preview": "I need permission to run `cargo test`.",
+      "question": null,
       "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
       "usage": {
         "context_pct": 72.0,

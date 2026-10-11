@@ -311,6 +311,30 @@ async fn answering_a_permission_prompt_clears_needs_input() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn ask_waits_on_the_session_until_typed_input() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    h.core.session_apply_hook(&s.id, ch(S::Working)).await.unwrap();
+    let options = vec!["A".to_owned(), "B".to_owned(), "C".to_owned()];
+    let md = Some("**pick** <script>alert(1)</script>".to_owned());
+    h.core.session_ask(&s.id, "Which one?".into(), options.clone(), md).unwrap();
+    let info = h.core.session_get(&s.id).unwrap();
+    let q = info.claude.unwrap().question.unwrap();
+    assert_eq!((q.question.as_str(), q.options), ("Which one?", options));
+    let body = q.body_html.unwrap();
+    assert!(body.contains("<strong>pick</strong>") && !body.contains("script"), "{body}");
+    // Needs input, but the status stays the hooks': only a real prompt disables the buttons.
+    assert_eq!((info.status, info.attention), (S::Working, A::NeedsInput));
+    for reply in [&b"\x1b[I"[..], b"\x1b[?1;2c", b"\x1b[200~"] {
+        h.core.session_write(&s.id, reply).await.unwrap();
+        assert!(h.core.session_get(&s.id).unwrap().claude.unwrap().question.is_some(), "{reply:?}");
+    }
+    h.core.session_write(&s.id, b"B").await.unwrap();
+    assert!(h.core.session_get(&s.id).unwrap().claude.unwrap().question.is_none());
+}
+
+#[tokio::test(start_paused = true)]
 async fn hooks_inactive_falls_back_to_heuristics() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);

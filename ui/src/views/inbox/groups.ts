@@ -5,7 +5,7 @@ import { msg, t, tn } from '$lib/i18n/index.svelte';
 import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
-import { workKey, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
+import { questionOf, workKey, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
 
 export interface WorkEntry {
   item: WorkItem;
@@ -114,9 +114,15 @@ export function nowSections(input: NowInput): Section[] {
       item.delta ? item.delta.lines + item.delta.generated : 0,
     );
 
-  // Plain sessions asking (WaitingUser is idle, never "needs you").
+  // Plain sessions asking (WaitingUser is idle, never "needs you"), or with an `ask` question (#356);
+  // a listed item's run session asks on that item's row.
+  const runIds = new Set(input.work.map((w) => w.item.run?.session_id));
   for (const s of input.sessions)
-    if (s.status === 'needs_input' && !(s.work_item_id && itemIds.has(s.work_item_id)))
+    if (
+      (s.status === 'needs_input' || questionOf(s)) &&
+      !(s.work_item_id && itemIds.has(s.work_item_id)) &&
+      !runIds.has(s.id)
+    )
       add('needs_you', { type: 'session', id: `s:${s.id}`, session: s }, 0, s.created_at);
   for (const s of input.outside ?? [])
     add(

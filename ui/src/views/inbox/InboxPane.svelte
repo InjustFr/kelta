@@ -6,7 +6,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError } from '$lib/gen';
+  import type { AccountError, SessionInfo } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import {
     GLOBAL,
@@ -42,11 +42,13 @@
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
-  import { claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
+  import AskBar from '../work/AskBar.svelte';
+  import { askerOf, claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { loadGlobalLayout, persistPaneContent } from '../work/nav';
   import {
     deltaParts,
     outsidePhase,
+    questionOf,
     testsMissing,
     workKey,
     type Lamp as LampKind,
@@ -329,6 +331,8 @@
     | { type: 'section'; id: string; section: Section; count: number }
     | { type: 'row'; id: string; row: NowRow }
     | { type: 'detail'; id: string; row: NowRow }
+    /** The option buttons of the row's question (#356). */
+    | { type: 'ask'; id: string; session: SessionInfo }
     | { type: 'msg'; id: string; text: string }
     | { type: 'more'; id: string; count: number };
 
@@ -350,6 +354,8 @@
       out.push({ type: 'section', id: `s:${s.id}`, section: s, count: s.rows.length + s.more });
       for (const row of s.rows) {
         out.push({ type: 'row', id: row.id, row });
+        const asker = rowAsker(row);
+        if (asker) out.push({ type: 'ask', id: `a:${row.id}`, session: asker });
         if (row === cur) out.push({ type: 'detail', id: `d:${row.id}`, row });
         if (row === cur && expanded === row.id && row.type === 'work')
           (row.item.claude_message ?? '')
@@ -490,10 +496,15 @@
   const QUEUE_MENU: WorkActionId[] = ['start_now', 'queue_front'];
   let queueMenu = $state<{ x: number; y: number; row: NowRow & { type: 'work' } } | null>(null);
 
-  /** The session a Now row peeks at: its own, or the work item's Claude. */
+  /** The session a Now row peeks at: its own, or the work item's asking session or Claude. */
   function rowSession(row: NowRow): string | null {
     if (row.type === 'session') return row.session.id;
-    return row.type === 'work' ? (claudeOf(row.item)?.id ?? null) : null;
+    return row.type === 'work' ? ((askerOf(row.item) ?? claudeOf(row.item))?.id ?? null) : null;
+  }
+
+  function rowAsker(row: NowRow): SessionInfo | null {
+    if (row.type === 'session') return questionOf(row.session) ? row.session : null;
+    return row.type === 'work' ? askerOf(row.item) : null;
   }
 
   function rowMenu(e: MouseEvent, row: NowRow): void {
@@ -609,6 +620,8 @@
                 {t(l.section.label)}
                 <span class="count">{l.count}</span>
               </div>
+            {:else if l.type === 'ask'}
+              <div class="row askline"><AskBar session={l.session} /></div>
             {:else if l.type === 'msg'}
               <div class="row msgline" data-testid="now-message">{l.text}</div>
             {:else if l.type === 'more'}
@@ -893,6 +906,10 @@
     white-space: pre;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .askline {
+    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
   }
 
   .age {

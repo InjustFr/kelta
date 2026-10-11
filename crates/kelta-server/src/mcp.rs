@@ -150,6 +150,7 @@ const SESSION_TOOLS: &[&str] = &[
     "get_review_feedback",
     "add_review_comment",
     "notify",
+    "ask",
 ];
 
 /// Board-wide writes, behind `claude.mcp` and `claude.mcp_board_writes`.
@@ -245,6 +246,19 @@ pub(crate) fn tool_defs() -> Value {
                 "type": "object",
                 "properties": { "message": { "type": "string" } },
                 "required": ["message"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "ask",
+            "description": "Ask the user a question with fixed answers: Kelta shows it (and the Markdown body) with one button per option on this session's rows, in Now and in Peek. Returns at once: then end your turn and wait. The chosen option arrives as the user's next message, exactly as written in `options` (the user may also type something else).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "question": { "type": "string" },
+                    "options": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 9 },
+                    "body_md": { "type": "string", "description": "Markdown shown under the question" }
+                },
+                "required": ["question", "options"], "additionalProperties": false
             },
         },
         {
@@ -551,8 +565,26 @@ async fn call_session_tool(core: &Arc<dyn CoreApi>, sid: &SessionId, name: &str,
             core.notify(n).await.map_err(|e| e.message)?;
             Ok("Notification sent.".to_owned())
         }
+        "ask" => ask(core, sid, args),
         other => Err(format!("unknown tool: {other}")),
     }
+}
+
+fn ask(core: &Arc<dyn CoreApi>, sid: &SessionId, args: &Value) -> ToolResult {
+    let question = str_arg(args, "question")?.trim().to_owned();
+    // Each option is typed into the terminal: one line of printable text.
+    let options = args
+        .get("options")
+        .and_then(Value::as_array)
+        .and_then(|a| a.iter().map(|o| Some(o.as_str()?.trim().to_owned())).collect::<Option<Vec<_>>>())
+        .filter(|o| {
+            (1..=9).contains(&o.len()) && !o.iter().any(|o| o.is_empty() || o.contains(char::is_control))
+        })
+        .ok_or("InvalidArgument: `options` takes 1 to 9 non-empty one-line strings")?;
+    let body_md = opt_arg(args, "body_md").filter(|b| !b.trim().is_empty());
+    core.session_ask(sid, question, options, body_md).map_err(coded)?;
+    Ok("Question shown in Kelta. End your turn now: the user's answer arrives as the next message."
+        .to_owned())
 }
 
 async fn work(core: &Arc<dyn CoreApi>, sid: &SessionId) -> Option<WorkItem> {

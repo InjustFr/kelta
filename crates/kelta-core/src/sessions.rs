@@ -14,8 +14,9 @@ use kelta_proto::events::{BusEvent, Notification, Toast, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    AttachInfo, Attention, ClaudeMeta, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle, RestorePolicy,
-    SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource, WorkItem,
+    AttachInfo, Attention, ClaudeMeta, ClaudeQuestion, ClaudeUsage, CloseOnExit, EditorMeta, Lifecycle,
+    RestorePolicy, SessionInfo, SessionKind, SessionStatus, SpawnRequest, StatusChange, StatusSource,
+    WorkItem,
 };
 use kelta_proto::settings::{BellMode, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost};
 use kelta_proto::store::SessionRow;
@@ -1023,6 +1024,10 @@ impl Core {
         let typed = bytes != b"\x1b[I" && bytes != b"\x1b[O";
         if typed {
             self.auto_park_status(&info, false, &timers);
+            // Terminal replies (DA/DSR, mouse, paste markers) start with ESC; text and Enter don't.
+            if bytes.first() != Some(&0x1b) {
+                self.clear_question(id);
+            }
         }
         if info.lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
@@ -1445,6 +1450,35 @@ impl Core {
             e.info.clone()
         };
         self.emit(UiEvent::SessionUpdated { session: info });
+        Ok(())
+    }
+
+    /// Any typed input answers an `ask` question, a button or the terminal alike.
+    fn clear_question(&self, id: &SessionId) {
+        let info = {
+            let mut s = self.sessions.lock();
+            let Some(e) = s.get_mut(id) else { return };
+            if e.info.claude.as_mut().and_then(|c| c.question.take()).is_none() {
+                return;
+            }
+            e.info.clone()
+        };
+        self.emit(UiEvent::SessionUpdated { session: info });
+    }
+
+    /// MCP `ask` (#356): keep the question until the next input (`write_session`) and ask for attention.
+    pub(crate) fn ask(&self, id: &SessionId, q: ClaudeQuestion) -> Result<(), KeltaError> {
+        let visible = self.is_visible(id);
+        let preview = q.question.clone();
+        let (state, source) = {
+            let mut s = self.sessions.lock();
+            let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
+            let c = e.info.claude.as_mut().ok_or_else(|| KeltaError::invalid("not a Claude session"))?;
+            c.question = Some(Box::new(q));
+            (e.state(visible), e.info.status_source)
+        };
+        // The preview carries the question (notification body, row detail) and emits the change.
+        self.apply_decision(id, status::asked(&state), source, Some(preview));
         Ok(())
     }
 

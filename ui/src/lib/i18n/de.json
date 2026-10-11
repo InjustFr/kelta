@@ -2341,5 +2341,6 @@
   "Filter by tag": "Nach Tag filtern",
   "Only items tagged {name}": "Nur Elemente mit dem Tag {name}",
   "Create tags in Settings": "Tags in den Einstellungen anlegen",
-  "Tags…": "Tags…"
+  "Tags…": "Tags…",
+  "Answer the prompt open in this session first": "Beantworten Sie zuerst die offene Abfrage in dieser Sitzung"
 }

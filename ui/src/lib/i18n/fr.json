@@ -2341,5 +2341,6 @@
   "Filter by tag": "Filtrer par étiquette",
   "Only items tagged {name}": "Seulement les éléments étiquetés {name}",
   "Create tags in Settings": "Créer des étiquettes dans les Paramètres",
-  "Tags…": "Étiquettes…"
+  "Tags…": "Étiquettes…",
+  "Answer the prompt open in this session first": "Répondez d’abord à l’invite ouverte dans cette session"
 }
