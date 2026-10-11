@@ -476,7 +476,10 @@ pub fn project_issues(value: &Value, stem: Option<&str>) -> Vec<RawIssue> {
     let pid = vec!["project".to_owned(), "id".to_owned()];
     match project.get("id").and_then(Value::as_str) {
         Some(id) if !valid_slug(id) => out.push(RawIssue::new(&pid, "project id must match [a-z0-9-]{1,40}")),
-        Some("home" | "inbox") => out.push(RawIssue::new(&pid, "project id is reserved")),
+        Some("home" | "inbox" | "global") => out.push(RawIssue::new(
+            &pid,
+            "project id is reserved (`home`, `inbox`, `global`): rename the project and its file, e.g. `global-project`",
+        )),
         Some(id) => {
             if let Some(stem) = stem
                 && stem != id
@@ -829,6 +832,10 @@ mod tests {
         assert_eq!(project_issues(&ok, Some("other")).len(), 1);
         let bad = json!({"project": {"id": "Shop!", "repos": [{"id": "a", "path": "x"}, {"id": "a", "path": "y"}]}});
         assert_eq!(project_issues(&bad, None).len(), 2);
+        for id in ["home", "inbox", "global"] {
+            let reserved = json!({"project": {"id": id, "name": "R", "repos": []}});
+            assert_eq!(project_issues(&reserved, Some(id)).len(), 1, "{id}");
+        }
     }
 
     #[test]

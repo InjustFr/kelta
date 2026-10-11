@@ -6,7 +6,8 @@ use kelta_proto::ErrorCode;
 use kelta_proto::api::CoreApi;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{
-    OpenPaneRequest, PaneContent, Placement, Scope, SessionKind, SpawnRequest, TicketsMode,
+    Layout, LayoutNode, OpenPaneRequest, PaneContent, Placement, Scope, SessionKind, SpawnRequest, Tab,
+    TicketsMode,
 };
 use kelta_proto::settings::Settings;
 
@@ -102,4 +103,70 @@ async fn backend_open_moves_sessions_and_kill_removes_panes() {
     h.core.session_kill(&s.id, false).await.unwrap();
     assert!(h.core.session_get(&s.id).is_none());
     assert!(h.core.layout_get(&blog).unwrap().tabs.is_empty());
+}
+
+fn tab_ids(l: &Layout) -> Vec<&str> {
+    l.tabs.iter().map(|t| t.id.as_str()).collect()
+}
+
+#[tokio::test]
+async fn global_views_layout_survives_a_restart() {
+    let tmp = tempfile::tempdir().unwrap();
+    let global = ProjectId::new(ProjectId::GLOBAL);
+    {
+        let h = start(tmp.path(), Settings::defaults(), vec![]);
+        let mut l = h.core.layout_get(&global).unwrap();
+        l.tabs = vec![tab("tickets"), tab("now")];
+        l.active_tab = Some("now".into());
+        h.core.layout_save(l).unwrap();
+        h.core.store().flush().await.unwrap();
+    }
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    let l = h.core.layout_get(&global).unwrap();
+    assert_eq!(
+        (l.rev, tab_ids(&l), l.active_tab.as_ref().map(|t| t.as_str())),
+        (1, vec!["tickets", "now"], Some("now"))
+    );
+}
+
+/// A tab with one pane that has no session (startup prunes dead sessions' panes).
+fn tab(id: &str) -> Tab {
+    let root = LayoutNode::Pane { id: id.into(), content: PaneContent::Inbox };
+    Tab { id: id.into(), title: id.into(), work_item_id: None, root, focused_pane: None, zoomed_pane: None }
+}
+
+/// Before #270 a project could be `global`: its row then held the project's tabs, merged with the views'.
+#[tokio::test]
+async fn a_pre_270_project_named_global_keeps_its_tabs_apart_from_the_views() {
+    let global = ProjectId::new(ProjectId::GLOBAL);
+    let moved = ProjectId::new("global-project");
+    let seed = |root: &std::path::Path, tabs: Vec<Tab>, active: &str| {
+        let h = start(root, Settings::defaults(), vec![]);
+        let mut l = h.core.layout_get(&global).unwrap();
+        l.tabs = tabs;
+        l.active_tab = Some(active.into());
+        h.core.layout_save(l).unwrap();
+        h
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    seed(tmp.path(), vec![tab("t1"), tab("tickets")], "t1").core.store().flush().await.unwrap();
+    for _ in 0..2 {
+        // once: a second start changes nothing
+        let h = start(tmp.path(), Settings::defaults(), vec![project("global-project", tmp.path())]);
+        let views = h.core.layout_get(&global).unwrap();
+        assert_eq!((tab_ids(&views), views.active_tab.clone()), (vec!["tickets"], None));
+        let own = h.core.layout_get(&moved).unwrap();
+        assert_eq!((tab_ids(&own), own.active_tab.as_ref().map(|t| t.as_str())), (vec!["t1"], Some("t1")));
+        h.core.store().flush().await.unwrap();
+    }
+    // A row that never had a view goes whole: the views seed as on a first start.
+    let tmp = tempfile::tempdir().unwrap();
+    seed(tmp.path(), vec![tab("t1"), tab("t2")], "t2").core.store().flush().await.unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("global-project", tmp.path())]);
+    assert_eq!(h.core.layout_get(&global).unwrap().rev, 0);
+    assert_eq!(tab_ids(&h.core.layout_get(&moved).unwrap()), vec!["t1", "t2"]);
+    h.core.store().flush().await.unwrap();
+    drop(h);
+    let h = start(tmp.path(), Settings::defaults(), vec![project("global-project", tmp.path())]);
+    assert_eq!(h.core.layout_get(&global).unwrap().rev, 0, "the row is deleted, not reloaded");
 }

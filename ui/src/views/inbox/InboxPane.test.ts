@@ -206,6 +206,28 @@ describe('Now', () => {
     expect(globalContent('tickets')).toMatchObject({ scope: { kind: 'all' }, who: 'mine', person: null });
   });
 
+  it('Show all opens Tickets on Mine even when the layout failed to load at startup', async () => {
+    const mine = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
+    if (!mine) throw new Error('fixture missing');
+    for (let i = 0; i < 12; i += 1) {
+      mock.state.tickets.push({
+        ...mine,
+        ticket: { ...mine.ticket, ref: { ...mine.ticket.ref, key: `MINE-${i}`, id: `m${i}` } },
+      });
+      mock.state.nextUp.seen.push(`${mine.ticket.ref.account}:MINE-${i}`);
+    }
+    mock.failNext('layout_get', { code: 'internal' });
+    await expect(loadGlobalLayout()).rejects.toBeTruthy();
+    expect(layout.get(GLOBAL)).toBeNull();
+    mountNow();
+    await screen.findByText('MINE-0');
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
+    await fireEvent.click(await screen.findByRole('button', { name: /more, show all$/ }));
+    await waitFor(() => expect(ui.view).toBe('tickets'));
+    const tab = layout.get(GLOBAL)?.tabs.find((t) => t.id === 'tickets');
+    expect(tab?.root.type === 'pane' && tab.root.content).toMatchObject({ who: 'mine', person: null });
+  });
+
   it('a ticket row says who it waits on instead of the bare assignee', async () => {
     const base = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
     if (!base) throw new Error('fixture missing');
