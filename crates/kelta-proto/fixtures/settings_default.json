@@ -5,6 +5,7 @@
     "dark_theme": "bezel-dark",
     "light_theme": "bezel-light",
     "log_level": "info",
+    "quit_sessions": "ask",
     "restore_mode": "lazy",
     "theme": "system",
     "updates": true

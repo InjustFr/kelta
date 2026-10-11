@@ -83,6 +83,8 @@ pub trait TerminalHost: Send + Sync {
     fn persistent(&self) -> bool {
         false
     }
+    /// Quit with "stop all sessions" (#305): kill what the host still runs and end it (keltad).
+    fn shutdown(&self) {}
     /// After an app restart, route a still-running session's events to `events`. Returns the
     /// environment it was spawned with (hook tokens), `Ok(None)` when no such session is running,
     /// `Err` when the host could not tell (it may still be running).

@@ -108,6 +108,10 @@ pub enum Req {
         id: SessionId,
     },
     Stats,
+    /// Kill every session and exit (quit with "stop all sessions", #305). Additive, so no protocol
+    /// bump (that would replace a keltad kept across an update): an older keltad drops the
+    /// connection instead and leaves after its idle grace.
+    Shutdown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -240,6 +244,7 @@ mod tests {
             Req::SetLimits { limits: TerminalLimits::default() },
             Req::TextTail { id: id.clone(), max_lines: 9 },
             Req::Stats,
+            Req::Shutdown,
         ] {
             round_trip(Call { seq: 42, req }, b"");
         }

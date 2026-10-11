@@ -151,6 +151,7 @@ export type * from './ProviderDef';
 export type * from './ProviderKind';
 export type * from './ProxiedRequest';
 export type * from './ProxiedResponse';
+export type * from './QuitSessions';
 export type * from './RateWindow';
 export type * from './Ready';
 export type * from './RebaseOnto';

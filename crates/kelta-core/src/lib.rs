@@ -183,6 +183,8 @@ pub struct Core {
     pub(crate) feeds: feeds::Feeds,
     pub(crate) exits: tokio::sync::Notify,
     pub(crate) quitting: AtomicBool,
+    /// The quit stops keltad and its sessions instead of leaving them running (#305).
+    pub(crate) quit_stop: AtomicBool,
     pub(crate) http_refs: std::sync::atomic::AtomicU32,
     pub(crate) last_reload: Mutex<Option<std::time::Instant>>,
     pub(crate) claude_ver: Mutex<Option<kelta_proto::ipc::ToolVersion>>,
@@ -347,6 +349,7 @@ impl Core {
                 feeds: feeds::Feeds::default(),
                 exits: tokio::sync::Notify::new(),
                 quitting: AtomicBool::new(false),
+                quit_stop: AtomicBool::new(false),
                 http_refs: std::sync::atomic::AtomicU32::new(0),
                 last_reload: Mutex::new(None),
                 claude_ver: Mutex::new(None),

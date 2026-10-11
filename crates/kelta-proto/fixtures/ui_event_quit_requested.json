@@ -1,0 +1,7 @@
+{
+  "busy": [
+    "claude"
+  ],
+  "live": 3,
+  "type": "app.quit_requested"
+}
