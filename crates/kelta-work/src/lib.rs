@@ -168,11 +168,13 @@ impl WorkService {
         let guard = self.start_lock.lock().await;
         // Re-check: another start for this source may have created its item since `plan`.
         let items = self.store.list_items(Some(&plan.project_id)).await?;
-        // A scratch source's name may be empty: match on the branch the plan resolved.
+        // A scratch source's name may be empty: match on the branch and repo the plan resolved.
         let source = match &plan.source {
-            WorkSource::Branch { task, repo, .. } => {
-                WorkSource::Branch { name: plan.branch.clone(), task: task.clone(), repo: repo.clone() }
-            }
+            WorkSource::Branch { task, .. } => WorkSource::Branch {
+                name: plan.branch.clone(),
+                task: task.clone(),
+                repo: Some(plan.repo_id.clone()),
+            },
             other => other.clone(),
         };
         let found = plan::existing_for(&items, &source).map(|w| w.id.clone());
