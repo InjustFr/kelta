@@ -808,6 +808,8 @@ impl WorkService {
         let opts =
             if adopted { FinishOpts { remove_worktree: false, delete_branch: false, ..opts } } else { opts };
         let j = self.load_journal(id);
+        // A worktree start adopted (already on the branch) is the user's: its ignored files are not ours to drop.
+        let opts = FinishOpts { remove_worktree: opts.remove_worktree && j.worktree_created, ..opts };
         let ev = BusEvent::new(
             bus::WORK_BEFORE_FINISH,
             serde_json::json!({ "work_item_id": item.id, "opts": opts }),
