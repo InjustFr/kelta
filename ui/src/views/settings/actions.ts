@@ -5,6 +5,7 @@
 
 import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
+import { findContent, focusPane, replacePaneContent, updateTab } from '$lib/layout';
 import { toasts, layout, projects } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
@@ -36,6 +37,22 @@ registerAction('settings.open', async (args) => {
   try {
     await layout.ensure(projectId);
     await activateProject(projectId); // from a global view the pane would open out of sight
+    const current = layout.get(projectId);
+    const open = current && findContent(current, (c) => c.kind === 'settings');
+    if (open) {
+      // A new content object re-runs the pane's section effect, which also takes the TOML request.
+      const retarget = section !== null || tomlRequest !== null;
+      layout.update(projectId, (l) => {
+        const next = retarget
+          ? updateTab(l, open.tabId, (t) => ({
+              ...t,
+              root: replacePaneContent(t.root, open.paneId, { kind: 'settings', section }),
+            }))
+          : l;
+        return focusPane(next, open.tabId, open.paneId);
+      });
+      return;
+    }
     layout.open(projectId, {
       content: { kind: 'settings', section },
       placement: 'new_tab',

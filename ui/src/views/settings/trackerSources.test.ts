@@ -9,10 +9,12 @@ import type { JsonValue, SourceRoute, TrackerBinding, TrackerView } from '$lib/g
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, settings, ui } from '$lib/stores';
+import { activeTab, allPanes, findContent } from '$lib/layout';
+import { layout, projects, settings, ui } from '$lib/stores';
 
 import { confirms } from '../../shell/confirm.svelte';
 import { takeTomlRequest } from './actions';
+import SettingsPane from './SettingsPane.svelte';
 import { iterationWord } from './lib/sources.svelte';
 import Projects from './sections/Projects.svelte';
 import Sources from './sections/Sources.svelte';
@@ -208,6 +210,43 @@ describe('settings.open toml', () => {
     await import('./actions');
     await dispatch('settings.open', { section: 'projects', toml: 'shop' });
     expect(takeTomlRequest()).toBe('shop');
+    expect(takeTomlRequest()).toBeNull();
+  });
+
+  it('focuses the open Settings tab and retargets its section instead of opening another (#340)', async () => {
+    await import('./actions');
+    layout.byProject = {};
+    const current = () => layout.get(projects.activeId ?? 'home')!;
+    const settingsPanes = () =>
+      current()
+        .tabs.flatMap((t) => allPanes(t.root))
+        .filter((p) => p.content.kind === 'settings');
+    await dispatch('settings.open');
+    expect(settingsPanes()).toHaveLength(1);
+    const at = findContent(current(), (c) => c.kind === 'settings')!;
+    layout.open(projects.activeId ?? 'home', {
+      content: { kind: 'inbox' },
+      placement: 'new_tab',
+      focus: true,
+      tab_title: null,
+      work_item_id: null,
+    });
+    await dispatch('settings.open');
+    expect(settingsPanes()).toHaveLength(1);
+    expect(activeTab(current())?.id).toBe(at.tabId);
+    expect(settingsPanes()[0]?.content).toEqual({ kind: 'settings', section: null });
+    await dispatch('settings.open', { section: 'accounts' });
+    expect(settingsPanes()).toHaveLength(1);
+    expect(settingsPanes()[0]?.content).toEqual({ kind: 'settings', section: 'accounts' });
+  });
+
+  it('an open Settings pane follows a retargeted section and TOML request', async () => {
+    const props = { projectId: 'shop', tabId: 't1', paneId: 'p1', visible: true, focused: true };
+    const view = render(SettingsPane, { ...props, content: { kind: 'settings', section: 'general' } });
+    expect(screen.queryByTestId('edit-toml')).toBeNull();
+    await dispatch('settings.open', { section: 'projects', toml: 'shop' });
+    await view.rerender({ ...props, content: { kind: 'settings', section: 'projects' } });
+    expect(await screen.findByTestId('edit-toml')).toBeTruthy();
     expect(takeTomlRequest()).toBeNull();
   });
 });
