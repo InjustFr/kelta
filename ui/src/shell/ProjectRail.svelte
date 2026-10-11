@@ -286,6 +286,7 @@
     if (e.button !== 0) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragX = sidebar.width; // a click without movement must not reuse a stale drag position
     dragging = true;
   }
 
@@ -301,7 +302,7 @@
     dragging = false;
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     frames.cancel(dragKey);
-    sidebar.resize(dragX || sidebar.width);
+    sidebar.resize(dragX);
   }
 
   function onEdgeKey(e: KeyboardEvent): void {

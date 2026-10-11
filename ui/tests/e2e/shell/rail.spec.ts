@@ -73,6 +73,10 @@ test.describe('sidebar', () => {
     await page.keyboard.press('Shift+ArrowLeft');
     await expect.poll(() => railWidth(page)).toBe(dragged - 16 - 64);
     await expect(edge).toHaveAttribute('aria-valuenow', String(dragged - 80));
+    // A click on the edge without moving keeps the keyboard-set width (no stale drag position).
+    const edgeBox = (await edge.boundingBox())!;
+    await page.mouse.click(edgeBox.x + edgeBox.width / 2, edgeBox.y + 300);
+    expect(await railWidth(page)).toBe(dragged - 80);
     // Clamped to its bounds.
     for (let i = 0; i < 10; i += 1) await page.keyboard.press('Shift+ArrowRight');
     await expect.poll(() => railWidth(page)).toBe(480);
