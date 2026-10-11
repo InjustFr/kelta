@@ -146,6 +146,10 @@ impl WorkService {
             return Ok(());
         }
         let Some(item) = self.for_session(sid).await else { return Ok(()) };
+        let j = self.load_journal(&item.id);
+        if let Some(run) = j.claude_run.as_deref().filter(|_| j.pending_prompt.is_none()) {
+            crate::fixloop::clear_held_copies(run);
+        }
         let mut sent: Vec<ReviewNote> =
             self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent).collect();
         if sent.is_empty() {

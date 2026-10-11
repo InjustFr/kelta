@@ -96,6 +96,22 @@ fn valid_name(name: &str) -> bool {
     }) && !RESERVED.contains(&name)
 }
 
+/// Remove the `name-N.md` copies held sends wrote into `run` (`send_impl`): once the turn that read
+/// them ended with nothing held, no prompt names them any more (#319).
+pub(crate) fn clear_held_copies(run: &std::path::Path) {
+    let copy = |n: &str| {
+        valid_name(n)
+            && n.trim_end_matches(".md")
+                .rsplit_once('-')
+                .is_some_and(|(_, i)| i.parse::<u32>().is_ok_and(|i| i >= 2))
+    };
+    for e in std::fs::read_dir(run).into_iter().flatten().flatten() {
+        if e.file_name().to_str().is_some_and(copy) {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
 impl WorkService {
     /// `work_send`: brief files into the private run dir, then the prompt into the previous
     /// conversation through [`WorkService::deliver_prompt`] (pasted, held until `Stop`, or resumed),
