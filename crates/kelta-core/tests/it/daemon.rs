@@ -169,6 +169,20 @@ fn running(pid: &str) -> bool {
     !state.is_empty() && !state.starts_with('Z')
 }
 
+/// #305: `running` treats an exited-but-unreaped child as gone (`kill -0` still succeeds on one).
+#[tokio::test]
+async fn running_is_false_for_a_zombie() {
+    let mut child = std::process::Command::new("sh").args(["-c", "exit 0"]).spawn().unwrap();
+    let pid = child.id().to_string();
+    let zombie = || {
+        let out = std::process::Command::new("ps").args(["-o", "stat=", "-p", &pid]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().starts_with('Z')
+    };
+    assert!(eventually(zombie).await, "the child never became a zombie");
+    assert!(!running(&pid));
+    child.wait().unwrap();
+}
+
 /// #305: quit with "stop all sessions" ends every session process and keltad (socket removed).
 #[tokio::test(flavor = "multi_thread")]
 async fn quit_with_stop_ends_the_sessions_and_keltad() {
