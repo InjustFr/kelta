@@ -1251,12 +1251,17 @@ impl WorkService {
                 Ok(info.id)
             }
             SlotKind::Shell { command } => {
+                // Render first: a rejected value must not leave an unjournaled orphan shell behind.
+                let line = command
+                    .as_ref()
+                    .filter(|c| !c.trim().is_empty())
+                    .map(|c| render_shell(c, &ctx, Mode::Lenient))
+                    .transpose()?;
                 let info = env
                     .core
                     .session_spawn(base_req(SessionKind::Shell, name.unwrap_or("shell").into()))
                     .await?;
-                if let Some(cmd) = command.as_ref().filter(|c| !c.trim().is_empty()) {
-                    let line = render_shell(cmd, &ctx, Mode::Lenient)?;
+                if let Some(line) = line {
                     env.core.session_write(&info.id, format!("{line}\r").as_bytes()).await?;
                 }
                 Ok(info.id)
