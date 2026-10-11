@@ -374,7 +374,7 @@ A plugin that calls a token-protected API marks a property of its settings schem
 
 - `{ Authorization = { setting = "qa_token", format = "Bearer {secret}" } }`, or the shorthand `{ "X-Token" = "qa_token" }` (format `{secret}`).
 - The setting must be an `x-kelta-secret` property of the plugin's own schema; anything else (another setting, a raw ref such as `gh-cli`) is `invalid_argument`. Unset: the call fails with `needs_auth` and the toast `<plugin>: set "<title>" in Settings → Plugins`.
-- `settings.set` refuses secret keys; `settings.get` returns `"***"` for a set one and omits an unset one.
+- `settings.set` refuses secret keys; `settings.get` returns `"***"` for a set one and omits an unset one. Kelta records what a plugin wrote through `settings.set` (reserved `kv` key `$kelta/settings.set`), so a key that later becomes secret is `permission_denied` while it still holds the plugin's value; a different value set by the user resolves.
 - `net:<host>` still governs the destination. A 401 drops the cached secret.
 - In user-config triggers (no plugin) a `secret_headers` string is a SecretRef (`{ Authorization = "env:CI_TOKEN" }`); the `{setting, …}` form is rejected.
 

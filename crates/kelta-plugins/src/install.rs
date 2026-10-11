@@ -14,6 +14,7 @@ use kelta_proto::ids::PluginId;
 use crate::PluginHost;
 use crate::manifest::{self, ParsedManifest};
 use crate::registry;
+use crate::screens::PLUGIN_SET_KEY;
 use crate::util::io_err;
 
 /// Where a plugin comes from.
@@ -376,7 +377,13 @@ pub(crate) async fn uninstall(host: &PluginHost, id: &PluginId) -> Result<(), Ke
         .await
         .map_err(|e| KeltaError::internal(e.to_string()))??;
     host.grant_store().revoke_all(id).await?;
-    host.grant_store().kv_clear(id).await?;
+    // Keep the `settings.set` marks: the values they guard stay in global settings, and dropping the
+    // marks would let a reinstall with a flipped `x-kelta-secret` schema resolve them as user refs.
+    for k in host.grant_store().kv_keys(id).await? {
+        if !k.starts_with(PLUGIN_SET_KEY) {
+            host.grant_store().kv_delete(id, &k).await?;
+        }
+    }
     let pdir = host.dirs().plugins_dir();
     let mut state = registry::load_state(&pdir);
     if state.disabled.remove(id.as_str()) {
