@@ -374,7 +374,7 @@ A plugin that calls a token-protected API marks a property of its settings schem
 
 - `{ Authorization = { setting = "qa_token", format = "Bearer {secret}" } }`, or the shorthand `{ "X-Token" = "qa_token" }` (format `{secret}`).
 - The setting must be an `x-kelta-secret` property of the plugin's own schema; anything else (another setting, a raw ref such as `gh-cli`) is `invalid_argument`. Unset: the call fails with `needs_auth` and the toast `<plugin>: set "<title>" in Settings → Plugins`.
-- `settings.set` refuses secret keys; `settings.get` returns `"***"` for a set one and omits an unset one. Kelta records what a plugin wrote through `settings.set` (reserved `kv` key `$kelta/settings.set`), so a key that later becomes secret is `permission_denied` while it still holds the plugin's value; a different value set by the user resolves.
+- `settings.set` refuses secret keys; `settings.get` returns `"***"` for a set one and omits an unset one. Kelta records what a plugin wrote through `settings.set` (reserved `kv` keys `$kelta/settings.set/<key>`, kept across uninstall so a reinstall cannot clear them), so a key that later becomes secret is `permission_denied` while it still holds the plugin's value; a different value set by the user resolves (the same value stays refused: user writes do not clear the mark).
 - `net:<host>` still governs the destination. A 401 drops the cached secret.
 - In user-config triggers (no plugin) a `secret_headers` string is a SecretRef (`{ Authorization = "env:CI_TOKEN" }`); the `{setting, …}` form is rejected.
 
@@ -440,7 +440,7 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 | `clipboard.write` | `{text}` | `clipboard.write` |
 | `kv.get` / `kv.set` / `kv.delete` / `kv.list` | `{key}` → JSON or `null` / `{key, value}` / `{key}` / `{}` → `[key]` (sorted) | `storage` |
 
-`kv.*` is the plugin's own store in SQLite `plugin_kv`, namespaced by the calling screen's plugin id (a plugin can never name another's), shared by all its screens and projects, kept across updates and deleted on uninstall. Keys are 1–256 bytes; a value is any JSON up to 64 KiB serialized; keys + values of one plugin are capped at 1 MiB. Over a cap → `InvalidArgument` and nothing is written.
+`kv.*` is the plugin's own store in SQLite `plugin_kv`, namespaced by the calling screen's plugin id (a plugin can never name another's), shared by all its screens and projects, kept across updates and deleted on uninstall (except Kelta's reserved `$kelta/settings.set/*` marks, §5.1, which survive it, are hidden from `kv.list`, refused to `kv.get`/`set`/`delete` and count toward the 1 MiB cap). Keys are 1–256 bytes; a value is any JSON up to 64 KiB serialized; keys + values of one plugin are capped at 1 MiB. Over a cap → `InvalidArgument` and nothing is written.
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 

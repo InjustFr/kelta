@@ -71,7 +71,7 @@ impl Store {
                     configure(&c)?;
                     migrations::migrate(&mut c, &sources)?;
                     if let Err(e) = q::prune(&c) {
-                        tracing::warn!(error = %e, "cannot prune the provider cache and seen reviews");
+                        tracing::warn!(error = %e, "cannot prune the provider cache, finished work items and seen reviews");
                     }
                     Ok(c)
                 });
@@ -460,7 +460,8 @@ pub mod q {
     // ---- provider_cache ------------------------------------------------------------------------
 
     /// Startup cleanup of rows nothing reads any more: cache entries not refreshed for 30 days (gone
-    /// views and tickets) and unstamped seen reviews first seen 90 days ago (a `reviewed_sha` stamp is kept). A pruned PR still open is re-seen
+    /// views and tickets), Finished work items last written 30 days ago (with their steps and notes)
+    /// and unstamped seen reviews first seen 90 days ago (a `reviewed_sha` stamp is kept). A pruned PR still open is re-seen
     /// silently: the first poll of a process never notifies.
     pub fn prune(c: &Connection) -> R<()> {
         c.execute_batch(
@@ -764,7 +765,7 @@ pub mod q {
         work_select(c, project, false)
     }
 
-    /// Unfinished items only: Finished ones pile up forever and most readers skip them.
+    /// Unfinished items only: most readers skip Finished ones (kept 30 days, see `prune`).
     pub fn work_open(c: &Connection) -> R<Vec<WorkItem>> {
         work_select(c, None, true)
     }
