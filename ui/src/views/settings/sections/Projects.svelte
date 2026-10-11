@@ -133,8 +133,7 @@
                 </div>
               </form>
             {:else}
-              <span class="dot" style:background={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border)'}
-              ></span>
+              <span class="dot" style:background={resolveProjectColor(p.color) ?? 'var(--k-border)'}></span>
               <div class="info">
                 <strong>{p.name}</strong>
                 <span class="muted"

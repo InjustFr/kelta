@@ -334,7 +334,7 @@
           aria-label={p.name}
           data-testid="rail-band"
           data-project-id={p.id}
-          style:--project-color={resolveProjectColor(p.color, ui.theme) ?? 'var(--k-border-strong)'}
+          style:--project-color={resolveProjectColor(p.color) ?? 'var(--k-border-strong)'}
         >
           <!-- The caption: click = the project's last row, ⋯ / right-click = project menu, drag = reorder. -->
           <div class="row caption-row" class:over={overId === p.id && dragId !== p.id}>
