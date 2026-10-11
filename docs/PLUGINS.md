@@ -1,4 +1,4 @@
-# Kelta v0.1 — Extensibility: tools, triggers, plugins (contract)
+# Kelta — Extensibility: tools, triggers, plugins
 
 Three tiers, none of which keeps a background runtime alive (zero memory when unused):
 
@@ -8,7 +8,7 @@ Three tiers, none of which keeps a background runtime alive (zero memory when un
 
 Tools, triggers, commands and session templates use the **same schema** in `config.toml`, project files, repo-local `.kelta/config.toml` (trust-gated) and plugin manifests. Types live in `kelta-proto::ext` (`ToolDef`, `TriggerDef`, `ActionDef`, `CommandDef`, `PluginManifest`, `ScreenDef`, `PluginMethod`, `Permission`), JSON Schemas in `schema/tool.schema.json`, `schema/trigger.schema.json`, `schema/plugin-manifest.schema.json` (generated, CI drift-checked).
 
-**Provider plugins (KPP, §9):** a plugin can also ship a process speaking JSON-RPC 2.0 over stdio that serves **tracker or code-host accounts** through the same `Tracker`/`CodeHost` traits as the built-in providers, spawned on first use only. v0.2 (designed, not built): WASM logic plugins.
+**Provider plugins (KPP, §9):** a plugin can also ship a process speaking JSON-RPC 2.0 over stdio that serves **tracker or code-host accounts** through the same `Tracker`/`CodeHost` traits as the built-in providers, spawned on first use only. Not built: WASM logic plugins.
 
 ---
 
@@ -22,7 +22,7 @@ As in SETTINGS.md §6: `{project.id|name|root}`, `{repo.id|path|name}`, `{worktr
 pub struct ToolDef {
   pub id: String,                      // [a-z0-9-]; plugin tools are namespaced "<plugin>/<id>"
   pub label: String, pub icon: Option<String>, pub description: Option<String>,
-  pub kind: ToolKind,                  // Pty | Web | External (detached launch, no pane)
+  pub kind: ToolKind,                  // pty (default) | web | external (detached launch, never tracked or killed; no pane)
   // pty
   pub command: Option<String>, pub args: Vec<String>, pub cwd: Option<String>, pub env: BTreeMap<String, String>,
   pub close_on_exit: CloseOnExit,      // never | on_success | always (default never → exit banner + Relaunch)
@@ -33,11 +33,12 @@ pub struct ToolDef {
   pub embed: EmbedMode,                // auto | iframe | proxy | external (default: web.embed_default)
   pub url_is_secret: bool,             // never logged / shown in chrome (default true when start is set)
   pub lifecycle: WebLifecycle,         // on_close (default) | on_project_close | never
-  pub keep_alive: bool,                // keep iframe while its pane is mounted but hidden (default web.keep_alive)
+  pub keep_alive: Option<bool>,        // keep iframe while its pane is mounted but hidden (None = web.keep_alive)
   // common
   pub check: Option<Vec<String>>,      // argv run by tool_check; exit 0 = installed
   pub install_hint: Option<String>,
-  pub placement: Placement,            // split_right (default) | split_down | new_tab
+  pub placement: Placement,            // split_right (default) | split_down | new_tab | replace_focused | focused
+  pub scope: ToolScope,                // work (default: one per work item, else per project) | project (one tab per project) | user (one tab in Home); SETTINGS [[tools]]
   pub keybinding: Option<Chord>,
   pub autostart: bool,                 // open when its project opens (default false)
   pub enabled: bool,                   // default true
@@ -132,7 +133,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 - No expression language: a payload path matches if its value equals / globs / regexes the matcher; a list = any-of; `!` prefix negates. Missing path → no match.
 - Triggers run in parallel; actions within a trigger sequentially (async). Each run is logged (`trigger_log`, last 1000) with depth and outcome.
 - **Guards:** chain depth ≤ 4 (events emitted by actions carry `chain`); a trigger never fires twice within one chain; rate limit 10 runs / 60 s per trigger (excess logged as `rate_limited`); `send_keys` needs `allow_send_keys = true` and is limited to 1 per 2 s per session.
-- **Blocking pre-events** (`ticket.before_start`, `work.before_finish`, `pr.before_create`): a `run` action with non-zero exit or stdout JSON `{"veto": "reason"}` aborts the operation with that reason; `{"patch": {...}}` may patch the plan (v0.1: only `branch`, `template_id`, `claude.prompt`).
+- **Blocking pre-events** (`ticket.before_start`, `work.before_finish`, `pr.before_create`): a `run` action with non-zero exit or stdout JSON `{"veto": "reason"}` aborts the operation with that reason; `{"patch": {...}}` may patch the plan (only `branch`, `template_id`, `claude.prompt`).
 - Origins: global, project, repo-local (trusted only), plugin (`<plugin>/<id>`, needs the plugin's permissions for its actions).
 
 ### 3.1 Action types (`ActionDef`, tag `action`)
@@ -234,7 +235,7 @@ External events: `kelta-ctl emit custom.deploy_finished --json '{"env":"staging"
 
 ## 4. Plugin manifest (`kelta-plugin.toml`; `.json` accepted)
 
-Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~/Library/Application Support/dev.kelta.Kelta/plugins`), plus `plugins.dev_paths` (global settings only). Install: Settings → Plugins → Install (dir, git URL + optional tag, `.tar.gz`), or `kelta-ctl plugin install <src>`; both go through `plugin_inspect` → permission dialog (plain-language permissions, manifest SHA-256, warnings such as "this plugin can run `kubectl`") → `plugin_install` (copies into the data dir; git → shallow clone of the tag). No registry/marketplace in v0.1.
+Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~/Library/Application Support/dev.kelta.Kelta/plugins`), plus `plugins.dev_paths` (global settings only). Install: Settings → Plugins → Install (dir, git URL + optional tag, `.tar.gz`), or `kelta-ctl plugin install <src>`; both go through `plugin_inspect` → permission dialog (plain-language permissions, manifest SHA-256, warnings such as "this plugin can run `kubectl`") → `plugin_install` (copies into the data dir; git → shallow clone of the tag). No registry or marketplace.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -244,12 +245,12 @@ Location: `<data>/plugins/<id>/` (Linux `~/.local/share/kelta/plugins`, macOS `~
 | `kelta_api` | semver req | yes | host API `0.1.0`; incompatible → not loaded, shown with reason |
 | `platforms` | list(`macos`\|`linux`) | no (all) | |
 | `permissions` | list<Permission> | no | §5 |
-| `activation` | list(`onStartup`\|`onCommand:<id>`\|`onScreen:<id>`\|`onEvent:<glob>`\|`onProjectOpen`) | no | v0.1: controls when triggers subscribe and screens are offered; nothing runs before activation |
+| `activation` | list(`onStartup`\|`onCommand:<id>`\|`onScreen:<id>`\|`onEvent:<glob>`\|`onProjectOpen`) | no | controls when triggers subscribe and screens are offered; nothing runs before activation |
 | `[[contributes.tools]]` | ToolDef | | namespaced `<plugin>/<id>` |
 | `[[contributes.triggers]]` | TriggerDef | | namespaced |
-| `[[contributes.commands]]` | `{id, title, do: [ActionDef], when?: "terminal"\|"ticket"\|"review"\|"work"\|"always"}` | | palette entries (§3.1) |
+| `[[contributes.commands]]` | `{id, title, do: [ActionDef], when?: "terminal"\|"ticket"\|"review"\|"work"\|"always", keybinding?: Chord, enabled? = true}` | | palette entries (§3.1) |
 | `[[contributes.keybindings]]` | `{command, key: Chord}` | | user bindings win; conflicts reported |
-| `[[contributes.session_templates]]` | session template | | |
+| `[[contributes.session_templates]]` | session template `{id, label, layout, options, enabled, claude_host?}` (SETTINGS) | | `claude_host` = `builtin` \| `terminal` \| `multiplexer`: where its Claude runs (ARCHITECTURE §2, #347) |
 | `[[contributes.screens]]` | ScreenDef | | §4.1; each gets an `Open <title>` palette entry (command `<plugin>/open:<screen>`, no `ui.open` needed: the user opens it), project screens in the active project, global ones in Home, that project shown first |
 | `[[contributes.ticket_actions]]`, `[[contributes.review_actions]]`, `[[contributes.work_actions]]` | `{id, title, do: [ActionDef]}` | | commands `<plugin>/<id>` with `when = ticket\|review\|work` (also in the palette, §3.1). Ticket/review actions come after the built-ins of the ticket detail action bar / the review detail buttons (one ghost button, or a `Plugins ▾` menu when there are several; no key); work actions after a separator at the end of the work menu (⌘., no letters), with the work item (`{branch}`, `{worktree}`, `{work.*}`) in its project. Ticket actions get the ticket and its work item (`{branch}`, `{worktree}`, `{work.*}`); review actions get `{pr.*}`. They run in the ticket's work item's project, else the ticket's or PR's first project, the pane's, then the active project; an action with an `open_screen`, `open_tool` or `spawn_session` step shows that project first |
 | `[contributes.settings]` | `{schema = "settings.schema.json"}` | | flat JSON Schema mounted at `plugins.<id>`, validated, rendered in Settings |
@@ -362,11 +363,11 @@ Checked in Rust for every `plugin_call` (screens) and every action of a plugin-c
 | `notify` | desktop notifications |
 | `clipboard.write` | write clipboard |
 | `storage` | own key-value store (`kv.*`, §7): JSON values, 64 KiB per value, 1 MiB per plugin |
-| `exec:<command>` | run that argv[0] in `run` / `spawn_session` actions, `sessions.spawn`, plugin tools and `exec.run`: a name runs from the login shell's `PATH`; a relative path (`exec:./bin/deploy.sh`) grants that path exactly as written and always runs the plugin's own file (resolved in the plugin directory, whatever the `cwd`). Plugin-supplied `env` never sets `PATH`, `DYLD_*` or `LD_*`. The grant means that program **with any arguments and any other environment**: options such as `git -c core.sshCommand=…`, `kubectl --kubeconfig`, or variables such as `GIT_SSH_COMMAND` and `NODE_OPTIONS` are not filtered, so granting `exec:git` grants what git can run |
+| `exec:<command>` | run that argv[0] in `run` / `spawn_session` actions, `sessions.spawn`, plugin tools and `exec.run`. The grant is compared with argv[0] exactly, as written: `exec:kubectl` allows `kubectl` (run from the login shell's `PATH`) but not `/usr/local/bin/kubectl` or `./kubectl`; a path grant (`exec:./bin/deploy.sh`) allows that path only and always runs the plugin's own file (resolved in the plugin directory, whatever the `cwd`; `..`, absolute paths and symlinks leaving it are refused). Plugin-supplied `env` never sets `PATH`, `DYLD_*` or `LD_*`. The grant means that program **with any arguments and any other environment**: options such as `git -c core.sshCommand=…`, `kubectl --kubeconfig`, or variables such as `GIT_SSH_COMMAND` and `NODE_OPTIONS` are not filtered, so granting `exec:git` grants what git can run |
 | `net:<host>` | `http_fetch` / `http` action to that host (exact or `*.domain`), https only; `net:127.0.0.1` / `net:localhost` explicit |
 | `provider` | run the `[provider]` program for the accounts that name the plugin, handing it their settings and secret (§9); its own network access is its business |
 
-Secrets are never readable by plugins in v0.1 (no `secret.get`). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
+Secrets are never readable by plugins (no `secret.get`; `secret_headers`, §5.1, injects them host-side). Plugin screens have no direct network (`connect-src 'none'`), no browser storage (use `kv.*`), no Tauri IPC.
 
 ### 5.1 Secret settings (`secret_headers`)
 
@@ -444,9 +445,9 @@ Transport: the SDK's `connect()` posts `{type:"kelta:ready"}` to the parent; the
 
 Error codes = `ErrorCode` (ARCHITECTURE §4); denied → `PermissionDenied` with the missing permission in `detail`.
 
-SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.work.list/get`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.exec(command, args?, {cwd, env, stdin, timeout_ms}?)`, `kelta.ui.*`, `kelta.notify`, `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`.
+SDK (`packages/plugin-sdk`, published as `@kelta/plugin-sdk`, MIT, ≈3 KB ESM, no deps): `connect(): Promise<Kelta>`; `kelta.call(method, params)`; typed helpers `kelta.tickets.*`, `kelta.reviews.*`, `kelta.sessions.*`, `kelta.work.list/get`, `kelta.tools.open`, `kelta.events.on(name, cb)`, `kelta.settings.get/set`, `kelta.kv.get/set/delete/list`, `kelta.fetch(url, init)`, `kelta.exec(command, args?, {cwd, env, stdin, timeout_ms}?)`, `kelta.ui.*`, `kelta.notify`, `kelta.clipboard.write`, `kelta.params` (the current params), `kelta.theme` (CSS variable map, also applied to `:root`), `kelta.onVisibility(cb)`, `kelta.onParams(cb)`, `kelta.onTheme(cb)` (each returns an unsubscribe function).
 
-Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe in v0.1. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
+Lifecycle: iframe created when the screen pane becomes visible, destroyed when hidden (unless `keep_alive`, which is listed with its memory cost in Settings → Performance). `keep_alive` holds while the pane stays mounted (zoomed away, inbox overlay); switching tab or project unmounts the pane and destroys the iframe. A screen that blocks the UI thread is detected by the core's ack watchdog (ARCHITECTURE §12.4) → webview reloaded in safe mode, screen closed, toast names the plugin.
 
 ## 8. Claude Code hooks generated by Kelta
 
@@ -473,7 +474,7 @@ Per Claude session, Kelta writes `<runtime>/s/<sid8>/claude-settings.json` (0600
 - `kelta-ctl hook` reads stdin (cap 1 MiB), reads `KELTA_SESSION_ID`, `KELTA_HOOK_TOKEN`, `KELTA_SOCK`, writes one line `{"v":1,"cmd":"hook","session":…,"token":…,"payload":{…}}` to the ctl socket, **always exits 0**, < 5 ms.
 - `kelta-ctl statusline` (ticket #135) relays Claude's statusline JSON as a `hook` frame named `Status` without reading the answer (50 ms write timeout), then runs the user's own `statusLine.command` (read at spawn from Claude's user, project and local settings into `KELTA_USER_STATUSLINE`, since `--settings` overrides it) on the same stdin and passes its stdout through. Core keeps the last snapshot per session (`ClaudeMeta.usage`: context %, `cost.total_cost_usd`, lines, `rate_limits.five_hour/seven_day`) in memory, no bus event; the growth of the cost is moved to `WorkItem.cost_usd` on SessionEnd and quit (the first snapshot of a process is its baseline, so a resumed Claude's restored cost is not counted twice).
 - `claude.extra_hooks` is merged in. A user's `disableAllHooks` disables these too → hooks-inactive heuristics (ARCHITECTURE §7.6).
-- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `get_review_feedback()`, `add_review_comment({path, line, body})`, `notify({message})`, `ask({question, options, body_md?})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `add_review_comment` adds a line comment (new-side `line` of `path`) to the pending review of the PR under review in the session's review-kind work item (`CodeHost::add_pending_comment`); nothing is published until the user submits in Kelta (`a` / `c` / `m`); error text "no pull request under review in this session" otherwise. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context). `ask` (#356, `/mcp/<sid>` only) → `CoreApi::session_ask`: core renders `body_md` with `kelta_http::markdown::to_html`, keeps `ClaudeMeta.question` in memory, asks for attention (needs input, notification) and clears it on the next typed input (`session_write` not starting with ESC). The UI shows one button per option on the run's ticket row, in Now and in Peek; a button sends the option as a bracketed paste then Enter, disabled while the session's status is `needs_input` (a prompt Enter would answer). The tool returns at once: the prompt ends its turn and gets the answer as the next message.
+- `mcp.json`: `{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:<port>/mcp/<sid>","headers":{"Authorization":"Bearer ${KELTA_MCP_TOKEN}"}}}}`. MCP tools: `get_ticket()`, `transition_ticket({to})`, `add_ticket_comment({markdown})`, `open_in_editor({path, line?})`, `create_pr({title?, body?, draft?})`, `list_review_requests()`, `get_review_feedback()`, `add_review_comment({path, line, body})`, `notify({message})`, `ask({question, options, body_md?})`; ticket tools return an error text "no ticket linked" for unlinked sessions. `add_review_comment` adds a line comment (new-side `line` of `path`) to the pending review of the PR under review in the session's review-kind work item (`CodeHost::add_pending_comment`); nothing is published until the user submits in Kelta (`a` / `c` / `m`); error text "no pull request under review in this session" otherwise. `transition_ticket` and `add_ticket_comment` go through `CoreApi::ticket_transition` / `ticket_comment` (core invalidates the tickets cache and publishes `ticket.transitioned` / `ticket.commented` with the session as context). `ask` (#356, `/mcp/<sid>` only) → `CoreApi::session_ask`. Limits, checked before anything is shown (else `InvalidArgument: …`): `question` (trimmed) ≤ 500 characters, details go in `body_md`; `options` 1 to 9 strings, each trimmed, non-empty, ≤ 100 characters and one line (no control characters), since each is typed into the terminal. Core renders `body_md` with `kelta_http::markdown::to_html`, keeps `ClaudeMeta.question` in memory, asks for attention (needs input, notification; it holds through Stop) and clears it on the next typed input that reached the PTY (`session_write` succeeded and does not start with ESC; a failed write keeps the question, #367). The UI shows one button per option on the run's ticket row, in Now and in Peek; a button sends the option as a bracketed paste then Enter, disabled while the session's status is `needs_input` (a prompt Enter would answer). The tool returns at once: the prompt ends its turn and gets the answer as the next message. `/mcp/<sid>` also serves the board tools (`list_tickets`, `get_ticket_by_key`, the by-key writes behind `claude.mcp_board_writes`), the background-run tools (`claim_ticket`, `report_progress`, `release_ticket`) and the setup tools (`get_setup`, `add_project`, `set_setting`, `test_account`, `request_token`); the global `/mcp` that Claude sessions Kelta did not start reach serves all of them but the session tools listed above (ARCHITECTURE §2).
 - **Gate C1 (verified with `claude` 2.1.295, macOS):** `KELTA_REAL_CLAUDE=1 cargo test -p kelta-core --test it real_claude:: -- --nocapture` runs the launcher through a real `Core` (PTY, ctl socket, installed `kelta-ctl`, loopback MCP) in a Kelta worktree, in print mode via `claude.extra_args = ["-p"]`, haiku/low effort, two model runs: SessionStart → UserPromptSubmit → PermissionRequest (fires in print mode too) → Stop → SessionEnd gives Running → Working → NeedsInput → Done → Exited; `--session-id` is honoured; `mcp__kelta__notify` is callable; `session_restart` on the same session id rebuilds the work item's restore argv (`--resume <uuid>`, files regenerated) and resumes the conversation in the worktree (`source: "resume"`), with `mcp__kelta__notify` still reaching that session; a project `.claude/settings.json` hook still runs next to Kelta's (`--settings` adds) and `~/.claude/settings.json` is untouched. Interactive sessions in a repo Claude does not trust stop at its workspace-trust dialog and hooks start only once it is accepted (a worktree inherits the trust of its main repository); the hooks-inactive fallback covers the gap and the first SessionStart switches back to hooks. Shift+Enter: Claude's own `/terminal-setup` binds it to ESC CR (`\u001b\r`), what Kelta sends for Claude sessions; the live keystroke is checked by hand.
 
 ## 9. Provider plugins (KPP)
@@ -494,7 +495,7 @@ branch_key = "{key}"                     # tracker branch_key (default "{key}")
 fetch_refspec = "pull/{number}/head:{branch}" # code host (this default)
 ```
 
-The synchronous trait methods (`kind`, `caps`, `browser_url`, `branch_key`, `fetch_refspec`) are answered from these fields without a round trip. Placeholders: `{base_url}`, `{web_url}` (falls back to `base_url`), `{key}`, `{id}` (tickets), `{repo}`, `{number}`, `{branch}` (reviews). `kind()` is `plugin` for both. `repo_from_remote` returns nothing in v0.1 (no core caller).
+The synchronous trait methods (`kind`, `caps`, `browser_url`, `branch_key`, `fetch_refspec`) are answered from these fields without a round trip. Placeholders: `{base_url}`, `{web_url}` (falls back to `base_url`), `{key}`, `{id}` (tickets), `{repo}`, `{number}`, `{branch}` (reviews). `kind()` is `plugin` for both. `repo_from_remote` returns nothing (no core caller).
 
 **Accounts** point at the plugin (SETTINGS §2): `[accounts.demo] kind = "plugin_tracker" | "plugin_codehost", plugin = "json-tracker"`, plus any `base_url`, `web_url`, `user`, `email`, `secret`… the plugin wants. `TrackerFactory` / `CodeHostFactory` are wrapped by `KppFactory`, which builds plugin accounts and passes every other kind through.
 

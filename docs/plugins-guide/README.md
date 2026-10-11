@@ -35,7 +35,8 @@ command = "btop"
 ```
 
 Load it while developing: add the folder to `plugins.dev_paths` in your global `config.toml`, restart, then grant
-the permissions Kelta lists in Settings > Plugins. Tools appear in the palette as `tools-pack/k9s`.
+the permissions Kelta lists in Settings > Plugins. Tools appear in the rail's Tools section and in the palette as
+"Open Kubernetes"; their id is namespaced, `tools-pack/k9s`.
 
 To install it like a user would: `kelta-ctl plugin install ~/code/tools-pack` (a directory, a git URL with an
 optional tag, or a `.tar.gz`). Kelta shows the permissions in plain language and the manifest SHA-256 first.
@@ -55,7 +56,8 @@ activated (`activation = ["onStartup"]`, `onCommand:<id>`, `onProjectOpen`, ...)
 
 ## 3. Permissions
 
-Ask for the least you need: `exec:<command>` per executable, `net:<host>` per host (https only),
+Ask for the least you need: `exec:<command>` per executable, written exactly as the plugin runs it (`exec:k9s`
+does not allow `/usr/local/bin/k9s`; a plugin script is `exec:./bin/run.sh`), `net:<host>` per host (https only),
 `tickets.read`, `prs.write`, `events:<glob>`, `notify`, and so on (PLUGINS.md section 5). A new version that adds
 permissions stays disabled for those capabilities until the user grants them again. Plugins cannot read secrets.
 
