@@ -2,13 +2,30 @@
 // Pure; used by Now, the work bar, the tab lamp, the rail tile and the palette.
 
 import { msg, t, tn } from '$lib/i18n/index.svelte';
-import type { GitStatus, Review, ReviewDelta, RunState, SessionInfo, WorkItem } from '$lib/gen';
+import type {
+  GitStatus,
+  OutsideSession,
+  Review,
+  ReviewDelta,
+  RunState,
+  SessionInfo,
+  WorkItem,
+} from '$lib/gen';
 
 /** Lamp shapes (DESIGN §6.1). `working` and `parked` are derived, not Attention levels. */
 export type Lamp = 'needs_input' | 'error' | 'working' | 'done' | 'activity' | 'parked' | 'none';
 
 export type NowSection =
-  'needs_you' | 'to_review' | 'next_up' | 'new' | 'fix' | 'requests' | 'ship' | 'in_flight' | 'up_next';
+  | 'needs_you'
+  | 'to_review'
+  | 'next_up'
+  | 'new'
+  | 'fix'
+  | 'requests'
+  | 'ship'
+  | 'in_flight'
+  | 'elsewhere'
+  | 'up_next';
 
 /** Ids of the work action registry (`actions.ts`). */
 export type WorkActionId =
@@ -34,6 +51,7 @@ export type WorkActionId =
   | 'open_pr'
   | 'open_review'
   | 'merge'
+  | 'set_draft'
   | 'start_now'
   | 'queue_front'
   | 'park'
@@ -61,11 +79,13 @@ export type PhaseId =
   | 'unpushed'
   | 'ready'
   | 'approved'
+  | 'draft'
   | 'in_review'
   | 'no_changes'
   | 'reviewing'
   | 'reviewed'
-  | 'updated';
+  | 'updated'
+  | 'elsewhere';
 
 export interface Phase {
   id: PhaseId;
@@ -367,6 +387,21 @@ function phaseRow(
       t('Ship'),
       'ship',
     );
+  // Pushed (the rows above catch unpushed work) and CI not red: ready to leave draft.
+  if (pr?.draft) {
+    const red = pr.ci === 'failure' || pr.ci === 'error';
+    return red
+      ? p(
+          'draft',
+          t('Draft'),
+          `${prLabel} ${t('checks {state}', { state: pr.ci })}`,
+          'none',
+          'open_pr',
+          t('Open PR'),
+          'in_flight',
+        )
+      : p('draft', t('Draft'), prLabel, 'none', 'set_draft', t('Mark ready…'), 'ship');
+  }
   if (pr?.decision === 'approved' && pr.ci === 'success')
     return p('approved', t('Approved'), prLabel, 'none', 'open_pr', t('Open PR'), 'ship');
   if (hasPr) {
@@ -412,6 +447,22 @@ const LAMP_RANK: Record<Lamp, number> = {
 };
 
 /** Aggregate lamp (DESIGN §6.1): needs input > error > working > done > activity. */
+/** A Claude session Kelta did not start (#345): its lamp and words, in Now and on its ticket's row. */
+export function outsidePhase(s: Pick<OutsideSession, 'status' | 'preview'>): Phase {
+  const [lamp, label]: [Lamp, string] =
+    s.status === 'needs_input'
+      ? ['needs_input', t('Claude needs you, outside Kelta')]
+      : s.status === 'working'
+        ? ['working', t('Claude working outside Kelta')]
+        : s.status === 'error'
+          ? ['error', t('Claude stopped on an error, outside Kelta')]
+          : s.status === 'done' || s.status === 'waiting_user'
+            ? ['done', t('Claude done, outside Kelta')]
+            : ['none', t('Claude open outside Kelta')];
+  const section = s.status === 'needs_input' ? 'needs_you' : 'elsewhere';
+  return p('elsewhere', label, s.preview ?? '', lamp, null, '', section);
+}
+
 export function maxLamp(lamps: Iterable<Lamp>): Lamp {
   let best: Lamp = 'none';
   for (const l of lamps) if (LAMP_RANK[l] > LAMP_RANK[best]) best = l;

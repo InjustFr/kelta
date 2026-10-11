@@ -1946,6 +1946,7 @@ export const settingsDefault: Settings = {
     "extra_args": [],
     "extra_hooks": {},
     "hook_transport": "command",
+    "hooks_offer": true,
     "ide_bridge": false,
     "max_live": 4,
     "mcp": true,
@@ -2672,6 +2673,27 @@ export const ctlRequestHook: CtlRequest = {
   },
   "session": "01928f6e-2b4c-7a10-9c3d-5e6f70819203",
   "token": "0123456789abcdef0123456789abcdef",
+  "v": 1
+};
+
+export const ctlRequestOutsideHook: CtlRequest = {
+  "cmd": "outside_hook",
+  "payload": {
+    "cwd": "/home/ada/.kelta-worktrees/shop/api/SHOP-142-rate-limit-login",
+    "hook_event_name": "Notification",
+    "last_assistant_message": null,
+    "message": null,
+    "notification_type": "permission_prompt",
+    "permission_mode": "acceptEdits",
+    "prompt": null,
+    "reason": null,
+    "session_id": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+    "source": null,
+    "tool_input": null,
+    "tool_name": null,
+    "transcript_path": "/home/ada/.claude/projects/x/6f1d2c3b.jsonl"
+  },
+  "pid": 4242,
   "v": 1
 };
 
@@ -3832,6 +3854,30 @@ export const uiEventQuitRequested: UiEvent = {
   "type": "app.quit_requested"
 };
 
+export const uiEventOutsideUpdated: UiEvent = {
+  "session": {
+    "branch": "feat/SHOP-142-checkout",
+    "cwd": "/Users/ada/src/shop",
+    "id": "5f0c2a1e-7d4b-4c3a-9e21-0b8f6a3d2c11",
+    "pid": 4242,
+    "preview": null,
+    "status": "needs_input",
+    "ticket": {
+      "account": "jira-acme",
+      "id": "10142",
+      "key": "SHOP-142"
+    },
+    "title": "Fix the checkout total",
+    "updated_at": "2026-10-09T12:00:00Z"
+  },
+  "type": "outside.updated"
+};
+
+export const uiEventOutsideRemoved: UiEvent = {
+  "id": "5f0c2a1e-7d4b-4c3a-9e21-0b8f6a3d2c11",
+  "type": "outside.removed"
+};
+
 /** Every fixture by file stem. */
 export const fixtures: Readonly<Record<string, unknown>> = {
   "kelta_error": keltaError,
@@ -3896,6 +3942,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "layout_save_result": layoutSaveResult,
   "bus_event": busEvent,
   "ctl_request_hook": ctlRequestHook,
+  "ctl_request_outside_hook": ctlRequestOutsideHook,
   "ctl_request_start": ctlRequestStart,
   "ctl_response": ctlResponse,
   "hook_session_start": hookSessionStart,
@@ -3945,4 +3992,6 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_ui_open": uiEventUiOpen,
   "ui_event_workflow_updated": uiEventWorkflowUpdated,
   "ui_event_quit_requested": uiEventQuitRequested,
+  "ui_event_outside_updated": uiEventOutsideUpdated,
+  "ui_event_outside_removed": uiEventOutsideRemoved,
 };

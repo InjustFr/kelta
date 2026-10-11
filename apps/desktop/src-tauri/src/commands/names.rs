@@ -20,6 +20,10 @@ pub const COMMANDS: &[&str] = &[
     "claude_setup",
     "claude_mcp_remove",
     "claude_permission_mode",
+    "claude_hooks_status",
+    "claude_hooks_install",
+    "claude_hooks_remove",
+    "outside_list",
     "app_update_status",
     "app_update_check",
     "app_restart",
@@ -104,6 +108,7 @@ pub const COMMANDS: &[&str] = &[
     "review_comment",
     "review_request_changes",
     "review_nudge",
+    "review_set_draft",
     // work
     "work_plan",
     "work_start",

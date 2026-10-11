@@ -112,6 +112,7 @@ export type * from './OnStart';
 export type * from './OpenPaneRequest';
 export type * from './OptionAsMeta';
 export type * from './Osc52';
+export type * from './OutsideSession';
 export type * from './Page';
 export type * from './PaneContent';
 export type * from './PaneId';

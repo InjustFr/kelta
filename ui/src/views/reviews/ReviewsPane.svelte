@@ -35,6 +35,7 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
 
+  import { toggleDraft } from './draft';
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
 
   let { projectId, tabId, paneId, content, focused }: PaneProps<'reviews'> = $props();
@@ -335,6 +336,9 @@
       case 'n':
         if (item) openNudge(item);
         break;
+      case 'd':
+        if (item) void toggleDraft(item.review);
+        break;
       default:
         return;
     }
@@ -559,6 +563,7 @@
       ['/', msg('Filter')],
       ['s', msg('Review locally')],
       ['n', msg('Nudge (my PRs)')],
+      ['d', msg('Mark ready / draft (my PRs)')],
       ['o', msg('Open in browser')],
       ['shift+m', msg('Merge when ready')],
       ['shift+r', msg('Refresh')],

@@ -42,6 +42,7 @@ import type {
   PrDraft,
   NextUp,
   NextUpItem,
+  OutsideSession,
   ProjectDraft,
   ProjectId,
   TabId,
@@ -128,6 +129,12 @@ export interface Commands {
   claude_mcp_remove: { args: NoArgs; result: null };
   /** The last mode a Claude session switched to (#277); `null` = Claude's own default. */
   claude_permission_mode: { args: NoArgs; result: PermissionMode | null };
+  /** Kelta's hook relay in Claude Code's user settings (#345); `null` = Claude Code not found. */
+  claude_hooks_status: { args: NoArgs; result: boolean | null };
+  claude_hooks_install: { args: NoArgs; result: null };
+  claude_hooks_remove: { args: NoArgs; result: null };
+  /** Claude sessions Kelta did not start (#345); those whose process is gone are dropped. */
+  outside_list: { args: NoArgs; result: OutsideSession[] };
   app_update_status: { args: NoArgs; result: UpdateStatus };
   /** Checks now and installs what it finds (resolves once done). */
   app_update_check: { args: NoArgs; result: UpdateStatus };
@@ -268,6 +275,7 @@ export interface Commands {
   review_request_changes: { args: { review: ReviewRef; body: string }; result: null };
   /** My PR: re-request `who` (its `waiting_on`; `comment` null) or post `comment`; refused for 24 h after a nudge. */
   review_nudge: { args: { review: ReviewRef; who: string[]; comment: string | null }; result: null };
+  review_set_draft: { args: { review: ReviewRef; draft: boolean }; result: null };
   // ---- work --------------------------------------------------------------------------------
   /** `project_id` null: the backend picks the default project (SPEC §3.1). */
   work_plan: {
@@ -389,6 +397,10 @@ export const COMMAND_NAMES = [
   'claude_setup',
   'claude_mcp_remove',
   'claude_permission_mode',
+  'claude_hooks_status',
+  'claude_hooks_install',
+  'claude_hooks_remove',
+  'outside_list',
   'app_update_status',
   'app_update_check',
   'app_restart',
@@ -467,6 +479,7 @@ export const COMMAND_NAMES = [
   'review_comment',
   'review_request_changes',
   'review_nudge',
+  'review_set_draft',
   'work_plan',
   'work_start',
   'work_list',
@@ -574,6 +587,10 @@ export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeSetup = wrap('claude_setup');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
 export const claudePermissionMode = wrap('claude_permission_mode');
+export const claudeHooksStatus = wrap('claude_hooks_status');
+export const claudeHooksInstall = wrap('claude_hooks_install');
+export const claudeHooksRemove = wrap('claude_hooks_remove');
+export const outsideList = wrap('outside_list');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');
@@ -701,6 +718,7 @@ export const reviewApprove = wrap('review_approve');
 export const reviewComment = wrap('review_comment');
 export const reviewRequestChanges = wrap('review_request_changes');
 export const reviewNudge = wrap('review_nudge');
+export const reviewSetDraft = wrap('review_set_draft');
 
 // ---- work -----------------------------------------------------------------------------------
 export const workPlan = wrap('work_plan');

@@ -156,12 +156,16 @@ pub const PROJECT_TOOLS_GLOBAL: &str = "`tools` cannot be set per project (globa
 
 pub const PROJECT_COLOR: &str = "`color` must be a theme colour or #rrggbb";
 
+pub const STATUS_COLOR: &str = "a status colour must be a theme colour or #rrggbb";
+
 /// Keys a hand-written file may get wrong without losing the rest of it: on load and in the settings
-/// editor the key is dropped and its issue becomes this warning. IPC writes stay strict ([`layer_issues`]).
+/// editor the key is dropped and its issue becomes this warning (`*` matches any one segment). IPC
+/// writes stay strict ([`layer_issues`]).
 const SOFT_KEYS: &[(Layer, &[&str], &str)] = &[
     (Layer::Repo, &["tools"], REPO_TOOLS_PERSONAL),
     (Layer::Project, &["tools"], PROJECT_TOOLS_GLOBAL),
     (Layer::Project, &["project", "color"], PROJECT_COLOR),
+    (Layer::Global, &["sources", "*", "status_colors", "*"], STATUS_COLOR),
 ];
 
 /// Load-time reading of a global, project or repo document: an issue under a [`SOFT_KEYS`] path drops
@@ -176,30 +180,26 @@ pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (V
     {
         *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
     }
-    let owned = |p: &[&str]| -> Vec<String> { p.iter().map(|s| (*s).to_owned()).collect() };
-    let mut dropped = [false; SOFT_KEYS.len()];
+    let mut warnings = Vec::new();
     loop {
         let raw = layer_issues(layer, value, stem);
         let mut again = false;
-        for (i, (l, path, _)) in SOFT_KEYS.iter().enumerate() {
-            let hit = *l == layer
-                && raw
-                    .iter()
-                    .any(|r| r.path.iter().map(String::as_str).take(path.len()).eq(path.iter().copied()));
-            // schema problems hide the follow-up checks, so validate again after a drop
-            if hit && crate::path::remove(value, &owned(path)) {
-                dropped[i] = true;
-                again = true;
+        for (k, (_, pattern, message)) in SOFT_KEYS.iter().enumerate().filter(|(_, (l, ..))| *l == layer) {
+            for r in &raw {
+                let hit = r.path.len() >= pattern.len()
+                    && pattern.iter().zip(&r.path).all(|(p, s)| *p == "*" || p == s);
+                let path = &r.path[..pattern.len().min(r.path.len())];
+                // schema problems hide the follow-up checks, so validate again after a drop
+                if hit && crate::path::remove(value, path) {
+                    warnings.push((k, RawIssue::new(path, *message)));
+                    again = true;
+                }
             }
         }
         if !again {
-            let warnings = SOFT_KEYS
-                .iter()
-                .zip(dropped)
-                .filter(|(_, d)| *d)
-                .map(|((_, path, message), _)| RawIssue::new(&owned(path), *message))
-                .collect();
-            return (raw, warnings);
+            // in SOFT_KEYS order, whichever drop revealed them
+            warnings.sort_by_key(|(k, _)| *k);
+            return (raw, warnings.into_iter().map(|(_, w)| w).collect());
         }
     }
 }
@@ -810,6 +810,20 @@ mod tests {
         let mut v = json!({"tools": [{"id": 3}]});
         let (errors, warnings) = lenient_issues(Layer::Global, &mut v, None);
         assert!(!errors.is_empty() && warnings.is_empty());
+    }
+
+    #[test]
+    fn a_bad_status_colour_is_dropped_as_a_warning() {
+        let source = |c: Value| json!({"id": "a", "tracker": {"account": "j"}, "status_colors": c});
+        let mut v = json!({"sources": [source(json!({"In QA": "theme:orange", "Ready": "#ff8800"}))]});
+        let (errors, warnings) = lenient_issues(Layer::Global, &mut v, None);
+        assert!(errors.is_empty(), "{errors:?}");
+        let path: Vec<String> = ["sources", "0", "status_colors", "In QA"].map(str::to_owned).into();
+        assert_eq!(warnings, [RawIssue::new(&path, STATUS_COLOR)]);
+        assert_eq!(v, json!({"sources": [source(json!({"Ready": "#ff8800"}))]}));
+        // IPC writes stay strict
+        let bad = json!({"sources": [source(json!({"Ready": "orange"}))]});
+        assert_eq!(layer_issues(Layer::Global, &bad, None).len(), 1);
     }
 
     #[test]

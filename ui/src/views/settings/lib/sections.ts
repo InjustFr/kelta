@@ -66,6 +66,7 @@ export const ADVANCED: readonly string[] = [
   'claude.hook_transport',
   'claude.ide_bridge',
   'claude.mcp_offer',
+  'claude.hooks_offer',
   'claude.min_version',
   'claude.prompt_templates',
   'claude.queue_hold_pct',

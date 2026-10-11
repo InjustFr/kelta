@@ -258,6 +258,7 @@ describe('mock transport', () => {
       review_comment: { review: review.ref, body: 'lgtm' },
       review_request_changes: { review: review.ref, body: 'nope' },
       review_nudge: { review: review.ref, who: ['anna'], comment: null },
+      review_set_draft: { review: review.ref, draft: false },
       work_plan: { project_id: 'shop', source: { kind: 'ticket', ticket: s.tickets[1]!.ticket.ref } },
       work_list: {},
       work_resume: { id: work.id },

@@ -109,6 +109,10 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         app::claude_setup,
         app::claude_mcp_remove,
         app::claude_permission_mode,
+        app::claude_hooks_status,
+        app::claude_hooks_install,
+        app::claude_hooks_remove,
+        app::outside_list,
         app::app_update_status,
         app::app_update_check,
         app::app_restart,
@@ -193,6 +197,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         review::review_comment,
         review::review_request_changes,
         review::review_nudge,
+        review::review_set_draft,
         // work
         work::work_plan,
         work::work_start,

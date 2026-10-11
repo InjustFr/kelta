@@ -10,6 +10,7 @@
     msg('Ticket sources moved out of your projects'),
     msg('A plugin screen stopped responding and was closed'),
     msg('Claude is working: it gets your message when it stops.'),
+    msg('Show the Claude sessions you start outside Kelta in Now?'),
     msg('Install'),
     msg('Never'),
     msg('Review'),

@@ -48,7 +48,14 @@ export function newSource(
     taken.map((s) => s.id),
   );
   const projects = projectId ? [projectId] : [];
-  return { id, label: hit.label, projects, tracker: withSource(null, account, hit), routes: [] };
+  return {
+    id,
+    label: hit.label,
+    projects,
+    tracker: withSource(null, account, hit),
+    routes: [],
+    status_colors: {},
+  };
 }
 
 /** Replaces the global `[[sources]]` list (sources are global only: one layer holds them all). */

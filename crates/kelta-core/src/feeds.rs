@@ -748,6 +748,12 @@ impl Core {
         self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
     }
 
+    /// The tickets of every list loaded since startup, from the cache; none is fetched.
+    pub(crate) async fn listed_tickets(&self) -> Vec<Ticket> {
+        let keys = self.feeds.views.lock().keys().cloned().collect();
+        self.cache_get_many::<Page<Ticket>>(keys).await.into_iter().flat_map(|p| p.items).collect()
+    }
+
     /// `tracker_list`: `source_id` / `view_id` are the pane's raw picks, resolved by `list_scope`.
     pub async fn tracker_list(
         &self,
@@ -1778,6 +1784,14 @@ impl Core {
     pub async fn review_comment(&self, r: &ReviewRef, body: &str) -> Result<(), KeltaError> {
         self.rt.capture();
         self.code_host_of(&r.account)?.comment(r, body).await?;
+        self.after_review_write(r).await;
+        Ok(())
+    }
+
+    /// Mark ready for review (`draft` false) or back to draft.
+    pub async fn review_set_draft(&self, r: &ReviewRef, draft: bool) -> Result<(), KeltaError> {
+        self.rt.capture();
+        self.code_host_of(&r.account)?.set_draft(r, draft).await?;
         self.after_review_write(r).await;
         Ok(())
     }

@@ -649,6 +649,26 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
             },
         ),
         ("ui_event_quit_requested", UiEvent::QuitRequested { live: 3, busy: vec!["claude".into()] }),
+        (
+            "ui_event_outside_updated",
+            UiEvent::OutsideUpdated {
+                session: OutsideSession {
+                    id: "5f0c2a1e-7d4b-4c3a-9e21-0b8f6a3d2c11".into(),
+                    cwd: Some(PathBuf::from("/Users/ada/src/shop")),
+                    title: "Fix the checkout total".into(),
+                    status: SessionStatus::NeedsInput,
+                    pid: Some(4242),
+                    branch: Some("feat/SHOP-142-checkout".into()),
+                    ticket: Some(ticket_ref()),
+                    preview: None,
+                    updated_at: TS.into(),
+                },
+            },
+        ),
+        (
+            "ui_event_outside_removed",
+            UiEvent::OutsideRemoved { id: "5f0c2a1e-7d4b-4c3a-9e21-0b8f6a3d2c11".into() },
+        ),
     ]
 }
 
@@ -1300,6 +1320,14 @@ pub fn all() -> Vec<Fixture> {
                     "Stop",
                     json!({"stop_hook_active": false, "last_assistant_message": "Done."})
                 )),
+            })
+        ),
+        fx!(
+            "ctl_request_outside_hook",
+            CtlRequest,
+            CtlRequest::new(CtlCommand::OutsideHook {
+                payload: Box::new(hook("Notification", json!({"notification_type": "permission_prompt"}))),
+                pid: Some(4242),
             })
         ),
         fx!(

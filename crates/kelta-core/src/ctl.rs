@@ -233,6 +233,10 @@ impl Core {
         match cmd {
             // kelta-server authenticates and ingests hooks itself (`hooks::ingest`).
             CtlCommand::Hook { .. } => Err(KeltaError::invalid("hooks go through the ctl server")),
+            CtlCommand::OutsideHook { payload, pid } => {
+                self.outside_hook(*payload, pid).await;
+                Ok(Value::Null)
+            }
             CtlCommand::Toggle
             | CtlCommand::Palette
             | CtlCommand::Next

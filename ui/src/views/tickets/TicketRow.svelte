@@ -137,9 +137,10 @@
           class:ask={phase.lamp === 'needs_input'}
           data-phase={phase.id}
           title={phaseText}
-          ><Icon name={phase.lamp === 'error' ? 'circle-alert' : 'git-branch'} size={14} /><span
-            class="k-visually-hidden">{phase.label}</span
-          ></span
+          ><Icon
+            name={phase.lamp === 'error' ? 'circle-alert' : phase.id === 'elsewhere' ? 'bot' : 'git-branch'}
+            size={14}
+          /><span class="k-visually-hidden">{phase.label}</span></span
         >{/if}
     </span>
     <span class="sig sig-pr">
@@ -164,7 +165,7 @@
   <span class="c-status" data-status
     ><RowButton
       label={t('{status}: move {key} (m)', { status: tk.status.name, key: tk.ref.key })}
-      onclick={onmove}><StatusChip status={tk.status} /></RowButton
+      onclick={onmove}><StatusChip status={tk.status} source={item.source_ids[0]} /></RowButton
     ></span
   >
   <span class="c-age"

@@ -2,7 +2,7 @@
 // sections in the order to work in, each with its own order. Pure: the pane and the rail feed it.
 
 import { msg, t, tn } from '$lib/i18n/index.svelte';
-import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
+import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
 import { workKey, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
@@ -15,6 +15,8 @@ export interface WorkEntry {
 export type NowRow =
   | { type: 'work'; id: string; item: WorkItem; phase: Phase }
   | { type: 'session'; id: string; session: SessionInfo }
+  /** A Claude session Kelta did not start (#345). */
+  | { type: 'outside'; id: string; session: OutsideSession }
   | { type: 'review'; id: string; review: ReviewItem; mine: boolean; reason: string }
   | { type: 'ticket'; id: string; ticket: TicketItem };
 
@@ -22,6 +24,8 @@ export interface NowInput {
   /** Unfinished work items with their phase. */
   work: readonly WorkEntry[];
   sessions: readonly SessionInfo[];
+  /** Claude sessions Kelta did not start: asking ones in Claude needs you, the others in Elsewhere. */
+  outside?: readonly OutsideSession[];
   requested: readonly ReviewItem[];
   authored: readonly ReviewItem[];
   /** Tickets assigned to me, in tracker order. */
@@ -52,6 +56,7 @@ export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] 
   { id: 'requests', label: msg('Review requests'), lamp: 'none' },
   { id: 'ship', label: msg('Ship and clean up'), lamp: 'none' },
   { id: 'in_flight', label: msg('In flight'), lamp: 'working' },
+  { id: 'elsewhere', label: msg('Elsewhere'), lamp: 'none' },
   { id: 'up_next', label: msg('Up next'), lamp: 'none' },
 ];
 
@@ -113,6 +118,13 @@ export function nowSections(input: NowInput): Section[] {
   for (const s of input.sessions)
     if (s.status === 'needs_input' && !(s.work_item_id && itemIds.has(s.work_item_id)))
       add('needs_you', { type: 'session', id: `s:${s.id}`, session: s }, 0, s.created_at);
+  for (const s of input.outside ?? [])
+    add(
+      s.status === 'needs_input' ? 'needs_you' : 'elsewhere',
+      { type: 'outside', id: `o:${s.id}`, session: s },
+      1,
+      s.updated_at,
+    );
 
   // PRs a work item already stands for are not listed twice.
   const ownedPrs = new Set<string>();
@@ -259,6 +271,8 @@ function waitingSince(row: NowRow): string {
       return row.item.claude_at ?? row.item.created_at;
     case 'session':
       return row.session.created_at;
+    case 'outside':
+      return row.session.updated_at;
     case 'review':
       return (row.mine ? null : row.review.review.requested_at) ?? row.review.review.updated_at;
     case 'ticket':
@@ -273,6 +287,8 @@ export function rowKey(row: NowRow): string {
       return workKey(row.item);
     case 'session':
       return row.session.name;
+    case 'outside':
+      return row.session.title;
     case 'review':
       return `#${row.review.review.ref.number}`;
     case 'ticket':

@@ -399,7 +399,7 @@
           title={t('Move (m)')}
           onclick={() => (picker = statusBtn ?? null)}
         >
-          <StatusChip status={ticket.status} />
+          <StatusChip status={ticket.status} source={item.source_ids[0]} />
           <Icon name="chevron-down" size={14} />
         </Button>
       </span>
@@ -508,7 +508,7 @@
             onkeydown={(e) => childKeys(e, c)}
           >
             <span class="key">{c.ticket.ref.key}</span>
-            <StatusChip status={c.ticket.status} />
+            <StatusChip status={c.ticket.status} source={c.source_ids[0] ?? item.source_ids[0]} />
             <span class="pr-title">{c.ticket.title}</span>
           </button>
         {/each}
