@@ -76,6 +76,9 @@ test.describe('tickets board', () => {
     await page.keyboard.press('s');
     const sheet = page.getByRole('dialog', { name: /Start work on SHOP-151/ });
     await expect(sheet).toBeVisible();
+    // The mock's unfinished work is listed first (#354); Enter starts anyway.
+    await expect(sheet.getByTestId('finish-first')).toContainText('SHOP-142');
+    await page.keyboard.press('Enter');
     await expect(sheet.getByLabel('Branch', { exact: true })).toHaveValue(/^feat\/shop-151/);
     await page.keyboard.press('Control+Enter');
     await expect(sheet).toBeHidden();
