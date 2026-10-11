@@ -3270,7 +3270,8 @@
               0.5
             ],
             "split": "row"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -3311,7 +3312,8 @@
               0.5
             ],
             "split": "row"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -3322,7 +3324,8 @@
             "name": null,
             "profile": null,
             "session": "claude"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -3333,7 +3336,8 @@
             "name": null,
             "profile": null,
             "session": "editor"
-          }
+          },
+          "options": []
         },
         {
           "enabled": true,
@@ -3344,7 +3348,8 @@
             "name": null,
             "profile": null,
             "session": "shell"
-          }
+          },
+          "options": []
         }
       ],
       "items": {
@@ -3437,6 +3442,30 @@
               "session": "shell"
             },
             "description": "`{ split = \"row\", ratios = [..], children = [..] }` | `{ session = \"claude\", ... }`."
+          },
+          "options": {
+            "default": [],
+            "description": "Picked per ticket in the Start sheet, unless the ticket's route declares its own.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.",
+              "properties": {
+                "label": {
+                  "default": "",
+                  "type": "string"
+                },
+                "values": {
+                  "default": [],
+                  "description": "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -3555,6 +3584,30 @@
                     }
                   },
                   "type": "object"
+                },
+                "options": {
+                  "default": [],
+                  "description": "Picked per ticket in the Start sheet; replace the template's options.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A start option: one value is a checkbox, several a single choice. The picked values go\nto the Claude prompt's `{options}`, else after it, in the declared order.",
+                    "properties": {
+                      "label": {
+                        "default": "",
+                        "type": "string"
+                      },
+                      "values": {
+                        "default": [],
+                        "description": "e.g. `[\"--auto\"]`, or `[\"--mode=quick\", \"--mode=skip\"]`.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "project": {
                   "default": "",

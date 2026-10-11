@@ -92,7 +92,7 @@
   function addRoute(s: Source): void {
     const project = s.projects[0] ?? '';
     const match = { component: '', label: null, type: null };
-    void setRoutes(s, [...s.routes, { match, project, repo: firstRepo(project) }]);
+    void setRoutes(s, [...s.routes, { match, project, repo: firstRepo(project), options: [] }]);
   }
 
   async function remove(s: Source): Promise<void> {

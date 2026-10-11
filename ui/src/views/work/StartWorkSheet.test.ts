@@ -7,7 +7,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, projects, settings, toasts, work } from '$lib/stores';
 
-import { refines } from '../tickets/refine.svelte';
+import { refines, withCriteria } from '../tickets/refine.svelte';
 import StartWorkSheet from './StartWorkSheet.svelte';
 
 let mock: MockControls;
@@ -80,6 +80,65 @@ describe('StartWorkSheet plan', () => {
     expect(plan.claude.prompt).toBe('Do the thing');
     expect(plan.side_effects.run_setup).toBe(false);
     expect(work.all.some((w) => w.branch === 'feat/custom-branch')).toBe(true);
+  });
+
+  it('applies the route options to the prompt as they change and sends the picks (#357)', async () => {
+    await mountSheet((p) => {
+      p.claude.prompt = '/pass SHOP-151 --auto';
+      p.options = {
+        key: 'route:product:0',
+        declared: [
+          { label: 'Auto', values: ['--auto'] },
+          { label: 'Mode', values: ['--mode=quick', '--mode=skip'] },
+        ],
+        picked: ['--auto'],
+        prompt: '/pass SHOP-151 {options}',
+      };
+    });
+    const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    const auto = screen.getByRole('switch', { name: 'Auto' }) as HTMLInputElement;
+    expect(auto.checked).toBe(true);
+    await fireEvent.change(screen.getByLabelText('Mode'), { target: { value: '--mode=skip' } });
+    expect(prompt.value).toBe('/pass SHOP-151 --auto --mode=skip');
+    await fireEvent.click(auto);
+    expect(prompt.value).toBe('/pass SHOP-151 --mode=skip');
+    // a hand edit keeps the options in place
+    await fireEvent.input(prompt, { target: { value: 'Now /pass SHOP-151 --mode=skip' } });
+    await fireEvent.change(screen.getByLabelText('Mode'), { target: { value: '--mode=quick' } });
+    expect(prompt.value).toBe('Now /pass SHOP-151 --mode=quick');
+    await fireEvent.click(start());
+    await waitFor(() => expect(sentPlan()).toBeTruthy());
+    expect(sentPlan().claude.prompt).toBe('Now /pass SHOP-151 --mode=quick');
+    expect(sentPlan().options?.picked).toEqual(['--mode=quick']);
+  });
+
+  it('keeps the accepted refine criteria in the prompt when an option is toggled (#357)', async () => {
+    refines[`${ticket.account}:${ticket.key}`] = {
+      running: false,
+      text: '## Acceptance criteria\n- fast',
+      posted: false,
+    };
+    await mountSheet((p) => {
+      p.claude.prompt = '/pass SHOP-151';
+      p.options = {
+        key: 'route:product:0',
+        declared: [{ label: 'Auto', values: ['--auto'] }],
+        picked: [],
+        prompt: '/pass SHOP-151 {options}',
+      };
+      withCriteria(p, ticket);
+    });
+    const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement;
+    expect(prompt.value).toContain('- fast');
+    await fireEvent.click(screen.getByRole('switch', { name: 'Auto' }));
+    expect(prompt.value).toContain('- fast');
+    expect(prompt.value).toContain('--auto');
+    delete refines[`${ticket.account}:${ticket.key}`];
+  });
+
+  it('shows no options without any declared', async () => {
+    await mountSheet();
+    expect(screen.queryByTestId('start-options')).toBeNull();
   });
 
   it('submits with Ctrl+Enter', async () => {

@@ -10,7 +10,9 @@ use crate::codehost::{ReviewKind, ReviewRef};
 use crate::ids::{
     PaneId, PluginId, ProjectId, ScreenInstanceId, SessionId, TabId, ToolId, ToolInstanceId, WorkItemId,
 };
-use crate::settings::{ClaudeEffort, CodeHostBinding, PermissionMode, TrackerBinding, TransitionTarget};
+use crate::settings::{
+    ClaudeEffort, CodeHostBinding, PermissionMode, StartOption, TrackerBinding, TransitionTarget,
+};
 use crate::tracker::{TicketGroupBy, TicketRef, TicketSort, Who};
 
 // ---------------------------------------------------------------------------------------------
@@ -1100,6 +1102,22 @@ pub struct StartWorkPlan {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub adopt_pr: Option<String>,
+    /// Options picked per ticket (#357), set by `Core::work_plan`; `claude.prompt` has them applied.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub options: Option<PlanOptions>,
+}
+
+/// The start options of a plan: the route's, else the template's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PlanOptions {
+    /// What remembers the picks: `route:<source>:<index>` or `template:<id>`.
+    pub key: String,
+    pub declared: Vec<StartOption>,
+    /// Picked values, at most one per option.
+    pub picked: Vec<String>,
+    /// The prompt before the options, with `{options}` where they go (none = at the end).
+    pub prompt: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

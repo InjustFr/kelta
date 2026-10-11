@@ -245,8 +245,10 @@ A theme is a named, **partial** set of colour overrides on top of a Bezel base: 
 A build without themes rejects a config that has `themes` (`deny_unknown_fields`). First paint shows Bezel until settings load.
 
 ### [[session_templates]]  (by_id; scope global+project+repo; x-kelta-exec)
-`{ id, label, layout: TemplateNode, enabled = true }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
+`{ id, label, layout: TemplateNode, enabled = true, options = [StartOption] }` where `TemplateNode = { split = "row"|"column", ratios = [f32], children = [TemplateNode] } | { session = "claude"|"editor"|"shell"|"setup"|"tool:<id>", name?: str, profile?: str /*claude profile*/, command?: Template /*shell: run this then stay interactive*/ }`. Defaults:
 ```toml
+`StartOption = { label, values = [str] }` (#357): options picked per ticket in the Start sheet, under the prompt. One value is a checkbox, several a single choice (or none). The picked values replace the Claude prompt's `{options}` (`claude.prompt_templates`), else go after it, in the declared order. A ticket's route with `options` replaces the template's (the default template, `work.default_template`). The last picks are remembered per route or template (`ui_state`) and pre-selected next time; a start without the sheet uses them.
+
 [[session_templates]]
 id = "claude+editor"
 label = "Claude + editor"
@@ -298,6 +300,7 @@ status_map = { start = { category = "in_progress" }, done = { category = "done" 
 match = { component = "Web" }
 project = "web"
 repo = "web"
+options = [{ label = "Auto", values = ["--auto"] }, { label = "Mode", values = ["--mode=brainstorm", "--mode=quick", "--mode=skip"] }]
 ```
 
 `blocked` says how the tracker marks a ticket blocked without changing its status: `"status"` (the status name reads blocked, on hold, waiting or impediment), `"flag"` (the Jira flag), `"relation"` (a Linear "blocked by" an open issue) or `{ label = "<name>" }`. Unset, it follows the provider: `flag` on Jira, `relation` on Linear, `status` elsewhere. A blocked ticket shows a Blocked chip, goes to Waiting in Flow and sorts last in its group; **Block / Unblock** (`b` in the detail) sets the flag, adds or removes the label (Jira, GitHub, GitLab, Gitea), or moves a `status` ticket to a blocked status and back to in progress (else to do). A Linear relation, or a label on Linear or Redmine, is set in the tracker: the action is off with that reason. A status name that reads blocked still puts the ticket in Waiting whatever the setting.
