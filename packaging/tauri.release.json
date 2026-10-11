@@ -21,7 +21,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE-WITH-the-content-of-kelta-updater.key.pub (CONTRIBUTING, Nightly builds)"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ1NjEzRTY1RTkyMDk1NTAKUldSUWxTRHBaVDVoMVlFeWdwZllWZ1RKc1pHODhubkZKbE0xVnZkbGZhUHlEa3JWbFU4NEZrR1IK"
     }
   }
 }
