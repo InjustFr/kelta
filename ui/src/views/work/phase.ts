@@ -373,7 +373,15 @@ function phaseRow(
   if (pr?.draft) {
     const red = pr.ci === 'failure' || pr.ci === 'error';
     return red
-      ? p('draft', t('Draft'), `${prLabel} ${t('checks {state}', { state: pr.ci })}`, 'none', 'open_pr', t('Open PR'), 'in_flight')
+      ? p(
+          'draft',
+          t('Draft'),
+          `${prLabel} ${t('checks {state}', { state: pr.ci })}`,
+          'none',
+          'open_pr',
+          t('Open PR'),
+          'in_flight',
+        )
       : p('draft', t('Draft'), prLabel, 'none', 'set_draft', t('Mark ready…'), 'ship');
   }
   if (pr?.decision === 'approved' && pr.ci === 'success')

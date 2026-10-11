@@ -7,7 +7,8 @@ import { reviews, settings, toasts } from '$lib/stores';
 
 import { confirms } from '../../shell/confirm.svelte';
 
-export const draftLabel = (r: Review): string => (r.draft ? t('Mark ready for review…') : t('Convert to draft'));
+export const draftLabel = (r: Review): string =>
+  r.draft ? t('Mark ready for review…') : t('Convert to draft');
 
 /** Why `r`'s draft state cannot change from Kelta, or null. */
 export function draftBlocked(r: Review): string | null {
@@ -34,7 +35,9 @@ export async function toggleDraft(r: Review): Promise<void> {
   try {
     await reviewSetDraft({ review: r.ref, draft: !r.draft });
     toasts.info(
-      r.draft ? t('#{n} is ready for review', { n: r.ref.number }) : t('#{n} is a draft again', { n: r.ref.number }),
+      r.draft
+        ? t('#{n} is ready for review', { n: r.ref.number })
+        : t('#{n} is a draft again', { n: r.ref.number }),
     );
     void reviews.loadDetail(r.ref);
   } catch (err) {
