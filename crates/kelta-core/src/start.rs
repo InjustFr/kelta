@@ -97,7 +97,7 @@ impl Core {
     /// The ticket's source, and the route it matches from the cached ticket, else the tracker's (a
     /// failed fetch matches no route: the plan reports it).
     async fn source_hint(&self, t: &TicketRef, sources: &[Source]) -> Option<SourceHint> {
-        let cached = self.cached_ticket(t).await;
+        let cached = self.cached_ticket(t, true).await;
         let listed_in = cached.as_ref().map(|(_, ids)| ids.as_slice()).unwrap_or_default();
         let s = source_of(sources, &t.account, listed_in)?;
         let route = if s.routes.is_empty() {
