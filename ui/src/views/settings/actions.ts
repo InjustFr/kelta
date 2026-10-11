@@ -14,6 +14,14 @@ let tomlRequest: string | null = null;
 
 let sourceRequest: string | null = null;
 
+const sourceListeners = new Set<() => void>();
+
+/** A mounted Sources section hears of a request made while it is already showing. */
+export function onSourceRequest(fn: () => void): () => void {
+  sourceListeners.add(fn);
+  return () => void sourceListeners.delete(fn);
+}
+
 /** Source whose card the next Sources section shows, once. */
 export function takeSourceRequest(): string | null {
   const id = sourceRequest;
@@ -41,7 +49,7 @@ registerAction('settings.open', async (args) => {
     const open = current && findContent(current, (c) => c.kind === 'settings');
     if (open) {
       // A new content object re-runs the pane's section effect, which also takes the TOML request.
-      const retarget = section !== null || tomlRequest !== null;
+      const retarget = section !== null || tomlRequest !== null || sourceRequest !== null;
       layout.update(projectId, (l) => {
         const next = retarget
           ? updateTab(l, open.tabId, (t) => ({
@@ -51,6 +59,7 @@ registerAction('settings.open', async (args) => {
           : l;
         return focusPane(next, open.tabId, open.paneId);
       });
+      if (sourceRequest !== null) sourceListeners.forEach((fn) => fn());
       return;
     }
     layout.open(projectId, {
@@ -62,6 +71,7 @@ registerAction('settings.open', async (args) => {
     });
   } catch (err) {
     tomlRequest = null;
+    sourceRequest = null;
     toasts.error(err, 'Could not open settings');
   }
 });

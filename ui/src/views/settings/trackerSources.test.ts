@@ -160,6 +160,18 @@ describe('Settings → Sources', () => {
     expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: {} });
   });
 
+  it('scrolls to the source asked while Settings is already open on Sources (#340)', async () => {
+    const seen = vi.fn();
+    Element.prototype.scrollIntoView = seen;
+    await import('./actions');
+    await dispatch('settings.open', { section: 'sources' });
+    mountSources();
+    await waitFor(() => expect(screen.getAllByTestId('source-card').length).toBeGreaterThan(0));
+    await dispatch('settings.open', { source_id: 'billing' });
+    await waitFor(() => expect(seen).toHaveBeenCalled());
+    expect((seen.mock.contexts[0] as HTMLElement).dataset.sourceCard).toBe('billing');
+  });
+
   it('Settings → Projects shows which sources feed a project, and no Tracker block', async () => {
     render(Projects, { layer: 'global', projectId: null, repoId: null });
     const row = await waitFor(() => {

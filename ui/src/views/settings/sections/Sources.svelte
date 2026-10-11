@@ -10,7 +10,7 @@
   import Icon from '$lib/ui/Icon.svelte';
 
   import { confirms } from '../../../shell/confirm.svelte';
-  import { takeSourceRequest } from '../actions';
+  import { onSourceRequest, takeSourceRequest } from '../actions';
   import Control from '../fields/Control.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import SettingsCard from '../layout/SettingsCard.svelte';
@@ -44,7 +44,9 @@
     MATCH.find((m) => r.match[m.value] != null)?.value ?? 'component';
 
   // Settings → Sources from a toast or a "Fed by" link: that source's card comes into view.
-  let wanted = takeSourceRequest();
+  let wanted = $state(takeSourceRequest());
+  // Settings already on Sources: the retarget does not remount this section.
+  $effect(() => onSourceRequest(() => (wanted = takeSourceRequest())));
   $effect(() => {
     const id = wanted;
     if (!id || !all.some((s) => s.id === id)) return;
