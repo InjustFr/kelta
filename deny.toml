@@ -1,5 +1,5 @@
 # cargo-deny configuration (BUILD_PLAN §2.5: licenses MIT/Apache/BSD/ISC/MPL-2.0/Zlib/Unicode only).
-# Run: cargo deny check licenses   (CI job "cargo-deny licenses")
+# Run: cargo deny check advisories licenses bans sources   (CI job "cargo-deny")
 
 [graph]
 # Shipping targets only (Windows-only crates such as clipboard-win are out of scope).
@@ -49,3 +49,8 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 [advisories]
 version = 2
 yanked = "warn"
+# Each entry: an advisory with no fix reachable from our dependency graph, and why.
+ignore = [
+  # Unmaintained (no vulnerability): pulled by glib-macros 0.18 via gtk-rs 0.18, pinned by tauri/wry on Linux.
+  { id = "RUSTSEC-2024-0370", reason = "transitive via tauri -> gtk 0.18 -> glib-macros; goes when tauri moves off gtk-rs 0.18" },
+]
