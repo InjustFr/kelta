@@ -187,7 +187,12 @@ pub fn existing_for<'a>(items: &'a [WorkItem], source: &WorkSource) -> Option<&'
             w.ticket.as_ref().is_some_and(|t| t.account == ticket.account && t.key == ticket.key)
         }
         WorkSource::Review { review } => w.review.as_ref() == Some(review),
-        WorkSource::Branch { name, .. } => w.ticket.is_none() && w.review.is_none() && &w.branch == name,
+        WorkSource::Branch { name, repo, .. } => {
+            w.ticket.is_none()
+                && w.review.is_none()
+                && &w.branch == name
+                && repo.as_ref().is_none_or(|r| &w.repo_id == r)
+        }
     })
 }
 

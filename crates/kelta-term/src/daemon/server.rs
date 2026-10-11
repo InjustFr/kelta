@@ -76,6 +76,13 @@ impl Route {
     }
 }
 
+// A route dropped while running never gets its Exited (a panic mid-Spawn): release the count.
+impl Drop for Route {
+    fn drop(&mut self) {
+        self.exited();
+    }
+}
+
 impl TerminalEvents for Route {
     fn on_event(&self, id: &SessionId, ev: TerminalEvent) {
         if matches!(ev, TerminalEvent::Exited { .. }) {
@@ -102,6 +109,19 @@ impl FrameSink for ConnSink {
     fn send(&mut self, frame: Vec<u8>) -> bool {
         encode(&Out::Frame { id: self.id.clone(), token: self.token }, &frame)
             .is_ok_and(|m| self.tx.send(m).is_ok())
+    }
+}
+
+/// Ends a connection on return or panic: stops its writer, releases its client count.
+struct ConnGuard {
+    idle: Arc<Idle>,
+    tx: Sender<Vec<u8>>,
+}
+
+impl Drop for ConnGuard {
+    fn drop(&mut self) {
+        let _ = self.tx.send(Vec::new());
+        self.idle.update(|s| s.0 -= 1);
     }
 }
 
@@ -190,6 +210,7 @@ impl Daemon {
             return tracing::warn!(error = %e, "keltad: cannot start a writer thread");
         }
         self.idle.update(|s| s.0 += 1);
+        let _conn = ConnGuard { idle: self.idle.clone(), tx: tx.clone() };
         let mut r = BufReader::new(stream);
         while let Ok(Some(body)) = read_msg(&mut r) {
             let Some((call, raw)) = decode::<Call>(&body) else {
@@ -212,8 +233,6 @@ impl Daemon {
             }
             reply(&tx, seq, self.handle(&tx, seq, call.req, raw));
         }
-        let _ = tx.send(Vec::new());
-        self.idle.update(|s| s.0 -= 1);
     }
 
     fn handle(&self, tx: &Sender<Vec<u8>>, seq: u64, req: Req, raw: &[u8]) -> Result<Value, KeltaError> {
@@ -231,6 +250,10 @@ impl Daemon {
                     idle: self.idle.clone(),
                 });
                 self.idle.update(|s| s.1 += 1);
+                #[cfg(test)]
+                if spec.program == Path::new(tests::PANIC) {
+                    panic!("test hook: handler panic");
+                }
                 let id = spec.id.clone();
                 let r = h.spawn(PtySpawnSpec {
                     id: spec.id,
@@ -326,6 +349,9 @@ mod tests {
     use kelta_proto::term::TerminalLimits;
 
     use super::*;
+
+    /// Spawn program that makes the handler panic.
+    pub(super) const PANIC: &str = "!panic";
 
     fn host() -> PtyTerminalHost {
         PtyTerminalHost::new(TerminalLimits::default())
@@ -482,6 +508,40 @@ mod tests {
         assert!(!t.is_finished(), "a connected client keeps keltad alive");
         drop(s);
         t.join().unwrap();
+        assert!(!sock.exists());
+    }
+
+    /// #291: a handler panic (here mid-Spawn) releases its client and running counts.
+    #[test]
+    fn exits_when_idle_after_a_handler_panic() {
+        use super::super::SpawnSpec;
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = tmp.path().join("run/keltad.sock");
+        let l = bind(&sock).unwrap();
+        let t = std::thread::spawn(move || serve(l, host(), Duration::from_millis(100)));
+        let mut s = UnixStream::connect(&sock).unwrap();
+        let spec = SpawnSpec {
+            id: SessionId::new("p"),
+            program: PANIC.into(),
+            args: Vec::new(),
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+        };
+        s.write_all(&encode(&Call { seq: 1, req: Req::Spawn { spec } }, &[]).unwrap()).unwrap();
+        // The panic closes the connection (no reply); the client side stays open.
+        s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let mut buf = Vec::new();
+        let _ = s.read_to_end(&mut buf);
+        assert!(buf.is_empty(), "got a reply");
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !t.is_finished() {
+            assert!(std::time::Instant::now() < deadline, "keltad stayed up after the panic");
+            std::thread::sleep(Duration::from_millis(20));
+        }
         assert!(!sock.exists());
     }
 }

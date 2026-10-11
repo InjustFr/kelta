@@ -708,6 +708,61 @@ async fn detail_reports_my_last_reviewed_head_and_pending_comments() {
     assert_eq!(d.pending_comments, 2);
 }
 
+/// `/reviews` split over two pages: erin's change request on page 1, her approval and my pending
+/// review on page 2.
+async fn mount_paged_reviews(server: &MockServer) {
+    let reviews = "/repos/acme/shop/pulls/101/reviews";
+    let review = |id: u64, login: &str, state: &str| json!({ "id": id, "node_id": format!("PRR_{id}"), "user": { "login": login }, "state": state, "commit_id": "abc123" });
+    Mock::given(method("GET"))
+        .and(path(reviews))
+        .and(query_param("page", "2"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!([review(5, "erin", "APPROVED"), review(9, "louis", "PENDING")])),
+        )
+        .mount(server)
+        .await;
+    let next = format!("<{}{reviews}?per_page=100&page=2>; rel=\"next\"", server.uri());
+    Mock::given(method("GET"))
+        .and(path(reviews))
+        .respond_with(
+            ResponseTemplate::new(200).insert_header("link", next.as_str()).set_body_json(json!([
+                review(1, "zed", "COMMENTED"),
+                review(2, "erin", "CHANGES_REQUESTED")
+            ])),
+        )
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn reviews_follow_the_link_header() {
+    let server = MockServer::start().await;
+    mount_paged_reviews(&server).await;
+    mount_detail(&server, "github/pull.json", "github/reviews.json", "github/check_runs.json").await;
+    mount(
+        &server,
+        "GET",
+        "/repos/acme/shop/pulls/101/reviews/9/comments",
+        200,
+        "github/review_comments.json",
+    )
+    .await;
+    let r = rref("github-work", "acme/shop", 101);
+    let d = gh(&server).get(&r).await.unwrap();
+    assert_eq!(d.review.decision, Some(ReviewDecision::Approved), "erin's page-2 approval wins");
+    assert_eq!(d.pending_comments, 2, "my pending review sits on page 2");
+
+    mount(&server, "POST", "/graphql", 200, "github/gql_thread.json").await;
+    gh(&server).add_pending_comment(&r, "src/a.rs", 3, "x").await.unwrap();
+    assert_eq!(
+        count(&server, "POST", "/repos/acme/shop/pulls/101/reviews").await,
+        0,
+        "no second pending review"
+    );
+    assert_eq!(bodies(&server, "POST", "/graphql").await[0]["variables"]["id"], "PRR_9");
+}
+
 #[tokio::test]
 async fn pending_comment_creates_the_review_once_and_adds_a_thread() {
     let server = MockServer::start().await;

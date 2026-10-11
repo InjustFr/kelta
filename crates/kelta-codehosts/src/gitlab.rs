@@ -35,6 +35,8 @@ use crate::common::{
 /// Merge requests untouched for longer than this are not listed.
 const STALE_AFTER_DAYS: i64 = 90;
 const PER_PAGE: &str = "100";
+/// shortcut: at most this many result pages per list, upgrade when someone has more MRs or notes.
+const MAX_PAGES: u32 = 5;
 
 /// `(repo, iid, head sha)`.
 type DiffKey = (String, u64, String);
@@ -113,6 +115,24 @@ impl GitlabHost {
 
     async fn json(&self, req: HttpRequest) -> Result<kelta_http::HttpResponse<Value>, KeltaError> {
         self.auth.send_json::<Value>(req).await
+    }
+
+    /// Rows of a paged list, following `x-next-page` up to [`MAX_PAGES`].
+    async fn paged(&self, req: HttpRequest) -> Result<Vec<Value>, KeltaError> {
+        let mut out = Vec::new();
+        let mut next = Some(req.clone());
+        for _ in 0..MAX_PAGES {
+            let Some(r) = next.take() else { break };
+            let resp = self.json(r).await?;
+            out.extend(resp.body.as_array().cloned().unwrap_or_default());
+            next = resp
+                .headers
+                .get("x-next-page")
+                .map(|p| p.trim())
+                .filter(|p| p.parse::<u32>().is_ok())
+                .map(|p| req.clone().query("page", p));
+        }
+        Ok(out)
     }
 
     fn mr_url(&self, repo: &str, tail: &str) -> String {
@@ -327,10 +347,11 @@ impl GitlabHost {
             Some(c) => c,
             None => {
                 let url = self.mr_url(&key.0, &format!("/{}/discussions", key.1));
-                let Ok(r) = self.json(HttpRequest::get(url).query("per_page", PER_PAGE)).await else {
+                let Ok(discussions) = self.paged(HttpRequest::get(url).query("per_page", PER_PAGE)).await
+                else {
                     return;
                 };
-                let open = open_discussions(&r.body);
+                let open = open_discussions(&discussions);
                 let at = open
                     .iter()
                     .filter_map(|(_, notes)| notes.last())
@@ -389,11 +410,9 @@ impl GitlabHost {
 }
 
 /// Resolvable, unresolved discussions with their non-system notes, oldest first.
-fn open_discussions(discussions: &Value) -> Vec<(&Value, Vec<&Value>)> {
+fn open_discussions(discussions: &[Value]) -> Vec<(&Value, Vec<&Value>)> {
     discussions
-        .as_array()
-        .into_iter()
-        .flatten()
+        .iter()
         .filter_map(|d| {
             let notes: Vec<&Value> = d
                 .get("notes")
@@ -503,24 +522,19 @@ impl CodeHost for GitlabHost {
         for (k, v) in self.list_query(q.kind, q.include_drafts).await? {
             req = req.query(k, v);
         }
-        let resp = self.json(req.with_etag()).await?;
+        let rows = self.paged(req.with_etag()).await?;
         // Only the review-requested list answers what the gate saw change.
         if q.kind == ReviewKind::ReviewRequested {
             self.gate.lock().pending = false;
         }
-        let mut list: Vec<(Review, u64)> = resp
-            .body
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|m| {
-                        let notes = m.get("user_notes_count").and_then(Value::as_u64).unwrap_or(0);
-                        Some((self.review_from(m, None, q.kind)?, notes))
-                    })
-                    .filter(|(r, _)| q.include_drafts || !r.draft)
-                    .collect()
+        let mut list: Vec<(Review, u64)> = rows
+            .iter()
+            .filter_map(|m| {
+                let notes = m.get("user_notes_count").and_then(Value::as_u64).unwrap_or(0);
+                Some((self.review_from(m, None, q.kind)?, notes))
             })
-            .unwrap_or_default();
+            .filter(|(r, _)| q.include_drafts || !r.draft)
+            .collect();
         if q.kind == ReviewKind::ReviewRequested {
             let me = self.me().await?;
             futures::future::join_all(list.iter_mut().map(|(r, _)| self.request_state(r, &me))).await;
@@ -551,12 +565,9 @@ impl CodeHost for GitlabHost {
                     r.query(k.clone(), v.clone())
                 });
             async move {
-                let resp = self.json(req.with_etag()).await?;
+                let rows = self.paged(req.with_etag()).await?;
                 Ok::<_, KeltaError>(
-                    resp.body
-                        .as_array()
-                        .into_iter()
-                        .flatten()
+                    rows.iter()
                         .filter_map(|m| self.review_from(m, Some(repo), ReviewKind::Team))
                         .collect::<Vec<_>>(),
                 )
@@ -803,10 +814,10 @@ impl CodeHost for GitlabHost {
         let url = self.mr_url(&r.repo, &format!("/{}", r.number));
         let (mr, discussions) = tokio::join!(
             self.json(HttpRequest::get(&url)),
-            self.json(HttpRequest::get(format!("{url}/discussions")).query("per_page", PER_PAGE)),
+            self.paged(HttpRequest::get(format!("{url}/discussions")).query("per_page", PER_PAGE)),
         );
         let mr = mr.map_err(&refused)?.body;
-        let discussions = discussions.map_err(&refused)?.body;
+        let discussions = discussions.map_err(&refused)?;
         let web = s(&mr, "web_url").unwrap_or("").to_owned();
         let me = self.me().await.ok().and_then(|u| u.login);
         let username =

@@ -584,6 +584,37 @@ async fn branch_workspace_without_ticket() {
 }
 
 #[tokio::test]
+async fn same_branch_name_in_two_repos_gets_two_items() {
+    need_git!();
+    let fx = Fx::new();
+    git(fx.tmp.path(), &["clone", "-q", &fx.repo.to_string_lossy(), "web"]);
+    let mut p = samples::project_info();
+    p.id = kelta_proto::ids::ProjectId::new("two");
+    p.repos[0].path = fx.repo.clone();
+    let mut web = p.repos[0].clone();
+    web.id = "web".into();
+    web.primary = false;
+    web.path = fx.tmp.path().join("web");
+    p.repos.push(web);
+    fx.core.add_project(p.clone());
+    let w = fx.service();
+    let src =
+        |repo: &str| WorkSource::Branch { name: "feat/login".into(), task: None, repo: Some(repo.into()) };
+    let api = w.start(w.plan(&p.id, src("api")).await.unwrap()).await.unwrap();
+    let plan = w.plan(&p.id, src("web")).await.unwrap();
+    assert!(plan.existing.is_none(), "the api item is not adopted");
+    let web = w.start(plan).await.unwrap();
+    assert_ne!(api.id, web.id);
+    assert_eq!((api.repo_id.as_str(), web.repo_id.as_str()), ("api", "web"));
+    assert_ne!(api.worktree, web.worktree);
+    // Same repo, same branch: resumes the existing item.
+    let plan = w.plan(&p.id, src("web")).await.unwrap();
+    assert_eq!(plan.existing.as_ref(), Some(&web.id));
+    assert_eq!(w.start(plan).await.unwrap().id, web.id);
+    assert_eq!(fx.store_items().await.len(), 2);
+}
+
+#[tokio::test]
 async fn resume_respawns_exited_claude_with_continue_fallback() {
     need_git!();
     let fx = Fx::new();
