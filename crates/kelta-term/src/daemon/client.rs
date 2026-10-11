@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_uid, pidfile, read_msg};
 
-const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+const CALL_TIMEOUT: Duration = Duration::from_secs(if cfg!(test) { 2 } else { 10 });
 /// How long a replaced keltad gets to close its socket after SIGTERM.
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const THREAD_STACK: usize = 256 * 1024;
@@ -352,6 +352,12 @@ impl TerminalHost for DaemonTerminalHost {
         };
         let seq = c.next_seq();
         let r = c.call_seq(seq, &req, &[]);
+        if let Err(e) = &r
+            && e.code == ErrorCode::Timeout
+        {
+            // keltad may still finish the spawn: queued behind it, the kill leaves no session without a handler.
+            let _ = c.send(0, &Req::Kill { id: id.clone(), signal: KillSignal::Kill }, &[]);
+        }
         if r.is_err() {
             let mut ev = c.events.lock();
             match prev {
@@ -481,5 +487,97 @@ impl TerminalHost for DaemonTerminalHost {
             c.events.lock().remove(id);
         }
         env
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::disallowed_methods)] // allowlisted: test threads
+    use std::os::unix::net::UnixListener;
+
+    use super::super::server::{bind, serve};
+    use super::*;
+    use crate::PtyTerminalHost;
+
+    struct NoEvents;
+    impl TerminalEvents for NoEvents {
+        fn on_event(&self, _: &SessionId, _: TerminalEvent) {}
+    }
+
+    fn cat(id: &SessionId, events: Arc<dyn TerminalEvents>) -> PtySpawnSpec {
+        PtySpawnSpec {
+            id: id.clone(),
+            program: "/bin/cat".into(),
+            args: Vec::new(),
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+            events,
+        }
+    }
+
+    /// #299: a spawn keltad does not answer in time fails with Timeout, rolls its handler back, and
+    /// the kill queued behind it leaves no running session behind.
+    #[test]
+    fn a_timed_out_spawn_is_killed_and_rolled_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("run/keltad.sock");
+        let l = bind(&real).unwrap();
+        std::thread::spawn(move || {
+            serve(l, PtyTerminalHost::new(TerminalLimits::default()), Duration::from_secs(60))
+        });
+        // A peer between the client and keltad: it answers Hello, then holds the Spawn (and the
+        // Kill that follows the timeout) until CALL_TIMEOUT has passed, and only then runs both.
+        let fake = tmp.path().join("fake.sock");
+        let fl = UnixListener::bind(&fake).unwrap();
+        let peer = std::thread::spawn(move || {
+            let (mut a, _) = fl.accept().unwrap();
+            let hello = read_msg(&mut a).unwrap().unwrap();
+            let ok = Out::Reply { seq: 1, result: Ok(Value::from(PROTOCOL_VERSION)) };
+            a.write_all(&encode(&ok, &[]).unwrap()).unwrap();
+            let spawn = read_msg(&mut a).unwrap().unwrap();
+            // No kill after the timeout is the failure under test: fail on the poll below, not here.
+            a.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let kill = read_msg(&mut a).ok().flatten();
+            let mut b = UnixStream::connect(&real).unwrap();
+            let sync = encode(&Call { seq: 99, req: Req::Stats }, &[]).unwrap();
+            for body in [Some(hello), Some(spawn), kill].into_iter().flatten() {
+                b.write_all(&(body.len() as u32).to_le_bytes()).unwrap();
+                b.write_all(&body).unwrap();
+            }
+            b.write_all(&sync).unwrap();
+            // keltad answers in order: the Spawn and the Kill are handled once the Stats reply is in.
+            let mut r = BufReader::new(b.try_clone().unwrap());
+            loop {
+                let body = read_msg(&mut r).unwrap().unwrap();
+                if matches!(decode::<Out>(&body), Some((Out::Reply { seq: 99, .. }, _))) {
+                    return b;
+                }
+            }
+        });
+        let c = DaemonTerminalHost::connect(&fake).unwrap();
+        let id = SessionId::new("hung");
+        let prev: Arc<dyn TerminalEvents> = Arc::new(NoEvents);
+        c.conn().unwrap().events.lock().insert(id.clone(), prev.clone());
+        let e = c.spawn(cat(&id, Arc::new(NoEvents))).unwrap_err();
+        assert_eq!(e.code, ErrorCode::Timeout);
+        assert!(Arc::ptr_eq(&c.conn().unwrap().events.lock()[&id], &prev), "handler not rolled back");
+        let _b = peer.join().unwrap();
+        // The kill is only a signal: the exit is noticed later, so poll until a new spawn is accepted.
+        let d = DaemonTerminalHost::connect(&tmp.path().join("run/keltad.sock")).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            match d.spawn(cat(&id, Arc::new(NoEvents))) {
+                Ok(()) => break,
+                Err(e) if e.code == ErrorCode::Conflict && std::time::Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                Err(e) => panic!("the timed-out spawn was left running: {e:?}"),
+            }
+        }
+        d.kill(&id, KillSignal::Kill).unwrap();
     }
 }
