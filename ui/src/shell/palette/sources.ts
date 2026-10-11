@@ -9,17 +9,7 @@ import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
-import {
-  plugins,
-  projects,
-  reviews,
-  sessions,
-  settings,
-  tickets,
-  toasts,
-  ui,
-  work,
-} from '$lib/stores';
+import { plugins, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
 import { attentionRank, lampOf, reviewKey, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform } from '$lib/ui';
 
