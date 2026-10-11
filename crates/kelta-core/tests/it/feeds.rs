@@ -1020,7 +1020,7 @@ async fn refine_feeds_claude_the_ticket_and_serves_get_ticket_over_mcp() {
         "#!/bin/sh\nhead -n1\necho \"args: $*\"\n/usr/bin/curl -s -H \"Authorization: Bearer $KELTA_MCP_TOKEN\" \
          -H 'Content-Type: application/json' \
          -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_ticket\"}}' \
-         \"$KELTA_MCP_URL\"\n",
+         \"$KELTA_MCP_URL\"\necho \"sid: $KELTA_SESSION_ID\"\n",
     )
     .unwrap();
     std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1032,6 +1032,11 @@ async fn refine_feeds_claude_the_ticket_and_serves_get_ticket_over_mcp() {
     assert!(out.contains("args: -p ") && out.contains("--allowedTools mcp__kelta__get_ticket"), "{out}");
     assert!(out.contains("Acceptance criteria"), "the prompt asks for the criteria: {out}");
     assert!(out.contains("# SHOP-142: ") && out.contains("\"isError\":false"), "get_ticket answered: {out}");
+    // A session id set, so the outside relay never reports a Refine run, with or without MCP.
+    assert!(out.contains("sid: refine-"), "{out}");
+    e.h.cfg.update(|s| s.claude.mcp = false);
+    let out = e.h.core.tracker_refine(&t, None).await.unwrap();
+    assert!(out.contains("sid: refine-"), "{out}");
 
     std::fs::write(&fake, "#!/bin/sh\necho 'not logged in' >&2\nexit 1\n").unwrap();
     let err = e.h.core.tracker_refine(&t, None).await.unwrap_err();
