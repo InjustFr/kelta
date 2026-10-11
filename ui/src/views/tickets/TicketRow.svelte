@@ -388,7 +388,7 @@
     font-size: 10px;
   }
 
-  /* Narrow lists: source and who drop first (the split view at 1440 wide leaves the list ~670px, and
+  /* Narrow lists: source, who and the field chips drop first (the split view at 1440 wide leaves the list ~670px, and
      a 60-character title needs 45 shown there), then the age, then the signals fold into the lamp's
      tooltip. Key, title and status never drop. */
   @container (width < 720px) {
@@ -400,7 +400,8 @@
     }
 
     .c-source,
-    .c-who {
+    .c-who,
+    .field {
       display: none;
     }
   }

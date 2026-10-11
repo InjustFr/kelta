@@ -1263,20 +1263,27 @@ impl Core {
     /// the sources of all that list it (the views are a map: only the union is stable); else stop at
     /// the first hit, its sources only.
     pub(crate) async fn cached_ticket(&self, t: &TicketRef, sources: bool) -> Option<(Ticket, Vec<String>)> {
-        let keys: Vec<(String, Vec<String>)> = self
+        let keys: Vec<(String, Vec<String>, bool)> = self
             .feeds
             .views
             .lock()
             .values()
             .filter(|q| q.account == t.account)
-            .map(|q| (q.cache_key.clone(), q.sources.clone()))
+            .map(|q| (q.cache_key.clone(), q.sources.clone(), !q.view.fields.is_empty()))
             .collect();
         let mut found: Option<(Ticket, Vec<String>)> = None;
-        for (k, ids) in keys {
+        let mut with_fields = false;
+        for (k, ids, chosen) in keys {
             if let Some((page, _)) = self.cache_get::<Page<Ticket>>(&k).await
                 && let Some(x) = page.items.into_iter().find(|x| &x.r#ref == t)
             {
-                found.get_or_insert_with(|| (x, Vec::new())).1.extend(ids);
+                // the copy listed with chosen fields wins, whatever the map's order (#351)
+                let e = found.get_or_insert_with(|| (x.clone(), Vec::new()));
+                if chosen && !with_fields {
+                    with_fields = true;
+                    e.0 = x;
+                }
+                e.1.extend(ids);
                 if !sources {
                     break;
                 }
