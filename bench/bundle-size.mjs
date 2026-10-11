@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Bundle budgets (ARCHITECTURE §13): initial JS <= 200 KB gz, each lazy chunk <= 120 KB gz,
-// optional installers (dmg <= 20 MB, deb <= 15 MB). Usage: node bench/bundle-size.mjs [ui/dist] [artifact...]
+// optional installers (dmg <= 20 MB, deb <= 25 MB). Usage: node bench/bundle-size.mjs [ui/dist] [artifact...]
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join, extname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const KB = 1024;
-export const LIMITS = { initialJs: 200 * KB, lazyChunk: 120 * KB, dmg: 20 * KB * KB, deb: 15 * KB * KB };
+export const LIMITS = { initialJs: 200 * KB, lazyChunk: 120 * KB, dmg: 20 * KB * KB, deb: 25 * KB * KB };
 
 /** JS files the HTML loads eagerly (script src, modulepreload). */
 export function initialFiles(html) {

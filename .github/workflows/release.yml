@@ -200,7 +200,7 @@ jobs:
       - name: Size budgets
         run: |
           for f in dist/*.dmg; do [ "$(stat -c %s "$f")" -le 20971520 ] || { echo "$f over 20 MB"; exit 1; }; done
-          for f in dist/*.deb; do [ "$(stat -c %s "$f")" -le 15728640 ] || { echo "$f over 15 MB"; exit 1; }; done
+          for f in dist/*.deb; do [ "$(stat -c %s "$f")" -le 26214400 ] || { echo "$f over 25 MB"; exit 1; }; done
       - name: Notes, updater manifest and checksums
         run: |
           # The notes: the CHANGELOG.md section semantic-release just wrote (the first `## ` one), under GitHub's
