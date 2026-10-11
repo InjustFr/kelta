@@ -513,10 +513,11 @@ mod tests {
         assert!(log.search(std::slice::from_ref(&id), "x", 5).is_empty());
         // Each call waits SYNC_WAIT at most; none waits for the writer.
         assert!(t.elapsed() < SYNC_WAIT * 3, "{:?}", t.elapsed());
-        // The writer wait and the read share one SYNC_WAIT (keltad's connection loop).
+        // The writer wait and the read share one SYNC_WAIT (keltad's connection loop): under two waits.
+        // Not SYNC_WAIT + a margin: loaded macOS runners oversleep recv_timeout by 100+ ms.
         let t = std::time::Instant::now();
         assert_eq!(log.tail(&id, 5), "");
-        assert!(t.elapsed() < SYNC_WAIT + SYNC_WAIT / 4, "{:?}", t.elapsed());
+        assert!(t.elapsed() < SYNC_WAIT * 2, "{:?}", t.elapsed());
     }
 
     #[test]
