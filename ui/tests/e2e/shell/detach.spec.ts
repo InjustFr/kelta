@@ -13,9 +13,9 @@ interface SavedTab {
 
 async function savedTabs(page: Page): Promise<SavedTab[]> {
   const saves = await callsOf(page, 'layout_save');
-  const layout = (saves.at(-1)?.args as { layout: { project_id: string; tabs: SavedTab[] } } | undefined)
-    ?.layout;
-  return layout?.project_id === 'shop' ? layout.tabs : [];
+  // The global views' layout is saved too, in any order: only the shop project's last save counts.
+  const layouts = saves.map((c) => (c.args as { layout: { project_id: string; tabs: SavedTab[] } }).layout);
+  return layouts.findLast((l) => l.project_id === 'shop')?.tabs ?? [];
 }
 
 test.describe('detached windows', () => {
@@ -31,7 +31,7 @@ test.describe('detached windows', () => {
     const [call] = await callsOf(page, 'window_detach');
     const tabId = (call!.args as { tab_id: string }).tab_id;
     expect(call!.args).toMatchObject({ project_id: 'shop' });
-    expect((await savedTabs(page)).find((t) => t.id === tabId)?.detached).toBe(true);
+    await expect.poll(async () => (await savedTabs(page)).find((t) => t.id === tabId)?.detached).toBe(true);
 
     // Its rail row shows the placeholder in the main window; "Move back here" brings it back.
     await page.locator(`[data-testid="rail-row"][data-tab-id="${tabId}"]`).click();
