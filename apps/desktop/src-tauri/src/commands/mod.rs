@@ -106,6 +106,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         app::notify_test,
         app::claude_mcp_status,
         app::claude_mcp_install,
+        app::claude_setup,
         app::claude_mcp_remove,
         app::claude_permission_mode,
         app::app_update_status,

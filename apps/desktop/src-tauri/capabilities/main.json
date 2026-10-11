@@ -25,6 +25,7 @@
     "allow-notify-test",
     "allow-claude-mcp-status",
     "allow-claude-mcp-install",
+    "allow-claude-setup",
     "allow-claude-mcp-remove",
     "allow-claude-permission-mode",
     "allow-app-update-status",

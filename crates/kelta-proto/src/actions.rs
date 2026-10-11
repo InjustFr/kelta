@@ -119,6 +119,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("terminal.paste", "Paste", ["cmd+v"], ["ctrl+shift+v"], Some("]"), Terminal),
     a!("settings.open", "Open settings", ["cmd+,"], ["ctrl+shift+,"], Some(","), Global),
     a!("app.restart", "Restart Kelta", [], [], None, Global),
+    a!("claude.setup", "Set up with Claude", [], [], None, Global),
     // Work menu and its entries for the focused tab's work item (FLOW §2.5, §3.5).
     a!("work.menu", "Work menu", ["cmd+."], ["ctrl+shift+."], Some("."), Global),
     a!("work.next", "Work: Next action", [], [], None, Global),

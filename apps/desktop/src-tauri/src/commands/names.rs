@@ -17,6 +17,7 @@ pub const COMMANDS: &[&str] = &[
     "notify_test",
     "claude_mcp_status",
     "claude_mcp_install",
+    "claude_setup",
     "claude_mcp_remove",
     "claude_permission_mode",
     "app_update_status",

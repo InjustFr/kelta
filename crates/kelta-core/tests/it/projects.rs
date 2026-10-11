@@ -158,6 +158,17 @@ async fn create_opens_and_activates() {
 }
 
 #[tokio::test]
+async fn project_add_keeps_the_active_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![]);
+    let repo = tmp.path().join("work").join("shop");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let (info, _) = h.core.project_add(&repo).unwrap();
+    assert!(info.open && !info.active);
+    assert_eq!(h.core.active_project(), ProjectId::home());
+}
+
+#[tokio::test]
 async fn kelta_ctl_trust_is_bound_to_the_hash_and_persisted() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repos").join("api");

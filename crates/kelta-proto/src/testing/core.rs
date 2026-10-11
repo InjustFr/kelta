@@ -371,6 +371,34 @@ impl CoreApi for FakeCore {
         self.settings.lock().clone()
     }
 
+    fn project_list(&self) -> Vec<ProjectInfo> {
+        self.projects.lock().values().cloned().collect()
+    }
+
+    /// Set with `respond("project_add", json!([project, draft]))`.
+    fn project_add(&self, path: &Path) -> Result<(ProjectInfo, crate::model::ProjectDraft), KeltaError> {
+        self.record("project_add", serde_json::json!({ "path": path }));
+        self.overridden("project_add").unwrap_or_else(|| Err(KeltaError::unsupported("project_add")))
+    }
+
+    fn settings_write(
+        &self,
+        layer: crate::settings::Layer,
+        project: Option<&ProjectId>,
+        path: &str,
+        value: Value,
+    ) -> Result<(), KeltaError> {
+        let args = serde_json::json!({ "layer": layer, "project": project, "path": path, "value": value });
+        self.record("settings_write", args);
+        self.overridden("settings_write").unwrap_or(Ok(()))
+    }
+
+    /// Set with `respond("account_test", json!({ "ok": true, "user": user, "error": null }))`.
+    async fn account_test(&self, account: &AccountId) -> Result<crate::ipc::AccountTestResult, KeltaError> {
+        self.record("account_test", serde_json::json!({ "account": account }));
+        self.overridden("account_test").unwrap_or_else(|| Err(KeltaError::unsupported("account_test")))
+    }
+
     /// Set with `respond("claude_permission_mode", json!("auto"))`.
     fn claude_permission_mode(&self) -> Option<crate::settings::PermissionMode> {
         self.overridden("claude_permission_mode").and_then(Result::ok)

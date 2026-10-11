@@ -206,3 +206,21 @@ async fn recheck_restores_a_dropped_entry_and_remove_cancels_it() {
     }
     assert!(!has_entry(root));
 }
+
+#[tokio::test]
+async fn setup_registers_the_mcp_then_starts_claude_in_home() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let h = start(root, Settings::defaults(), vec![]);
+    fake_claude(root);
+    let info = h.core.claude_setup().await.unwrap();
+    assert_eq!(h.core.claude_mcp_status().await, Some(true));
+    assert!(matches!(info.kind, kelta_proto::model::SessionKind::Claude));
+    let home = kelta_proto::ids::ProjectId::home();
+    assert_eq!(info.project_id, home);
+    let prompt = h.term.with_session(&info.id, |s| s.spec.args.last().cloned()).unwrap().unwrap();
+    assert!(prompt.contains("get_setup") && prompt.contains("request_token"), "{prompt}");
+    let layout = h.core.layout_get(&home).unwrap();
+    let tab = layout.tabs.iter().find(|t| t.title == "Set up Kelta").unwrap();
+    assert_eq!(layout.active_tab.as_ref(), Some(&tab.id), "the setup tab takes the focus");
+}
