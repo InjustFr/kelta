@@ -4,7 +4,7 @@
 import type { ThemeBase, ThemeDef, ThemeTerminal, ThemeUi } from '$lib/gen';
 import { colors } from '$lib/terminal/theme';
 
-type Rgb = [number, number, number];
+import { linear, parseHex } from '../hex';
 
 /** Raw colours (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) as the source gives them; any may be absent. */
 export interface PartialTheme {
@@ -17,18 +17,9 @@ export interface PartialTheme {
 // Bezel's ui fg from tokens.css (its well is the terminal background in lib/terminal/theme.ts).
 const BEZEL_FG: Record<ThemeBase, string> = { dark: '#e1e6ec', light: '#161b21' };
 
-/** `[r, g, b, alpha 0..1]`, or null for anything that is not a hex colour. */
-export function parse(v: unknown): [...Rgb, number] | null {
-  const m = typeof v === 'string' ? /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(v.trim()) : null;
-  if (!m) return null;
-  const h = m[1]!.length <= 4 ? [...m[1]!].map((c) => c + c).join('') : m[1]!;
-  const [r, g, b, a = 255] = (h.match(/../g) ?? []).map((x) => parseInt(x, 16));
-  return [r!, g!, b!, a / 255];
-}
-
 const toHex = (c: readonly number[]) =>
   `#${c.map((x) => Math.round(x).toString(16).padStart(2, '0')).join('')}`;
-const rgb = (h: string): Rgb => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) as Rgb;
+const rgb = (h: string) => parseHex(h)!.slice(0, 3);
 
 /** Plain sRGB lerp from `a` to `b` (`#rrggbb`). */
 export function mix(a: string, b: string, p: number): string {
@@ -39,16 +30,13 @@ export function mix(a: string, b: string, p: number): string {
 
 /** `v` as `#rrggbb`, its alpha composited over `under`; null when unparsable. */
 function over(v: string | undefined, under: string): string | null {
-  const c = parse(v);
+  const c = parseHex(v);
   return c && mix(under, toHex(c.slice(0, 3)), c[3]);
 }
 
 /** WCAG relative luminance. */
 export function luminance(hex: string): number {
-  const [r, g, b] = rgb(hex).map((v) => {
-    const s = v / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
+  const [r, g, b] = rgb(hex).map(linear);
   return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 }
 
