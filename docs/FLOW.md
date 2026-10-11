@@ -158,7 +158,7 @@ The same letters are shown on the ghost buttons of the expanded Now row. The sam
 
 ![Now](images/flow/f1-now.png)
 
-Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, are polled like a visible pane while shown (`ui_set_global_view`), and follow the "leaves Now" rule of §3.3.
+Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves Now" rule of §3.3.
 
 ### 3.1 Sections
 

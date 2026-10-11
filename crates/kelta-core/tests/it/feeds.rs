@@ -748,19 +748,22 @@ async fn global_tickets_view_is_polled_without_a_tickets_pane() {
     e.h.cfg.update(|s| s.notifications.enabled = false);
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "the active layout has no Tickets pane");
-    e.h.core.ui_set_global_view(Some(PaneContent::Tickets {
-        scope: Scope::All,
-        view_id: None,
-        source_id: None,
-        mode: TicketsMode::List,
-        who: Some(Who::Mine),
-        group: None,
-        sort: None,
-        person: None,
-    }));
+    show_global(
+        &e.h.core,
+        Some(PaneContent::Tickets {
+            scope: Scope::All,
+            view_id: None,
+            source_id: None,
+            mode: TicketsMode::List,
+            who: Some(Who::Mine),
+            group: None,
+            sort: None,
+            person: None,
+        }),
+    );
     settle().await;
     assert!(e.h.core.scheduler_snapshot().subscriptions > 0, "the view's cache keys are subscribed");
-    e.h.core.ui_set_global_view(None);
+    show_global(&e.h.core, None);
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "back to a project");
 }
@@ -1094,13 +1097,13 @@ async fn team_is_polled_only_while_its_tab_is_shown() {
     e.h.cfg.update(|s| s.notifications.enabled = false);
     settle().await;
     let view = |tab| PaneContent::Reviews { scope: Scope::All, tab };
-    e.h.core.ui_set_global_view(Some(view(None)));
+    show_global(&e.h.core, Some(view(None)));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2, "For me + Mine");
-    e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Team))));
+    show_global(&e.h.core, Some(view(Some(ReviewKind::Team))));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 3, "+ Team");
-    e.h.core.ui_set_global_view(Some(view(Some(ReviewKind::Authored))));
+    show_global(&e.h.core, Some(view(Some(ReviewKind::Authored))));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2);
 }

@@ -3,6 +3,7 @@
 // closes it and focuses the target in its project (FLOW §3.3, bug B1).
 
 import type {
+  Layout,
   PaneContent,
   PaneId,
   Placement,
@@ -12,7 +13,7 @@ import type {
   WorkItem,
   WorkItemId,
 } from '$lib/gen';
-import { uiSetGlobalView, workResume } from '$lib/ipc/commands';
+import { workResume } from '$lib/ipc/commands';
 import {
   activateTab,
   allPanes,
@@ -95,35 +96,28 @@ export async function openFrom(
 }
 
 const ALL = { kind: 'all' } as const;
-const TICKETS_VIEW = 'kelta.view.tickets';
-const REVIEWS_VIEW = 'kelta.view.reviews';
+export const GLOBAL_VIEWS: readonly GlobalView[] = ['tickets', 'now', 'reviews'];
 type TicketsContent = Extract<PaneContent, { kind: 'tickets' }>;
 type TicketsState = Partial<Omit<TicketsContent, 'kind' | 'scope' | 'mode'>>;
 
-/** A global view's saved state; `{}` when none or unreadable. */
-function loadView<T extends object>(key: string): Partial<T> {
+/** Pre-#270 localStorage state (views' state, the place shown), read only to seed the `GLOBAL` layout. */
+function stored(key: string): string | null {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '{}') as Partial<T>;
+    return localStorage.getItem(key);
   } catch {
-    return {};
+    return null;
   }
 }
 
-/**
- * Saves a global view's state and polls what it now shows (`content`).
- * shortcut: the contract has no ui_state command, so it lives in this webview's storage; add one if
- * it must follow Louis across machines.
- */
-function saveView(key: string, state: object, content: PaneContent): void {
+function legacy<T>(key: string): T | null {
   try {
-    localStorage.setItem(key, JSON.stringify(state));
+    return JSON.parse(stored(key) ?? 'null') as T | null;
   } catch {
-    // storage blocked: the state lasts until the view closes
+    return null;
   }
-  uiSetGlobalView({ content }).catch(() => {});
 }
 
-const ticketsContent = (s: TicketsState): PaneContent => ({
+const ticketsContent = (s: TicketsState | null): PaneContent => ({
   kind: 'tickets',
   scope: ALL,
   view_id: null,
@@ -134,36 +128,51 @@ const ticketsContent = (s: TicketsState): PaneContent => ({
 
 const reviewsContent = (tab: ReviewKind | null): PaneContent => ({ kind: 'reviews', scope: ALL, tab });
 
-/** The pane a global view shows; the Tickets view (list only) and Reviews seed their saved state. */
-export function globalContent(view: GlobalView): PaneContent {
+function seedContent(view: GlobalView): PaneContent {
   if (view === 'now') return { kind: 'inbox' };
-  if (view === 'reviews') return reviewsContent(loadView<{ tab: ReviewKind }>(REVIEWS_VIEW).tab ?? null);
-  return ticketsContent(loadView<TicketsState>(TICKETS_VIEW));
+  if (view === 'reviews')
+    return reviewsContent(legacy<{ tab?: ReviewKind }>('kelta.view.reviews')?.tab ?? null);
+  return ticketsContent(legacy<TicketsState>('kelta.view.tickets'));
 }
 
-/** Saves the Reviews view's tab (the core polls Team only while shown). */
-export function saveReviewsView(tab: ReviewKind): void {
-  saveView(REVIEWS_VIEW, { tab }, reviewsContent(tab));
-}
-
-/** Saves the Tickets view's who/group/sort/person/source. */
-export function saveTicketsView(patch: TicketsState): void {
-  const next = { ...loadView<TicketsState>(TICKETS_VIEW), ...patch };
-  saveView(TICKETS_VIEW, next, ticketsContent(next));
+/** The pane a global view shows: its pane in the `GLOBAL` layout; the Tickets view is list only. */
+export function globalContent(view: GlobalView): PaneContent {
+  const root = layout.get(GLOBAL)?.tabs.find((t) => t.id === view)?.root;
+  const content = root?.type === 'pane' ? root.content : seedContent(view);
+  return content.kind === 'tickets' ? { ...content, mode: 'list' } : content;
 }
 
 /**
- * Persists `patch` into pane `paneId`'s content: the global view's storage (`saveGlobal`) for a
- * `GLOBAL` pane, else the project's layout. Merged onto the stored content: two changes in one tick
- * must not drop the first.
+ * The `GLOBAL` layout with one tab per view (tab id = pane id = view); a never-saved one takes the
+ * pre-#270 place as its active tab. Unchanged when complete.
  */
-export function persistPaneContent(
-  projectId: ProjectId,
-  paneId: PaneId,
-  patch: object,
-  saveGlobal: () => void,
-): void {
-  if (projectId === GLOBAL) return saveGlobal();
+export function seedGlobalLayout(l: Layout): Layout {
+  const missing = GLOBAL_VIEWS.filter((v) => !l.tabs.some((t) => t.id === v));
+  if (missing.length === 0) return l;
+  const tabs = missing.map((v) => ({
+    id: v,
+    title: v,
+    work_item_id: null,
+    root: makePane(seedContent(v), v),
+    focused_pane: v,
+    zoomed_pane: null,
+  }));
+  const place = stored('kelta.place');
+  const active = l.rev === 0 && GLOBAL_VIEWS.includes(place as GlobalView) ? place : l.active_tab;
+  return { ...l, tabs: [...l.tabs, ...tabs], active_tab: active };
+}
+
+/** Loads the `GLOBAL` layout (seeded when incomplete). */
+export async function loadGlobalLayout(): Promise<Layout | null> {
+  await layout.ensure(GLOBAL);
+  return layout.update(GLOBAL, seedGlobalLayout);
+}
+
+/**
+ * Persists `patch` into pane `paneId`'s content in `projectId`'s layout (`GLOBAL` for a global
+ * view). Merged onto the stored content: two changes in one tick must not drop the first.
+ */
+export function persistPaneContent(projectId: ProjectId, paneId: PaneId, patch: object): void {
   const current = layout.get(projectId);
   if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
   layout.update(projectId, (l) => ({

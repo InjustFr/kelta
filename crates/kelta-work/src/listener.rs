@@ -103,8 +103,8 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                     svc.on_session_exited(&sid);
                     let svc = svc.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = svc.orphan_claims(Some(&sid)).await {
-                            tracing::warn!(error = %e.message, "orphaning claims failed");
+                        if let Err(e) = svc.publish_claims_of(&sid).await {
+                            tracing::warn!(error = %e.message, "publishing orphaned claims failed");
                         }
                     });
                 }

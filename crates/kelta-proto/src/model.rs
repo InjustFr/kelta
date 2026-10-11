@@ -731,7 +731,8 @@ pub enum RunState {
     Blocked,
     Failed,
     Done,
-    /// The claiming session exited while the run was `running`.
+    /// The claiming session is no longer live while the run is `running`: computed when shown
+    /// (`work_list`, `work.updated`), not stored by new code.
     Orphaned,
 }
 

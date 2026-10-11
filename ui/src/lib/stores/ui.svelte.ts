@@ -27,7 +27,8 @@ export type SheetKey =
 export type OverlayKey = 'palette' | 'switcher';
 /** The cross-project places on the rail (SPEC §1), shown outside any project. */
 export type GlobalView = 'tickets' | 'now' | 'reviews';
-/** `projectId` of the panes a global view hosts: never a real project, never opened into. */
+/** The global views' built-in layout (a tab per view) and `projectId` of their panes: never a real
+ *  project, never opened into. */
 export const GLOBAL = 'global';
 
 export interface SheetEntry {

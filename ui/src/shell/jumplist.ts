@@ -3,7 +3,9 @@
 
 import type { PaneId, ProjectId, TabId } from '$lib/gen';
 import { findPane } from '$lib/layout';
-import { layout, projects, type GlobalView } from '$lib/stores';
+import { GLOBAL, layout, projects, type GlobalView } from '$lib/stores';
+
+import { GLOBAL_VIEWS } from '../views/work/nav';
 
 import { activateProject, focusPaneById, openView } from './nav';
 
@@ -11,8 +13,6 @@ export interface JumpLoc {
   project: ProjectId;
   tab: TabId;
   pane: PaneId;
-  /** A global view (Tickets, Now, Reviews) was shown: the other fields are not a place then. */
-  view?: GlobalView;
 }
 
 export const JUMP_CAP = 100;
@@ -21,7 +21,7 @@ export const JUMP_CAP = 100;
 const KEY = 'kelta.jumplist.v1';
 
 const same = (a: JumpLoc | undefined, b: JumpLoc): boolean =>
-  !!a && a.view === b.view && (!!b.view || (a.project === b.project && a.tab === b.tab && a.pane === b.pane));
+  !!a && a.project === b.project && a.tab === b.tab && a.pane === b.pane;
 
 export class Jumplist {
   list: JumpLoc[] = [];
@@ -49,7 +49,12 @@ function load(): Jumplist {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { list: JumpLoc[]; at: number } | null;
     if (saved && Array.isArray(saved.list)) {
-      j.list = saved.list.slice(-JUMP_CAP);
+      // Pre-#270 entries carry `view`: a global view is now its tab in the GLOBAL layout.
+      j.list = saved.list
+        .slice(-JUMP_CAP)
+        .map((l: JumpLoc & { view?: string }) =>
+          l.view ? { project: GLOBAL, tab: l.view, pane: l.view } : l,
+        );
       j.at = Math.min(saved.at, j.list.length - 1);
     }
   } catch {
@@ -94,9 +99,9 @@ export function flushJump(): void {
   pending = null;
 }
 
-/** A place `nav.back` can still land on: a view, or a pane of an open project. */
+/** A place `nav.back` can still land on: a global view, or a pane of an open project. */
 function alive(loc: JumpLoc): boolean {
-  if (loc.view) return true;
+  if (loc.project === GLOBAL) return GLOBAL_VIEWS.includes(loc.tab as GlobalView);
   const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
   return !!projects.byId(loc.project)?.open && !!tab && !!findPane(tab.root, loc.pane);
 }
@@ -117,13 +122,10 @@ export function navStep(delta: 1 | -1): void {
   flushJump();
   const from = jumplist.at;
   for (let loc = jumplist.step(delta); loc; loc = jumplist.step(delta)) {
-    if (loc.view) {
-      save();
-      openView(loc.view);
-      return;
-    }
     if (!alive(loc)) continue;
     save();
+    // GLOBAL is no project: landing on its tab shows that view.
+    if (loc.project === GLOBAL) return openView(loc.tab as GlobalView);
     void activateProject(loc.project);
     focusPaneById(loc.project, loc.tab, loc.pane);
     return;

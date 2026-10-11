@@ -22,7 +22,7 @@ import.meta.glob(['./shell/actions.ts', './views/*/actions.ts'], { eager: true }
 async function start(): Promise<void> {
   if (import.meta.env.VITE_IPC === 'mock') {
     const { createMockTransport } = await import('$lib/ipc/mock');
-    const { transport, controls } = createMockTransport();
+    const { transport, controls } = createMockTransport({ keepGlobalLayout: true });
     setTransport(transport);
     window.__keltaMock = controls;
     window.__kelta = { stores, registry, actions };

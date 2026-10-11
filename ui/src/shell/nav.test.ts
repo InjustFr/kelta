@@ -22,8 +22,6 @@ import {
   railRows,
   requestCloseTab,
   revealSession,
-  savedPlace,
-  savePlace,
   splitFocused,
   tabAttention,
   toggleZoomFocused,
@@ -127,13 +125,6 @@ describe('projects', () => {
     openView('reviews');
     cycleProject(1);
     expect([ui.view, projects.activeId]).toEqual([null, 'shop']);
-  });
-
-  it('remembers the last place', () => {
-    savePlace('reviews');
-    expect(savedPlace()).toBe('reviews');
-    savePlace(null);
-    expect(savedPlace()).toBeNull();
   });
 });
 

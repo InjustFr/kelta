@@ -25,7 +25,7 @@
 
   import { runWorkAction } from '../work/actions';
   import { ciGlyph, decisionInfo, isAuthError, myStateInfo, reviewPhase } from '../work/common';
-  import { openFrom, persistPaneContent, saveReviewsView } from '../work/nav';
+  import { openFrom, persistPaneContent } from '../work/nav';
   import { groupByTicket } from './group';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
@@ -61,7 +61,7 @@
   function setTab(k: ReviewKind): void {
     tabOverride = k;
     // The core polls Team only while a visible pane shows it (its `tab`).
-    persistPaneContent(projectId, paneId, { tab: k }, () => saveReviewsView(k));
+    persistPaneContent(projectId, paneId, { tab: k });
   }
 
   const lists = $derived({

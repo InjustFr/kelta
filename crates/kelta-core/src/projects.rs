@@ -220,6 +220,7 @@ impl Core {
         if !ProjectId::is_valid_slug(draft.suggested_id.as_str())
             || draft.suggested_id.as_str() == ProjectId::HOME
             || draft.suggested_id.as_str() == ProjectId::INBOX
+            || draft.suggested_id.as_str() == ProjectId::GLOBAL
         {
             return Err(KeltaError::invalid(format!("invalid project id `{}`", draft.suggested_id)));
         }

@@ -59,6 +59,9 @@ pub(crate) struct Journal {
     /// Worktree-relative files `include_files` copied (finish may delete only these).
     #[serde(default)]
     pub include_copies: Vec<String>,
+    /// SHA-256 of each include copy at copy time: Finish compares the copy to it, not to the main checkout.
+    #[serde(default)]
+    pub include_hashes: BTreeMap<String, String>,
     /// Tracker side effects already attempted (`assign`, `transition`, `comment`).
     pub effects_done: BTreeSet<String>,
     /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
@@ -899,6 +902,11 @@ impl WorkService {
             tokio::task::spawn_blocking(move || files::copy_includes(&repo, &wt, &candidates, &patterns))
                 .await
                 .map_err(|e| KeltaError::internal(e.to_string()))??;
+        for f in &copied {
+            if let Some(h) = files::content_hash(&item.worktree.join(f)) {
+                j.include_hashes.insert(f.clone(), h);
+            }
+        }
         j.include_copies.extend(copied.iter().cloned());
         let copied = if copied.is_empty() {
             "nothing to copy".into()

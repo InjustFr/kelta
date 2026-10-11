@@ -9,7 +9,7 @@ import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui } from
 
 import { openPr } from '../tickets/prs';
 import TicketsPane from '../tickets/TicketsPane.svelte';
-import { globalContent } from '../work/nav';
+import { globalContent, loadGlobalLayout } from '../work/nav';
 import ReviewsPane from './ReviewsPane.svelte';
 
 let mock: MockControls;
@@ -267,6 +267,7 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     });
 
   it('For me / Team / Mine with counts, switched by 1 2 3; the rail view saves the tab and polls it', async () => {
+    await loadGlobalLayout();
     ui.view = 'reviews';
     mountGlobal();
     await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team', 'Mine 3']));
@@ -279,8 +280,8 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     await press('2');
     await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team 7', 'Mine 3']));
     expect(globalContent('reviews')).toMatchObject({ tab: 'team' });
-    const set = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1);
-    expect(set?.args).toMatchObject({ content: { kind: 'reviews', tab: 'team' } });
+    await layout.flush(GLOBAL);
+    expect(JSON.stringify(mock.state.layouts[GLOBAL])).toContain('"tab":"team"');
   });
 
   it('a project pane keeps its tab; a project no source feeds has no Team tab', async () => {

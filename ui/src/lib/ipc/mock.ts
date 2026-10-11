@@ -133,6 +133,8 @@ export interface MockState {
 interface MockOptions {
   /** Artificial latency per call in ms (one-shot timer per call). Default 0. */
   latencyMs?: number;
+  /** Keeps the `global` layout across reloads, as the core's DB does (the app; unit tests start fresh). */
+  keepGlobalLayout?: boolean;
 }
 
 type Handler<K extends CommandName> = (args: CommandArgs<K>) => CommandResult<K> | Promise<CommandResult<K>>;
@@ -414,11 +416,20 @@ export function lastSettingsValue<T>(mock: MockControls): T | undefined {
   return (mock.calls.filter((c) => c.cmd === 'settings_set').at(-1)?.args as { value: T } | undefined)?.value;
 }
 
+const GLOBAL_LAYOUT_KEY = 'kelta.mock.layout.global';
+
 export function createMockTransport(options: MockOptions = {}): {
   transport: IpcTransport;
   controls: MockControls;
 } {
   let state = freshState();
+  const keep = options.keepGlobalLayout === true;
+  try {
+    const saved = keep ? sessionStorage.getItem(GLOBAL_LAYOUT_KEY) : null;
+    if (saved) state.layouts.global = JSON.parse(saved) as Layout;
+  } catch {
+    // no storage: a reload starts without the global layout, like a fresh profile
+  }
   const calls: MockCall[] = [];
   const failOnce = new Map<string, KeltaError>();
   const held = new Map<string, Promise<KeltaError | null>>();
@@ -775,7 +786,7 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     // ---- layout ----------------------------------------------------------------------------
     layout_get: ({ project_id }) => {
-      project(project_id);
+      if (project_id !== 'global') project(project_id);
       return clone(layoutOf(project_id));
     },
     layout_save: ({ layout }) => {
@@ -786,9 +797,14 @@ export function createMockTransport(options: MockOptions = {}): {
         });
       const rev = current.rev + 1;
       state.layouts[layout.project_id] = { ...clone(layout), rev };
+      if (keep && layout.project_id === 'global')
+        try {
+          sessionStorage.setItem(GLOBAL_LAYOUT_KEY, JSON.stringify(state.layouts.global));
+        } catch {
+          // no storage: kept until reload
+        }
       return { rev };
     },
-    ui_set_global_view: () => null,
     // ---- sessions --------------------------------------------------------------------------
     session_spawn: ({ req }) => {
       const s = spawn(req.project_id, req.kind, req.name, req.cwd);
@@ -1924,6 +1940,11 @@ export function createMockTransport(options: MockOptions = {}): {
     output: (sessionId, text) => sendFrame(sessionId, FRAME_DATA, new TextEncoder().encode(text)),
     reset: () => {
       state = freshState();
+      try {
+        sessionStorage.removeItem(GLOBAL_LAYOUT_KEY);
+      } catch {
+        // no storage
+      }
       calls.length = 0;
       attached.clear();
     },

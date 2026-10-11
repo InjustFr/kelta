@@ -9,7 +9,7 @@ import type { PaneContent, Settings } from '$lib/gen';
 import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
-import { globalContent } from '../work/nav';
+import { globalContent, loadGlobalLayout } from '../work/nav';
 import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
 import { batch } from '../work/batch.svelte';
@@ -898,15 +898,18 @@ describe('TicketsPane in the rail Tickets view', () => {
   beforeEach(() => localStorage.removeItem('kelta.view.tickets'));
 
   it('remembers who across restarts and opens a ticket in its own project, leaving the view', async () => {
+    // Pre-#270 state seeds the GLOBAL layout once.
     localStorage.setItem('kelta.view.tickets', JSON.stringify({ who: 'anyone' }));
+    await loadGlobalLayout();
+    expect(globalContent('tickets')).toMatchObject({ who: 'anyone', mode: 'list' });
     await activateProject('billing');
     ui.view = 'tickets';
     const { container } = mountGlobal();
     await ready(container, 'SHOP-151');
     await press('2');
     expect(globalContent('tickets')).toMatchObject({ who: 'unassigned', scope: { kind: 'all' } });
-    const polled = mock.calls.filter((c) => c.cmd === 'ui_set_global_view').at(-1)?.args;
-    expect(polled).toMatchObject({ content: { kind: 'tickets', who: 'unassigned' } });
+    await layout.flush(GLOBAL);
+    expect(JSON.stringify(mock.state.layouts[GLOBAL])).toContain('"who":"unassigned"');
     await press('3');
     await ready(container, 'SHOP-151');
     await press('Enter', { shiftKey: true });
