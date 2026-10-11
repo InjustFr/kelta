@@ -39,6 +39,12 @@ pub async fn review_request_changes(core: State<'_, Arc<Core>>, review: ReviewRe
     core.review_request_changes(&review, &body).await
 }
 
+/// Mark ready for review (`draft` false) or back to draft.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn review_set_draft(core: State<'_, Arc<Core>>, review: ReviewRef, draft: bool) -> Res<()> {
+    core.review_set_draft(&review, draft).await
+}
+
 /// Nudges the reviewers of my PR: re-request `who` (`comment` null) or post `comment`; refused for 24 h after the last.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn review_nudge(

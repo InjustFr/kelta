@@ -16,6 +16,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
 
@@ -109,9 +110,10 @@
   function onkeydown(e: KeyboardEvent): void {
     if ((e.target as HTMLElement).closest('input, textarea, select, [role="dialog"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (own && (e.key === 'f' || e.key === 'g')) {
+    if (own && (e.key === 'f' || e.key === 'g' || e.key === 'd')) {
       e.preventDefault();
       if (e.key === 'f') fixWithClaude();
+      else if (e.key === 'd') void (rv && toggleDraft(rv));
       else void reviewLocally(ref, projectId);
       return;
     }
@@ -229,6 +231,12 @@
           <Button variant="primary" icon="bot" onclick={fixWithClaude}>{t('Fix with Claude')}</Button>
           <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}
             >{t('Go to work item')}</Button
+          >
+          <Button
+            icon={rv.draft ? 'eye' : 'pencil'}
+            disabled={!!draftBlocked(rv)}
+            title={draftBlocked(rv) ?? undefined}
+            onclick={() => void toggleDraft(rv)}>{draftLabel(rv)}</Button
           >
           <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
         {:else}

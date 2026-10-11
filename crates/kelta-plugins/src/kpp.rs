@@ -163,7 +163,7 @@ impl KppProcess {
     }
 
     fn spawn(&self) -> Result<Arc<Conn>, KeltaError> {
-        let mut cmd = tokio::process::Command::new(&self.program);
+        let mut cmd = kelta_proto::term::async_command(&self.program);
         // The provider gets secrets per call only: no inherited environment (env: secret refs).
         cmd.args(&self.args).current_dir(&self.dir).env_clear();
         for k in ["HOME", "USER", "LANG", "TMPDIR"] {

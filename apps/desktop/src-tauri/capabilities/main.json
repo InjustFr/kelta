@@ -106,6 +106,7 @@
     "allow-review-comment",
     "allow-review-request-changes",
     "allow-review-nudge",
+    "allow-review-set-draft",
     "allow-work-plan",
     "allow-work-start",
     "allow-work-list",

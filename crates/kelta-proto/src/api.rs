@@ -237,6 +237,10 @@ pub trait CodeHost: Send + Sync {
     async fn disarm_auto_merge(&self, _r: &ReviewRef) -> Result<(), KeltaError> {
         Err(KeltaError::unsupported("this code host cannot merge when ready"))
     }
+    /// Mark ready for review (`draft` false) or convert back to a draft.
+    async fn set_draft(&self, _r: &ReviewRef, _draft: bool) -> Result<(), KeltaError> {
+        Err(KeltaError::unsupported("this code host cannot change a pull request's draft state"))
+    }
 }
 
 // ---- config / secrets (impl: kelta-config / kelta-secrets) ------------------------------------

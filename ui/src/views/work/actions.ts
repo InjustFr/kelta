@@ -33,6 +33,7 @@ import {
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
 import { claudeOf, phaseNow, prOf } from './live';
+import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
@@ -232,6 +233,22 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     run: async ({ item }) => {
       if (item.auto_finish) work.upsert(await workDisarmMerge({ id: item.id }));
       else ui.openSheet('merge', { item });
+    },
+  },
+  {
+    id: 'set_draft',
+    key: 'd',
+    label: (c) => {
+      const pr = prOf(c.item);
+      return pr ? draftLabel(pr) : t('Mark ready / Convert to draft');
+    },
+    blocked: (c) => {
+      const pr = prOf(c.item);
+      return c.item.state.kind !== 'pr_open' || !pr ? t('Needs an open PR') : draftBlocked(pr);
+    },
+    run: async ({ item }) => {
+      const pr = prOf(item);
+      if (pr) await toggleDraft(pr);
     },
   },
   {

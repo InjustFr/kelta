@@ -132,11 +132,9 @@ pub async fn start(launch: &Launch) -> Result<(ServerProc, Option<String>), Kelt
         }
         _ => None,
     };
-    let mut cmd = tokio::process::Command::new(&launch.program);
+    let mut cmd = kelta_proto::term::async_command(&launch.program);
     cmd.args(&launch.args)
         .current_dir(&launch.cwd)
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .envs(&launch.env)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -235,10 +233,8 @@ pub async fn stop(proc_: &ServerProc, spec: &StopSpec, stop_argv: Option<StopArg
             if let Some((argv, cwd, env)) = stop_argv
                 && let Some((program, args)) = argv.split_first()
             {
-                let mut cmd = tokio::process::Command::new(program);
+                let mut cmd = kelta_proto::term::async_command(program);
                 cmd.args(args)
-                    .env_clear()
-                    .envs(kelta_proto::term::LoginEnv::inherited().vars)
                     .envs(env)
                     .current_dir(cwd)
                     .stdin(Stdio::null())

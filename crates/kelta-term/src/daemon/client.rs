@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::{BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender, SyncSender};
@@ -149,13 +149,7 @@ fn hello(s: &UnixStream) -> Result<(), KeltaError> {
 fn keltad_pid(sock: &Path) -> Option<i32> {
     let from_file = std::fs::read_to_string(pidfile(sock)).ok().and_then(|t| t.trim().parse().ok());
     let from_lsof = || {
-        let out = Command::new("lsof")
-            .env_clear()
-            .envs(kelta_proto::term::LoginEnv::inherited().vars)
-            .args(["-F", "pn", "--"])
-            .arg(sock)
-            .output()
-            .ok()?;
+        let out = kelta_proto::term::command("lsof").args(["-F", "pn", "--"]).arg(sock).output().ok()?;
         lsof_holders(&String::from_utf8_lossy(&out.stdout), sock).into_iter().find(is_keltad)
     };
     from_file.filter(is_keltad).or_else(from_lsof)
@@ -196,7 +190,7 @@ fn argv0(pid: i32) -> Option<String> {
 /// macOS `comm` is the exec path.
 #[cfg(not(target_os = "linux"))]
 fn argv0(pid: i32) -> Option<String> {
-    let out = Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().ok()?;
+    let out = kelta_proto::term::command("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().ok()?;
     Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
@@ -269,7 +263,7 @@ impl DaemonTerminalHost {
                 }
                 let log = std::fs::OpenOptions::new().create(true).append(true).open(log)?;
                 // keltad forks into the background once its socket is bound, so it is ready here.
-                let status = Command::new(exe)
+                let status = kelta_proto::term::command(exe)
                     .arg("--socket")
                     .arg(&self.sock)
                     .arg("--history")
@@ -527,6 +521,7 @@ impl TerminalHost for DaemonTerminalHost {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::disallowed_methods)] // allowlisted: test threads
     use std::os::unix::net::UnixListener;
+    use std::process::Command;
 
     use super::super::server::{bind, serve};
     use super::*;

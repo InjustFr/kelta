@@ -46,11 +46,9 @@ pub(crate) fn external_command(
     cwd: &std::path::Path,
     env: &BTreeMap<String, String>,
 ) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(program);
+    let mut cmd = kelta_proto::term::async_command(program);
     cmd.args(args)
         .current_dir(cwd)
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .envs(env)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -697,8 +695,8 @@ async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) ->
     let Some((program, args)) = argv.split_first() else {
         return ToolCheck { installed: false, version: None, install_hint: hint };
     };
-    let mut cmd = tokio::process::Command::new(program);
-    cmd.args(args).env_clear().envs(kelta_proto::term::LoginEnv::inherited().vars);
+    let mut cmd = kelta_proto::term::async_command(program);
+    cmd.args(args);
     cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
     if let Some(p) = path {
         cmd.env("PATH", p);
@@ -769,7 +767,7 @@ mod external_tests {
         let dir = std::env::temp_dir().join(format!("kelta-ext-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         // Written by a child `sh`: a write fd held here leaks into concurrent forks -> ETXTBSY (Linux).
-        let ok = std::process::Command::new("sh")
+        let ok = kelta_proto::term::command("sh")
             .args(["-c", "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && chmod 755 \"$1\"", "sh"])
             .arg(dir.join("kelta-fake-tool"))
             .status()
