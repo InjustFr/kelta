@@ -131,7 +131,7 @@
         {#if item.pr_url}
           <dt>Pull request</dt>
           <dd>
-            <button type="button" class="link" onclick={() => item.pr_url && browse(item.pr_url)}>
+            <button type="button" class="k-link" onclick={() => item.pr_url && browse(item.pr_url)}>
               {item.pr_url}
             </button>
           </dd>
@@ -182,7 +182,7 @@
             <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
             <li tabindex="0" data-state={n.state} onkeydown={(e) => noteKey(e, n)}>
               <input type="checkbox" aria-label="Resolve note" onchange={() => void resolveNote(n)} />
-              <button type="button" class="link" title="Open in editor (e)" onclick={() => jumpTo(n)}>
+              <button type="button" class="k-link" title="Open in editor (e)" onclick={() => jumpTo(n)}>
                 <code>{anchor(n)}</code>
               </button>
               <span class="body">{n.body}</span>
@@ -314,14 +314,5 @@
   small,
   .muted {
     color: var(--k-fg-subtle);
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--k-accent);
-    font: inherit;
-    cursor: pointer;
   }
 </style>

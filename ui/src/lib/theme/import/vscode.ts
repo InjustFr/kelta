@@ -4,7 +4,8 @@
 import type { ThemeBase, ThemeDef, ThemeTerminal, ThemeUi } from '$lib/gen';
 
 import { BUILTIN } from '../builtin';
-import { complete, parse, type PartialTheme } from './derive';
+import { parseHex } from '../hex';
+import { complete, type PartialTheme } from './derive';
 
 // First present key wins; complete() derives the rest.
 const UI: Record<keyof ThemeUi, string[]> = {
@@ -50,7 +51,7 @@ export function fromVscodeColors(
   const pick = <K extends string>(map: Record<K, string[]>) => {
     const out: Partial<Record<K, string>> = {};
     for (const [token, keys] of Object.entries(map) as [K, string[]][]) {
-      const key = keys.find((k) => parse(colors[k]));
+      const key = keys.find((k) => parseHex(colors[k]));
       if (key) out[token] = colors[key] as string;
     }
     found += Object.keys(out).length;
@@ -58,7 +59,7 @@ export function fromVscodeColors(
   };
   const ui = pick(UI);
   const terminal: PartialTheme['terminal'] = pick(TERMINAL);
-  terminal.ansi = ANSI.map((k) => (parse(colors[k]) ? (colors[k] as string) : undefined));
+  terminal.ansi = ANSI.map((k) => (parseHex(colors[k]) ? (colors[k] as string) : undefined));
   found += terminal.ansi.filter(Boolean).length;
   if (!found) return new Error('No usable colours in this theme');
   const base = typeof type === 'string' && Object.hasOwn(BASES, type) ? BASES[type] : undefined;

@@ -38,7 +38,7 @@ async function mountSheet(key: RegisteredSheetKey) {
 }
 
 function mountHeader(item: WorkItem) {
-  return render(WorkContext, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
+  return render(WorkContext, { props: { projectId: item.project_id, workItemId: item.id } });
 }
 
 const item = (i: number): WorkItem => mock.state.work[i] as WorkItem;
@@ -295,7 +295,7 @@ describe('context bar: work item segment', () => {
   });
 
   it('shows a placeholder for an unknown work item', async () => {
-    render(WorkContext, { props: { projectId: 'shop', tabId: 'tab', workItemId: 'nope' } });
+    render(WorkContext, { props: { projectId: 'shop', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();
   });
 

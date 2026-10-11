@@ -3,7 +3,7 @@ import { ACTIONS, RESERVED_CHORDS } from '$lib/gen/actions';
 import { findConflicts } from '$lib/keys';
 import { formatChord } from '$lib/ui/format';
 
-import { slugify } from './accounts';
+import { slugify, uniqueId } from './accounts';
 
 /** Shell-like split: whitespace separates, single/double quotes group, backslash escapes. Null on an unclosed quote. */
 export function splitArgv(line: string): string[] | null {
@@ -37,11 +37,7 @@ export function splitArgv(line: string): string[] | null {
 
 /** Slug of `name`, suffixed `-2`, `-3`… past the ids already taken. */
 export function uniqueToolId(name: string, taken: readonly string[]): string {
-  const base = slugify(name) || 'tool';
-  if (!taken.includes(base)) return base;
-  let i = 2;
-  while (taken.includes(`${base}-${i}`)) i++;
-  return `${base}-${i}`;
+  return uniqueId(slugify(name) || 'tool', taken);
 }
 
 /**

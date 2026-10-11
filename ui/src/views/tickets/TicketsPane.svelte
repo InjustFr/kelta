@@ -5,8 +5,7 @@
   import { dispatch } from '$lib/actions';
   import type { Column, PrLink, Scope, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
-  import { findPane, replacePaneContent } from '$lib/layout';
-  import { GLOBAL, layout, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, settings, tickets, toasts, ui, work } from '$lib/stores';
   import { scopeKey } from '$lib/stores/reducers';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
@@ -26,7 +25,7 @@
   } from '$lib/ui';
 
   import { columnFor, initials, isAuthError } from '../work/common';
-  import { openFrom, saveTicketsView } from '../work/nav';
+  import { openFrom, persistPaneContent, saveTicketsView } from '../work/nav';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -115,18 +114,7 @@
   let currentSprint = $state(false);
 
   function persist(patch: Partial<Omit<typeof content, 'kind' | 'scope'>>): void {
-    if (projectId === GLOBAL) return saveTicketsView(patch);
-    const current = layout.get(projectId);
-    if (!current || !current.tabs.some((t) => findPane(t.root, paneId))) return;
-    layout.update(projectId, (l) => ({
-      ...l,
-      // Merged onto the stored content: two changes in one tick must not drop the first.
-      tabs: l.tabs.map((t) => {
-        const stored = findPane(t.root, paneId)?.pane.content;
-        const base = stored?.kind === 'tickets' ? stored : content;
-        return { ...t, root: replacePaneContent(t.root, paneId, { ...base, ...patch }) };
-      }),
-    }));
+    persistPaneContent(projectId, paneId, patch, () => saveTicketsView(patch));
   }
 
   function setSource(id: string | null, view: string | null = null): void {
@@ -268,10 +256,9 @@
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
-  const groupBys = GROUP_BYS;
   const groupBy = $derived.by<GroupBy>(() => {
     const g = groupOverride ?? content.group ?? 'flow';
-    return groupBys.includes(g) ? g : 'flow';
+    return GROUP_BYS.includes(g) ? g : 'flow';
   });
   const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
   const sorted = $derived(sortTickets(shown, sort));
@@ -709,7 +696,7 @@
         if (item) void focusDetail(item);
         break;
       case 'G':
-        setGroup(groupBys[(groupBys.indexOf(groupBy) + 1) % groupBys.length] ?? 'flow');
+        setGroup(GROUP_BYS[(GROUP_BYS.indexOf(groupBy) + 1) % GROUP_BYS.length] ?? 'flow');
         break;
       case 'R':
         refresh();
@@ -887,7 +874,7 @@
         {#snippet actions()}<Button onclick={() => setGroup('status')}>By status</Button>{/snippet}
       </EmptyState>
     {:else if mode === 'list'}
-      <div class="split">
+      <div class="k-split">
         <div class="list" style:--key-chars={keyChars}>
           <VirtualList
             bind:this={vlist}
@@ -954,11 +941,11 @@
           </VirtualList>
         </div>
         {#if splitShown}
-          <aside class="side" bind:this={side} aria-label="Ticket detail">
+          <aside class="k-split-side" bind:this={side} aria-label="Ticket detail">
             {#if cur}
               <TicketDetail item={cur} projectId={cur.project_ids[0] ?? home} embedded />
             {:else}
-              <p class="side-empty">Select a ticket to see it here.</p>
+              <p class="k-split-empty">Select a ticket to see it here.</p>
             {/if}
           </aside>
         {/if}
@@ -1137,36 +1124,6 @@
     padding: 0 2px;
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
-  }
-
-  /* Split view: list left, the selected ticket's detail right, the 1px splitter gap between. */
-  .split {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    gap: 1px;
-    background: var(--k-border);
-  }
-
-  .split .list {
-    min-width: 0;
-    background: var(--k-well);
-  }
-
-  .side {
-    flex: 0 0 clamp(320px, 44%, 640px);
-    min-width: 0;
-    background: var(--k-well);
-  }
-
-  .side-empty {
-    margin: 0;
-    padding: var(--k-space-5) var(--k-space-4);
-    color: var(--k-fg-subtle);
-  }
-
-  .list {
-    container-type: inline-size;
   }
 
   .head {

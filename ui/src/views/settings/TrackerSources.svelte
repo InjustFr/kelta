@@ -2,11 +2,11 @@
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
   // Whose tickets, current iteration and removal save at once to the global `[[sources]]`.
   import type { TrackerView, Who } from '$lib/gen';
-  import { settings, toasts, ui } from '$lib/stores';
+  import { settings, ui } from '$lib/stores';
   import { Badge, Button, IconButton, Select, Toggle } from '$lib/ui';
 
   import { confirms } from '../../shell/confirm.svelte';
-  import { iterationWord, saveSources, viewAccount, withEdited } from './lib/sources.svelte';
+  import { editSource, iterationWord, viewAccount } from './lib/sources.svelte';
 
   interface Props {
     sourceId: string;
@@ -30,26 +30,21 @@
   const whoOptions = (v: TrackerView) =>
     v.who && !hasQuery(v) ? WHO : [{ value: '' as const, label: 'Set by query' }, ...WHO];
 
-  async function save(views: TrackerView[]): Promise<void> {
-    try {
-      await saveSources(withEdited(all, sourceId, (s) => ({ ...s, tracker: { ...s.tracker, views } })));
-    } catch (err) {
-      toasts.error(err, 'Could not save the ticket source');
-    }
-  }
+  const save = (f: (views: TrackerView[]) => TrackerView[]) =>
+    editSource(sourceId, (s) => ({ ...s, tracker: { ...s.tracker, views: f(s.tracker.views) } }));
 
-  const patch = (views: TrackerView[], id: string, p: Partial<TrackerView>) =>
-    save(views.map((v) => (v.id === id ? { ...v, ...p } : v)));
+  const patch = (id: string, p: Partial<TrackerView>) =>
+    save((views) => views.map((v) => (v.id === id ? { ...v, ...p } : v)));
 
   /** A view can hold a hand-written query: removal is confirmed (it writes the TOML at once). */
-  async function remove(views: TrackerView[], v: TrackerView): Promise<void> {
+  async function remove(v: TrackerView): Promise<void> {
     const answer = await confirms.ask({
       title: `Remove ${v.label}?`,
       body: `${source?.label ?? 'The source'} stops listing tickets from this view. Its query is not kept.`,
       tone: 'danger',
       actions: [{ id: 'remove', label: 'Remove view', variant: 'danger' }],
     });
-    if (answer === 'remove') await save(views.filter((x) => x.id !== v.id));
+    if (answer === 'remove') await save((views) => views.filter((x) => x.id !== v.id));
   }
 </script>
 
@@ -81,7 +76,7 @@
               <Select
                 value={v.who ?? ''}
                 options={whoOptions(v)}
-                onchange={(who) => void patch(b.views, v.id, { who: who || null })}
+                onchange={(who) => void patch(v.id, { who: who || null })}
                 id="who-{source.id}-{v.id}"
               />
             </span>
@@ -89,15 +84,10 @@
               <Toggle
                 label="Current {word} only"
                 checked={v.current_iteration}
-                onchange={(on) => void patch(b.views, v.id, { current_iteration: on })}
+                onchange={(on) => void patch(v.id, { current_iteration: on })}
               />
             {/if}
-            <IconButton
-              icon="trash-2"
-              label="Remove {v.label}"
-              size="sm"
-              onclick={() => void remove(b.views, v)}
-            />
+            <IconButton icon="trash-2" label="Remove {v.label}" size="sm" onclick={() => void remove(v)} />
           </li>
         {/each}
       </ul>

@@ -3,7 +3,7 @@
 // Every handler takes `{ id }` and falls back to the focused tab's work item (palette).
 
 import { registerAction, type ActionArgs } from '$lib/actions';
-import type { Feedback, ProjectId, ReviewRef, Toast, WorkItem, WorkItemId } from '$lib/gen';
+import type { Feedback, ProjectId, ReviewRef, SessionInfo, Toast, WorkItem, WorkItemId } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { isIpcError } from '$lib/ipc/transport';
 import { activeTab } from '$lib/layout';
@@ -279,13 +279,23 @@ async function push(w: WorkItem, force: boolean): Promise<void> {
   }
 }
 
+/** The item's live Claude session, or null. */
+export function liveClaude(id: WorkItemId): SessionInfo | null {
+  return (
+    sessions.all.find((s) => s.work_item_id === id && s.kind.type === 'claude' && s.lifecycle === 'live') ??
+    null
+  );
+}
+
+/** Hooks report `c` and it is not idle: `work_send` holds a prompt until its next `Stop`. */
+export const claudeBusy = (c: SessionInfo): boolean =>
+  c.status_source === 'hook' && !['done', 'waiting_user'].includes(c.status);
+
 /** A live Claude core cannot paste into now: `work_send` holds the prompt until its `Stop` (hooks,
  * busy) or copies it (hooks inactive), and core toasts that itself. */
 export function sendDeferred(id: WorkItemId): boolean {
-  const c = sessions.all.find(
-    (s) => s.work_item_id === id && s.kind.type === 'claude' && s.lifecycle === 'live',
-  );
-  return !!c && (c.status_source !== 'hook' || !['done', 'waiting_user'].includes(c.status));
+  const c = liveClaude(id);
+  return !!c && (c.status_source !== 'hook' || claudeBusy(c));
 }
 
 /** Sends a prompt to the item's Claude; errors become toasts. */

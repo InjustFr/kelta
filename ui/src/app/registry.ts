@@ -48,7 +48,6 @@ export function paneComponent(kind: PaneKind): LazyComponent | null {
 export type TabHeaderKey = 'work' | 'brief';
 export interface TabHeaderProps {
   projectId: string;
-  tabId: string;
   workItemId: string;
 }
 export const tabHeaderRegistry: Record<TabHeaderKey, LazyComponent> = {

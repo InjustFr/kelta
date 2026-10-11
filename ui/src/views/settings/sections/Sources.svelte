@@ -14,7 +14,7 @@
   import Control from '../fields/Control.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import { entrySchema, nodeAt, type SchemaNode } from '../lib/schema';
-  import { saveSources, withEdited } from '../lib/sources.svelte';
+  import { editSource, saveSources } from '../lib/sources.svelte';
   import SectionForm from '../SectionForm.svelte';
   import TrackerSources from '../TrackerSources.svelte';
 
@@ -50,20 +50,12 @@
     );
   });
 
-  async function edit(id: string, f: (s: Source) => Source): Promise<void> {
-    try {
-      await saveSources(withEdited(all, id, f));
-    } catch (err) {
-      toasts.error(err, 'Could not save the ticket source');
-    }
-  }
-
   const setTracker = (s: Source, key: 'columns' | 'status_map', v: JsonValue | null) =>
-    edit(s.id, (x) => ({ ...x, tracker: { ...x.tracker, [key]: v ?? (key === 'columns' ? [] : {}) } }));
+    editSource(s.id, (x) => ({ ...x, tracker: { ...x.tracker, [key]: v ?? (key === 'columns' ? [] : {}) } }));
 
   /** Unticking a project drops its routes too (a route must name one of the source's projects). */
   const toggleProject = (s: Source, pid: string) =>
-    edit(s.id, (x) =>
+    editSource(s.id, (x) =>
       x.projects.includes(pid)
         ? {
             ...x,
@@ -73,7 +65,7 @@
         : { ...x, projects: [...x.projects, pid] },
     );
 
-  const setRoutes = (s: Source, routes: SourceRoute[]) => edit(s.id, (x) => ({ ...x, routes }));
+  const setRoutes = (s: Source, routes: SourceRoute[]) => editSource(s.id, (x) => ({ ...x, routes }));
   const patchRoute = (s: Source, i: number, p: Partial<SourceRoute>) =>
     setRoutes(
       s,
@@ -135,7 +127,7 @@
               value={s.label}
               onchange={(e) => {
                 const label = (e.currentTarget as HTMLInputElement).value.trim();
-                if (label && label !== s.label) void edit(s.id, (x) => ({ ...x, label }));
+                if (label && label !== s.label) void editSource(s.id, (x) => ({ ...x, label }));
               }}
             />
             <IconButton icon="trash-2" label="Remove {s.label}" size="sm" onclick={() => void remove(s)} />

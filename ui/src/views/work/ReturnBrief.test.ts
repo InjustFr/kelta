@@ -21,7 +21,7 @@ beforeEach(async () => {
 });
 
 function mountHeader(item: WorkItem) {
-  return render(ReturnBrief, { props: { projectId: item.project_id, tabId: 'tab', workItemId: item.id } });
+  return render(ReturnBrief, { props: { projectId: item.project_id, workItemId: item.id } });
 }
 
 const item = (i: number): WorkItem => mock.state.work[i] as WorkItem;

@@ -148,7 +148,7 @@
                   <span class="muted" data-testid="fed-by"
                     >Fed by {#each fedBy(p.id) as s, i (s.id)}{i > 0 ? ', ' : ''}<button
                         type="button"
-                        class="link"
+                        class="k-link"
                         onclick={() =>
                           void dispatch('settings.open', { section: 'sources', source_id: s.id })}
                         >{s.label}</button
@@ -261,14 +261,5 @@
     margin: 0;
     color: var(--k-warn);
     font-size: var(--k-font-size-sm);
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--k-accent);
-    font: inherit;
-    cursor: pointer;
   }
 </style>
