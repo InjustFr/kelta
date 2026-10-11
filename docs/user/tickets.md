@@ -216,8 +216,8 @@ Kelta's MCP server gives Claude its ticket tools. Sessions Kelta starts always g
 
 - At launch, when Kelta finds Claude Code (`claude.binary` in your login PATH) and the `kelta` MCP server is not
   registered, a toast asks "Claude Code detected. Let your Claude sessions use Kelta's ticket tools?".
-  **Install** registers it at user scope (`claude mcp add --scope user --transport http kelta
-  http://127.0.0.1:<port>/mcp` with a token of its own), so the next `claude`, in any directory, lists the `kelta`
+  **Install** registers it at user scope (the `kelta` entry of `mcpServers` in `~/.claude.json`, pointing at
+  `http://127.0.0.1:<port>/mcp` with a token of its own), so the next `claude`, in any directory, lists the `kelta`
   tools. Dismissing the toast asks again at the next launch; **Never** stops asking (`claude.mcp_offer = false`).
 - Settings > Claude shows whether it is installed, with **Install** / **Remove**. Remove unregisters it and revokes
   its token.
