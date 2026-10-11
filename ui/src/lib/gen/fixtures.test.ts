@@ -5,7 +5,7 @@ import { fixtures } from './fixtures';
 
 describe('kelta-proto fixtures', () => {
   it('has every fixture', () => {
-    expect(Object.keys(fixtures).length).toBe(109);
+    expect(Object.keys(fixtures).length).toBe(110);
   });
 
   for (const [name, value] of Object.entries(fixtures)) {

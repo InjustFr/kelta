@@ -1,6 +1,6 @@
 // Sessions across all projects. Fed by session.* UiEvents.
 
-import type { KeltaError, ProjectId, SessionId, SessionInfo, UiEvent } from '$lib/gen';
+import type { ClaudeRun, KeltaError, ProjectId, SessionId, SessionInfo, UiEvent } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
 import { toKeltaError } from './loadable';
@@ -36,9 +36,37 @@ export class SessionsStore {
     return nextNeedingInput(this.all, projectOrder, afterId);
   }
 
+  /** Claude `Workflow` runs per session, in first-seen order (#272). */
+  runs = $state<Record<SessionId, ClaudeRun[]>>({});
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a load guard, never rendered
+  #runsLoaded = new Set<SessionId>();
+
   apply(ev: UiEvent): void {
     const next = reduceSessions(this.byId, ev);
     if (next !== this.byId) this.byId = next;
+    if (ev.type === 'workflow.updated') this.putRun(ev.run);
+    else if (ev.type === 'session.removed' && ev.id in this.runs) {
+      const { [ev.id]: _gone, ...rest } = this.runs;
+      this.runs = rest;
+    }
+  }
+
+  /** Once per session: the runs core saw before this window listened (events keep them current). */
+  async loadRuns(id: SessionId): Promise<void> {
+    if (this.#runsLoaded.has(id)) return;
+    this.#runsLoaded.add(id);
+    try {
+      for (const run of await ipc.claudeRunsList({ id })) this.putRun(run);
+    } catch {
+      this.#runsLoaded.delete(id);
+    }
+  }
+
+  private putRun(run: ClaudeRun): void {
+    const list = this.runs[run.session_id] ?? [];
+    const i = list.findIndex((r) => r.run_id === run.run_id);
+    const next = i < 0 ? [...list, run] : list.map((r, j) => (j === i ? run : r));
+    this.runs = { ...this.runs, [run.session_id]: next };
   }
 
   /** Loads every session (or one project's, merged into the map). */

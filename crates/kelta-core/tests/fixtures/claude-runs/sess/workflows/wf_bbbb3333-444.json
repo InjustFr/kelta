@@ -1,0 +1,1 @@
+{"runId":"wf_bbbb3333-444","workflowName":"kelta-ticket-pass","status":"killed","durationMs":61000,"totalTokens":1234,"totalToolCalls":7,"agentCount":2,"phases":[{"title":"Pick","detail":"x"},{"title":"Implement"},{"bogus":true}],"result":{"status":"blocked","ticket":7},"logs":["Picked #7",3],"futureField":{"a":[1]}}

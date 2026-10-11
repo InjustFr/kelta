@@ -277,6 +277,9 @@ pub trait CoreApi: Send + Sync {
     async fn session_set_usage(&self, _id: &SessionId, _usage: ClaudeUsage) -> Result<(), KeltaError> {
         Ok(())
     }
+    /// Every hook of a session, for its Claude `Workflow` runs (#272): core re-reads the runs the
+    /// hook concerns and emits `workflow.updated`. Never fails: the files are Claude internals.
+    fn session_claude_runs_hook(&self, _id: &SessionId, _payload: &crate::hooks::HookPayload) {}
     /// New tab / split / focus.
     async fn layout_open(&self, project: &ProjectId, req: OpenPaneRequest) -> Result<PaneRef, KeltaError>;
     // projects & settings
