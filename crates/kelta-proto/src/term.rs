@@ -292,7 +292,10 @@ impl LoginEnv {
     /// The inherited process environment without the AppImage runtime's variables
     /// ([`strip_appimage_env`]): what a child process of Kelta should start from.
     pub fn inherited() -> Self {
-        let mut vars = std::env::vars().collect();
+        // A non-UTF-8 pair can't live in the map: drop it rather than panic like `vars()`.
+        let mut vars = std::env::vars_os()
+            .filter_map(|(k, v)| Some((k.to_str()?.to_owned(), v.to_str()?.to_owned())))
+            .collect();
         strip_appimage_env(&mut vars);
         Self { vars, source: LoginEnvSource::Inherited, shell: std::env::var_os("SHELL").map(PathBuf::from) }
     }
@@ -488,6 +491,26 @@ mod tests {
         let mut vars = plain.clone();
         strip_appimage_env(&mut vars);
         assert_eq!(vars, plain);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn inherited_drops_non_utf8_vars() {
+        use std::os::unix::ffi::OsStrExt;
+        const NAME: &str = "term::tests::inherited_drops_non_utf8_vars";
+        // Inner run, re-executed below with a Latin-1 variable (no `set_var` in a threaded test).
+        if std::env::var_os("KELTA_TEST_NON_UTF8").is_some() {
+            let env = LoginEnv::inherited();
+            assert!(env.get("KELTA_TEST_NON_UTF8").is_none());
+            assert!(env.path().is_some());
+            return;
+        }
+        let status = command(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--test-threads=1"])
+            .env("KELTA_TEST_NON_UTF8", std::ffi::OsStr::from_bytes(b"caf\xe9"))
+            .status()
+            .unwrap();
+        assert!(status.success());
     }
 
     #[test]
