@@ -71,9 +71,17 @@ pub fn enabled(config: &tauri::Config, debug: bool) -> bool {
     !debug && config.plugins.0.contains_key("updater")
 }
 
+/// shortcut: release.yml neither signs nor publishes `latest.json`, so the release channel has no
+/// manifest to check; drop this once it does.
+fn channel_reason(channel: UpdateChannel) -> Option<&'static str> {
+    (channel == UpdateChannel::Release).then_some("Updates come from the releases page.")
+}
+
 fn unsupported(app: &AppHandle) -> Option<&'static str> {
     if !enabled(app.config(), cfg!(debug_assertions)) {
         Some("Development builds do not update.")
+    } else if let Some(reason) = channel_reason(channel(&app.package_info().version.to_string())) {
+        Some(reason)
     } else if cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_none() {
         Some("Updates come from your package manager.")
     } else if cfg!(target_os = "macos") && !std::env::current_exe().is_ok_and(|e| writable_bundle(&e)) {
@@ -224,6 +232,12 @@ mod tests {
         config.plugins.0.insert("updater".into(), serde_json::json!({ "pubkey": "k" }));
         assert!(enabled(&config, false), "release overlay");
         assert!(!enabled(&config, true), "debug build");
+    }
+
+    #[test]
+    fn release_channel_has_no_manifest_yet() {
+        assert_eq!(channel_reason(UpdateChannel::Release), Some("Updates come from the releases page."));
+        assert_eq!(channel_reason(UpdateChannel::Nightly), None);
     }
 
     #[test]

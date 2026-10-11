@@ -95,7 +95,7 @@ else
   skip e2e "no UI, desktop or kelta-proto change"
 fi
 if [ "$deny" = 1 ]; then
-  run cargo-deny cargo deny check licenses bans sources
+  run cargo-deny cargo deny check advisories licenses bans sources
 else
   skip cargo-deny "Cargo.lock and deny.toml unchanged"
 fi

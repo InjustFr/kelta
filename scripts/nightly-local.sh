@@ -23,12 +23,12 @@ password="$(security find-generic-password -s kelta-updater -w)" ||
   { echo "updater key password missing from the Keychain (service kelta-updater)" >&2; exit 1; }
 ! grep -q 'REPLACE-WITH' packaging/tauri.release.json ||
   { echo "packaging/tauri.release.json still has the placeholder updater pubkey" >&2; exit 1; }
-TAURI_SIGNING_PRIVATE_KEY="$(cat "$key_file")"
-export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$password"
+# Not exported: only the signing builds below get the key, never the gate (build scripts, tests, Docker).
+key="$(cat "$key_file")"
 
 [[ -z "$(git status --porcelain)" ]] || { echo "dirty tree: commit or stash first" >&2; exit 1; }
 # The public nightly is main only: refuse unreviewed branches.
-git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main || { echo "HEAD is not on origin/main" >&2; exit 1; }
+{ git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main; } || { echo "HEAD is not on origin/main" >&2; exit 1; }
 # The nightly is built from a commit that passes every gate step, not only the affected ones.
 bash scripts/ci-local.sh --full
 sha="$(git rev-parse HEAD)"
@@ -41,7 +41,7 @@ rm -rf "$dist" && mkdir -p "$dist"
 
 # The bundler keeps older versioned files: clear them so only this build is published.
 rm -rf target/release/bundle
-bash packaging/build.sh
+TAURI_SIGNING_PRIVATE_KEY="$key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$password" bash packaging/build.sh
 cp target/release/bundle/dmg/*.dmg "$dist"
 # Versioned name: the new bundle is uploaded beside the old one before latest.json points at it.
 for ext in tar.gz tar.gz.sig; do
@@ -54,7 +54,7 @@ if ((linux)); then arches="arm64 amd64"; fi
 for arch in $arches; do
   docker build --platform "linux/$arch" -f docker/ubuntu-build.Dockerfile -t "kelta-nightly-$arch" .
   # Source comes from `git archive` so only HEAD is built; /work/target is a per-arch volume (warm rebuilds).
-  git archive HEAD | docker run --rm -i --platform "linux/$arch" \
+  git archive HEAD | TAURI_SIGNING_PRIVATE_KEY="$key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$password" docker run --rm -i --platform "linux/$arch" \
     -v "kelta-nightly-target-$arch":/work/target -v kelta-cargo:/root/.cargo/registry \
     -v kelta-pnpm:/root/.local/share/pnpm/store -v "$dist":/out \
     -e APPIMAGE_EXTRACT_AND_RUN=1 -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \

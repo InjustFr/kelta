@@ -785,13 +785,6 @@ pub mod q {
         Ok(r)
     }
 
-    pub fn work_delete(c: &Connection, id: &WorkItemId) -> R<()> {
-        c.execute("DELETE FROM work_steps WHERE work_item_id = ?1", [id.as_str()]).map_err(db_err)?;
-        c.execute("DELETE FROM notes WHERE work_item = ?1", [id.as_str()]).map_err(db_err)?;
-        c.execute("DELETE FROM work_items WHERE id = ?1", [id.as_str()]).map_err(db_err)?;
-        Ok(())
-    }
-
     pub fn step_set(
         c: &Connection,
         id: &WorkItemId,
@@ -1013,11 +1006,6 @@ impl WorkStore for Store {
     async fn list_items(&self, project: Option<&ProjectId>) -> Result<Vec<WorkItem>, KeltaError> {
         let project = project.cloned();
         self.call(move |c| q::work_list(c, project.as_ref())).await
-    }
-
-    async fn delete_item(&self, id: &WorkItemId) -> Result<(), KeltaError> {
-        let id = id.clone();
-        self.call(move |c| q::work_delete(c, &id)).await
     }
 
     async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError> {

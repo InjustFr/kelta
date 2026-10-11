@@ -3073,7 +3073,6 @@ dependencies = [
  "uuid",
  "which",
  "wiremock",
- "zbus",
 ]
 
 [[package]]

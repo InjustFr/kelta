@@ -1,7 +1,7 @@
 name: nightly
 
-# Manual only (the daily local build is scripts/nightly-local.sh): unsigned macOS universal dmg + Linux AppImage + deb, published to the rolling "nightly"
-# prerelease (deleted and recreated each time). Skipped when main has not moved since the last nightly.
+# Manual only: unsigned macOS universal dmg + Linux AppImage + deb, kept as run artifacts. Nothing is published:
+# the rolling "nightly" prerelease (signed, with latest.json) comes from scripts/nightly-local.sh only.
 on:
   workflow_dispatch:
 
@@ -10,35 +10,14 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   packages: read # the ghcr.io/injustfr/kelta-ci image
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    runs-on: ubuntu-24.04
-    outputs:
-      build: ${{ steps.main.outputs.build }}
-    steps:
-      - id: main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          head="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          last="$(gh api "repos/${GITHUB_REPOSITORY}/commits/nightly" --jq .sha 2>/dev/null || true)"
-          # A manual run always builds.
-          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && [ "$head" = "$last" ]; then
-            echo "main ${head} already has a nightly, nothing to build"
-            echo "build=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          fi
-
   linux:
-    needs: check
-    if: needs.check.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # The prebuilt image (ci-image.yml) has the system packages and the Rust toolchain.
     container:
@@ -50,22 +29,22 @@ jobs:
     env:
       APPIMAGE_EXTRACT_AND_RUN: "1" # no FUSE in a container for linuxdeploy
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Validate desktop entry and AppStream metadata
         run: |
           desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
           appstreamcli validate --no-net packaging/linux/dev.kelta.Kelta.metainfo.xml
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: release # nightly and release share their release builds
           cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: bash packaging/build.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux
           path: |
@@ -73,59 +52,28 @@ jobs:
             target/release/bundle/appimage/*.AppImage
 
   macos:
-    needs: check
-    if: needs.check.outputs.build == 'true'
     runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: 1.99.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       # Caches both targets' dependencies (target/<triple>/release).
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: release
           cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       # No APPLE_* variables: the app is built unsigned.
       - run: UNIVERSAL=1 bash packaging/build.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: macos
           path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
-  publish:
-    needs: [linux, macos]
-    # A manual run on another branch only builds: the rolling prerelease is main's.
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Rolling "nightly" prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          (cd dist && sha256sum -- * > SHA256SUMS)
-          lanes="$(git log --format=%B | grep -oE '\bL[0-9]{1,2}\b' | sort -uV | paste -sd' ' -)"
-          {
-            echo "Unsigned build of \`${GITHUB_SHA}\` (main)."
-            echo
-            echo "Merged lanes: ${lanes:-none yet}"
-            echo
-            echo "macOS: the app is not signed, see the README (right-click Open, or xattr -dr com.apple.quarantine)."
-          } > notes.md
-          gh release delete nightly --cleanup-tag --yes || true
-          gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
-            --title "Nightly ${GITHUB_SHA::7}" --notes-file notes.md

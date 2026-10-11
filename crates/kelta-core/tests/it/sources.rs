@@ -287,3 +287,21 @@ fn startup_moves_project_trackers_to_sources_once() {
     assert!(toasts(&ui).is_empty());
     assert_eq!(std::fs::read_to_string(dirs.global_config()).unwrap(), global);
 }
+
+#[test]
+fn unopenable_state_database_toasts_at_app_ready() {
+    let tmp = tempfile::tempdir().unwrap();
+    // A directory where the database file should be: SQLite cannot open it.
+    std::fs::create_dir_all(Dirs::under(tmp.path()).db_path()).unwrap();
+    let ui = FakeUiBridge::new();
+    let mut deps = kelta_core::CoreDeps::new(Dirs::under(tmp.path()), CliArgs::default(), ui.clone());
+    deps.terminal = Some(FakeTerminalHost::new());
+    deps.secrets = Some(FakeSecrets::new());
+    deps.login_env = Some(login_env(tmp.path()));
+    deps.install_ctl = false;
+    deps.start_services = false;
+    let core = Core::start_with(deps).unwrap();
+    tokio::runtime::Runtime::new().unwrap().block_on(core.app_ready(0.0)).unwrap();
+    let t = toasts(&ui);
+    assert!(t.len() == 1 && t[0].contains("changes this session will not be saved"), "{t:?}");
+}
