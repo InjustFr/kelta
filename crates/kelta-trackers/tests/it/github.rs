@@ -80,6 +80,7 @@ async fn a_304_is_answered_from_the_etag_cache_without_refetching_the_body() {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("etag", "\"etag-1\"")
+                .insert_header("link", "<https://api.github.com/issues?page=2>; rel=\"next\"")
                 .set_body_string(fixture_text("github/issues_assigned_p1.json")),
         )
         .expect(1)
@@ -90,6 +91,8 @@ async fn a_304_is_answered_from_the_etag_cache_without_refetching_the_body() {
     let b = t.list(&view("mine"), None).await.unwrap();
     assert_eq!(a, b);
     assert_eq!(b.items.len(), 2);
+    // The bare 304 carries no Link: `next` comes from the cached 200's headers.
+    assert_eq!(b.next, Some(Cursor::Page(2)));
 }
 
 #[tokio::test]

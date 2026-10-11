@@ -90,6 +90,7 @@ async fn a_304_reuses_the_cached_list() {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("etag", "W/\"abc\"")
+                .insert_header("x-next-page", "2")
                 .set_body_string(fixture_text("gitlab/issues_p1.json")),
         )
         .expect(1)
@@ -99,6 +100,8 @@ async fn a_304_reuses_the_cached_list() {
     let a = t.list(&view("mine"), None).await.unwrap();
     let b = t.list(&view("mine"), None).await.unwrap();
     assert_eq!(a, b);
+    // The bare 304 carries no x-next-page: `next` comes from the cached 200's headers.
+    assert_eq!(b.next, Some(Cursor::Page(2)));
 }
 
 #[tokio::test]
