@@ -48,7 +48,10 @@ impl HttpClient {
             .pool_idle_timeout(Duration::from_secs(30))
             // reqwest strips only Authorization on cross-host redirects, not PRIVATE-TOKEN etc.
             .redirect(reqwest::redirect::Policy::custom(|a| {
-                if a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url())) {
+                // Ten hops, as reqwest's default policy: a no-timeout client must not loop forever.
+                if a.previous().len() <= 10
+                    && a.previous().last().is_some_and(|p| redirect_keeps_secrets_safe(p, a.url()))
+                {
                     a.follow()
                 } else {
                     a.stop()
