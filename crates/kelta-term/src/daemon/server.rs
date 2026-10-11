@@ -1,6 +1,7 @@
 //! keltad side: one [`PtyTerminalHost`], a thread per client connection, events routed to the
 //! client that spawned or last adopted each session. Exits after `idle_grace` with no client and no
-//! running session (the grace is armed by the disconnect / exit that made it idle).
+//! running session (the grace is armed by the disconnect / exit that made it idle), or at once on
+//! [`Req::Shutdown`].
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufReader, Write};
@@ -14,7 +15,7 @@ use std::time::Duration;
 use kelta_proto::api::{FrameSink, TerminalEvents, TerminalHost};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
-use kelta_proto::term::{PtySpawnSpec, TerminalEvent};
+use kelta_proto::term::{KillSignal, PtySpawnSpec, TerminalEvent};
 use parking_lot::{Condvar, Mutex};
 use serde_json::Value;
 
@@ -32,6 +33,7 @@ pub fn bind(path: &Path) -> Result<UnixListener, KeltaError> {
 struct Idle {
     st: Mutex<(usize, usize)>, // (clients, running sessions)
     cv: Condvar,
+    stop: AtomicBool,
 }
 
 impl Idle {
@@ -43,6 +45,9 @@ impl Idle {
     fn wait(&self, grace: Duration) {
         let mut st = self.st.lock();
         loop {
+            if self.stop.load(Ordering::SeqCst) {
+                return;
+            }
             if *st != (0, 0) {
                 self.cv.wait(&mut st);
                 continue;
@@ -322,6 +327,15 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Req::Stats => Ok(serde_json::to_value(h.stats())?),
+            Req::Shutdown => {
+                // SIGKILL each process group (as `session_kill`), exited ones are just closed.
+                for s in h.stats().sessions {
+                    let _ = h.kill(&s.id, KillSignal::Kill);
+                }
+                self.idle.stop.store(true, Ordering::SeqCst);
+                self.idle.update(|_| {});
+                Ok(Value::Null)
+            }
         }
     }
 }
@@ -434,6 +448,53 @@ mod tests {
         let (seq, hits) = reply();
         assert_eq!(seq, 2);
         assert!(hits.to_string().contains("a needle"), "{hits}");
+    }
+
+    /// #305: Shutdown kills the sessions and exits at once, a client still connected.
+    #[test]
+    fn shutdown_kills_sessions_and_exits() {
+        use super::super::SpawnSpec;
+        let tmp = tempfile::tempdir().unwrap();
+        let sock = tmp.path().join("run/keltad.sock");
+        let l = bind(&sock).unwrap();
+        let t = std::thread::spawn(move || serve(l, host(), Duration::from_secs(60)));
+        let mut s = UnixStream::connect(&sock).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let spec = SpawnSpec {
+            id: SessionId::new("sleep"),
+            program: "/bin/sleep".into(),
+            args: vec!["60".into()],
+            cwd: "/".into(),
+            env: BTreeMap::new(),
+            cols: 80,
+            rows: 24,
+            scrollback_lines: 0,
+            kind: kelta_proto::model::SessionKind::Shell,
+        };
+        let mut r = BufReader::new(s.try_clone().unwrap());
+        let mut call = |seq, req| {
+            s.write_all(&encode(&Call { seq, req }, &[]).unwrap()).unwrap();
+            loop {
+                let body = read_msg(&mut r).unwrap().unwrap();
+                if let Some((Out::Reply { seq: got, result }, _)) = decode::<Out>(&body)
+                    && got == seq
+                {
+                    return result.unwrap();
+                }
+            }
+        };
+        call(1, Req::Spawn { spec });
+        let stats: kelta_proto::term::TerminalStats = serde_json::from_value(call(2, Req::Stats)).unwrap();
+        assert_eq!(stats.sessions.len(), 1);
+        call(3, Req::Shutdown);
+        for _ in 0..200 {
+            if t.is_finished() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert!(t.is_finished(), "keltad still serving after Shutdown");
+        assert!(!sock.exists());
     }
 
     #[test]

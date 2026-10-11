@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Dialog, TextInput } from '$lib/ui';
+  import { Button, Dialog, TextInput, Toggle } from '$lib/ui';
 
   import { confirms, prompts } from './confirm.svelte';
 
@@ -15,6 +15,11 @@
         <ul>
           {#each req.details as line, i (i)}<li>{line}</li>{/each}
         </ul>
+      {/if}
+      {#if req.checkbox}
+        <div class="check" data-testid="confirm-checkbox">
+          <Toggle label={req.checkbox} bind:checked={confirms.checked} />
+        </div>
       {/if}
     </div>
     {#snippet actions()}
@@ -52,6 +57,10 @@
   .body {
     margin: 0 0 var(--k-space-3);
     color: var(--k-fg-muted);
+  }
+
+  .check {
+    margin-top: var(--k-space-3);
   }
 
   ul {

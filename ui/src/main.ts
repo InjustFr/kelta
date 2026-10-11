@@ -7,7 +7,7 @@ import './styles/base.css';
 import { mount } from 'svelte';
 
 import * as actions from '$lib/actions';
-import { appReady } from '$lib/ipc/commands';
+import { appClose, appReady } from '$lib/ipc/commands';
 import { createTauriTransport } from '$lib/ipc/tauri';
 import { setTransport } from '$lib/ipc/transport';
 import * as stores from '$lib/stores';
@@ -28,9 +28,14 @@ async function start(): Promise<void> {
     window.__kelta = { stores, registry, actions };
   } else {
     setTransport(createTauriTransport());
-    // The webview is destroyed on close: save the debounced layout first (the window waits for it).
+    // The webview is destroyed on close: save the debounced layout first, then let Rust decide
+    // (quit question or close). Without preventDefault Tauri destroys the window right after.
     void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
-      getCurrentWindow().onCloseRequested(() => stores.layout.flushForClose()),
+      getCurrentWindow().onCloseRequested(async (e) => {
+        e.preventDefault();
+        await stores.layout.flushForClose();
+        await appClose().catch(() => getCurrentWindow().destroy()); // never leave an unclosable window
+      }),
     );
   }
   // shortcut: best effort on reload / Cmd+Q (app.exit does not wait for the page), upgrade by routing quit through the UI.

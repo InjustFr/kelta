@@ -14,17 +14,30 @@ export interface ConfirmRequest {
   details?: string[];
   actions: ConfirmAction[];
   tone?: 'default' | 'danger';
+  /** Label of a checkbox under the body ("Don't ask again"); read it with `askChecked`. */
+  checkbox?: string;
+}
+
+export interface ConfirmAnswer {
+  id: string | null;
+  checked: boolean;
 }
 
 interface Pending extends ConfirmRequest {
-  resolve: (id: string | null) => void;
+  resolve: (answer: ConfirmAnswer) => void;
 }
 
 export class ConfirmStore {
   current = $state<Pending | null>(null);
+  /** The current request's checkbox; every request starts unchecked. */
+  checked = $state(false);
   #queue: Pending[] = [];
 
-  ask(request: ConfirmRequest): Promise<string | null> {
+  async ask(request: ConfirmRequest): Promise<string | null> {
+    return (await this.askChecked(request)).id;
+  }
+
+  askChecked(request: ConfirmRequest): Promise<ConfirmAnswer> {
     return new Promise((resolve) => {
       const pending: Pending = { ...request, resolve };
       if (this.current) this.#queue.push(pending);
@@ -35,8 +48,10 @@ export class ConfirmStore {
   answer(id: string | null): void {
     const cur = this.current;
     if (!cur) return;
+    const checked = this.checked;
+    this.checked = false;
     this.current = this.#queue.shift() ?? null;
-    cur.resolve(id);
+    cur.resolve({ id, checked });
   }
 }
 

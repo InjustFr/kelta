@@ -126,6 +126,9 @@ pub enum UiEvent {
     /// A Claude `Workflow` run of a session changed (#272).
     #[serde(rename = "workflow.updated")]
     WorkflowUpdated { run: ClaudeRun },
+    /// Quit asked with sessions keltad would keep (#305): the UI asks keep / stop, then `app_quit`.
+    #[serde(rename = "app.quit_requested")]
+    QuitRequested { live: u32, busy: Vec<String> },
 }
 
 impl UiEvent {
@@ -148,6 +151,7 @@ impl UiEvent {
             Self::CtlCommand { .. } => "ctl.command",
             Self::UiOpen { .. } => "ui.open",
             Self::WorkflowUpdated { .. } => "workflow.updated",
+            Self::QuitRequested { .. } => "app.quit_requested",
         }
     }
 }

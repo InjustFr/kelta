@@ -1905,6 +1905,7 @@ export const settingsDefault: Settings = {
     "dark_theme": "bezel-dark",
     "light_theme": "bezel-light",
     "log_level": "info",
+    "quit_sessions": "ask",
     "restore_mode": "lazy",
     "theme": "system",
     "updates": true
@@ -3795,6 +3796,14 @@ export const uiEventWorkflowUpdated: UiEvent = {
   "type": "workflow.updated"
 };
 
+export const uiEventQuitRequested: UiEvent = {
+  "busy": [
+    "claude"
+  ],
+  "live": 3,
+  "type": "app.quit_requested"
+};
+
 /** Every fixture by file stem. */
 export const fixtures: Readonly<Record<string, unknown>> = {
   "kelta_error": keltaError,
@@ -3907,4 +3916,5 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_ctl_command": uiEventCtlCommand,
   "ui_event_ui_open": uiEventUiOpen,
   "ui_event_workflow_updated": uiEventWorkflowUpdated,
+  "ui_event_quit_requested": uiEventQuitRequested,
 };

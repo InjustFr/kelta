@@ -9,11 +9,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kelta_core::Core;
+use kelta_core::sessions::QuitPlan;
 use kelta_proto::api::CoreApi;
 use kelta_proto::api::SettingsSource;
+use kelta_proto::api::UiBridge;
 use kelta_proto::ctl::CtlCommand;
 use kelta_proto::dirs::CliArgs;
-use kelta_proto::events::{BusEvent, Toast, bus};
+use kelta_proto::events::{BusEvent, Toast, UiEvent, bus};
 use kelta_proto::settings::Decorations;
 use tauri::webview::PageLoadEvent;
 use tauri::{
@@ -68,9 +70,8 @@ pub fn setup(app: &mut tauri::App, core: Arc<Core>) -> Result<(), Box<dyn std::e
         // The predefined Quit item calls NSApp terminate:, which exits without RunEvent::Exit
         // (no Core::shutdown). Route our own item through app.exit instead.
         app.on_menu_event(|app, ev| {
-            if ev.id() == "quit" {
-                save_main_geometry(app); // app.exit does not send CloseRequested
-                app.exit(0);
+            if ev.id() == "quit" && !quit_asks(app) {
+                quit(app);
             }
         });
     }
@@ -130,6 +131,41 @@ fn monitors(app: &AppHandle) -> Vec<(f64, f64, f64, f64)> {
             (f64::from(p.x) / f, f64::from(p.y) / f, f64::from(s.width) / f, f64::from(s.height) / f)
         })
         .collect()
+}
+
+/// Quits through `Core::shutdown` (Cmd+Q, `app_quit`).
+pub(crate) fn quit(app: &AppHandle) {
+    save_main_geometry(app); // app.exit does not send CloseRequested
+    app.exit(0);
+}
+
+/// A user quit with sessions keltad would keep (#305): true when the UI now asks keep / stop and
+/// quits through `app_quit`; `app.quit_sessions = "stop"` marks the quit to stop them.
+fn quit_asks(app: &AppHandle) -> bool {
+    let Some(c) = core(app) else { return false };
+    match c.quit_plan() {
+        QuitPlan::Keep => false,
+        QuitPlan::Stop => {
+            c.stop_sessions_on_quit();
+            false
+        }
+        // The bridge raises the window first (background mode) and queues the event until the page listens.
+        QuitPlan::Ask { live, busy } => {
+            let Some(b) = app.try_state::<Arc<TauriBridge>>() else { return false };
+            b.emit(UiEvent::QuitRequested { live, busy });
+            true
+        }
+    }
+}
+
+/// The UI's close handler (it prevents the default close, which Tauri would otherwise finish
+/// right after the handler whatever Rust does in `CloseRequested`): the quit question, or close.
+pub(crate) fn close_requested(app: &AppHandle) {
+    if (background_mode(app) || !quit_asks(app))
+        && let Some(w) = app.get_webview_window(MAIN_WINDOW)
+    {
+        let _ = w.destroy();
+    }
 }
 
 fn save_main_geometry(app: &AppHandle) {
@@ -225,9 +261,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     }
     let app = window.app_handle();
     match event {
-        WindowEvent::CloseRequested { .. } => {
-            save_main_geometry(app);
-        }
+        // The UI's close handler decides (`close_requested`): Tauri already prevents the close
+        // while it listens, and finishes it itself unless the handler prevents the default.
+        WindowEvent::CloseRequested { .. } => save_main_geometry(app),
         // Scheduler intervals and triggers follow focus (`app.focus_changed`).
         WindowEvent::Focused(focused) => {
             if let Some(c) = core(app) {
