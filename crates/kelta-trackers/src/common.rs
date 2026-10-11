@@ -75,7 +75,7 @@ pub fn category_from_name(name: &str) -> StatusCategory {
         }
     }
     let (mut n, mut negated) = (String::new(), false);
-    for w in split.split_whitespace() {
+    for w in split.split_whitespace().map(|w| w.trim_matches('\'')) {
         // "n't" contractions negate like "not", except "won't" ("Won't fix" is Done).
         if w == "not" || w == "non" || (w.ends_with("n't") && w != "won't") {
             negated = true;
@@ -252,6 +252,7 @@ mod tests {
         assert_eq!(category_from_name("Isn't done"), StatusCategory::Todo);
         assert_eq!(category_from_name("Hasn’t started"), StatusCategory::Todo);
         assert_eq!(category_from_name("Don't merge"), StatusCategory::Todo);
+        assert_eq!(category_from_name("'Not done'"), StatusCategory::Todo);
         assert_eq!(category_from_name("ISN'T DONE"), StatusCategory::Todo);
         assert_eq!(category_from_name("Won't fix"), StatusCategory::Done);
         assert_eq!(category_from_name("Won’t do"), StatusCategory::Done);
