@@ -50,7 +50,7 @@ async fn seed(h: &H, root: &std::path::Path) -> WorkItem {
         SessionKind::Claude,
         "claude",
         &["--session-id", CLAUDE_UUID, "-n", "x", "do it"],
-        RestorePolicy::ClaudeResume { uuid: CLAUDE_UUID.into() },
+        RestorePolicy::ClaudeResume { uuid: CLAUDE_UUID.into(), profile: None },
     );
     h.core.session_spawn(claude).await.unwrap();
     item

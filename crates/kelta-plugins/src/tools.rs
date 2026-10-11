@@ -207,16 +207,26 @@ impl PluginHost {
         let path = self.core().and_then(|c| c.login_path()).or_else(|| std::env::var("PATH").ok());
         let result = match &r.def.check {
             Some(argv) => {
-                let argv: Vec<String> =
+                let mut argv: Vec<String> =
                     argv.iter().map(|a| vars.expand(a).unwrap_or_else(|_| a.clone())).collect();
                 self.check_tool_permission(&r, argv.first().map(String::as_str)).await?;
-                run_check(&argv, path.as_deref(), hint.clone()).await
+                // A relative program is the plugin's own file, as at launch: never Kelta's cwd.
+                match argv.first().map(|p| Self::tool_command(&r, p.clone())).transpose() {
+                    Ok(program) => {
+                        if let Some(p) = program {
+                            argv[0] = p;
+                        }
+                        run_check(&argv, path.as_deref(), hint.clone()).await
+                    }
+                    Err(_) => ToolCheck { installed: false, version: None, install_hint: hint },
+                }
             }
             None => match Self::program_of(&r.def) {
                 Some(p) => {
                     let p = vars.expand(p).unwrap_or_else(|_| p.to_owned());
                     let cwd = std::env::current_dir().unwrap_or_default();
-                    let installed = which::which_in(&p, path.as_deref(), cwd).is_ok();
+                    let installed = Self::tool_command(&r, p)
+                        .is_ok_and(|p| which::which_in(&p, path.as_deref(), cwd).is_ok());
                     ToolCheck { installed, version: None, install_hint: if installed { None } else { hint } }
                 }
                 None => ToolCheck { installed: true, version: None, install_hint: None },
