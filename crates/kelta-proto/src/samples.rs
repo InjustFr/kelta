@@ -1365,6 +1365,7 @@ pub fn all() -> Vec<Fixture> {
                 memory_cap_mb: 160,
                 view_scrollback: 1000,
                 keyboard_protocol: KeyboardProtocol::Kitty,
+                osc52: Osc52::Write,
                 history_log: true,
                 history_log_mb: 16,
                 history_log_total_mb: 512

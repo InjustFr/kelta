@@ -55,6 +55,9 @@ impl SessionTimers {
     }
 }
 
+/// Minimum gap between two OSC 9/777 notifications of one session.
+const PROGRAM_NOTIFY_INTERVAL: Duration = Duration::from_secs(5);
+
 pub struct SessionEntry {
     pub info: SessionInfo,
     /// The original request (resolved cwd), replayed by restore policies.
@@ -77,6 +80,8 @@ pub struct SessionEntry {
     pub http_ref: bool,
     /// Hooks inactive → heuristic status.
     pub heuristic: bool,
+    /// Last delivered OSC 9/777 notification (rate limit).
+    pub last_program_notify: Option<Instant>,
     pub timers: Arc<SessionTimers>,
 }
 
@@ -320,6 +325,7 @@ impl Core {
                 restoring: false,
                 http_ref: false,
                 heuristic: false,
+                last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
             };
             if let Ok(r) = entry.row("dormant") {
@@ -756,6 +762,7 @@ impl Core {
                 restoring: s.get(&id).is_some_and(|e| e.restoring),
                 http_ref,
                 heuristic: false,
+                last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
             };
             s.insert(id.clone(), entry)
@@ -1453,7 +1460,7 @@ impl Core {
         let is_claude = matches!(kind, SessionKind::Claude);
         match ev {
             TerminalEvent::Title(t) => {
-                if let Ok(info) = self.update_title(id, &t) {
+                if let Some(info) = self.update_title(id, &t) {
                     self.publish_ev(
                         BusEvent::new(bus::SESSION_TITLE_CHANGED, serde_json::json!({ "title": t }))
                             .with_project(info.project_id)
@@ -1509,13 +1516,25 @@ impl Core {
                 d.notify = None;
                 self.apply_decision(id, d, source, None);
                 let settings = self.cfg.effective(Some(&project));
-                if crate::notifier::should_notify(
-                    NotifyKind::Program,
-                    &settings.notifications,
-                    self.bridge.window_state(),
-                    visible,
-                    crate::notifier::local_minute_of_day(),
-                ) {
+                // A log full of OSC 9 must not flood Notification Center: status above still updates.
+                let recent = self
+                    .sessions
+                    .lock()
+                    .get(id)
+                    .and_then(|e| e.last_program_notify)
+                    .is_some_and(|t| t.elapsed() < PROGRAM_NOTIFY_INTERVAL);
+                if !recent
+                    && crate::notifier::should_notify(
+                        NotifyKind::Program,
+                        &settings.notifications,
+                        self.bridge.window_state(),
+                        visible,
+                        crate::notifier::local_minute_of_day(),
+                    )
+                {
+                    if let Some(e) = self.sessions.lock().get_mut(id) {
+                        e.last_program_notify = Some(Instant::now());
+                    }
                     self.deliver(Notification {
                         title: title.unwrap_or_else(|| info.name.clone()),
                         body: Some(body),
@@ -1573,15 +1592,20 @@ impl Core {
         }
     }
 
-    fn update_title(&self, id: &SessionId, t: &str) -> Result<SessionInfo, KeltaError> {
+    /// The updated session, or None when it is gone or the title did not change.
+    fn update_title(&self, id: &SessionId, t: &str) -> Option<SessionInfo> {
         let info = {
             let mut s = self.sessions.lock();
-            let e = s.get_mut(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
-            e.info.title = (!t.is_empty()).then(|| t.to_owned());
+            let e = s.get_mut(id)?;
+            let title = (!t.is_empty()).then(|| t.to_owned());
+            if e.info.title == title {
+                return None;
+            }
+            e.info.title = title;
             e.info.clone()
         };
         self.emit(UiEvent::SessionUpdated { session: info.clone() });
-        Ok(info)
+        Some(info)
     }
 
     fn on_ack_timeout(&self) {

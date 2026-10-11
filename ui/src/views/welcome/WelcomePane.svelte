@@ -10,6 +10,7 @@
 
   import { chordFor } from '../../shell/labels';
   import { spawnTemplate } from '../../shell/spawn';
+  import { sortChecks } from '../diagnostics/report';
 
   let { projectId }: Pick<PaneProps<'welcome'>, 'projectId'> = $props();
 
@@ -38,9 +39,7 @@
       missing: "Not found, so account tokens can't be saved in the system keychain yet.",
     },
   };
-  const RANK = { fail: 0, warn: 1, ok: 2 } as const;
-
-  const sorted = $derived(checks ? [...checks].sort((a, b) => RANK[a.status] - RANK[b.status]) : []);
+  const sorted = $derived(checks ? sortChecks(checks) : []);
   const missing = $derived(sorted.filter((c) => c.status !== 'ok').length);
   const paletteChord = chordFor('palette.open');
 

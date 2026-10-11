@@ -57,14 +57,22 @@ export class ProjectsStore {
     return p;
   }
 
-  /** Optimistically marks `id` active, then confirms with the backend (rolls back on error). */
+  /** Optimistically marks `id` active, then confirms with the backend (undoes this switch on error). */
   async activate(id: ProjectId): Promise<ProjectInfo> {
-    const before = this.list;
+    const was = { active: this.activeId, open: this.byId(id)?.open };
     this.list = this.list.map((p) => ({ ...p, active: p.id === id, open: p.id === id ? true : p.open }));
     try {
       return this.#upsert(await ipc.projectActivate({ id }));
     } catch (err) {
-      this.list = before;
+      // Undo only this switch: a later one that landed (or events applied meanwhile) must survive.
+      if (this.activeId === id)
+        this.list = this.list.map((p) =>
+          p.id === id
+            ? { ...p, active: false, open: was.open ?? p.open }
+            : p.id === was.active
+              ? { ...p, active: true }
+              : p,
+        );
       throw err;
     }
   }

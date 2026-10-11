@@ -16,7 +16,7 @@ import type {
 } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
-import { idle, settle, type Loadable } from './loadable';
+import { capDetails, idle, settle, type Loadable } from './loadable';
 import { scopeAffects, scopeKey } from './reducers';
 
 export interface TicketList extends Loadable<TicketPage> {
@@ -81,7 +81,7 @@ export class TicketsStore {
   ): Promise<TicketList> {
     const key = ticketListKey(scope, viewId, who);
     const prev = this.list(scope, viewId, who);
-    this.lists = { ...this.lists, [key]: { ...prev, loading: true } };
+    this.lists = { ...this.lists, [key]: { ...prev, loading: true, invalidated: false } };
     const next = await settle(
       prev,
       () => ipc.trackerList({ scope, view_id: viewId, cursor: null, refresh, who }),
@@ -89,9 +89,11 @@ export class TicketsStore {
         stale: (p) => p.stale,
       },
     );
-    const entry: TicketList = { ...next, scope, viewId, who, loadingMore: false };
+    // `apply` flags a list that is loading and `refreshInvalidated` skips it: reload here.
+    const again = this.lists[key]?.invalidated ?? false;
+    const entry: TicketList = { ...next, scope, viewId, who, loadingMore: false, invalidated: again };
     this.lists = { ...this.lists, [key]: entry };
-    return entry;
+    return again ? this.load(scope, viewId, false, who) : entry;
   }
 
   /** Fetches the next page and appends it. */
@@ -136,7 +138,7 @@ export class TicketsStore {
     const prev = this.details[key] ?? idle<TicketDetail>();
     this.details = { ...this.details, [key]: { ...prev, loading: true } };
     const next = await settle(prev, () => ipc.trackerGet({ ticket: ref }));
-    this.details = { ...this.details, [key]: next };
+    this.details = capDetails({ ...this.details, [key]: next });
     return next;
   }
 

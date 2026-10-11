@@ -5,7 +5,8 @@ import type { ReviewRef } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
-import { layout, reviews, toasts } from '$lib/stores';
+import { layout, plugins, reviews, toasts } from '$lib/stores';
+import { idle } from '$lib/stores/loadable';
 
 import ReviewDetailPane from './ReviewDetailPane.svelte';
 
@@ -45,6 +46,35 @@ describe('ReviewDetailPane', () => {
       const l = layout.get('shop');
       expect(l && findContent(l, (c) => c.kind === 'ticket_detail')).toBeTruthy();
     });
+  });
+
+  it('letters typed in an open Plugins menu never reach the pane (a is not Approve)', async () => {
+    const base = mock.state.plugins[0]!;
+    const say = (id: string) => ({
+      id,
+      title: id,
+      do: [{ action: 'toast' as const, text: 'x', level: null }],
+    });
+    plugins.plugins = {
+      ...idle(),
+      data: [
+        {
+          ...base,
+          enabled: true,
+          contributes: { ...base.contributes, review_actions: [say('p'), say('q')] },
+        },
+      ],
+      fetchedAt: Date.now(),
+    };
+    mountDetail();
+    await screen.findByTestId('head-sha');
+    const open = screen.queryByRole('button', { name: /Plugins/ });
+    if (!open) throw new Error('fixture: the review has no plugin actions');
+    await fireEvent.click(open);
+    const menu = await screen.findByRole('menu');
+    for (const key of ['a', 'c', 'm']) await fireEvent.keyDown(menu, { key });
+    expect(approveCalls()).toHaveLength(0);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('approves with the head_sha that is displayed', async () => {

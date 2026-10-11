@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAction } from '$lib/actions';
 
-import type { UiEvent } from '$lib/gen';
+import type { TicketDetail, UiEvent } from '$lib/gen';
 import { connectUiEvents, onAnyUiEvent, resetUiEventsForTests } from '$lib/ipc/events';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -15,6 +15,7 @@ import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
 import { TicketsStore, ticketListKey } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
+import { idle } from './loadable';
 import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
 
@@ -45,6 +46,41 @@ describe('ProjectsStore', () => {
     await store.activate('billing');
     expect(store.activeId).toBe('billing');
     expect(store.list.filter((p) => p.active)).toHaveLength(1);
+  });
+
+  it('a failed switch undoes only itself: a later one that landed and its events stay', async () => {
+    const store = new ProjectsStore();
+    await store.load();
+    const [b, c] = store.list.filter((p) => !p.active && p.open && !p.builtin).map((p) => p.id);
+    const failB = mock.holdNext('project_activate');
+    const pendingB = store.activate(b!);
+    await flush();
+    await store.activate(c!);
+    store.apply({
+      type: 'attention.changed',
+      project_id: 'shop',
+      level: 'needs_input',
+      needs_input_count: 3,
+      total_needs_input: 3,
+    });
+    failB({ code: 'internal' });
+    await expect(pendingB).rejects.toMatchObject({ code: 'internal' });
+    expect(store.activeId).toBe(c);
+    expect(store.byId('shop')?.attention.needs_input).toBe(3);
+  });
+
+  it('a failed switch with nothing after it restores the previous project', async () => {
+    const store = new ProjectsStore();
+    await store.load();
+    const before = store.activeId;
+    const b = store.list.find((p) => p.id !== before && p.open)!;
+    const fail = mock.holdNext('project_activate');
+    const pending = store.activate(b.id);
+    expect(store.activeId).toBe(b.id);
+    fail({ code: 'internal' });
+    await expect(pending).rejects.toBeTruthy();
+    expect(store.activeId).toBe(before);
+    expect(store.byId(b.id)?.open).toBe(b.open);
   });
 
   it('rolls back an optimistic activation on error', async () => {
@@ -256,6 +292,31 @@ describe('TicketsStore', () => {
     expect(mock.calls.filter((c) => c.cmd === 'tracker_list').length).toBe(before + 1);
   });
 
+  it('a change announced while a list loads reloads it once the load ends', async () => {
+    const store = new TicketsStore();
+    const scope = { kind: 'project' as const, id: 'billing' };
+    await store.load(scope, 'mine');
+    const count = () => mock.calls.filter((c) => c.cmd === 'tracker_list').length;
+    const before = count();
+    const release = mock.holdNext('tracker_list');
+    const pending = store.load(scope, 'mine');
+    store.apply({ type: 'tickets.changed', scope });
+    release();
+    await pending;
+    expect(count()).toBe(before + 2);
+    expect(store.list(scope, 'mine').invalidated).toBe(false);
+  });
+
+  it('caps the detail map, dropping the oldest fetch', async () => {
+    const store = new TicketsStore();
+    const slot = (n: number) => ({ ...idle<TicketDetail>(), fetchedAt: n });
+    store.details = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`k${i}`, slot(i + 1)]));
+    await store.loadDetail({ account: 'jira-acme', key: 'SHOP-142', id: '10142' });
+    expect(Object.keys(store.details)).toHaveLength(200);
+    expect(store.details['k0']).toBeUndefined();
+    expect(store.details['jira-acme:SHOP-142']).toBeDefined();
+  });
+
   it('ignores reviews.changed (no tracker reload per review poll)', async () => {
     const store = new TicketsStore();
     const scope = { kind: 'project' as const, id: 'billing' };
@@ -311,6 +372,21 @@ describe('ReviewsStore', () => {
     expect(store.isNew(ref)).toBe(true);
     store.markSeen(ref);
     expect(store.isNew(ref)).toBe(false);
+  });
+
+  it('a change announced while a list loads reloads it once the load ends', async () => {
+    const store = new ReviewsStore();
+    const scope = { kind: 'all' as const };
+    await store.load(scope, 'review_requested');
+    const count = () => mock.calls.filter((c) => c.cmd === 'review_list').length;
+    const before = count();
+    const release = mock.holdNext('review_list');
+    const pending = store.load(scope, 'review_requested');
+    store.apply({ type: 'reviews.changed', scope, new_keys: [] });
+    release();
+    await pending;
+    expect(count()).toBe(before + 2);
+    expect(store.list(scope, 'review_requested').invalidated).toBe(false);
   });
 
   it('approve with a stale head sha conflicts', async () => {

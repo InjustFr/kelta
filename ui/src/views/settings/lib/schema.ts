@@ -4,7 +4,7 @@
 
 import type { JsonValue } from '$lib/gen';
 
-import { getAt, isRecord, joinPath } from './paths';
+import { getAt, joinPath } from './paths';
 
 export interface SchemaNode {
   type?: string | string[];
@@ -409,11 +409,6 @@ export function defaultOf(node: SchemaNode): JsonValue {
     default:
       return null;
   }
-}
-
-/** Does `value` look like an object path container (helper for sources lookups). */
-export function hasChildren(value: JsonValue | undefined): boolean {
-  return isRecord(value) && Object.keys(value).length > 0;
 }
 
 export { getAt };

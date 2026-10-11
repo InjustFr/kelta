@@ -67,11 +67,6 @@ export function webglSupported(): boolean {
   return webglProbe;
 }
 
-/** Test helper. */
-export function setWebglSupportedForTests(value: boolean | null): void {
-  webglProbe = value;
-}
-
 /**
  * Linux first-run probe verdict (§9.2): suggest WebGL when it renders ≥ 55 fps while DOM stays
  * under 45 fps in the scroll test.

@@ -148,10 +148,6 @@ export function selectRow(project: ProjectId, tabId: TabId): void {
   selectTab(project, tabId);
 }
 
-export function activeProjectId(): ProjectId | null {
-  return projects.activeId;
-}
-
 /** Visible terminal sessions of a project's active tab (views about to be shown). */
 export function visibleSessions(projectId: ProjectId): SessionId[] {
   const l = layout.get(projectId);
