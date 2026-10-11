@@ -1,0 +1,36 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    [
+      "@semantic-release/exec",
+      {
+        "verifyReleaseCmd": "echo version=${nextRelease.version} >> $GITHUB_OUTPUT",
+        "prepareCmd": "python3 scripts/set-version.py ${nextRelease.version}"
+      }
+    ],
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogTitle": "# Changelog\n\nAll notable changes are listed here, generated from the commit messages at each release. Versions follow semver."
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md",
+          "Cargo.toml",
+          "Cargo.lock",
+          "apps/desktop/src-tauri/tauri.conf.json",
+          "ui/package.json",
+          "packaging/aur/PKGBUILD",
+          "packaging/homebrew/kelta.rb",
+          "packaging/linux/dev.kelta.Kelta.metainfo.xml"
+        ],
+        "message": "chore(release): ${nextRelease.version} [skip ci]"
+      }
+    ]
+  ]
+}

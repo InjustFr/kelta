@@ -1,7 +1,8 @@
 name: nightly
 
-# Every night (and on a manual run): the newest main commit with a green `ci` push run, unless the `nightly` tag
-# is already on it, built as the macOS Apple silicon dmg + updater bundle (ad-hoc signed, not notarized; release.yml keeps
+# Every night (and on a manual run): the newest main commit with a green `ci` push run (or the `sha` input: release.yml
+# passes its release commit, which only bumps the versions of a green commit), unless the `nightly` tag is already on
+# it or past it, built as the macOS Apple silicon dmg + updater bundle (ad-hoc signed, not notarized; release.yml keeps
 # the universal one) and the Linux deb + AppImage for amd64 and arm64 (native runners), the updater bundles signed
 # with the TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) secrets, then published to the rolling "nightly" prerelease by
 # scripts/publish-nightly.sh. scripts/nightly-local.sh is the same publish from the maintainer's Mac.
@@ -9,6 +10,11 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to build instead of the newest green one
+        required: false
+        default: ""
 
 concurrency:
   group: nightly
@@ -39,15 +45,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
+          INPUT_SHA: ${{ inputs.sha }}
         run: |
           # An unsigned nightly would strand every installed copy: refuse before building anything.
           [[ "$HAS_KEY" == true ]] || { echo "::error::updater key secrets missing (CONTRIBUTING, Nightly builds)"; exit 1; }
           # The gate: ci's main push runs cover both OSes; docs-only commits have no run and are not needed.
-          sha="$(gh run list -w ci.yml -b main -e push -s success -L 1 --json headSha --jq '.[0].headSha')"
+          if [[ -n "$INPUT_SHA" ]]; then
+            sha="$(git rev-parse --verify "$INPUT_SHA^{commit}")"
+          else
+            sha="$(gh run list -w ci.yml -b main -e push -s success -L 1 --json headSha --jq '.[0].headSha')"
+          fi
           [[ -n "$sha" ]] || { echo "::error::no green ci push run on main"; exit 1; }
           build=true
-          if [[ "$(git ls-remote origin refs/tags/nightly | cut -f1)" == "$sha" ]]; then
-            build=false; echo "::notice::nightly is already $sha"
+          # Or past it: the release commit has no ci run, so the newest green commit can be older than the nightly.
+          nightly="$(git ls-remote origin refs/tags/nightly | cut -f1)"
+          if [[ -n "$nightly" ]] && git merge-base --is-ancestor "$sha" "$nightly" 2>/dev/null; then
+            build=false; echo "::notice::nightly ($nightly) already has $sha"
           fi
           # The updater compares this version; the Cargo version (bin/<version>/ dirs) stays as it is.
           base="$(git show "$sha:apps/desktop/src-tauri/tauri.conf.json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"

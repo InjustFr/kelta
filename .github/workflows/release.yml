@@ -1,23 +1,71 @@
 name: release
 
-# Tag vX.Y.Z -> deb + AppImage (ubuntu-24.04), signed + notarized universal dmg (macos-14), checksums.
-# A manual run (workflow_dispatch) is a dry run: it builds but publishes nothing.
+# Manual only (Actions, release, Run workflow on main). semantic-release (.releaserc.json) reads the conventional
+# commits since the last vX.Y.Z tag, sets the version (scripts/set-version.py), prepends the notes to CHANGELOG.md,
+# and pushes the release commit and the tag to main. The same run then builds that commit: deb + AppImage for
+# amd64 and arm64, the universal dmg, the signed updater bundles. The publish job creates the GitHub release with
+# all of them and latest.json at once, so releases/latest never lacks its manifest, then runs nightly.yml on the
+# release commit. Everything happens in this run: refs pushed with GITHUB_TOKEN trigger no workflow. A failed
+# build leaves the tag without a release: re-run the failed jobs. `dry_run` pushes and publishes nothing but
+# still builds, with the version semantic-release would pick.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute the version and build, publish nothing
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
   packages: read # the ghcr.io/injustfr/kelta-ci image
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linux:
+  version:
     runs-on: ubuntu-24.04
-    # The prebuilt image (ci-image.yml) has the system packages and the Rust toolchain.
+    permissions:
+      contents: write # the release commit and the tag
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # semantic-release reads the tags and the history
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # A release without signed updater bundles would strand every installed copy: refuse before tagging.
+          [[ "$HAS_KEY" == true ]] || { echo "::error::updater key secrets missing (CONTRIBUTING, Nightly builds)"; exit 1; }
+          # The version output comes from verifyReleaseCmd (.releaserc.json); none when there is nothing to release.
+          if [[ "$DRY_RUN" == true ]]; then pnpm exec semantic-release --dry-run; else pnpm exec semantic-release; fi
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT" # the release commit (HEAD itself in a dry run)
+
+  linux:
+    needs: version
+    if: needs.version.outputs.version != ''
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    # The prebuilt image (ci-image.yml, amd64 + arm64) has the system packages and the Rust toolchain.
     container:
       image: ghcr.io/injustfr/kelta-ci:latest
       credentials:
@@ -28,6 +76,8 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: "1" # no FUSE in a container for linuxdeploy
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - name: Validate desktop entry and AppStream metadata
         run: |
           desktop-file-validate packaging/linux/dev.kelta.Kelta.desktop
@@ -41,19 +91,33 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: bash packaging/build.sh
+      # The signing key only reaches this step.
+      - env:
+          KELTA_VERSION: ${{ needs.version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bash packaging/build.sh
+      # Flat: several paths would upload as deb/ and appimage/ folders.
+      - run: |
+          mkdir dist
+          cp target/release/bundle/deb/*.deb target/release/bundle/appimage/*.AppImage target/release/bundle/appimage/*.AppImage.sig dist/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: linux
-          path: |
-            target/release/bundle/deb/*.deb
-            target/release/bundle/appimage/*.AppImage
+          name: release-linux-${{ runner.arch }}
+          if-no-files-found: error
+          path: dist/*
 
   macos:
+    needs: version
+    if: needs.version.outputs.version != ''
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      KELTA_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: 1.99.0
@@ -68,7 +132,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Universal dmg (signed and notarized by Tauri from the APPLE_* variables)
+      - name: Universal dmg + updater bundle
         env:
           UNIVERSAL: "1"
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -77,29 +141,73 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash packaging/build.sh
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # With the APPLE_* secrets Tauri signs and notarizes. Without them: ad-hoc signed ("-") and not notarized,
+        # like nightly (see nightly.yml). Unset: Tauri could take the empty values for a certificate to import.
+        run: |
+          if [[ -z "$APPLE_CERTIFICATE" ]]; then
+            unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+            export APPLE_SIGNING_IDENTITY=-
+          fi
+          bash packaging/build.sh
+      # Versioned name: one universal bundle, which latest.json lists for both Macs.
+      - run: |
+          out=target/universal-apple-darwin/release/bundle
+          mkdir dist && cp "$out"/dmg/*.dmg dist/
+          for ext in tar.gz tar.gz.sig; do
+            cp "$out/macos/Kelta.app.$ext" "dist/Kelta_${KELTA_VERSION}_universal.app.$ext"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: macos
-          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          name: release-macos
+          if-no-files-found: error
+          path: dist/*
 
   publish:
-    needs: [linux, macos]
-    if: github.ref_type == 'tag'
+    needs: [version, linux, macos]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the release assets
+      actions: write # gh workflow run nightly.yml
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+      SHA: ${{ needs.version.outputs.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
+          pattern: release-*
           path: dist
           merge-multiple: true
-      - name: Size budgets and checksums
+      - name: Size budgets
         run: |
-          cd dist
-          [ "$(stat -c %s ./*.dmg)" -le 20971520 ] || { echo "dmg over 20 MB"; exit 1; }
-          [ "$(stat -c %s ./*.deb)" -le 15728640 ] || { echo "deb over 15 MB"; exit 1; }
-          sha256sum -- * > SHA256SUMS
-      - name: GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+          for f in dist/*.dmg; do [ "$(stat -c %s "$f")" -le 20971520 ] || { echo "$f over 20 MB"; exit 1; }; done
+          for f in dist/*.deb; do [ "$(stat -c %s "$f")" -le 15728640 ] || { echo "$f over 15 MB"; exit 1; }; done
+      - name: Notes, updater manifest and checksums
+        run: |
+          # The notes: the CHANGELOG.md section semantic-release just wrote (the first `## ` one), under GitHub's
+          # 125000-character release body limit (the first release lists every commit).
+          notes="$RUNNER_TEMP/notes"
+          awk '/^## /{n++; next} n==1' CHANGELOG.md > "$notes"
+          if [ "$(wc -c < "$notes")" -gt 120000 ]; then
+            head -c 115000 "$notes" | sed '$d' > "$notes.cut"
+            printf '\n... the rest is in [CHANGELOG.md](https://github.com/InjustFr/kelta/blob/v%s/CHANGELOG.md).\n' \
+              "$VERSION" >> "$notes.cut"
+            mv "$notes.cut" "$notes"
+          fi
+          bash scripts/update-manifest.sh dist "$VERSION" "$notes" \
+            "https://github.com/InjustFr/kelta/releases/download/v$VERSION"
+          (cd dist && sha256sum -- * > SHA256SUMS)
+      # gh creates the release as a draft, uploads every asset, then publishes it: releases/latest never points
+      # at a release without latest.json.
+      - name: Publish the release
+        run: |
+          gh release create "v$VERSION" dist/* --verify-tag --latest --title "v$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes"
+      - name: Nightly on the release commit
+        run: gh workflow run nightly.yml --ref main -f sha="$SHA"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Self-test for update-manifest.sh: the macOS entry, Linux entries only for built AppImages, and a
-# refusal when a bundle has no `.sig`.
+# Self-test for update-manifest.sh: the macOS entry (Apple silicon, or universal for both Macs), Linux entries
+# only for built AppImages, and a refusal when a bundle has no `.sig`.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 tmp=$(mktemp -d)
@@ -35,4 +35,12 @@ if out=$(bash update-manifest.sh "$d" 0.1.0-nightly.1 "$tmp/notes" "$base" 2>&1)
   fail "a missing .sig must fail"
 fi
 [[ "$out" == *"aarch64.AppImage.sig is missing"* ]] || fail "unexpected error: $out"
+# The release: one universal bundle for both Macs.
+rm "$d"/*.app.tar.gz* "$d"/*.AppImage
+touch "$d/Kelta_1.0.0_universal.app.tar.gz"
+echo SIGUNI >"$d/Kelta_1.0.0_universal.app.tar.gz.sig"
+bash update-manifest.sh "$d" 1.0.0 "$tmp/notes" "$base"
+[ "$(field 'sorted(m["platforms"])')" = "['darwin-aarch64', 'darwin-x86_64']" ] || fail "universal: $(cat "$d/latest.json")"
+[ "$(field 'm["platforms"]["darwin-x86_64"]["url"]')" = "$base/Kelta_1.0.0_universal.app.tar.gz" ] || fail "universal url"
+[ "$(field 'm["platforms"]["darwin-x86_64"]["signature"]')" = SIGUNI ] || fail "universal signature"
 echo "update-manifest.test: ok"

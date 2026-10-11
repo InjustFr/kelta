@@ -59,6 +59,7 @@ bash scripts/check-no-timers.sh
 bash scripts/check-no-timers.test.sh
 bash scripts/update-manifest.test.sh
 python3 scripts/affected_test.py
+python3 scripts/set-version_test.py
 
 if want rust; then
   if [ ${#pkgs[@]} -eq 0 ]; then
