@@ -203,7 +203,7 @@
   {#if workTab}
     <!-- The work segment brings its own spacer and right-hand actions. -->
     {#if WorkComponent && project && tab && item}
-      <WorkComponent projectId={project.id} tabId={tab.id} workItemId={item.id} />
+      <WorkComponent projectId={project.id} workItemId={item.id} />
     {/if}
   {:else}
     {#if tool && project}

@@ -25,7 +25,6 @@ import {
   savedPlace,
   savePlace,
   splitFocused,
-  projectAttention,
   tabAttention,
   toggleZoomFocused,
 } from './nav';
@@ -169,7 +168,6 @@ describe('sessions', () => {
     expect(tabAttention(tab)).toBe('none');
     work.upsert({ ...item, review_due: true });
     expect(tabAttention(tab)).toBe('done');
-    expect(projectAttention('shop')).toBe('done');
   });
 
   it('computes tab attention from the sessions shown in the tab', async () => {

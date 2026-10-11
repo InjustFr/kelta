@@ -103,7 +103,7 @@
     {/if}
   {:else}
     {#if tab.work_item_id && BriefComponent}
-      <BriefComponent {projectId} tabId={tab.id} workItemId={tab.work_item_id} />
+      <BriefComponent {projectId} workItemId={tab.work_item_id} />
     {/if}
     <div class="panes" bind:clientWidth={width} bind:clientHeight={height} data-testid="panes">
       {#each geometry.panes as placed (placed.pane.id)}

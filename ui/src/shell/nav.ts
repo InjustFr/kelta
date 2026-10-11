@@ -484,15 +484,6 @@ function sessionLamp(s: SessionInfo | null): Lamp {
   return s.attention;
 }
 
-/** One lamp for a set of sessions (a ticket's work item). */
-export function sessionsLamp(ids: (SessionId | null)[]) {
-  const tabSessions = ids.filter((s): s is SessionId => s !== null).map((s) => sessions.get(s));
-  return lampOf(
-    maxAttention(tabSessions.map((s) => s?.attention ?? 'none')),
-    tabSessions.some((s) => s?.status === 'working'),
-  );
-}
-
 /** Tab lamp: its sessions, and for a work tab the item's phase (FLOW §2.3). */
 export function tabAttention(tab: Tab): Lamp {
   const lamps = allPanes(tab.root)
@@ -510,15 +501,11 @@ export function toolLamp(toolId: string): Lamp {
     (s) => s.kind.type === 'tool' && s.kind.tool_id === toolId && s.lifecycle === 'live',
   );
   if (live.length === 0) return 'none';
-  const lvl = sessionsLamp(live.map((s) => s.id));
+  const lvl = lampOf(
+    maxAttention(live.map((s) => s.attention)),
+    live.some((s) => s.status === 'working'),
+  );
   return lvl === 'none' ? 'activity' : lvl;
-}
-
-/** Project lamp (peek-next, switcher): the project's sessions folded with its work items' phases. */
-export function projectAttention(id: ProjectId): Lamp {
-  const lamps = sessions.forProject(id).map(sessionLamp);
-  for (const item of work.forProject(id)) if (item.state.kind !== 'finished') lamps.push(phaseNow(item).lamp);
-  return maxLamp(lamps);
 }
 
 export type { PaneContent };
