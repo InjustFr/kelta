@@ -120,6 +120,13 @@ fn build_set(patterns: &[String]) -> Result<GlobSet, KeltaError> {
 
 /// Copy untracked/ignored `candidates` (relative to `repo`, dirs end with `/`) matching `patterns`
 /// into `worktree`, never overwriting. Returns the copied relative paths.
+/// SHA-256 (hex) of a file's bytes; `None` when it cannot be read.
+pub fn content_hash(path: &Path) -> Option<String> {
+    use sha2::Digest;
+    let bytes = std::fs::read(path).ok()?;
+    Some(sha2::Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect())
+}
+
 pub fn copy_includes(
     repo: &Path,
     worktree: &Path,

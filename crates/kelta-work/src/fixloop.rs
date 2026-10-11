@@ -128,18 +128,24 @@ impl WorkService {
         let copy = claude_of(&env.core, &item, &j).is_some_and(|s| copies(&s));
         let run = self.ensure_claude_run(&item, &mut j)?;
         self.save_journal(id, &j)?;
+        let mut first = None;
         for f in &sent {
-            let path = run.join(&f.name);
-            // A held prompt that names this file still needs its brief: append. Any other (a review
-            // note) leaves the file stale, so overwrite.
-            let held = j.pending_prompt.as_deref().is_some_and(|p| p.contains(&*path.to_string_lossy()));
-            let old = if held { std::fs::read_to_string(&path).ok() } else { None };
-            let body = old.map_or_else(|| f.content.clone(), |o| format!("{o}\n---\n\n{}", f.content));
-            files::write_private(&path, body.as_bytes())?;
+            // A held prompt may still need an existing brief: this send writes its own (`name-2.md`, ...).
+            let path = (1..)
+                .map(|i| match i {
+                    1 => f.name.clone(),
+                    i => format!("{}-{i}.md", f.name.trim_end_matches(".md")),
+                })
+                .filter(|n| valid_name(n))
+                .map(|n| run.join(n))
+                .find(|p| j.pending_prompt.is_none() || !p.exists())
+                .unwrap_or_else(|| run.join(&f.name));
+            files::write_private(&path, f.content.as_bytes())?;
+            first.get_or_insert(path);
         }
         let mut ctx = self.item_ctx(&env, &item, &j);
-        if let Some(f) = sent.first() {
-            ctx.set("file", run.join(&f.name).to_string_lossy().into_owned());
+        if let Some(p) = first {
+            ctx.set("file", p.to_string_lossy().into_owned());
         }
         if let Some(url) = &item.pr_url {
             ctx.set("pr.url", url.clone());
