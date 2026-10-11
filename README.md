@@ -131,6 +131,8 @@ bash packaging/build.sh             # installers: deb + AppImage on Linux, dmg o
 
 ## Contributing, security, license
 
+- Bugs and feature requests: see
+  [reporting bugs and requesting features](CONTRIBUTING.md#reporting-bugs-and-requesting-features).
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Before a pull request run `bash scripts/ci-local.sh`.
 - CI time budget: each `ci` job ≤ 10 min with a warm cache, each `nightly`/`release` OS ≤ 25 min. The jobs time
   out at 15 min (ci rust), 10 min (ci ui) and 30 min (nightly, release), so a regression fails loudly.
