@@ -117,7 +117,7 @@ mod tests {
     }
 
     fn which_node() -> Option<()> {
-        std::process::Command::new("node")
+        kelta_proto::term::command("node")
             .arg("--version")
             .output()
             .ok()

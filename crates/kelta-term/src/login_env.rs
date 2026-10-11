@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 use kelta_proto::term::{LoginEnv, LoginEnvSource};
@@ -92,9 +92,9 @@ pub fn parse_path_helper(output: &str) -> BTreeMap<String, String> {
 /// Spawn `program args` without a controlling terminal, stdin `/dev/null`, and collect stdout
 /// until EOF or `timeout`. The process group is killed on timeout.
 pub fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Option<Vec<u8>> {
-    let mut cmd = Command::new(program);
     // The probed shell starts from the user's environment, not the AppImage runtime's.
-    cmd.args(args).env_clear().envs(LoginEnv::inherited().vars);
+    let mut cmd = kelta_proto::term::command(program);
+    cmd.args(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     // SAFETY: `setsid` is async-signal-safe; it detaches the probe from our controlling tty and
     // makes it a process group leader so a timeout can kill the whole group.

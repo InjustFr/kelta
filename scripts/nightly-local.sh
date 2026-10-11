@@ -43,7 +43,8 @@ rm -rf "$dist" && mkdir -p "$dist"
 
 # The bundler keeps older versioned files: clear them so only this build is published.
 rm -rf target/release/bundle
-TAURI_SIGNING_PRIVATE_KEY="$key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$password" bash packaging/build.sh
+# Ad-hoc signed ("-"): the linker-only signature makes Gatekeeper call the downloaded app "damaged".
+APPLE_SIGNING_IDENTITY=- TAURI_SIGNING_PRIVATE_KEY="$key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$password" bash packaging/build.sh
 cp target/release/bundle/dmg/*.dmg "$dist"
 # Versioned name: the new bundle is uploaded beside the old one before latest.json points at it.
 for ext in tar.gz tar.gz.sig; do

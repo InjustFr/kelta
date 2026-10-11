@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)] // test helpers outside #[test] fns
 
 mod claim;
 mod claude_files;
