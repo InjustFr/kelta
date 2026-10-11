@@ -6,7 +6,7 @@
   import { dispatch } from '$lib/actions';
   import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
-  import { GLOBAL, projects, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, sessions, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -45,6 +45,8 @@
   import TicketRow from './TicketRow.svelte';
   import TicketsToolbar from './TicketsToolbar.svelte';
   import { pickWorkflow } from './workflow.svelte';
+  import TagChips from '../tags/TagChips.svelte';
+  import TagMenu from '../tags/TagMenu.svelte';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -166,12 +168,16 @@
   // ---- data ---------------------------------------------------------------------------------
   const items = $derived(list.data?.items ?? []);
   let filter = $state('');
+  /** The toolbar's tag chip (#349). shortcut: per mount, not persisted. */
+  let tagFilter = $state<string | null>(null);
   const shown = $derived.by(() => {
     const needle = filter.trim().toLowerCase();
+    const tag = tags.live(tagFilter);
     return items.filter((i) => {
       const t = i.ticket;
       if (person && !isPerson(t)) return false;
       if (currentSprint && !t.sprint?.active) return false;
+      if (tag && !tags.has('tickets', keyOf(i), tag)) return false;
       return (
         needle === '' ||
         `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
@@ -415,6 +421,7 @@
   let chord: string | null = null;
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
+  let tagMenu = $state<{ x: number; y: number; key: string } | null>(null);
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
   const hints = $derived<[string, string][]>([
@@ -436,6 +443,7 @@
     ['v', msg('Source')],
     ['shift+g', msg('Group')],
     ['c', msg('Comment')],
+    ['t', msg('Tags')],
     ['o', msg('Open in browser')],
     ['shift+r', msg('Refresh')],
   ]);
@@ -545,6 +553,12 @@
 
   function pickOrMove(item: TicketItem): void {
     openPicker(picked.length > 0 && picked.includes(keyOf(item)) ? pickedItems : [item]);
+  }
+
+  /** `t`: my local tags on the ticket, under its row. */
+  function openTags(item: TicketItem): void {
+    const r = (rowEl(keyOf(item)) ?? root)?.getBoundingClientRect();
+    tagMenu = { x: (r?.left ?? 0) + 24, y: (r?.bottom ?? 0) + 2, key: keyOf(item) };
   }
 
   function openSourceMenu(): void {
@@ -730,6 +744,9 @@
       case 'w':
         if (item) void pickWorkflow(item.ticket.ref);
         break;
+      case 't':
+        if (item) openTags(item);
+        break;
       default:
         return;
     }
@@ -830,6 +847,9 @@
     {mode}
     onmode={setMode}
     onrefresh={refresh}
+    tagKeys={items.map(keyOf)}
+    tag={tagFilter}
+    ontag={(name) => (tagFilter = name)}
   />
 
   {#if noSource}
@@ -876,7 +896,12 @@
       {/if}
     {:else if shown.length === 0}
       <EmptyState icon="search" title={t('No tickets match "{filter}".', { filter })}>
-        {#snippet actions()}<Button onclick={() => (filter = '')}>{t('Clear filter')}</Button>{/snippet}
+        {#snippet actions()}<Button
+            onclick={() => {
+              filter = '';
+              tagFilter = null;
+            }}>{t('Clear filter')}</Button
+          >{/snippet}
       </EmptyState>
     {:else if mode === 'list' && groupBy === 'flow' && rows.length === 0}
       <EmptyState icon="ticket" title={t('Nothing in flow; older done tickets are hidden.')}>
@@ -945,6 +970,10 @@
                   }}
                   onpr={() => openPrOf(r.item, false)}
                   onstart={() => start(r.item)}
+                  ontag={() => {
+                    selKey = r.key;
+                    openTags(r.item);
+                  }}
                 />
               {/if}
             {/snippet}
@@ -1014,6 +1043,7 @@
                       >{item.ticket.assignee ? initials(item.ticket.assignee.name) : '–'}</span
                     >
                     {#each item.ticket.labels.slice(0, 2) as l (l)}<Badge>{l}</Badge>{/each}
+                    <TagChips kind="tickets" itemKey={keyOf(item)} />
                     <span class="spacer"></span>
                     {#if item.ticket.priority}<span class="k-row-meta">{item.ticket.priority}</span>{/if}
                     <span class="k-row-meta">{relativeTime(Date.parse(item.ticket.updated_at))}</span>
@@ -1064,6 +1094,18 @@
     }}
     onclose={() => {
       prMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if tagMenu}
+  <TagMenu
+    kind="tickets"
+    itemKey={tagMenu.key}
+    x={tagMenu.x}
+    y={tagMenu.y}
+    onclose={() => {
+      tagMenu = null;
       root?.focus();
     }}
   />

@@ -16,4 +16,5 @@ mod sources;
 mod spawn;
 mod status;
 mod store;
+mod tags;
 mod workflows;

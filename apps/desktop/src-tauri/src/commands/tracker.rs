@@ -164,3 +164,15 @@ pub async fn next_up_remove(core: State<'_, Arc<Core>>, ticket: TicketRef) -> Re
 pub async fn ticket_seen(core: State<'_, Arc<Core>>, tickets: Vec<TicketRef>) -> Res<()> {
     core.ticket_seen(tickets).await
 }
+
+/// My local tags on tickets and pull requests (#349); never sent to a tracker or code host.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn tags_get(core: State<'_, Arc<Core>>) -> Res<LocalTags> {
+    core.tags_get().await
+}
+
+/// Replaces the whole set; returns it as stored (trimmed names, unknown tags dropped).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn tags_set(core: State<'_, Arc<Core>>, tags: LocalTags) -> Res<LocalTags> {
+    core.tags_set(tags).await
+}

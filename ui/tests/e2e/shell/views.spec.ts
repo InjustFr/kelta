@@ -49,7 +49,8 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
   await boot(page);
   const host = page.getByTestId('global-host');
   await page.getByTestId('rail-tickets').click();
-  await host.locator('[data-key="redmine-corp:4567"]').click();
+  // The key cell: the row's middle can sit under its hover actions.
+  await host.locator('[data-key="redmine-corp:4567"] .k-row-key').click();
   await page.keyboard.press('p');
 
   // Reviews, on the PR (Mine), its detail in the column beside the list.

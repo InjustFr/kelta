@@ -36,6 +36,7 @@ pub mod spawn_env;
 mod start;
 pub mod status;
 pub mod store;
+mod tags;
 pub mod team;
 pub mod templates;
 mod workflows;
@@ -781,6 +782,9 @@ impl CoreApi for Core {
         refresh: bool,
     ) -> Result<TicketPage, KeltaError> {
         self.tracker_list(scope, None, view_id, None, cursor, refresh).await
+    }
+    async fn local_tags(&self) -> Result<kelta_proto::model::LocalTags, KeltaError> {
+        self.tags_get().await
     }
     async fn ticket_by_key(
         &self,

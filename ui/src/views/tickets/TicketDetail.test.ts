@@ -111,6 +111,7 @@ describe('TicketDetail', () => {
       'Run workflow…',
       'Copy branch',
       'Open in browser',
+      'Tags…',
     ]);
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
