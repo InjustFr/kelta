@@ -258,6 +258,7 @@ pub(crate) fn tool_defs() -> Value {
                     "status": { "type": "string", "description": "Status name or category (todo, in_progress, in_review, done)" },
                     "assignee": { "type": "string", "description": "Assignee name or login; `none` = unassigned" },
                     "label": { "type": "string" },
+                    "tag": { "type": "string", "description": "One of my local Kelta tags (kept in Kelta, never on the tracker)" },
                     "refresh": { "type": "boolean" }
                 },
                 "additionalProperties": false
@@ -703,6 +704,19 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
         None => Scope::All,
     };
     let refresh = args.get("refresh").and_then(Value::as_bool).unwrap_or(false);
+    let tagged = match opt("tag") {
+        Some(tag) => Some(
+            core.local_tags()
+                .await
+                .map_err(|e| e.message)?
+                .tickets
+                .into_iter()
+                .filter(|(_, v)| v.iter().any(|n| n.eq_ignore_ascii_case(tag)))
+                .map(|(k, _)| k)
+                .collect::<std::collections::HashSet<_>>(),
+        ),
+        None => None,
+    };
     let page = core
         .ticket_list(scope, opt("view").map(str::to_owned), None, refresh)
         .await
@@ -724,6 +738,9 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
             })
         })
         .filter(|t| opt("label").is_none_or(|l| t.labels.iter().any(|x| x.eq_ignore_ascii_case(l))))
+        .filter(|t| {
+            tagged.as_ref().is_none_or(|k| k.contains(&format!("{}:{}", t.r#ref.account.as_str(), t.r#ref.key)))
+        })
         .map(|t| {
             json!({
                 "key": t.r#ref.key, "account": t.r#ref.account, "title": t.title, "status": t.status.name,

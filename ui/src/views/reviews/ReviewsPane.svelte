@@ -6,7 +6,7 @@
   import { dispatch } from '$lib/actions';
   import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
-  import { GLOBAL, projects, reviews, settings, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, reviews, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -34,6 +34,9 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import TagChips from '../tags/TagChips.svelte';
+  import TagFilter from '../tags/TagFilter.svelte';
+  import TagMenu from '../tags/TagMenu.svelte';
 
   import { toggleDraft } from './draft';
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
@@ -96,6 +99,8 @@
   let includeDrafts = $state(true);
   let repo = $state('');
   let filterInput = $state<HTMLInputElement>();
+  /** The toolbar's tag chip (#349). shortcut: per mount, not persisted. */
+  let tagFilter = $state<string | null>(null);
 
   const allItems = $derived(shown.data?.items ?? []);
   const repos = $derived([...new Set(allItems.map((i) => i.review.ref.repo))].sort());
@@ -119,6 +124,8 @@
     const r = i.review;
     if (!includeDrafts && r.draft) return false;
     if (repo !== '' && r.ref.repo !== repo) return false;
+    const tag = tags.live(tagFilter);
+    if (tag && !tags.has('prs', reviewKey(r.ref), tag)) return false;
     const needle = filter.trim().toLowerCase();
     if (needle === '') return true;
     return `${r.title} ${r.ref.repo}#${r.ref.number} ${r.author.name} ${r.source_branch} ${r.linked_tickets.join(' ')}`
@@ -227,6 +234,14 @@
 
   function browse(item: ReviewItem): void {
     openExternal({ url: item.review.url }).catch((err) => toasts.error(err, t('Open in browser')));
+  }
+
+  // ---- local tags (#349) ----------------------------------------------------------------------
+  let tagMenu = $state<{ x: number; y: number; key: string } | null>(null);
+
+  function openTags(item: ReviewItem): void {
+    const r = root?.querySelector('.k-row.selected')?.getBoundingClientRect();
+    tagMenu = { x: (r?.left ?? 16) + 24, y: (r?.bottom ?? 40) + 2, key: reviewKey(item.review.ref) };
   }
 
   // ---- nudge (my PRs) -------------------------------------------------------------------------
@@ -339,6 +354,9 @@
       case 'd':
         if (item) void toggleDraft(item.review);
         break;
+      case 't':
+        if (item) openTags(item);
+        break;
       default:
         return;
     }
@@ -396,6 +414,12 @@
     />
     <!-- The tab and pane header already say "Reviews"; only the cross-project scope is news. -->
     {#if scope.kind === 'all'}<span class="title">{t('All projects')}</span>{/if}
+    <TagFilter
+      kind="prs"
+      keys={allItems.map((i) => reviewKey(i.review.ref))}
+      value={tagFilter}
+      onchange={(name) => (tagFilter = name)}
+    />
     <span class="spacer"></span>
     {#if repos.length > 1}
       <Select
@@ -488,6 +512,7 @@
                   <span class="k-row-key">#{rv.ref.number}</span>
                   <span class="k-row-title">{rv.title}</span>
                   <span class="k-row-tail">
+                    <TagChips kind="prs" itemKey={reviewKey(rv.ref)} />
                     {#if reviews.isNew(rv.ref)}<Badge tone="accent">{t('new')}</Badge>{/if}
                     {#if rv.draft}<Badge>{t('draft')}</Badge>{/if}
                     {#if workOf(r.item)?.auto_finish}<Badge tone="accent">{t('armed')}</Badge>{/if}
@@ -564,6 +589,7 @@
       ['s', msg('Review locally')],
       ['n', msg('Nudge (my PRs)')],
       ['d', msg('Mark ready / draft (my PRs)')],
+      ['t', msg('Tags')],
       ['o', msg('Open in browser')],
       ['shift+m', msg('Merge when ready')],
       ['shift+r', msg('Refresh')],
@@ -571,6 +597,18 @@
   />
 </div>
 
+{#if tagMenu}
+  <TagMenu
+    kind="prs"
+    itemKey={tagMenu.key}
+    x={tagMenu.x}
+    y={tagMenu.y}
+    onclose={() => {
+      tagMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if nudgeMenu}
   <Menu
     items={nudgeItems}

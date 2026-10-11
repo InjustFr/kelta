@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/InjustFr/kelta/security/advisories/new
+    about: Do not open a public issue. Report it privately, as described in SECURITY.md.
+  - name: How to report bugs and request features
+    url: https://github.com/InjustFr/kelta/blob/main/CONTRIBUTING.md#reporting-bugs-and-requesting-features
+    about: Where to look first, what makes a good report, and where the logs are.

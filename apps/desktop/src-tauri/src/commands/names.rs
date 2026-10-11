@@ -103,6 +103,8 @@ pub const COMMANDS: &[&str] = &[
     "next_up_put",
     "next_up_remove",
     "ticket_seen",
+    "tags_get",
+    "tags_set",
     // reviews
     "review_list",
     "review_get",

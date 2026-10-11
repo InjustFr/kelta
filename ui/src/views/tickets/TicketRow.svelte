@@ -10,6 +10,7 @@
   import { mainPr, prLabel, prLamp, reviewWord } from './prs';
   import RowButton from './RowButton.svelte';
   import StatusChip from './StatusChip.svelte';
+  import TagChips from '../tags/TagChips.svelte';
 
   // One ticket row (DESIGN §6.8): a grid on fixed tracks every row shares, so key, title, status, age
   // and source form straight columns whatever a row carries. Secondary text lives in the tooltip.
@@ -32,6 +33,7 @@
     onmove: () => void;
     onpr: () => void;
     onstart: () => void;
+    ontag: () => void;
   }
 
   let {
@@ -51,6 +53,7 @@
     onmove,
     onpr,
     onstart,
+    ontag,
   }: Props = $props();
 
   const tk = $derived(item.ticket);
@@ -114,7 +117,7 @@
       >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span
         >{/if}{#if tk.parent && groupBy !== 'parent'}<span class="parent" data-parent>{tk.parent.key}</span
         >{/if}{tk.title}</span
-    ><span class="acts" data-acts>
+    ><TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts>
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
         icon="git-pull-request"
@@ -126,7 +129,7 @@
         icon="play"
         label={hasWork ? t('Resume work (s)') : t('Start work (s)')}
         onclick={onstart}
-      /></span
+      /><RowButton icon="tag" label={t('Tags (t)')} onclick={ontag} /></span
     ></span
   >
   <!-- Fixed slots: work, pull request, waiting, marked. Icons with the words for tooltips and readers. -->
@@ -231,15 +234,18 @@
     padding-left: var(--k-space-2);
   }
 
+  /* The title, then its local tags (#349): the title gives way first. */
   .c-title {
     grid-area: title;
     position: relative;
-    display: block;
+    display: flex;
+    align-items: baseline;
     padding-left: var(--k-space-3);
   }
 
   .text {
     display: block;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }

@@ -33,7 +33,7 @@ export const TOML_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>> =
 /** Nav groups, in order. A section missing here (e.g. a platform-only one) is not shown. */
 export const SECTION_GROUPS: readonly { label: string; ids: readonly SettingsSectionId[] }[] = [
   { label: msg('Basics'), ids: ['general', 'window', 'terminal', 'keys', 'notifications', 'linux-graphics'] },
-  { label: msg('Work'), ids: ['projects', 'sources', 'worktree', 'reviews', 'claude', 'editors'] },
+  { label: msg('Work'), ids: ['projects', 'sources', 'worktree', 'reviews', 'tags', 'claude', 'editors'] },
   { label: msg('Integrations'), ids: ['accounts', 'tools', 'triggers', 'plugins'] },
   { label: msg('Advanced'), ids: ['performance'] },
 ];
@@ -112,6 +112,9 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
     'Branch folders (git worktrees) let each work item have its own copy of the code. Choose where they live, how branches are named, and what runs on PR and merge.',
   ),
   reviews: msg('Which pull / merge requests appear in the review lists.'),
+  tags: msg(
+    'Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.',
+  ),
   notifications: msg('Desktop notifications and quiet hours.'),
   performance: msg('How often Kelta checks your tracker and code host, memory use and web view behaviour.'),
   tools: msg('Buttons that open programs like lazygit in a pane, or apps like Fork.'),

@@ -510,6 +510,11 @@ impl CoreApi for FakeCore {
         self.overridden("ticket_list").unwrap_or_else(|| Ok(TicketPage::default()))
     }
 
+    /// Set with `respond("local_tags", tags)`; none otherwise.
+    async fn local_tags(&self) -> Result<crate::model::LocalTags, KeltaError> {
+        self.overridden("local_tags").unwrap_or_else(|| Ok(crate::model::LocalTags::default()))
+    }
+
     /// Set with `respond("ticket_by_key", item)`; not found otherwise.
     async fn ticket_by_key(
         &self,
