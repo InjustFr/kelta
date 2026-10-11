@@ -49,6 +49,7 @@ pub struct FakeCore {
     ctl_commands: Mutex<Vec<CtlCommand>>,
     bus: broadcast::Sender<BusEvent>,
     next_pid: Mutex<u32>,
+    write_gate: Mutex<Option<Arc<tokio::sync::Semaphore>>>,
 }
 
 impl FakeCore {
@@ -72,6 +73,7 @@ impl FakeCore {
             ctl_commands: Mutex::new(Vec::new()),
             bus,
             next_pid: Mutex::new(1000),
+            write_gate: Mutex::new(None),
         })
     }
 
@@ -85,6 +87,11 @@ impl FakeCore {
     /// Make `method` fail.
     pub fn fail(&self, method: &'static str, e: KeltaError) {
         self.responses.lock().insert(method, Err(e));
+    }
+
+    /// `session_write` records the call, then waits for a permit of the returned gate (`add_permits`).
+    pub fn hold_writes(&self) -> Arc<tokio::sync::Semaphore> {
+        self.write_gate.lock().insert(Arc::new(tokio::sync::Semaphore::new(0))).clone()
     }
 
     pub fn clear_response(&self, method: &'static str) {
@@ -279,6 +286,12 @@ impl CoreApi for FakeCore {
 
     async fn session_write(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
         self.record("session_write", serde_json::json!({ "id": id, "len": bytes.len() }));
+        let gate = self.write_gate.lock().clone();
+        if let Some(g) = gate
+            && let Ok(p) = g.acquire().await
+        {
+            p.forget();
+        }
         if let Some(r) = self.overridden::<()>("session_write") {
             r?;
         }

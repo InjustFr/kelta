@@ -268,6 +268,7 @@ impl Core {
             Some(t) => t,
             None => terminal_host(&dirs, &settings),
         };
+        let mut store_error = None;
         let store = if in_memory_store {
             Store::open_in_memory()?
         } else {
@@ -275,6 +276,7 @@ impl Core {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!(error = %e, "cannot open the state database; using an in-memory store");
+                    store_error = Some(e.to_string());
                     Store::open_in_memory()?
                 }
             }
@@ -352,6 +354,12 @@ impl Core {
             }
         });
         core.boot()?;
+        // After boot so the migration toast cannot replace it: losing the session's work is worse.
+        if let Some(e) = store_error {
+            *core.boot_toast.lock() = Some(Toast::error(format!(
+                "State database could not be opened ({e}); changes this session will not be saved."
+            )));
+        }
         Ok(core)
     }
 

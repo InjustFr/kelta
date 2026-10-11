@@ -123,12 +123,12 @@ impl WorkService {
     /// the held prompt. Returns true when there was one.
     pub(crate) async fn flush_pending(&self, sid: &SessionId) -> Result<bool, KeltaError> {
         let Some(item) = self.for_session(sid).await else { return Ok(false) };
-        let Some(p) = self.load_journal(&item.id).pending_prompt else { return Ok(false) };
-        let delivered = self.resume_item(&item.id, Some(p)).await;
-        // Dropped either way: held past this Stop it would land after some unrelated turn.
         let mut j = self.load_journal(&item.id);
-        j.pending_prompt = None;
+        let Some(p) = j.pending_prompt.take() else { return Ok(false) };
+        // Taken before the await (dropped either way: held past this Stop it would land after some
+        // unrelated turn), so a prompt held while resuming is not erased.
         self.save_journal(&item.id, &j)?;
+        let delivered = self.resume_item(&item.id, Some(p)).await;
         let Err(e) = delivered else { return Ok(true) };
         // Reopen the notes it carried so `s` / `<leader>ks` can send them again.
         for mut n in self.store.notes(&item.id).await?.into_iter().filter(|n| n.state == NoteState::Sent) {
