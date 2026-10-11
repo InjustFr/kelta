@@ -19,6 +19,8 @@
   import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
+  import TagChips from '../tags/TagChips.svelte';
+  import TagMenu from '../tags/TagMenu.svelte';
 
   /** `embedded`: the Reviews split view's column; the list owns `Esc` and the focus. */
   let {
@@ -41,6 +43,13 @@
   let approving = $state(false);
   let dialog = $state<'comment' | 'changes' | null>(null);
   let root = $state<HTMLDivElement>();
+  let tagMenu = $state<{ x: number; y: number } | null>(null);
+  let tagBtn = $state<HTMLElement>();
+
+  function openTags(): void {
+    const r = tagBtn?.getBoundingClientRect();
+    tagMenu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+  }
 
   $effect(() => {
     const r = ref;
@@ -137,6 +146,9 @@
       case 'R':
         refresh();
         break;
+      case 't':
+        openTags();
+        break;
       default:
         return;
     }
@@ -211,6 +223,7 @@
             {projectId}
             repo={rv.ref.repo}
           />{/each}
+        <TagChips kind="prs" itemKey={reviewKey(ref)} />
       </div>
       <h1>{rv.title}</h1>
       <p class="branches"><code>{rv.source_branch}</code> {t('into')} <code>{rv.target_branch}</code></p>
@@ -255,6 +268,11 @@
             {t('Review locally')}
           </Button>
         {/if}
+        <span bind:this={tagBtn}
+          ><Button variant="ghost" icon="tag" aria-haspopup="menu" title={t('Tags (t)')} onclick={openTags}
+            >{t('Tags')}</Button
+          ></span
+        >
         <Button variant="ghost" icon="refresh-cw" onclick={refresh}>{t('Refresh')}</Button>
         <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       </div>
@@ -356,6 +374,18 @@
     onsubmit={(text) => send('changes', text)}
     onclose={() => {
       dialog = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if tagMenu}
+  <TagMenu
+    kind="prs"
+    itemKey={reviewKey(ref)}
+    x={tagMenu.x}
+    y={tagMenu.y}
+    onclose={() => {
+      tagMenu = null;
       root?.focus();
     }}
   />

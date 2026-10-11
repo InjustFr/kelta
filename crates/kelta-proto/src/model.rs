@@ -901,6 +901,23 @@ pub struct NextUp {
     pub seen: Vec<String>,
 }
 
+/// `tags_get` / `tags_set` (#349): my local tags and what carries them, kept in Kelta's store and never
+/// sent to a tracker or code host. Items are keyed `account:key` (tickets) and `account:repo#number`
+/// (pull requests); their lists hold tag names.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct LocalTags {
+    pub tags: Vec<LocalTag>,
+    pub tickets: BTreeMap<String, Vec<String>>,
+    pub prs: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct LocalTag {
+    pub name: String,
+    /// `theme:<slot>` or `#rrggbb`, like a project colour; `None` = neutral.
+    pub color: Option<String>,
+}
+
 /// Ports per work item: `KELTA_PORT` plus `KELTA_PORT_1..9`.
 pub const PORT_BLOCK: u16 = 10;
 
