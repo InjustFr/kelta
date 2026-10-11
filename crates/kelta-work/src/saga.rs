@@ -62,7 +62,7 @@ pub(crate) struct Journal {
     /// SHA-256 of each include copy at copy time: Finish compares the copy to it, not to the main checkout.
     #[serde(default)]
     pub include_hashes: BTreeMap<String, String>,
-    /// Tracker side effects already attempted (`assign`, `transition`, `comment`).
+    /// Tracker side effects done (`assign`, `transition` on success; `comment` once attempted).
     pub effects_done: BTreeSet<String>,
     /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
     #[serde(default)]
@@ -610,7 +610,6 @@ impl WorkService {
             let mut j = self.load_journal(id);
             match name {
                 "setup" => j.setup_session = None,
-                "tracker_side_effects" => j.effects_done.clear(),
                 "claude" => j.arranged = false,
                 _ => {}
             }
@@ -1593,6 +1592,11 @@ impl WorkService {
             .filter(|_| !j.effects_done.contains("comment"))
             .and_then(|c| render(c, &ctx, Mode::Lenient).ok())
             .filter(|c| !c.trim().is_empty());
+        // At most once: a comment cut off mid-step (quit, crash) is never posted again on Retry.
+        if comment.is_some() {
+            j.effects_done.insert("comment".to_owned());
+            self.save_journal(&item.id, j)?;
+        }
         let core = env.core.clone();
         let (pid, wid) = (item.project_id.clone(), item.id.clone());
         let assign = async {
@@ -1633,9 +1637,12 @@ impl WorkService {
         let mut parts = Vec::new();
         for (name, res) in [("assign", a), ("transition", tr), ("comment", c)] {
             let Some(res) = res else { continue };
-            j.effects_done.insert(name.to_owned());
             match res {
-                Ok(msg) => parts.push(msg),
+                Ok(msg) => {
+                    // assign / transition are idempotent: only a success stops a Retry from redoing them.
+                    j.effects_done.insert(name.to_owned());
+                    parts.push(msg);
+                }
                 Err(e) => {
                     parts.push(format!("{name} failed: {}", e.message));
                     let mut toast = Toast::warn(format!("{}: {name} failed — {}", t.key, e.message));
