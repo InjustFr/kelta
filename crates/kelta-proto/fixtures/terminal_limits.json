@@ -4,6 +4,7 @@
   "history_log_total_mb": 512,
   "keyboard_protocol": "kitty",
   "memory_cap_mb": 160,
+  "osc52": "write",
   "scrollback": {
     "claude": 3000,
     "custom": 3000,

@@ -16,6 +16,8 @@ const CAN: u8 = 0x18;
 const SUB: u8 = 0x1a;
 /// Longest captured OSC body; longer bodies are skipped.
 const MAX_OSC: usize = 8 * 1024;
+/// Longest OSC the model's parser may swallow: vte (`std`) buffers an OSC body without a cap.
+pub const MAX_OSC_TOTAL: usize = 4 * 1024 * 1024;
 /// Longest pending tail kept for snapshots.
 const MAX_TAIL: usize = 4 * 1024;
 
@@ -43,13 +45,15 @@ enum State {
 pub struct OscScanner {
     state: State,
     buf: Vec<u8>,
+    /// Bytes of the current OSC seen so far (Capture and Skip).
+    osc_len: usize,
     /// Raw OSC 7 payload last seen (re-emitted by snapshots).
     cwd_uri: Option<String>,
 }
 
 impl Default for OscScanner {
     fn default() -> Self {
-        Self { state: State::Ground, buf: Vec::new(), cwd_uri: None }
+        Self { state: State::Ground, buf: Vec::new(), osc_len: 0, cwd_uri: None }
     }
 }
 
@@ -63,20 +67,21 @@ impl OscScanner {
         self.cwd_uri.as_deref()
     }
 
-    /// Scan a chunk, pushing events for completed OSC 7/9/777 sequences.
-    pub fn scan(&mut self, bytes: &[u8], out: &mut Vec<TerminalEvent>) {
+    /// Scan a chunk, pushing events for completed OSC 7/9/777 sequences. Returns the offset where
+    /// an OSC passed [`MAX_OSC_TOTAL`] (bytes after it are not scanned): the caller must reset its
+    /// parser there and scan the rest again.
+    pub fn scan(&mut self, bytes: &[u8], out: &mut Vec<TerminalEvent>) -> Option<usize> {
         let mut i = 0;
         while i < bytes.len() {
             match self.state {
-                State::Ground => match bytes[i..].iter().position(|&b| b == ESC) {
-                    Some(p) => {
-                        i += p + 1;
-                        self.state = State::Esc;
-                    }
-                    None => return,
-                },
+                State::Ground => {
+                    let p = bytes[i..].iter().position(|&b| b == ESC)?;
+                    i += p + 1;
+                    self.state = State::Esc;
+                }
                 State::Esc => {
                     self.state = if bytes[i] == b']' { State::OscNum(0, 0) } else { State::Ground };
+                    self.osc_len = 0;
                     if bytes[i] == ESC {
                         self.state = State::Esc;
                     }
@@ -105,7 +110,11 @@ impl OscScanner {
                 }
                 State::Capture(kind) => {
                     let rest = &bytes[i..];
-                    match rest.iter().position(|&b| matches!(b, BEL | ESC | CAN | SUB)) {
+                    let end = rest.iter().position(|&b| matches!(b, BEL | ESC | CAN | SUB));
+                    if let Some(cut) = self.over_cap(end.unwrap_or(rest.len())) {
+                        return Some(i + cut);
+                    }
+                    match end {
                         Some(p) => {
                             self.push_capture(&rest[..p]);
                             let t = rest[p];
@@ -124,19 +133,19 @@ impl OscScanner {
                         }
                         None => {
                             self.push_capture(rest);
-                            return;
+                            return None;
                         }
                     }
                 }
                 State::Skip => {
                     let rest = &bytes[i..];
-                    match rest.iter().position(|&b| matches!(b, BEL | ESC | CAN | SUB)) {
-                        Some(p) => {
-                            i += p + 1;
-                            self.state = if rest[p] == ESC { State::OscEsc(None) } else { State::Ground };
-                        }
-                        None => return,
+                    let end = rest.iter().position(|&b| matches!(b, BEL | ESC | CAN | SUB));
+                    if let Some(cut) = self.over_cap(end.unwrap_or(rest.len())) {
+                        return Some(i + cut);
                     }
+                    let p = end?;
+                    i += p + 1;
+                    self.state = if rest[p] == ESC { State::OscEsc(None) } else { State::Ground };
                 }
                 State::OscEsc(kind) => {
                     // vte dispatches the OSC on any ESC; `ESC \` is then a no-op.
@@ -153,6 +162,20 @@ impl OscScanner {
                 }
             }
         }
+        None
+    }
+
+    /// Counts `seg` more OSC bytes. Past the cap: back to Ground, and how many of them fit.
+    fn over_cap(&mut self, seg: usize) -> Option<usize> {
+        if self.osc_len + seg <= MAX_OSC_TOTAL {
+            self.osc_len += seg;
+            return None;
+        }
+        let fit = MAX_OSC_TOTAL - self.osc_len;
+        self.osc_len = 0;
+        self.buf.clear();
+        self.state = State::Ground;
+        Some(fit)
     }
 
     fn push_capture(&mut self, bytes: &[u8]) {

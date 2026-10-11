@@ -39,7 +39,7 @@ use kelta_proto::api::{FrameSink, TerminalHost};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::AttachInfo;
-use kelta_proto::settings::KeyboardProtocol;
+use kelta_proto::settings::{KeyboardProtocol, Osc52};
 use kelta_proto::term::{
     HistoryHit, KillSignal, LoginEnv, PtySpawnSpec, SessionTermStats, TerminalLimits, TerminalPalette,
     TerminalStats,
@@ -180,7 +180,11 @@ impl TerminalHost for PtyTerminalHost {
         };
         let master = Arc::new(child.master);
         let mut model = TermModel::new(cols, rows, self.history_for(&spec));
-        model.set_kitty_keyboard(self.shared.limits.lock().keyboard_protocol == KeyboardProtocol::Kitty);
+        {
+            let limits = self.shared.limits.lock();
+            model.set_kitty_keyboard(limits.keyboard_protocol == KeyboardProtocol::Kitty);
+            model.set_osc52_read(limits.osc52 == Osc52::ReadWrite);
+        }
         if let Some(h) = self.shared.history_on() {
             // Same id again (restore, restart): earlier output goes back into the scrollback,
             // above a cleared screen, before logging starts so it is not logged twice.
@@ -345,6 +349,7 @@ impl TerminalHost for PtyTerminalHost {
             let mut st = s.state.lock();
             st.model.set_history_limit(lines);
             st.model.set_kitty_keyboard(limits.keyboard_protocol == KeyboardProtocol::Kitty);
+            st.model.set_osc52_read(limits.osc52 == Osc52::ReadWrite);
             st.sync_keyboard(&self.shared);
             st.model.set_logging(log && !s.exited.load(Ordering::SeqCst));
             st.refresh_memory(&self.shared);
