@@ -647,10 +647,7 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
         name: run_str("name"),
         run_id: run_str("id"),
         session_id: sid.cloned(),
-        phase: None,
-        state: RunState::Running,
-        note: None,
-        sha: None,
+        ..RunClaim::default()
     };
     let key = ticket.key.clone();
     let w = core

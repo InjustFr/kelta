@@ -7,8 +7,8 @@ use std::path::Path;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{
-    OpenPaneRequest, PaneContent, Placement, RestorePolicy, RunClaim, RunState, SessionInfo, SessionKind,
-    SpawnRequest, WorkflowInfo, WorkflowSource,
+    OpenPaneRequest, PaneContent, Placement, RestorePolicy, RunClaim, SessionInfo, SessionKind, SpawnRequest,
+    WorkflowInfo, WorkflowSource,
 };
 use kelta_proto::tracker::TicketRef;
 use kelta_work::template::{Ctx, Mode, render};
@@ -52,9 +52,7 @@ impl Core {
             run_id: Some(run_id.clone()),
             session_id: Some(sid.clone()),
             phase: Some("Starting".into()),
-            state: RunState::Running,
-            note: None,
-            sha: None,
+            ..RunClaim::default()
         };
         self.work.claim(&project, ticket.clone(), None, None, run).await?;
         let title = format!("{} · {}", wf.name, ticket.key);
