@@ -267,11 +267,15 @@ const FINISH_MERGED: FinishOpts = {
 };
 
 function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
-  const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.`;
+  // Headings, lists, a rule and a task list, as tracker descriptions carry them. No `#`: the title is the only h1.
+  const body = `Ticket **${t.ref.key}** (${t.title}).\n\nMock body rendered from the in-memory fixtures.\n\n## Acceptance\n\n- [x] Shown in the detail\n- [ ] Covered by a test\n\n---\n\n### Notes\n\n1. First\n2. Second`;
   return {
     ticket: t,
     body_md: body,
-    body_html: `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>Mock body rendered from the in-memory fixtures. <a href="${t.url}">Open in tracker</a></p>`,
+    body_html:
+      `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>Mock body rendered from the in-memory fixtures. <a href="${t.url}">Open in tracker</a></p>` +
+      '<h2>Acceptance</h2><ul><li><input disabled="" type="checkbox" checked="">Shown in the detail</li><li><input disabled="" type="checkbox">Covered by a test</li></ul>' +
+      '<hr><h3>Notes</h3><ol><li>First</li><li>Second</li></ol>',
     body_format: 'markdown',
     comments: [
       {
