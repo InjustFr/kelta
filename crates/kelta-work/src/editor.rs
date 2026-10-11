@@ -128,11 +128,9 @@ pub fn render_args(args: &[String], ctx: &Ctx) -> Result<Vec<String>, KeltaError
 /// Waits at most 10 s for short-lived clients (`emacsclient -n`, `code -g`) so they are reaped.
 pub async fn run_detached(argv: &[String], cwd: &Path) -> Result<(), KeltaError> {
     let (prog, args) = argv.split_first().ok_or_else(|| KeltaError::invalid("editor command is empty"))?;
-    let mut cmd = tokio::process::Command::new(prog);
+    let mut cmd = kelta_proto::term::async_command(prog);
     cmd.args(args)
         .current_dir(cwd)
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())

@@ -23,4 +23,7 @@ disallowed-methods = [
   { path = "reqwest::Client::builder", reason = "use kelta_http::client_builder (installs the TLS provider)" },
   { path = "reqwest::ClientBuilder::new", reason = "use kelta_http::client_builder (installs the TLS provider)" },
   { path = "reqwest::get", reason = "use kelta_http::client_builder (installs the TLS provider)" },
+  # #358: a child must not inherit the AppImage runtime's environment.
+  { path = "std::process::Command::new", reason = "use kelta_proto::term::command (starts from the launch environment)" },
+  { path = "tokio::process::Command::new", reason = "use kelta_proto::term::async_command (starts from the launch environment)" },
 ]

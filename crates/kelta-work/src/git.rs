@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use kelta_proto::error::{ErrorCode, KeltaError};
 use tokio::io::AsyncReadExt;
-use tokio::process::Command;
 
 /// Default timeout for local git operations.
 pub const LOCAL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -63,11 +62,9 @@ pub async fn run_env(
     extra: &[(&str, &str)],
     timeout: Duration,
 ) -> Result<Output, KeltaError> {
-    let mut cmd = Command::new("git");
+    let mut cmd = kelta_proto::term::async_command("git");
     cmd.args(args)
         .current_dir(cwd)
-        .env_clear()
-        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

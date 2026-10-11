@@ -34,7 +34,7 @@ impl Drop for App {
         }
         // Session children that outlive a killed app (`nvim --embed --listen <tmp>/…` ignores SIGTERM).
         // shortcut: matches on the temp path in argv only; upgrade to a process group if one escapes.
-        let _ = std::process::Command::new("pkill").args(["-9", "-f"]).arg(&self.tmp).status();
+        let _ = kelta_proto::term::command("pkill").args(["-9", "-f"]).arg(&self.tmp).status();
         let _ = std::fs::remove_dir_all(&self.tmp);
     }
 }
@@ -60,7 +60,7 @@ async fn launch(o: &Opts) -> Result<App> {
         let dir = tmp.join("projects").join(p);
         std::fs::create_dir_all(&dir)?;
         std::fs::copy(o.fixtures.join("3p10s/projects").join(p).join("README.md"), dir.join("README.md"))?;
-        let git = |args: &[&str]| std::process::Command::new("git").current_dir(&dir).args(args).output();
+        let git = |args: &[&str]| kelta_proto::term::command("git").current_dir(&dir).args(args).output();
         git(&["init", "-q"])?;
         git(&["add", "."])?;
         git(&["-c", "user.name=bench", "-c", "user.email=bench@localhost", "commit", "-qm", "fixture"])?;

@@ -7,7 +7,9 @@ All notable changes are listed here. The format follows Keep a Changelog, versio
 ### Fixed
 
 - AppImage: terminals, Claude sessions and every other child process start from the user's environment, without
-  the AppImage runtime's `PYTHONHOME`, `LD_LIBRARY_PATH`, `GTK_*` or `$APPDIR` entries in `PATH`.
+  the AppImage runtime's `PYTHONHOME`, `LD_LIBRARY_PATH`, `GTK_*` or `$APPDIR` entries in `PATH`. This now covers
+  `keltad` and every other spawn path, any variable pointing into the mount or at the `.AppImage` file, and
+  AppImageLauncher's `*_APPIMAGE`, `DESKTOPINTEGRATION` and `GIO_LAUNCHED_DESKTOP_FILE*`.
 
 ### Changed
 

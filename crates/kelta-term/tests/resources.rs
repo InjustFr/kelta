@@ -2,7 +2,7 @@
 //! no fd or thread leak after 100 spawn/kill cycles. One test so nothing else runs in this process
 //! while it measures.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)] // test helpers outside #[test] fns
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)] // test helpers outside #[test] fns
 
 #[path = "it/common/mod.rs"]
 mod common;
