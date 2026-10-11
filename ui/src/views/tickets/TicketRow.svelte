@@ -111,7 +111,8 @@
   <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
     ><span class="text"
-      >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span>{/if}{#if tk.parent && groupBy !== 'parent'}<span class="parent" data-parent>{tk.parent.key}</span
+      >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span
+        >{/if}{#if tk.parent && groupBy !== 'parent'}<span class="parent" data-parent>{tk.parent.key}</span
         >{/if}{tk.title}</span
     ><span class="acts" data-acts>
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
