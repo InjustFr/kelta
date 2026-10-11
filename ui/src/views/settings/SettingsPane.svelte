@@ -58,9 +58,15 @@
   const repoOptions = $derived((currentProject?.repos ?? []).map((r) => ({ value: r.id, label: r.id })));
 
   $effect(() => {
-    // initial section from the pane content (e.g. "Open Accounts settings")
+    // section from the pane content (e.g. "Open Accounts settings"), also when settings.open
+    // retargets this open pane, with its TOML request
     const wanted = content.section;
     if (wanted && sections.some((s) => s.id === wanted)) sectionId = wanted;
+    const toml = takeTomlRequest();
+    if (toml) {
+      editor.raw = true;
+      untrack(() => void editor.target({ layer: 'project', projectId: toml, repoId: null }));
+    }
   });
 
   $effect(() => {

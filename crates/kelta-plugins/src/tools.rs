@@ -49,6 +49,8 @@ pub(crate) fn external_command(
     let mut cmd = tokio::process::Command::new(program);
     cmd.args(args)
         .current_dir(cwd)
+        .env_clear()
+        .envs(kelta_proto::term::LoginEnv::inherited().vars)
         .envs(env)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -696,7 +698,8 @@ async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) ->
         return ToolCheck { installed: false, version: None, install_hint: hint };
     };
     let mut cmd = tokio::process::Command::new(program);
-    cmd.args(args).stdin(std::process::Stdio::null()).kill_on_drop(true);
+    cmd.args(args).env_clear().envs(kelta_proto::term::LoginEnv::inherited().vars);
+    cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
     if let Some(p) = path {
         cmd.env("PATH", p);
     }
@@ -758,10 +761,7 @@ mod external_tests {
         assert_eq!(c.get_program(), "open");
         assert_eq!(c.get_args().collect::<Vec<_>>(), ["-a", "Fork", "."]);
         assert_eq!(c.get_current_dir(), Some(std::path::Path::new("/tmp")));
-        assert_eq!(
-            c.get_envs().collect::<Vec<_>>(),
-            [(std::ffi::OsStr::new("A"), Some(std::ffi::OsStr::new("1")))]
-        );
+        assert!(c.get_envs().any(|kv| kv == (std::ffi::OsStr::new("A"), Some(std::ffi::OsStr::new("1")))));
     }
 
     #[tokio::test]

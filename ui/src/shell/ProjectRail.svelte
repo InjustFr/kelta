@@ -46,6 +46,7 @@
     workItemOfTab,
     type ToolInstance,
   } from './nav';
+  import { paneDrag } from './paneDrag.svelte';
   import { peekHover, peekTarget } from './peek.svelte';
 
   const rail = $derived(railProjects());
@@ -84,6 +85,8 @@
   let overId = $state<string | null>(null);
   let rowDrag = $state<{ project: ProjectId; tab: string } | null>(null);
   let rowOver = $state<string | null>(null);
+  // A pane dragged over a band but not over one of its rows: dropping opens it in a new tab.
+  let bandOver = $state<ProjectId | null>(null);
 
   function menuItems(p: ProjectInfo): MenuItem[] {
     const index = reorderable.findIndex((x) => x.id === p.id);
@@ -220,6 +223,11 @@
   }
 
   function onRowDrop(project: ProjectId, target: Tab): void {
+    if (paneDrag.current) {
+      rowOver = null;
+      paneDrag.drop(project, { tabId: target.id });
+      return;
+    }
     const from = rowDrag;
     rowDrag = null;
     rowOver = null;
@@ -331,10 +339,25 @@
       {#each rail as p (p.id)}
         <section
           class="band"
+          class:pane-target={bandOver === p.id && paneDrag.current}
           aria-label={p.name}
           data-testid="rail-band"
           data-project-id={p.id}
           style:--project-color={resolveProjectColor(p.color) ?? 'var(--k-border-strong)'}
+          ondragover={(e) => {
+            if (paneDrag.current?.projectId !== p.id) return;
+            bandOver = e.defaultPrevented ? null : p.id; // a row took it
+            e.preventDefault();
+          }}
+          ondragleave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) bandOver = null;
+          }}
+          ondrop={(e) => {
+            bandOver = null;
+            if (paneDrag.current?.projectId !== p.id) return;
+            e.preventDefault();
+            paneDrag.drop(p.id, { tabId: null });
+          }}
         >
           <!-- The caption: click = the project's last row, ⋯ / right-click = project menu, drag = reorder. -->
           <div class="row caption-row" class:over={overId === p.id && dragId !== p.id}>
@@ -374,7 +397,12 @@
               {@const lvl = tabAttention(tab)}
               {@const active = isFront(p.id, tab.id)}
               {@const label = rowLabel(tab)}
-              <li class="row" class:over={rowOver === tab.id && rowDrag?.tab !== tab.id}>
+              {@const over = rowOver === tab.id}
+              <li
+                class="row"
+                class:over={over && rowDrag && rowDrag.tab !== tab.id}
+                class:pane-over={over && paneDrag.current && paneDrag.current.tabId !== tab.id}
+              >
                 <button
                   type="button"
                   class="item tab-row"
@@ -406,7 +434,8 @@
                     e.dataTransfer?.setData('text/plain', tab.id);
                   }}
                   ondragover={(e) => {
-                    if (rowDrag?.project !== p.id) return;
+                    const pane = paneDrag.current;
+                    if (pane ? pane.projectId !== p.id : rowDrag?.project !== p.id) return;
                     e.preventDefault();
                     rowOver = tab.id;
                   }}
@@ -761,6 +790,13 @@
 
   .row.over {
     box-shadow: 0 -2px 0 0 var(--k-accent);
+  }
+
+  /* A dragged pane lands in this tab, or in a new tab of this band. */
+  .row.pane-over,
+  .band.pane-target {
+    border-radius: var(--k-radius);
+    box-shadow: inset 0 0 0 2px var(--k-accent);
   }
 
   /* Band caption: the project's name, its menu and its drag handle. No lamp: its rows carry them. */

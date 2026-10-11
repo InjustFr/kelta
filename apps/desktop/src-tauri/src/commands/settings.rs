@@ -12,7 +12,7 @@ use kelta_proto::redact::redact_text;
 use serde_json::Value;
 use tauri::State;
 
-use super::Res;
+use super::{Res, unpanic};
 
 /// Run a blocking config operation off the async workers.
 async fn blocking<T, F>(f: F) -> Res<T>
@@ -170,6 +170,10 @@ pub async fn repo_trust(
 /// exercised exactly as in normal use) and call `me()`. Provider failures are data, not errors.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn account_test(core: State<'_, Arc<Core>>, account_id: AccountId) -> Res<AccountTestResult> {
+    unpanic(test_account(core.inner().clone(), account_id)).await
+}
+
+async fn test_account(core: Arc<Core>, account_id: AccountId) -> Res<AccountTestResult> {
     let settings = core.config().effective(None);
     let Some(account) = settings.accounts.get(&account_id) else {
         return Ok(AccountTestResult {

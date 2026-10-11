@@ -149,7 +149,11 @@ async fn stage(host: &PluginHost, source: &str) -> Result<Staged, KeltaError> {
             let temp = staging_dir(host)?;
             let staged = Staged { root: temp.clone(), temp: Some(temp.clone()), source: src.clone() };
             let listing = run(
-                tokio::process::Command::new("tar").arg("-tf").arg(file),
+                tokio::process::Command::new("tar")
+                    .env_clear()
+                    .envs(kelta_proto::term::LoginEnv::inherited().vars)
+                    .arg("-tf")
+                    .arg(file),
                 "tar -t",
                 Duration::from_secs(60),
             )
@@ -159,6 +163,8 @@ async fn stage(host: &PluginHost, source: &str) -> Result<Staged, KeltaError> {
             }
             run(
                 tokio::process::Command::new("tar")
+                    .env_clear()
+                    .envs(kelta_proto::term::LoginEnv::inherited().vars)
                     .arg("-xf")
                     .arg(file)
                     .arg("--no-same-owner")
@@ -179,6 +185,7 @@ async fn stage(host: &PluginHost, source: &str) -> Result<Staged, KeltaError> {
             let staged = Staged { root: temp.clone(), temp: Some(temp.clone()), source: src.clone() };
             let target = temp.join("repo");
             let mut cmd = tokio::process::Command::new("git");
+            cmd.env_clear().envs(kelta_proto::term::LoginEnv::inherited().vars);
             cmd.env("GIT_TERMINAL_PROMPT", "0").args([
                 "clone",
                 "--depth",
