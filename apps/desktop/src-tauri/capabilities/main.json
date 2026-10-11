@@ -100,6 +100,8 @@
     "allow-next-up-put",
     "allow-next-up-remove",
     "allow-ticket-seen",
+    "allow-tags-get",
+    "allow-tags-set",
     "allow-review-list",
     "allow-review-get",
     "allow-review-approve",

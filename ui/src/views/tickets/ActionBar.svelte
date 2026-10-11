@@ -38,6 +38,7 @@
     workflow: t('Run workflow…'),
     branch: t('Copy branch'),
     browser: t('Open in browser'),
+    tag: t('Tags…'),
   });
   /** The row; the rest of TICKET_ACTIONS goes under More. */
   const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'assign', 'comment'];

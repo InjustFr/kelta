@@ -561,6 +561,37 @@ async fn global_mcp_serves_the_board_tools() {
 }
 
 #[tokio::test]
+async fn list_tickets_filters_by_local_tag() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let item = |key: &str| {
+        let mut ticket = samples::ticket();
+        ticket.r#ref.key = key.into();
+        json!({ "ticket": ticket, "project_ids": [] })
+    };
+    e.fake.respond(
+        "ticket_list",
+        json!({ "items": [item("A-1"), item("A-2")], "next": null, "stale": false, "errors": [] }),
+    );
+    let account = samples::ticket().r#ref.account;
+    e.fake.respond(
+        "local_tags",
+        json!({ "tags": [{ "name": "Retest", "color": null }], "tickets": { format!("{account}:A-2"): ["Retest"] }, "prs": {} }),
+    );
+    let keys = |text: String| -> Vec<String> {
+        let v: Value = serde_json::from_str(&text).unwrap();
+        v["tickets"].as_array().unwrap().iter().map(|t| t["key"].as_str().unwrap().to_owned()).collect()
+    };
+    let (text, err) = global_call(port, "list_tickets", json!({ "tag": "retest" })).await;
+    assert!(!err, "{text}");
+    assert_eq!(keys(text), ["A-2"]);
+    let (text, _) = global_call(port, "list_tickets", json!({})).await;
+    assert_eq!(keys(text), ["A-1", "A-2"]);
+    e.server.release_http();
+}
+
+#[tokio::test]
 async fn global_mcp_sets_kelta_up() {
     let e = common::env();
     e.server.set_install_token(Some("it"));

@@ -2272,5 +2272,28 @@
   "#{n} is a draft again": "#{n} est de nouveau un brouillon",
   "Mark ready / draft (my PRs)": "Marquer prête / brouillon (mes PR)",
   "Mark ready / Convert to draft": "Marquer prête / Repasser en brouillon",
-  "Mark ready…": "Marquer prête…"
+  "Mark ready…": "Marquer prête…",
+  "Tags": "Étiquettes",
+  "Saving tags failed": "Échec de l’enregistrement des étiquettes",
+  "Tags (t)": "Étiquettes (t)",
+  "Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.": "Étiquettes locales : des rappels que vous posez sur les tickets et les pull requests. Gardées dans Kelta, jamais envoyées à un tracker ni à un hébergeur de code.",
+  "Your tags": "Vos étiquettes",
+  "New tag": "Nouvelle étiquette",
+  "No tags yet": "Aucune étiquette pour l’instant",
+  "Tags are reminders only you see, on tickets and pull requests.": "Les étiquettes sont des rappels que vous seul voyez, sur les tickets et les pull requests.",
+  "Delete {name}": "Supprimer {name}",
+  "Delete tag": "Supprimer l’étiquette",
+  "{n} items": {
+    "one": "{n} élément",
+    "other": "{n} éléments"
+  },
+  "Delete {name}? It comes off the {n} items that carry it.": {
+    "one": "Supprimer {name} ? Elle est retirée de l’élément qui la porte ({n}).",
+    "other": "Supprimer {name} ? Elle est retirée des {n} éléments qui la portent."
+  },
+  "Local tag {name}": "Étiquette locale {name}",
+  "Filter by tag": "Filtrer par étiquette",
+  "Only items tagged {name}": "Seulement les éléments étiquetés {name}",
+  "Create tags in Settings": "Créer des étiquettes dans les Paramètres",
+  "Tags…": "Étiquettes…"
 }

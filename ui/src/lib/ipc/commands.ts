@@ -40,6 +40,7 @@ import type {
   PluginInstallPreview,
   PluginMethod,
   PrDraft,
+  LocalTags,
   NextUp,
   NextUpItem,
   ProjectDraft,
@@ -260,6 +261,10 @@ export interface Commands {
   next_up_remove: { args: { ticket: TicketRef }; result: null };
   /** Clears the tickets' `New` badge. */
   ticket_seen: { args: { tickets: TicketRef[] }; result: null };
+  /** My local tags (#349): Kelta-local, never sent to a tracker or code host. */
+  tags_get: { args: NoArgs; result: LocalTags };
+  /** Replaces the whole set; returns it as stored. */
+  tags_set: { args: { tags: LocalTags }; result: LocalTags };
   // ---- reviews -----------------------------------------------------------------------------
   review_list: { args: { scope: Scope; kind: ReviewKind; refresh: boolean }; result: ReviewPage };
   review_get: { args: { review: ReviewRef }; result: ReviewDetail };
@@ -462,6 +467,8 @@ export const COMMAND_NAMES = [
   'next_up_put',
   'next_up_remove',
   'ticket_seen',
+  'tags_get',
+  'tags_set',
   'review_list',
   'review_get',
   'review_approve',
@@ -695,6 +702,8 @@ export const nextUpList = wrap('next_up_list');
 export const nextUpPut = wrap('next_up_put');
 export const nextUpRemove = wrap('next_up_remove');
 export const ticketSeen = wrap('ticket_seen');
+export const tagsGet = wrap('tags_get');
+export const tagsSet = wrap('tags_set');
 
 // ---- reviews --------------------------------------------------------------------------------
 export const reviewList = wrap('review_list');

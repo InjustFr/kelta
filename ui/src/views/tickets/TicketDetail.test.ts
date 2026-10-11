@@ -104,7 +104,7 @@ describe('TicketDetail', () => {
       within(more)
         .getAllByRole('menuitem')
         .map((b) => b.querySelector('.label')?.textContent),
-    ).toEqual(['Unassign', 'Refine with Claude', 'Run workflow…', 'Copy branch', 'Open in browser']);
+    ).toEqual(['Unassign', 'Refine with Claude', 'Run workflow…', 'Copy branch', 'Open in browser', 'Tags…']);
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');

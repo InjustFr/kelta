@@ -16,6 +16,7 @@ import type {
   JsonValue,
   KeltaError,
   Layer,
+  LocalTags,
   NextUp,
   Layout,
   Person,
@@ -122,6 +123,7 @@ export interface MockState {
   notes: Record<string, ReviewNote[]>;
   /** Next up list and seen tickets (#145). */
   nextUp: NextUp;
+  tags: LocalTags;
   /** Saved Claude workflows (`workflows_list`, #233). */
   workflows: WorkflowInfo[];
   /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
@@ -255,6 +257,7 @@ function freshState(): MockState {
     pending: { 'acme/shop-web#101': 2 },
     plugins: [clone(samples.pluginInfo)],
     notes: Object.fromEntries(FIXTURES.work.slice(0, 1).map((w) => [w.id, sampleNotes(w.id)])),
+    tags: { tags: [], tickets: {}, prs: {} },
     // Every fixture ticket seen but the last: one `New` ticket to groom.
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
@@ -1243,6 +1246,11 @@ export function createMockTransport(options: MockOptions = {}): {
     ticket_seen: ({ tickets }) => {
       for (const t of tickets) if (!state.nextUp.seen.includes(refKey(t))) state.nextUp.seen.push(refKey(t));
       return null;
+    },
+    tags_get: () => clone(state.tags),
+    tags_set: ({ tags }) => {
+      state.tags = JSON.parse(JSON.stringify(tags)) as LocalTags; // args may be $state proxies
+      return clone(state.tags);
     },
     // ---- reviews ---------------------------------------------------------------------------
     // Team: every PR of the scope, as the core lists the source-fed repos' open PRs.

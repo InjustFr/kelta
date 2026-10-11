@@ -351,6 +351,10 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<TicketPage, KeltaError> {
         Ok(TicketPage::default())
     }
+    /// My local tags (#349; MCP `list_tickets` filter `tag`, read-only).
+    async fn local_tags(&self) -> Result<crate::model::LocalTags, KeltaError> {
+        Ok(crate::model::LocalTags::default())
+    }
     /// The listed ticket `key` names (on `account` when given) with its projects, without the
     /// list's enrichment (MCP by-key tools).
     async fn ticket_by_key(

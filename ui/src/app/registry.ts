@@ -119,6 +119,7 @@ export type SettingsSectionId =
   | 'editors'
   | 'worktree'
   | 'reviews'
+  | 'tags'
   | 'notifications'
   | 'performance'
   | 'tools'
@@ -229,6 +230,13 @@ export const settingsSections: readonly SettingsSection[] = [
     icon: 'git-pull-request',
     owner: 'L4',
     load: () => import('../views/settings/sections/Reviews.svelte'),
+  },
+  {
+    id: 'tags',
+    label: msg('Tags'),
+    icon: 'tag',
+    owner: 'L4',
+    load: () => import('../views/settings/sections/Tags.svelte'),
   },
   {
     id: 'notifications',

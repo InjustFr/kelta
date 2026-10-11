@@ -5,6 +5,7 @@
   import type { TicketSort, TicketsMode, Who } from '$lib/gen';
   import { Button, Icon, IconButton, Select, Tabs } from '$lib/ui';
 
+  import TagFilter from '../tags/TagFilter.svelte';
   import { GROUP_BYS, SORTS, type GroupBy } from './group';
 
   // The Tickets toolbar (DESIGN §6.8), in two groups. Left, what you look at: source, then whose
@@ -43,6 +44,10 @@
     mode: TicketsMode;
     onmode: (m: TicketsMode) => void;
     onrefresh: () => void;
+    /** The list's ticket keys and the tag chip picked (#349). */
+    tagKeys: readonly string[];
+    tag: string | null;
+    ontag: (name: string | null) => void;
   }
 
   let {
@@ -73,6 +78,9 @@
     mode,
     onmode,
     onrefresh,
+    tagKeys,
+    tag,
+    ontag,
   }: Props = $props();
 
   const GROUP_LABELS: Record<GroupBy, string> = $derived({
@@ -136,6 +144,7 @@
   {#if hasSource}
     <Tabs label={t('Whose tickets')} items={who} value={whoTab ?? undefined} onchange={onwho} />
   {/if}
+  <TagFilter kind="tickets" keys={tagKeys} value={tag} onchange={ontag} />
   <span class="spacer"></span>
   {#if hasView}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

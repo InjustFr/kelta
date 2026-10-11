@@ -11,6 +11,7 @@ import { ProjectsStore } from './projects.svelte';
 import { ReviewsStore } from './reviews.svelte';
 import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
+import { TagsStore } from './tags.svelte';
 import { TicketsStore } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { ToolsStore } from './tools.svelte';
@@ -18,7 +19,7 @@ import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
 
 export { AttentionStore, LayoutStore, PluginsStore, ProjectsStore, ReviewsStore, SessionsStore };
-export { SettingsStore, TicketsStore, ToastsStore, ToolsStore, UiStore, WorkStore };
+export { SettingsStore, TagsStore, TicketsStore, ToastsStore, ToolsStore, UiStore, WorkStore };
 export type { Loadable } from './loadable';
 export { GLOBAL, type GlobalView } from './ui.svelte';
 export * from './reducers';
@@ -35,8 +36,11 @@ export const toasts = new ToastsStore();
 export const ui = new UiStore();
 export const tools = new ToolsStore();
 export const plugins = new PluginsStore();
+/** Local tags (#349): no UiEvent touches them, so they stay out of `ALL`. */
+export const tags = new TagsStore();
 
 layout.onSaveError = (err) => toasts.error(err, t('Saving layout failed'));
+tags.onSaveError = (err) => toasts.error(err, t('Saving tags failed'));
 
 const ALL = [
   projects,
@@ -91,6 +95,7 @@ export function bootstrap(): Promise<BootstrapResult> {
       ],
       ['session_list', sessions.load()],
       ['work_list', work.load()],
+      ['tags_get', tags.load()],
       ['settings_effective', settings.load().then((r) => (r.error ? Promise.reject(r.error) : r))],
     ];
     const results = await Promise.allSettled(tasks.map(([, p]) => p));

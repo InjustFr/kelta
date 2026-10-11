@@ -128,7 +128,7 @@ test('tickets: the Tickets view grouped by flow, with the ticket detail', async 
   await boot(page, 'macos');
   await page.getByTestId('rail-tickets').click();
   const host = page.getByTestId('global-host');
-  await host.locator('[data-key="redmine-corp:4567"]').click();
+  await host.locator('[data-key="redmine-corp:4567"] .k-row-key').click();
   await expect(host.getByTestId('ticket-detail')).toBeVisible();
   await shoot(page, 'tickets');
 });

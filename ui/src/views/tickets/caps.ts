@@ -7,7 +7,17 @@ import type { TicketItem, WorkflowInfo } from '$lib/gen';
 import { workflowReason } from './workflow.svelte';
 
 export type TicketAction =
-  'start' | 'move' | 'pr' | 'assign' | 'unassign' | 'comment' | 'refine' | 'workflow' | 'branch' | 'browser';
+  | 'start'
+  | 'move'
+  | 'pr'
+  | 'assign'
+  | 'unassign'
+  | 'comment'
+  | 'refine'
+  | 'workflow'
+  | 'branch'
+  | 'browser'
+  | 'tag';
 
 /** Action bar order, with the key that runs each one in the detail. */
 export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
@@ -21,6 +31,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'workflow', key: 'w' },
   { id: 'branch', key: 'y' },
   { id: 'browser', key: 'o' },
+  { id: 'tag', key: 't' },
 ];
 
 /** Opens the detail's More menu (Cmd+. on macOS, Ctrl+Shift+. on Linux). */
