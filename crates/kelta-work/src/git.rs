@@ -471,13 +471,6 @@ pub async fn diffstat(worktree: &Path, base: &str) -> Result<(u32, u32, u32), Ke
     Ok((files, ins, del))
 }
 
-/// Upstream of HEAD (`origin/feat/x`) if configured.
-pub async fn upstream(worktree: &Path) -> Result<Option<String>, KeltaError> {
-    let out =
-        run(worktree, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], LOCAL_TIMEOUT).await?;
-    Ok(out.ok().then(|| out.stdout.trim().to_owned()).filter(|s| !s.is_empty()))
-}
-
 /// `git rev-parse --git-common-dir` as an absolute path.
 pub async fn common_dir(repo: &Path) -> Result<PathBuf, KeltaError> {
     let out = run_ok(repo, &["rev-parse", "--git-common-dir"], LOCAL_TIMEOUT).await?;

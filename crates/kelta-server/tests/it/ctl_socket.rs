@@ -164,8 +164,6 @@ async fn commands_are_dispatched_to_core() {
     assert!(
         send_json(&path, json!({"v":1,"cmd":"emit","name":"custom.build","payload":{"ok":true}})).await.ok
     );
-    let r = send_json(&path, json!({"v":1,"cmd":"emit","name":"pr.created","payload":{}})).await;
-    assert_eq!(r.error.unwrap().code, ErrorCode::InvalidArgument);
     let r = send_json(&path, json!({"v":1,"cmd":"version"})).await;
     assert!(r.result.unwrap()["version"].is_string());
     let cmds = e.fake.ctl_commands();

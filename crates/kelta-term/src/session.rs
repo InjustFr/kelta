@@ -57,6 +57,14 @@ impl Shared {
         }
     }
 
+    /// History lines sent with a snapshot (`terminal.view_scrollback`, 0 = [`VIEW_SCROLLBACK`]).
+    pub fn view_scrollback(&self) -> usize {
+        match self.limits.lock().view_scrollback {
+            0 => VIEW_SCROLLBACK,
+            n => n as usize,
+        }
+    }
+
     /// The history log when `terminal.history_log` is on.
     pub fn history_on(&self) -> Option<&HistoryLog> {
         self.history.as_ref().filter(|_| self.limits.lock().history_log)
@@ -208,11 +216,7 @@ impl State {
     /// Send a snapshot (attach / catch-up) and, after it, a pending exit frame.
     pub fn send_snapshot(&mut self, palette: &Palette, shared: &Shared, now: Instant) -> Vec<Output> {
         let mut frame = frames::snapshot_buffer(64 * 1024);
-        let view = match shared.limits.lock().view_scrollback {
-            0 => VIEW_SCROLLBACK,
-            n => n as usize,
-        };
-        let outs = self.model.snapshot_into(view, palette, &mut frame);
+        let outs = self.model.snapshot_into(shared.view_scrollback(), palette, &mut frame);
         let len = frame.len() - 1;
         if self.send(frame, shared) {
             self.flow.snapshot_sent(len, now);

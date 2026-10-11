@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
 use kelta_proto::api::{FrameSink, TerminalEvents};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Notification, Toast, UiEvent, bus};
@@ -242,21 +243,8 @@ fn default_name(kind: &SessionKind, program: Option<&str>, shell: &Path) -> Stri
 /// OSC 52 reply: `ESC ] 52 ; c|p ; <base64> BEL`.
 pub fn osc52_reply(kind: ClipboardKind, text: &str) -> Vec<u8> {
     let sel = if kind == ClipboardKind::Primary { 'p' } else { 'c' };
-    format!("\x1b]52;{sel};{}\x07", base64(text.as_bytes())).into_bytes()
-}
-
-fn base64(input: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0)];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
+    format!("\x1b]52;{sel};{}\x07", base64::engine::general_purpose::STANDARD.encode(text.as_bytes()))
+        .into_bytes()
 }
 
 /// Input that answers a permission prompt (#303): Enter, `1`-`9`, `y`/`n`, or a lone Esc, raw or as
@@ -1919,12 +1907,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn base64_matches_rfc4648() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"fo"), "Zm8=");
-        assert_eq!(base64(b"foo"), "Zm9v");
-        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    fn osc52_reply_is_base64() {
         assert_eq!(osc52_reply(ClipboardKind::Clipboard, "hi"), b"\x1b]52;c;aGk=\x07".to_vec());
     }
 }
