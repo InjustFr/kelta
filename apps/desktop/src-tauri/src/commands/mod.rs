@@ -27,6 +27,12 @@ pub mod work;
 /// Command result.
 pub type Res<T> = Result<T, KeltaError>;
 
+/// Run a command body as its own task: Tauri never answers an invoke whose future panicked, so
+/// the panic comes back as an `internal` error instead of a promise that never resolves.
+pub async fn unpanic<T: Send + 'static>(f: impl Future<Output = Res<T>> + Send + 'static) -> Res<T> {
+    tokio::spawn(f).await.unwrap_or_else(|e| Err(KeltaError::internal(format!("command failed: {e}"))))
+}
+
 /// Header carrying the session id when `session_write` is invoked with a raw `Uint8Array` body.
 pub const SESSION_ID_HEADER: &str = "x-kelta-session-id";
 
@@ -286,5 +292,12 @@ mod tests {
         assert_eq!(parse_write_body(&InvokeBody::Json(j), None).unwrap().1, b"ls\r".to_vec());
         let j = serde_json::json!({"id": "s5", "data": [256]});
         assert!(parse_write_body(&InvokeBody::Json(j), None).is_err());
+    }
+
+    #[tokio::test]
+    async fn unpanic_turns_a_panic_into_an_error() {
+        assert_eq!(unpanic(async { Ok(1) }).await.unwrap(), 1);
+        let e = unpanic::<()>(async { panic!("boom") }).await.unwrap_err();
+        assert_eq!(e.code, kelta_proto::error::ErrorCode::Internal);
     }
 }
