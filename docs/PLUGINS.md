@@ -54,6 +54,7 @@ Behaviour (kelta-plugins `tools`):
   - `auto`: HEAD probe; no `X-Frame-Options` and no `frame-ancestors` → `iframe`, else `proxy`.
   - `proxy`: `http://127.0.0.1:<listener-port>/proxy/<128-bit instance>/…` reverse proxy to the tool's loopback origin, served by kelta-plugins on its own loopback listener per instance (a distinct origin per web tool; started on first open, stopped with the instance); strips `X-Frame-Options` and CSP `frame-ancestors`; passes WebSocket upgrades; rewrites `Location` headers to the proxy prefix.
   - `external`: opens the system browser (url via `open_external`).
+- **Plugin web tools** need `sessions.spawn` (+ `exec:<cmd>` for `start`), and their rendered URL needs `net:<host>` (§5) unless it is loopback: checked before Kelta opens it or sends the `auto` HEAD probe, so a non-granted host is `PermissionDenied` with no request sent. Tools from settings are not gated.
 - Server process killed per `lifecycle` (process group, `stop` spec). Exit → pane shows exit code + log tail + **Relaunch**.
 
 ### 2.1 Example: lazydocker (PTY)

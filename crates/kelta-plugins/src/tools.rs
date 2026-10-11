@@ -118,6 +118,10 @@ fn needs_project(def: &ToolDef) -> bool {
         .any(|r| r == "project" || r == "repo")
 }
 
+fn url_host(url: &str) -> String {
+    url.parse::<axum::http::Uri>().ok().and_then(|u| u.host().map(str::to_owned)).unwrap_or_default()
+}
+
 fn plugin_tool_id(plugin: &PluginId, id: &str) -> String {
     format!("{plugin}/{id}")
 }
@@ -412,8 +416,7 @@ impl PluginHost {
     }
 
     async fn decide_embed(&self, pref: EmbedMode, url: &str) -> EmbedMode {
-        let host =
-            url.parse::<axum::http::Uri>().ok().and_then(|u| u.host().map(str::to_owned)).unwrap_or_default();
+        let host = url_host(url);
         let loopback = is_loopback_host(&host) && url.starts_with("http://");
         match pref {
             EmbedMode::External => EmbedMode::External,
@@ -532,6 +535,13 @@ impl PluginHost {
             let log_url = if secret { kelta_proto::redact::redact_url(&url) } else { url.clone() };
             tracing::info!(tool = %r.id, url = %log_url, "web tool ready");
 
+            // A plugin web tool reaches (and the `auto` probe sends HEAD to) only `net:`-granted hosts;
+            // loopback, where its own server runs, stays free.
+            if let Some(e) = &r.plugin
+                && !is_loopback_host(&url_host(&url))
+            {
+                self.granted(e).await?.require_net(&url)?;
+            }
             let pref = def.embed.unwrap_or(settings.web.embed_default);
             let mut embed = self.decide_embed(pref, &url).await;
             let mut public_url = url.clone();
