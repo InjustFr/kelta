@@ -113,6 +113,50 @@ async fn notes_survive_a_restart_and_go_with_their_item() {
 }
 
 #[tokio::test]
+async fn work_list_reads_every_items_steps_in_one_query() {
+    use rusqlite::trace::{TraceEvent, TraceEventCodes};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static STEP_QUERIES: AtomicUsize = AtomicUsize::new(0);
+    let s = Store::open_in_memory().unwrap();
+    let mut want = Vec::new();
+    for state in [WorkState::Active, WorkState::Finished, WorkState::PrOpen] {
+        let mut w = kelta_proto::samples::work_item();
+        w.id = WorkItemId::generate();
+        w.state = state;
+        w.created_at = format!("2026-01-0{}T00:00:00Z", want.len() + 1);
+        w.steps.truncate(want.len() + 1);
+        w.steps[0].status = StepStatus::Done;
+        s.put_item(&w).await.unwrap();
+        want.push(s.get_item(&w.id).await.unwrap().unwrap());
+    }
+    let (all, open) = s
+        .call(|c| {
+            c.trace_v2(
+                TraceEventCodes::SQLITE_TRACE_STMT,
+                Some(|e| {
+                    if let TraceEvent::Stmt(_, sql) = e
+                        && sql.contains("FROM work_steps")
+                    {
+                        STEP_QUERIES.fetch_add(1, Ordering::Relaxed);
+                    }
+                }),
+            );
+            Ok((q::work_list(c, None)?, q::work_open(c)?))
+        })
+        .await
+        .unwrap();
+    let ids = |v: &[kelta_proto::model::WorkItem]| v.iter().map(|w| w.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&all), ids(&want));
+    assert_eq!(
+        all.iter().map(|w| &w.steps).collect::<Vec<_>>(),
+        want.iter().map(|w| &w.steps).collect::<Vec<_>>()
+    );
+    assert_eq!(ids(&open), [want[0].id.clone(), want[2].id.clone()], "Finished left out");
+    assert_eq!(open[1].steps, want[2].steps);
+    assert_eq!(STEP_QUERIES.load(Ordering::Relaxed), 2, "one steps query per list");
+}
+
+#[tokio::test]
 async fn claim_item_is_atomic_and_round_trips_the_run() {
     use kelta_proto::model::{RunClaim, RunState};
     let s = std::sync::Arc::new(Store::open_in_memory().unwrap());

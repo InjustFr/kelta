@@ -44,6 +44,8 @@ tracing = { workspace = true }
 kelta-proto = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["test-util"] }
 tempfile = { workspace = true }
+# work_list test counts the statements it runs
+rusqlite = { workspace = true, features = ["trace"] }
 insta = { workspace = true }
 wiremock = { workspace = true }
 
