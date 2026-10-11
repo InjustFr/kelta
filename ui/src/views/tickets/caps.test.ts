@@ -10,6 +10,7 @@ const caps = {
   comment: true,
   transitions_need_fetch: false,
   projects_v2: false,
+  block: true,
 };
 
 describe('blockedReason', () => {
@@ -30,17 +31,28 @@ describe('blockedReason', () => {
       source: 'key_match',
     } as const;
     const item = { ...base, prs: [pr] };
-    for (const a of ['start', 'move', 'pr', 'assign', 'unassign', 'comment', 'branch', 'browser'] as const)
+    for (const a of [
+      'start',
+      'move',
+      'pr',
+      'assign',
+      'unassign',
+      'comment',
+      'block',
+      'branch',
+      'browser',
+    ] as const)
       expect(blockedReason(a, item, 'feat/x')).toBeNull();
     // Workflows not loaded yet: the picker says why when there are none.
     expect(blockedReason('workflow', item, null)).toBeNull();
   });
 
   it('names what is missing', () => {
-    const item = { ...base, caps: { ...caps, assign: false, comment: false } };
+    const item = { ...base, caps: { ...caps, assign: false, comment: false, block: false } };
     expect(blockedReason('assign', item, null)).toMatch(/assignee/);
     expect(blockedReason('unassign', item, null)).toMatch(/assignee/);
     expect(blockedReason('comment', item, null)).toMatch(/comments/);
+    expect(blockedReason('block', item, null)).toMatch(/blocked marker/);
     expect(blockedReason('pr', item, null)).toMatch(/No pull request/);
     expect(blockedReason('branch', item, null)).toMatch(/Start work first/);
     expect(blockedReason('move', item, null)).toBeNull();

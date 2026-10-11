@@ -112,3 +112,20 @@ test('a background run claim shows on the ticket row and follows report_progress
   await expect(nowRow).toContainText('2 unresolved review findings');
   await expect(nowRow.locator('[data-attention]').first()).toHaveAttribute('data-attention', 'error');
 });
+
+test('b in the detail blocks the ticket: the row shows Blocked and moves to Waiting; b again unblocks', async ({
+  page,
+}) => {
+  await openTickets(page);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('b');
+  await expect(row(page, 'SHOP-142').locator('[data-blocked]')).toHaveText('Blocked');
+  // Flow: SHOP-160 and SHOP-120 wait; the blocked ticket joins them.
+  await expect(page.locator('[data-group="waiting"] .count')).toHaveText('3');
+  await page.keyboard.press('b');
+  await expect(row(page, 'SHOP-142').locator('[data-blocked]')).toHaveCount(0);
+  expect((await callsOf(page, 'tracker_set_blocked')).map((c) => c.args)).toMatchObject([
+    { blocked: true },
+    { blocked: false },
+  ]);
+});

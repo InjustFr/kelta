@@ -349,3 +349,24 @@ async fn search_ors_title_and_description_into_the_view_filter() {
     let m = |k: &str| json!({k: {"containsIgnoreCase": "login"}});
     assert_eq!(f["or"], json!([m("title"), m("description")]));
 }
+
+#[tokio::test]
+async fn an_open_blocking_issue_marks_the_ticket_blocked() {
+    let server = MockServer::start().await;
+    let node = |id: &str, rels: serde_json::Value| {
+        json!({"id": id, "identifier": id, "title": "T", "url": "u", "updatedAt": "2026-10-05T08:00:00.000Z",
+               "state": {"id": "s", "name": "Todo", "type": "unstarted"}, "inverseRelations": {"nodes": rels}})
+    };
+    let issues = json!({"data": {"issues": {"nodes": [
+        node("ENG-1", json!([{"type": "blocks", "issue": {"state": {"type": "started"}}}])),
+        node("ENG-2", json!([{"type": "blocks", "issue": {"state": {"type": "completed"}}}])),
+        node("ENG-3", json!([{"type": "related", "issue": {"state": {"type": "started"}}}])),
+    ], "pageInfo": {"hasNextPage": false, "endCursor": null}}}});
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(issues))
+        .mount(&server)
+        .await;
+    let items = lin(&server).list(&view("mine"), None).await.unwrap().items;
+    assert_eq!(items.iter().map(|t| t.blocked).collect::<Vec<_>>(), [true, false, false]);
+}

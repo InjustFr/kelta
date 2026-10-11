@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{ProjectV2Ref, TrackerBinding};
+use kelta_proto::settings::{BlockedMarker, ProjectV2Ref, TrackerBinding};
 use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
@@ -794,4 +794,32 @@ async fn repo_columns_still_find_the_board_after_a_no_board_list() {
     let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
     let cols = t.columns(&b).await.unwrap();
     assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["Todo", "In Progress", "Done"]);
+}
+
+#[tokio::test]
+async fn block_adds_the_label_and_unblock_removes_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/acme/shop/issues/12/labels"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"name": "blocked"}])))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // 404: the label is not on the issue, which is what Unblock wants
+    Mock::given(method("DELETE"))
+        .and(path("/repos/acme/shop/issues/12/labels/on%20hold"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({"message": "Label does not exist"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
+    let t = gh(&server);
+    t.set_blocked(&r(), &BlockedMarker::Label("blocked".into()), true).await.unwrap();
+    assert_eq!(
+        bodies(&server, "POST", "/repos/acme/shop/issues/12/labels").await[0],
+        json!({"labels": ["blocked"]})
+    );
+    t.set_blocked(&r(), &BlockedMarker::Label("on hold".into()), false).await.unwrap();
+    let err = t.set_blocked(&r(), &BlockedMarker::Flag, true).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
 }
