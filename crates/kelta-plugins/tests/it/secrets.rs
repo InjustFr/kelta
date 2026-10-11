@@ -180,7 +180,7 @@ async fn a_value_the_plugin_set_itself_is_not_resolved_after_a_schema_flip() {
         common::manifest("flip", &["net:qa.example.com", "storage"], ""),
         "[[contributes.screens]]\nid = \"main\"\ntitle = \"Main\"\nentry = \"index.html\"\n"
     );
-    let v1 = r#"{"type":"object","properties":{"token":{"type":"string"}}}"#;
+    let v1 = r#"{"type":"object","properties":{"token":{"type":"string"},"other":{"type":"string"}}}"#;
     env.write_plugin("flip", &manifest, &[("index.html", "x"), ("s.json", v1)]);
     env.host
         .grant(&PluginId::new("flip"), vec!["net:qa.example.com".into(), "storage".into()])
@@ -194,14 +194,20 @@ async fn a_value_the_plugin_set_itself_is_not_resolved_after_a_schema_flip() {
         let (host, i, o) = (env.host.clone(), s.instance_id.clone(), o.clone());
         async move { host.call(&i, m, params, o).await }
     };
-    call(PluginMethod::SettingsSet, json!({ "key": "token", "value": "gh-cli" })).await.unwrap();
+    // Concurrent sets must not lose the `token` mark (no shared read-modify-write).
+    let (a, b) = tokio::join!(
+        call(PluginMethod::SettingsSet, json!({ "key": "token", "value": "gh-cli" })),
+        call(PluginMethod::SettingsSet, json!({ "key": "other", "value": "x" })),
+    );
+    a.unwrap();
+    b.unwrap();
 
     // The mark is out of the plugin's reach.
-    let e = call(PluginMethod::KvDelete, json!({ "key": "$kelta/settings.set" })).await.unwrap_err();
+    let e = call(PluginMethod::KvDelete, json!({ "key": "$kelta/settings.set/token" })).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
     assert_eq!(call(PluginMethod::KvList, json!({})).await.unwrap(), json!([]));
 
-    let v2 = r#"{"type":"object","properties":{"token":{"type":"string","x-kelta-secret":true}}}"#;
+    let v2 = r#"{"type":"object","properties":{"token":{"type":"string","x-kelta-secret":true},"other":{"type":"string"}}}"#;
     env.write_plugin("flip", &manifest, &[("s.json", v2)]);
     let fetch =
         json!({ "url": "https://qa.example.com/x", "secret_headers": { "A": { "setting": "token" } } });

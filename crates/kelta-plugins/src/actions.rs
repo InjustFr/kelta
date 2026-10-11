@@ -762,10 +762,15 @@ impl PluginHost {
             .ok_or_else(|| KeltaError::unsupported("`secret_headers` need a secret resolver"))?;
         let ctx = SecretCtx { host: kelta_http::util::url_host(&req.url), ..Default::default() };
         let settings = self.settings(project);
-        let plugin_set = match plugin {
-            Some(e) => self.plugin_set_settings(&e.id).await?,
-            None => Map::new(),
-        };
+        let mut plugin_set = Map::new();
+        if let Some(e) = plugin {
+            for spec in secret_headers.values() {
+                let (SecretHeader::Name(n) | SecretHeader::Setting { setting: n, .. }) = spec;
+                if let Some(v) = self.plugin_set_setting(&e.id, n).await? {
+                    plugin_set.insert(n.clone(), v);
+                }
+            }
+        }
         let mut refs = Vec::new();
         for (header, spec) in secret_headers {
             let (r, format) = secret_ref(plugin, &settings, &plugin_set, spec)?;
@@ -780,13 +785,14 @@ impl PluginHost {
         Ok(resp)
     }
 
-    /// `{key: value}` the plugin wrote through `settings.set` (reserved `kv` entry).
-    pub(crate) async fn plugin_set_settings(
+    /// The value the plugin wrote to `key` through `settings.set` (reserved `kv` entry).
+    pub(crate) async fn plugin_set_setting(
         &self,
         plugin: &PluginId,
-    ) -> Result<Map<String, Value>, KeltaError> {
-        let v = self.grant_store().kv_get(plugin, PLUGIN_SET_KEY).await?;
-        Ok(v.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_default())
+        key: &str,
+    ) -> Result<Option<Value>, KeltaError> {
+        let v = self.grant_store().kv_get(plugin, &format!("{PLUGIN_SET_KEY}/{key}")).await?;
+        Ok(v.and_then(|v| serde_json::from_str(&v).ok()))
     }
 }
 
