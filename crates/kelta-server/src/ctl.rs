@@ -85,11 +85,31 @@ async fn write_response(w: &mut (impl AsyncWriteExt + Unpin), resp: &CtlResponse
     w.flush().await
 }
 
+/// The peer's uid. macOS: tokio's `peer_cred` also asks for the pid, which fails (ENOTCONN) once a
+/// client that wrote its line has closed (the statusline relay, #366); `getpeereid` reads the
+/// credentials the kernel saved at connect.
+#[cfg(target_os = "macos")]
+fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    use std::os::fd::AsRawFd;
+    let (mut uid, mut gid) = (0, 0);
+    // SAFETY: a valid socket fd for the duration of the call; uid/gid are plain out-parameters.
+    if unsafe { libc::getpeereid(stream.as_raw_fd(), &mut uid, &mut gid) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(uid)
+}
+
+/// The peer's uid (`SO_PEERCRED` still answers after the peer closed).
+#[cfg(not(target_os = "macos"))]
+fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    stream.peer_cred().map(|c| c.uid())
+}
+
 async fn serve_conn(stream: UnixStream, ctx: Arc<CtlCtx>) {
-    match stream.peer_cred() {
-        Ok(cred) if cred.uid() == kelta_proto::dirs::my_uid() => {}
-        Ok(cred) => {
-            tracing::warn!(peer_uid = cred.uid(), "ctl: rejected connection from another uid");
+    match peer_uid(&stream) {
+        Ok(uid) if uid == kelta_proto::dirs::my_uid() => {}
+        Ok(uid) => {
+            tracing::warn!(peer_uid = uid, "ctl: rejected connection from another uid");
             return;
         }
         Err(e) => {

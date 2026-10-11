@@ -342,6 +342,36 @@ async fn hooks_inactive_falls_back_to_heuristics() {
     assert_eq!(h.core.session_get(&t.id).unwrap().status_source, StatusSource::Hook);
 }
 
+/// Ticket #366: a `Stop` whose client closed right after writing it (macOS dropped those) still
+/// marks the background session done, with the "finished" notification.
+#[tokio::test]
+async fn stop_from_a_closed_client_marks_done_and_notifies() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let sock = h.core.server().start_ctl().await.unwrap();
+    let s = h.core.session_spawn(claude_req()).await.unwrap();
+    let token = h.term.with_session(&s.id, |x| x.spec.env["KELTA_HOOK_TOKEN"].clone()).unwrap();
+    let hook = |event: &str| {
+        serde_json::json!({ "v": 1, "cmd": "hook", "session": s.id, "token": token,
+            "payload": { "hook_event_name": event, "last_assistant_message": "All done" } })
+    };
+    assert_eq!(ctl_send(&sock, hook("UserPromptSubmit")).await["ok"], true);
+    assert!(!h.core.visible_sessions().contains(&s.id));
+    let mut c = std::os::unix::net::UnixStream::connect(&sock).unwrap();
+    std::io::Write::write_all(&mut c, format!("{}\n", hook("Stop")).as_bytes()).unwrap();
+    drop(c);
+    let t0 = std::time::Instant::now();
+    while h.core.session_get(&s.id).unwrap().status != S::Done && t0.elapsed() < Duration::from_secs(1) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let info = h.core.session_get(&s.id).unwrap();
+    assert_eq!((info.status, info.attention), (S::Done, A::Done), "Stop not applied within a second");
+    let n = h.ui.notifications();
+    assert_eq!(n.len(), 1);
+    assert_eq!((n[0].title.as_str(), n[0].body.as_deref()), ("claude finished", Some("All done")));
+    assert_eq!(n[0].session_id.as_ref(), Some(&s.id));
+}
+
 #[tokio::test]
 async fn ctl_hook_through_the_server() {
     let tmp = tempfile::tempdir().unwrap();
