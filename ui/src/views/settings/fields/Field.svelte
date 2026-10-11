@@ -112,6 +112,7 @@
           {id}
           {label}
           template={isTemplate}
+          browse={path === 'plugins.dev_paths'}
           readonly={!access.editable || !!editor.saving[path]}
           onchange={(v) => void editor.set(path, v)}
         />

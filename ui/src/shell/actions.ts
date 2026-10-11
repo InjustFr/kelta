@@ -141,6 +141,7 @@ async function quickfixClaude(): Promise<void> {
 
 registerAction('palette.open', () => ui.toggleOverlay('palette'));
 registerAction('project.switcher', () => ui.toggleOverlay('switcher'));
+registerAction('project.open', () => ui.toggleOverlay('reopen'));
 // Toast action of a start refused for want of a project with a repository (SPEC §3.1).
 registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoRailRow(n));

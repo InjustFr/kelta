@@ -13,6 +13,7 @@
     "core:window:allow-destroy",
     "core:window:allow-start-resize-dragging",
     "core:window:allow-set-title",
+    "dialog:allow-open",
     "allow-app-info",
     "allow-app-ready",
     "allow-bench-mark",

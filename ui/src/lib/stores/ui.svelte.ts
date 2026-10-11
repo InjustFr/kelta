@@ -24,7 +24,8 @@ export type SheetKey =
   | 'workflow_run'
   | 'claude_runs'
   | 'groom';
-export type OverlayKey = 'palette' | 'switcher';
+/** `reopen`: the switcher listing closed projects only (#363). */
+export type OverlayKey = 'palette' | 'switcher' | 'reopen';
 /** The cross-project places on the rail (SPEC §1), shown outside any project. */
 export type GlobalView = 'tickets' | 'now' | 'reviews';
 /** The global views' built-in layout (a tab per view) and `projectId` of their panes: never a real

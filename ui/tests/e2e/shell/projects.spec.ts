@@ -225,6 +225,44 @@ test.describe('project switching', () => {
     });
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
   });
+
+  test('a closed project reopens from the rail and from the palette', async ({ page }) => {
+    await boot(page);
+    const reopen = page.getByTestId('rail-reopen');
+    await expect(reopen).toHaveCount(0);
+    const tools = page.locator('[data-testid="rail-project"][data-project-id="kelta-tools"]');
+    const close = async () => {
+      await tools.click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Close project', exact: true }).click();
+      await expect(tools).toHaveCount(0);
+    };
+    await close();
+
+    // Rail: the picker lists only the closed project; picking it opens and activates it.
+    await reopen.click();
+    const items = page.getByTestId('switcher-item');
+    await expect(items).toHaveCount(1);
+    await expect(items).toContainText('not open');
+    await items.click();
+    await expect(tools).toHaveCount(1);
+    await expect.poll(() => activeProject(page)).toBe('kelta-tools');
+    expect((await callsOf(page, 'project_open'))[0]?.args).toMatchObject({ id: 'kelta-tools' });
+    await expect(reopen).toHaveCount(0);
+
+    // Palette: the "Open project" action opens the same closed-only picker.
+    await close();
+    await page.keyboard.press('Control+Shift+K');
+    await page.getByTestId('palette-input').fill('open project');
+    await page
+      .getByTestId('palette-item')
+      .filter({ has: page.locator('.label', { hasText: /^Open project$/ }) })
+      .click();
+    await expect(page.getByTestId('switcher')).toBeVisible();
+    await expect(items).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    await expect(tools).toHaveCount(1);
+    await expect.poll(() => activeProject(page)).toBe('kelta-tools');
+  });
 });
 
 declare global {
