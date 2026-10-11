@@ -657,7 +657,10 @@ impl CodeHost for GithubHost {
             "query($s:String!{decl}){{ viewer{{ login }} {alias}: search(query:$s, type:ISSUE, first:50){{ nodes{{ ...Pr{spread} }} }}{extra} }} {PR_FRAGMENT} {threads}"
         );
         let data = graphql(&self.auth, &self.graphql, &query, vars).await?;
-        self.gate.lock().pending = false;
+        // Only the review-requested list answers what the gate saw change.
+        if q.kind == ReviewKind::ReviewRequested {
+            self.gate.lock().pending = false;
+        }
         let me = data.pointer("/viewer/login").and_then(Value::as_str).unwrap_or("").to_owned();
         let nodes = |alias: &str| {
             data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default()

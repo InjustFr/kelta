@@ -3,11 +3,14 @@
 
 use std::time::Duration;
 
-use kelta_http::{HttpClient, HttpCtx, HttpPolicy, HttpRequest};
+use kelta_http::graphql::graphql;
+use kelta_http::{AuthScheme, Authed, HttpClient, HttpCtx, HttpPolicy, HttpRequest};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::AccountId;
+use kelta_proto::secret::SecretRef;
+use serde_json::json;
 use tokio::time::Instant;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// No client-side timeout: under paused time the runtime would otherwise auto-advance the clock to
@@ -183,6 +186,32 @@ async fn transient_502_is_retried_with_jittered_backoff_for_get_only() {
     let waited = t0.elapsed();
     assert!(waited >= Duration::from_millis(180) && waited <= Duration::from_millis(330), "{waited:?}");
     let e = c.send_text(HttpRequest::post(format!("{}/p", server.uri()))).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Upstream);
+}
+
+#[tokio::test(start_paused = true)]
+async fn graphql_query_is_retried_on_502_but_a_mutation_is_not() {
+    let server = MockServer::start().await;
+    Mock::given(body_string_contains("viewer"))
+        .respond_with(ResponseTemplate::new(502))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(body_string_contains("viewer"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":{"viewer":{"login":"me"}}}"#))
+        .mount(&server)
+        .await;
+    Mock::given(body_string_contains("closeIssue"))
+        .respond_with(ResponseTemplate::new(502))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let secrets = kelta_proto::testing::FakeSecrets::with(&[("env:T", "tok")]);
+    let auth = Authed::new(ctx(), secrets, Some(SecretRef::new("env:T")), None, AuthScheme::Bearer);
+    let url = format!("{}/graphql", server.uri());
+    let d = graphql(&auth, &url, "query { viewer { login } }", json!({})).await.unwrap();
+    assert_eq!(d["viewer"]["login"], "me");
+    let e = graphql(&auth, &url, "mutation { closeIssue(id: 1) { id } }", json!({})).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Upstream);
 }
 

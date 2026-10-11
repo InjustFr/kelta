@@ -500,7 +500,7 @@ impl Tracker for JiraTracker {
                 if let Some(t) = &token {
                     body["nextPageToken"] = json!(t);
                 }
-                let v = api.json(HttpRequest::post(api.url("/search/jql")).json(body)).await?;
+                let v = api.json(HttpRequest::post(api.url("/search/jql")).json(body).idempotent()).await?;
                 let items = self.tickets_from(&v, lk)?;
                 let pages = done + 1;
                 let next = s(&v, "nextPageToken")
@@ -521,7 +521,7 @@ impl Tracker for JiraTracker {
                 };
                 let body =
                     json!({"jql": jql, "fields": lk.fields(), "startAt": start, "maxResults": PAGE_SIZE});
-                let v = api.json(HttpRequest::post(api.url("/search")).json(body)).await?;
+                let v = api.json(HttpRequest::post(api.url("/search")).json(body).idempotent()).await?;
                 let items = self.tickets_from(&v, lk)?;
                 let total = v.get("total").and_then(Value::as_u64).unwrap_or(0);
                 let end = start as u64 + items.len() as u64;

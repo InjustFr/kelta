@@ -3254,6 +3254,7 @@ dependencies = [
  "insta",
  "kelta-http",
  "kelta-proto",
+ "libc",
  "parking_lot",
  "regex",
  "serde_json",
