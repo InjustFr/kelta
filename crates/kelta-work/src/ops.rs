@@ -1232,11 +1232,7 @@ impl WorkService {
             return Err(KeltaError::invalid("the editor buffer has no file"));
         }
         let text = selection_ref(Path::new(&sel.path), &cl.cwd, sel.l1, sel.l2);
-        if cl.claude.as_ref().is_some_and(|c| c.host.is_some()) {
-            return Err(KeltaError::conflict(
-                "Claude runs outside Kelta: it cannot receive prompts from here.",
-            ));
-        }
+        cl.refuse_hosted()?;
         let bytes = if cl.kind == SessionKind::Claude { format!("\x1b[200~{text}\x1b[201~") } else { text };
         core.session_write(&cl.id, bytes.as_bytes()).await
     }

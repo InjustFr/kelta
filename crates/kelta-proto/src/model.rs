@@ -147,6 +147,23 @@ pub enum SessionKind {
     Custom,
 }
 
+impl SessionInfo {
+    /// Its Claude runs outside Kelta (#347).
+    pub fn hosted(&self) -> bool {
+        self.claude.as_ref().is_some_and(|c| c.host.is_some())
+    }
+
+    /// Typing into a hosted Claude's pane is dropped silently (the wrapper never reads stdin).
+    pub fn refuse_hosted(&self) -> Result<(), crate::error::KeltaError> {
+        if self.hosted() {
+            return Err(crate::error::KeltaError::conflict(
+                "Claude runs outside Kelta: it cannot receive prompts from here.",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl SessionKind {
     /// Name used in settings maps (`terminal.scrollback`, `terminal.shift_enter`).
     pub fn name(&self) -> &'static str {
