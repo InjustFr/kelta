@@ -134,7 +134,10 @@ impl Fx {
 
     pub fn service(&self) -> Arc<WorkService> {
         let weak: Weak<dyn CoreApi> = Arc::downgrade(&(self.core.clone() as Arc<dyn CoreApi>));
-        WorkService::new(weak, self.store.clone(), self.dirs.clone())
+        let w = WorkService::new(weak, self.store.clone(), self.dirs.clone());
+        // Every port is free: allocation depends on the items alone, never on what the runner listens on.
+        w.set_port_probe(|_| true);
+        w
     }
 
     pub fn spawned(&self) -> Vec<SessionInfo> {
