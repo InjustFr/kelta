@@ -943,7 +943,8 @@ impl Core {
         let reviews = self.cached_reviews().await;
         d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &reviews, &repos);
         d.caps = self.tracker_of(&t.account)?.caps();
-        self.fill_blocked(&mut d.ticket, &mut d.caps, &[]);
+        let sources = self.cached_ticket(t, true).await.map(|(_, s)| s).unwrap_or_default();
+        self.fill_blocked(&mut d.ticket, &mut d.caps, &sources);
         // Sub-tasks: the provider gives each ticket, the rest is ours (like a list row).
         let people = self.people_of(d.children.iter().map(|c| &c.ticket), &reviews).await;
         for c in &mut d.children {
@@ -1025,8 +1026,8 @@ impl Core {
         self.rt.capture();
         let tracker = self.tracker_of(&t.account)?;
         let from = self.cached_ticket(t, false).await.map(|(x, _)| x.status);
-        let ticket = tracker.transition(t, transition_id, fields).await?;
-        self.after_ticket_write(&ticket).await;
+        let mut ticket = tracker.transition(t, transition_id, fields).await?;
+        self.after_ticket_write(&mut ticket).await;
         self.publish_from(
             session,
             BusEvent::new(
@@ -1119,8 +1120,8 @@ impl Core {
         who: Assignee,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
-        let ticket = self.tracker_of(&t.account)?.assign(t, who.clone()).await?;
-        self.after_ticket_write(&ticket).await;
+        let mut ticket = self.tracker_of(&t.account)?.assign(t, who.clone()).await?;
+        self.after_ticket_write(&mut ticket).await;
         self.publish_ev(BusEvent::new(
             bus::TICKET_ASSIGNED,
             serde_json::json!({ "ticket": t, "assignee": who }),
@@ -1150,8 +1151,8 @@ impl Core {
         priority: &str,
     ) -> Result<kelta_proto::tracker::Ticket, KeltaError> {
         self.rt.capture();
-        let ticket = self.tracker_of(&t.account)?.set_priority(t, priority).await?;
-        self.after_ticket_write(&ticket).await;
+        let mut ticket = self.tracker_of(&t.account)?.set_priority(t, priority).await?;
+        self.after_ticket_write(&mut ticket).await;
         Ok(ticket)
     }
 
@@ -1189,7 +1190,7 @@ impl Core {
         let tracker = self.tracker_of(&t.account)?;
         let sources = self.cached_ticket(t, true).await.map(|(_, s)| s).unwrap_or_default();
         let marker = self.blocked_marker(&t.account, tracker.as_ref(), &sources);
-        let mut ticket = if marker == BlockedMarker::Status {
+        let ticket = if marker == BlockedMarker::Status {
             let ts = tracker.transitions(t).await?;
             let to = if blocked {
                 ts.iter().find(|x| is_blocked_status(&x.to.name))
@@ -1207,19 +1208,18 @@ impl Core {
             })?;
             self.tracker_transition(t, &to.id, None, None).await?
         } else {
-            let ticket = tracker.set_blocked(t, &marker, blocked).await?;
-            self.after_ticket_write(&ticket).await;
+            let mut ticket = tracker.set_blocked(t, &marker, blocked).await?;
+            self.after_ticket_write(&mut ticket).await;
             ticket
         };
-        ticket.blocked = marker.on(&ticket);
         Ok(ticket)
     }
 
     /// MCP `close_ticket`: the provider's close, then the cached rows like any write.
     pub async fn tracker_close(&self, t: &TicketRef) -> Result<Ticket, KeltaError> {
         self.rt.capture();
-        let ticket = self.tracker_of(&t.account)?.close(t).await?;
-        self.after_ticket_write(&ticket).await;
+        let mut ticket = self.tracker_of(&t.account)?.close(t).await?;
+        self.after_ticket_write(&mut ticket).await;
         Ok(ticket)
     }
 
@@ -1251,7 +1251,14 @@ impl Core {
 
     /// After a write, before its bus event: patch cached pages and notify views (the event's
     /// [`Core::on_ticket_written`] refreshes the account; patching first keeps that fetch last).
-    async fn after_ticket_write(&self, ticket: &Ticket) {
+    async fn after_ticket_write(&self, ticket: &mut Ticket) {
+        // the provider's raw `blocked` is not the source's marker (#348)
+        let sources = self.cached_ticket(&ticket.r#ref, true).await.map(|(_, s)| s).unwrap_or_default();
+        if let Ok(tracker) = self.tracker_of(&ticket.r#ref.account) {
+            ticket.blocked =
+                self.blocked_marker(&ticket.r#ref.account, tracker.as_ref(), &sources).on(ticket);
+        }
+        let ticket = &*ticket;
         self.feeds.transitions.lock().remove(&ticket.r#ref);
         let queries: Vec<TicketQuery> =
             self.feeds.views.lock().values().filter(|q| q.account == ticket.r#ref.account).cloned().collect();
